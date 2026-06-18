@@ -997,6 +997,7 @@ message TrafficPolicySpec {
     message User {
       string key = 1;
       google.protobuf.Struct metadata = 2;
+      string key_hash = 3;
     }
 
     repeated User api_keys = 1;

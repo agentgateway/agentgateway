@@ -6722,16 +6722,20 @@ spec:
                           `secretSelector` can be used instead.\n\nEach entry in the
                           credential data represents one API key. The key is an\narbitrary
                           identifier. The value can either be:\n* A string representing
-                          the API key.\n* A JSON object with two fields, `key` and
-                          `metadata`. `key` contains\n  the API key. `metadata` contains
-                          arbitrary JSON metadata associated\n  with the key, which
-                          may be used by other policies. For example, you\n  may write
-                          an authorization policy allowing `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
-                          v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
-                          \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
-                          {\n\t        \"group\": \"sales\",\n\t        \"created_at\":
-                          \"2024-10-01T12:00:00Z\"\n\t      }\n\t    }\n\t  client2:
-                          \"k-456\""
+                          the API key.\n* A JSON object with `key` or `keyHash`, plus
+                          optional `metadata`.\n  `key` contains the API key. `keyHash`
+                          contains a hashed API key in\n  `sha256:<hex>` format. `metadata`
+                          contains arbitrary JSON metadata\n  associated with the
+                          key, which may be used by other policies. For\n  example,
+                          you may write an authorization policy allowing\n  `apiKey.group
+                          == 'sales'`.\n\nExample:\n\n\tapiVersion: v1\n\tkind: Secret\n\tmetadata:\n\t
+                          \ name: api-key\n\tstringData:\n\t  client1: |\n\t    {\n\t
+                          \     \"key\": \"k-123\",\n\t      \"metadata\": {\n\t        \"group\":
+                          \"sales\",\n\t        \"created_at\": \"2024-10-01T12:00:00Z\"\n\t
+                          \     }\n\t    }\n\t  client2: \"k-456\"\n\t  client3: |\n\t
+                          \   {\n\t      \"keyHash\": \"sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad\",\n\t
+                          \     \"metadata\": {\n\t        \"group\": \"engineering\"\n\t
+                          \     }\n\t    }"
                         properties:
                           group:
                             description: |-
@@ -6765,11 +6769,12 @@ spec:
                           is undefined.\n\nEach entry in the `Secret` data represents
                           one API key. The key is an\narbitrary identifier. The value
                           can either be:\n* A string representing the API key.\n*
-                          A JSON object with two fields, `key` and `metadata`. `key`
-                          contains\n  the API key. `metadata` contains arbitrary JSON
-                          metadata associated\n  with the key, which may be used by
-                          other policies. For example, you\n  may write an authorization
-                          policy allowing `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
+                          A JSON object with `key` or `keyHash`, plus optional `metadata`.\n
+                          \ `key` contains the API key. `keyHash` contains a hashed
+                          API key in\n  `sha256:<hex>` format. `metadata` contains
+                          arbitrary JSON metadata\n  associated with the key, which
+                          may be used by other policies. For\n  example, you may write
+                          an authorization policy allowing\n  `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
                           v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
                           \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
                           {\n\t        \"group\": \"sales\",\n\t        \"created_at\":

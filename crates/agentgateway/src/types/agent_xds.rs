@@ -2349,21 +2349,30 @@ fn traffic_policy_from_proto(
 						.map(serde_json::to_value)
 						.transpose()?
 						.unwrap_or_default();
-					Ok::<_, ProtoError>((http::apikey::APIKey::new(u.key.clone()), meta))
+					let key = match (u.key.is_empty(), u.key_hash.is_empty()) {
+						(false, true) => http::apikey::APIKey::new(u.key.clone()).sha256(),
+						(true, false) => {
+							http::apikey::APIKeyHash::parse(&u.key_hash).map_err(ProtoError::Generic)?
+						},
+						_ => {
+							return Err(ProtoError::Generic(
+								"exactly one of API key or keyHash must be set".to_string(),
+							));
+						},
+					};
+					Ok::<_, ProtoError>((key, meta))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
-			TrafficPolicy::APIKey(RequestPolicy::single(
-				http::apikey::APIKeyAuthentication::new(
-					keys,
-					mode,
-					authorization_location(
-						diagnostics,
-						"apiKeyAuthentication.authorizationLocation.expression",
-						ba.authorization_location.as_ref(),
-						http::auth::AuthorizationLocation::bearer_header(),
-					)?,
-				),
-			))
+			TrafficPolicy::APIKey(RequestPolicy::single(http::apikey::APIKeyAuthentication {
+				users: Arc::new(keys.into_iter().collect()),
+				mode,
+				location: authorization_location(
+					diagnostics,
+					"apiKeyAuthentication.authorizationLocation.expression",
+					ba.authorization_location.as_ref(),
+					http::auth::AuthorizationLocation::bearer_header(),
+				)?,
+			}))
 		},
 		Some(tps::Kind::HostRewrite(hr)) => {
 			let mode = tps::host_rewrite::Mode::try_from(hr.mode)?;

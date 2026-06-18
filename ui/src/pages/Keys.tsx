@@ -19,7 +19,7 @@ import {
   upsertVirtualKey,
 } from "../config";
 import { EnumSelector } from "../components/EnumSelector";
-import { maskKey } from "../credentialDisplay";
+import { hasKeyValue, keyValue, maskKey } from "../credentialDisplay";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import {
@@ -66,7 +66,7 @@ export function KeysPage() {
     (keyDrawer === "new"
       ? { key: newVirtualKey() }
       : linkedKey
-        ? { previousKey: linkedKey.key, key: structuredClone(linkedKey) }
+        ? { previousKey: keyValue(linkedKey), key: structuredClone(linkedKey) }
         : null);
   const advancedOpen = keyDrawer === "settings";
 
@@ -180,12 +180,12 @@ export function KeysPage() {
               </thead>
               <tbody>
                 {keys.map((item, index) => (
-                  <tr key={item.key}>
+                  <tr key={keyValue(item)}>
                     <td className="strong key-name-cell">
                       {keyName(item) || "Unnamed key"}
                     </td>
                     <td className="key-cell">
-                      <VirtualKeyValue value={item.key} />
+                      <VirtualKeyValue value={keyValue(item)} />
                     </td>
                     <td>
                       <MetadataSummary value={item.metadata} />
@@ -249,8 +249,8 @@ export function KeysPage() {
           confirmDisabled={update.isPending}
           onCancel={() => setDeleteKey(null)}
           onConfirm={() => {
-            const keyValue = deleteKey.key;
-            update.mutate((next) => removeVirtualKey(next, keyValue), {
+            const value = keyValue(deleteKey);
+            update.mutate((next) => removeVirtualKey(next, value), {
               onSuccess: () => setDeleteKey(null),
             });
           }}
@@ -532,7 +532,9 @@ function KeyEditor(props: {
   const [keyMode, setKeyMode] = useState<"auto" | "custom">(
     isNew ? "auto" : "custom",
   );
-  const [key, setKey] = useState(isNew ? "" : props.initial.key);
+  const [key, setKey] = useState(
+    isNew || !hasKeyValue(props.initial) ? "" : props.initial.key,
+  );
   const [replaceKey, setReplaceKey] = useState(false);
   const [metadataValues, setMetadataValues] = useState(() =>
     stringMetadata(withoutManagedMetadata(initialMetadata)),
@@ -561,9 +563,11 @@ function KeyEditor(props: {
         : key
       : replaceKey
         ? key
-        : props.initial.key;
+        : "";
     props.onSave(
-      { ...props.initial, key: nextKey, metadata },
+      isNew || replaceKey
+        ? { key: nextKey, metadata }
+        : { ...props.initial, metadata },
       props.previousKey,
     );
   }
@@ -628,7 +632,7 @@ function KeyEditor(props: {
           tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "key")}
         >
           <div className="key-editor-value-row">
-            <VirtualKeyValue value={props.initial.key} />
+            <VirtualKeyValue value={keyValue(props.initial)} />
             <button
               className="button"
               type="button"
@@ -710,7 +714,7 @@ function keyName(key: VirtualApiKey) {
 
 function virtualKeyDeleteLabel(key: VirtualApiKey) {
   const name = keyName(key).trim();
-  return name || maskKey(key.key);
+  return name || maskKey(keyValue(key));
 }
 
 function duplicateKeyName(name: string, keys: VirtualApiKey[]) {

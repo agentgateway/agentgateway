@@ -4991,22 +4991,45 @@
       ]
     },
     "LocalAPIKey": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "description": "API key value to accept.",
-          "$ref": "#/$defs/APIKey"
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "description": "API key value to accept.",
+              "$ref": "#/$defs/APIKey"
+            },
+            "metadata": {
+              "description": "Optional metadata attached to requests authenticated with this key."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ]
         },
-        "metadata": {
-          "description": "Optional metadata attached to requests authenticated with this key."
+        {
+          "type": "object",
+          "properties": {
+            "keyHash": {
+              "description": "SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.",
+              "$ref": "#/$defs/APIKeyHash"
+            },
+            "metadata": {
+              "description": "Optional metadata attached to requests authenticated with this key."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "keyHash"
+          ]
         }
-      },
-      "additionalProperties": false,
-      "required": [
-        "key"
       ]
     },
     "APIKey": {
+      "type": "string"
+    },
+    "APIKeyHash": {
       "type": "string"
     },
     "APIKeyMode": {

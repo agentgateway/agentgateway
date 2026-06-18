@@ -1199,10 +1199,12 @@ type APIKeyAuthentication struct {
 	// Each entry in the credential data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
-	// * A JSON object with two fields, `key` and `metadata`. `key` contains
-	//   the API key. `metadata` contains arbitrary JSON metadata associated
-	//   with the key, which may be used by other policies. For example, you
-	//   may write an authorization policy allowing `apiKey.group == 'sales'`.
+	// * A JSON object with `key` or `keyHash`, plus optional `metadata`.
+	//   `key` contains the API key. `keyHash` contains a hashed API key in
+	//   `sha256:<hex>` format. `metadata` contains arbitrary JSON metadata
+	//   associated with the key, which may be used by other policies. For
+	//   example, you may write an authorization policy allowing
+	//   `apiKey.group == 'sales'`.
 	//
 	// Example:
 	//
@@ -1220,6 +1222,13 @@ type APIKeyAuthentication struct {
 	//	      }
 	//	    }
 	//	  client2: "k-456"
+	//	  client3: |
+	//	    {
+	//	      "keyHash": "sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad",
+	//	      "metadata": {
+	//	        "group": "engineering"
+	//	      }
+	//	    }
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
@@ -1231,10 +1240,12 @@ type APIKeyAuthentication struct {
 	// Each entry in the `Secret` data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
-	// * A JSON object with two fields, `key` and `metadata`. `key` contains
-	//   the API key. `metadata` contains arbitrary JSON metadata associated
-	//   with the key, which may be used by other policies. For example, you
-	//   may write an authorization policy allowing `apiKey.group == 'sales'`.
+	// * A JSON object with `key` or `keyHash`, plus optional `metadata`.
+	//   `key` contains the API key. `keyHash` contains a hashed API key in
+	//   `sha256:<hex>` format. `metadata` contains arbitrary JSON metadata
+	//   associated with the key, which may be used by other policies. For
+	//   example, you may write an authorization policy allowing
+	//   `apiKey.group == 'sales'`.
 	//
 	// Example:
 	//

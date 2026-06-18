@@ -13,6 +13,7 @@ import type {
   ProviderName,
   VirtualApiKey,
 } from "./types";
+import { keyValue } from "./credentialDisplay";
 
 const promptLogKey = "gen_ai.prompt";
 const completionLogKey = "gen_ai.completion";
@@ -293,7 +294,7 @@ export function upsertVirtualKey(
 ) {
   const policy = getApiKeyPolicy(config);
   const index = policy.keys.findIndex(
-    (item) => item.key === (previousKey ?? key.key),
+    (item) => keyValue(item) === (previousKey ?? keyValue(key)),
   );
   if (index >= 0) {
     policy.keys[index] = key;
@@ -304,7 +305,7 @@ export function upsertVirtualKey(
 
 export function removeVirtualKey(config: GatewayConfig, key: string) {
   const policy = getApiKeyPolicy(config);
-  policy.keys = policy.keys.filter((item) => item.key !== key);
+  policy.keys = policy.keys.filter((item) => keyValue(item) !== key);
 }
 
 export function disableApiKeyPolicy(config: GatewayConfig) {

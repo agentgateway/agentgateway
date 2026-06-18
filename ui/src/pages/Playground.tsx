@@ -15,7 +15,7 @@ import {
 import { sendChatCompletion, sendMcpJsonRpc } from "../api/playgroundApi";
 import { providerLabel } from "../config";
 import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
-import { keyLabel } from "../credentialDisplay";
+import { hasKeyValue, keyLabel } from "../credentialDisplay";
 import { gatewayEndpoint, gatewayOrigin } from "../gatewayUrls";
 import {
   useGatewayConfig,
@@ -152,6 +152,10 @@ export function PlaygroundPage() {
     () => config.data?.llm?.policies?.apiKey?.keys ?? [],
     [config.data],
   );
+  const rawVirtualKeys = useMemo(
+    () => virtualKeys.filter(hasKeyValue),
+    [virtualKeys],
+  );
   const [storedModel, setStoredModel] = useStoredStringState(
     storageKeys.model,
     "",
@@ -221,22 +225,22 @@ export function PlaygroundPage() {
   const selectedCatalogProvider = selectedModelConfig
     ? modelProviderLabel(selectedModelConfig, providers)
     : null;
-  const selectedKeyOptionRef = virtualKeys.some(
+  const selectedKeyOptionRef = rawVirtualKeys.some(
     (item, index) => virtualKeyStorageRef(item, index) === selectedKeyRef,
   )
     ? selectedKeyRef
-    : virtualKeys[0]
-      ? virtualKeyStorageRef(virtualKeys[0], 0)
+    : rawVirtualKeys[0]
+      ? virtualKeyStorageRef(rawVirtualKeys[0], 0)
       : "";
   const savedKey =
-    virtualKeys.find(
+    rawVirtualKeys.find(
       (item, index) =>
         virtualKeyStorageRef(item, index) === selectedKeyOptionRef,
     )?.key ??
-    virtualKeys[0]?.key ??
+    rawVirtualKeys[0]?.key ??
     "";
   const selectedKeyValue =
-    apiKeyMode === "saved" && virtualKeys.length > 0 ? savedKey : apiKey;
+    apiKeyMode === "saved" && rawVirtualKeys.length > 0 ? savedKey : apiKey;
   const needsCors = config.data
     ? corsNeedsUpdate(config.data.llm?.policies?.cors, "llm")
     : false;
@@ -251,7 +255,7 @@ export function PlaygroundPage() {
     modelOptionsCount: modelOptions.length,
     selectedKeyValue,
     apiKeyMode,
-    virtualKeysCount: virtualKeys.length,
+    virtualKeysCount: rawVirtualKeys.length,
   });
 
   useEffect(() => {
@@ -264,14 +268,14 @@ export function PlaygroundPage() {
 
   useEffect(() => {
     if (
-      virtualKeys[0]?.key &&
-      !virtualKeys.some(
+      rawVirtualKeys[0]?.key &&
+      !rawVirtualKeys.some(
         (item, index) => virtualKeyStorageRef(item, index) === selectedKeyRef,
       )
     ) {
-      setSelectedKeyRef(virtualKeyStorageRef(virtualKeys[0], 0));
+      setSelectedKeyRef(virtualKeyStorageRef(rawVirtualKeys[0], 0));
     }
-  }, [selectedKeyRef, setSelectedKeyRef, virtualKeys]);
+  }, [selectedKeyRef, setSelectedKeyRef, rawVirtualKeys]);
 
   useEffect(() => {
     localStorage.setItem(storageKeys.apiKeyMode, apiKeyMode);
@@ -624,12 +628,12 @@ export function PlaygroundPage() {
                 <Dropdown
                   ariaLabel="Virtual API key"
                   value={
-                    apiKeyMode === "saved" && virtualKeys.length > 0
+                    apiKeyMode === "saved" && rawVirtualKeys.length > 0
                       ? selectedKeyOptionRef
                       : "__raw__"
                   }
                   options={[
-                    ...virtualKeys.map((item, index) => ({
+                    ...rawVirtualKeys.map((item, index) => ({
                       value: virtualKeyStorageRef(item, index),
                       label: keyLabel(item),
                       icon: <KeyRound size={16} />,
@@ -650,7 +654,7 @@ export function PlaygroundPage() {
                   }}
                 />
               </FieldGroup>
-              {apiKeyMode === "raw" || virtualKeys.length === 0 ? (
+              {apiKeyMode === "raw" || rawVirtualKeys.length === 0 ? (
                 <Field label="Raw API key">
                   <input
                     value={apiKey}
@@ -801,10 +805,7 @@ function storedApiKeyMode(): "saved" | "raw" {
     : "saved";
 }
 
-function virtualKeyStorageRef(
-  key: { key: string; metadata?: unknown },
-  index: number,
-) {
+function virtualKeyStorageRef(key: { metadata?: unknown }, index: number) {
   const metadata =
     key.metadata &&
     typeof key.metadata === "object" &&

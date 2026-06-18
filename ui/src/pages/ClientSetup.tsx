@@ -10,7 +10,7 @@ import {
   StatusBanner,
 } from "../components/Primitives";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
-import { keyLabel, maskKey } from "../credentialDisplay";
+import { hasKeyValue, keyLabel, maskKey } from "../credentialDisplay";
 import { gatewayOrigin } from "../gatewayUrls";
 import { useGatewayConfig } from "../hooks";
 import { llmModelOptions, resolveLlmModelOption } from "../llmModelOptions";
@@ -59,6 +59,10 @@ export function ClientSetupPage() {
     () => config.data?.llm?.policies?.apiKey?.keys ?? [],
     [config.data],
   );
+  const rawVirtualKeys = useMemo(
+    () => virtualKeys.filter(hasKeyValue),
+    [virtualKeys],
+  );
   const derivedBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
   const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
   const [baseUrlTouched, setBaseUrlTouched] = useState(false);
@@ -95,7 +99,8 @@ export function ClientSetupPage() {
     : null;
   const selectedVirtualKey =
     apiKeyMode === "saved"
-      ? (virtualKeys.find((item) => item.key === selectedKey) ?? virtualKeys[0])
+      ? (rawVirtualKeys.find((item) => item.key === selectedKey) ??
+        rawVirtualKeys[0])
       : undefined;
   const apiKey = selectedVirtualKey?.key ?? rawKey;
   const effectiveBaseUrl = baseUrlTouched ? baseUrl : derivedBaseUrl;
@@ -196,7 +201,7 @@ export function ClientSetupPage() {
                   : "__raw__"
               }
               options={[
-                ...virtualKeys.map((item) => ({
+                ...rawVirtualKeys.map((item) => ({
                   value: item.key,
                   label: keyLabel(item),
                   icon: <KeyRound size={16} />,
@@ -217,7 +222,7 @@ export function ClientSetupPage() {
               }}
             />
           </FieldGroup>
-          {apiKeyMode === "raw" ? (
+          {apiKeyMode === "raw" || rawVirtualKeys.length === 0 ? (
             <Field label="Raw API key">
               <input
                 value={rawKey}
