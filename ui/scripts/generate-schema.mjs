@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { execSync } from "node:child_process";
 import {
   copyFileSync,
   mkdirSync,
@@ -9,6 +8,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { compileFromFile } from "json-schema-to-typescript";
 
 const uiDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const rootDir = join(uiDir, "..");
@@ -33,12 +33,19 @@ writeFileSync(
   JSON.stringify(sanitizeSchemaForTypes(adminSchema)),
 );
 
-execSync(
-  `node_modules/.bin/json2ts ../schema/cel.json > src/cel.d.ts && node_modules/.bin/json2ts ${JSON.stringify(sanitizedConfigSchemaPath)} > src/gateway-config.d.ts && node_modules/.bin/json2ts ${JSON.stringify(sanitizedAdminSchemaPath)} > src/gateway-admin.d.ts`,
-  { cwd: uiDir, shell: true, stdio: "inherit" },
-);
-rmSync(sanitizedConfigSchemaPath, { force: true });
-rmSync(sanitizedAdminSchemaPath, { force: true });
+try {
+  await Promise.all([
+    writeTypes(join(rootDir, "schema/cel.json"), join(uiDir, "src/cel.d.ts")),
+    writeTypes(
+      sanitizedConfigSchemaPath,
+      join(uiDir, "src/gateway-config.d.ts"),
+    ),
+    writeTypes(sanitizedAdminSchemaPath, join(uiDir, "src/gateway-admin.d.ts")),
+  ]);
+} finally {
+  rmSync(sanitizedConfigSchemaPath, { force: true });
+  rmSync(sanitizedAdminSchemaPath, { force: true });
+}
 
 copyFileSync(
   join(rootDir, "schema/config.json"),
@@ -75,6 +82,10 @@ function sanitizeSchemaForTypes(value) {
     next[key] = sanitized;
   }
   return next;
+}
+
+async function writeTypes(schemaPath, outputPath) {
+  writeFileSync(outputPath, await compileFromFile(schemaPath));
 }
 
 function isImpossibleSchema(value) {
