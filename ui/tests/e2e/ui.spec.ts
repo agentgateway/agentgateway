@@ -188,7 +188,7 @@ test("creates a weighted virtual model with a concrete wildcard target", async (
   ).toBeDisabled();
 
   await page
-    .getByRole("textbox", { name: "Resolved model" })
+    .getByRole("textbox", { name: "Specific model" })
     .fill("gpt-5.4-nano");
   await page.getByRole("button", { name: "Save virtual model" }).click();
 

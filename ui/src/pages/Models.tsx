@@ -50,8 +50,10 @@ import { cleanEmpty, parseYamlText, toYamlText } from "../policies/policyUtils";
 import type { AuthorizationDraft } from "../policies/types";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import {
+  concreteModelName,
   isWildcardModelName,
   resolvedProviderLabel,
+  selectedConfiguredModelName,
   wildcardModelPrefix,
   wildcardResolvedSuffix,
 } from "../modelResolution";
@@ -82,7 +84,6 @@ import {
   failoverTargetGroups,
   isIncompleteWildcardTarget,
   modelTargetOptions,
-  selectedConfiguredTargetName,
   virtualModelStrategy,
   virtualModelSummary,
 } from "./models/virtualModelUtils";
@@ -1670,7 +1671,7 @@ function VirtualTargetSelector(props: {
   providers: LlmProvider[];
   onChange: (model: string) => void;
 }) {
-  const selectedModelName = selectedConfiguredTargetName(
+  const selectedModelName = selectedConfiguredModelName(
     props.targetModel,
     props.baseModels,
   );
@@ -1703,11 +1704,7 @@ function VirtualTargetSelector(props: {
         searchable
         options={props.options}
         placeholder="No configured models"
-        onChange={(value) =>
-          props.onChange(
-            isWildcardModelName(value) ? wildcardModelPrefix(value) : value,
-          )
-        }
+        onChange={(value) => props.onChange(concreteModelName(value, ""))}
       />
       {wildcard ? (
         <div className="target-resolved-composite">
@@ -1715,10 +1712,12 @@ function VirtualTargetSelector(props: {
             <span className="target-prefix">{wildcardPrefix}</span>
           ) : null}
           <CatalogModelSelector
-            ariaLabel="Resolved model"
+            ariaLabel="Specific model"
             value={resolvedSuffix}
             provider={provider}
-            onChange={(value) => props.onChange(`${wildcardPrefix}${value}`)}
+            onChange={(value) =>
+              props.onChange(concreteModelName(selectedModelName, value))
+            }
             placeholder="claude-haiku-4-5"
           />
         </div>

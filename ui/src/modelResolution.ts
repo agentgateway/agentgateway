@@ -59,3 +59,53 @@ export function wildcardResolvedSuffix(
     ? targetModel.slice(prefix.length)
     : targetModel;
 }
+
+export function selectedConfiguredModelName(
+  concreteModel: string,
+  models: LlmModel[],
+) {
+  const exact = models.find((model) => model.name === concreteModel);
+  if (exact) return exact.name;
+  const wildcard = models
+    .map((model, index) => ({ model, index }))
+    .filter(
+      ({ model }) =>
+        isWildcardModelName(model.name) &&
+        (concreteModel === wildcardModelPrefix(model.name) ||
+          wildcardMatchesModel(model.name, concreteModel)),
+    )
+    .sort((left, right) => {
+      const specificity =
+        wildcardSpecificity(right.model.name) -
+        wildcardSpecificity(left.model.name);
+      return specificity || left.index - right.index;
+    })[0]?.model;
+  return wildcard?.name ?? models[0]?.name ?? "";
+}
+
+export function concreteModelName(
+  configuredModelName: string,
+  specificModel: string,
+) {
+  if (!isWildcardModelName(configuredModelName)) return configuredModelName;
+  return `${wildcardModelPrefix(configuredModelName)}${specificModel}`;
+}
+
+function wildcardMatchesModel(pattern: string, model: string) {
+  if (pattern === "*") return Boolean(model.trim());
+  const wildcardIndex = pattern.indexOf("*");
+  if (wildcardIndex < 0) return pattern === model;
+  const prefix = pattern.slice(0, wildcardIndex);
+  const suffix = pattern.slice(wildcardIndex + 1);
+  return (
+    model.startsWith(prefix) &&
+    model.endsWith(suffix) &&
+    model.length > prefix.length + suffix.length
+  );
+}
+
+function wildcardSpecificity(pattern: string) {
+  const wildcardIndex = pattern.indexOf("*");
+  if (wildcardIndex < 0) return Number.MAX_SAFE_INTEGER;
+  return pattern.length - 1;
+}
