@@ -22,6 +22,8 @@ use crate::llm::cost::ModelCatalog;
 use crate::{Config, ConfigSource, client, yamlviajson};
 
 const BASE_COSTS_FILE: &str = "base-costs.json";
+const CONFIG_SCHEMA_HEADER: &str =
+	"# yaml-language-server: $schema=https://agentgateway.dev/schema/config\n";
 
 #[derive(Clone, Debug)]
 struct App {
@@ -194,6 +196,7 @@ async fn write_config(
 	};
 	let yaml_content =
 		yamlviajson::to_string(&config_json).map_err(|e| ErrorResponse::Anyhow(e.into()))?;
+	let yaml_file_content = format!("{CONFIG_SCHEMA_HEADER}{yaml_content}");
 
 	if let Err(e) = crate::types::local::NormalizedLocalConfig::from(
 		&app.state,
@@ -207,7 +210,7 @@ async fn write_config(
 	}
 
 	// Write the YAML content to the file
-	fs_err::tokio::write(file_path, yaml_content)
+	fs_err::tokio::write(file_path, yaml_file_content)
 		.await
 		.map_err(|e| ErrorResponse::Anyhow(e.into()))?;
 
