@@ -3,7 +3,6 @@ package syncer
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync/atomic"
 
 	securityclient "istio.io/client-go/pkg/apis/security/v1"
@@ -15,7 +14,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/slices"
-	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,7 +38,6 @@ import (
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
-	listenerv2 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
 )
 
 var (
