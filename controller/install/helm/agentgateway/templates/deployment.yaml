@@ -26,6 +26,9 @@ spec:
         {{- toYaml .Values.podAnnotations | nindent 8 }}
       labels:
         {{- include "agentgateway.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
