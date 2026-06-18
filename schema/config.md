@@ -11,6 +11,8 @@
 |`config.modelCatalog`|[]object|Model cost catalog sources; entries are merged in order, with later entries taking precedence.|
 |`config.modelCatalog[].file`|string||
 |`config.modelCatalog[].inline`|string||
+|`config.modelCatalog[].inline`|object||
+|`config.modelCatalog[].inline.providers`|object||
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string||
 |`config.caAddress`|string||

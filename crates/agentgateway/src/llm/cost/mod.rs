@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use arc_swap::ArcSwap;
-pub use catalog::Breakdown;
+pub use catalog::{Breakdown, Catalog};
 use catalog::{Catalog as CatalogData, Rates, Usage};
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::Decimal;
@@ -52,6 +52,7 @@ impl ModelCatalog {
 			.filter_map(|s| match s {
 				ModelCatalogSource::File { file } => Some(file.clone()),
 				ModelCatalogSource::Inline { .. } => None,
+				ModelCatalogSource::InlineCatalog { .. } => None,
 			})
 			.collect();
 		tokio::spawn({
@@ -484,6 +485,10 @@ async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCa
 			ModelCatalogSource::Inline { inline } => {
 				let catalog = catalog::from_json(inline).context("invalid inline model catalog")?;
 				catalogs.push(catalog);
+			},
+			ModelCatalogSource::InlineCatalog { inline } => {
+				inline.validate().context("invalid inline model catalog")?;
+				catalogs.push(inline.clone());
 			},
 		}
 	}

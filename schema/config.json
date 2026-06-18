@@ -395,7 +395,156 @@
           "required": [
             "inline"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "inline": {
+              "$ref": "#/$defs/Catalog"
+            }
+          },
+          "required": [
+            "inline"
+          ]
         }
+      ]
+    },
+    "Catalog": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Provider"
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "Provider": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Model"
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "Model": {
+      "type": "object",
+      "properties": {
+        "rates": {
+          "$ref": "#/$defs/Rates"
+        },
+        "tiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Tier"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Rates": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cacheRead": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cacheWrite": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoning": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputAudio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputAudio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Money": {
+      "type": "string"
+    },
+    "Tier": {
+      "type": "object",
+      "properties": {
+        "contextOver": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "rates": {
+          "$ref": "#/$defs/Rates"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "contextOver",
+        "rates"
       ]
     },
     "Config": {
