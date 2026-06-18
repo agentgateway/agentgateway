@@ -457,9 +457,9 @@ impl From<::bytes::Bytes> for Value<'static> {
 }
 
 // Convert &Bytes to Value
-impl From<&::bytes::Bytes> for Value<'static> {
-	fn from(v: &::bytes::Bytes) -> Self {
-		Value::Bytes(BytesValue::Bytes(v.clone()))
+impl<'a> From<&'a ::bytes::Bytes> for Value<'a> {
+	fn from(v: &'a ::bytes::Bytes) -> Self {
+		Value::Bytes(BytesValue::Borrowed(v))
 	}
 }
 
