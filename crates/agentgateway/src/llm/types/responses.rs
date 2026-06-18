@@ -402,29 +402,51 @@ impl RequestType for Request {
 	}
 }
 
-fn extract_tool_calls(output: &[OutputItem]) -> Option<Vec<ToolCall>> {
-	let tool_calls: Vec<ToolCall> = output
-		.iter()
-		.filter_map(|item| match item {
+fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
+	let mut content = Vec::new();
+
+	for item in &resp.output {
+		match item {
+			OutputItem::Message(msg) => {
+				for c in &msg.content {
+					if let Content::OutputText(t) = c {
+						if !t.text.is_empty() {
+							content.push(OutputMessagePart::Text {
+								text: t.text.clone(),
+							});
+						}
+					}
+				}
+			},
 			OutputItem::FunctionCall(call) => {
 				let id = call.id.as_deref().unwrap_or(call.call_id.as_str());
-				Some(ToolCall {
+				let arguments = serde_json::from_str(&call.arguments)
+					.unwrap_or(serde_json::Value::Object(Default::default()));
+				content.push(OutputMessagePart::ToolCall {
 					id: strng::new(id),
 					name: strng::new(&call.name),
-					arguments: strng::new(&call.arguments),
-				})
+					arguments,
+				});
 			},
-			_ => None,
-		})
-		.collect();
+			_ => {},
+		}
+	}
 
-	(!tool_calls.is_empty()).then_some(tool_calls)
+	if content.is_empty() {
+		return None;
+	}
+
+	Some(vec![OutputMessage {
+		role: strng::literal!("assistant"),
+		content,
+		finish_reason: Some(strng::new(&resp.status)),
+	}])
 }
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
-		let tool_calls = if include_completion_in_log {
-			extract_tool_calls(&self.output)
+		let output_messages = if include_completion_in_log {
+			extract_output_messages(self)
 		} else {
 			None
 		};
@@ -479,7 +501,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
-			tool_calls,
+			output_messages,
 			first_token: Default::default(),
 		}
 	}
@@ -638,21 +660,22 @@ mod tests {
 		})]);
 
 		let llm_response = response.to_llm_response(true);
-		let tool_calls = llm_response
-			.tool_calls
-			.expect("tool_calls should be present");
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be present");
+		let tool_calls = messages[0].tool_calls();
 
 		assert_eq!(tool_calls.len(), 1);
 		assert_eq!(tool_calls[0].id.as_str(), "fc_123");
 		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
 		assert_eq!(
-			tool_calls[0].arguments.as_str(),
-			r#"{"location":"San Francisco"}"#
+			tool_calls[0].arguments,
+			serde_json::json!({"location":"San Francisco"})
 		);
 	}
 
 	#[test]
-	fn test_response_tool_calls_omitted_when_flag_false() {
+	fn test_response_output_messages_omitted_when_flag_false() {
 		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
 			arguments: "{}".to_string(),
 			call_id: "call_123".to_string(),
@@ -664,6 +687,6 @@ mod tests {
 
 		let llm_response = response.to_llm_response(false);
 
-		assert!(llm_response.tool_calls.is_none());
+		assert!(llm_response.output_messages.is_none());
 	}
 }

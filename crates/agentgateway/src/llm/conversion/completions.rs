@@ -441,14 +441,14 @@ pub mod from_messages {
 			}
 
 			if include_completion_in_log
-				&& let Some(tool_calls) = super::finalize_streaming_tool_calls(
+				&& let Some(tool_parts) = super::finalize_streaming_tool_calls(
 					state
 						.pending_tool_calls
 						.drain()
 						.map(|(idx, call)| (idx, call.id, call.name, call.arguments)),
 				) {
 				log.non_atomic_mutate(|r| {
-					r.response.tool_calls = Some(tool_calls);
+					super::build_output_messages(&mut r.response, None, Some(tool_parts));
 				});
 			}
 		}
@@ -989,23 +989,51 @@ pub mod from_messages {
 	}
 }
 
-/// Build the observability tool-call list from accumulated streaming deltas,
+/// Build the observability tool-call content parts from accumulated streaming deltas,
 /// keyed by tool-call index. Synthesizes an id when the provider omitted one,
 /// and returns `None` when there are no tool calls.
 fn finalize_streaming_tool_calls(
 	entries: impl IntoIterator<Item = (u32, Option<String>, Option<String>, String)>,
-) -> Option<Vec<llm::ToolCall>> {
+) -> Option<Vec<llm::OutputMessagePart>> {
 	let mut entries: Vec<_> = entries.into_iter().collect();
 	entries.sort_by_key(|(idx, ..)| *idx);
-	let tool_calls: Vec<llm::ToolCall> = entries
+	let parts: Vec<llm::OutputMessagePart> = entries
 		.into_iter()
-		.map(|(idx, id, name, arguments)| llm::ToolCall {
-			id: id.unwrap_or_else(|| format!("tool_call_{idx}")).into(),
-			name: name.unwrap_or_default().into(),
-			arguments: arguments.into(),
+		.map(|(idx, id, name, arguments)| {
+			let arguments = serde_json::from_str(&arguments)
+				.unwrap_or(serde_json::Value::Object(Default::default()));
+			llm::OutputMessagePart::ToolCall {
+				id: id.unwrap_or_else(|| format!("tool_call_{idx}")).into(),
+				name: name.unwrap_or_default().into(),
+				arguments,
+			}
 		})
 		.collect();
-	(!tool_calls.is_empty()).then_some(tool_calls)
+	(!parts.is_empty()).then_some(parts)
+}
+
+/// Builds `output_messages` on `LLMResponse` from accumulated text and tool call parts.
+pub(crate) fn build_output_messages(
+	response: &mut llm::LLMResponse,
+	text: Option<String>,
+	tool_parts: Option<Vec<llm::OutputMessagePart>>,
+) {
+	let mut content = Vec::new();
+	if let Some(t) = text {
+		if !t.is_empty() {
+			content.push(llm::OutputMessagePart::Text { text: t });
+		}
+	}
+	if let Some(parts) = tool_parts {
+		content.extend(parts);
+	}
+	if !content.is_empty() {
+		response.output_messages = Some(vec![llm::OutputMessage {
+			role: agent_core::strng::literal!("assistant"),
+			content,
+			finish_reason: None,
+		}]);
+	}
 }
 
 pub fn passthrough_stream(
@@ -1022,7 +1050,7 @@ pub fn passthrough_stream(
 
 	fn finalize_tool_calls(
 		pending: &mut std::collections::HashMap<u32, PendingPassthroughToolCall>,
-	) -> Option<Vec<llm::ToolCall>> {
+	) -> Option<Vec<llm::OutputMessagePart>> {
 		finalize_streaming_tool_calls(
 			pending
 				.drain()
@@ -1101,14 +1129,18 @@ pub fn passthrough_stream(
 									.completion_tokens_details
 									.as_ref()
 									.and_then(|d| d.reasoning_tokens);
-								if let Some(c) = completion.take() {
-									r.response.completion = Some(vec![c]);
+								let text_part = completion.take();
+								if let Some(c) = &text_part {
+									r.response.completion = Some(vec![c.clone()]);
 								}
-								if let Some(pending) = pending_tool_calls.as_mut()
-									&& let Some(tc) = finalize_tool_calls(pending)
-								{
-									r.response.tool_calls = Some(tc);
-								}
+								let tool_parts = pending_tool_calls
+									.as_mut()
+									.and_then(|p| finalize_tool_calls(p));
+								build_output_messages(
+									&mut r.response,
+									text_part,
+									tool_parts,
+								);
 							});
 
 							log.report_rate_limit();
@@ -1121,14 +1153,18 @@ pub fn passthrough_stream(
 						// We are done, try to set completion if we haven't already
 						// This is useful in case we never see "usage"
 						log.non_atomic_mutate(|r| {
-							if let Some(c) = completion.take() {
-								r.response.completion = Some(vec![c]);
+							let text_part = completion.take();
+							if let Some(c) = &text_part {
+								r.response.completion = Some(vec![c.clone()]);
 							}
-							if let Some(pending) = pending_tool_calls.as_mut()
-								&& let Some(tc) = finalize_tool_calls(pending)
-							{
-								r.response.tool_calls = Some(tc);
-							}
+							let tool_parts = pending_tool_calls
+								.as_mut()
+								.and_then(|p| finalize_tool_calls(p));
+							build_output_messages(
+								&mut r.response,
+								text_part,
+								tool_parts,
+							);
 						});
 					},
 				}

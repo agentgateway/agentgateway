@@ -611,7 +611,7 @@ mod response {
 		("stream_tool_empty_content", &[COMPLETIONS_TO_MESSAGES]),
 	];
 	// Streaming fixtures replayed with include_completion_in_log=true so the
-	// streaming tool-call aggregator populates LLMResponse.tool_calls. Kept
+	// streaming tool-call aggregator populates LLMResponse.output_messages. Kept
 	// separate from COMPLETIONS_STREAM_RESPONSES so existing flag-disabled
 	// snapshots remain unchanged.
 	const COMPLETIONS_STREAM_TOOL_CALL_RESPONSES: &[(&str, &[&str])] = &[(

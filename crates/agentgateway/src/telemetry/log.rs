@@ -1092,10 +1092,10 @@ impl Drop for DropOnLog {
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
 			let cost = llm_response.as_ref().and_then(|l| l.cost.as_ref());
 			let usage_cost_total = cost.map(|b| b.total().to_string());
-			let tool_calls_json = llm_response
+			let output_messages_json = llm_response
 				.as_ref()
-				.and_then(|l| l.tool_calls.as_ref())
-				.and_then(|tc| serde_json::to_string(tc).ok());
+				.and_then(|l| l.output_messages.as_ref())
+				.and_then(|msgs| serde_json::to_string(msgs).ok());
 			let trace_cost_fields = if enable_trace {
 				cost.map(|b| {
 					[
@@ -1285,8 +1285,8 @@ impl Drop for DropOnLog {
 						.map(Into::into),
 				),
 				(
-					"gen_ai.tool_calls",
-					tool_calls_json.as_deref().map(Into::into),
+					"gen_ai.output.messages",
+					output_messages_json.as_deref().map(Into::into),
 				),
 				(
 					"gen_ai.request.temperature",
@@ -2051,7 +2051,7 @@ mod tests {
 	}
 
 	#[test]
-	fn tool_calls_emitted_as_span_attribute_when_present() {
+	fn output_messages_emitted_as_span_attribute_when_present() {
 		let request = llm::LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Completions,
@@ -2064,10 +2064,14 @@ mod tests {
 			prompt: None,
 		};
 		let response = llm::LLMResponse {
-			tool_calls: Some(vec![llm::ToolCall {
-				id: strng::literal!("call_1"),
-				name: strng::literal!("get_weather"),
-				arguments: strng::literal!("{\"city\":\"sf\"}"),
+			output_messages: Some(vec![llm::OutputMessage {
+				role: strng::literal!("assistant"),
+				content: vec![llm::OutputMessagePart::ToolCall {
+					id: strng::literal!("call_1"),
+					name: strng::literal!("get_weather"),
+					arguments: serde_json::json!({"city": "sf"}),
+				}],
+				finish_reason: Some(strng::literal!("tool_calls")),
 			}]),
 			..Default::default()
 		};
@@ -2091,20 +2095,28 @@ mod tests {
 			.iter()
 			.find(|span| span.name.as_ref() == "unknown")
 			.expect("request span should be exported");
-		let tool_calls = span
+		let output_messages = span
 			.attributes
 			.iter()
-			.find(|attr| attr.key.as_str() == "gen_ai.tool_calls")
-			.expect("expected gen_ai.tool_calls span attribute");
-		let value = tool_calls.value.as_str();
+			.find(|attr| attr.key.as_str() == "gen_ai.output.messages")
+			.expect("expected gen_ai.output.messages span attribute");
+		let value = output_messages.value.as_str();
 		assert!(
 			value.contains("get_weather"),
-			"tool_calls attribute should contain the invoked tool name, got {value}"
+			"gen_ai.output.messages should contain the invoked tool name, got {value}"
+		);
+		assert!(
+			value.contains("tool_call"),
+			"gen_ai.output.messages should contain tool_call type, got {value}"
+		);
+		assert!(
+			value.contains("tool_calls"),
+			"gen_ai.output.messages should contain finish_reason, got {value}"
 		);
 	}
 
 	#[test]
-	fn tool_calls_absent_when_no_tool_calls() {
+	fn output_messages_absent_when_none() {
 		let request = llm::LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Completions,
@@ -2117,7 +2129,7 @@ mod tests {
 			prompt: None,
 		};
 		let response = llm::LLMResponse {
-			tool_calls: None,
+			output_messages: None,
 			..Default::default()
 		};
 
@@ -2144,8 +2156,8 @@ mod tests {
 			span
 				.attributes
 				.iter()
-				.all(|attr| attr.key.as_str() != "gen_ai.tool_calls"),
-			"gen_ai.tool_calls must not be emitted when there are no tool calls"
+				.all(|attr| attr.key.as_str() != "gen_ai.output.messages"),
+			"gen_ai.output.messages must not be emitted when there are no output messages"
 		);
 	}
 }

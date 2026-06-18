@@ -30,11 +30,19 @@ data: {"type":"message_stop"}
   "output_tokens": 8,
   "total_tokens": 20,
   "provider_model": "claude-opus-4-8",
-  "tool_calls": [
+  "output_messages": [
     {
-      "id": "toolu_empty_content",
-      "name": "Bash",
-      "arguments": "{\"command\":\"pwd\"}"
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "toolu_empty_content",
+          "name": "Bash",
+          "arguments": {
+            "command": "pwd"
+          }
+        }
+      ]
     }
   ]
 }

@@ -4,7 +4,9 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::policy::webhook::{Message, ResponseChoice};
-use crate::llm::types::{RequestType, ResponseType, SimpleChatCompletionMessage, ToolCall};
+use crate::llm::types::{
+	OutputMessage, OutputMessagePart, RequestType, ResponseType, SimpleChatCompletionMessage,
+};
 use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
 
 #[derive(Debug, Deserialize, Clone, Serialize, Default)]
@@ -359,38 +361,56 @@ impl From<SimpleChatCompletionMessage> for RequestMessage {
 	}
 }
 
-fn extract_tool_calls_from_content(content: &[Content]) -> Option<Vec<ToolCall>> {
-	let tool_calls: Vec<ToolCall> = content
-		.iter()
-		.filter_map(|c| {
-			let typ = c.rest.get("type")?.as_str()?;
-			if typ != "tool_use" && typ != "server_tool_use" {
-				return None;
+fn extract_output_message(resp: &Response) -> Option<Vec<OutputMessage>> {
+	let mut content = Vec::new();
+
+	for c in &resp.content {
+		if let Some(text) = &c.text {
+			let typ = c.rest.get("type").and_then(|v| v.as_str()).unwrap_or("text");
+			if typ == "text" && !text.is_empty() {
+				content.push(OutputMessagePart::Text { text: text.clone() });
 			}
-			let id = c.rest.get("id")?.as_str().unwrap_or("");
-			let name = c.rest.get("name")?.as_str().unwrap_or("");
-			// Mirror the typed path, which always serializes the `input` Value;
-			// fall back to an empty JSON object when the provider omitted it.
+		}
+		let typ = c.rest.get("type").and_then(|v| v.as_str());
+		if matches!(typ, Some("tool_use" | "server_tool_use")) {
+			let id = c
+				.rest
+				.get("id")
+				.and_then(|v| v.as_str())
+				.unwrap_or("");
+			let name = c
+				.rest
+				.get("name")
+				.and_then(|v| v.as_str())
+				.unwrap_or("");
 			let arguments = c
 				.rest
 				.get("input")
-				.map(|v| v.to_string())
-				.unwrap_or_else(|| "{}".to_string());
-			Some(ToolCall {
+				.cloned()
+				.unwrap_or(serde_json::Value::Object(Default::default()));
+			content.push(OutputMessagePart::ToolCall {
 				id: strng::new(id),
 				name: strng::new(name),
-				arguments: strng::new(&arguments),
-			})
-		})
-		.collect();
+				arguments,
+			});
+		}
+	}
 
-	(!tool_calls.is_empty()).then_some(tool_calls)
+	if content.is_empty() {
+		return None;
+	}
+
+	Some(vec![OutputMessage {
+		role: strng::new(&resp.role),
+		content,
+		finish_reason: resp.stop_reason.as_deref().map(strng::new),
+	}])
 }
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
-		let tool_calls = if include_completion_in_log {
-			extract_tool_calls_from_content(&self.content)
+		let output_messages = if include_completion_in_log {
+			extract_output_message(self)
 		} else {
 			None
 		};
@@ -422,7 +442,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
-			tool_calls,
+			output_messages,
 			first_token: Default::default(),
 		}
 	}
@@ -1035,33 +1055,63 @@ pub mod typed {
 		pub fields: std::collections::HashMap<String, String>,
 	}
 
-	fn extract_tool_calls_from_content_blocks(
-		content: &[ContentBlock],
-	) -> Option<Vec<super::ToolCall>> {
-		let tool_calls: Vec<super::ToolCall> = content
-			.iter()
-			.filter_map(|block| match block {
+	fn extract_output_message_from_typed(resp: &MessagesResponse) -> Option<Vec<super::OutputMessage>> {
+		let mut content = Vec::new();
+
+		for block in &resp.content {
+			match block {
+				ContentBlock::Text(t) => {
+					if !t.text.is_empty() {
+						content.push(super::OutputMessagePart::Text {
+							text: t.text.clone(),
+						});
+					}
+				},
 				ContentBlock::ToolUse {
 					id, name, input, ..
 				}
 				| ContentBlock::ServerToolUse {
 					id, name, input, ..
-				} => Some(super::ToolCall {
-					id: agent_core::strng::new(id),
-					name: agent_core::strng::new(name),
-					arguments: agent_core::strng::new(input.to_string()),
-				}),
-				_ => None,
-			})
-			.collect();
+				} => {
+					content.push(super::OutputMessagePart::ToolCall {
+						id: agent_core::strng::new(id),
+						name: agent_core::strng::new(name),
+						arguments: input.clone(),
+					});
+				},
+				_ => {},
+			}
+		}
 
-		(!tool_calls.is_empty()).then_some(tool_calls)
+		if content.is_empty() {
+			return None;
+		}
+
+		let finish_reason = resp.stop_reason.as_ref().map(|sr| {
+			let s = serde_json::to_value(sr)
+				.ok()
+				.and_then(|v| v.as_str().map(String::from))
+				.unwrap_or_default();
+			agent_core::strng::new(&s)
+		});
+
+		let role_str = match resp.role {
+			Role::User => "user",
+			Role::Assistant => "assistant",
+			Role::System => "system",
+		};
+
+		Some(vec![super::OutputMessage {
+			role: agent_core::strng::new(role_str),
+			content,
+			finish_reason,
+		}])
 	}
 
 	impl super::ResponseType for MessagesResponse {
 		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
-			let tool_calls = if include_completion_in_log {
-				extract_tool_calls_from_content_blocks(&self.content)
+			let output_messages = if include_completion_in_log {
+				extract_output_message_from_typed(self)
 			} else {
 				None
 			};
@@ -1096,7 +1146,7 @@ pub mod typed {
 				} else {
 					None
 				},
-				tool_calls,
+				output_messages,
 				first_token: Default::default(),
 			}
 		}
@@ -1186,30 +1236,37 @@ mod tests {
 	}
 
 	#[test]
-	fn test_typed_response_tool_calls_populated_when_flag_true() {
+	fn test_typed_response_output_messages_populated_when_flag_true() {
 		let response = make_typed_response_with_tool_use();
 		let llm_response = response.to_llm_response(true);
 
-		let tool_calls = llm_response.tool_calls.expect("tool_calls should be Some");
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be Some");
+		assert_eq!(messages.len(), 1);
+		assert_eq!(messages[0].role.as_str(), "assistant");
+		assert_eq!(messages[0].finish_reason.as_deref(), Some("tool_use"));
+
+		let tool_calls = messages[0].tool_calls();
 		assert_eq!(tool_calls.len(), 2);
 
 		assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
 		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
 		assert_eq!(
-			tool_calls[0].arguments.as_str(),
-			r#"{"location":"San Francisco"}"#
+			tool_calls[0].arguments,
+			serde_json::json!({"location":"San Francisco"})
 		);
 
 		assert_eq!(tool_calls[1].id.as_str(), "srvtoolu_01B");
 		assert_eq!(tool_calls[1].name.as_str(), "web_search");
 		assert_eq!(
-			tool_calls[1].arguments.as_str(),
-			r#"{"query":"rust programming"}"#
+			tool_calls[1].arguments,
+			serde_json::json!({"query":"rust programming"})
 		);
 	}
 
 	#[test]
-	fn test_typed_response_no_tool_calls_returns_none() {
+	fn test_typed_response_text_only_has_text_content() {
 		let response = typed::MessagesResponse {
 			id: "msg_test2".to_string(),
 			r#type: "message".to_string(),
@@ -1234,11 +1291,15 @@ mod tests {
 		};
 
 		let llm_response = response.to_llm_response(true);
-		assert!(llm_response.tool_calls.is_none());
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be present for text-only response");
+		assert!(messages[0].tool_calls().is_empty());
+		assert_eq!(messages[0].finish_reason.as_deref(), Some("end_turn"));
 	}
 
 	#[test]
-	fn test_weakly_typed_response_tool_calls_from_rest() {
+	fn test_weakly_typed_response_output_messages_from_rest() {
 		let response = Response {
 			id: "msg_test3".to_string(),
 			r#type: "message".to_string(),
@@ -1276,13 +1337,22 @@ mod tests {
 
 		let llm_response = response.to_llm_response(true);
 
-		let tool_calls = llm_response.tool_calls.expect("tool_calls should be Some");
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be Some");
+		assert_eq!(messages[0].role.as_str(), "assistant");
+		assert_eq!(messages[0].finish_reason.as_deref(), Some("tool_use"));
+
+		// Should have text + tool_call parts
+		assert_eq!(messages[0].content.len(), 2);
+
+		let tool_calls = messages[0].tool_calls();
 		assert_eq!(tool_calls.len(), 1);
 		assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
 		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
 		assert_eq!(
-			tool_calls[0].arguments.as_str(),
-			r#"{"location":"San Francisco"}"#
+			tool_calls[0].arguments,
+			serde_json::json!({"location":"San Francisco"})
 		);
 	}
 }

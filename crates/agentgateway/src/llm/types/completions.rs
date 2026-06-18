@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::llm::bedrock::Provider;
 use crate::llm::policy::webhook::{Message, ResponseChoice};
-use crate::llm::types::{ResponseType, SimpleChatCompletionMessage, ToolCall};
+use crate::llm::types::{
+	OutputMessage, OutputMessagePart, ResponseType, SimpleChatCompletionMessage,
+};
 use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
 use crate::{json, llm};
 
@@ -150,8 +152,8 @@ pub struct Usage {
 
 impl ResponseType for Response {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
-		let tool_calls = if include_completion_in_log {
-			extract_tool_calls(&self.choices)
+		let output_messages = if include_completion_in_log {
+			extract_output_messages(&self.choices)
 		} else {
 			None
 		};
@@ -202,7 +204,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
-			tool_calls,
+			output_messages,
 			first_token: Default::default(),
 		}
 	}
@@ -236,40 +238,68 @@ impl ResponseType for Response {
 	}
 }
 
-fn extract_tool_calls(choices: &[Choice]) -> Option<Vec<ToolCall>> {
-	let mut tool_calls = Vec::new();
+fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
+	let messages: Vec<OutputMessage> = choices
+		.iter()
+		.map(|choice| {
+			let mut content = Vec::new();
 
-	for choice in choices {
-		if let Some(tc_array) = choice
-			.message
-			.rest
-			.get("tool_calls")
-			.and_then(|v| v.as_array())
-		{
-			for (idx, tc_item) in tc_array.iter().enumerate() {
-				if let Some(function) = tc_item.get("function").and_then(|v| v.as_object()) {
-					let id = tc_item
-						.get("id")
-						.and_then(|v| v.as_str())
-						.map(strng::new)
-						.unwrap_or_else(|| format!("tool_call_{idx}").into());
-					let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
-					let arguments = function
-						.get("arguments")
-						.and_then(|v| v.as_str())
-						.unwrap_or("");
-
-					tool_calls.push(ToolCall {
-						id,
-						name: strng::new(name),
-						arguments: strng::new(arguments),
-					});
+			if let Some(text) = &choice.message.content {
+				if !text.is_empty() {
+					content.push(OutputMessagePart::Text { text: text.clone() });
 				}
 			}
-		}
-	}
 
-	(!tool_calls.is_empty()).then_some(tool_calls)
+			if let Some(tc_array) = choice
+				.message
+				.rest
+				.get("tool_calls")
+				.and_then(|v| v.as_array())
+			{
+				for (idx, tc_item) in tc_array.iter().enumerate() {
+					if let Some(function) = tc_item.get("function").and_then(|v| v.as_object()) {
+						let id = tc_item
+							.get("id")
+							.and_then(|v| v.as_str())
+							.map(strng::new)
+							.unwrap_or_else(|| format!("tool_call_{idx}").into());
+						let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
+						let arguments = function
+							.get("arguments")
+							.and_then(|v| v.as_str())
+							.and_then(|s| serde_json::from_str(s).ok())
+							.unwrap_or(serde_json::Value::Object(Default::default()));
+
+						content.push(OutputMessagePart::ToolCall {
+							id,
+							name: strng::new(name),
+							arguments,
+						});
+					}
+				}
+			}
+
+			let finish_reason = choice
+				.rest
+				.get("finish_reason")
+				.and_then(|v| v.as_str())
+				.map(strng::new);
+
+			OutputMessage {
+				role: strng::new(
+					choice
+						.message
+						.role
+						.as_deref()
+						.unwrap_or("assistant"),
+				),
+				content,
+				finish_reason,
+			}
+		})
+		.collect();
+
+	(!messages.is_empty()).then_some(messages)
 }
 
 impl super::RequestType for Request {
@@ -1126,16 +1156,24 @@ mod tests {
 		let response: Response = serde_json::from_str(json_str).expect("Failed to parse JSON");
 		let llm_response = response.to_llm_response(true);
 
-		let tool_calls = llm_response
-			.tool_calls
-			.expect("tool_calls should be present");
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be present");
+		assert_eq!(messages.len(), 1);
+		assert_eq!(messages[0].role.as_str(), "assistant");
+		assert_eq!(
+			messages[0].finish_reason.as_deref(),
+			Some("tool_calls")
+		);
+
+		let tool_calls: Vec<_> = messages[0].tool_calls();
 		assert_eq!(tool_calls.len(), 2);
 
 		assert_eq!(tool_calls[0].id.as_str(), "call_1");
 		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
 		assert_eq!(
-			tool_calls[0].arguments.as_str(),
-			r#"{"location": "San Francisco"}"#
+			tool_calls[0].arguments,
+			serde_json::json!({"location": "San Francisco"})
 		);
 		assert_eq!(tool_calls[1].id.as_str(), "call_2");
 		assert_eq!(tool_calls[1].name.as_str(), "func_b");
@@ -1179,13 +1217,13 @@ mod tests {
 		let llm_response = response.to_llm_response(false);
 
 		assert!(
-			llm_response.tool_calls.is_none(),
-			"tool_calls should be None when flag is false"
+			llm_response.output_messages.is_none(),
+			"output_messages should be None when flag is false"
 		);
 	}
 
 	#[test]
-	fn test_no_tool_calls_in_response() {
+	fn test_no_output_messages_in_response() {
 		let json_str = r#"{
 			"id": "chatcmpl-test",
 			"object": "chat.completion",
@@ -1211,9 +1249,12 @@ mod tests {
 		let response: Response = serde_json::from_str(json_str).expect("Failed to parse JSON");
 		let llm_response = response.to_llm_response(true);
 
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be present for text-only response");
 		assert!(
-			llm_response.tool_calls.is_none(),
-			"tool_calls should be None when no tool calls in response"
+			messages[0].tool_calls().is_empty(),
+			"tool_calls should be empty when no tool calls in response"
 		);
 	}
 }

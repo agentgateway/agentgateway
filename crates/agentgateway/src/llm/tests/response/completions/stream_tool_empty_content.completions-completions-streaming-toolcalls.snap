@@ -33,11 +33,19 @@ data: [DONE]
   "completion": [
     ""
   ],
-  "tool_calls": [
+  "output_messages": [
     {
-      "id": "toolu_empty_content",
-      "name": "Bash",
-      "arguments": "{\"command\":\"pwd\"}"
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "toolu_empty_content",
+          "name": "Bash",
+          "arguments": {
+            "command": "pwd"
+          }
+        }
+      ]
     }
   ]
 }

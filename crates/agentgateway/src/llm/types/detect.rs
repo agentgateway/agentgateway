@@ -412,7 +412,7 @@ impl ResponseType for Response {
 				.map(Into::into),
 			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			completion: None,
-			tool_calls: None,
+			output_messages: None,
 			// TODO: we could probably derive this
 			first_token: None,
 		}

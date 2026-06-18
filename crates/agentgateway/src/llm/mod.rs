@@ -41,7 +41,7 @@ pub mod policy;
 mod types;
 
 use policy::streaming_guardrails::GuardedSseBody;
-pub use types::{SimpleChatCompletionMessage, ToolCall};
+pub use types::{OutputMessage, OutputMessagePart, SimpleChatCompletionMessage, ToolCall};
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
 use crate::proxy::dtrace;
@@ -341,7 +341,7 @@ pub struct LLMResponse {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub tool_calls: Option<Vec<ToolCall>>,
+	pub output_messages: Option<Vec<OutputMessage>>,
 
 	#[serde(skip)]
 	// Time to get the first token. Only used for streaming.
