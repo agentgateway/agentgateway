@@ -8,7 +8,8 @@ use crate::llm::RequestType;
 use crate::llm::bedrock::AwsRegion;
 use crate::llm::policy::BedrockGuardrails;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
+use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -113,13 +114,18 @@ impl ApplyGuardrailResponse {
 impl BedrockGuardrails {
 	/// User-provided policies come first so they take precedence during resolution
 	/// then system TLS and implicit AWS auth are appended as fallbacks.
-	pub(crate) fn build_request_policies(&self) -> Vec<BackendPolicy> {
-		let mut pols: Vec<BackendPolicy> = self.policies.to_vec();
-		pols.push(BackendPolicy::BackendTLS(
+	pub(crate) fn build_request_policies(&self) -> Vec<BackendTrafficPolicy> {
+		let mut pols: Vec<BackendTrafficPolicy> = self.policies.to_vec();
+		pols.push(BackendTrafficPolicy::BackendTLS(
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
-		pols.push(BackendPolicy::BackendAuth(BackendAuth::Aws(
-			AwsAuth::Implicit {},
+		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
+			AwsAuth::Implicit {
+				service_name: None,
+				assume_role: None,
+				source_credentials_cache: Default::default(),
+				assume_role_cache: Default::default(),
+			},
 		)));
 		pols
 	}
@@ -215,12 +221,13 @@ async fn send_guardrail_request(
 
 	let req = rb.body(crate::http::Body::from(serde_json::to_vec(&request_body)?))?;
 
-	let mock_be = SimpleBackend::Opaque(
+	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_bedrock-guardrails"), strng::literal!("")),
-		Target::Hostname(host, 443),
+		(),
 	);
 
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 

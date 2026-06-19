@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: denied-svc
+  namespace: backend-ns
+spec:
+  ports:
+    - port: 9002
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: denied-service-source
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      grpc: {}
+      backendRef:
+        name: denied-svc
+        namespace: backend-ns
+        port: 9002
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: denied-service-backend-policy
+  namespace: backend-ns
+spec:
+  targetRefs:
+    - kind: Service
+      name: denied-svc
+      group: ""
+  backend:
+    health:
+      unhealthyCondition: response.code >= 500
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/denied-service-source:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: denied-service-source
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          grpc: {}
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: denied-service-backend-policy
+    namespace: backend-ns
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: Service backend-ns/denied-svc is not attached
+          to any Gateway'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: denied-service-source
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'failed to build extAuth: backendRef backend-ns/denied-svc not accessible
+          to an AgentgatewayPolicy in namespace "default" (missing a ReferenceGrant?)'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

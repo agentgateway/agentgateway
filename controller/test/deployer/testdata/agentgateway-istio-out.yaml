@@ -74,7 +74,6 @@ spec:
       annotations:
         checksum/config: 864542ed2e0b0de7cfd066cda1995c0816d7b62bfd2ec96fd7eaa6f50f2624aa
         checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
-        gateway.kgateway.dev/gateway-full-name: gw
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
         prometheus.io/scrape: "true"
@@ -141,6 +140,10 @@ spec:
           value: https://foo:443
         - name: TRUST_DOMAIN
           value: not.cluster.local
+        - name: CLUSTER_ID
+          value: cluster-1
+        - name: NETWORK
+          value: network-1
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:
@@ -152,7 +155,10 @@ spec:
             path: /healthz/ready
             port: 15021
           periodSeconds: 10
-        resources: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -179,8 +185,10 @@ spec:
           readOnly: true
         - mountPath: /var/run/secrets/istio
           name: istiod-ca-cert
+          readOnly: true
         - mountPath: /var/run/secrets/tokens
           name: istio-token
+          readOnly: true
       securityContext:
         sysctls:
         - name: net.ipv4.ip_unprivileged_port_start

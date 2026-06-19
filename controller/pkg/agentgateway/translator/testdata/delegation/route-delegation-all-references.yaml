@@ -204,7 +204,7 @@ output:
   resource:
     route:
       backends:
-      - routeGroupKey: team1/*
+      - routeGroupKey: default/parent/team1/*
         weight: 1
       hostnames:
       - delegation.example
@@ -226,7 +226,7 @@ output:
       - backend:
           backend: grandchild/grandchild
         weight: 1
-      key: grandchild/grandchild.00.routegroup.grandchild.wildcard
+      key: grandchild/grandchild.00.routegroup.team1.child-team1-foo.grandchild.wildcard
       matches:
       - path:
           pathPrefix: /anything/team1/grandchild/foo
@@ -234,7 +234,7 @@ output:
         kind: HTTPRoute
         name: grandchild
         namespace: grandchild
-      routeGroupKey: grandchild/*
+      routeGroupKey: team1/child-team1-foo/grandchild/*
 - gateway:
     Name: test-gateway
     Namespace: default
@@ -244,7 +244,7 @@ output:
       - backend:
           backend: team1/route-backend
         weight: 1
-      key: team1/child-team1-foo.00.routegroup.team1.wildcard
+      key: team1/child-team1-foo.00.routegroup.default.parent.team1.wildcard
       matches:
       - path:
           pathPrefix: /anything/team1/foo
@@ -252,16 +252,16 @@ output:
         kind: HTTPRoute
         name: child-team1-foo
         namespace: team1
-      routeGroupKey: team1/*
+      routeGroupKey: default/parent/team1/*
 - gateway:
     Name: test-gateway
     Namespace: default
   resource:
     route:
       backends:
-      - routeGroupKey: grandchild/*
+      - routeGroupKey: team1/child-team1-foo/grandchild/*
         weight: 1
-      key: team1/child-team1-foo.01.routegroup.team1.wildcard
+      key: team1/child-team1-foo.01.routegroup.default.parent.team1.wildcard
       matches:
       - path:
           pathPrefix: /anything/team1/grandchild
@@ -269,7 +269,7 @@ output:
         kind: HTTPRoute
         name: child-team1-foo
         namespace: team1
-      routeGroupKey: team1/*
+      routeGroupKey: default/parent/team1/*
 status:
 - apiVersion: gateway.networking.k8s.io/v1
   kind: HTTPRoute

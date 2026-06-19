@@ -2,12 +2,14 @@ package agentgatewaybackend
 
 import (
 	"fmt"
+	"strings"
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/agentgateway/agentgateway/api"
 	apiannotations "github.com/agentgateway/agentgateway/controller/api/annotations"
@@ -98,9 +100,21 @@ func TranslateMCPSelectorTargets(
 				appProtocol != mcpProtocolLegacy && appProtocol != mcpProtocolSSELegacy {
 				continue
 			}
-			targetName := service.Name + fmt.Sprintf("-%d", port.Port)
-			if port.Name != "" {
-				targetName = service.Name + "-" + port.Name
+			targetName := service.Annotations[apiannotations.MCPServiceTargetName]
+			if targetName == "" {
+				targetName = service.Name + fmt.Sprintf("-%d", port.Port)
+				if port.Name != "" {
+					targetName = service.Name + "-" + port.Name
+				}
+			} else if errs := validation.IsDNS1123Subdomain(targetName); len(errs) > 0 {
+				return nil, fmt.Errorf(
+					"invalid Service %s/%s annotation %s value %q: must be a valid Gateway API SectionName: %s",
+					service.Namespace,
+					service.Name,
+					apiannotations.MCPServiceTargetName,
+					targetName,
+					strings.Join(errs, "; "),
+				)
 			}
 
 			path := service.Annotations[apiannotations.MCPServiceHTTPPath]

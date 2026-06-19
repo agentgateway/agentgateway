@@ -2,6 +2,7 @@ package plugins
 
 import (
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
+	"istio.io/istio/pilot/pkg/serviceregistry/ambient"
 	"istio.io/istio/pkg/config/schema/gvr"
 	istiokube "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient"
@@ -19,6 +20,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	kgwversioned "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
+	"github.com/agentgateway/agentgateway/controller/pkg/meshconfig"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	krtpkg "github.com/agentgateway/agentgateway/controller/pkg/utils/krtutil"
@@ -47,23 +49,30 @@ type AgwCollections struct {
 	// Istio resources for ambient mesh
 	WorkloadEntries krt.Collection[*networkingclient.WorkloadEntry]
 	ServiceEntries  krt.Collection[*networkingclient.ServiceEntry]
+	MeshConfig      krt.Singleton[ambient.MeshConfig]
 
 	// Gateway API resources
-	GatewayClasses     krt.Collection[*gwv1.GatewayClass]
-	Gateways           krt.Collection[*gwv1.Gateway]
-	HTTPRoutes         krt.Collection[*gwv1.HTTPRoute]
-	GRPCRoutes         krt.Collection[*gwv1.GRPCRoute]
-	TCPRoutes          krt.Collection[*gwv1a2.TCPRoute]
-	TLSRoutes          krt.Collection[*gwv1.TLSRoute]
-	ReferenceGrants    krt.Collection[*gwv1b1.ReferenceGrant]
-	BackendTLSPolicies krt.Collection[*gwv1.BackendTLSPolicy]
-	ListenerSets       krt.Collection[*gwv1.ListenerSet]
+	GatewayClasses          krt.Collection[*gwv1.GatewayClass]
+	Gateways                krt.Collection[*gwv1.Gateway]
+	GatewaysByNamespace     krt.Index[string, *gwv1.Gateway]
+	HTTPRoutes              krt.Collection[*gwv1.HTTPRoute]
+	HTTPRoutesByNamespace   krt.Index[string, *gwv1.HTTPRoute]
+	GRPCRoutes              krt.Collection[*gwv1.GRPCRoute]
+	GRPCRoutesByNamespace   krt.Index[string, *gwv1.GRPCRoute]
+	TCPRoutes               krt.Collection[*gwv1a2.TCPRoute]
+	TLSRoutes               krt.Collection[*gwv1.TLSRoute]
+	ReferenceGrants         krt.Collection[*gwv1b1.ReferenceGrant]
+	BackendTLSPolicies      krt.Collection[*gwv1.BackendTLSPolicy]
+	ListenerSets            krt.Collection[*gwv1.ListenerSet]
+	ListenerSetsByNamespace krt.Index[string, *gwv1.ListenerSet]
 
 	// Extended resources
-	InferencePools krt.Collection[*inf.InferencePool]
+	InferencePools            krt.Collection[*inf.InferencePool]
+	InferencePoolsByNamespace krt.Index[string, *inf.InferencePool]
 
 	// agentgateway resources
 	Backends             krt.Collection[*agentgateway.AgentgatewayBackend]
+	BackendsByNamespace  krt.Index[string, *agentgateway.AgentgatewayBackend]
 	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
 
 	// ControllerName is the name of the Gateway controller.
@@ -74,8 +83,13 @@ type AgwCollections struct {
 	IstioNamespace string
 	// IstioRevision is the Istio revision of the Istio control plane (default is "default").
 	IstioRevision string
-	// ClusterID is the cluster ID of the cluster the proxy is running in.
-	ClusterID string
+	// IstioAutoEnabled turns on Istio integration by default for built-in-class gateways
+	IstioAutoEnabled bool
+	// IstioClusterId / IstioNetwork / IstioCaAddress are control-plane-wide mesh values.
+	// Gateway that have istio enabled will have them propagated on envs when deployed.
+	IstioClusterId string
+	IstioNetwork   string
+	IstioCaAddress string
 }
 
 // NewAgwCollections initializes the core krt collections.
@@ -87,7 +101,6 @@ func NewAgwCollections(
 	agwControllerName string,
 	settings apisettings.Settings,
 	systemNamespace string,
-	clusterID string,
 ) (*AgwCollections, error) {
 	filter := kclient.Filter{ObjectFilter: client.ObjectFilter()}
 	gateways := krt.WrapClient(kclient.NewFilteredDelayed[*gwv1.Gateway](
@@ -110,16 +123,38 @@ func NewAgwCollections(
 		}}
 	})
 
+	configMaps := krt.WrapClient(
+		kclient.NewFiltered[*corev1.ConfigMap](client, kubetypes.Filter{
+			ObjectFilter: client.ObjectFilter(),
+		}),
+		krtOptions.ToOptions("informer/ConfigMaps")...,
+	)
+	meshConfig := meshconfig.NewSingleton(
+		configMaps,
+		settings.IstioNamespace,
+		settings.IstioRevision,
+		krtOptions.ToOptions("IstioMeshConfig")...,
+	)
+
 	agwCollections := &AgwCollections{
-		Client:              client,
-		KrtOpts:             krtOptions,
-		Settings:            settings,
-		GatewaysForDeployer: krt.NewCollection(gateways, collections.GatewaysForDeployerTransformationFunc(gatewayClasses, listenerSets, byParentRefIndex, agwControllerName)),
-		ControllerName:      agwControllerName,
-		SystemNamespace:     systemNamespace,
-		IstioNamespace:      settings.IstioNamespace,
-		IstioRevision:       settings.IstioRevision,
-		ClusterID:           clusterID,
+		Client:   client,
+		KrtOpts:  krtOptions,
+		Settings: settings,
+		GatewaysForDeployer: krt.NewCollection(gateways, collections.GatewaysForDeployerTransformationFunc(
+			gatewayClasses,
+			listenerSets,
+			byParentRefIndex,
+			meshConfig,
+			agwControllerName,
+		), krtOptions.ToOptions("deployer/Gateways")...),
+		ControllerName:   agwControllerName,
+		SystemNamespace:  systemNamespace,
+		IstioNamespace:   settings.IstioNamespace,
+		IstioRevision:    settings.IstioRevision,
+		IstioAutoEnabled: settings.IstioAutoEnabled,
+		IstioClusterId:   settings.IstioClusterId,
+		IstioNetwork:     settings.IstioNetwork,
+		IstioCaAddress:   settings.IstioCaAddress,
 
 		// Core Kubernetes resources
 		Namespaces: krt.NewInformer[*corev1.Namespace](client, krtOptions.ToOptions("informer/Namespaces")...),
@@ -136,13 +171,9 @@ func NewAgwCollections(
 				FieldSelector: apiclient.SecretsFieldSelector,
 				ObjectFilter:  client.ObjectFilter(),
 			}),
+			krtOptions.ToOptions("informer/Secrets")...,
 		),
-		ConfigMaps: krt.WrapClient(
-			kclient.NewFiltered[*corev1.ConfigMap](client, kubetypes.Filter{
-				ObjectFilter: client.ObjectFilter(),
-			}),
-			krtOptions.ToOptions("informer/ConfigMaps")...,
-		),
+		ConfigMaps: configMaps,
 		Services: krt.WrapClient(
 			kclient.NewFiltered[*corev1.Service](client, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}),
 			krtOptions.ToOptions("informer/Services")...),
@@ -157,6 +188,7 @@ func NewAgwCollections(
 		ServiceEntries: krt.WrapClient(
 			kclient.NewDelayedInformer[*networkingclient.ServiceEntry](client, gvr.ServiceEntry, kubetypes.StandardInformer, kclient.Filter{ObjectFilter: client.ObjectFilter()}),
 			krtOptions.ToOptions("informer/ServiceEntries")...),
+		MeshConfig: meshConfig,
 
 		// Gateway API resources
 		GatewayClasses:     gatewayClasses,
@@ -176,8 +208,8 @@ func NewAgwCollections(
 		InferencePools: krt.NewStaticCollection[*inf.InferencePool](nil, nil, krtOptions.ToOptions("disable/inferencepools")...),
 
 		// agentgateway-specific CRDs
-		AgentgatewayPolicies: krt.NewInformer[*agentgateway.AgentgatewayPolicy](client),
-		Backends:             krt.NewInformer[*agentgateway.AgentgatewayBackend](client),
+		AgentgatewayPolicies: krt.NewInformer[*agentgateway.AgentgatewayPolicy](client, krtOptions.ToOptions("informer/AgentgatewayPolicies")...),
+		Backends:             krt.NewInformer[*agentgateway.AgentgatewayBackend](client, krtOptions.ToOptions("informer/AgentgatewayBackends")...),
 	}
 
 	if settings.EnableInferExt {
@@ -193,6 +225,12 @@ func NewAgwCollections(
 func (c *AgwCollections) SetupIndexes() {
 	c.SecretsByNamespace = krt.NewNamespaceIndex(c.Secrets)
 	c.ServicesByNamespace = krt.NewNamespaceIndex(c.Services)
+	c.GatewaysByNamespace = krt.NewNamespaceIndex(c.Gateways)
+	c.HTTPRoutesByNamespace = krt.NewNamespaceIndex(c.HTTPRoutes)
+	c.GRPCRoutesByNamespace = krt.NewNamespaceIndex(c.GRPCRoutes)
+	c.ListenerSetsByNamespace = krt.NewNamespaceIndex(c.ListenerSets)
+	c.BackendsByNamespace = krt.NewNamespaceIndex(c.Backends)
+	c.InferencePoolsByNamespace = krt.NewNamespaceIndex(c.InferencePools)
 }
 
 func (c *AgwCollections) HasSynced() bool {

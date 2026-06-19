@@ -1,5 +1,6 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
+assertion_line: 207
 description: "Config normalization test for llm_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -17,137 +18,165 @@ binds:
         protocol: HTTP
 listener_routes:
   - - llm
-    - - inlinePolicies:
-          - responseHeaderModifier:
-              set:
-                Content-Type: application/json
-          - directResponse:
-              body: eyJkYXRhIjpbeyJpZCI6ImNsYXVkZS0zLWhhaWt1Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJnZW1pbmktMC41LXBybyIsIm9iamVjdCI6Im1vZGVsIiwiY3JlYXRlZCI6MCwib3duZWRfYnkiOiJvcGVuYWkifSx7ImlkIjoiZ3B0LTctbWF4Iiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9LHsiaWQiOiJncHQtMy41LXR1cmJvIiwib2JqZWN0IjoibW9kZWwiLCJjcmVhdGVkIjowLCJvd25lZF9ieSI6Im9wZW5haSJ9XSwib2JqZWN0IjoibGlzdCJ9
-              status: 200
-        key: "llm:admin:model-list"
+    - - key: "llm:request"
+        llmRouter:
+          models:
+            - name: llama-3.1-8b-instant
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:llama-3.1-8b-instant:0"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+            - name: fireworks-llama
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:fireworks-llama:1"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+            - name: claude-3-haiku
+              visibility: public
+              headerMatches:
+                - - name: x-org
+                    value:
+                      exact: engineering
+              backendKey: "llm:model:claude-3-haiku:2"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+            - name: gpt-3.5-turbo
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:gpt-3.5-turbo:3"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+            - name: gpt-7-max
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:gpt-7-max:4"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+            - name: "*"
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:*:5"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+          virtualModels: []
+          created: 0
         matches:
           - path:
-              pathPrefix: /v1/models
-          - path:
-              pathPrefix: /models
-        name: "admin:model-list"
-        namespace: internal
-      - backends:
-          - backend: "/llm:model:claude-3-haiku:0"
-            weight: 1
-        inlinePolicies:
-          - ai:
-              routes:
-                "*": passthrough
-                /v1/chat/completions: completions
-                /v1/embeddings: embeddings
-                /v1/images/edits: detect
-                /v1/images/generations: detect
-                /v1/images/variations: detect
-                /v1/messages: messages
-                /v1/responses: responses
-                /v1/responses/compact: detect
-                ":rawPredict": messages
-                ":streamRawPredict": messages
-        key: "llm:model:000000:claude-3-haiku"
-        matches:
-          - headers:
-              - name: x-org
-                value:
-                  exact: engineering
-              - name: x-gateway-model-name
-                value:
-                  exact: claude-3-haiku
-            path:
               pathPrefix: /
-        name: "model:claude-3-haiku"
-        namespace: internal
-      - backends:
-          - backend: "/llm:model:gemini-0.5-pro:1"
-            weight: 1
-        inlinePolicies:
-          - ai:
-              routes:
-                "*": passthrough
-                /v1/chat/completions: completions
-                /v1/embeddings: embeddings
-                /v1/images/edits: detect
-                /v1/images/generations: detect
-                /v1/images/variations: detect
-                /v1/messages: messages
-                /v1/responses: responses
-                /v1/responses/compact: detect
-                ":rawPredict": messages
-                ":streamRawPredict": messages
-        key: "llm:model:000001:gemini-0.5-pro"
-        matches:
-          - headers:
-              - name: x-gateway-model-name
-                value:
-                  exact: gemini-0.5-pro
-            path:
-              pathPrefix: /
-        name: "model:gemini-0.5-pro"
-        namespace: internal
-      - backends:
-          - backend: "/llm:model:gpt-7-max:2"
-            weight: 1
-        inlinePolicies:
-          - ai:
-              routes:
-                "*": passthrough
-                /v1/chat/completions: completions
-                /v1/embeddings: embeddings
-                /v1/images/edits: detect
-                /v1/images/generations: detect
-                /v1/images/variations: detect
-                /v1/messages: messages
-                /v1/responses: responses
-                /v1/responses/compact: detect
-                ":rawPredict": messages
-                ":streamRawPredict": messages
-        key: "llm:model:000002:gpt-7-max"
-        matches:
-          - headers:
-              - name: x-gateway-model-name
-                value:
-                  exact: gpt-7-max
-            path:
-              pathPrefix: /
-        name: "model:gpt-7-max"
-        namespace: internal
-      - backends:
-          - backend: "/llm:model:gpt-3.5-turbo:3"
-            weight: 1
-        inlinePolicies:
-          - ai:
-              routes:
-                "*": passthrough
-                /v1/chat/completions: completions
-                /v1/embeddings: embeddings
-                /v1/images/edits: detect
-                /v1/images/generations: detect
-                /v1/images/variations: detect
-                /v1/messages: messages
-                /v1/responses: responses
-                /v1/responses/compact: detect
-                ":rawPredict": messages
-                ":streamRawPredict": messages
-        key: "llm:model:000003:gpt-3.5-turbo"
-        matches:
-          - headers:
-              - name: x-gateway-model-name
-                value:
-                  exact: gpt-3.5-turbo
-            path:
-              pathPrefix: /
-        name: "model:gpt-3.5-turbo"
+        name: "llm:request"
         namespace: internal
 listener_tcp_routes:
   - - llm
     - []
 policies:
   - key: listener/0
+    name: ~
+    target:
+      gateway:
+        gatewayName: name
+        gatewayNamespace: ns
+        listenerName: llm
+    policy:
+      traffic:
+        cors:
+          allowCredentials: false
+          allowOrigins:
+            - "http://localhost:15000"
+          maxAge: ~
+        phase: gateway
+  - key: listener/1
     name: ~
     target:
       gateway:
@@ -166,7 +195,7 @@ policies:
             - issuer: agentgateway.dev
               keys: []
         phase: gateway
-  - key: listener/1
+  - key: listener/2
     name: ~
     target:
       gateway:
@@ -179,12 +208,9 @@ policies:
           rules:
             allow:
               - "jwt.email.endsWith(\"@example.com\")"
-        phase: route
-  - key: "llm:transformation"
-    name:
-      kind: Local
-      name: "llm:transformation"
-      namespace: internal
+        phase: gateway
+  - key: listener/3
+    name: ~
     target:
       gateway:
         gatewayName: name
@@ -192,15 +218,12 @@ policies:
         listenerName: llm
     policy:
       traffic:
-        phase: gateway
-        transformation:
-          request:
-            set:
-              - - x-gateway-model-name
-                - "\nrequest.path.endsWith(\":streamRawPredict\") || request.path.endsWith(\":rawPredict\") ?\nrequest.path.regexReplace(\"^.*/publishers/anthropic/models/(.+?):.*\", \"${1}\") :\njson(request.body).model\n"
-              - - anthropic-beta
-                - "request.headers['anthropic-beta'].split(',').filter(v, v.trim() in [])"
-          response: {}
+        localRateLimit:
+          - fillInterval: 1s
+            maxTokens: 100
+            tokensPerFill: 10
+            type: tokens
+        phase: route
   - key: frontend/accessLog
     name: ~
     target:
@@ -216,7 +239,103 @@ policies:
 backends:
   - backend:
       ai:
-        name: "llm:model:claude-3-haiku:0"
+        name: "llm:model:llama-3.1-8b-instant:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                llama-3.1-8b-instant:
+                  endpoint:
+                    name: llama-3.1-8b-instant
+                    provider:
+                      custom:
+                        providerOverride: groq
+                        formats:
+                          - type: completions
+                            path: ~
+                          - type: responses
+                            path: ~
+                    hostOverride: "api.groq.com:443"
+                    pathOverride: ~
+                    pathPrefix: /openai/v1
+                    tokenize: false
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - backendTLS:
+          systemRoots: true
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
+  - backend:
+      ai:
+        name: "llm:model:fireworks-llama:1"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                fireworks-llama:
+                  endpoint:
+                    name: fireworks-llama
+                    provider:
+                      custom:
+                        providerOverride: fireworks
+                        formats:
+                          - type: completions
+                            path: ~
+                          - type: messages
+                            path: ~
+                          - type: responses
+                            path: ~
+                          - type: embeddings
+                            path: ~
+                          - type: rerank
+                            path: ~
+                    hostOverride: "api.fireworks.ai:443"
+                    pathOverride: ~
+                    pathPrefix: /inference/v1
+                    tokenize: false
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - backendTLS:
+          systemRoots: true
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
+  - backend:
+      ai:
+        name: "llm:model:claude-3-haiku:2"
         namespace: ""
         target:
           providers:
@@ -227,32 +346,27 @@ backends:
                     provider:
                       anthropic:
                         model: claude-haiku-4-5-20251001
-                    hostOverride: "anthropic.internal:8443"
-                    pathOverride: /v1/messages
-                    pathPrefix: ~
+                    hostOverride: "anthropic.internal:443"
+                    pathOverride: ~
+                    pathPrefix: /v1
                     tokenize: true
                     inlinePolicies:
                       - backendAuth:
                           key:
                             value: "<redacted>"
-                            location:
-                              header:
-                                name: authorization
-                                prefix: "Bearer "
                   info:
                     health: 1
-                    request_latency: 0
-                    pending_requests: 0
-                    total_requests: 0
-                    consecutive_failures: 0
-                    times_ejected: 0
-                    evicted_until: ~
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
-      - backendTLS: ~
-      - requestHeaderModifier:
-          remove:
-            - x-gateway-model-name
+      - backendTLS:
+          systemRoots: true
       - responseHeaderModifier:
           remove:
             - server
@@ -260,51 +374,77 @@ backends:
           unhealthyExpression: response.code >= 500 || response.code == 429
           eviction:
             duration: 30s
-      - ai: {}
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: creditCard
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 403
+            response:
+              - regex:
+                  action: mask
+                  rules:
+                    - builtin: phoneNumber
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 403
+          promptCaching:
+            cacheSystem: true
+            cacheMessages: true
+            cacheTools: false
+            minTokens: 1
+            cacheMessageOffset: 0
   - backend:
       ai:
-        name: "llm:model:gemini-0.5-pro:1"
+        name: "llm:model:gpt-3.5-turbo:3"
         namespace: ""
         target:
           providers:
             - active:
-                gemini-0.5-pro:
+                gpt-3.5-turbo:
                   endpoint:
-                    name: gemini-0.5-pro
+                    name: gpt-3.5-turbo
                     provider:
-                      vertex:
-                        model: claude-haiku-4-5-20251001
-                        region: global
-                        projectId: my-vertex-project
+                      openAI: {}
                     hostOverride: ~
                     pathOverride: ~
                     pathPrefix: ~
                     tokenize: false
-                    inlinePolicies:
-                      - backendAuth:
-                          key:
-                            value: "<redacted>"
-                            location:
-                              header:
-                                name: authorization
-                                prefix: "Bearer "
                   info:
                     health: 1
-                    request_latency: 0
-                    pending_requests: 0
-                    total_requests: 0
-                    consecutive_failures: 0
-                    times_ejected: 0
-                    evicted_until: ~
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
-      - requestHeaderModifier:
-          remove:
-            - x-gateway-model-name
-      - ai: {}
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
   - backend:
       ai:
-        name: "llm:model:gpt-7-max:2"
+        name: "llm:model:gpt-7-max:4"
         namespace: ""
         target:
           providers:
@@ -324,48 +464,69 @@ backends:
                     tokenize: false
                   info:
                     health: 1
-                    request_latency: 0
-                    pending_requests: 0
-                    total_requests: 0
-                    consecutive_failures: 0
-                    times_ejected: 0
-                    evicted_until: ~
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
-      - requestHeaderModifier:
-          remove:
-            - x-gateway-model-name
-      - ai: {}
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
   - backend:
       ai:
-        name: "llm:model:gpt-3.5-turbo:3"
+        name: "llm:model:*:5"
         namespace: ""
         target:
           providers:
             - active:
-                gpt-3.5-turbo:
+                "*":
                   endpoint:
-                    name: gpt-3.5-turbo
+                    name: "*"
                     provider:
-                      openAI: {}
+                      vertex:
+                        model: claude-haiku-4-5-20251001
+                        region: global
+                        projectId: my-vertex-project
                     hostOverride: ~
                     pathOverride: ~
                     pathPrefix: ~
                     tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
                   info:
                     health: 1
-                    request_latency: 0
-                    pending_requests: 0
-                    total_requests: 0
-                    consecutive_failures: 0
-                    times_ejected: 0
-                    evicted_until: ~
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
               rejected: {}
     inlinePolicies:
-      - requestHeaderModifier:
-          remove:
-            - x-gateway-model-name
-      - ai: {}
+      - ai:
+          promptGuard:
+            request:
+              - regex:
+                  action: reject
+                  rules:
+                    - builtin: email
+                rejection:
+                  body: The request was rejected due to inappropriate content
+                  status: 400
 route_groups: []
 workloads: []
 services: []

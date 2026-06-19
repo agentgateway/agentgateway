@@ -1,0 +1,63 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/messages/reasoning_replay.json
+info:
+  model: "claude-3-7-sonnet-20250219-v1:0"
+  max_tokens: 1024
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: What is 2+2?
+    - role: assistant
+      content:
+        - type: thinking
+          thinking: Two plus two.
+          signature: SIG-replay==
+        - type: text
+          text: "4"
+    - role: user
+      content:
+        - type: text
+          text: And 3+3?
+---
+{
+  "modelId": "claude-3-7-sonnet-20250219-v1:0",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "What is 2+2?"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "reasoningContent": {
+            "reasoningText": {
+              "text": "Two plus two.",
+              "signature": "SIG-replay=="
+            }
+          }
+        },
+        {
+          "text": "4"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "And 3+3?"
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 1024
+  }
+}

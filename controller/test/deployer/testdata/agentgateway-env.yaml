@@ -23,7 +23,7 @@ spec:
     - name: CONNECTION_MIN_TERMINATION_DEADLINE
       value: "500s"
     - name: RUST_BACKTRACE
-      value: null
+      value: ""
     - name: TEST_OF_VARIABLE_EXPANSION
       value: "$(GATEWAY)"
     - name: TEST_OF_AVOIDING_VARIABLE_EXPANSION

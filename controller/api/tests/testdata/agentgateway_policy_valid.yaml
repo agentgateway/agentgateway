@@ -170,7 +170,7 @@ spec:
       name: dummy
   frontend:
     http:
-      maxBufferSize: 5242880
+      maxBufferSize: 5Mi
       http1MaxHeaders: 150
       http1IdleTimeout: 5m
 ---
@@ -185,9 +185,10 @@ spec:
       name: dummy
   frontend:
     http:
-      http2WindowSize: 65536
+      http2WindowSize: 64Ki
       http2ConnectionWindowSize: 131072
-      http2FrameSize: 32768
+      http2FrameSize: 32Ki
+      http2MaxHeaderSize: 16Ki
       http2KeepaliveInterval: 30s
       http2KeepaliveTimeout: 10s
 ---
@@ -443,6 +444,21 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: traffic-inheritance-override
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  strategy:
+    inheritance: Override
+  traffic:
+    timeouts:
+      request: 30s
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: traffic-access-log
 spec:
   targetRefs:
@@ -661,3 +677,393 @@ spec:
         - requests: 10
           unit: Seconds
           burst: 5
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-proxy
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  frontend:
+    proxyProtocol:
+      version: All
+      mode: Optional
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-auth-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      conditional:
+        - condition: "random() > .5"
+          policy:
+            backendRef:
+              name: foo
+              port: 1234
+            grpc: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-auth-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      conditional:
+        - condition: '"x-test" in request.headers'
+          policy:
+            backendRef:
+              name: foo
+              port: 1234
+            grpc: {}
+        - policy:
+            backendRef:
+              name: fallback
+              port: 1234
+            grpc: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: transformation-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    transformation:
+      conditional:
+        - condition: "request.path == '/transform'"
+          policy:
+            request:
+              set:
+                - name: x-test
+                  value: "'transform'"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: transformation-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    transformation:
+      conditional:
+        - condition: "request.path == '/transform'"
+          policy:
+            request:
+              set:
+                - name: x-test
+                  value: "'transform'"
+        - policy:
+            response:
+              add:
+                - name: x-fallback
+                  value: "'true'"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-proc-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extProc:
+      conditional:
+        - condition: "request.path == '/process'"
+          policy:
+            backendRef:
+              name: processor
+              port: 1234
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-proc-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extProc:
+      conditional:
+        - condition: "request.path == '/process'"
+          policy:
+            backendRef:
+              name: processor
+              port: 1234
+        - policy:
+            backendRef:
+              name: fallback-processor
+              port: 1234
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: rate-limit-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      conditional:
+        - condition: "request.path == '/limited'"
+          policy:
+            local:
+              - requests: 10
+                unit: Seconds
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: rate-limit-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    rateLimit:
+      conditional:
+        - condition: "request.path == '/limited'"
+          policy:
+            local:
+              - requests: 10
+                unit: Seconds
+        - policy:
+            local:
+              - requests: 1
+                unit: Minutes
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-request-and-response
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    buffer:
+      request:
+        maxBytes: 10Mi
+      response:
+        maxBytes: 5Mi
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-request-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    buffer:
+      request:
+        maxBytes: 10Mi
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-response-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    buffer:
+      response:
+        maxBytes: 5Mi
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-response-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    buffer:
+      request: {}
+      response: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: buffer-response-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: GRPCRoute
+      name: dummy
+  traffic:
+    buffer:
+      request: {}
+      response: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: direct-response-conditional
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    directResponse:
+      conditional:
+        - condition: "request.path == '/blocked'"
+          policy:
+            status: 403
+            body: denied
+            headers:
+              - name: x-direct
+                value: "'blocked'"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: direct-response-conditional-fallback
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    directResponse:
+      conditional:
+        - condition: "request.path == '/blocked'"
+          policy:
+            status: 403
+            body: denied
+        - policy:
+            status: 404
+            bodyExpression: "'missing ' + request.path"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-auth-expression-location
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    jwtAuthentication:
+      location:
+        expression: 'request.headers["x-jwt-token"]'
+      providers:
+        - issuer: solo.io
+          jwks:
+            inline: '{"keys":[]}'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: api-key-auth-expression-location
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    apiKeyAuthentication:
+      location:
+        expression: 'request.headers["x-api-key"]'
+      secretRef:
+        name: api-keys
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: basic-auth-expression-location
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    basicAuthentication:
+      location:
+        expression: 'request.headers["authorization"]'
+      secretRef:
+        name: basic-users
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-auth-credential-ref-explicit-secret
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+        group: ""
+        kind: Secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-auth-credential-ref-empty-secret-kind
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+        group: ""
+        kind: ""
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-auth-credential-ref-secret-kind
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+        kind: Secret
+---

@@ -6,7 +6,8 @@ use crate::json;
 use crate::llm::RequestType;
 use crate::llm::policy::Moderation;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendPolicy, ResourceName, SimpleBackend, Target};
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
+use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
 
 pub async fn send_request(
 	req: &mut dyn RequestType,
@@ -18,7 +19,7 @@ pub async fn send_request(
 		.model
 		.clone()
 		.unwrap_or(strng::literal!("omni-moderation-latest"));
-	let mut pols = vec![BackendPolicy::BackendTLS(
+	let mut pols = vec![BackendTrafficPolicy::BackendTLS(
 		crate::http::backendtls::SYSTEM_TRUST.clone(),
 	)];
 	pols.extend(moderation.policies.iter().cloned());
@@ -41,11 +42,12 @@ pub async fn send_request(
 			"model": model,
 		}),
 	)?))?;
-	let mock_be = SimpleBackend::Opaque(
+	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_openai-moderation"), strng::literal!("")),
-		Target::Hostname(strng::literal!("api.openai.com"), 443),
+		(),
 	);
 	let resp = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_with_explicit_policies_list(req, mock_be, pols)
 		.await?;
 	let resp: async_openai::types::moderations::CreateModerationResponse =

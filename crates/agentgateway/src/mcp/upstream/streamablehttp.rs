@@ -92,7 +92,7 @@ impl Client {
 
 		self.maybe_insert_session_id(&mut req)?;
 
-		ctx.apply(&mut req);
+		ctx.apply(&mut req).map_err(ClientError::new)?;
 
 		let resp = self.http_client.call(req).await?;
 
@@ -133,9 +133,12 @@ impl Client {
 				.await
 				.map_err(ClientError::new)?
 				.1;
-				let message =
-					serde_json::from_slice::<ServerJsonRpcMessage>(&body_bytes).map_err(ClientError::new)?;
-				Ok(StreamableHttpPostResponse::Json(message, session_id))
+				let message: Option<ServerJsonRpcMessage> =
+					serde_json::from_slice(&body_bytes).map_err(ClientError::new)?;
+				match message {
+					Some(msg) => Ok(StreamableHttpPostResponse::Json(msg, session_id)),
+					None => Ok(StreamableHttpPostResponse::Accepted),
+				}
 			},
 			_ => Err(ClientError::new(anyhow!(
 				"unexpected content type: {:?}",
@@ -156,7 +159,7 @@ impl Client {
 
 		self.maybe_insert_session_id(&mut req)?;
 
-		ctx.apply(&mut req);
+		ctx.apply(&mut req).map_err(ClientError::new)?;
 
 		let resp = self.http_client.call(req).await?;
 
@@ -178,7 +181,7 @@ impl Client {
 
 		self.maybe_insert_session_id(&mut req)?;
 
-		ctx.apply(&mut req);
+		ctx.apply(&mut req).map_err(ClientError::new)?;
 
 		let resp = self.http_client.call(req).await?;
 

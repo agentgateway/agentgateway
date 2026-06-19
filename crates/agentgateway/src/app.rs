@@ -12,6 +12,7 @@ use crate::telemetry::trc;
 use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
 
 pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
+	crate::transport::tls::warn_if_key_log_enabled();
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
 	// Initialize OpenTelemetry resource defaults from gateway + proxy metadata
@@ -30,7 +31,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let proxy_task = ready.register_task("agentgateway");
 
 	let readiness_server = crate::management::readiness_server::Server::new(
-		config.readiness_addr,
+		config.readiness_addr.clone(),
 		drain_rx.clone(),
 		ready.clone(),
 	)
@@ -49,6 +50,8 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let sub_registry = metrics::sub_registry(&mut registry);
 	let xds_metrics = agent_xds::Metrics::new(sub_registry);
 	agent_core::metrics::TokioCollector::register(sub_registry, &data_plane_handle);
+	pprof_alloc::stats::cgroups::PrometheusCollector::register(sub_registry);
+	pprof_alloc::stats::smaps::PrometheusCollector::register(sub_registry);
 
 	// TODO: use for XDS
 	let control_client = client::Client::new(&config.dns, None, config.backend.clone(), None);
@@ -77,12 +80,18 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	);
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
-	let state_mgr =
-		state_manager::StateManager::new(config.clone(), control_client.clone(), xds_metrics, xds_tx)
-			.await?;
+	let state_mgr = state_manager::StateManager::new(
+		config.clone(),
+		control_client.clone(),
+		Arc::new(xds_metrics),
+		xds_tx,
+	)
+	.await?;
 	let stores = state_mgr.stores();
 
 	state_manager::start_self_workload_resolution(&config, stores.clone(), &ready);
+
+	let model_catalog = crate::llm::cost::ModelCatalog::new(config.model_catalog.sources.clone())?;
 
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
@@ -93,9 +102,9 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	// Run the XDS state manager in the current tokio worker pool.
 	tokio::spawn(state_mgr.run());
 
-	#[allow(unused_mut)]
-	let mut admin_server = crate::management::admin::Service::new(
+	let admin_server = crate::management::admin::Service::new(
 		config.clone(),
+		model_catalog.clone(),
 		stores.clone(),
 		shutdown.trigger(),
 		drain_rx.clone(),
@@ -104,14 +113,13 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	.await
 	.context("admin server starts")?;
 	#[cfg(feature = "ui")]
-	admin_server.set_admin_handler(Arc::new(crate::ui::UiHandler::new(config.clone())));
-	#[cfg(feature = "ui")]
 	info!("serving UI at http://{}/ui", config.admin_addr);
 
 	let pi = ProxyInputs {
 		cfg: config.clone(),
 		stores: stores.clone(),
 		metrics: metrics_handle.clone(),
+		model_catalog,
 		upstream: client.clone(),
 		ca,
 
@@ -139,10 +147,13 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	admin_server.spawn();
 
 	// Create and start the metrics server.
-	let metrics_server =
-		crate::management::metrics_server::Server::new(config.stats_addr, drain_rx.clone(), registry)
-			.await
-			.context("stats server starts")?;
+	let metrics_server = crate::management::metrics_server::Server::new(
+		config.stats_addr.clone(),
+		drain_rx.clone(),
+		registry,
+	)
+	.await
+	.context("stats server starts")?;
 	// Run the metrics sever in the current tokio worker pool.
 	metrics_server.spawn();
 	Ok(Bound {
@@ -163,6 +174,10 @@ pub struct Bound {
 impl Bound {
 	pub fn readiness(&self) -> readiness::Ready {
 		self.ready.clone()
+	}
+
+	pub fn bind_addresses(&self) -> Vec<std::net::SocketAddr> {
+		self.stores.binds.read().bind_addresses()
 	}
 
 	pub async fn wait_termination(self) -> anyhow::Result<()> {

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use http::Uri;
 use http::uri::Scheme;
 
+use crate::client::HboneHeaders;
 use crate::http::Error;
 use crate::transport::hbone::WorkloadKey;
 use crate::transport::stream::Socket;
@@ -11,10 +12,40 @@ use crate::transport::{hbone, stream};
 use crate::types::agent::Target;
 use crate::types::discovery::Identity;
 
+static X_ISTIO_SOURCE: http::HeaderName = http::HeaderName::from_static("x-istio-source");
+static X_FORWARDED_NETWORK: http::HeaderName = http::HeaderName::from_static("x-forwarded-network");
+static BAGGAGE: http::HeaderName = http::HeaderName::from_static("baggage");
+
+/// Apply identification headers used by Istio's ambient multi-network plumbing
+/// to a CONNECT request. `inner` controls whether the workload-identifying
+/// `baggage` header is added (only set on the inner / terminating CONNECT).
+fn apply_hbone_headers(req: &mut ::http::Request<()>, headers: &HboneHeaders, inner: bool) {
+	let h = req.headers_mut();
+	if let Some(role) = headers.source {
+		h.insert(
+			X_ISTIO_SOURCE.clone(),
+			http::HeaderValue::from_static(role.as_header_value()),
+		);
+	}
+	if !headers.forwarded_network.is_empty()
+		&& let Ok(v) = ::http::HeaderValue::from_str(&headers.forwarded_network)
+	{
+		h.insert(X_FORWARDED_NETWORK.clone(), v);
+	}
+	if inner
+		&& let Some(b) = headers.baggage.as_deref()
+		&& let Ok(v) = ::http::HeaderValue::from_str(b)
+	{
+		h.insert(BAGGAGE.clone(), v);
+	}
+}
+
 pub async fn handshake(
 	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
 	ep: SocketAddr,
+	hbone_port: u16,
 	identities: Vec<Identity>,
+	headers: HboneHeaders,
 ) -> Result<Socket, Error> {
 	let uri = Uri::builder()
 		.scheme(Scheme::HTTPS)
@@ -23,6 +54,62 @@ pub async fn handshake(
 		.build()
 		.expect("static builder must be accepted");
 	tracing::debug!("will use HBONE");
+	let mut req = ::http::Request::builder()
+		.uri(uri)
+		.method(hyper::Method::CONNECT)
+		.version(hyper::Version::HTTP_2)
+		.body(())
+		.expect("builder with known status code should not fail");
+	apply_hbone_headers(&mut req, &headers, true);
+
+	let pool_key = Box::new(WorkloadKey {
+		dst_id: identities,
+		dst: SocketAddr::from((ep.ip(), hbone_port)),
+	});
+
+	let upgraded = Box::pin(hbone_pool.send_request_pooled(&pool_key, req))
+		.await
+		.map_err(crate::http::Error::new)?;
+	let rw = agent_hbone::RWStream {
+		stream: upgraded,
+		buf: Default::default(),
+		drain_tx: None,
+	};
+	Ok(Socket::from_hbone(
+		Arc::new(stream::Extension::new()),
+		pool_key.dst,
+		rw,
+	))
+}
+
+pub async fn handshake_waypoint(
+	mut hbone_pool: agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>,
+	target: &Target,
+	waypoint_address: SocketAddr,
+	identities: Vec<Identity>,
+) -> Result<Socket, Error> {
+	// The CONNECT URI authority is the service target so the waypoint knows
+	// which service the traffic is destined for.
+	let authority = match target {
+		Target::Hostname(host, port) => format!("{}:{}", host, port),
+		Target::Address(addr) => addr.to_string(),
+		Target::UnixSocket(_) => {
+			return Err(Error::new(
+				"Unix sockets should not reach HboneWaypoint connection path",
+			));
+		},
+	};
+	let uri = Uri::builder()
+		.scheme(Scheme::HTTPS)
+		.authority(authority)
+		.path_and_query("/")
+		.build()
+		.expect("uri build should not fail");
+	tracing::debug!(
+		"will use HBONE waypoint: connecting to waypoint {} for service target {:?}",
+		waypoint_address,
+		target
+	);
 	let req = ::http::Request::builder()
 		.uri(uri)
 		.method(hyper::Method::CONNECT)
@@ -30,9 +117,10 @@ pub async fn handshake(
 		.body(())
 		.expect("builder with known status code should not fail");
 
+	// Physical connection goes to the waypoint at its HBONE port.
 	let pool_key = Box::new(WorkloadKey {
 		dst_id: identities,
-		dst: SocketAddr::from((ep.ip(), 15008)),
+		dst: waypoint_address,
 	});
 
 	let upgraded = Box::pin(hbone_pool.send_request_pooled(&pool_key, req))
@@ -55,8 +143,9 @@ pub async fn handshake_double(
 	target: &Target,
 	ep: SocketAddr,
 	gateway_address: SocketAddr,
-	gateway_identity: Identity,
+	gateway_identities: Vec<Identity>,
 	waypoint_identities: Vec<Identity>,
+	headers: HboneHeaders,
 ) -> Result<Socket, Error> {
 	tracing::debug!(
 		"will use DOUBLE HBONE: gateway {} -> workload {}",
@@ -80,16 +169,17 @@ pub async fn handshake_double(
 		.path_and_query("/")
 		.build()
 		.expect("uri build should not fail");
-	let outer_req = ::http::Request::builder()
+	let mut outer_req = ::http::Request::builder()
 		.uri(outer_uri)
 		.method(hyper::Method::CONNECT)
 		.version(hyper::Version::HTTP_2)
 		.body(())
 		.expect("builder with known status code should not fail");
+	apply_hbone_headers(&mut outer_req, &headers, false);
 
 	// Connect to the network gateway at its HBONE port
 	let outer_pool_key = Box::new(WorkloadKey {
-		dst_id: vec![gateway_identity.clone()],
+		dst_id: gateway_identities,
 		dst: gateway_address,
 	});
 	let mut pool_clone = pool.clone();
@@ -155,12 +245,13 @@ pub async fn handshake_double(
 		.path_and_query("/")
 		.build()
 		.expect("uri build should not fail");
-	let inner_req = ::http::Request::builder()
+	let mut inner_req = ::http::Request::builder()
 		.uri(inner_uri)
 		.method(hyper::Method::CONNECT)
 		.version(hyper::Version::HTTP_2)
 		.body(())
 		.expect("builder with known status code should not fail");
+	apply_hbone_headers(&mut inner_req, &headers, true);
 
 	let inner_upgraded = sender
 		.send_request(inner_req)

@@ -25,6 +25,7 @@ RUN choco install protoc
 # Build UI
 WORKDIR C:/app/ui
 COPY ui .
+COPY schema C:/schema
 RUN npm install
 RUN npm run build
 

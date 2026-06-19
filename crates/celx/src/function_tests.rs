@@ -66,6 +66,14 @@ fn with() {
 }
 
 #[test]
+fn variables_includes_resolver_variables() {
+	assert(
+		json!({"vars": {"foo": "hello", "bar": "world"}}),
+		"variables()",
+	);
+}
+
+#[test]
 fn json() {
 	let expr = r#"json('{"hi":1}').hi"#;
 	assert(json!(1), expr);
@@ -132,6 +140,64 @@ fn base64() {
 }
 
 #[test]
+fn url() {
+	assert(
+		json!("hello%20world%2F%3Fx%3D1%26y%3D2"),
+		r#"url.encode("hello world/?x=1&y=2")"#,
+	);
+	assert(json!("abc-._~"), r#"url.encode("abc-._~")"#);
+	assert(json!("%21"), r#"url.encode("!")"#);
+	assert(
+		json!("hello world/?x=1&y=2"),
+		r#"url.decode("hello%20world%2F%3Fx%3D1%26y%3D2")"#,
+	);
+	assert(json!("a+b"), r#"url.decode("a+b")"#);
+	assert(
+		json!("hello world"),
+		r#"url.decode(url.encode("hello world"))"#,
+	);
+
+	assert(json!("hello"), r#"url.encode("hello")"#);
+	assert_fails(r#"url.decode("%FF")"#);
+}
+
+#[test]
+fn form() {
+	assert(
+		json!({"client_id": "abc", "scope": "openid profile"}),
+		r#"form.decode("client_id=abc&scope=openid+profile")"#,
+	);
+	assert(json!({"a": ["1", "2"]}), r#"form.decode("a=1&a=2")"#);
+	assert(
+		json!("scope=openid+profile"),
+		r#"form.encode({"scope": "openid profile"})"#,
+	);
+	assert(
+		json!({"client_id": "app id", "scope": "openid profile"}),
+		r#"form.decode(form.encode({"client_id": "app id", "scope": "openid profile"}))"#,
+	);
+	assert(
+		json!({
+			"client_id": "app-id",
+			"scope": "openid profile api://app-id/access_as_user",
+		}),
+		r#"form.decode(form.encode(form.decode("").merge({"client_id": "app-id", "scope": "openid profile api://app-id/access_as_user"})))"#,
+	);
+	assert(
+		json!({
+			"client_id": "app-id",
+			"device_code": "abc",
+			"grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+		}),
+		r#"form.decode(form.encode(form.decode("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc").merge({"client_id": "app-id"})))"#,
+	);
+
+	assert_fails(r#"form.decode({})"#);
+	assert_fails(r#"form.encode([])"#);
+	assert_fails(r#"form.encode({"bad": {}})"#);
+}
+
+#[test]
 fn hashes() {
 	assert(
 		json!("aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"),
@@ -145,6 +211,112 @@ fn hashes() {
 		json!("5d41402abc4b2a76b9719d911017c592"),
 		r#"md5.encode("hello")"#,
 	);
+}
+
+#[test]
+fn math() {
+	assert(json!(1), "math.least(1)");
+	assert(json!(2), "math.greatest(1, 2)");
+	assert(json!(-100.0), "math.least([-42.0, -21.5, -100.0])");
+	assert(json!(-21.5), "math.greatest(-42.0, -21.5, -100.0)");
+	assert(json!(true), "math.least(1, -2.0) == -2.0");
+	assert(json!(true), "math.least(2, 1u) == 1u");
+	assert(json!(true), "math.least(1.5, -2) == -2");
+	assert(json!(true), "math.least(1u, -2) == -2");
+	assert(json!(true), "math.greatest(1, -2.0) == 1");
+	assert(json!(true), "math.greatest(1.5, 2) == 2");
+	assert(json!(true), "math.greatest(1u, -2) == 1u");
+	assert(json!(true), "math.greatest(2u, 2.5) == 2.5");
+	assert(json!(true), "math.greatest([1u, 0.0, 0u]) == 1");
+	assert_fails("math.least()");
+	assert_fails("math.greatest([])");
+	assert_fails(r#"math.least("string")"#);
+
+	assert(json!(2.0), "math.ceil(1.2)");
+	assert(json!(-2.0), "math.floor(-1.2)");
+	assert(json!(2.0), "math.round(1.5)");
+	assert(json!(-2.0), "math.round(-1.5)");
+	assert(json!(true), "math.isNaN(math.round(0.0 / 0.0))");
+	assert(json!(-1.0), "math.trunc(-1.3)");
+
+	assert(json!(1), "math.abs(-1)");
+	assert(json!(1u64), "math.abs(1u)");
+	assert(json!(1.5), "math.abs(-1.5)");
+	assert_fails("math.abs(-9223372036854775808)");
+	assert(json!(-1), "math.sign(-42)");
+	assert(json!(0), "math.sign(0)");
+	assert(json!(1), "math.sign(42)");
+	assert(json!(1u64), "math.sign(42u)");
+	assert(json!(-1.0), "math.sign(-0.3)");
+	assert(json!(0.0), "math.sign(0.0)");
+	assert(json!(1.0), "math.sign(1.0 / 0.0)");
+	assert(json!(-1.0), "math.sign(-1.0 / 0.0)");
+	assert(json!(true), "math.isNaN(math.sign(0.0 / 0.0))");
+
+	assert(json!(true), "math.isInf(1.0 / 0.0)");
+	assert(json!(true), "math.isNaN(0.0 / 0.0)");
+	assert(json!(false), "math.isFinite(0.0 / 0.0)");
+	assert(json!(true), "math.isFinite(1.2)");
+	assert(json!(9.0), "math.sqrt(81)");
+	assert(json!(9.055385138137417), "math.sqrt(82)");
+	assert(json!(true), "math.isNaN(math.sqrt(-15.34))");
+
+	assert(json!(3u64), "math.bitOr(1u, 2u)");
+	assert(json!(-2), "math.bitOr(-2, -4)");
+	assert(json!(2u64), "math.bitAnd(3u, 2u)");
+	assert(json!(-7), "math.bitAnd(-3, -5)");
+	assert(json!(6u64), "math.bitXor(3u, 5u)");
+	assert(json!(2), "math.bitXor(1, 3)");
+	assert(
+		json!("AQ=="),
+		r#"base64.encode(math.bitAnd(base64.decode("BQ=="), base64.decode("Aw==")))"#,
+	);
+	assert(
+		json!("Bw=="),
+		r#"base64.encode(math.bitOr(base64.decode("BQ=="), base64.decode("Aw==")))"#,
+	);
+	assert(
+		json!("Bg=="),
+		r#"base64.encode(math.bitXor(base64.decode("BQ=="), base64.decode("Aw==")))"#,
+	);
+	assert(
+		json!("AAE="),
+		r#"base64.encode(math.bitAnd(base64.decode("AAE="), base64.decode("AQ==")))"#,
+	);
+	assert(json!(4), r#"math.bitAnd(0x4, base64.decode("BQ=="))"#);
+	assert(json!(0), r#"math.bitAnd(0x2, base64.decode("BQ=="))"#);
+	assert(json!(4), r#"math.bitAnd(base64.decode("BQ=="), 0x4)"#);
+	assert(json!(4u64), r#"math.bitAnd(0x4u, base64.decode("BQ=="))"#);
+	assert(json!(4), r#"math.bitAnd(0x4, base64.decode("AQAF"))"#);
+	assert(
+		json!(true),
+		r#"base64.decode("BQ==").with(user, {
+			"read": 0x4,
+			"rwx": 0x5,
+			"rw": 0x7,
+		}.with(tools, tools.filter(x, math.bitAnd(tools[x], user) == tools[x]).with(allowed,
+			allowed.size() == 2 && allowed.contains("read") && allowed.contains("rwx")
+		)))"#,
+	);
+	assert(json!(-2), "math.bitNot(1)");
+	assert(json!(u64::MAX), "math.bitNot(0u)");
+	assert(json!(4), "math.bitShiftLeft(1, 2)");
+	assert(json!(-4), "math.bitShiftLeft(-1, 2)");
+	assert(json!(0u64), "math.bitShiftLeft(1u, 200)");
+	assert(json!(256), "math.bitShiftRight(1024, 2)");
+	assert(json!(0u64), "math.bitShiftRight(1024u, 64)");
+	assert(
+		json!(2305843009213693824i64),
+		"math.bitShiftRight(-1024, 3)",
+	);
+	assert(json!(0), "math.bitShiftRight(-1024, 64)");
+	assert_fails("math.bitShiftLeft(1, -1)");
+	assert_fails("math.bitAnd(1, 2u)");
+	assert_fails(&format!(
+		r#"math.bitAnd(base64.decode("{}"), b"\x01")"#,
+		base64::Engine::encode(&base64::prelude::BASE64_STANDARD, vec![0u8; 33])
+	));
+	assert_fails(r#"math.bitAnd(-1, base64.decode("BQ=="))"#);
 }
 
 #[test]

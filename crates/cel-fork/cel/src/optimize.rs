@@ -188,7 +188,6 @@ mod test {
 	use serde::{Serialize, Serializer};
 
 	use crate::common::ast::{CallExpr, Expr};
-
 	use crate::objects::{Opaque, OpaqueValue};
 	use crate::{Context, ExecutionError, FunctionContext, IdedExpr, Program, ResolveResult, Value};
 

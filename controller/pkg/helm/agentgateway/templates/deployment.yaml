@@ -22,12 +22,14 @@ spec:
     metadata:
       annotations:
       {{- /* Add managed resource checksums to trigger rollout when config changes */}}
-      {{- $configChecksum := dict "checksum/config" (include (print $.Template.BasePath "/configmap.yaml") . | sha256sum) }}
+      {{- $managedChecksums := dict "checksum/config" (include (print $.Template.BasePath "/configmap.yaml") . | sha256sum) }}
+      {{- if and $gateway.xds.tls $gateway.xds.tls.enabled }}
+      {{- $_ := set $managedChecksums "checksum/xds-ca" (include (print $.Template.BasePath "/xds-ca-configmap.yaml") . | sha256sum) }}
+      {{- end }}
       {{- toYaml (merge
-          $configChecksum
+          $managedChecksums
           (deepCopy ($gateway.gatewayAnnotations | default dict))
           $promAnnotations
-          (include "kgateway.gateway.gatewayNameAnnotation" . | fromYaml)
        ) | nindent 8 }}
       labels:
         {{- toYaml (merge
@@ -176,6 +178,30 @@ spec:
             - name: TRUST_DOMAIN
               value: {{ $gateway.istio.trustDomain | default "cluster.local" | quote }}
             {{- end }}
+            {{- if and (not (hasKey $userEnvNames "ADDITIONAL_TRUST_DOMAINS")) (hasKey $gateway "istio") $gateway.istio.additionalTrustDomains }}
+            - name: ADDITIONAL_TRUST_DOMAINS
+              value: {{ $gateway.istio.additionalTrustDomains | join "," | quote }}
+            {{- end }}
+            {{- if and (not (hasKey $userEnvNames "CLUSTER_ID")) (hasKey $gateway "istio") $gateway.istio.clusterId }}
+            - name: CLUSTER_ID
+              value: {{ $gateway.istio.clusterId | quote }}
+            {{- end }}
+            {{- if and (not (hasKey $userEnvNames "NETWORK")) (hasKey $gateway "istio") $gateway.istio.network }}
+            - name: NETWORK
+              value: {{ $gateway.istio.network | quote }}
+            {{- end }}
+          {{- $catalogPaths := list }}
+          {{- range ($gateway.modelCatalog).sources }}
+          {{- if .configMap }}
+          {{- $catalogPaths = append $catalogPaths (printf "/config/model-catalog/%s.json" .configMap.name) }}
+          {{- end }}
+          {{- end }}
+          {{- if $catalogPaths }}
+            {{- if not (hasKey $userEnvNames "MODEL_CATALOG_PATHS") }}
+            - name: MODEL_CATALOG_PATHS
+              value: {{ $catalogPaths | join "," | quote }}
+            {{- end }}
+          {{- end }}
           {{- /* User-specified env vars */}}
           {{- with $gateway.env }}
             {{- toYaml . | nindent 12 }}
@@ -197,8 +223,18 @@ spec:
             {{- if hasKey $gateway "istio" }}
             - mountPath: /var/run/secrets/istio
               name: istiod-ca-cert
+              readOnly: true
             - mountPath: /var/run/secrets/tokens
               name: istio-token
+              readOnly: true
+            {{- end }}
+            {{- range ($gateway.modelCatalog).sources }}
+            {{- if .configMap }}
+            - name: model-catalog-{{ .configMap.name }}
+              mountPath: /config/model-catalog/{{ .configMap.name }}.json
+              subPath: {{ .configMap.key | default "catalog.json" }}
+              readOnly: true
+            {{- end }}
             {{- end }}
       volumes:
         - name: config-volume
@@ -232,5 +268,15 @@ spec:
                   audience: istio-ca
                   expirationSeconds: 43200
                   path: istio-token
+        {{- end }}
+        {{- range ($gateway.modelCatalog).sources }}
+        {{- if .configMap }}
+        - name: model-catalog-{{ .configMap.name }}
+          configMap:
+            name: {{ .configMap.name }}
+            items:
+            - key: {{ .configMap.key | default "catalog.json" }}
+              path: {{ .configMap.name }}.json
+        {{- end }}
         {{- end }}
       terminationGracePeriodSeconds: {{($gateway.shutdown).max|default 60|int}}

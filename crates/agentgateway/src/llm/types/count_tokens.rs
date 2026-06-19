@@ -4,7 +4,10 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::types::{RequestType, messages};
-use crate::llm::{AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, conversion};
+use crate::llm::{
+	AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, conversion,
+	logged_response_parsing,
+};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Request {
@@ -36,6 +39,8 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::CountTokens,
+			native_format: Some(crate::llm::custom::ProviderFormat::AnthropicTokenCount),
+			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: false,
@@ -76,7 +81,7 @@ pub struct Response {
 
 impl Response {
 	pub fn translate_response(bytes: Bytes) -> Result<(Bytes, u64), AIError> {
-		let resp: Self = serde_json::from_slice(&bytes).map_err(AIError::ResponseParsing)?;
+		let resp: Self = serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
 		Ok((bytes, resp.input_tokens))
 	}
 }

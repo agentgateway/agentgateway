@@ -74,7 +74,6 @@ spec:
       annotations:
         checksum/config: 20e03375ff2a736462894456b982110ca3e7b8ba58eab83c6f2e936be3e714ba
         checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
-        gateway.kgateway.dev/gateway-full-name: extremely-long-gateway-name-that-exceeds-the-sixty-three-character-limit-imposed-by-kubernetes-dns-naming-requirements
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
         prometheus.io/scrape: "true"
@@ -146,7 +145,10 @@ spec:
             path: /healthz/ready
             port: 15021
           periodSeconds: 10
-        resources: {}
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

@@ -7,6 +7,7 @@ use crate::*;
 
 #[apply(schema)]
 pub struct Csrf {
+	/// Additional trusted origins allowed to send state-changing requests.
 	#[serde(default)]
 	additional_origins: HashSet<String>,
 }
@@ -89,6 +90,20 @@ impl Csrf {
 			direct_response: Some(response),
 			response_headers: None,
 		})
+	}
+}
+
+impl crate::store::RequestPolicyTrait for Csrf {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(req)
+			.map_err(|_| crate::proxy::ProxyError::CsrfValidationFailed)
+			.map_err(crate::proxy::ProxyResponse::from)
 	}
 }
 

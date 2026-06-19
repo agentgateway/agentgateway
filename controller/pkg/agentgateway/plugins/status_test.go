@@ -24,7 +24,7 @@ func TestMergeAncestorsSummarizesWhenOwnedAncestorFitsInFirst16(t *testing.T) {
 		})
 	}
 
-	got := mergeAncestors(controllerName, nil, incoming)
+	got := MergeAncestors(controllerName, nil, incoming)
 
 	if len(got) != 16 {
 		t.Fatalf("expected 16 ancestors, got %d", len(got))
@@ -39,7 +39,7 @@ func TestMergeAncestorsSummarizesWhenOwnedAncestorFitsInFirst16(t *testing.T) {
 		t.Fatalf("expected summary group agentgateway.dev, got %#v", got[15].AncestorRef.Group)
 	}
 	if len(got[15].Conditions) != 1 {
-		t.Fatalf("expected one summary condition, got %d", len(got[15].Conditions))
+		t.Fatalf("expected one summary Condition, got %d", len(got[15].Conditions))
 	}
 	cond := got[15].Conditions[0]
 	if cond != (metav1.Condition{
@@ -48,7 +48,7 @@ func TestMergeAncestorsSummarizesWhenOwnedAncestorFitsInFirst16(t *testing.T) {
 		Reason:  "StatusSummary",
 		Message: "2 AncestorRefs ignored due to max status size",
 	}) {
-		t.Fatalf("unexpected summary condition: %#v", cond)
+		t.Fatalf("unexpected summary Condition: %#v", cond)
 	}
 	for _, ancestor := range got[:15] {
 		if ancestor.AncestorRef.Name == "ours" {
@@ -72,7 +72,7 @@ func TestMergeAncestorsTruncatesWhenNoOwnedAncestorFitsInFirst16(t *testing.T) {
 		})
 	}
 
-	got := mergeAncestors(controllerName, nil, incoming)
+	got := MergeAncestors(controllerName, nil, incoming)
 
 	if len(got) != 16 {
 		t.Fatalf("expected 16 ancestors, got %d", len(got))

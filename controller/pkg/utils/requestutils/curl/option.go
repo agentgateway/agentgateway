@@ -1,36 +1,26 @@
 package curl
 
 import (
-	"encoding/base64"
 	"net/http"
-	"strconv"
 	"strings"
+	"time"
 )
 
 // Option represents an option for a curl request.
 type Option func(config *requestConfig)
-
-// VerboseOutput returns the Option to emit a verbose output for the  curl request
-// https://curl.se/docs/manpage.html#-v
-func VerboseOutput() Option {
-	return func(config *requestConfig) {
-		config.verbose = true
-	}
-}
-
-// Silent returns the Option to enable silent mode for the curl request
-// https://curl.se/docs/manpage.html#-s
-func Silent() Option {
-	return func(config *requestConfig) {
-		config.silent = true
-	}
-}
 
 // WithMethod returns the Option to set the method for the curl request
 // https://curl.se/docs/manpage.html#-X
 func WithMethod(method string) Option {
 	return func(config *requestConfig) {
 		config.method = method
+	}
+}
+
+// WithTimeout bounds the whole request via a context deadline.
+func WithTimeout(d time.Duration) Option {
+	return func(config *requestConfig) {
+		config.timeout = d
 	}
 }
 
@@ -41,34 +31,10 @@ func WithPort(port int) Option {
 	}
 }
 
-// WithConnectionTimeout returns the Option to set connect and request timeout in seconds.
-func WithConnectionTimeout(seconds int) Option {
-	return func(config *requestConfig) {
-		config.connectionTimeout = seconds
-	}
-}
-
 // WithHost returns the Option to set the host for the curl request
 func WithHost(host string) Option {
 	return func(config *requestConfig) {
 		config.host = host
-	}
-}
-
-// WithHostPort returns the Option to set the host and port for the curl request
-// The provided string is assumed to have the format [HOST]:[PORT]
-func WithHostPort(hostPort string) Option {
-	return func(config *requestConfig) {
-		parts := strings.Split(hostPort, ":")
-		host := "unset"
-		port := 0
-		if len(parts) == 2 {
-			host = parts[0]
-			port, _ = strconv.Atoi(parts[1])
-		}
-
-		WithHost(host)(config)
-		WithPort(port)(config)
 	}
 }
 
@@ -78,18 +44,6 @@ func WithHostPort(hostPort string) Option {
 func WithPath(path string) Option {
 	return func(config *requestConfig) {
 		config.path = strings.TrimPrefix(path, "/")
-	}
-}
-
-// WithRetries returns the Option to configure the retries for the curl request
-// https://curl.se/docs/manpage.html#--retry
-// https://curl.se/docs/manpage.html#--retry-delay
-// https://curl.se/docs/manpage.html#--retry-max-time
-func WithRetries(retry, retryDelay, retryMaxTime int) Option {
-	return func(config *requestConfig) {
-		config.retry = retry
-		config.retryDelay = retryDelay
-		config.retryMaxTime = retryMaxTime
 	}
 }
 
@@ -121,15 +75,6 @@ func WithContentType(contentType string) Option {
 func WithHostHeader(host string) Option {
 	return func(config *requestConfig) {
 		WithHeader("Host", host)(config)
-	}
-}
-
-// WithBasicAuth returns the Option to configure a basic auth header for the curl request
-func WithBasicAuth(username string, password string) Option {
-	auth := username + ":" + password
-	basicAuth := base64.StdEncoding.EncodeToString([]byte(auth))
-	return func(config *requestConfig) {
-		WithHeader("Authorization", "Basic "+basicAuth)(config)
 	}
 }
 

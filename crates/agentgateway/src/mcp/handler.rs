@@ -2,18 +2,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::http::Response;
-use crate::http::sessionpersistence::MCPSession;
-use crate::mcp;
-use crate::mcp::FailureMode;
-use crate::mcp::mergestream::{MergeFn, Messages};
-use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
-use crate::mcp::router::McpBackendGroup;
-use crate::mcp::streamablehttp::ServerSseMessage;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, MCPInfo, mergestream, rbac, upstream};
-use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use http::StatusCode;
@@ -23,9 +11,22 @@ use rmcp::ErrorData;
 use rmcp::model::{
 	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
 	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
-	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerResult,
+	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
+	ServerNotification, ServerResult,
 };
 use tracing::{debug, warn};
+
+use crate::http::Response;
+use crate::http::sessionpersistence::MCPSession;
+use crate::mcp;
+use crate::mcp::mergestream::{MergeFn, Messages};
+use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
+use crate::mcp::router::McpBackendGroup;
+use crate::mcp::streamablehttp::ServerSseMessage;
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
+use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 
 const DELIMITER: &str = "_";
 
@@ -53,21 +54,46 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 	}
 }
 
+fn rewrite_resource_update_message(
+	default_target_name: Option<&String>,
+	target: &str,
+	mut message: ServerJsonRpcMessage,
+) -> ServerJsonRpcMessage {
+	if let ServerJsonRpcMessage::Notification(notification) = &mut message
+		&& let ServerNotification::ResourceUpdatedNotification(resource_updated) =
+			&mut notification.notification
+	{
+		resource_updated.params.uri = resource_uri(
+			default_target_name,
+			target,
+			resource_updated.params.uri.as_str(),
+		);
+	}
+	message
+}
+
 #[derive(Debug, Clone)]
 pub struct Relay {
-	upstreams: Arc<upstream::UpstreamGroup>,
+	pub(crate) upstreams: Arc<upstream::UpstreamGroup>,
 	pub policies: McpAuthorizationSet,
+	pub(crate) mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
+	pub(crate) policy_client: PolicyClient,
 }
 
 pub struct RelayInputs {
 	pub backend: McpBackendGroup,
 	pub policies: McpAuthorizationSet,
+	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 	pub client: PolicyClient,
 }
 
 impl RelayInputs {
 	pub fn build_new_connections(self) -> Result<Relay, mcp::Error> {
-		Relay::new(self.backend, self.policies, self.client)
+		let r = Relay::new(self.backend, self.policies, self.client)?;
+		Ok(Relay {
+			mcp_guardrails: self.mcp_guardrails,
+			..r
+		})
 	}
 }
 
@@ -78,15 +104,27 @@ impl Relay {
 		client: PolicyClient,
 	) -> Result<Self, mcp::Error> {
 		Ok(Self {
-			upstreams: Arc::new(upstream::UpstreamGroup::new(client, backend)?),
+			upstreams: Arc::new(upstream::UpstreamGroup::new(client.clone(), backend)?),
 			policies,
+			mcp_guardrails: None,
+			policy_client: client,
 		})
 	}
 	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
 		Self {
 			upstreams: self.upstreams.clone(),
 			policies,
+			mcp_guardrails: self.mcp_guardrails.clone(),
+			policy_client: self.policy_client.clone(),
 		}
+	}
+
+	fn rewrite_outbound_server_messages(&self, target: &str, stream: Messages) -> Messages {
+		let target = target.to_string();
+		let default_target_name = self.upstreams.default_target_name.clone();
+		stream.map_server_messages(move |message| {
+			rewrite_resource_update_message(default_target_name.as_ref(), &target, message)
+		})
 	}
 
 	pub fn parse_resource_name<'a, 'b: 'a>(
@@ -101,6 +139,27 @@ impl Relay {
 				.ok_or(UpstreamError::InvalidRequest(
 					"invalid resource name".to_string(),
 				))
+		}
+	}
+
+	/// Reverse of `resource_uri`: extracts the service name and original URI from a
+	/// multiplexed URI of the form `service+scheme://rest`.
+	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
+		if let Some(default) = self.upstreams.default_target_name.as_ref() {
+			Ok((default.as_str(), uri.to_string()))
+		} else {
+			// URI format: "service+scheme://rest"
+			let plus_pos = uri
+				.find('+')
+				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
+			let service_name = &uri[..plus_pos];
+			let original_uri = &uri[plus_pos + 1..];
+			// Validate that the extracted service name corresponds to a known upstream
+			let validated_name = self
+				.upstreams
+				.get_name(service_name)
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+			Ok((validated_name, original_uri.to_string()))
 		}
 	}
 
@@ -163,14 +222,99 @@ impl Relay {
 	pub fn is_multiplexing(&self) -> bool {
 		self.upstreams.is_multiplexing
 	}
-	pub fn default_target_name(&self) -> Option<String> {
-		self.upstreams.default_target_name.clone()
+
+	fn build_guardrails_ctx(
+		&self,
+		r: &JsonRpcRequest<ClientRequest>,
+		ctx: &IncomingRequestContext,
+		backends: Vec<String>,
+	) -> Option<GuardrailsCtx> {
+		let ext = self.mcp_guardrails.as_ref()?;
+		let method = r.request.method().to_string();
+		if !ext.runs_response(&method) {
+			// we only need an GuardrailsCtx for response-phase guardrails hooks
+			return None;
+		}
+		Some(GuardrailsCtx {
+			ext: ext.clone(),
+			method,
+			backends,
+			client: self.policy_client.clone(),
+			req_ctx: Arc::new(ctx.clone()),
+		})
 	}
 
-	pub fn merge_tools(&self, cel: CelExecWrapper) -> Box<MergeFn> {
+	pub(crate) async fn run_guardrails_call_request<P: serde::de::DeserializeOwned>(
+		&self,
+		ext_ctx: &mut crate::mcp::guardrails::CallRequestCtx<'_>,
+		ctx: &mut IncomingRequestContext,
+	) -> Result<Option<P>, UpstreamError> {
+		use crate::mcp::guardrails::Outcome;
+		let Some(ext) = self.mcp_guardrails.as_ref() else {
+			return Ok(None);
+		};
+		let method = ext_ctx.method;
+		match crate::mcp::guardrails::run_call_request::<P>(ext, ext_ctx, ctx, &self.policy_client)
+			.await
+		{
+			Outcome::Pass => Ok(None),
+			Outcome::Mutated(p) => {
+				tracing::debug!(method, "mcpGuardrails: request mutated");
+				Ok(Some(p))
+			},
+			Outcome::Reject(rej) => {
+				tracing::debug!(
+					method,
+					code = rej.code.0,
+					message = %rej.message,
+					"mcpGuardrails: request rejected",
+				);
+				Err(UpstreamError::McpGuardrails(rej))
+			},
+		}
+	}
+
+	pub(crate) async fn maybe_run_guardrails_call_request<P>(
+		&self,
+		backend: &str,
+		method: &str,
+		params: &mut P,
+		ctx: &mut IncomingRequestContext,
+	) -> Result<(), UpstreamError>
+	where
+		P: serde::Serialize + serde::de::DeserializeOwned,
+	{
+		let Some(ext) = self.mcp_guardrails.as_ref() else {
+			return Ok(());
+		};
+		// Skip the (potentially expensive) params serialization when this method
+		// has no request-phase hook configured.
+		if !ext.runs_request(method) {
+			return Ok(());
+		}
+		let params_b = serde_json::to_vec(&*params)
+			.map_err(|e| UpstreamError::InvalidRequest(format!("serialize {method} params: {e}")))?;
+		let backends = [backend.to_string()];
+		if let Some(p) = self
+			.run_guardrails_call_request::<P>(
+				&mut crate::mcp::guardrails::CallRequestCtx {
+					backends: &backends,
+					method,
+					params: Some(params_b.into()),
+				},
+				ctx,
+			)
+			.await?
+		{
+			*params = p;
+		}
+		Ok(())
+	}
+
+	pub fn merge_tools(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams| {
+		Box::new(move |streams, cel| {
 			let tools = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -187,7 +331,7 @@ impl Relay {
 									server_name.to_string(),
 									t.name.to_string(),
 								)),
-								&cel,
+								cel,
 							)
 						})
 						// Rename to handle multiplexing
@@ -214,7 +358,8 @@ impl Relay {
 	}
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
-		Box::new(move |s| {
+		let resource_subscribe = self.upstreams.stateful();
+		Box::new(move |s, _cel| {
 			if !multiplexing {
 				// Happy case: we can forward everything
 				let res = s.into_iter().next().and_then(|(_, r)| match r {
@@ -226,7 +371,7 @@ impl Relay {
 				}
 				// If we got here in FailOpen mode, it means the only target failed.
 				// Return a default info response to keep the client session alive.
-				return Ok(Self::get_info(pv, multiplexing, Vec::new()).into());
+				return Ok(Self::get_info(pv, resource_subscribe, Vec::new()).into());
 			}
 
 			// Multiplexing is more complex. We need to find the lowest protocol version
@@ -247,14 +392,14 @@ impl Relay {
 				}
 			}
 
-			Ok(Self::get_info(lowest_version, multiplexing, upstream_instructions).into())
+			Ok(Self::get_info(lowest_version, resource_subscribe, upstream_instructions).into())
 		})
 	}
 
-	pub fn merge_prompts(&self, cel: CelExecWrapper) -> Box<MergeFn> {
+	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams| {
+		Box::new(move |streams, cel| {
 			let prompts = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -270,7 +415,7 @@ impl Relay {
 									server_name.to_string(),
 									p.name.to_string(),
 								)),
-								&cel,
+								cel,
 							)
 						})
 						.map(|mut p| {
@@ -290,10 +435,10 @@ impl Relay {
 			)
 		})
 	}
-	pub fn merge_resources(&self, cel: CelExecWrapper) -> Box<MergeFn> {
+	pub fn merge_resources(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		Box::new(move |streams| {
+		Box::new(move |streams, cel| {
 			let resources = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -309,7 +454,7 @@ impl Relay {
 									server_name.to_string(),
 									r.uri.to_string(),
 								)),
-								&cel,
+								cel,
 							)
 						})
 						// Prefix URI with service name when multiplexing to avoid conflicts
@@ -330,9 +475,10 @@ impl Relay {
 			)
 		})
 	}
-	pub fn merge_resource_templates(&self, cel: CelExecWrapper) -> Box<MergeFn> {
+	pub fn merge_resource_templates(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		Box::new(move |streams| {
+		let default_target_name = self.upstreams.default_target_name.clone();
+		Box::new(move |streams, cel| {
 			let resource_templates = streams
 				.into_iter()
 				.flat_map(|(server_name, s)| {
@@ -348,11 +494,18 @@ impl Relay {
 									server_name.to_string(),
 									rt.uri_template.to_string(),
 								)),
-								&cel,
+								cel,
 							)
 						})
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404) map this to the service name,
-						// if we add support for multiple services.
+						// Prefix uri_template with service name when multiplexing
+						.map(|mut rt| {
+							rt.uri_template = resource_uri(
+								default_target_name.as_ref(),
+								server_name.as_str(),
+								&rt.uri_template,
+							);
+							rt
+						})
 						.collect_vec()
 				})
 				.collect_vec();
@@ -367,7 +520,7 @@ impl Relay {
 		})
 	}
 	pub fn merge_empty(&self) -> Box<MergeFn> {
-		Box::new(move |_| Ok(rmcp::model::ServerResult::empty(())))
+		Box::new(move |_, _cel| Ok(rmcp::model::ServerResult::empty(())))
 	}
 	pub async fn send_single(
 		&self,
@@ -382,29 +535,34 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let stream = us.generic_stream(r, &ctx).await?;
+		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
+		let stream =
+			self.rewrite_outbound_server_messages(service_name, us.generic_stream(r, &ctx).await?);
 
-		messages_to_response(id, stream, mcp_log)
-	}
-	// For some requests, we don't have a sane mapping of incoming requests to a specific
-	// downstream service when multiplexing. Only forward when we have only one backend.
-	pub async fn send_single_without_multiplexing(
-		&self,
-		r: JsonRpcRequest<ClientRequest>,
-		ctx: IncomingRequestContext,
-		mcp_log: Option<AsyncLog<MCPInfo>>,
-	) -> Result<Response, UpstreamError> {
-		let Some(service_name) = &self.upstreams.default_target_name else {
-			return Err(UpstreamError::InvalidMethod(r.request.method().to_string()));
-		};
-		self.send_single(r, ctx, service_name, mcp_log).await
+		match guardrails {
+			Some(guardrails) => {
+				messages_to_response(id, wrap_with_guardrails(stream, guardrails), mcp_log)
+			},
+			None => messages_to_response(id, stream, mcp_log),
+		}
 	}
 	pub async fn send_fanout_deletion(
 		&self,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		for (name, con) in self.upstreams.iter_named() {
-			match con.delete(&ctx).await {
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(name, con)| {
+				let ctx = &ctx;
+				async move { (name, con.delete(ctx).await) }
+			})
+			.collect();
+
+		let fut_results = futures::future::join_all(futs).await;
+
+		for (name, result) in fut_results {
+			match result {
 				Ok(_) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
@@ -425,9 +583,24 @@ impl Relay {
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
-		for (name, con) in self.upstreams.iter_named() {
-			match con.get_event_stream(&ctx).await {
-				Ok(s) => streams.push((name, s)),
+
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(name, con)| {
+				let ctx = &ctx;
+				async move { (name, con.get_event_stream(ctx).await) }
+			})
+			.collect();
+
+		let fut_results = futures::future::join_all(futs).await;
+
+		for (name, result) in fut_results {
+			match result {
+				Ok(s) => {
+					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					streams.push((name, s));
+				},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						let is_405 = if let UpstreamError::Http(ClientError::Status(ref r)) = e
@@ -460,17 +633,69 @@ impl Relay {
 		let ms = mergestream::MergeStream::new_without_merge(streams, self.upstreams.failure_mode);
 		messages_to_response(RequestId::Number(0), ms, None)
 	}
+
 	pub async fn send_fanout(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
-		ctx: IncomingRequestContext,
+		mut ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
 		let mut streams = Vec::new();
-		for (name, con) in self.upstreams.iter_named() {
-			match con.generic_stream(r.clone(), &ctx).await {
-				Ok(s) => streams.push((name, s)),
+		let method = r.request.method().to_string();
+		let method = method.as_str();
+
+		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
+		// fans out to (just the one name when there is a single backend).
+		let service_names = self.mcp_guardrails.as_ref().map(|_| {
+			self
+				.upstreams
+				.iter_named()
+				.map(|(n, _)| n.to_string())
+				.collect::<Vec<_>>()
+		});
+
+		// Request-phase hook runs once for the whole client call. params is None for
+		// fanout (no body to rewrite); header/metadata side effects apply to the single
+		// shared ctx forwarded to every upstream. A reject fails the whole call.
+		if let Some(ext) = self.mcp_guardrails.as_ref() {
+			// params is None, so mutations are discarded unparsed and the params
+			// type is never used.
+			let outcome = crate::mcp::guardrails::run_call_request::<serde_json::Value>(
+				ext,
+				&mut crate::mcp::guardrails::CallRequestCtx {
+					backends: service_names.as_deref().unwrap_or_default(),
+					method,
+					params: None,
+				},
+				&mut ctx,
+				&self.policy_client,
+			)
+			.await;
+			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
+				return Err(UpstreamError::McpGuardrails(rej));
+			}
+		}
+
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(name, con)| {
+				let r = r.clone();
+				let ctx = &ctx;
+				async move { (name, con.generic_stream(r, ctx).await) }
+			})
+			.collect();
+
+		let fut_results = futures::future::join_all(futs).await;
+
+		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		for (name, result) in fut_results {
+			match result {
+				Ok(s) => {
+					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					streams.push((name, s));
+				},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
@@ -492,16 +717,34 @@ impl Relay {
 			));
 		}
 
-		let ms = mergestream::MergeStream::new(streams, id.clone(), merge, self.upstreams.failure_mode);
-		messages_to_response(id, ms, None)
+		let ms =
+			mergestream::MergeStream::new(streams, id.clone(), merge, cel, self.upstreams.failure_mode);
+
+		// Response-phase hook runs once on the merged (muxed) result.
+		match service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)) {
+			Some(guardrails) => messages_to_response(id, wrap_with_guardrails(ms, guardrails), None),
+			None => messages_to_response(id, ms, None),
+		}
 	}
 	pub async fn send_notification(
 		&self,
 		r: JsonRpcNotification<ClientNotification>,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		for (name, con) in self.upstreams.iter_named() {
-			match con.generic_notification(r.notification.clone(), &ctx).await {
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(name, con)| {
+				let notification = r.notification.clone();
+				let ctx = &ctx;
+				async move { (name, con.generic_notification(notification, ctx).await) }
+			})
+			.collect();
+
+		let fut_results = futures::future::join_all(futs).await;
+
+		for (name, result) in fut_results {
+			match result {
 				Ok(_) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
@@ -536,21 +779,23 @@ impl Relay {
 
 	fn get_info(
 		pv: ProtocolVersion,
-		multiplexing: bool,
+		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
 	) -> ServerInfo {
-		let capabilities = if multiplexing {
-			// Resources are now supported with multiplexing using proper URI prefixing
-			ServerCapabilities::builder()
+		let capabilities = {
+			// Prompts are supported with multiplexing using proxy-prefixed names.
+			// Resources are supported with multiplexing using service+scheme:// URI prefixing.
+			let mut builder = ServerCapabilities::builder()
 				.enable_tools()
-				.enable_resources()
-				.build()
-		} else {
-			ServerCapabilities::builder()
-				.enable_tools()
+				.enable_tool_list_changed()
 				.enable_prompts()
+				.enable_prompts_list_changed()
 				.enable_resources()
-				.build()
+				.enable_resources_list_changed();
+			if resource_subscribe {
+				builder = builder.enable_resources_subscribe();
+			}
+			builder.build()
 		};
 		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
 		let instructions = if upstream_instructions.is_empty() {
@@ -592,15 +837,55 @@ pub fn setup_request_log(
 	(_span, log, cel)
 }
 
+pub(crate) struct GuardrailsCtx {
+	pub ext: Arc<crate::mcp::guardrails::McpGuardrails>,
+	pub method: String,
+	pub backends: Vec<String>,
+	pub client: PolicyClient,
+	pub req_ctx: Arc<IncomingRequestContext>,
+}
+
 fn messages_to_response(
 	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
 ) -> Result<Response, UpstreamError> {
+	Ok(mcp::session::sse_stream_response(
+		into_sse_stream(id, stream, mcp_log),
+		None,
+	))
+}
+
+fn wrap_with_guardrails(
+	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+	guardrails: GuardrailsCtx,
+) -> impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static {
 	use futures_util::StreamExt;
-	let request_id = id.clone();
+	let guardrails = Arc::new(guardrails);
+	stream.then(move |rpc| {
+		let ctx = guardrails.clone();
+		async move {
+			match rpc {
+				Ok(mut rpc) => {
+					if let Some(scrubbed) = apply_guardrails_response_intercept(&ctx, &rpc).await {
+						rpc = scrubbed;
+					}
+					Ok(rpc)
+				},
+				Err(e) => Err(e),
+			}
+		}
+	})
+}
+
+fn into_sse_stream(
+	request_id: RequestId,
+	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+	mcp_log: Option<AsyncLog<MCPInfo>>,
+) -> impl Stream<Item = ServerSseMessage> + Send + 'static {
+	use futures_util::StreamExt;
 	let mut captured_terminal = false;
-	let stream = stream.map(move |rpc| {
+	stream.map(move |rpc| {
 		let r = match rpc {
 			Ok(rpc) => {
 				if !captured_terminal && let Some(log) = mcp_log.as_ref() {
@@ -608,17 +893,56 @@ fn messages_to_response(
 				}
 				rpc
 			},
-			Err(e) => {
-				ServerJsonRpcMessage::error(ErrorData::internal_error(e.to_string(), None), id.clone())
-			},
+			Err(e) => ServerJsonRpcMessage::error(
+				ErrorData::internal_error(e.to_string(), None),
+				request_id.clone(),
+			),
 		};
 		// TODO: is it ok to have no event_id here?
 		ServerSseMessage {
 			event_id: None,
 			message: Arc::new(r),
 		}
-	});
-	Ok(mcp::session::sse_stream_response(stream, None))
+	})
+}
+
+async fn apply_guardrails_response_intercept(
+	ctx: &GuardrailsCtx,
+	msg: &ServerJsonRpcMessage,
+) -> Option<ServerJsonRpcMessage> {
+	use crate::mcp::guardrails::Outcome;
+	// The stream is request-scoped, so the only Response on it is the terminal.
+	let ServerJsonRpcMessage::Response(resp) = msg else {
+		return None;
+	};
+	let json: bytes::Bytes = match serde_json::to_vec(&resp.result) {
+		Ok(v) => v.into(),
+		Err(e) => {
+			// Fail the response rather than skip a hook the operator configured,
+			// matching the request side's handling of serialize failures.
+			tracing::warn!(error = %e, "mcpGuardrails: failed to serialize result for inspection");
+			return Some(ServerJsonRpcMessage::error(
+				ErrorData::internal_error(format!("mcpGuardrails: serialize result: {e}"), None),
+				resp.id.clone(),
+			));
+		},
+	};
+	match crate::mcp::guardrails::run_response(
+		&ctx.ext,
+		&ctx.method,
+		&ctx.backends,
+		json,
+		&ctx.req_ctx,
+		&ctx.client,
+	)
+	.await
+	{
+		Outcome::Pass => None,
+		Outcome::Mutated(new_result) => {
+			Some(ServerJsonRpcMessage::response(new_result, resp.id.clone()))
+		},
+		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, resp.id.clone())),
+	}
 }
 
 fn capture_terminal_mcp_payload(
@@ -650,10 +974,11 @@ fn accepted_response() -> Response {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use futures_util::stream;
 	use rmcp::model::{CallToolResult, ListToolsResult};
 	use serde_json::json;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn messages_to_response_captures_first_matching_tool_result() {

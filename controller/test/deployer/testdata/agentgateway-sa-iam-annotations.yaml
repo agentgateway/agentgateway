@@ -24,10 +24,7 @@ spec:
   deployment:
     metadata:
       labels:
-        # You'd think this would remove the app.kubernetes.io/instance label,
-        # but it just sets the label to the empty string. TODO(chandler):
-        # Figure out the incantation to cause removal of the label.
-        app.kubernetes.io/instance: null
+        app.kubernetes.io/instance: ""
 ---
 kind: Gateway
 apiVersion: gateway.networking.k8s.io/v1

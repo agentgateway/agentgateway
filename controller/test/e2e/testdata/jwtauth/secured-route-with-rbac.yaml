@@ -1,0 +1,38 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-secure
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "secureroute.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+# jwks were generated using hack/utils/jwt/jwt-generator.go
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: route-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: route-secure
+  traffic:
+    authorization:
+      action: Allow
+      policy:
+        matchExpressions:
+          - 'jwt.sub == "ignore@agentgateway.dev"'
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: https://agentgateway.dev
+        jwks:
+          inline: '{"keys":[{"use":"sig","kty":"RSA","kid":"7073024352919329094","n":"mDGi5mfwowUijU5cfoBC7DgjHi3Q_HITTiBQk0oCyIJY63GSdneLRYLL3tc3ae8_Uz0mIeTIY0QumsC0JYVnf28yYGFbaJRaiy3NqwdGz3Eecz8eOXWe6tnx-ZxaO4hOCguSQhmdUvc1VSL5pXohQd4UESpI6DgApuTIix9u0gqBIYbanKaa-KFPex_AaPFO0YrnVa6W6eFZXCQH-rKl7jmHa94iD-hwuuGJynPU9cjLJzSofNZUJvA1sCWDH6c8hk_caA4o0C6GFr-zGCmXfq9S_5IlUsKNMxjlFFE64gWutK_l5zGwd9X5Pd42eTmEWHY3bR6jXM3L7FAI0FUw1Q","e":"AQAB","x5c":["MIIC5jCCAc6gAwIBAgIBRzANBgkqhkiG9w0BAQsFADAbMRkwFwYDVQQKExBhZ2VudGdhdGV3YXkuZGV2MB4XDTI2MDUwMjE0NDUxNVoXDTI2MDUwMjE2NDUxNVowGzEZMBcGA1UEChMQYWdlbnRnYXRld2F5LmRldjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAJgxouZn8KMFIo1OXH6AQuw4Ix4t0PxyE04gUJNKAsiCWOtxknZ3i0WCy97XN2nvP1M9JiHkyGNELprAtCWFZ39vMmBhW2iUWostzasHRs9xHnM/Hjl1nurZ8fmcWjuITgoLkkIZnVL3NVUi+aV6IUHeFBEqSOg4AKbkyIsfbtIKgSGG2pymmvihT3sfwGjxTtGK51WulunhWVwkB/qype45h2veIg/ocLrhicpz1PXIyyc0qHzWVCbwNbAlgx+nPIZP3GgOKNAuhha/sxgpl36vUv+SJVLCjTMY5RRROuIFrrSv5ecxsHfV+T3eNnk5hFh2N20eo1zNy+xQCNBVMNUCAwEAAaM1MDMwDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsGAQUFBwMBMAwGA1UdEwEB/wQCMAAwDQYJKoZIhvcNAQELBQADggEBAJVRjqfAML3BkvBhWmuXxNwMUC6ds6R3sc1DjdOz6c6VBECh6EP2l2SfSUssq9/oLjRikS/M+tP16rWLd2TdHL4zGy+vFbOamLmvIWx6T+ujv2pieH+qhaixSY2PiX2FNd9Qf+IiZRpy+dekUsq0bIgJx2WlL9qbYPISxjCUak7vgywZntbr0MCesc1AuW7QXS2iVsF9U2fO/KmJPlIRRcmzBC+FZMQW5vvJ3U4y0z+ZAeBN/qPl3h+LGiEl3dXokXsGKJiiCCCoe9xD7uR6SC9UTBPSQEECWf5T8kefKWaDMJ8nwUI2c9yDAr7a5cTR3m5+W2+JyK29zt8o52RolvU="]}]}'

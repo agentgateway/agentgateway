@@ -37,5 +37,8 @@ info:
   "max_tokens": 1024,
   "thinking": {
     "type": "adaptive"
+  },
+  "output_config": {
+    "effort": "high"
   }
 }

@@ -1,7 +1,0 @@
-gatewayClassParametersRefs:
-  kgateway:
-    name: custom-gwp
-    namespace: kgateway-test
-  agentgateway:
-    name: custom-agwp
-    namespace: kgateway-test

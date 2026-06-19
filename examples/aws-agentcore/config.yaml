@@ -13,8 +13,7 @@ binds:
           agentCore:
             agentRuntimeArn: "arn:aws:bedrock-agentcore:us-west-2:606469916935:runtime/a2a_sca_iam-4rLvS1BRqq"
         policies:
-          transformations:
-            request:
-              set:
-                X-Amzn-Bedrock-AgentCore-Runtime-User-Id: "user-foo"
-                X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: "user-foo"
+          requestHeaderModifier:
+            set:
+              X-Amzn-Bedrock-AgentCore-Runtime-User-Id: "user-foo"
+              X-Amzn-Bedrock-AgentCore-Runtime-Custom-User-Id: "user-foo"

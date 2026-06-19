@@ -118,13 +118,14 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 		return nil, nil
 	}
 
-	be, err := buildBackendRef(ctx, webhook.BackendRef, namespace)
+	be, err := BuildBackendRef(ctx, webhook.BackendRef, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build webhook: %v", err)
 	}
 
 	w := &api.BackendPolicySpec_Ai_Webhook{
-		Backend: be,
+		Backend:     be,
+		FailureMode: webhookFailureMode(webhook.FailureMode),
 	}
 
 	if len(webhook.ForwardHeaderMatches) > 0 {
@@ -148,6 +149,13 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	}
 
 	return w, nil
+}
+
+func webhookFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_Webhook_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.BackendPolicySpec_Ai_Webhook_FAIL_OPEN
+	}
+	return api.BackendPolicySpec_Ai_Webhook_FAIL_CLOSED
 }
 
 func processBuiltinRegexRule(builtin agentgateway.BuiltIn, logger *slog.Logger) *api.BackendPolicySpec_Ai_RegexRule {
@@ -275,9 +283,9 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 
 	// Set location with default value if not specified
 	if armor.Location != nil {
-		pgArmor.Location = ptr.Of(*armor.Location)
+		pgArmor.Location = new(*armor.Location)
 	} else {
-		pgArmor.Location = ptr.Of("us-central1")
+		pgArmor.Location = new("us-central1")
 	}
 
 	if armor.Policies != nil {

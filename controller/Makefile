@@ -131,11 +131,18 @@ mod-tidy: mod-download mod-tidy-nested ## Tidy the go mod file
 #----------------------------------------------------------------------------
 
 .PHONY: analyze
-analyze: $(CUSTOM_GOLANGCI_LINT_BIN)  ## Run golangci-lint. Override options with ANALYZE_ARGS.
+analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options with ANALYZE_ARGS.
 	$(CUSTOM_GOLANGCI_LINT_RUN) $(ANALYZE_ARGS) ./...
 
-$(CUSTOM_GOLANGCI_LINT_BIN): ../go.mod ../go.sum .custom-gcl.yml
-	golangci-lint custom
+.PHONY: ensure-custom-golangci-lint
+ensure-custom-golangci-lint:
+	@expected_go_version="$$(go env GOVERSION)"; \
+	current_go_version="$$( $(CUSTOM_GOLANGCI_LINT_BIN) version 2>/dev/null | sed -n 's/.* built with \(go[0-9.]*\).*/\1/p' )"; \
+	if [ ! -x "$(CUSTOM_GOLANGCI_LINT_BIN)" ] || [ "$$current_go_version" != "$$expected_go_version" ]; then \
+		echo "Rebuilding golangci-lint custom with $$expected_go_version..."; \
+		rm -f "$(CUSTOM_GOLANGCI_LINT_BIN)"; \
+		golangci-lint custom; \
+	fi
 
 .PHONY: lint-actions
 lint-actions: ## Lint the GitHub Actions workflows
@@ -360,13 +367,13 @@ $(STAMP_DIR)/mod-tidy: $(MOD_FILES) | $(STAMP_DIR)
 # License generation with dependency tracking
 $(STAMP_DIR)/generate-licenses: $(MOD_FILES) | $(STAMP_DIR)
 	@echo "Generating licenses..."
-	GO111MODULE=on go run hack/utils/oss_compliance/oss_compliance.go osagen -c "GNU General Public License v2.0,GNU General Public License v3.0,GNU Lesser General Public License v2.1,GNU Lesser General Public License v3.0,GNU Affero General Public License v3.0"
-	GO111MODULE=on go run hack/utils/oss_compliance/oss_compliance.go osagen -s "Mozilla Public License 2.0,GNU General Public License v2.0,GNU General Public License v3.0,GNU Lesser General Public License v2.1,GNU Lesser General Public License v3.0,GNU Affero General Public License v3.0"> hack/utils/oss_compliance/osa_provided.md
-	GO111MODULE=on go run hack/utils/oss_compliance/oss_compliance.go osagen -i "Mozilla Public License 2.0"> hack/utils/oss_compliance/osa_included.md
+	../tools/oss_compliance osagen -c "GNU General Public License v2.0,GNU General Public License v3.0,GNU Lesser General Public License v2.1,GNU Lesser General Public License v3.0,GNU Affero General Public License v3.0"
+	../tools/oss_compliance osagen -s "Mozilla Public License 2.0,GNU General Public License v2.0,GNU General Public License v3.0,GNU Lesser General Public License v2.1,GNU Lesser General Public License v3.0,GNU Affero General Public License v3.0"> hack/utils/oss_compliance/osa_provided.md
+	../tools/oss_compliance osagen -i "Mozilla Public License 2.0"> hack/utils/oss_compliance/osa_included.md
 	@touch $@
 
 # Formatting - only runs if generation steps changed
-$(STAMP_DIR)/fmt: $(STAMP_DIR)/go-generate-all $(CUSTOM_GOLANGCI_LINT_BIN)
+$(STAMP_DIR)/fmt: $(STAMP_DIR)/go-generate-all ensure-custom-golangci-lint
 	@echo "Formatting code..."
 	$(CUSTOM_GOLANGCI_LINT_FMT) ./...
 	@touch $@
@@ -414,6 +421,35 @@ export AGENTGATEWAY_IMAGE_REPO ?= agentgateway-controller
 .PHONY: agentgateway-controller
 agentgateway-controller:
 	 $(GO_BUILD_FLAGS) GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(CONTROLLER_OUTPUT_DIR)/agentgateway-linux-$(GOARCH) ./cmd/agentgateway
+
+#----------------------------------------------------------------------------------
+# agctl CLI
+#----------------------------------------------------------------------------------
+
+AGCTL_OUTPUT_DIR=$(OUTPUT_DIR)/pkg/agctl
+
+.PHONY: agctl
+agctl: ## Build agctl for the host OS/arch
+	CGO_ENABLED=0 GOARCH=$(GOARCH) go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-$(GOOS)-$(GOARCH) ./cmd/agctl
+
+.PHONY: agctl-linux-amd64
+agctl-linux-amd64: ## Build agctl for linux/amd64
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-linux-amd64 ./cmd/agctl
+
+.PHONY: agctl-linux-arm64
+agctl-linux-arm64: ## Build agctl for linux/arm64
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=linux go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-linux-arm64 ./cmd/agctl
+
+.PHONY: agctl-darwin-arm64
+agctl-darwin-arm64: ## Build agctl for darwin/arm64
+	CGO_ENABLED=0 GOARCH=arm64 GOOS=darwin go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-darwin-arm64 ./cmd/agctl
+
+.PHONY: agctl-windows-amd64
+agctl-windows-amd64: ## Build agctl for windows/amd64
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags='$(LDFLAGS)' -gcflags='$(GCFLAGS)' -o $(AGCTL_OUTPUT_DIR)/agctl-windows-amd64.exe ./cmd/agctl
+
+.PHONY: agctl-release
+agctl-release: agctl-linux-amd64 agctl-linux-arm64 agctl-darwin-arm64 agctl-windows-amd64 ## Build agctl for all release targets
 
 $(CONTROLLER_OUTPUT_DIR)/Dockerfile.agentgateway: cmd/agentgateway/Dockerfile.agentgateway
 	cp $< $@
@@ -550,8 +586,8 @@ CLUSTER_NAME ?= kind
 INSTALL_NAMESPACE ?= agentgateway-system
 
 # The version of the Node Docker image to use for booting the kind cluster: https://hub.docker.com/r/kindest/node/tags
-# This version should stay in sync with `hack/kind/setup-kind.sh`.
-CLUSTER_NODE_VERSION ?= v1.35.0@sha256:452d707d4862f52530247495d180205e029056831160e22870e37e3f6c1ac31f
+# This version should stay in sync with the default node version in (controller)`test/setup/setup-kind-ci.sh`.
+CLUSTER_NODE_VERSION ?= v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
 
 .PHONY: kind-create
 kind-create: ## Create a KinD cluster

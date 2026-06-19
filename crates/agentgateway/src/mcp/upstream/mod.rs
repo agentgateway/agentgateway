@@ -10,14 +10,14 @@ pub(crate) use client::McpHttpClient;
 pub use openapi::ParseError as OpenAPIParseError;
 use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
+use rmcp::transport::common::http_header::HEADER_SESSION_ID;
 use thiserror::Error;
 use tokio::process::Command;
 
-use crate::mcp::FailureMode;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
-use crate::mcp::{mergestream, upstream};
+use crate::mcp::{FailureMode, mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
@@ -25,35 +25,84 @@ use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
+	method: ::http::Method,
+	uri: ::http::Uri,
 	headers: http::HeaderMap,
 	ext: ::http::Extensions,
+	authority: Option<::http::uri::Authority>,
 }
 
 impl IncomingRequestContext {
 	#[cfg(test)]
 	pub fn empty() -> Self {
 		Self {
+			method: ::http::Method::GET,
+			uri: ::http::Uri::from_static("/"),
 			headers: http::HeaderMap::new(),
 			ext: ::http::Extensions::new(),
+			authority: None,
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
 		Self {
+			method: parts.method.clone(),
+			uri: parts.uri.clone(),
 			headers: parts.headers.clone(),
 			ext: parts.extensions.clone(),
+			authority: parts.uri.authority().cloned(),
 		}
 	}
-	pub fn apply(&self, req: &mut http::Request) {
+	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
+		&mut self.headers
+	}
+	pub fn extensions_mut(&mut self) -> &mut ::http::Extensions {
+		&mut self.ext
+	}
+	pub fn apply(&self, req: &mut http::Request) -> anyhow::Result<()> {
+		req.extensions_mut().extend(self.ext.clone());
+		let explicit_auto_hostname = req
+			.extensions()
+			.get::<crate::http::filters::AutoHostname>()
+			.is_some_and(|auto| auto.explicit);
+		if explicit_auto_hostname {
+			let authority = req.uri().authority().map(|a| strng::new(a.as_str()));
+			if let Some(authority) = authority
+				&& let Some(auto) = req
+					.extensions_mut()
+					.get_mut::<crate::http::filters::AutoHostname>()
+				&& auto.target.is_none()
+			{
+				auto.target = Some(authority);
+			}
+		}
 		for (k, v) in &self.headers {
 			// Remove headers we do not want to propagate to the backend
-			if k == http::header::CONTENT_ENCODING || k == http::header::CONTENT_LENGTH {
+			if k == http::header::CONTENT_ENCODING
+				|| k == http::header::CONTENT_LENGTH
+				|| k.as_str().eq_ignore_ascii_case(HEADER_SESSION_ID)
+			{
 				continue;
 			}
 			if !req.headers().contains_key(k) {
 				req.headers_mut().insert(k.clone(), v.clone());
 			}
 		}
-		req.extensions_mut().extend(self.ext.clone());
+		let Some(authority) = self.authority.clone() else {
+			return Ok(());
+		};
+		http::modify_req_uri(req, |uri| {
+			uri.authority = Some(authority);
+			Ok(())
+		})
+	}
+	// Empty-bodied Request mirroring the incoming headers/extensions, for CEL input.
+	pub fn as_request(&self) -> crate::http::Request {
+		let mut req = ::http::Request::new(crate::http::Body::empty());
+		*req.method_mut() = self.method.clone();
+		*req.uri_mut() = self.uri.clone();
+		*req.headers_mut() = self.headers.clone();
+		*req.extensions_mut() = self.ext.clone();
+		req
 	}
 }
 
@@ -64,12 +113,12 @@ pub enum UpstreamError {
 		resource_type: String,
 		resource_name: String,
 	},
+	#[error("mcpGuardrails rejected: {}", .0.message)]
+	McpGuardrails(rmcp::ErrorData),
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
 	#[error("unsupported method: {0}")]
 	InvalidMethod(String),
-	#[error("method {0} is unsupported with multiplexing")]
-	InvalidMethodWithMultiplexing(String),
 	#[error("stdio upstream error: {0}")]
 	ServiceError(#[from] rmcp::ServiceError),
 	#[error("http upstream error: {0}")]
@@ -171,7 +220,7 @@ impl Upstream {
 						StreamableHttpPostResponse::Json(_, sid) => sid.as_ref(),
 						StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
 					};
-					c.set_session_id(sid.map(|s| s.as_str()), None)
+					c.set_session_id(sid.map(|s| s.as_str()), None);
 				}
 				res.try_into().map_err(Into::into)
 			},
@@ -281,6 +330,15 @@ impl UpstreamGroup {
 			.map(|v| v.as_ref())
 			.ok_or_else(|| anyhow::anyhow!("requested target {name} is not initialized",))
 	}
+	/// Returns the stored name key if it exists in the upstream map.
+	/// Used by `parse_resource_uri` to get a stable `&str` reference.
+	pub(crate) fn get_name(&self, name: &str) -> Option<&str> {
+		self.by_name.get_key_value(name).map(|(k, _)| k.as_str())
+	}
+
+	pub(crate) fn stateful(&self) -> bool {
+		self.backend.stateful
+	}
 
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {
 		trace!("connecting to target: {}", target.name);
@@ -384,5 +442,97 @@ impl UpstreamGroup {
 		};
 
 		Ok(target)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn incoming_request_context_applies_original_authority() {
+		let parts = ::http::Request::builder()
+			.uri("http://original.example/mcp")
+			.body(())
+			.unwrap()
+			.into_parts()
+			.0;
+		let ctx = IncomingRequestContext::new(&parts);
+		let mut req = ::http::Request::builder()
+			.uri("http://svc.default.svc.cluster.local:80/mcp")
+			.body(crate::http::Body::empty())
+			.unwrap();
+
+		ctx.apply(&mut req).unwrap();
+
+		assert_eq!(
+			req.uri().authority().map(|a| a.as_str()),
+			Some("original.example")
+		);
+		assert_eq!(req.headers().get(http::header::HOST), None);
+		assert_eq!(req.uri().path(), "/mcp");
+	}
+
+	fn ctx_with_headers(headers: &[(&str, &str)]) -> IncomingRequestContext {
+		let mut builder = ::http::Request::builder()
+			.uri("http://example/")
+			.method("GET");
+		for (k, v) in headers {
+			builder = builder.header(*k, *v);
+		}
+		let parts = builder.body(()).unwrap().into_parts().0;
+		IncomingRequestContext::new(&parts)
+	}
+
+	fn empty_upstream_req() -> http::Request {
+		::http::Request::builder()
+			.uri("http://upstream/")
+			.body(http::Body::empty())
+			.unwrap()
+	}
+
+	#[test]
+	fn apply_strips_inbound_mcp_session_id() {
+		let ctx = ctx_with_headers(&[(HEADER_SESSION_ID, "client-sid"), ("x-trace", "abc")]);
+		let mut req = empty_upstream_req();
+		ctx.apply(&mut req).unwrap();
+		assert!(req.headers().get(HEADER_SESSION_ID).is_none());
+		assert_eq!(req.headers().get("x-trace").unwrap(), "abc");
+	}
+
+	#[test]
+	fn apply_preserves_upstream_session_id_when_already_set() {
+		let ctx = ctx_with_headers(&[(HEADER_SESSION_ID, "client-sid")]);
+		let mut req = empty_upstream_req();
+		req.headers_mut().insert(
+			::http::HeaderName::from_static("mcp-session-id"),
+			::http::HeaderValue::from_static("upstream-sid"),
+		);
+		ctx.apply(&mut req).unwrap();
+		assert_eq!(
+			req.headers().get(HEADER_SESSION_ID).unwrap(),
+			"upstream-sid"
+		);
+	}
+
+	#[test]
+	fn apply_strips_content_encoding_and_length() {
+		let ctx = ctx_with_headers(&[
+			(http::header::CONTENT_ENCODING.as_str(), "gzip"),
+			(http::header::CONTENT_LENGTH.as_str(), "42"),
+		]);
+		let mut req = empty_upstream_req();
+		ctx.apply(&mut req).unwrap();
+		assert!(req.headers().get(http::header::CONTENT_ENCODING).is_none());
+		assert!(req.headers().get(http::header::CONTENT_LENGTH).is_none());
+	}
+
+	#[test]
+	fn apply_propagates_other_headers() {
+		let ctx = ctx_with_headers(&[("authorization", "Bearer token"), ("x-request-id", "req-1")]);
+		let mut req = empty_upstream_req();
+		ctx.apply(&mut req).unwrap();
+		assert_eq!(req.headers().get("authorization").unwrap(), "Bearer token");
+		assert_eq!(req.headers().get("x-request-id").unwrap(), "req-1");
 	}
 }

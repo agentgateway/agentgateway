@@ -80,7 +80,7 @@ func ConvertHTTPRouteToAgw(ctx RouteContext, r gwv1.HTTPRouteRule,
 		}
 	}
 
-	backends, backendErr, err := buildAgwHTTPDestination(ctx, r.BackendRefs, obj.Namespace)
+	backends, backendErr, err := buildAgwHTTPDestination(ctx, r.BackendRefs, obj.Namespace, obj.Name)
 	if err != nil {
 		return nil, &reporter.RouteCondition{
 			Type:    gwv1.RouteConditionAccepted,
@@ -156,7 +156,7 @@ func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1a2.TCPRouteRule,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	res := &api.TCPRoute{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos),
+		Key:         internalL4RouteRuleKey(obj, pos),
 		Name:        utils.RouteName(wellknown.TCPRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -246,7 +246,7 @@ func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	res := &api.TCPRoute{
 		// unique for route rule
-		Key:         utils.InternalRouteRuleKey(obj.Namespace, obj.Name, pos) + ".tls",
+		Key:         internalL4RouteRuleKey(obj, pos) + ".tls",
 		Name:        utils.RouteName(wellknown.TLSRouteKind, obj.Namespace, obj.Name, r.Name),
 		ListenerKey: "",
 	}
@@ -265,6 +265,15 @@ func ConvertTLSRouteToAgw(ctx RouteContext, r gwv1.TLSRouteRule,
 	})
 
 	return res, backendErr
+}
+
+func internalL4RouteRuleKey(obj controllers.Object, pos int) string {
+	key := utils.InternalRouteRuleKey(obj.GetNamespace(), obj.GetName(), pos)
+	created := obj.GetCreationTimestamp()
+	if created.IsZero() {
+		return key
+	}
+	return fmt.Sprintf("%010d/%s", created.Unix(), key)
 }
 
 func buildAgwTCPDestination(
@@ -568,6 +577,7 @@ func buildAgwHTTPDestination(
 	ctx RouteContext,
 	forwardTo []gwv1.HTTPBackendRef,
 	ns string,
+	routeName string,
 ) ([]*api.RouteBackend, *reporter.RouteCondition, *reporter.RouteCondition) {
 	if forwardTo == nil {
 		return nil, nil, nil
@@ -577,8 +587,8 @@ func buildAgwHTTPDestination(
 	var res []*api.RouteBackend
 	for _, fwd := range forwardTo {
 		// Handle HTTPRoute backend refs as delegation (route group) references
-		ref := NormalizeReference(fwd.Group, fwd.Kind, wellknown.ServiceGVK)
-		if ref == wellknown.HTTPRouteGVK {
+		ref := NormalizeReference(fwd.Group, fwd.Kind, wellknown.ServiceGVK.GroupKind())
+		if ref == wellknown.HTTPRouteGVK.GroupKind() {
 			weight := int32(1)
 			if fwd.Weight != nil {
 				weight = *fwd.Weight
@@ -587,9 +597,10 @@ func buildAgwHTTPDestination(
 			if fwd.Namespace != nil {
 				backendNs = string(*fwd.Namespace)
 			}
+			// distinct parents delegating to the same target do not share a group.
 			res = append(res, &api.RouteBackend{
 				Weight:        weight,
-				RouteGroupKey: ptr.Of(utils.InternalRouteGroupKey(backendNs, string(fwd.Name))),
+				RouteGroupKey: new(utils.InternalRouteGroupKey(ns, routeName, backendNs, string(fwd.Name))),
 			})
 			continue
 		}
@@ -628,19 +639,19 @@ func buildAgwDestination(
 	rb := &api.RouteBackend{
 		Weight: weight,
 	}
-	ref := NormalizeReference(to.Group, to.Kind, wellknown.ServiceGVK)
+	ref := NormalizeReference(to.Group, to.Kind, wellknown.ServiceGVK.GroupKind())
 	// check if the reference is allowed
 	if toNs := to.Namespace; toNs != nil && string(*toNs) != ns {
-		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref) {
+		if !ctx.Grants.BackendAllowed(ctx.Krt, k, to.Name, *toNs, ns, ref, ctx.BackendRefGrantMode) {
 			return rb, &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionResolvedRefs,
 				Status:  metav1.ConditionFalse,
 				Reason:  gwv1.RouteReasonRefNotPermitted,
-				Message: fmt.Sprintf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", to.Name, *toNs, k.Kind, ns),
+				Message: fmt.Sprintf("backendRef %v/%v not accessible to a %s in namespace %q (missing a ReferenceGrant?)", *toNs, to.Name, k.Kind, ns),
 			}
 		}
 	}
-	backendRef, err := ctx.References.RouteBackend(ctx.Krt, ns, ref.GroupKind(), to.Name, to.Namespace, to.Port)
+	backendRef, err := ctx.References.RouteBackend(ctx.Krt, ns, ref, to.Name, to.Namespace, to.Port)
 	// Even in the error case, we still populate a partial backend
 	rb.Backend = backendRef
 	if err != nil {
@@ -680,26 +691,11 @@ func buildAgwDestination(
 	return rb, nil
 }
 
-var knownReferences = sets.New(
-	wellknown.GatewayGVK,
-	wellknown.ListenerSetGVK,
-	wellknown.ServiceGVK,
-	wellknown.ServiceEntryGVK,
-	wellknown.SecretGVK,
-	wellknown.ConfigMapGVK,
-)
-var allowedParentReferences = sets.New(
-	wellknown.GatewayGVK,
-	wellknown.ListenerSetGVK,
-	wellknown.ServiceGVK,
-	wellknown.ServiceEntryGVK,
-)
-
-// NormalizeReference normalizes group and kind references to a standard GVK format.
-// If group or kind are nil/empty, it uses the default GVK's group/kind.
+// NormalizeReference applies Gateway API group/kind defaulting.
+// If group or kind are nil/empty, it uses the default GroupKind's group/kind.
 // Empty group is treated as "core" API group.
-func NormalizeReference(group *gwv1.Group, kind *gwv1.Kind, defaultGVK schema.GroupVersionKind) schema.GroupVersionKind {
-	result := defaultGVK
+func NormalizeReference(group *gwv1.Group, kind *gwv1.Kind, defaultGK schema.GroupKind) schema.GroupKind {
+	result := defaultGK
 
 	if kind != nil && *kind != "" {
 		result.Kind = string(*kind)
@@ -714,19 +710,14 @@ func NormalizeReference(group *gwv1.Group, kind *gwv1.Kind, defaultGVK schema.Gr
 			result.Group = groupStr
 		}
 	}
-	for wk := range knownReferences {
-		if wk.Group == result.Group && wk.Kind == result.Kind {
-			return wk
-		}
-	}
 
 	return result
 }
 
 // ToInternalParentReference converts a gwv1.ParentReference to a TypedNamespacedName.
-func ToInternalParentReference(p gwv1.ParentReference, localNamespace string) (utils.TypedNamespacedName, error) {
-	ref := NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK)
-	if !allowedParentReferences.Contains(ref) {
+func ToInternalParentReference(p gwv1.ParentReference, localNamespace string, allowed sets.Set[schema.GroupKind]) (utils.TypedNamespacedName, error) {
+	ref := NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK.GroupKind())
+	if !allowed.Contains(ref) {
 		return utils.TypedNamespacedName{}, fmt.Errorf("unsupported Parent: %v/%v", p.Group, p.Kind)
 	}
 	return utils.TypedNamespacedName{
@@ -751,7 +742,13 @@ func ReferenceAllowed(
 	localNamespace string,
 ) *ParentError {
 	if parent.ServiceKey != nil {
-		// Parent resolver already verified this reference exists.
+		// Parent resolver already verified this referenced Service exists.
+		if parentRef.Port != 0 && !slices.Contains(parent.ServicePorts, parentRef.Port) {
+			return &ParentError{
+				Reason:  ParentErrorNotAccepted,
+				Message: fmt.Sprintf("port %v not found", parentRef.Port),
+			}
+		}
 	} else if parentRef.Kind == wellknown.ServiceGVK.Kind {
 		// check that the referenced svc exists
 		key := parentRef.Namespace + "/" + parentRef.Name
@@ -858,9 +855,10 @@ func ReferenceAllowed(
 func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj controllers.Object) []RouteParentReference {
 	routeRefs, hostnames, kind := GetCommonRouteInfo(obj)
 	localNamespace := obj.GetNamespace()
+	allowed := ctx.References.AllowedParentReferences
 	var parentRefs []RouteParentReference
 	for _, ref := range routeRefs {
-		ir, err := ToInternalParentReference(ref, localNamespace)
+		ir, err := ToInternalParentReference(ref, localNamespace, allowed)
 		if err != nil {
 			continue
 		}
@@ -891,6 +889,7 @@ func extractParentReferenceInfo(ctx RouteContext, parents ParentResolver, obj co
 				ParentGateway:     pr.ParentGateway,
 				ListenerKey:       pr.ListenerKey,
 				ServiceKey:        pr.ServiceKey,
+				Port:              pk.Port,
 				InternalKind:      ir.Kind,
 				Hostname:          pr.OriginalHostname,
 				DeniedReason:      deniedReason,
@@ -940,6 +939,8 @@ type RouteParentReference struct {
 	ListenerKey string
 	// ServiceKey (optionally) links a parent reference to an individual Service.
 	ServiceKey *types.NamespacedName
+	// Port is the parentRef port, scoping the route to one port. Zero means any port.
+	Port gwv1.PortNumber
 	// InternalKind is the Kind of the Parent
 	InternalKind string
 	// DeniedReason, if present, indicates why the reference was not valid
@@ -1206,7 +1207,15 @@ var dummyTls = &TLSInfo{
 	Key:  []byte("invalid"),
 }
 
+const (
+	gatewayTLSTerminateModeKey          = "gateway.istio.io/tls-terminate-mode"
+	agentgatewayTLSCertificateSourceKey = "agentgateway.dev/tls-certificate-source"
+)
+
 func validateTLS(certInfo *TLSInfo) *ConfigError {
+	if certInfo.IstioWorkloadCert {
+		return nil
+	}
 	if _, err := tls.X509KeyPair(certInfo.Cert, certInfo.Key); err != nil {
 		return &ConfigError{
 			Reason:  InvalidTLS,
@@ -1243,6 +1252,15 @@ func buildTLS(
 	namespace := gw.GetNamespace()
 	switch mode {
 	case gwv1.TLSModeTerminate:
+		if tls.Options != nil {
+			switch tls.Options[gatewayTLSTerminateModeKey] {
+			case "ISTIO_SIMPLE":
+				return &TLSInfo{IstioWorkloadCert: true}, nil
+			case "ISTIO_MUTUAL":
+				return &TLSInfo{IstioWorkloadCert: true, IstioMutual: true}, nil
+			}
+		}
+
 		// Important: all failures MUST include dummyTls, as this is the signal to the dataplane to actually do TLS (but fail)
 		if len(tls.CertificateRefs) != 1 {
 			// This is required in the API, should be rejected in validation
@@ -1262,6 +1280,14 @@ func buildTLS(
 					"certificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
 					tls.CertificateRefs[0].Name, tlsRes.Source.Namespace, namespace,
 				),
+			}
+		}
+
+		dynamicCA := tls.Options != nil && tls.Options[agentgatewayTLSCertificateSourceKey] == "DYNAMIC_CA"
+		if dynamicCA && gatewayTLS != nil && gatewayTLS.Validation != nil && len(gatewayTLS.Validation.CACertificateRefs) > 0 {
+			return dummyTls, &ConfigError{
+				Reason:  InvalidTLSCA,
+				Message: "GatewayTLSConfig validation caCertificateRefs cannot be configured with DYNAMIC_CA TLS certificate source",
 			}
 		}
 
@@ -1292,6 +1318,9 @@ func buildTLS(
 			if gatewayTLS.Validation.Mode == gwv1.AllowInsecureFallback {
 				tlsRes.Info.MtlsFallbackEnabled = true
 			}
+		}
+		if dynamicCA {
+			tlsRes.Info.DynamicCA = true
 		}
 		return &tlsRes.Info, nil
 	case gwv1.TLSModePassthrough:
@@ -1349,8 +1378,8 @@ func buildCaCertificateReference(
 		Info: TLSInfo{},
 	}
 
-	switch NormalizeReference(&ref.Group, &ref.Kind, schema.GroupVersionKind{}) {
-	case wellknown.ConfigMapGVK:
+	switch NormalizeReference(&ref.Group, &ref.Kind, schema.GroupKind{}) {
+	case wellknown.ConfigMapGVK.GroupKind():
 		res.Kind = wellknown.ConfigMapGVK.Kind
 		cm := ptr.Flatten(krt.FetchOne(ctx, configMaps, krt.FilterObjectName(res.Source)))
 		if cm == nil {
@@ -1367,7 +1396,7 @@ func buildCaCertificateReference(
 			}
 		}
 		res.Info.CaCert = certInfo.Cert
-	case wellknown.SecretGVK:
+	case wellknown.SecretGVK.GroupKind():
 		res.Kind = wellknown.SecretGVK.Kind
 		scrt := ptr.Flatten(krt.FetchOne(ctx, secrets, krt.FilterObjectName(res.Source)))
 		if scrt == nil {
@@ -1406,7 +1435,7 @@ func buildSecretReference(
 	gw controllers.Object,
 	secrets krt.Collection[*corev1.Secret],
 ) (*SecretReference, *ConfigError) {
-	if NormalizeReference(ref.Group, ref.Kind, wellknown.SecretGVK) != wellknown.SecretGVK {
+	if NormalizeReference(ref.Group, ref.Kind, wellknown.SecretGVK.GroupKind()) != wellknown.SecretGVK.GroupKind() {
 		return nil, &ConfigError{Reason: InvalidTLS, Message: fmt.Sprintf("invalid certificate reference %v, only secret is allowed", objectReferenceString(ref))}
 	}
 

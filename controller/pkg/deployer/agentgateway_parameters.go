@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/util/smallset"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
@@ -27,6 +28,11 @@ import (
 )
 
 const sessionKeyEnvVar = "SESSION_KEY"
+
+var defaultResourceRequests = corev1.ResourceList{
+	corev1.ResourceCPU:    resource.MustParse("100m"),
+	corev1.ResourceMemory: resource.MustParse("128Mi"),
+}
 
 // AgentgatewayParametersApplier applies AgentgatewayParameters configurations and overlays.
 type AgentgatewayParametersApplier struct {
@@ -48,6 +54,46 @@ func setIfNonZero[T comparable](dst *T, src T) {
 	var zero T
 	if src != zero {
 		*dst = src
+	}
+}
+
+// istioEnabledForGateway decides whether Istio integration is on for this gateway after AGWP params
+// have been applied. Explicit spec.istio.enabled wins; otherwise the presence of spec.istio (even an
+// empty `istio: {}`) is treated as opt-in; otherwise it follows the control-plane default.
+func istioEnabledForGateway(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwCollections) bool {
+	if gtw.Istio != nil {
+		if gtw.Istio.Enabled != nil {
+			return *gtw.Istio.Enabled
+		}
+		return true
+	}
+	return cols.IstioAutoEnabled
+}
+
+// ResolveIstioIntegration finalizes the gateway's Istio block. It runs after AGWP params are applied
+// so per-gateway spec.istio values take precedence. When integration is enabled it seeds any unset
+// control-plane mesh values (cluster ID, network, CA address) and infers the trust domain from mesh
+// config; when disabled it clears the block so the deployment renders without Istio.
+func ResolveIstioIntegration(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwCollections) {
+	if gtw == nil || cols == nil {
+		return
+	}
+	if !istioEnabledForGateway(gtw, cols) {
+		gtw.Istio = nil
+		return
+	}
+	if gtw.Istio == nil {
+		gtw.Istio = &agentgateway.IstioSpec{}
+	}
+	setIfNonZero(&gtw.Istio.ClusterId, cols.IstioClusterId)
+	setIfNonZero(&gtw.Istio.Network, cols.IstioNetwork)
+	setIfNonZero(&gtw.Istio.CaAddress, cols.IstioCaAddress)
+
+	// Inherit the mesh trust domain only when the params didn't set one.
+	if gtw.Istio.TrustDomain == "" && cols.MeshConfig != nil {
+		if mc := cols.MeshConfig.Get(); mc != nil && mc.MeshConfig != nil {
+			gtw.Istio.TrustDomain = mc.MeshConfig.GetTrustDomain()
+		}
 	}
 }
 
@@ -87,8 +133,14 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *HelmConfig) {
 		if res.Istio == nil {
 			res.Istio = &agentgateway.IstioSpec{}
 		}
+		setIfNonNil(&res.Istio.Enabled, configs.Istio.Enabled)
 		setIfNonZero(&res.Istio.CaAddress, configs.Istio.CaAddress)
 		setIfNonZero(&res.Istio.TrustDomain, configs.Istio.TrustDomain)
+		setIfNonZero(&res.Istio.ClusterId, configs.Istio.ClusterId)
+		setIfNonZero(&res.Istio.Network, configs.Istio.Network)
+		if len(configs.Istio.AdditionalTrustDomains) > 0 {
+			res.Istio.AdditionalTrustDomains = configs.Istio.AdditionalTrustDomains
+		}
 	}
 	setIfNonNil(&res.RawConfig, configs.RawConfig)
 
@@ -212,10 +264,32 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 		applier := NewAgentgatewayParametersApplier(resolved.gatewayAGWP)
 		applier.ApplyToHelmValues(vals)
 	}
+	// ModelCatalog ConfigMap sources are deployment-relative: they resolve from the
+	// Gateway's namespace, not the AgentgatewayParameters' namespace. Apply only from
+	// the Gateway-level AGWP so the reference is always unambiguous.
+	if resolved.gatewayAGWP != nil && resolved.gatewayAGWP.Spec.ModelCatalog != nil {
+		vals.Agentgateway.ModelCatalog = resolved.gatewayAGWP.Spec.ModelCatalog.DeepCopy()
+	}
+
+	// Resolve Istio enablement and defaults after gw params so spec.istio takes precedence.
+	ResolveIstioIntegration(vals.Agentgateway, g.inputs.AgwCollections)
+
 	applyManagedSessionKeyDefaults(vals.Agentgateway, gw.Name)
 
 	if g.inputs.ControlPlane.XdsTLS {
-		if err := injectXdsCACertificate(g.inputs.ControlPlane.XdsTlsCaPath, vals); err != nil {
+		caCert := g.inputs.ControlPlane.XdsTlsCaCert
+		if caCert == "" {
+			secret := g.secretClient.Get(g.inputs.ControlPlane.XdsTLSSecretName, g.inputs.ControlPlane.ControlPlaneNs)
+			if secret == nil {
+				return nil, fmt.Errorf("xDS TLS secret %s/%s not found", g.inputs.ControlPlane.ControlPlaneNs, g.inputs.ControlPlane.XdsTLSSecretName)
+			}
+			var err error
+			caCert, err = extractXdsCACertificate(secret)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err := injectXdsCACertificate(caCert, vals); err != nil {
 			return nil, fmt.Errorf("failed to inject xDS CA certificate: %w", err)
 		}
 	}
@@ -313,7 +387,11 @@ func applyManagedSessionKeyDefaults(gtw *AgentgatewayHelmGateway, gatewayName st
 }
 
 func (g *agentgatewayParametersHelmValuesGenerator) GetCacheSyncHandlers() []cache.InformerSynced {
-	return []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced, g.secretClient.HasSynced}
+	handlers := []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced, g.secretClient.HasSynced}
+	if g.inputs != nil && g.inputs.AgwCollections != nil && g.inputs.AgwCollections.MeshConfig != nil {
+		handlers = append(handlers, g.inputs.AgwCollections.MeshConfig.AsCollection().HasSynced)
+	}
+	return handlers
 }
 
 // GetResolvedParametersForGateway returns both the GatewayClass-level and Gateway-level
@@ -358,7 +436,12 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 			Port: &g.inputs.ControlPlane.AgwXdsPort,
 			Tls: &HelmXdsTls{
 				Enabled: func() *bool { b := g.inputs.ControlPlane.XdsTLS; return &b }(),
-				CaCert:  &g.inputs.ControlPlane.XdsTlsCaPath,
+				CaCert:  &g.inputs.ControlPlane.XdsTlsCaCert,
+			},
+		},
+		AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
+			Resources: &corev1.ResourceRequirements{
+				Requests: defaultResourceRequests.DeepCopy(),
 			},
 		},
 	}

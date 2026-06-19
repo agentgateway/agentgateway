@@ -9,7 +9,6 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -18,8 +17,11 @@ const (
 	frontendNetworkAuthzSuffix  = ":frontend-network-authz"
 	frontendTlsPolicySuffix     = ":frontend-tls"
 	frontendHttpPolicySuffix    = ":frontend-http"
+	frontendProxyPolicySuffix   = ":frontend-proxy"
+	frontendConnectPolicySuffix = ":frontend-connect"
 	frontendLoggingPolicySuffix = ":frontend-logging"
 	frontendTracingPolicySuffix = ":frontend-tracing"
+	frontendMetricsPolicySuffix = ":frontend-metrics"
 )
 
 func translateFrontendPolicyToAgw(
@@ -51,6 +53,14 @@ func translateFrontendPolicyToAgw(
 		appendPolicy("http")(translateFrontendHTTP(policy, policyName), nil)
 	}
 
+	if s := frontend.ProxyProtocol; s != nil {
+		appendPolicy("proxyProtocol")(translateFrontendProxyProtocol(policy, policyName), nil)
+	}
+
+	if s := frontend.Connect; s != nil {
+		appendPolicy("connect")(translateFrontendConnect(policy, policyName), nil)
+	}
+
 	if s := frontend.TLS; s != nil {
 		appendPolicy("tls")(translateFrontendTLS(policy, policyName), nil)
 	}
@@ -71,13 +81,17 @@ func translateFrontendPolicyToAgw(
 		appendPolicy("tracing")(translateFrontendTracing(policyCtx, policy, policyName))
 	}
 
+	if s := frontend.Metrics; s != nil {
+		appendPolicy("metrics")(translateFrontendMetrics(policy, policyName))
+	}
+
 	return agwPolicies, errors.Join(errs...)
 }
 
 func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tracing := policy.Spec.Frontend.Tracing
 	var errs []error
-	provider, err := buildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
+	provider, err := BuildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to translate tracing backend ref: %v", err))
 	}
@@ -114,21 +128,21 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var randomSampling *string
 	if tracing.RandomSampling != nil {
-		randomSampling = castCELPtr(tracing.RandomSampling, func(expr shared.CELExpression) {
+		randomSampling = castCELPtr(tracing.RandomSampling, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend tracing randomSampling is not a valid CEL expression: %s", expr))
 		})
 	}
 
 	var clientSampling *string
 	if tracing.ClientSampling != nil {
-		clientSampling = castCELPtr(tracing.ClientSampling, func(expr shared.CELExpression) {
+		clientSampling = castCELPtr(tracing.ClientSampling, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend tracing clientSampling is not a valid CEL expression: %s", expr))
 		})
 	}
 
 	var path *string
 	if tracing.Path != nil {
-		path = ptr.Of(*tracing.Path)
+		path = new(*tracing.Path)
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -173,7 +187,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	spec := &api.FrontendPolicySpec_Logging{}
 	var errs []error
 	if f := logging.Filter; f != nil {
-		spec.Filter = castCELPtr(f, func(expr shared.CELExpression) {
+		spec.Filter = castCELPtr(f, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("frontend accessLog filter is not a valid CEL expression: %s", expr))
 		})
 	}
@@ -195,7 +209,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		spec.Fields = f
 	}
 	if otlp := logging.Otlp; otlp != nil {
-		provider, err := buildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
+		provider, err := BuildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to translate access log OTLP backend ref: %v", err))
 		}
@@ -212,7 +226,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 		var path *string
 		if otlp.Path != nil {
-			path = ptr.Of(*otlp.Path)
+			path = new(*otlp.Path)
 		}
 
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{
@@ -276,12 +290,89 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 	return tcpPolicy
 }
 
+func translateFrontendProxyProtocol(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+	proxy := policy.Spec.Frontend.ProxyProtocol
+	version := api.FrontendPolicySpec_ProxyProtocol_V2
+	switch proxy.Version {
+	case agentgateway.ProxyProtocolVersionV1:
+		version = api.FrontendPolicySpec_ProxyProtocol_V1
+	case agentgateway.ProxyProtocolVersionAll:
+		version = api.FrontendPolicySpec_ProxyProtocol_ALL
+	case agentgateway.ProxyProtocolVersionV2, "":
+		version = api.FrontendPolicySpec_ProxyProtocol_V2
+	default:
+		logger.Warn("unknown proxy protocol version", "version", proxy.Version)
+	}
+
+	mode := api.FrontendPolicySpec_ProxyProtocol_STRICT
+	switch proxy.Mode {
+	case agentgateway.ProxyProtocolModeOptional:
+		mode = api.FrontendPolicySpec_ProxyProtocol_OPTIONAL
+	case agentgateway.ProxyProtocolModeStrict, "":
+		mode = api.FrontendPolicySpec_ProxyProtocol_STRICT
+	default:
+		logger.Warn("unknown proxy protocol mode", "mode", proxy.Mode)
+	}
+
+	proxyPolicy := &api.Policy{
+		Key:  name + frontendProxyPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_ProxyProtocol_{
+					ProxyProtocol: &api.FrontendPolicySpec_ProxyProtocol{
+						Version: version,
+						Mode:    mode,
+					},
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated proxy policy",
+		"policy", policy.Name,
+		"agentgateway_policy", proxyPolicy.Name)
+
+	return proxyPolicy
+}
+
+func translateFrontendConnect(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+	mode := api.FrontendPolicySpec_Connect_DENY
+	switch policy.Spec.Frontend.Connect.Mode {
+	case agentgateway.FrontendConnectModeRoute:
+		mode = api.FrontendPolicySpec_Connect_ROUTE
+	case agentgateway.FrontendConnectModeTunnel:
+		mode = api.FrontendPolicySpec_Connect_TUNNEL
+	case agentgateway.FrontendConnectModeDeny:
+		mode = api.FrontendPolicySpec_Connect_DENY
+	}
+	connectPolicy := &api.Policy{
+		Key:  name + frontendConnectPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_Connect_{
+					Connect: &api.FrontendPolicySpec_Connect{
+						Mode: mode,
+					},
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated frontend connect policy",
+		"policy", policy.Name,
+		"agentgateway_policy", connectPolicy.Name)
+
+	return connectPolicy
+}
+
 func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	auth := policy.Spec.Frontend.NetworkAuthorization
 	var allowPolicies, denyPolicies, requirePolicies []string
-	if auth.Action == shared.AuthorizationPolicyActionDeny {
+	if auth.Action == agentgateway.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, cast(auth.Policy.MatchExpressions)...)
-	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+	} else if auth.Action == agentgateway.AuthorizationPolicyActionRequire {
 		requirePolicies = append(requirePolicies, cast(auth.Policy.MatchExpressions)...)
 	} else {
 		allowPolicies = append(allowPolicies, cast(auth.Policy.MatchExpressions)...)
@@ -311,7 +402,11 @@ func translateFrontendNetworkAuthorization(policy *agentgateway.AgentgatewayPoli
 }
 
 func castUint32[T ~int32](ka *T) *uint32 {
-	return ptr.Of((uint32)(*ka))
+	return new((uint32)(*ka))
+}
+
+func quantityUint32(ka *agentgateway.ByteSize) *uint32 {
+	return ka.ClampedValue()
 }
 
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
@@ -378,6 +473,7 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	if len(agwCipherSuites) > 0 {
 		spec.CipherSuites = agwCipherSuites
 	}
+	spec.KeyExchangeGroups = convertTLSKeyExchangeGroups(tls.KeyExchangeGroups)
 
 	tlsPolicy := &api.Policy{
 		Key:  name + frontendTlsPolicySuffix,
@@ -398,11 +494,31 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	return tlsPolicy
 }
 
+func convertTLSKeyExchangeGroups(groups []agentgateway.KeyExchangeGroup) []api.TLSConfig_KeyExchangeGroup {
+	var out []api.TLSConfig_KeyExchangeGroup
+	for _, group := range groups {
+		switch group {
+		case agentgateway.KeyExchangeGroupX25519:
+			out = append(out, api.TLSConfig_X25519)
+		case agentgateway.KeyExchangeGroupP256:
+			out = append(out, api.TLSConfig_P256)
+		case agentgateway.KeyExchangeGroupP384:
+			out = append(out, api.TLSConfig_P384)
+		case agentgateway.KeyExchangeGroupX25519MLKEM768:
+			out = append(out, api.TLSConfig_X25519_MLKEM768)
+		default:
+			logger.Warn("unknown tls key exchange group", "key_exchange_group", group)
+			continue
+		}
+	}
+	return out
+}
+
 func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	http := policy.Spec.Frontend.HTTP
 	spec := &api.FrontendPolicySpec_HTTP{}
 	if v := http.MaxBufferSize; v != nil {
-		spec.MaxBufferSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.MaxBufferSize = quantityUint32(v)
 	}
 	if v := http.HTTP1MaxHeaders; v != nil {
 		spec.Http1MaxHeaders = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
@@ -410,14 +526,25 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP1IdleTimeout; v != nil {
 		spec.Http1IdleTimeout = durationpb.New(v.Duration)
 	}
+	if v := http.HTTP1HeaderCase; v != nil {
+		switch *v {
+		case agentgateway.HTTPHeaderCasePreserve:
+			spec.Http1HeaderCase = api.FrontendPolicySpec_HTTP_PRESERVE
+		case agentgateway.HTTPHeaderCaseLowercase:
+			spec.Http1HeaderCase = api.FrontendPolicySpec_HTTP_LOWERCASE
+		}
+	}
 	if v := http.HTTP2WindowSize; v != nil {
-		spec.Http2WindowSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2WindowSize = quantityUint32(v)
 	}
 	if v := http.HTTP2ConnectionWindowSize; v != nil {
-		spec.Http2ConnectionWindowSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2ConnectionWindowSize = quantityUint32(v)
 	}
 	if v := http.HTTP2FrameSize; v != nil {
-		spec.Http2FrameSize = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		spec.Http2FrameSize = quantityUint32(v)
+	}
+	if v := http.HTTP2MaxHeaderSize; v != nil {
+		spec.Http2MaxHeaderSize = quantityUint32(v)
 	}
 	if v := http.HTTP2KeepaliveInterval; v != nil {
 		spec.Http2KeepaliveInterval = durationpb.New(v.Duration)
@@ -446,4 +573,42 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 		"agentgateway_policy", httpPolicy.Name)
 
 	return httpPolicy
+}
+
+func translateFrontendMetrics(policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
+	metricsSpec := policy.Spec.Frontend.Metrics
+	spec := &api.FrontendPolicySpec_Metrics{}
+	var errs []error
+
+	fields := make([]*api.FrontendPolicySpec_Metrics_Field, 0, len(metricsSpec.Attributes.Add))
+	for _, add := range metricsSpec.Attributes.Add {
+		if !isCEL(add.Expression) {
+			errs = append(errs, fmt.Errorf("frontend metrics field %q is not a valid CEL expression: %s", add.Name, add.Expression))
+		}
+		fields = append(fields, &api.FrontendPolicySpec_Metrics_Field{
+			Name:       add.Name,
+			Expression: string(add.Expression),
+		})
+	}
+	spec.Fields = &api.FrontendPolicySpec_Metrics_Fields{
+		Add: fields,
+	}
+
+	metricsPolicy := &api.Policy{
+		Key:  name + frontendMetricsPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Frontend{
+			Frontend: &api.FrontendPolicySpec{
+				Kind: &api.FrontendPolicySpec_Metrics_{
+					Metrics: spec,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated metrics policy",
+		"policy", policy.Name,
+		"agentgateway_policy", metricsPolicy.Name)
+
+	return metricsPolicy, errors.Join(errs...)
 }

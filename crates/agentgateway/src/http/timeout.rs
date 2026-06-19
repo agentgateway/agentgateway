@@ -12,7 +12,9 @@ use crate::*;
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "TimeoutPolicy"))]
 pub struct Policy {
+	/// Maximum time allowed for the full downstream request and response.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -20,6 +22,7 @@ pub struct Policy {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub request_timeout: Option<Duration>,
+	/// Maximum time allowed for the upstream backend request.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",

@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Based of of gateway-api codegen (https://github.com/kubernetes-sigs/gateway-api/blob/main/hack/update-codegen.sh)
-# generate deep copy and clients for our api.
-# In this project, clients mostly used as fakes for testing.
+# Generates deepcopy code, CRDs, and clients for the agentgateway API.
+# In this project, clients are mostly used as fakes for testing.
 
 set -o errexit
 set -o nounset
@@ -25,14 +24,12 @@ readonly VERSIONS=( v1alpha1 )
 readonly OPENAPI_GEN_DIR=pkg/generated/openapi
 readonly APPLY_CFG_DIR=api/applyconfiguration
 readonly CLIENT_GEN_DIR=pkg/client
-readonly KGATEWAY_CRD_DIR=install/helm/kgateway-crds/templates
-readonly KGATEWAY_MANIFESTS_DIR=install/helm/kgateway/templates
 readonly AGENTGATEWAY_CRD_DIR=install/helm/agentgateway-crds/templates
 readonly AGENTGATEWAY_MANIFESTS_DIR=install/helm/agentgateway/templates
 
 echo "Generating clientset at ${OUTPUT_PKG}/${CLIENTSET_PKG_NAME} for versions:" "${VERSIONS[@]}"
 
-# Build combined input list for BOTH groups so a single clientset includes both
+# Build the client-gen input list for the agentgateway API packages.
 API_INPUT_DIRS_SPACE=""
 API_INPUT_DIRS_COMMA=""
 for VERSION in "${VERSIONS[@]}"; do
@@ -51,14 +48,13 @@ for VERSION in "${VERSIONS[@]}"; do
 done
 
 # Generate objects and RBAC with stock controller-gen.
-(cd "${REPO_ROOT}" && controller-gen object paths="${APIS_PKG}/api/${VERSION}/agentgateway" paths="${APIS_PKG}/api/${VERSION}/shared")
+(cd "${REPO_ROOT}" && controller-gen object paths="${APIS_PKG}/api/${VERSION}/agentgateway")
 
 # Generate CRDs with custom kubebuilder validation markers.
 (cd "${REPO_ROOT}" && go run ./controller/hack/crdgen \
     --max-desc-len 50000 \
     --output-dir "${ROOT_DIR}/${AGENTGATEWAY_CRD_DIR}" \
-    --path "${APIS_PKG}/api/${VERSION}/agentgateway" \
-    --path "${APIS_PKG}/api/${VERSION}/shared")
+    --path "${APIS_PKG}/api/${VERSION}/agentgateway")
 
 # throw away
 new_report="$(mktemp -t "$(basename "$0").api_violations.XXXXXX")"

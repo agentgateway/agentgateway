@@ -137,6 +137,41 @@ func TestOverrideXValidationErrorsWithoutExactSingleMatch(t *testing.T) {
 	})
 }
 
+func TestApplyConditionalPolicyUsesVisibleSchemaFields(t *testing.T) {
+	schema := &apiextensionsv1.JSONSchemaProps{
+		Properties: map[string]apiextensionsv1.JSONSchemaProps{
+			"backendRef":  {},
+			"conditional": {},
+			"failureMode": {},
+		},
+	}
+
+	err := applyConditionalPolicy(schema, sortedPropertyNames(schema), ConditionalPolicy{
+		Fields: []string{"backendRef"},
+	})
+	require.NoError(t, err)
+	require.Len(t, schema.XValidations, 2)
+	require.Equal(t, "has(self.conditional) ? [has(self.backendRef),has(self.failureMode)].filter(x,x==true).size() == 0 : true", schema.XValidations[0].Rule)
+	require.Equal(t, "conditional cannot be set with any other field", schema.XValidations[0].Message)
+	require.Equal(t, "has(self.conditional) ? true : has(self.backendRef)", schema.XValidations[1].Rule)
+	require.Equal(t, "backendRef: Required value", schema.XValidations[1].Message)
+}
+
+func TestApplyConditionalPolicyAllowsZeroRequiredFields(t *testing.T) {
+	schema := &apiextensionsv1.JSONSchemaProps{
+		Properties: map[string]apiextensionsv1.JSONSchemaProps{
+			"conditional": {},
+			"optional":    {},
+		},
+	}
+
+	err := applyConditionalPolicy(schema, sortedPropertyNames(schema), ConditionalPolicy{})
+	require.NoError(t, err)
+	require.Len(t, schema.XValidations, 1)
+	require.Equal(t, "has(self.conditional) ? [has(self.optional)].filter(x,x==true).size() == 0 : true", schema.XValidations[0].Rule)
+	require.Equal(t, "conditional cannot be set with any other field", schema.XValidations[0].Message)
+}
+
 func TestApplyIfThenOnlyFieldsUsesVisibleSchemaFields(t *testing.T) {
 	schema := &apiextensionsv1.JSONSchemaProps{
 		Properties: map[string]apiextensionsv1.JSONSchemaProps{
@@ -185,4 +220,37 @@ func TestApplyPostSchemaMarkersToCRDIfThenOnlyFieldsIncludesImportedInlineFields
 	require.Len(t, trafficSchema.XValidations, 1)
 	require.Equal(t, "when baz is set only foo and baz may be set", trafficSchema.XValidations[0].Message)
 	require.Equal(t, "has(self.baz) ? [has(self.bar)].filter(x,x==true).size() == 0 : true", trafficSchema.XValidations[0].Rule)
+}
+
+func TestApplyPostSchemaMarkersToCRDOverrideXValidationMatchesSideEffectLoadedInlineType(t *testing.T) {
+	const rootPath = "github.com/agentgateway/agentgateway/controller/hack/crdgen/testdata/overrideembedded/api/v1"
+
+	roots, parser := newTestParser(t, rootPath)
+	require.NoError(t, populateInferredMarkerFields(parser))
+
+	metav1Pkg := crd.FindMetav1(roots)
+	require.NotNil(t, metav1Pkg)
+
+	kubeKinds := crd.FindKubeKinds(parser, metav1Pkg)
+	require.Len(t, kubeKinds, 1)
+
+	groupKind := kubeKinds[0]
+	maxDescLen := 0
+	parser.NeedCRDFor(groupKind, &maxDescLen)
+
+	crdObj := parser.CustomResourceDefinitions[groupKind]
+	require.NoError(t, applyPostSchemaMarkersToCRD(parser, &crdObj, groupKind))
+
+	require.Len(t, crdObj.Spec.Versions, 1)
+	rootSchema := crdObj.Spec.Versions[0].Schema.OpenAPIV3Schema
+	require.NotNil(t, rootSchema)
+
+	specSchema, ok := rootSchema.Properties["spec"]
+	require.True(t, ok)
+	policiesSchema, ok := specSchema.Properties["policies"]
+	require.True(t, ok)
+
+	require.Len(t, policiesSchema.XValidations, 1)
+	require.Equal(t, "at least one of the fields in [ai auth health http token] must be set", policiesSchema.XValidations[0].Message)
+	require.Equal(t, "[has(self.ai),has(self.auth),has(self.health),has(self.http),has(self.token)].filter(x,x==true).size() >= 1", policiesSchema.XValidations[0].Rule)
 }

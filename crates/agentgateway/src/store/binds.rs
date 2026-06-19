@@ -2,22 +2,33 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
 
+use ::http::HeaderValue;
+use agent_xds::{RejectedConfig, XdsUpdate};
+use anyhow::Context;
+use futures_core::Stream;
+use hashbrown::{Equivalent, HashMap as HbHashMap};
+use itertools::Itertools;
+use tokio::sync::watch;
+use tracing::{Level, instrument, warn};
+
 use crate::cel::ContextBuilder;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
-use crate::http::oidc;
-use crate::http::{ext_authz, ext_proc, filters, health, remoteratelimit, retry, timeout};
+use crate::http::{ext_authz, ext_proc, filters, health, oidc, remoteratelimit, retry, timeout};
 use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
+use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::store::{BackendPolicy, PolicyExpressions, RequestPolicy};
 use crate::types::agent::{
-	A2aPolicy, Backend, BackendKey, BackendPolicy, BackendTargetRef, BackendWithPolicies, Bind,
-	BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
-	McpAuthentication, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey, RouteName, RouteSet,
-	TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
+	A2aPolicy, Backend, BackendKey, BackendTargetRef, BackendTrafficPolicy, BackendWithPolicies,
+	Bind, BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
+	McpAuthentication, PolicyInheritance, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey,
+	RouteName, RouteSet, TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
 };
+use crate::types::agent_xds::Diagnostics;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
@@ -26,12 +37,6 @@ use crate::types::proto::agent::{
 };
 use crate::types::{agent, frontend};
 use crate::*;
-use agent_xds::{RejectedConfig, XdsUpdate};
-use anyhow::Context;
-use futures_core::Stream;
-use hashbrown::{Equivalent, HashMap as HbHashMap};
-use itertools::Itertools;
-use tracing::{Level, instrument, warn};
 
 #[derive(Debug)]
 enum ResourceKind {
@@ -83,6 +88,7 @@ impl<'a> From<&'a RouteTarget> for RouteTargetRef<'a> {
 pub struct Store {
 	ipv6_enabled: bool,
 	core_ids: Option<Vec<core_affinity::CoreId>>,
+	dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 	binds: HashMap<BindKey, Arc<Bind>>,
 	resources: HashMap<Strng, ResourceKind>,
 
@@ -95,6 +101,8 @@ pub struct Store {
 	pending_listeners: HashMap<BindKey, HashMap<ListenerKey, Listener>>,
 	http_routes: HbHashMap<RouteTarget, Arc<RouteSet>>,
 	tcp_routes: HbHashMap<RouteTarget, Arc<TCPRouteSet>>,
+	listener_change_tx: watch::Sender<u64>,
+	listener_change_rx: watch::Receiver<u64>,
 
 	tx: tokio::sync::mpsc::UnboundedSender<BindEvent>,
 	rx: Option<tokio::sync::mpsc::UnboundedReceiver<BindEvent>>,
@@ -112,15 +120,31 @@ pub enum BindListeners {
 	PerCore(HashMap<core_affinity::CoreId, StdTcpListener>),
 }
 
+impl BindListeners {
+	fn local_port(&self) -> Option<u16> {
+		match self {
+			Self::Single(l) => l.local_addr().ok().map(|a| a.port()),
+			Self::PerCore(m) => m
+				.values()
+				.next()
+				.and_then(|l| l.local_addr().ok())
+				.map(|a| a.port()),
+		}
+	}
+}
+
 #[derive(Default, Debug, Clone)]
 pub struct FrontendPolices {
 	pub http: Option<frontend::HTTP>,
 	pub tls: Option<frontend::TLS>,
 	pub tcp: Option<frontend::TCP>,
 	pub network_authorization: Option<NetworkAuthorizationSet>,
+	pub proxy: Option<frontend::Proxy>,
+	pub connect: Option<frontend::Connect>,
 	pub access_log: Option<frontend::LoggingPolicy>,
 	pub tracing: Option<Arc<crate::types::agent::TracingPolicy>>,
 	pub access_log_otlp: Option<Arc<crate::types::agent::AccessLogPolicy>>,
+	pub metrics_fields: Option<frontend::MetricsFieldsPolicy>,
 }
 
 impl FrontendPolices {
@@ -142,6 +166,12 @@ impl FrontendPolices {
 					self.network_authorization = Some(NetworkAuthorizationSet::new(vec![p.0.clone()].into()));
 				}
 			},
+			FrontendPolicy::Proxy(p) => {
+				self.proxy.get_or_insert_with(|| p.clone());
+			},
+			FrontendPolicy::Connect(p) => {
+				self.connect.get_or_insert_with(|| p.clone());
+			},
 			FrontendPolicy::AccessLog(p) => {
 				self.access_log.get_or_insert_with(|| p.clone());
 				if let Some(alp) = &p.access_log_policy {
@@ -151,29 +181,44 @@ impl FrontendPolices {
 			FrontendPolicy::Tracing(p) => {
 				self.tracing.get_or_insert_with(|| p.clone());
 			},
+			FrontendPolicy::Metrics(p) => {
+				self.metrics_fields.get_or_insert_with(|| p.clone());
+			},
 		}
 	}
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		let Some(frontend::LoggingPolicy {
+		if let Some(frontend::LoggingPolicy {
 			filter,
 			add: fields_add,
 			remove: _,
 			otlp: _,
+			database,
 			access_log_policy: _,
 		}) = &self.access_log
-		else {
-			return;
-		};
-		if let Some(f) = filter {
-			ctx.register_expression(f)
+		{
+			if let Some(f) = filter {
+				ctx.register_log_expression(f)
+			}
+			for (_, v) in fields_add.iter() {
+				ctx.register_log_expression(v)
+			}
+			if let Some(database) = database {
+				for (_, v) in database.add.iter() {
+					ctx.register_log_expression(v)
+				}
+			}
 		}
-		for (_, v) in fields_add.iter() {
-			ctx.register_expression(v)
+		if let Some(mf) = &self.metrics_fields {
+			for (_, v) in mf.add.iter() {
+				ctx.register_log_expression(v)
+			}
 		}
 	}
 }
 
-#[derive(Default, Debug, Clone)]
+#[serde_with::skip_serializing_none]
+#[derive(Default, Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BackendPolicies {
 	pub backend_tls: Option<BackendTLS>,
 	pub backend_auth: Option<BackendAuth>,
@@ -181,19 +226,21 @@ pub struct BackendPolicies {
 	pub llm_provider: Option<Arc<llm::NamedAIProvider>>,
 	pub llm: Option<Arc<llm::Policy>>,
 	pub inference_routing: Option<InferenceRouting>,
+	pub ext_authz: BackendPolicy<ext_authz::ExtAuthz>,
 
 	pub mcp_authorization: Option<McpAuthorizationSet>,
 	pub mcp_authentication: Option<McpAuthentication>,
+	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 
 	pub http: Option<types::backend::HTTP>,
 	pub tcp: Option<types::backend::TCP>,
 	pub tunnel: Option<types::backend::Tunnel>,
 
 	pub request_header_modifier: Option<filters::HeaderModifier>,
-	pub response_header_modifier: Option<filters::HeaderModifier>,
+	pub response_header_modifier: BackendPolicy<filters::HeaderModifier>,
 	pub request_redirect: Option<filters::RequestRedirect>,
 	pub request_mirror: Vec<filters::RequestMirror>,
-	pub transformation: Option<http::transformation_cel::Transformation>,
+	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
 	pub session_persistence: Option<http::sessionpersistence::Policy>,
 
@@ -217,7 +264,9 @@ impl BackendPolicies {
 			// TODO: is this right??
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
+			mcp_guardrails: other.mcp_guardrails.or(self.mcp_guardrails),
 			inference_routing: other.inference_routing.or(self.inference_routing),
+			ext_authz: other.ext_authz.or(self.ext_authz),
 			http: other.http.or(self.http),
 			tcp: other.tcp.or(self.tcp),
 			tunnel: other.tunnel.or(self.tunnel),
@@ -249,121 +298,118 @@ impl BackendPolicies {
 	}
 
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		if let Some(xfm) = &self.transformation {
-			for expr in xfm.expressions() {
-				ctx.register_expression(expr)
-			}
+		self.ext_authz.register_expressions(ctx);
+		self.transformation.register_expressions(ctx);
+		if let Some(health) = self.health.as_ref() {
+			health.register_expressions(ctx);
 		}
 	}
 }
 
-#[derive(Debug, Default)]
+#[serde_with::skip_serializing_none]
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RoutePolicies {
-	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
-	pub remote_rate_limit: Option<remoteratelimit::RemoteRateLimit>,
-	pub authorization: Option<http::authorization::HTTPAuthorizationSet>,
-	pub jwt: Option<JwtAuthentication>,
-	pub oidc: Option<oidc::OidcPolicy>,
-	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
-	pub api_key: Option<http::apikey::APIKeyAuthentication>,
-	pub ext_authz: Option<ext_authz::ExtAuthz>,
-	pub ext_proc: Option<ext_proc::ExtProc>,
-	pub transformation: Option<http::transformation_cel::Transformation>,
-	pub llm: Option<Arc<llm::Policy>>,
-	pub csrf: Option<http::csrf::Csrf>,
+	pub local_rate_limit: RequestPolicy<Vec<http::localratelimit::RateLimit>>,
+	pub remote_rate_limit: RequestPolicy<remoteratelimit::RemoteRateLimit>,
+	pub authorization: RequestPolicy<HTTPAuthorizationSet>,
+	pub jwt: RequestPolicy<JwtAuthentication>,
+	pub oidc: RequestPolicy<oidc::OidcPolicy>,
+	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
+	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
+	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
+	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
+	pub csrf: RequestPolicy<http::csrf::Csrf>,
+	pub direct_response: RequestPolicy<filters::DirectResponse>,
 
-	pub timeout: Option<timeout::Policy>,
-	pub retry: Option<retry::Policy>,
-	pub request_header_modifier: Option<filters::HeaderModifier>,
-	pub response_header_modifier: Option<filters::HeaderModifier>,
-	pub request_redirect: Option<filters::RequestRedirect>,
-	pub url_rewrite: Option<filters::UrlRewrite>,
-	pub hostname_rewrite: Option<agent::HostRedirectOverride>,
-	pub request_mirror: Vec<filters::RequestMirror>,
-	pub direct_response: Option<filters::DirectResponse>,
-	pub cors: Option<http::cors::Cors>,
+	pub llm: RequestPolicy<llm::Policy>,
+	pub timeout: RequestPolicy<timeout::Policy>,
+	pub retry: RequestPolicy<retry::Policy>,
+
+	pub request_header_modifier: RequestPolicy<filters::HeaderModifier>,
+	pub response_header_modifier: RequestPolicy<filters::HeaderModifier>,
+	pub request_redirect: RequestPolicy<filters::RequestRedirect>,
+	pub url_rewrite: RequestPolicy<filters::UrlRewrite>,
+	pub hostname_rewrite: RequestPolicy<agent::HostRedirectOverride>,
+	pub request_mirror: RequestPolicy<Vec<filters::RequestMirror>>,
+	pub cors: RequestPolicy<http::cors::Cors>,
+	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GatewayPolicies {
-	pub ext_proc: Option<ext_proc::ExtProc>,
-	pub oidc: Option<oidc::OidcPolicy>,
-	pub jwt: Option<JwtAuthentication>,
-	pub ext_authz: Option<ext_authz::ExtAuthz>,
-	pub transformation: Option<http::transformation_cel::Transformation>,
-	pub basic_auth: Option<http::basicauth::BasicAuthentication>,
-	pub api_key: Option<http::apikey::APIKeyAuthentication>,
+	pub cors: RequestPolicy<http::cors::Cors>,
+	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
+	pub oidc: RequestPolicy<oidc::OidcPolicy>,
+	pub jwt: RequestPolicy<JwtAuthentication>,
+	pub authorization: RequestPolicy<HTTPAuthorizationSet>,
+	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
+	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
+	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
+	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
 impl GatewayPolicies {
+	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
+		[
+			&self.cors as &dyn PolicyExpressions,
+			&self.ext_proc as &dyn PolicyExpressions,
+			&self.oidc as &dyn PolicyExpressions,
+			&self.jwt as &dyn PolicyExpressions,
+			&self.authorization as &dyn PolicyExpressions,
+			&self.ext_authz as &dyn PolicyExpressions,
+			&self.transformation as &dyn PolicyExpressions,
+			&self.basic_auth as &dyn PolicyExpressions,
+			&self.api_key as &dyn PolicyExpressions,
+		]
+		.into_iter()
+	}
+
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		if let Some(xfm) = &self.transformation {
-			for expr in xfm.expressions() {
-				ctx.register_expression(expr)
-			}
-		}
-
-		if let Some(extauthz) = &self.ext_authz {
-			for expr in extauthz.expressions() {
-				ctx.register_expression(expr)
-			}
-		}
-
-		if let Some(extproc) = &self.ext_proc {
-			for expr in extproc.expressions() {
-				ctx.register_expression(expr);
-			}
+		for policy in self.iter() {
+			policy.register_expressions(ctx);
 		}
 	}
 }
 
 impl RoutePolicies {
-	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		if let Some(xfm) = &self.transformation {
-			for expr in xfm.expressions() {
-				ctx.register_expression(expr)
-			}
-		};
-		if let Some(rrl) = &self.remote_rate_limit {
-			for expr in rrl.expressions() {
-				ctx.register_expression(expr)
-			}
-		};
-		if let Some(rrl) = &self.authorization {
-			rrl.register(ctx)
-		};
-		if let Some(extauthz) = &self.ext_authz {
-			for expr in extauthz.expressions() {
-				ctx.register_expression(expr)
-			}
-		}
-		if let Some(extproc) = &self.ext_proc {
-			for expr in extproc.expressions() {
-				ctx.register_expression(expr);
-			}
-		}
+	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
+		[
+			&self.local_rate_limit as &dyn PolicyExpressions,
+			&self.remote_rate_limit as &dyn PolicyExpressions,
+			&self.authorization as &dyn PolicyExpressions,
+			&self.jwt as &dyn PolicyExpressions,
+			&self.oidc as &dyn PolicyExpressions,
+			&self.basic_auth as &dyn PolicyExpressions,
+			&self.api_key as &dyn PolicyExpressions,
+			&self.ext_authz as &dyn PolicyExpressions,
+			&self.ext_proc as &dyn PolicyExpressions,
+			&self.transformation as &dyn PolicyExpressions,
+			&self.csrf as &dyn PolicyExpressions,
+			&self.direct_response as &dyn PolicyExpressions,
+			&self.request_header_modifier as &dyn PolicyExpressions,
+			&self.retry as &dyn PolicyExpressions,
+			&self.request_redirect as &dyn PolicyExpressions,
+			&self.url_rewrite as &dyn PolicyExpressions,
+			&self.cors as &dyn PolicyExpressions,
+		]
+		.into_iter()
 	}
-}
 
-impl From<RoutePolicies> for LLMRequestPolicies {
-	fn from(value: RoutePolicies) -> Self {
-		LLMRequestPolicies {
-			remote_rate_limit: value.remote_rate_limit.clone(),
-			local_rate_limit: value
-				.local_rate_limit
-				.iter()
-				.filter(|r| r.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
-				.cloned()
-				.collect(),
-			llm: value.llm.clone(),
+	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		for policy in self.iter() {
+			policy.register_expressions(ctx);
 		}
 	}
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct LLMRequestPolicies {
-	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
-	pub remote_rate_limit: Option<http::remoteratelimit::RemoteRateLimit>,
+	pub local_rate_limit: Option<Arc<Vec<http::localratelimit::RateLimit>>>,
+	pub remote_rate_limit: Option<Arc<http::remoteratelimit::RemoteRateLimit>>,
 	pub llm: Option<Arc<llm::Policy>>,
 }
 
@@ -379,35 +425,60 @@ impl LLMRequestPolicies {
 			return Arc::new(route_policies);
 		};
 
-		// Backend aliases replace route aliases entirely (consistent with defaults/overrides)
-		let (merged_aliases, merged_wildcard_patterns) = if be.model_aliases.is_empty() {
-			(re.model_aliases.clone(), Arc::clone(&re.wildcard_patterns))
+		route_policies.llm = Some(Self::merge_llm_policies(&be, &re));
+		Arc::new(route_policies)
+	}
+
+	fn merge_llm_policies(
+		preferred: &Arc<llm::Policy>,
+		fallback: &Arc<llm::Policy>,
+	) -> Arc<llm::Policy> {
+		// Preferred aliases replace fallback aliases entirely (consistent with defaults/overrides).
+		let (merged_aliases, merged_wildcard_patterns) = if preferred.model_aliases.is_empty() {
+			(
+				fallback.model_aliases.clone(),
+				Arc::clone(&fallback.wildcard_patterns),
+			)
 		} else {
-			(be.model_aliases.clone(), Arc::clone(&be.wildcard_patterns))
+			(
+				preferred.model_aliases.clone(),
+				Arc::clone(&preferred.wildcard_patterns),
+			)
 		};
 
-		route_policies.llm = Some(Arc::new(llm::Policy {
-			prompt_guard: be.prompt_guard.clone().or_else(|| re.prompt_guard.clone()),
-			defaults: be.defaults.clone().or_else(|| re.defaults.clone()),
-			overrides: be.overrides.clone().or_else(|| re.overrides.clone()),
-			transformations: be
+		Arc::new(llm::Policy {
+			prompt_guard: preferred
+				.prompt_guard
+				.clone()
+				.or_else(|| fallback.prompt_guard.clone()),
+			defaults: preferred
+				.defaults
+				.clone()
+				.or_else(|| fallback.defaults.clone()),
+			overrides: preferred
+				.overrides
+				.clone()
+				.or_else(|| fallback.overrides.clone()),
+			transformations: preferred
 				.transformations
 				.clone()
-				.or_else(|| re.transformations.clone()),
-			prompts: be.prompts.clone().or_else(|| re.prompts.clone()),
+				.or_else(|| fallback.transformations.clone()),
+			prompts: preferred
+				.prompts
+				.clone()
+				.or_else(|| fallback.prompts.clone()),
 			model_aliases: merged_aliases,
 			wildcard_patterns: merged_wildcard_patterns,
-			prompt_caching: be
+			prompt_caching: preferred
 				.prompt_caching
 				.clone()
-				.or_else(|| re.prompt_caching.clone()),
-			routes: if be.routes.is_empty() {
-				re.routes.clone()
+				.or_else(|| fallback.prompt_caching.clone()),
+			routes: if preferred.routes.is_empty() {
+				fallback.routes.clone()
 			} else {
-				be.routes.clone()
+				preferred.routes.clone()
 			},
-		}));
-		Arc::new(route_policies)
+		})
 	}
 }
 
@@ -415,7 +486,9 @@ impl LLMRequestPolicies {
 pub struct LLMResponsePolicies {
 	pub local_rate_limit: Vec<http::localratelimit::RateLimit>,
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
+	pub request_traceparent: Option<HeaderValue>,
 	pub prompt_guard: Vec<ResponseGuard>,
+	pub streaming_prompt_guard_enabled: bool,
 }
 
 impl Default for Store {
@@ -431,6 +504,7 @@ pub struct RoutePath<'a> {
 	// the originally intended service, pre-routing
 	pub service: Option<&'a NamespacedHostname>,
 	pub routes: Vec<&'a RouteName>,
+	pub route_inlines: Vec<&'a [TrafficPolicy]>,
 }
 
 impl<'a> RoutePath<'a> {
@@ -489,13 +563,23 @@ impl Store {
 	}
 
 	pub fn with_ipv6_enabled(ipv6_enabled: bool) -> Self {
-		Self::new(ipv6_enabled, crate::ThreadingMode::Multithreaded)
+		Self::new(
+			ipv6_enabled,
+			crate::ThreadingMode::Multithreaded,
+			Default::default(),
+		)
 	}
 
-	pub fn new(ipv6_enabled: bool, threading_mode: crate::ThreadingMode) -> Self {
+	pub fn new(
+		ipv6_enabled: bool,
+		threading_mode: crate::ThreadingMode,
+		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
+	) -> Self {
 		let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+		let (listener_change_tx, listener_change_rx) = watch::channel(0);
 		Self {
 			ipv6_enabled,
+			dynamic_ca_cert_cache,
 			core_ids: match threading_mode {
 				crate::ThreadingMode::Multithreaded => None,
 				crate::ThreadingMode::ThreadPerCore => {
@@ -510,6 +594,8 @@ impl Store {
 			pending_listeners: Default::default(),
 			http_routes: Default::default(),
 			tcp_routes: Default::default(),
+			listener_change_tx,
+			listener_change_rx,
 			tx,
 			rx: Some(rx),
 		}
@@ -544,6 +630,45 @@ impl Store {
 			.cloned()
 	}
 
+	pub fn subscribe_listener_changes(&self) -> watch::Receiver<u64> {
+		self.listener_change_rx.clone()
+	}
+
+	pub fn get_bind_listener(&self, bind: &BindKey, listener: &ListenerKey) -> Option<Arc<Listener>> {
+		self
+			.binds
+			.get(bind)
+			.and_then(|bind| bind.listeners.inner.get(listener).cloned())
+	}
+
+	fn notify_listener_changed(&self) {
+		self
+			.listener_change_tx
+			.send_modify(|epoch| *epoch = epoch.saturating_add(1));
+	}
+
+	fn bind_listener_changed(old: &Bind, new: &Bind) -> bool {
+		for new_listener in new.listeners.iter() {
+			let Some(old_listener) = old.listeners.get(&new_listener.key) else {
+				// If a new listener is added, no need to notify
+				continue;
+			};
+			if old_listener != new_listener {
+				return true;
+			}
+		}
+		for old_listener in old.listeners.iter() {
+			let Some(new_listener) = new.listeners.get(&old_listener.key) else {
+				// If an old listener is removed, we do need to notify!
+				return true;
+			};
+			if old_listener != new_listener {
+				return true;
+			}
+		}
+		false
+	}
+
 	fn insert_http_route_target(&mut self, target: RouteTarget, route: Route) {
 		let routes = self
 			.http_routes
@@ -562,6 +687,7 @@ impl Store {
 
 	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) {
 		debug!(bind=%bind.key, "insert bind");
+		let old_bind = self.binds.get(&key).cloned();
 
 		for (_, listener) in self
 			.pending_listeners
@@ -577,13 +703,26 @@ impl Store {
 			None
 		} else {
 			match self.bind_listeners(bind.address) {
-				Ok(listeners) => Some(listeners),
+				Ok(listeners) => {
+					// When port 0 is used, update the address with the actual bound port.
+					if bind.address.port() == 0
+						&& let Some(actual_port) = listeners.local_port()
+					{
+						bind.address.set_port(actual_port);
+					}
+					Some(listeners)
+				},
 				Err(err) => {
 					warn!(bind=%key, address=%bind.address, error=%err, "failed to start bind listener");
 					None
 				},
 			}
 		};
+		if let Some(old_bind) = old_bind.as_deref()
+			&& Self::bind_listener_changed(old_bind, &bind)
+		{
+			self.notify_listener_changed();
+		}
 		self.binds.insert(key.clone(), Arc::new(bind.clone()));
 		if let Some(listeners) = listeners {
 			let _ = self.tx.send(BindEvent::Add(bind, listeners));
@@ -595,7 +734,7 @@ impl Store {
 		tokio_stream::wrappers::UnboundedReceiverStream::new(sub)
 	}
 
-	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[&[TrafficPolicy]]) -> RoutePolicies {
+	pub fn route_policies(&self, path: &RoutePath<'_>) -> RoutePolicies {
 		let listener = &path.listener;
 		let gateway = self
 			.policies_by_target
@@ -608,17 +747,7 @@ impl Store {
 			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
 
 		let mut route_rules = Vec::new();
-		for (idx, route) in path.routes.iter().enumerate().rev() {
-			route_rules.extend(inline.get(idx).copied().unwrap_or_default().iter());
-			route_rules.extend(
-				self
-					.policies_by_target
-					.get(&route.as_route_rule_target_ref())
-					.into_iter()
-					.flatten()
-					.filter_map(|n| self.policies_by_key.get(n))
-					.filter_map(|p| p.policy.as_traffic_route_phase()),
-			);
+		for (idx, route) in path.routes.iter().enumerate() {
 			route_rules.extend(
 				self
 					.policies_by_target
@@ -626,104 +755,159 @@ impl Store {
 					.into_iter()
 					.flatten()
 					.filter_map(|n| self.policies_by_key.get(n))
-					.filter_map(|p| p.policy.as_traffic_route_phase()),
+					.filter_map(|p| {
+						p.policy
+							.as_traffic_route_phase()
+							.map(|inner| (p.inheritance, inner))
+					}),
 			);
+			route_rules.extend(
+				self
+					.policies_by_target
+					.get(&route.as_route_rule_target_ref())
+					.into_iter()
+					.flatten()
+					.filter_map(|n| self.policies_by_key.get(n))
+					.filter_map(|p| {
+						p.policy
+							.as_traffic_route_phase()
+							.map(|inner| (p.inheritance, inner))
+					}),
+			);
+			if let Some(inline) = path.route_inlines.get(idx) {
+				route_rules.extend(inline.iter().map(|p| (PolicyInheritance::Default, p)));
+			}
 		}
 
-		let shared_rules = service
+		let shared_rules = gateway
 			.iter()
 			.copied()
 			.flatten()
 			.chain(listener.iter().copied().flatten())
-			.chain(gateway.iter().copied().flatten())
+			.chain(service.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
-			.filter_map(|p| p.policy.as_traffic_route_phase());
+			.filter_map(|p| {
+				p.policy
+					.as_traffic_route_phase()
+					.map(|inner| (p.inheritance, inner))
+			});
 
-		let rules = route_rules.into_iter().chain(shared_rules);
+		let rules = shared_rules.chain(route_rules);
 
 		let mut authz = Vec::new();
+		let mut authz_locked = false;
 		let mut pol = RoutePolicies::default();
-		for rule in rules {
-			match &rule {
+		for (inheritance, rule) in rules {
+			let lock_inheritance = inheritance == PolicyInheritance::Override;
+			match rule {
 				TrafficPolicy::LocalRateLimit(p) => {
-					if pol.local_rate_limit.is_empty() {
-						pol.local_rate_limit = p.clone();
-					}
+					pol
+						.local_rate_limit
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.get_or_insert_with(|| p.clone());
+					pol.ext_authz.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.get_or_insert_with(|| p.clone());
+					pol.ext_proc.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::RemoteRateLimit(p) => {
-					pol.remote_rate_limit.get_or_insert_with(|| p.clone());
+					pol
+						.remote_rate_limit
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.get_or_insert_with(|| p.clone());
+					pol.jwt.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::Oidc(p) => {
-					pol.oidc.get_or_insert_with(|| p.clone());
+					pol.oidc.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.get_or_insert_with(|| p.clone());
+					pol.basic_auth.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::APIKey(p) => {
-					pol.api_key.get_or_insert_with(|| p.clone());
+					pol.api_key.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::Transformation(p) => {
-					pol.transformation.get_or_insert_with(|| p.clone());
+					pol
+						.transformation
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::Authorization(p) => {
-					// Authorization policies merge, unlike others
-					authz.push(p.clone().0);
+					if !authz_locked {
+						authz.push(p.clone().0);
+						authz_locked = lock_inheritance;
+					}
 				},
 				TrafficPolicy::AI(p) => {
-					pol.llm.get_or_insert_with(|| p.clone());
+					pol
+						.llm
+						.merge_with_inheritance(&RequestPolicy::single_arc(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::Csrf(p) => {
-					pol.csrf.get_or_insert_with(|| p.clone());
+					pol.csrf.merge_with_inheritance(p, lock_inheritance);
 				},
 
 				TrafficPolicy::Timeout(p) => {
-					pol.timeout.get_or_insert_with(|| p.clone());
+					pol
+						.timeout
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::Retry(p) => {
-					pol.retry.get_or_insert_with(|| p.clone());
+					pol
+						.retry
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
-					pol.request_header_modifier.get_or_insert_with(|| p.clone());
+					pol
+						.request_header_modifier
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::ResponseHeaderModifier(p) => {
 					pol
 						.response_header_modifier
-						.get_or_insert_with(|| p.clone());
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::RequestRedirect(p) => {
-					pol.request_redirect.get_or_insert_with(|| p.clone());
+					pol
+						.request_redirect
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::UrlRewrite(p) => {
-					pol.url_rewrite.get_or_insert_with(|| p.clone());
+					pol.url_rewrite.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::HostRewrite(p) => {
-					pol.hostname_rewrite.get_or_insert(*p);
+					pol
+						.hostname_rewrite
+						.merge_with_inheritance(&RequestPolicy::single(*p), lock_inheritance);
 				},
 				TrafficPolicy::RequestMirror(p) => {
-					if pol.request_mirror.is_empty() {
-						pol.request_mirror = p.clone();
-					}
+					pol
+						.request_mirror
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::DirectResponse(p) => {
-					pol.direct_response.get_or_insert_with(|| p.clone());
+					pol
+						.direct_response
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::CORS(p) => {
-					pol.cors.get_or_insert_with(|| p.clone());
+					pol.cors.merge_with_inheritance(p, lock_inheritance);
+				},
+				TrafficPolicy::Buffer(p) => {
+					pol.buffer.set_if_unset(p);
 				},
 			}
 		}
 		if !authz.is_empty() {
-			pol.authorization = Some(HTTPAuthorizationSet::new(authz.into()));
+			pol.authorization = RequestPolicy::single(HTTPAuthorizationSet::new(
+				crate::http::authorization::RuleSets::from_arcs(authz),
+			));
 		}
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies("route", s)
+		});
 
 		pol
 	}
@@ -731,43 +915,67 @@ impl Store {
 	pub fn gateway_policies(&self, name: &ListenerName) -> GatewayPolicies {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
+		let listener_set = name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let rules = listener
 			.iter()
 			.copied()
 			.flatten()
+			.chain(listener_set_section.iter().copied().flatten())
+			.chain(listener_set.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_traffic_gateway_phase());
 
+		let mut authz = Vec::new();
 		let mut pol = GatewayPolicies::default();
 		for rule in rules {
-			match &rule {
+			match rule {
+				TrafficPolicy::CORS(p) => {
+					pol.cors.set_if_unset(p);
+				},
 				TrafficPolicy::Oidc(p) => {
-					pol.oidc.get_or_insert_with(|| p.clone());
+					pol.oidc.set_if_unset(p);
 				},
 				TrafficPolicy::JwtAuth(p) => {
-					pol.jwt.get_or_insert_with(|| p.clone());
+					pol.jwt.set_if_unset(p);
 				},
 				TrafficPolicy::BasicAuth(p) => {
-					pol.basic_auth.get_or_insert_with(|| p.clone());
+					pol.basic_auth.set_if_unset(p);
 				},
 				TrafficPolicy::APIKey(p) => {
-					pol.api_key.get_or_insert_with(|| p.clone());
+					pol.api_key.set_if_unset(p);
+				},
+				TrafficPolicy::Authorization(p) => {
+					authz.push(p.clone().0);
 				},
 				TrafficPolicy::ExtAuthz(p) => {
-					pol.ext_authz.get_or_insert_with(|| p.clone());
+					pol.ext_authz.set_if_unset(p);
 				},
 				TrafficPolicy::ExtProc(p) => {
-					pol.ext_proc.get_or_insert_with(|| p.clone());
+					pol.ext_proc.set_if_unset(p);
 				},
 				TrafficPolicy::Transformation(p) => {
-					pol.transformation.get_or_insert_with(|| p.clone());
+					pol.transformation.set_if_unset(p);
 				},
 				other => {
 					warn!("unexpected gateway policy: {:?}", other);
 				},
 			}
 		}
+		if !authz.is_empty() {
+			pol.authorization = RequestPolicy::single(HTTPAuthorizationSet::new(
+				crate::http::authorization::RuleSets::from_arcs(authz),
+			));
+		}
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies("gateway", s)
+		});
 
 		pol
 	}
@@ -778,9 +986,10 @@ impl Store {
 	pub fn sub_backend_policies(
 		&self,
 		sub_backend: BackendTargetRef,
-		inline_policies: Option<&[BackendPolicy]>,
+		inline_policies: Option<&[BackendTrafficPolicy]>,
 	) -> BackendPolicies {
 		self.internal_backend_policies(
+			"subBackend",
 			None,
 			Some(sub_backend),
 			if let Some(s) = &inline_policies {
@@ -794,8 +1003,12 @@ impl Store {
 	}
 
 	// inline_backend_policies flattens out a list of inline policies,
-	pub fn inline_backend_policies(&self, inline_policies: &[BackendPolicy]) -> BackendPolicies {
+	pub fn inline_backend_policies(
+		&self,
+		inline_policies: &[BackendTrafficPolicy],
+	) -> BackendPolicies {
 		self.internal_backend_policies(
+			"inlineBackend",
 			None,
 			None,
 			std::slice::from_ref(&inline_policies),
@@ -807,10 +1020,18 @@ impl Store {
 	pub fn backend_policies(
 		&self,
 		backend: BackendTargetRef,
-		inline_policies: &[&[BackendPolicy]],
+		inline_policies: &[&[BackendTrafficPolicy]],
 		path: Option<RoutePath>,
 	) -> BackendPolicies {
+		let phase = match backend {
+			BackendTargetRef::Backend {
+				section: Some(_), ..
+			}
+			| BackendTargetRef::Service { port: Some(_), .. } => "subBackend",
+			_ => "backend",
+		};
 		self.internal_backend_policies(
+			phase,
 			Some(backend.strip_section()),
 			Some(backend.clone()),
 			inline_policies,
@@ -822,12 +1043,13 @@ impl Store {
 	#[allow(clippy::too_many_arguments)]
 	fn internal_backend_policies(
 		&self,
+		phase: &str,
 		// backend with section stripped, always
 		backend: Option<BackendTargetRef>,
 		// backend with section retained.
 		// Note this differs from other types, where just one is passed in and we strip them
 		sub_backend: Option<BackendTargetRef>,
-		inline_policies: &[&[BackendPolicy]],
+		inline_policies: &[&[BackendTrafficPolicy]],
 		gateway: Option<&ListenerName>,
 		routes: &[&RouteName],
 	) -> BackendPolicies {
@@ -855,7 +1077,7 @@ impl Store {
 			}
 		}
 
-		// Route chain (child→parent) > SubBackend > Backend/Service > Gateway
+		// Route chain (child->parent) > SubBackend > Backend/Service > Gateway
 		let rules = route_based_keys
 			.into_iter()
 			.chain(sub_backend_rules.iter().copied().flatten())
@@ -875,69 +1097,80 @@ impl Store {
 		let mut pol = BackendPolicies::default();
 		for rule in rules {
 			match &rule {
-				BackendPolicy::A2a(p) => {
+				BackendTrafficPolicy::A2a(p) => {
 					pol.a2a.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::BackendTLS(p) => {
+				BackendTrafficPolicy::BackendTLS(p) => {
 					pol.backend_tls.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::BackendAuth(p) => {
+				BackendTrafficPolicy::BackendAuth(p) => {
 					pol.backend_auth.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::InferenceRouting(p) => {
+				BackendTrafficPolicy::InferenceRouting(p) => {
 					pol.inference_routing.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::AI(p) => {
-					pol.llm.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::ExtAuthz(p) => {
+					pol.ext_authz.set_if_unset(p);
+				},
+				BackendTrafficPolicy::AI(p) => {
+					pol.llm = Some(match pol.llm.take() {
+						Some(existing) => LLMRequestPolicies::merge_llm_policies(&existing, p),
+						None => p.clone(),
+					});
 				},
 
-				BackendPolicy::HTTP(p) => {
+				BackendTrafficPolicy::HTTP(p) => {
 					pol.http.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::TCP(p) => {
+				BackendTrafficPolicy::TCP(p) => {
 					pol.tcp.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::Tunnel(p) => {
+				BackendTrafficPolicy::Tunnel(p) => {
 					pol.tunnel.get_or_insert_with(|| p.clone());
 				},
 
-				BackendPolicy::RequestHeaderModifier(p) => {
+				BackendTrafficPolicy::RequestHeaderModifier(p) => {
 					pol.request_header_modifier.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::ResponseHeaderModifier(p) => {
-					pol
-						.response_header_modifier
-						.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::ResponseHeaderModifier(p) => {
+					pol.response_header_modifier.set_if_unset(p);
 				},
-				BackendPolicy::RequestRedirect(p) => {
+				BackendTrafficPolicy::RequestRedirect(p) => {
 					pol.request_redirect.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::Transformation(p) => {
-					pol.transformation.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::Transformation(p) => {
+					pol.transformation.set_if_unset(p);
 				},
-				BackendPolicy::SessionPersistence(p) => {
+				BackendTrafficPolicy::SessionPersistence(p) => {
 					pol.session_persistence.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::Health(p) => {
+				BackendTrafficPolicy::Health(p) => {
 					pol.health.get_or_insert_with(|| p.clone());
 				},
-				BackendPolicy::RequestMirror(p) => {
+				BackendTrafficPolicy::RequestMirror(p) => {
 					if pol.request_mirror.is_empty() {
 						pol.request_mirror = p.clone();
 					}
 				},
-				BackendPolicy::McpAuthorization(p) => {
+				BackendTrafficPolicy::McpAuthorization(p) => {
 					// Authorization policies merge, unlike others
 					mcp_authz.push(p.clone().into_inner());
 				},
-				BackendPolicy::McpAuthentication(p) => {
+				BackendTrafficPolicy::McpAuthentication(p) => {
 					pol.mcp_authentication.get_or_insert_with(|| p.clone());
+				},
+				BackendTrafficPolicy::McpGuardrails(p) => {
+					pol.mcp_guardrails.get_or_insert_with(|| p.clone());
 				},
 			}
 		}
 		if !mcp_authz.is_empty() {
 			pol.mcp_authorization = Some(McpAuthorizationSet::new(mcp_authz.into()));
 		}
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies(phase, s)
+		});
 		pol
 	}
 
@@ -970,12 +1203,41 @@ impl Store {
 			.collect_vec()
 	}
 
+	pub fn all_access_log_policies(&self) -> Vec<Arc<crate::types::agent::AccessLogPolicy>> {
+		self
+			.binds
+			.values()
+			.flat_map(|bind| {
+				bind.listeners.iter().map(|listener| {
+					self.listener_frontend_policies(&listener.name, Some(bind.address.port()), None)
+				})
+			})
+			.filter_map(|fp| fp.access_log_otlp)
+			.unique_by(|p| Arc::as_ptr(p) as usize)
+			.collect_vec()
+	}
+
 	pub fn frontend_policies(&self, gateway: PolicyTargetRef) -> FrontendPolices {
 		let gw_rules = self.policies_by_target.get(&gateway);
+		let parent_gateway = match gateway {
+			PolicyTargetRef::Gateway {
+				gateway_name,
+				gateway_namespace,
+				listener_name: None,
+				port: Some(_),
+			} => self.policies_by_target.get(&PolicyTargetRef::Gateway {
+				gateway_name,
+				gateway_namespace,
+				listener_name: None,
+				port: None,
+			}),
+			_ => None,
+		};
 		let rules = gw_rules
 			.iter()
 			.copied()
 			.flatten()
+			.chain(parent_gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_frontend());
 
@@ -983,19 +1245,38 @@ impl Store {
 		rules.for_each(|r| pol.set_if_empty(r));
 		pol
 	}
+
 	pub fn listener_frontend_policies(
 		&self,
 		name: &ListenerName,
+		port: Option<u16>,
 		service: Option<PolicyTargetRef>,
 	) -> FrontendPolices {
 		let gateway = self.policies_by_target.get(&name.as_gateway_target_ref());
 		let listener = self.policies_by_target.get(&name.as_listener_target_ref());
+		let listener_set = name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let svc = service.and_then(|s| self.policies_by_target.get(&s));
+		let gateway_port = port.and_then(|port| {
+			self.policies_by_target.get(&PolicyTargetRef::Gateway {
+				gateway_name: name.gateway_name.as_ref(),
+				gateway_namespace: name.gateway_namespace.as_ref(),
+				listener_name: None,
+				port: Some(port),
+			})
+		});
 		let rules = svc
 			.iter()
 			.copied()
 			.flatten()
 			.chain(listener.iter().copied().flatten())
+			.chain(listener_set_section.iter().copied().flatten())
+			.chain(listener_set.iter().copied().flatten())
+			.chain(gateway_port.iter().copied().flatten())
 			.chain(gateway.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
 			.filter_map(|p| p.policy.as_frontend());
@@ -1006,6 +1287,10 @@ impl Store {
 
 	pub fn bind(&self, bind: &BindKey) -> Option<Arc<Bind>> {
 		self.binds.get(bind).cloned()
+	}
+
+	pub fn bind_addresses(&self) -> Vec<std::net::SocketAddr> {
+		self.binds.values().map(|b| b.address).collect()
 	}
 
 	/// find_bind looks up a bind by address. Typically, this is done by the kernel for us, but in some cases
@@ -1022,6 +1307,14 @@ impl Store {
 					have == want
 				}
 			})
+			.cloned()
+	}
+
+	pub fn find_bind_by_port(&self, port: u16) -> Option<Arc<Bind>> {
+		self
+			.binds
+			.values()
+			.find(|b| b.address.port() == port)
 			.cloned()
 	}
 
@@ -1230,11 +1523,11 @@ impl Store {
 		self.tcp_routes.get(&Self::service_target_ref(key)).cloned()
 	}
 
-	fn remove_resource(&mut self, res: &Strng) -> anyhow::Result<()> {
+	fn remove_resource(&mut self, res: &Strng) {
 		trace!("removing res {res}...");
 		let Some(old) = self.resources.remove(res) else {
 			debug!("unknown resource name {res}");
-			return Ok(());
+			return;
 		};
 		match old {
 			ResourceKind::Policy(n) => self.remove_policy(n),
@@ -1244,54 +1537,58 @@ impl Store {
 			ResourceKind::Listener(n) => self.remove_listener(n),
 			ResourceKind::Backend(n) => self.remove_backend(n),
 		}
-		Ok(())
 	}
 
-	fn insert_xds(&mut self, name: Strng, res: ADPResource) -> anyhow::Result<()> {
+	fn insert_xds(
+		&mut self,
+		name: Strng,
+		res: ADPResource,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
 		trace!(%name, "insert resource {res:?}");
 		match res.kind {
 			Some(XdsKind::Bind(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Bind(strng::new(&w.key)));
-				self.insert_xds_bind(w)
+				self.insert_xds_bind(w, diagnostics)
 			},
 			Some(XdsKind::Listener(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Listener(strng::new(&w.key)));
-				self.insert_xds_listener(w)
+				self.insert_xds_listener(w, diagnostics)
 			},
 			Some(XdsKind::Route(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Route(strng::new(&w.key)));
-				self.insert_xds_route(w)
+				self.insert_xds_route(w, diagnostics)
 			},
 			Some(XdsKind::TcpRoute(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::TcpRoute(strng::new(&w.key)));
-				self.insert_xds_tcp_route(w)
+				self.insert_xds_tcp_route(w, diagnostics)
 			},
 			Some(XdsKind::Backend(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Backend(strng::new(&w.key)));
-				self.insert_xds_backend(w)
+				self.insert_xds_backend(w, diagnostics)
 			},
 			Some(XdsKind::Policy(w)) => {
 				self
 					.resources
 					.insert(name, ResourceKind::Policy(strng::new(&w.key)));
-				self.insert_xds_policy(w)
+				self.insert_xds_policy(w, diagnostics)
 			},
 			_ => Err(anyhow::anyhow!("unknown resource type")),
 		}
 	}
 
-	fn insert_xds_bind(&mut self, raw: XdsBind) -> anyhow::Result<()> {
-		let mut bind = Bind::try_from_xds(&raw, self.ipv6_enabled)?;
+	fn insert_xds_bind(&mut self, raw: XdsBind, diagnostics: &mut Diagnostics) -> anyhow::Result<()> {
+		let mut bind = Bind::from_xds(&raw, self.ipv6_enabled, diagnostics)?;
 		// If XDS server pushes the same bind twice (which it shouldn't really do, but oh well),
 		// we need to copy the listeners over.
 		if let Some(old) = self.binds.get(&bind.key) {
@@ -1301,24 +1598,38 @@ impl Store {
 		self.insert_bind(bind);
 		Ok(())
 	}
-	fn insert_xds_listener(&mut self, raw: XdsListener) -> anyhow::Result<()> {
-		let (lis, bind_name) = Listener::try_from_xds(&raw)?;
+	fn insert_xds_listener(
+		&mut self,
+		raw: XdsListener,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let (lis, bind_name) =
+			Listener::from_xds(&raw, diagnostics, self.dynamic_ca_cert_cache.clone())?;
 		self.insert_listener(lis, bind_name);
 		Ok(())
 	}
-	fn insert_xds_route(&mut self, raw: XdsRoute) -> anyhow::Result<()> {
-		let (route, listener_name, rgk) = Route::try_from_xds(&raw)?;
-		if let Some(sk) = route.service_key.clone() {
-			self.insert_service_route(route, sk);
-		} else if let Some(rgk) = rgk {
+	fn insert_xds_route(
+		&mut self,
+		raw: XdsRoute,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let (route, listener_name, rgk) = Route::from_xds(&raw, diagnostics)?;
+		if let Some(rgk) = rgk {
+			// use group over service key here, the leaf route has a service key for policy
 			self.insert_route_into_group(route, rgk);
+		} else if let Some(sk) = route.service_key.clone() {
+			self.insert_service_route(route, sk);
 		} else {
 			self.insert_route(route, listener_name);
 		}
 		Ok(())
 	}
-	fn insert_xds_tcp_route(&mut self, raw: XdsTcpRoute) -> anyhow::Result<()> {
-		let (route, listener_name) = TCPRoute::try_from_xds(&raw)?;
+	fn insert_xds_tcp_route(
+		&mut self,
+		raw: XdsTcpRoute,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let (route, listener_name) = TCPRoute::from_xds(&raw, diagnostics)?;
 		if let Some(sk) = route.service_key.clone() {
 			self.insert_service_tcp_route(route, sk);
 			Ok(())
@@ -1327,14 +1638,22 @@ impl Store {
 			Ok(())
 		}
 	}
-	fn insert_xds_backend(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
+	fn insert_xds_backend(
+		&mut self,
+		raw: XdsBackend,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
 		let key = strng::new(&raw.key);
-		let backend: BackendWithPolicies = (&raw).try_into()?;
+		let backend = crate::types::agent_xds::backend_with_policies_from_proto(&raw, diagnostics)?;
 		self.insert_backend(key, backend);
 		Ok(())
 	}
-	fn insert_xds_policy(&mut self, raw: XdsPolicy) -> anyhow::Result<()> {
-		let policy: TargetedPolicy = (&raw).try_into()?;
+	fn insert_xds_policy(
+		&mut self,
+		raw: XdsPolicy,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let policy = crate::types::agent_xds::targeted_policy_from_proto(&raw, diagnostics)?;
 		self.insert_policy(policy);
 		Ok(())
 	}
@@ -1345,37 +1664,44 @@ pub struct StoreUpdater {
 	state: Arc<RwLock<Store>>,
 }
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RoutesDump {
-	http_mesh: HashMap<NamespacedHostname, RouteSet>,
-	tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
+	pub http_mesh: HashMap<NamespacedHostname, RouteSet>,
+	pub tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
+	pub route_groups: HashMap<RouteGroupKey, RouteSet>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-struct DumpListener {
+pub struct DumpListener {
 	#[serde(flatten)]
-	listener: Listener,
+	pub listener: Listener,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	routes: Option<Arc<RouteSet>>,
+	pub routes: Option<Arc<RouteSet>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	tcp_routes: Option<Arc<TCPRouteSet>>,
+	pub tcp_routes: Option<Arc<TCPRouteSet>>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-struct DumpBind {
+pub struct DumpBind {
 	#[serde(flatten)]
-	bind: Arc<Bind>,
-	listeners: BTreeMap<ListenerKey, DumpListener>,
+	pub bind: Arc<Bind>,
+	pub listeners: BTreeMap<ListenerKey, DumpListener>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 pub struct Dump {
-	binds: Vec<DumpBind>,
-	routes: RoutesDump,
-	policies: Vec<Arc<TargetedPolicy>>,
-	backends: Vec<Arc<BackendWithPolicies>>,
+	pub binds: Vec<DumpBind>,
+	pub routes: RoutesDump,
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
+	pub policies: Vec<Arc<TargetedPolicy>>,
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
+	pub backends: Vec<Arc<BackendWithPolicies>>,
 }
 
 impl StoreUpdater {
@@ -1444,6 +1770,16 @@ impl StoreUpdater {
 					.iter()
 					.filter_map(|(target, routes)| match target {
 						RouteTarget::Service(service) => Some((service.clone(), routes.as_ref().clone())),
+						_ => None,
+					})
+					.collect(),
+				route_groups: store
+					.http_routes
+					.iter()
+					.filter_map(|(target, routes)| match target {
+						RouteTarget::RouteGroup(route_group) => {
+							Some((route_group.clone(), routes.as_ref().clone()))
+						},
 						_ => None,
 					})
 					.collect(),
@@ -1548,20 +1884,40 @@ pub struct PreviousState {
 impl agent_xds::Handler<ADPResource> for StoreUpdater {
 	fn handle(
 		&self,
-		updates: Box<&mut dyn Iterator<Item = XdsUpdate<ADPResource>>>,
+		mut updates: Box<&mut dyn Iterator<Item = XdsUpdate<ADPResource>>>,
 	) -> Result<(), Vec<RejectedConfig>> {
 		let mut state = self.state.write().unwrap();
-		let handle = |res: XdsUpdate<ADPResource>| {
+		let mut rejects = Vec::new();
+
+		for res in updates.as_mut() {
+			let name = res.name();
 			match res {
-				XdsUpdate::Update(w) => state.insert_xds(w.name, w.resource)?,
+				XdsUpdate::Update(w) => {
+					let mut diagnostics = Diagnostics::default();
+					match state.insert_xds(w.name, w.resource, &mut diagnostics) {
+						Ok(()) => {
+							rejects.extend(
+								diagnostics
+									.into_warnings()
+									.into_iter()
+									.map(|warning| RejectedConfig::warning(name.clone(), warning)),
+							);
+						},
+						Err(err) => rejects.push(RejectedConfig::error(name, err)),
+					}
+				},
 				XdsUpdate::Remove(name) => {
 					debug!("handling delete {}", name);
-					state.remove_resource(&strng::new(name))?
+					state.remove_resource(&name);
 				},
 			}
+		}
+
+		if rejects.is_empty() {
 			Ok(())
-		};
-		agent_xds::handle_single_resource(updates, handle)
+		} else {
+			Err(rejects)
+		}
 	}
 }
 
@@ -1586,7 +1942,8 @@ mod tests {
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
 	use crate::types::agent::{
-		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, PolicyType, TunnelProtocol,
+		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, ListenerSetTarget, PolicyType,
+		ResourceName, TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
 
@@ -1608,22 +1965,47 @@ mod tests {
 		}
 	}
 
+	fn request_for_policy_selection() -> crate::http::Request {
+		::http::Request::builder()
+			.uri("http://example.com/")
+			.body(crate::http::Body::empty())
+			.expect("request should build")
+	}
+
 	fn insert_route_timeout_policy(
 		store: &mut Store,
 		key: &str,
 		route_target: RouteName,
 		request_timeout_secs: u64,
 	) -> timeout::Policy {
-		let policy_key: PolicyKey = strng::new(key);
 		let pol = timeout::Policy {
 			request_timeout: Some(Duration::from_secs(request_timeout_secs)),
 			backend_request_timeout: None,
 		};
+		insert_traffic_policy(
+			store,
+			key,
+			PolicyTarget::Route(route_target),
+			Default::default(),
+			TrafficPolicy::Timeout(pol.clone()),
+		);
+		pol
+	}
+
+	fn insert_traffic_policy(
+		store: &mut Store,
+		key: &str,
+		target: PolicyTarget,
+		inheritance: PolicyInheritance,
+		policy: TrafficPolicy,
+	) {
+		let policy_key: PolicyKey = strng::new(key);
 		let targeted = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
-			target: PolicyTarget::Route(route_target.clone()),
-			policy: TrafficPolicy::Timeout(pol.clone()).into(),
+			target: target.clone(),
+			inheritance,
+			policy: policy.into(),
 		};
 
 		store
@@ -1631,11 +2013,9 @@ mod tests {
 			.insert(policy_key.clone(), Arc::new(targeted));
 		store
 			.policies_by_target
-			.entry(PolicyTarget::Route(route_target))
+			.entry(target)
 			.or_default()
 			.insert(policy_key);
-
-		pol
 	}
 
 	fn create_access_log_policy(remove_item: &str) -> FrontendPolicy {
@@ -1644,6 +2024,7 @@ mod tests {
 			add: Arc::new(OrderedStringMap::default()),
 			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),
 			otlp: None,
+			database: None,
 			access_log_policy: None,
 		})
 	}
@@ -1684,6 +2065,7 @@ mod tests {
 		let route = Route {
 			key: strng::literal!("route"),
 			service_key: None,
+			service_port: 0,
 			name: RouteName {
 				name: strng::literal!("route"),
 				namespace: strng::literal!("ns"),
@@ -1692,6 +2074,7 @@ mod tests {
 			},
 			hostnames: vec![],
 			matches: vec![],
+			llm_router: None,
 			inline_policies: vec![],
 			backends: vec![],
 		};
@@ -1716,12 +2099,134 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn delegated_child_dispatches_to_group_and_inherits_service_policies() {
+		use crate::types::proto::agent::RouteName as XdsRouteName;
+		use crate::types::proto::workload::NamespacedHostname as XdsNamespacedHostname;
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+		let listener = listener();
+		let svc = NamespacedHostname {
+			namespace: strng::literal!("ns"),
+			hostname: strng::literal!("svc-a.ns.svc.cluster.local"),
+		};
+		let rgk: RouteGroupKey = strng::literal!("ns/svc-a-children");
+
+		// Service-targeted timeout policy on svc-a. Service targets are stored
+		// as Backend(Service { ... }) — the same view NamespacedHostname uses
+		// in as_policy_target_ref().
+		let svc_policy_key: PolicyKey = strng::literal!("svc-a-timeout");
+		let svc_policy_target = PolicyTarget::Backend(BackendTarget::Service {
+			hostname: svc.hostname.clone(),
+			namespace: svc.namespace.clone(),
+			port: None,
+		});
+		let svc_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(7)),
+			backend_request_timeout: None,
+		};
+
+		let xds_route = XdsRoute {
+			key: "child-route".to_string(),
+			listener_key: String::new(),
+			service_key: Some(XdsNamespacedHostname {
+				namespace: svc.namespace.to_string(),
+				hostname: svc.hostname.to_string(),
+			}),
+			service_port: 0,
+			route_group_key: Some(rgk.to_string()),
+			name: Some(XdsRouteName {
+				kind: "HTTPRoute".to_string(),
+				name: "child".to_string(),
+				namespace: "ns".to_string(),
+				rule_name: None,
+			}),
+			hostnames: vec![],
+			matches: vec![],
+			backends: vec![],
+			traffic_policies: vec![],
+		};
+
+		{
+			let mut store = updater.write();
+			store.policies_by_key.insert(
+				svc_policy_key.clone(),
+				Arc::new(TargetedPolicy {
+					key: svc_policy_key.clone(),
+					name: None,
+					target: svc_policy_target.clone(),
+					inheritance: Default::default(),
+					policy: TrafficPolicy::Timeout(svc_timeout.clone()).into(),
+				}),
+			);
+			store
+				.policies_by_target
+				.entry(svc_policy_target)
+				.or_default()
+				.insert(svc_policy_key);
+			store
+				.insert_xds_route(xds_route, &mut Diagnostics::default())
+				.expect("insert_xds_route should succeed");
+		}
+
+		let store = updater.read();
+
+		let group = store
+			.lookup_route_group(&rgk)
+			.expect("route should be in the route group");
+		let in_group = group
+			.iter()
+			.find(|r| r.key == strng::literal!("child-route"))
+			.expect("delegated child should be in the group");
+		assert!(
+			store.get_service_routes(&svc).is_none(),
+			"route with route_group_key must not also live in service-keyed routes",
+		);
+
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: in_group.service_key.as_ref(),
+			routes: vec![&in_group.name],
+			route_inlines: vec![&[]],
+		});
+		assert_eq!(
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(svc_timeout),
+			"Service-targeted policy on svc-a must apply when traffic reaches the delegated child",
+		);
+	}
+
 	fn insert_policy_at_level(
 		store: &mut Store,
 		listener: &ListenerName,
 		policy_name: &str,
 		for_listener: bool,
 		policy: FrontendPolicy,
+		port: Option<u16>,
+	) {
+		insert_policy_at_level_with_inheritance(
+			store,
+			listener,
+			policy_name,
+			for_listener,
+			Default::default(),
+			policy,
+			port,
+		);
+	}
+
+	fn insert_policy_at_level_with_inheritance(
+		store: &mut Store,
+		listener: &ListenerName,
+		policy_name: &str,
+		for_listener: bool,
+		inheritance: PolicyInheritance,
+		policy: FrontendPolicy,
+		port: Option<u16>,
 	) {
 		let policy_key = strng::new(policy_name);
 		let listener_name = if for_listener {
@@ -1733,11 +2238,13 @@ mod tests {
 			gateway_name: listener.gateway_name.clone(),
 			gateway_namespace: listener.gateway_namespace.clone(),
 			listener_name,
+			port,
 		});
 		let policy = TargetedPolicy {
 			key: policy_key.clone(),
 			name: None,
 			target: target.clone(),
+			inheritance,
 			policy: agent::PolicyType::Frontend(policy),
 		};
 
@@ -1762,6 +2269,7 @@ mod tests {
 			"gw_frontend_policy",
 			false,
 			create_access_log_policy(remove_item),
+			None,
 		);
 	}
 
@@ -1776,6 +2284,7 @@ mod tests {
 			"listener_frontend_policy",
 			true,
 			create_access_log_policy(remove_item),
+			None,
 		);
 	}
 
@@ -1791,6 +2300,23 @@ mod tests {
 			policy_name,
 			false,
 			create_network_authorization_policy(cidr),
+			None,
+		);
+	}
+
+	fn insert_port_level_frontend_policy(
+		store: &mut Store,
+		listener: &ListenerName,
+		port: u16,
+		remove_item: &str,
+	) {
+		insert_policy_at_level(
+			store,
+			listener,
+			"port_frontend_policy",
+			false,
+			create_access_log_policy(remove_item),
+			Some(port),
 		);
 	}
 
@@ -1805,25 +2331,35 @@ mod tests {
 		let http_timeout = insert_route_timeout_policy(&mut store, "p-http", http_route.clone(), 1);
 		let grpc_timeout = insert_route_timeout_policy(&mut store, "p-grpc", grpc_route.clone(), 2);
 
-		let http_pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&http_route],
-			},
-			&[],
+		let http_pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&http_route],
+			route_inlines: vec![&[]],
+		});
+		assert_eq!(
+			http_pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(http_timeout)
 		);
-		assert_eq!(http_pols.timeout, Some(http_timeout));
 
-		let grpc_pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&grpc_route],
-			},
-			&[],
+		let grpc_pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&grpc_route],
+			route_inlines: vec![&[]],
+		});
+		assert_eq!(
+			grpc_pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(grpc_timeout)
 		);
-		assert_eq!(grpc_pols.timeout, Some(grpc_timeout));
 	}
 
 	#[test]
@@ -1837,17 +2373,122 @@ mod tests {
 			insert_route_timeout_policy(&mut store, "p-parent", parent_route.clone(), 1);
 		let child_timeout = insert_route_timeout_policy(&mut store, "p-child", child_route.clone(), 2);
 
-		let pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&parent_route, &child_route],
-			},
-			&[],
-		);
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&parent_route, &child_route],
+			route_inlines: vec![&[], &[]],
+		});
 
 		assert_ne!(parent_timeout, child_timeout);
-		assert_eq!(pols.timeout, Some(child_timeout));
+		assert_eq!(
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(child_timeout)
+		);
+	}
+
+	#[test]
+	fn route_policies_preserve_inline_policy_route_specificity() {
+		let mut store = Store::default();
+		let listener = listener();
+		let parent_route = route("parent", "ns", Some("HTTPRoute"));
+		let child_route = route("child", "ns", Some("HTTPRoute"));
+
+		let parent_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		let child_timeout = insert_route_timeout_policy(&mut store, "p-child", child_route.clone(), 2);
+		let parent_inline = [TrafficPolicy::Timeout(parent_timeout.clone())];
+
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&parent_route, &child_route],
+			route_inlines: vec![&parent_inline, &[]],
+		});
+
+		assert_ne!(parent_timeout, child_timeout);
+		assert_eq!(
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(child_timeout)
+		);
+	}
+
+	#[test]
+	fn route_policy_override_stops_more_specific_policy_type_inheritance() {
+		let mut store = Store::default();
+		let listener = listener();
+		let route = route("route", "ns", Some("HTTPRoute"));
+		let gateway_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		insert_traffic_policy(
+			&mut store,
+			"gateway-timeout",
+			PolicyTarget::Gateway(agent::ListenerTarget {
+				gateway_name: listener.gateway_name.clone(),
+				gateway_namespace: listener.gateway_namespace.clone(),
+				listener_name: None,
+				port: None,
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(gateway_timeout.clone()),
+		);
+		insert_traffic_policy(
+			&mut store,
+			"listener-override",
+			PolicyTarget::Gateway(agent::ListenerTarget {
+				gateway_name: listener.gateway_name.clone(),
+				gateway_namespace: listener.gateway_namespace.clone(),
+				listener_name: Some(listener.listener_name.clone()),
+				port: None,
+			}),
+			PolicyInheritance::Override,
+			TrafficPolicy::HostRewrite(agent::HostRedirectOverride::None),
+		);
+		let route_timeout = insert_route_timeout_policy(&mut store, "route-timeout", route.clone(), 3);
+		insert_traffic_policy(
+			&mut store,
+			"route-host-rewrite",
+			PolicyTarget::Route(route.clone()),
+			PolicyInheritance::Default,
+			TrafficPolicy::HostRewrite(agent::HostRedirectOverride::Auto),
+		);
+
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&route],
+			route_inlines: vec![&[]],
+		});
+
+		assert_ne!(gateway_timeout, route_timeout);
+		assert_eq!(
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(route_timeout)
+		);
+		assert_eq!(
+			pols
+				.hostname_rewrite
+				.select("hostname rewrite", &request_for_policy_selection())
+				.as_deref()
+				.copied(),
+			Some(agent::HostRedirectOverride::None)
+		);
 	}
 
 	/// Tests that frontend policies at listener level take precedence over gateway level policies
@@ -1860,7 +2501,7 @@ mod tests {
 		insert_gateway_level_frontend_policy(&mut store, &listener, "gw_remove");
 		insert_listener_level_frontend_policy(&mut store, &listener, "listener_remove");
 
-		let merged_pols = store.listener_frontend_policies(&listener, None);
+		let merged_pols = store.listener_frontend_policies(&listener, None, None);
 		// Verify that listener policy takes precedence over gateway policy
 		assert!(
 			merged_pols.access_log.is_some(),
@@ -1876,6 +2517,26 @@ mod tests {
 			!access_log.remove.contains("gw_remove"),
 			"Gateway policy should not override listener policy"
 		);
+	}
+
+	#[test]
+	fn frontend_policy_gateway_port_inherits_gateway_level() {
+		let mut store = Store::default();
+		let listener = listener();
+
+		insert_gateway_level_frontend_policy(&mut store, &listener, "gw_remove");
+
+		let access_log = store
+			.frontend_policies(PolicyTargetRef::Gateway {
+				gateway_name: listener.gateway_name.as_ref(),
+				gateway_namespace: listener.gateway_namespace.as_ref(),
+				listener_name: None,
+				port: Some(15008),
+			})
+			.access_log
+			.expect("expected gateway policy to apply");
+
+		assert!(access_log.remove.contains("gw_remove"));
 	}
 
 	#[test]
@@ -1940,6 +2601,50 @@ mod tests {
 	}
 
 	#[test]
+	fn frontend_policy_port_precedence() {
+		let mut store = Store::default();
+		let listener = listener();
+
+		insert_gateway_level_frontend_policy(&mut store, &listener, "gw_remove");
+		insert_port_level_frontend_policy(&mut store, &listener, 15008, "port_remove");
+		insert_listener_level_frontend_policy(&mut store, &listener, "listener_remove");
+
+		let merged_pols = store.listener_frontend_policies(&listener, Some(15008), None);
+		let access_log = merged_pols.access_log.as_ref().unwrap();
+		assert!(access_log.remove.contains("listener_remove"));
+		assert!(!access_log.remove.contains("port_remove"));
+		assert!(!access_log.remove.contains("gw_remove"));
+
+		let merged_pols = store.listener_frontend_policies(&listener, Some(15009), None);
+		let access_log = merged_pols.access_log.as_ref().unwrap();
+		assert!(access_log.remove.contains("listener_remove"));
+
+		let listener_without_listener_policy = ListenerName {
+			gateway_name: listener.gateway_name.clone(),
+			gateway_namespace: listener.gateway_namespace.clone(),
+			listener_name: strng::literal!("other"),
+			listener_set: None,
+		};
+		let merged_pols =
+			store.listener_frontend_policies(&listener_without_listener_policy, Some(15008), None);
+		let access_log = merged_pols.access_log.as_ref().unwrap();
+		assert!(access_log.remove.contains("port_remove"));
+		assert!(!access_log.remove.contains("gw_remove"));
+	}
+
+	#[test]
+	fn gateway_target_cannot_mix_listener_and_port() {
+		let target = ListenerTarget {
+			gateway_name: strng::literal!("gw"),
+			gateway_namespace: strng::literal!("ns"),
+			listener_name: Some(strng::literal!("listener")),
+			port: Some(15008),
+		};
+
+		assert!(target.validate().is_err());
+	}
+
+	#[test]
 	fn xds_bind_uses_ipv4_when_ipv6_disabled() {
 		use std::net::{IpAddr, Ipv4Addr};
 
@@ -1950,7 +2655,7 @@ mod tests {
 			tunnel_protocol: 0, // Direct
 		};
 
-		let bind = Bind::try_from_xds(&xds_bind, false).unwrap();
+		let bind = Bind::from_xds(&xds_bind, false, &mut Diagnostics::default()).unwrap();
 		assert_eq!(bind.address.port(), 8080);
 		assert_eq!(bind.address.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
 	}
@@ -1967,7 +2672,7 @@ mod tests {
 			tunnel_protocol: 0, // Direct
 		};
 
-		let bind = Bind::try_from_xds(&xds_bind, true).unwrap();
+		let bind = Bind::from_xds(&xds_bind, true, &mut Diagnostics::default()).unwrap();
 		assert_eq!(bind.address.port(), 9090);
 		assert_eq!(bind.address.ip(), IpAddr::V6(Ipv6Addr::UNSPECIFIED));
 	}
@@ -1990,11 +2695,14 @@ mod tests {
 				namespace: strng::new("test-ns"),
 				section: None,
 			}),
-			policy: PolicyType::Backend(BackendPolicy::RequestHeaderModifier(HeaderModifier {
-				add: vec![],
-				set: vec![(strng::new("x-foo"), strng::new("bar"))],
-				remove: vec![],
-			})),
+			inheritance: Default::default(),
+			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
+				HeaderModifier {
+					add: vec![],
+					set: vec![(strng::new("x-foo"), strng::new("bar"))],
+					remove: vec![],
+				},
+			)),
 		};
 		store.insert_policy(backend_attached_policy);
 
@@ -2008,20 +2716,25 @@ mod tests {
 				namespace: strng::new("test-ns"),
 				section: Some(strng::new("target")),
 			}),
-			policy: PolicyType::Backend(BackendPolicy::RequestHeaderModifier(HeaderModifier {
-				add: vec![],
-				set: vec![(strng::new("x-foo"), strng::new("bar3"))],
-				remove: vec![],
-			})),
+			inheritance: Default::default(),
+			policy: PolicyType::Backend(BackendTrafficPolicy::RequestHeaderModifier(
+				HeaderModifier {
+					add: vec![],
+					set: vec![(strng::new("x-foo"), strng::new("bar3"))],
+					remove: vec![],
+				},
+			)),
 		};
 		store.insert_policy(section_policy);
 
 		// Create inline policies - sets x-foo=bar2
-		let backend_inline_policies = vec![BackendPolicy::RequestHeaderModifier(HeaderModifier {
-			add: vec![],
-			set: vec![(strng::new("x-foo"), strng::new("bar2"))],
-			remove: vec![],
-		})];
+		let backend_inline_policies = vec![BackendTrafficPolicy::RequestHeaderModifier(
+			HeaderModifier {
+				add: vec![],
+				set: vec![(strng::new("x-foo"), strng::new("bar2"))],
+				remove: vec![],
+			},
+		)];
 
 		// Test case 1: Inline policy beats backend attached policy
 		let policies_no_section = store.backend_policies(
@@ -2138,6 +2851,176 @@ mod tests {
 			modifier.set[0],
 			(strng::new("x-foo"), strng::new("bar3")),
 			"Section attached policy (bar3) should win over backend attached policy (bar)"
+		);
+	}
+
+	#[test]
+	fn backend_ai_policy_merge_preserves_routes_and_prompt_guard() {
+		use crate::llm::policy::{
+			PromptGuard, RegexRule, RegexRules, RequestGuard, RequestGuardKind, SortedRoutes,
+		};
+		use crate::llm::{self, RouteType};
+
+		let mut routes = SortedRoutes::default();
+		routes.insert(strng::new("/v1/messages"), RouteType::Messages);
+		routes.insert(strng::new("*"), RouteType::Passthrough);
+
+		let routes_policy = BackendTrafficPolicy::AI(Arc::new(llm::Policy {
+			routes,
+			..Default::default()
+		}));
+		let prompt_guard_policy = BackendTrafficPolicy::AI(Arc::new(llm::Policy {
+			prompt_guard: Some(PromptGuard {
+				streaming: Default::default(),
+				request: vec![RequestGuard {
+					rejection: Default::default(),
+					kind: RequestGuardKind::Regex(RegexRules {
+						action: Default::default(),
+						rules: vec![RegexRule::Regex {
+							pattern: regex::Regex::new("secret").unwrap(),
+						}],
+					}),
+				}],
+				response: vec![],
+			}),
+			..Default::default()
+		}));
+
+		let inline_policies = vec![prompt_guard_policy, routes_policy];
+		let policies = Store::default().backend_policies(
+			BackendTargetRef::Backend {
+				name: "test-backend",
+				namespace: "test-ns",
+				section: None,
+			},
+			&[&inline_policies],
+			None,
+		);
+		let policy = policies.llm.expect("expected merged AI policy");
+
+		assert!(
+			policy.prompt_guard.is_some(),
+			"prompt guard config should be preserved"
+		);
+		assert_eq!(policy.resolve_route("/v1/messages"), RouteType::Messages);
+		assert_eq!(policy.resolve_route("/v1/models"), RouteType::Passthrough);
+	}
+
+	#[test]
+	fn listenerset_targeted_policy_is_found_via_listener_frontend_policies() {
+		let mut store = Store::default();
+
+		// Insert a policy targeting a ListenerSet
+		let policy_key: PolicyKey = strng::new("ls-policy");
+		let targeted = TargetedPolicy {
+			key: policy_key.clone(),
+			name: None,
+			target: PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}),
+			inheritance: Default::default(),
+			policy: agent::PolicyType::Frontend(create_access_log_policy("ls_remove")),
+		};
+		store
+			.policies_by_key
+			.insert(policy_key.clone(), Arc::new(targeted));
+		store
+			.policies_by_target
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}))
+			.or_default()
+			.insert(policy_key);
+
+		// Create a ListenerName that belongs to the ListenerSet
+		let listener = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+
+		let pols = store.listener_frontend_policies(&listener, None, None);
+		let access_log = pols
+			.access_log
+			.as_ref()
+			.expect("expected access log policy from ListenerSet target");
+		assert!(
+			access_log.remove.contains("ls_remove"),
+			"ListenerSet-targeted policy should be found via listener_frontend_policies"
+		);
+	}
+
+	#[test]
+	fn listenerset_section_targeted_policy_applies_only_to_named_listener() {
+		let mut store = Store::default();
+
+		let policy_key: PolicyKey = strng::new("ls-section-policy");
+		// Policy targets ListenerSet/my-ls with sectionName: listener-a
+		let targeted = TargetedPolicy {
+			key: policy_key.clone(),
+			name: None,
+			target: PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}),
+			inheritance: Default::default(),
+			policy: agent::PolicyType::Frontend(create_access_log_policy("section_remove")),
+		};
+		store
+			.policies_by_key
+			.insert(policy_key.clone(), Arc::new(targeted));
+		store
+			.policies_by_target
+			.entry(PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}))
+			.or_default()
+			.insert(policy_key);
+
+		// listener-a: should match
+		let listener_a = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener-a"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+		let pols_a = store.listener_frontend_policies(&listener_a, None, None);
+		assert!(
+			pols_a
+				.access_log
+				.as_ref()
+				.is_some_and(|p| p.remove.contains("section_remove")),
+			"section-targeted policy should apply to the named listener"
+		);
+
+		// listener-b: should NOT match
+		let listener_b = ListenerName {
+			gateway_name: strng::new("gw"),
+			gateway_namespace: strng::new("ns"),
+			listener_name: strng::new("listener-b"),
+			listener_set: Some(ResourceName::new(
+				strng::new("my-ls"),
+				strng::new("default"),
+			)),
+		};
+		let pols_b = store.listener_frontend_policies(&listener_b, None, None);
+		assert!(
+			pols_b.access_log.is_none(),
+			"section-targeted policy should NOT apply to a different listener in the same set"
 		);
 	}
 }

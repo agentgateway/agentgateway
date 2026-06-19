@@ -10,12 +10,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"istio.io/istio/pkg/ptr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml"
 
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
@@ -32,6 +32,8 @@ type HelmTestCase struct {
 	Inputs *deployer.Inputs
 	// InputFile is just the name of the manifest omitting the file extension suffix
 	InputFile string
+	// Settings has install-time control plane settings, passed to AgwCollections.
+	Settings *apisettings.Settings
 	// Validate is an optional function to run additional validation on the output YAML
 	Validate func(t *testing.T, outputYaml string)
 	// HelmValuesGeneratorOverride is an optional function to modify deployer inputs before rendering.
@@ -161,6 +163,10 @@ func (dt DeployerTester) RunHelmChartTest(t *testing.T, tt HelmTestCase, scheme 
 		t.FailNow()
 	}
 	agwCols := NewAgwCols(t)
+	if tt.Settings != nil {
+		// override control-plane level settings
+		agwCols = NewAgwColsWithSettings(t, *tt.Settings, objs...)
+	}
 	inputs := DefaultDeployerInputs(dt, agwCols)
 	if tt.Inputs != nil {
 		inputs = tt.Inputs
@@ -252,9 +258,9 @@ func DefaultDeployerInputs(dt DeployerTester, agwCols *plugins.AgwCollections) *
 		AgentgatewayClassName:      dt.AgwClassName,
 		AgentgatewayControllerName: dt.AgwControllerName,
 		ImageDefaults: &agentgateway.Image{
-			Registry:   ptr.Of("cr.agentgateway.dev"),
-			Repository: ptr.Of("agentgateway"),
-			Tag:        ptr.Of("99.99.99"),
+			Registry:   new("cr.agentgateway.dev"),
+			Repository: new("agentgateway"),
+			Tag:        new("99.99.99"),
 			Digest:     nil,
 			PullPolicy: nil,
 		},

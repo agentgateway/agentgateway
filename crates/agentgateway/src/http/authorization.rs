@@ -3,9 +3,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::cel::{ContextBuilder, Executor};
 use crate::proxy::ProxyError;
+use crate::proxy::dtrace::{
+	self, AuthorizationResult as TraceAuthorizationResult, AuthorizationRuleMode,
+	AuthorizationRuleResult,
+};
 use crate::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct HTTPAuthorizationSet(RuleSets);
 
 impl HTTPAuthorizationSet {
@@ -21,9 +25,23 @@ impl HTTPAuthorizationSet {
 		}
 		Ok(())
 	}
+}
 
-	pub fn register(&self, cel: &mut ContextBuilder) {
-		self.0.register(cel);
+impl crate::store::RequestPolicyTrait for HTTPAuthorizationSet {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut http::Request,
+	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(req)
+			.map_err(|_| crate::proxy::ProxyResponse::from(ProxyError::AuthorizationFailed))?;
+		Ok(http::PolicyResponse::default())
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.0.expressions()
 	}
 }
 
@@ -50,29 +68,16 @@ impl NetworkAuthorizationSet {
 	}
 
 	pub fn merge_rule_set(&mut self, rule_set: RuleSet) {
-		self.0.0.push(rule_set);
+		self.0.0.push(Arc::new(rule_set));
 	}
 }
 
 #[apply(schema!)]
 pub struct RuleSet {
+	/// CEL authorization rules to evaluate for a request.
 	#[serde(serialize_with = "se_policies", deserialize_with = "de_policies")]
-	#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<RuleSerde>"))]
 	pub rules: PolicySet,
-}
-
-impl RuleSet {
-	pub fn register(&self, cel: &mut ContextBuilder) {
-		for rule in &self.rules.allow {
-			cel.register_expression(rule.as_ref());
-		}
-		for rule in &self.rules.deny {
-			cel.register_expression(rule.as_ref());
-		}
-		for rule in &self.rules.require {
-			cel.register_expression(rule.as_ref());
-		}
-	}
 }
 
 #[derive(Clone, Debug, Default)]
@@ -101,8 +106,11 @@ enum RuleSerde {
 
 #[apply(schema!)]
 enum RuleTypeSerde {
+	/// Allow the request when this CEL expression is true.
 	Allow(String),
+	/// Deny the request when this CEL expression is true.
 	Deny(String),
+	/// Require this CEL expression to be true.
 	Require(String),
 }
 
@@ -179,42 +187,101 @@ where
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct RuleSets(Vec<RuleSet>);
+pub struct RuleSets(Vec<Arc<RuleSet>>);
 
 impl From<Vec<RuleSet>> for RuleSets {
 	fn from(value: Vec<RuleSet>) -> Self {
+		Self(value.into_iter().map(Arc::new).collect())
+	}
+}
+
+impl RuleSets {
+	pub fn from_arcs(value: Vec<Arc<RuleSet>>) -> Self {
 		Self(value)
 	}
 }
 
 impl RuleSets {
 	pub fn register(&self, ctx: &mut ContextBuilder) {
-		for rule_set in &self.0 {
-			rule_set.register(ctx);
+		for expr in self.expressions() {
+			ctx.register_expression(expr);
 		}
+	}
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.0.iter().flat_map(|rule_set| {
+			rule_set
+				.rules
+				.allow
+				.iter()
+				.chain(rule_set.rules.deny.iter())
+				.chain(rule_set.rules.require.iter())
+				.map(|rule| rule.as_ref())
+		})
+	}
+	pub(crate) fn has_rules(&self) -> bool {
+		self.0.iter().any(|r| r.has_rules())
 	}
 	pub fn validate(&self, exec: &Executor) -> bool {
 		let rule_sets = &self.0;
-		let has_rules = rule_sets.iter().any(|r| r.has_rules());
+		let has_rules = self.has_rules();
 		// If there are no rule sets, everyone has access
-		if !has_rules {
-			return true;
-		}
+		#[allow(clippy::if_same_then_else)] // This is intentional to make things explicit.
+		let allowed = if !has_rules {
+			true
 		// If there are any DENY, deny
-		if rule_sets.iter().any(|r| r.denies(exec)) {
-			return false;
-		}
+		} else if rule_sets.iter().any(|r| r.denies(exec)) {
+			false
 		// All REQUIRE policies must match when present.
-		if rule_sets.iter().any(|r| !r.all_requires_match(exec)) {
-			return false;
-		}
+		} else if rule_sets.iter().any(|r| !r.all_requires_match(exec)) {
+			false
 		// If there are any ALLOW, allow
-		if rule_sets.iter().any(|r| r.allows(exec)) {
-			return true;
-		}
-		// If only deny rules exist (no allow rules), default to allow (denylist semantics).
-		// If allow rules exist but none matched, default to deny (allowlist semantics).
-		!rule_sets.iter().any(|r| r.has_allow_rules())
+		} else if rule_sets.iter().any(|r| r.allows(exec)) {
+			true
+		} else {
+			// If only deny rules exist (no allow rules), default to allow (denylist semantics).
+			// If allow rules exist but none matched, default to deny (allowlist semantics).
+			!rule_sets.iter().any(|r| r.has_allow_rules())
+		};
+
+		dtrace::trace(|trace| {
+			// Re-evaluate the rules for diagnostics. Note we do not short-circuit here.
+			let mut rules = Vec::new();
+
+			for rule_set in rule_sets {
+				for rule in &rule_set.rules.allow {
+					rules.push(AuthorizationRuleResult {
+						name: rule.original_expression.clone(),
+						matched: exec.eval_bool(rule.as_ref()),
+						mode: AuthorizationRuleMode::Allow,
+					});
+				}
+				for rule in &rule_set.rules.deny {
+					rules.push(AuthorizationRuleResult {
+						name: rule.original_expression.clone(),
+						matched: exec.eval_bool(rule.as_ref()),
+						mode: AuthorizationRuleMode::Deny,
+					});
+				}
+				for rule in &rule_set.rules.require {
+					rules.push(AuthorizationRuleResult {
+						name: rule.original_expression.clone(),
+						matched: exec.eval_bool(rule.as_ref()),
+						mode: AuthorizationRuleMode::Require,
+					});
+				}
+			}
+
+			trace.authorization_result(
+				rules,
+				if allowed {
+					TraceAuthorizationResult::Allow
+				} else {
+					TraceAuthorizationResult::Deny
+				},
+			)
+		});
+
+		allowed
 	}
 
 	pub fn is_empty(&self) -> bool {

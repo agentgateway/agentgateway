@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::{RunArgs, read_config_contents};
 use agent_core::{strng, telemetry, version};
 use agentgateway::app::Bound;
 use agentgateway::types::agent::ListenerTarget;
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
 use tracing::info;
+
+use crate::{RunArgs, read_config_contents};
 
 pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 	let RunArgs {
@@ -33,11 +34,11 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 		.build()
 		.unwrap()
 		.block_on(async move {
-			let (contents, filename) = read_config_contents(&config)?;
+			let (contents, local_config_source) = read_config_contents(&config)?;
 			if validate_only {
-				return validate(contents, filename).await;
+				return validate(contents, local_config_source).await;
 			}
-			let mut config = agentgateway::config::parse_config(contents, filename)?;
+			let mut config = agentgateway::config::parse_config(contents, local_config_source)?;
 			// Capture the admin/runtime handle to ensure some background tasks (e.g., OTLP exporters created from dataplane
 			// policy initialization) run on the admin runtime rather than the dataplane runtime.
 			config.admin_runtime_handle = Some(tokio::runtime::Handle::current());
@@ -45,7 +46,15 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				&config.logging.level,
 				config.logging.format == LoggingFormat::Json,
 			);
-			proxy(Arc::new(config)).await
+			let request_log_store = match config.database.as_ref() {
+				Some(cfg) => Some(agentgateway::telemetry::log_store::setup(cfg).await?),
+				None => None,
+			};
+			let result = proxy(Arc::new(config)).await;
+			if let Some(request_log_store) = request_log_store {
+				request_log_store.shutdown_and_wait().await;
+			}
+			result
 		})
 }
 
@@ -69,8 +78,11 @@ fn copy_binary(copy_self: PathBuf) -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result<()> {
-	let config = agentgateway::config::parse_config(contents, filename)?;
+async fn validate(
+	contents: String,
+	local_config_source: Option<agentgateway::ConfigSource>,
+) -> anyhow::Result<()> {
+	let config = agentgateway::config::parse_config(contents, local_config_source)?;
 	let client = client::Client::new(&config.dns, None, BackendConfig::default(), None);
 	if let Some(cfg) = config.xds.local_config.as_ref() {
 		let cs = cfg.read_to_string().await?;
@@ -81,6 +93,7 @@ async fn validate(contents: String, filename: Option<PathBuf>) -> anyhow::Result
 				gateway_name: strng::literal!("default"),
 				gateway_namespace: strng::literal!("default"),
 				listener_name: None,
+				port: None,
 			},
 			cs.as_str(),
 		)

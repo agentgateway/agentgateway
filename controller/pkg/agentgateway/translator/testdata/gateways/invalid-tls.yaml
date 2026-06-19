@@ -51,7 +51,7 @@ status:
     attachedListenerSets: 0
     conditions:
     - lastTransitionTime: fake
-      message: 'Some listeners are not programmed: https: Bad TLS configuration'
+      message: 'Some listeners are not accepted: https: Bad TLS configuration'
       reason: ListenersNotValid
       status: "True"
       type: Accepted

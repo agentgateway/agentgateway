@@ -3,7 +3,7 @@ use std::num::NonZeroU16;
 use regex;
 
 use crate::http::StatusCode;
-use crate::http::filters::{RequestRedirect, UrlRewrite};
+use crate::http::filters::{HeaderModifier, RequestRedirect, UrlRewrite};
 use crate::http::tests_common::*;
 use crate::types::agent::{HostRedirect, PathMatch, PathRedirect};
 use crate::*;
@@ -800,6 +800,30 @@ fn rewrite_test() {
 				uri: "http://test.com/users".to_string(),
 			}),
 		),
+		// Test path prefix edge case - replace exact prefix with empty
+		(
+			"path_prefix_exact_empty_rewrite",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_empty_rewrite,
+				uri: "http://test.com/api",
+			},
+			Some(Want {
+				uri: "http://test.com/".to_string(),
+			}),
+		),
+		// Test path prefix edge case - replace exact prefix with empty and preserve query
+		(
+			"path_prefix_exact_empty_rewrite_with_query",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_empty_rewrite,
+				uri: "http://test.com/api?debug=true",
+			},
+			Some(Want {
+				uri: "http://test.com/?debug=true".to_string(),
+			}),
+		),
 		// Test complex query parameters with special characters
 		(
 			"complex_query_parameters",
@@ -824,6 +848,24 @@ fn rewrite_test() {
 			Some(Want {
 				uri: "http://test.com/v1".to_string(),
 			}),
+		),
+		(
+			"path_prefix_rewrite_rejects_partial_segment",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_rewrite,
+				uri: "http://test.com/apiary",
+			},
+			None,
+		),
+		(
+			"path_prefix_rewrite_rejects_encoded_slash_boundary",
+			Input {
+				path: &match_api,
+				rewrite: &prefix_path_rewrite,
+				uri: "http://test.com/api%2Fv1",
+			},
+			None,
 		),
 		// Test hostname rewrite with HTTPS
 		(
@@ -924,4 +966,33 @@ fn rewrite_test() {
 			.ok();
 		assert_eq!(got, want, "{name}");
 	}
+}
+
+#[test]
+fn request_header_modifier_lifts_host_to_authority() {
+	let mut req = request_for_uri("http://example.com/path");
+	let modifier = HeaderModifier {
+		add: vec![("host".into(), "new.example.com:8443".into())],
+		set: vec![],
+		remove: vec![],
+	};
+	modifier.apply_request(&mut req).unwrap();
+	assert_eq!(req.uri().to_string(), "http://new.example.com:8443/path");
+	assert!(req.headers().get(http::header::HOST).is_none());
+}
+
+#[test]
+fn request_header_modifier_remove_host_keeps_authority() {
+	let mut req = request_for_uri("http://example.com/path");
+	req
+		.headers_mut()
+		.insert(http::header::HOST, "stale.example.com".parse().unwrap());
+	let modifier = HeaderModifier {
+		add: vec![],
+		set: vec![],
+		remove: vec!["host".into()],
+	};
+	modifier.apply_request(&mut req).unwrap();
+	assert_eq!(req.uri().to_string(), "http://example.com/path");
+	assert!(req.headers().get(http::header::HOST).is_none());
 }

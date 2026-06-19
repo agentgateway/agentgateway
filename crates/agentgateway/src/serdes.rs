@@ -4,6 +4,7 @@ use std::io;
 use std::path::PathBuf;
 
 use anyhow::Context;
+use openapiv3::OpenAPI;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
 use secrecy::SecretString;
@@ -14,7 +15,6 @@ pub use serde_with;
 
 use crate::client::Client;
 use crate::http::Body;
-use openapiv3::OpenAPI;
 
 /// Serde yaml represents things different than just as "JSON in YAML format".
 /// We don't want this. Instead, we transcode YAML via the JSON module.
@@ -59,6 +59,32 @@ attribute_alias! {
 
 pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 	*t == Default::default()
+}
+
+pub struct SerAsStr;
+impl<T> serde_with::SerializeAs<T> for SerAsStr
+where
+	T: AsRef<str>,
+{
+	fn serialize_as<S>(source: &T, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		serializer.serialize_str(source.as_ref())
+	}
+}
+impl<'de, T> serde_with::DeserializeAs<'de, T> for SerAsStr
+where
+	T: std::str::FromStr,
+	<T as std::str::FromStr>::Err: Display,
+{
+	fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let s = String::deserialize(deserializer)?;
+		s.parse().map_err(serde::de::Error::custom)
+	}
 }
 
 pub mod serde_instant_option {

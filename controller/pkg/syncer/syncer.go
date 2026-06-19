@@ -8,11 +8,11 @@ import (
 
 	securityclient "istio.io/client-go/pkg/apis/security/v1"
 	"istio.io/istio/pilot/pkg/model"
-	"istio.io/istio/pilot/pkg/serviceregistry/kube/controller/ambient"
+	"istio.io/istio/pilot/pkg/serviceregistry/ambient"
 	"istio.io/istio/pkg/cluster"
 	"istio.io/istio/pkg/config/mesh"
+	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
@@ -108,7 +108,7 @@ func NewAgwSyncer(
 	}
 	logger.Debug("init agentgateway Syncer", "controllername", controllerName)
 
-	syncer.buildResourceCollections(krtopts.WithPrefix("agentgateway"))
+	syncer.buildResourceCollections(krtopts)
 	return syncer
 }
 
@@ -137,8 +137,17 @@ type CustomResourceCollectionsConfig struct {
 
 func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	// Build core collections for irs
+	referenceTypes := plugins.DefaultReferenceTypes(s.agwCollections)
+	if s.buildReferenceTypesFunc != nil {
+		referenceTypes = s.buildReferenceTypesFunc(s.agwCollections, referenceTypes)
+	}
 	gatewayClasses := translator.GatewayClassesCollection(s.agwCollections.GatewayClasses, krtopts)
-	refGrants := translator.BuildReferenceGrants(translator.ReferenceGrantsCollection(s.agwCollections.ReferenceGrants, krtopts))
+	refGrants := translator.BuildReferenceGrants(translator.ReferenceGrantsCollection(
+		s.agwCollections.ReferenceGrants,
+		referenceTypes.KnownFromReferences,
+		referenceTypes.KnownToReferences,
+		krtopts,
+	))
 	listenerSetInitialStatus, listenerSets := s.buildListenerSetCollection(gatewayClasses, refGrants, krtopts)
 	if s.customResourceCollections != nil {
 		s.customResourceCollections(CustomResourceCollectionsConfig{
@@ -158,7 +167,7 @@ func (s *Syncer) buildResourceCollections(krtopts krtutil.KrtOptions) {
 	gatewayInitialStatus, gateways := s.buildGatewayCollection(gatewayClasses, listenerSets, refGrants, krtopts)
 
 	// Build Agw resources for gateway
-	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, refGrants, krtopts)
+	agwResources, routeAttachments, ancestorCollection := s.buildAgwResources(gateways, listenerSets, refGrants, referenceTypes, krtopts)
 
 	gatewayFinalStatus := s.buildFinalGatewayStatus(gatewayInitialStatus, routeAttachments, krtopts)
 	status.RegisterStatus(s.statusCollections, gatewayFinalStatus, translator.GetStatus)
@@ -245,7 +254,7 @@ func (s *Syncer) buildFinalListenerSetStatus(
 			},
 			SectionName: gwl.ParentInfo.SectionName,
 		}}
-	}).AsCollection(append(krtopts.ToOptions("gatewayIndex"), utils.SectionedNamespacedNameIndexCollectionFunc)...)
+	}).AsCollection(append(krtopts.ToOptions("translator/ListenerSetListenersByParentSection"), utils.SectionedNamespacedNameIndexCollectionFunc)...)
 	return krt.NewCollection(listenerSetStatus,
 		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.ListenerSet, gwv1.ListenerSetStatus]) *krt.ObjectWithStatus[*gwv1.ListenerSet, gwv1.ListenerSetStatus] {
 			// Skip if listenerset not allowed
@@ -395,10 +404,16 @@ func (s *Syncer) buildListenerSetCollection(
 				s.agwCollections.Secrets,
 				s.agwCollections.ConfigMaps,
 			)
-		}, krtopts.ToOptions("ListenerSets")...)
+		}, krtopts.ToOptions("translator/ListenerSetListeners")...)
 }
 
-func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayListener], refGrants translator.ReferenceGrants, krtopts krtutil.KrtOptions) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
+func (s *Syncer) buildAgwResources(
+	gateways krt.Collection[*translator.GatewayListener],
+	listenerSets krt.Collection[translator.ListenerSet],
+	refGrants translator.ReferenceGrants,
+	referenceTypes plugins.ReferenceTypes,
+	krtopts krtutil.KrtOptions,
+) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], plugins.ReferenceIndex) {
 	// filter gateway collections to only include gateways which use a built-in gateway class
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
@@ -406,17 +421,18 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 			return nil
 		}
 		return &gw
-	}, krtopts.ToOptions("FilteredGateways")...)
+	}, krtopts.ToOptions("translator/FilteredGateways")...)
 
 	// Build ports and binds
 	ports := krtpkg.UnnamedIndex(filteredGateways, func(l *translator.GatewayListener) []string {
 		return []string{fmt.Sprint(l.ParentInfo.Port)}
-	}).AsCollection(krtopts.ToOptions("PortBindings")...)
+	}).AsCollection(krtopts.ToOptions("translator/PortBindings")...)
 
-	binds := krt.NewManyCollection(ports, func(ctx krt.HandlerContext, object krt.IndexObject[string, *translator.GatewayListener]) []agwir.AgwResource {
+	baseBinds := krt.NewManyCollection(ports, func(ctx krt.HandlerContext, object krt.IndexObject[string, *translator.GatewayListener]) []agwir.AgwResource {
 		port, _ := strconv.Atoi(object.Key)
 		uniq := sets.New[types.NamespacedName]()
 		protocol := api.Bind_Protocol(0)
+		var tunnelProtocol = api.Bind_DIRECT
 		for _, gw := range object.Objects {
 			uniq.Insert(types.NamespacedName{
 				Namespace: gw.ParentGateway.Namespace,
@@ -425,30 +441,38 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 			// TODO: better handle conflicts of protocols. For now, we arbitrarily treat TLS > plain
 			if gw.Conflict == "" {
 				protocol = max(protocol, s.getBindProtocol(gw))
+				if tp := s.getTunnelProtocol(gw); tp != api.Bind_DIRECT {
+					tunnelProtocol = tp
+				}
 			}
 		}
 		return slices.Map(uniq.UnsortedList(), func(e types.NamespacedName) agwir.AgwResource {
 			bind := translator.AgwBind{
 				Bind: &api.Bind{
-					Key:      object.Key + "/" + e.String(),
-					Port:     uint32(port), //nolint:gosec // G115: port is always in valid port range
-					Protocol: protocol,
+					Key:            object.Key + "/" + e.String(),
+					Port:           uint32(port), //nolint:gosec // G115: port is always in valid port range
+					Protocol:       protocol,
+					TunnelProtocol: tunnelProtocol,
 				},
 			}
 			return translator.ToResourceForGateway(e, bind)
 		})
-	}, krtopts.ToOptions("Binds")...)
+	}, krtopts.ToOptions("translator/Binds")...)
+	bindCollections := []krt.Collection[agwir.AgwResource]{baseBinds}
 	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.Binds != nil {
-		binds = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, s.agwPlugins.AddResourceExtension.Binds})
+		bindCollections = append(bindCollections, s.agwPlugins.AddResourceExtension.Binds)
 	}
+	binds := krt.JoinCollection(bindCollections, krtopts.ToOptions("resources/Binds")...)
 
 	// Build listeners
-	listeners := krt.NewCollection(filteredGateways, func(ctx krt.HandlerContext, obj *translator.GatewayListener) *agwir.AgwResource {
+	baseListeners := krt.NewCollection(filteredGateways, func(ctx krt.HandlerContext, obj *translator.GatewayListener) *agwir.AgwResource {
 		return s.buildListenerFromGateway(obj)
-	}, krtopts.ToOptions("Listeners")...)
+	}, krtopts.ToOptions("translator/Listeners")...)
+	listenerCollections := []krt.Collection[agwir.AgwResource]{baseListeners}
 	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.Listeners != nil {
-		listeners = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{listeners, s.agwPlugins.AddResourceExtension.Listeners})
+		listenerCollections = append(listenerCollections, s.agwPlugins.AddResourceExtension.Listeners)
 	}
+	listeners := krt.JoinCollection(listenerCollections, krtopts.ToOptions("resources/Listeners")...)
 
 	// Build routes
 	var routeParents translator.ParentResolver = translator.BuildRouteParents(filteredGateways)
@@ -464,57 +488,82 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 		routeParents = &translator.CompositeParentResolver{Resolvers: resolvers}
 	}
 
-	referenceTypes := plugins.DefaultReferenceTypes(s.agwCollections)
-	if s.buildReferenceTypesFunc != nil {
-		referenceTypes = s.buildReferenceTypesFunc(s.agwCollections, referenceTypes)
-	}
-
 	routeInputs := translator.RouteContextInputs{
-		Grants:         refGrants,
-		RouteParents:   routeParents,
-		ControllerName: s.controllerName,
-		Services:       s.agwCollections.Services,
-		Namespaces:     s.agwCollections.Namespaces,
-		ServiceEntries: s.agwCollections.ServiceEntries,
-		InferencePools: s.agwCollections.InferencePools,
-		Backends:       s.agwCollections.Backends,
-		References:     referenceTypes,
+		Grants:              refGrants,
+		RouteParents:        routeParents,
+		ControllerName:      s.controllerName,
+		Services:            s.agwCollections.Services,
+		Namespaces:          s.agwCollections.Namespaces,
+		ServiceEntries:      s.agwCollections.ServiceEntries,
+		InferencePools:      s.agwCollections.InferencePools,
+		Backends:            s.agwCollections.Backends,
+		References:          referenceTypes,
+		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 	}
 
-	agwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
+	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
+	routeCollections := []krt.Collection[agwir.AgwResource]{baseAgwRoutes}
 	if s.agwPlugins.AddResourceExtension != nil {
 		if s.agwPlugins.AddResourceExtension.Routes != nil {
-			agwRoutes = krt.JoinCollection([]krt.Collection[agwir.AgwResource]{agwRoutes, s.agwPlugins.AddResourceExtension.Routes})
+			routeCollections = append(routeCollections, s.agwPlugins.AddResourceExtension.Routes)
 		}
 		if s.agwPlugins.AddResourceExtension.AncestorBackends != nil {
-			ancestorBackends = krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{ancestorBackends, s.agwPlugins.AddResourceExtension.AncestorBackends})
+			ancestorBackends = krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{ancestorBackends, s.agwPlugins.AddResourceExtension.AncestorBackends}, krtopts.ToOptions("AncestorBackendsWithExtensions")...)
 		}
 	}
+	agwRoutes := krt.JoinCollection(routeCollections, krtopts.ToOptions("resources/Routes")...)
 	routeAttachmentsIndex := krt.NewIndex(routeAttachments, "from", func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.From}
-	}).AsCollection(append(krtopts.ToOptions("RouteAttachments"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+	}).AsCollection(append(krtopts.ToOptions("translator/RouteAttachmentsBySource"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
 	ancestorsIndex := krt.NewIndex(ancestorBackends, "ancestors", func(o *utils.AncestorBackend) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.Backend}
 	})
-	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("AncestorBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+	ancestorCollection := ancestorsIndex.AsCollection(append(krtopts.ToOptions("translator/AncestorBackendsByBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+
+	// Build a per-ListenerSet → parent-Gateway attachment index.
+	// Each entry maps the ListenerSet identity to its parent Gateway so that
+	// LookupGatewaysForTarget can route ListenerSet-targeted policies to the
+	// correct xDS snapshot.
+	listenerSetAttachments := krt.NewManyCollection(listenerSets,
+		func(ctx krt.HandlerContext, ls translator.ListenerSet) []*plugins.RouteAttachment {
+			if !ls.Valid {
+				return nil
+			}
+			lsKey := utils.TypedNamespacedName{
+				Kind:           wellknown.ListenerSetGVK.Kind,
+				NamespacedName: ls.Parent,
+			}
+			return []*plugins.RouteAttachment{{
+				From:    lsKey,
+				To:      lsKey,
+				Gateway: ls.GatewayParent,
+				// ListenerName omitted: this index only needs ListenerSet→Gateway;
+				// omitting it lets krt deduplicate the N per-listener entries to one.
+			}}
+		}, krtopts.ToOptions("translator/ListenerSetGatewayAttachments")...)
+	listenerSetAttachmentsIdx := krt.NewIndex(listenerSetAttachments, "ls-to-gateway",
+		func(o *plugins.RouteAttachment) []utils.TypedNamespacedName {
+			return []utils.TypedNamespacedName{o.To}
+		}).AsCollection(append(krtopts.ToOptions("translator/ListenerSetGatewayAttachmentsByTarget"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 
 	referenceIndex := plugins.BuildReferenceIndex(ancestorCollection, routeAttachmentsIndex, referenceTypes)
 
 	// Phase 1: Collect policy references (e.g. ext_proc backendRefs) BEFORE building
 	// policies. This ensures BackendTLSPolicy can look up gateways for backends that
 	// are only reachable via PolicyAttachments (like ext_proc processor Services).
-	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, krtopts)
+	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	backendPolicyReferences := AgwBackendReferencesCollection(s.agwPlugins, krtopts)
-	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("JoinPolicyAttachment")...)
+	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("references/PolicyAndBackendReferences")...)
 	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
 		return []utils.TypedNamespacedName{o.Backend}
 	})
-	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("PolicyReferencesIndex"), utils.TypedNamespacedNameIndexCollectionFunc)...)
+	policyReferencesIndexCollection := policyReferencesIndex.AsCollection(append(krtopts.ToOptions("references/PolicyReferencesByBackend"), utils.TypedNamespacedNameIndexCollectionFunc)...)
 	referenceIndex = referenceIndex.WithPolicyAttachments(policyReferencesIndexCollection)
+	referenceIndex = referenceIndex.WithListenerSetAttachments(listenerSetAttachmentsIdx)
 
 	// Phase 2: Build policies with the fully-populated reference index.
-	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)
+	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	for _, col := range policyStatuses {
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
 	}
@@ -525,16 +574,21 @@ func (s *Syncer) buildAgwResources(gateways krt.Collection[*translator.GatewayLi
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
 	}
 	// Join all Agw resources
-	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("Resources")...)
+	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("resources/AllResources")...)
 
 	return allAgwResources, routeAttachments, referenceIndex
 }
 
 // buildListenerFromGateway creates a listener resource from a gateway
 func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwir.AgwResource {
+	var ls *api.ResourceName
+	if obj.ParentObject.Kind == wellknown.ListenerSetGVK.Kind {
+		ls = &api.ResourceName{Name: obj.ParentObject.Name, Namespace: obj.ParentObject.Namespace}
+	}
+	listenerName := utils.ListenerName(obj.ParentGateway.Namespace, obj.ParentGateway.Name, string(obj.ParentInfo.SectionName), ls)
 	l := &api.Listener{
 		Key:      obj.ResourceName(),
-		Name:     utils.ListenerName(obj.ParentGateway.Namespace, obj.ParentGateway.Name, string(obj.ParentInfo.SectionName)),
+		Name:     listenerName,
 		BindKey:  fmt.Sprint(obj.ParentInfo.Port) + "/" + obj.ParentGateway.Namespace + "/" + obj.ParentGateway.Name,
 		Hostname: obj.ParentInfo.OriginalHostname,
 	}
@@ -548,7 +602,7 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 	l.Protocol = protocol
 	l.Tls = tlsConfig
 
-	return ptr.Of(translator.ToResourceForGateway(types.NamespacedName{
+	return new(translator.ToResourceForGateway(types.NamespacedName{
 		Namespace: obj.ParentGateway.Namespace,
 		Name:      obj.ParentGateway.Name,
 	}, translator.AgwListener{l}))
@@ -564,10 +618,20 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 			Cert:       obj.TLSInfo.Cert,
 			PrivateKey: obj.TLSInfo.Key,
 		}
+		if obj.TLSInfo.IstioWorkloadCert {
+			tlsConfig.CertificateSource = api.TLSConfig_ISTIO_WORKLOAD
+		} else if obj.TLSInfo.DynamicCA {
+			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
+		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
 		}
-		if obj.TLSInfo.MtlsFallbackEnabled {
+		if obj.TLSInfo.IstioMutual {
+			tlsConfig.Root = nil
+			tlsConfig.MtlsMode = api.TLSConfig_STRICT
+		} else if obj.TLSInfo.IstioWorkloadCert {
+			tlsConfig.MtlsMode = api.TLSConfig_DISABLE
+		} else if obj.TLSInfo.MtlsFallbackEnabled {
 			tlsConfig.MtlsMode = api.TLSConfig_ALLOW_INSECURE_FALLBACK
 		}
 	}
@@ -593,6 +657,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 		return api.Protocol_TLS, tlsConfig, true
 	case gwv1.TCPProtocolType:
 		return api.Protocol_TCP, nil, true
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Protocol_HBONE, nil, true
 	default:
 		return api.Protocol_HTTP, nil, false // Unsupported protocol
 	}
@@ -609,16 +675,33 @@ func (s *Syncer) getBindProtocol(obj *translator.GatewayListener) api.Bind_Proto
 		return api.Bind_TLS
 	case gwv1.TCPProtocolType:
 		return api.Bind_TCP
+	case gwv1.ProtocolType(protocol.HBONE):
+		// The bind protocol is not used for HBONE_GATEWAY in the data plane;
+		// the actual inner protocol is determined at runtime from the other
+		// listeners on the same port. Return HTTP as a placeholder.
+		return api.Bind_HTTP
 	default:
 		return api.Bind_HTTP
+	}
+}
+
+// getTunnelProtocol maps a Gateway listener protocol to its tunnel protocol.
+// HBONE listeners use HBONE_GATEWAY mode: the proxy terminates inbound HBONE
+// and routes CONNECT requests to local binds.
+func (s *Syncer) getTunnelProtocol(obj *translator.GatewayListener) api.Bind_TunnelProtocol {
+	switch obj.ParentInfo.Protocol {
+	case gwv1.ProtocolType(protocol.HBONE):
+		return api.Bind_HBONE_GATEWAY
+	default:
+		return api.Bind_DIRECT
 	}
 }
 
 // defaultBuildAddressCollections is the default implementation for building address collections
 // using the istio ambient builder. It can be passed via WithBuildAddressCollections to the syncer.
 func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtutil.KrtOptions) (krt.Collection[Address], func() bool) {
-	opts := krtopts.ToIstio()
-	clusterId := cluster.ID(cols.ClusterID)
+	opts := krtopts.WithPrefix("addresses").ToIstio()
+	clusterId := cluster.ID(cols.IstioClusterId)
 	Networks := ambient.BuildNetworkCollections(cols.Namespaces, cols.Gateways, ambient.Options{
 		SystemNamespace: cols.IstioNamespace,
 		ClusterID:       clusterId,
@@ -633,16 +716,11 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		},
 	}
 
-	meshConfigMapName := GetMeshConfigMapName(cols.IstioRevision)
-	meshConfig := krt.NewSingleton(func(ctx krt.HandlerContext) *ambient.MeshConfig {
-		cm := krt.FetchOne(ctx, cols.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: cols.IstioNamespace, Name: meshConfigMapName}))
-		if flattened := ptr.Flatten(cm); flattened != nil {
-			if mc := ParseMeshConfigFromConfigMap(flattened); mc != nil {
-				return &ambient.MeshConfig{MeshConfig: mc}
-			}
-		}
-		return &ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
-	}, krtopts.ToOptions("IstioMeshConfig")...)
+	meshConfig := cols.MeshConfig
+	if meshConfig == nil {
+		defaultConfig := ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
+		meshConfig = krt.NewStatic(&defaultConfig, true, krtopts.ToOptions("addresses/DefaultMeshConfig")...)
+	}
 
 	waypoints := builder.WaypointsCollection(clusterId, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
 	services := builder.ServicesCollection(
@@ -657,8 +735,8 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 	)
 	// Istio doesn't include InferencePools, but we need them; add our own after the Istio build
 	inferencePoolsInfo := krt.NewCollection(cols.InferencePools, InferencePoolBuilder(),
-		krtopts.ToOptions("InferencePools")...)
-	services = krt.JoinCollection([]krt.Collection[model.ServiceInfo]{services, inferencePoolsInfo}, krt.WithJoinUnchecked())
+		krtopts.ToOptions("addresses/InferencePoolServices")...)
+	services = krt.JoinCollection([]krt.Collection[model.ServiceInfo]{services, inferencePoolsInfo}, append(krtopts.ToOptions("addresses/ServicesWithInferencePools"), krt.WithJoinUnchecked())...)
 
 	nodeLocality := ambient.NodesCollection(cols.Nodes, opts.WithName("NodeLocality")...)
 	workloads := builder.WorkloadsCollection(
@@ -666,8 +744,8 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		nodeLocality,
 		meshConfig,
 		// Authz/Authn are not use for agentgateway, ignore
-		krt.NewStaticCollection[model.WorkloadAuthorization](nil, nil),
-		krt.NewStaticCollection[*securityclient.PeerAuthentication](nil, nil),
+		krt.NewStaticCollection[model.WorkloadAuthorization](nil, nil, krtopts.ToOptions("addresses/DisabledWorkloadAuthorization")...),
+		krt.NewStaticCollection[*securityclient.PeerAuthentication](nil, nil, krtopts.ToOptions("addresses/DisabledPeerAuthentication")...),
 		waypoints,
 		services,
 		cols.WorkloadEntries,
@@ -679,12 +757,12 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 
 	workloadAddresses := krt.MapCollection(workloads, func(t model.WorkloadInfo) Address {
 		return Address{Workload: &t}
-	})
+	}, krtopts.ToOptions("addresses/WorkloadAddresses")...)
 	svcAddresses := krt.MapCollection(services, func(t model.ServiceInfo) Address {
 		return Address{Service: &t}
-	})
+	}, krtopts.ToOptions("addresses/ServiceAddresses")...)
 
-	adpAddresses := krt.JoinCollection([]krt.Collection[Address]{svcAddresses, workloadAddresses}, krtopts.ToOptions("Addresses")...)
+	adpAddresses := krt.JoinCollection([]krt.Collection[Address]{svcAddresses, workloadAddresses}, krtopts.ToOptions("addresses/All")...)
 	return adpAddresses, func() bool { return true }
 }
 

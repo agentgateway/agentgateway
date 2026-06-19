@@ -6,9 +6,11 @@ use crate::{apply, *};
 #[apply(schema!)]
 #[derive(Default)]
 pub struct HTTP {
+	/// HTTP version to use when connecting to the backend.
 	#[serde(default, with = "http_serde::option::version")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub version: Option<::http::Version>,
+	/// Maximum time allowed for a backend HTTP request.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -38,7 +40,7 @@ impl HTTP {
 				let tls = req.extensions().get::<TLSConnectionInfo>();
 				if tls.is_some() {
 					// Do not trust the downstream, use HTTP/1.1
-					if is_grpc(req) {
+					if http::is_grpc_content_type(req.headers()) {
 						Some(::http::Version::HTTP_2)
 					} else {
 						Some(::http::Version::HTTP_11)
@@ -61,22 +63,17 @@ impl HTTP {
 	}
 }
 
-fn is_grpc(req: &http::Request) -> bool {
-	req
-		.headers()
-		.get(http::header::CONTENT_TYPE)
-		.is_some_and(|value| value.as_bytes().starts_with("application/grpc".as_bytes()))
-}
-
 #[apply(schema!)]
 pub struct Tunnel {
-	/// Reference to the proxy address
+	/// Proxy backend used to tunnel the connection.
 	pub proxy: Arc<SimpleBackendReference>,
 }
 
 #[apply(schema!)]
 pub struct TCP {
+	/// TCP keepalive settings for backend connections.
 	pub keepalives: super::agent::KeepaliveConfig,
+	/// Maximum time allowed to establish a backend TCP connection.
 	pub connect_timeout: Duration,
 }
 

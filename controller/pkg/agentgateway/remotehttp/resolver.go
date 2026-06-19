@@ -6,18 +6,36 @@ import (
 	"strings"
 
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
+// ResolvedBackend is the normalized backend shape required by the remote HTTP
+// resolver. Additional backend kinds can resolve to this type to reuse the
+// built-in static endpoint, TLS, and tunnel handling.
+type ResolvedBackend struct {
+	Static   *agentgateway.StaticBackend
+	Policies *agentgateway.BackendFull
+}
+
+// BackendResolver resolves a backend object into the normalized shape used by
+// remote HTTP fetches. The bool return is false when the referenced backend does
+// not exist.
+type BackendResolver func(krt.HandlerContext, types.NamespacedName) (*ResolvedBackend, bool, error)
+
 type Inputs struct {
-	ConfigMaps     krt.Collection[*corev1.ConfigMap]
-	Services       krt.Collection[*corev1.Service]
-	Backends       krt.Collection[*agentgateway.AgentgatewayBackend]
-	PolicySelector policyselection.Selector
+	ConfigMaps       krt.Collection[*corev1.ConfigMap]
+	Services         krt.Collection[*corev1.Service]
+	Backends         krt.Collection[*agentgateway.AgentgatewayBackend]
+	PolicySelector   policyselection.Selector
+	BackendResolvers map[schema.GroupKind]BackendResolver
 }
 
 type ResolveInput struct {
@@ -33,18 +51,42 @@ type Resolver interface {
 }
 
 type defaultResolver struct {
-	cfgmaps        krt.Collection[*corev1.ConfigMap]
-	services       krt.Collection[*corev1.Service]
-	backends       krt.Collection[*agentgateway.AgentgatewayBackend]
-	policySelector policyselection.Selector
+	cfgmaps          krt.Collection[*corev1.ConfigMap]
+	services         krt.Collection[*corev1.Service]
+	backendResolvers map[schema.GroupKind]BackendResolver
+	policySelector   policyselection.Selector
 }
 
 func NewResolver(inputs Inputs) Resolver {
+	backendResolvers := map[schema.GroupKind]BackendResolver{}
+	if inputs.Backends != nil {
+		backendResolvers[wellknown.AgentgatewayBackendGVK.GroupKind()] = AgentgatewayBackendResolver(inputs.Backends)
+	}
+	for gk, resolver := range inputs.BackendResolvers {
+		if resolver != nil {
+			backendResolvers[gk] = resolver
+		}
+	}
 	return &defaultResolver{
-		cfgmaps:        inputs.ConfigMaps,
-		services:       inputs.Services,
-		backends:       inputs.Backends,
-		policySelector: inputs.PolicySelector,
+		cfgmaps:          inputs.ConfigMaps,
+		services:         inputs.Services,
+		backendResolvers: backendResolvers,
+		policySelector:   inputs.PolicySelector,
+	}
+}
+
+// AgentgatewayBackendResolver adapts AgentgatewayBackend collections to the
+// generic remote HTTP backend resolver interface.
+func AgentgatewayBackendResolver(backends krt.Collection[*agentgateway.AgentgatewayBackend]) BackendResolver {
+	return func(krtctx krt.HandlerContext, nn types.NamespacedName) (*ResolvedBackend, bool, error) {
+		backend := ptr.Flatten(krt.FetchOne(krtctx, backends, krt.FilterObjectName(nn)))
+		if backend == nil {
+			return nil, false, nil
+		}
+		return &ResolvedBackend{
+			Static:   backend.Spec.Static,
+			Policies: backend.Spec.Policies,
+		}, true, nil
 	}
 }
 

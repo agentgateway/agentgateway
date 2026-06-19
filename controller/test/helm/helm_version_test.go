@@ -37,8 +37,8 @@ func TestImageTagVPrefix(t *testing.T) {
 	}{
 		{
 			name:        "default AppVersion without v prefix gets v added",
-			setValues:   nil, // Uses Chart.AppVersion which is "0.0.1"
-			expectedTag: "v0.0.1",
+			setValues:   nil, // Uses Chart.AppVersion which is "0.0.0-dev"
+			expectedTag: "v0.0.0-dev",
 		},
 		{
 			name:        "explicit tag with v prefix is not doubled",
@@ -54,13 +54,13 @@ func TestImageTagVPrefix(t *testing.T) {
 			name:           "controller-specific tag with v prefix is not doubled",
 			setValues:      []string{"controller.image.tag=v3.0.0"},
 			expectedTag:    "v3.0.0",
-			expectedEnvTag: "v0.0.1", // KGW_DEFAULT_IMAGE_TAG falls back to AppVersion
+			expectedEnvTag: "v0.0.0-dev", // KGW_DEFAULT_IMAGE_TAG falls back to AppVersion
 		},
 		{
 			name:           "controller-specific tag without v prefix gets v added",
 			setValues:      []string{"controller.image.tag=3.0.0"},
 			expectedTag:    "v3.0.0",
-			expectedEnvTag: "v0.0.1", // KGW_DEFAULT_IMAGE_TAG falls back to AppVersion
+			expectedEnvTag: "v0.0.0-dev", // KGW_DEFAULT_IMAGE_TAG falls back to AppVersion
 		},
 		{
 			name:        "latest tag is not modified",
@@ -132,7 +132,7 @@ func extractImageLines(output string) string {
 	return strings.Join(lines, "\n")
 }
 
-// TestHelmChartTemplate tests helm template output for both kgateway and agentgateway charts
+// TestHelmChartTemplate tests helm template output for agentgateway charts
 // with different values configurations.
 // NOTE: The test cases contain YAML blocks that are indented with 2 spaces, do not use tabs.
 func TestHelmChartTemplate(t *testing.T) {
@@ -151,8 +151,7 @@ func TestHelmChartTemplate(t *testing.T) {
 			name: "xds-tls-enabled",
 			valuesYAML: `controller:
   xds:
-    tls:
-      enabled: true
+    mode: tls
 `,
 		},
 		{
@@ -262,6 +261,19 @@ func TestHelmChartTemplate(t *testing.T) {
 `,
 		},
 		{
+			name: "extra-volumes",
+			valuesYAML: `controller:
+  extraVolumeMounts:
+    - name: plugin-cache
+      mountPath: /var/lib/agentgateway/plugins
+      readOnly: true
+  extraVolumes:
+    - name: plugin-cache
+      secret:
+        secretName: agentgateway-plugin-cache
+`,
+		},
+		{
 			name: "extra-env-invalid-value-and-valuefrom",
 			valuesYAML: `controller:
   extraEnv:
@@ -281,6 +293,51 @@ func TestHelmChartTemplate(t *testing.T) {
     BAD_ENV: {}
 `,
 			expectedError: "controller.extraEnv.BAD_ENV must set either value or valueFrom",
+		},
+		{
+			name: "monitoring-enabled",
+			valuesYAML: `monitoring:
+  enabled: true
+  serviceMonitor:
+    interval: 30s
+    extraLabels:
+      release: prometheus
+  proxy:
+    namespaceSelector:
+      matchNames:
+      - default
+  grafanaDashboard:
+    enabled: false
+`,
+		},
+		{
+			name: "monitoring-enabled-no-dashboard",
+			valuesYAML: `monitoring:
+  enabled: true
+  grafanaDashboard:
+    enabled: false
+`,
+		},
+		{
+			name: "monitoring-enabled-no-service-monitor",
+			valuesYAML: `monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+  grafanaDashboard:
+    enabled: false
+`,
+		},
+		{
+			name: "monitoring-custom-proxy-namespace-selector",
+			valuesYAML: `monitoring:
+  enabled: true
+  proxy:
+    namespaceSelector:
+      any: true
+  grafanaDashboard:
+    enabled: false
+`,
 		},
 	}
 

@@ -8,19 +8,30 @@ use agent_core::durfmt;
 use agent_core::env::ENV;
 use agent_core::prelude::*;
 use secrecy::ExposeSecret;
-use serde::de::DeserializeOwned;
 
 use crate::control::caclient;
-use crate::telemetry::log::{LoggingFields, MetricFields};
+use crate::telemetry::log::{LoggingFields, MetricFields, OrderedStringMap};
 use crate::telemetry::trc;
-use crate::types;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::{
-	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingLevel, StringOrInt,
-	ThreadingMode, XDSConfig, cel, client, serdes, telemetry,
+	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingFields,
+	RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
 };
 
-pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Result<Config> {
+const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
+const DEFAULT_UI_GROUP_ATTRIBUTE: &str = r#"coalesce(apiKey.group, jwt.groups[0], null)"#;
+
+#[derive(Default)]
+struct TracingEnvOverrides {
+	endpoint: Option<String>,
+	headers: Option<std::collections::HashMap<String, String>>,
+	protocol: Option<trc::Protocol>,
+}
+
+pub fn parse_config(
+	contents: String,
+	local_config_source: Option<ConfigSource>,
+) -> anyhow::Result<Config> {
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents)?;
 	let raw = nested.config.unwrap_or_default();
 
@@ -43,8 +54,8 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 	};
 	let local_config = parse::<PathBuf>("LOCAL_XDS_PATH")?
 		.or(raw.local_xds_path)
-		.or(filename)
-		.map(ConfigSource::File);
+		.map(ConfigSource::File)
+		.or(local_config_source);
 
 	let dns = raw.dns.unwrap_or_default();
 	let dns_lookup_family = match env::var("DNS_LOOKUP_FAMILY") {
@@ -127,7 +138,6 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			local_config,
 		}
 	};
-
 	let self_addr = if !xds.namespace.is_empty() && !xds.gateway.is_empty() {
 		Some(WaypointIdentity {
 			gateway: xds.gateway.clone(),
@@ -268,8 +278,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		.unwrap_or_default();
 	let termination_max_deadline =
 		parse_duration("CONNECTION_TERMINATION_DEADLINE")?.or(raw.connection_termination_deadline);
-	let otlp = empty_to_none(parse("OTLP_ENDPOINT")?)
-		.or(raw.tracing.as_ref().map(|t| t.otlp_endpoint.clone()));
+	let tracing_env = resolve_tracing_env_overrides()?;
 
 	let mut otlp_headers = raw
 		.tracing
@@ -277,11 +286,12 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 		.map(|t| t.headers.clone())
 		.unwrap_or_default();
 
-	if let Some(env_headers) = parse_otlp_headers("OTLP_HEADERS")? {
+	if let Some(env_headers) = tracing_env.headers.clone() {
 		otlp_headers.extend(env_headers);
 	}
 
-	let otlp_protocol = parse_serde("OTLP_PROTOCOL")?
+	let otlp_protocol = tracing_env
+		.protocol
 		.or(raw.tracing.as_ref().map(|t| t.otlp_protocol))
 		.unwrap_or_default();
 	// Parse admin_addr from environment variable or config file
@@ -321,6 +331,22 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
 		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
 		.transpose()?;
+	let dynamic_ca_cert_cache = parse_dynamic_ca_cert_cache_config()?;
+
+	let model_catalog_sources = parse::<String>("MODEL_CATALOG_PATHS")?
+		.map(|s| {
+			s.split(',')
+				.map(|p| PathBuf::from(p.trim()))
+				.filter(|p| !p.as_os_str().is_empty())
+				.map(|file| crate::ModelCatalogSource::File { file })
+				.collect::<Vec<_>>()
+		})
+		.or(raw.model_catalog)
+		.unwrap_or_default();
+	let database = raw
+		.database
+		.clone()
+		.or_else(|| raw.logging.as_ref().and_then(|l| l.database.clone()));
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -361,8 +387,15 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 			.tracing
 			.clone()
 			.map(|t| {
+				let (otlp_endpoint, otlp_path) = normalize_tracing_endpoint(
+					tracing_env.endpoint.clone().or(t.otlp_endpoint.clone()),
+					t.path.clone(),
+				)?;
+				let endpoint = otlp_endpoint.context(
+					"config.tracing requires otlpEndpoint or one of OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, or OTEL_EXPORTER_OTLP_ENDPOINT",
+				)?;
 				Ok::<_, anyhow::Error>(trc::DeprecatedConfig {
-					endpoint: otlp.clone(),
+					endpoint: Some(endpoint),
 					headers: otlp_headers.clone(),
 					protocol: otlp_protocol,
 
@@ -397,7 +430,7 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 						.map(cel::Expression::new_strict)
 						.transpose()?
 						.map(Arc::new),
-					path: t.path.clone().unwrap_or_else(|| "/v1/traces".to_string()),
+					path: otlp_path.unwrap_or_else(|| "/v1/traces".to_string()),
 				})
 			})
 			.transpose()?,
@@ -412,22 +445,22 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 						.collect::<frozen_collections::FzHashSet<String>>()
 				})
 				.unwrap_or_default(),
-			metric_fields: Arc::new(
-				raw
-					.metrics
-					.and_then(|f| f.fields)
-					.map(|fields| {
-						Ok::<_, anyhow::Error>(MetricFields {
-							add: fields
+			metric_fields: raw
+				.metrics
+				.and_then(|f| f.fields)
+				.map(|fields| {
+					Ok::<_, anyhow::Error>(MetricFields {
+						add: Arc::new(
+							fields
 								.add
 								.iter()
 								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
 								.collect::<Result<_, _>>()?,
-						})
+						),
 					})
-					.transpose()?
-					.unwrap_or_default(),
-			),
+				})
+				.transpose()?
+				.unwrap_or_default(),
 		},
 		logging: telemetry::log::Config {
 			filter: raw
@@ -447,23 +480,9 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.as_ref()
 				.and_then(|l| l.format.clone())
 				.unwrap_or_default(),
-			fields: raw
-				.logging
-				.and_then(|f| f.fields)
-				.map(|fields| {
-					Ok::<_, anyhow::Error>(LoggingFields {
-						remove: Arc::new(fields.remove.into_iter().collect()),
-						add: Arc::new(
-							fields
-								.add
-								.iter()
-								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-								.collect::<Result<_, _>>()?,
-						),
-					})
-				})
-				.transpose()?
-				.unwrap_or_default(),
+			database: database.clone(),
+			fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))?,
+			database_fields: database_logging_fields(raw.standard_attributes.as_ref())?,
 		},
 		dns: client::Config {
 			resolver_cfg,
@@ -484,6 +503,11 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 				.and_then(|m| m.session_ttl)
 				.unwrap_or(crate::mcp::DEFAULT_SESSION_IDLE_TTL),
 		},
+		dynamic_ca_cert_cache,
+		model_catalog: crate::ModelCatalogConfig {
+			sources: model_catalog_sources,
+		},
+		database,
 		session_encoder,
 		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {
@@ -517,6 +541,51 @@ pub fn parse_config(contents: String, filename: Option<PathBuf>) -> anyhow::Resu
 	})
 }
 
+fn logging_fields(fields: Option<RawLoggingFields>) -> anyhow::Result<LoggingFields> {
+	let fields = fields.unwrap_or(RawLoggingFields {
+		remove: Vec::new(),
+		add: Default::default(),
+	});
+	Ok(LoggingFields {
+		remove: Arc::new(fields.remove.into_iter().collect()),
+		add: Arc::new(
+			fields
+				.add
+				.iter()
+				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.collect::<Result<_, _>>()?,
+		),
+	})
+}
+
+fn database_logging_fields(
+	standard_attributes: Option<&crate::RawStandardAttributes>,
+) -> anyhow::Result<LoggingFields> {
+	let add = [
+		(
+			"agentgateway.user".to_string(),
+			standard_attributes
+				.and_then(|attributes| attributes.user.clone())
+				.unwrap_or_else(|| DEFAULT_UI_USER_ATTRIBUTE.to_string()),
+		),
+		(
+			"agentgateway.group".to_string(),
+			standard_attributes
+				.and_then(|attributes| attributes.group.clone())
+				.unwrap_or_else(|| DEFAULT_UI_GROUP_ATTRIBUTE.to_string()),
+		),
+	];
+
+	Ok(LoggingFields {
+		remove: Arc::default(),
+		add: Arc::new(
+			add
+				.iter()
+				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.collect::<Result<OrderedStringMap<_>, _>>()?,
+		),
+	})
+}
 fn parse<T: FromStr>(env: &str) -> anyhow::Result<Option<T>>
 where
 	<T as FromStr>::Err: ToString,
@@ -528,15 +597,6 @@ where
 			.map_err(|e: <T as FromStr>::Err| {
 				anyhow::anyhow!("invalid env var {}={} ({})", env, val, e.to_string())
 			}),
-		Err(_) => Ok(None),
-	}
-}
-
-fn parse_serde<T: DeserializeOwned>(env: &str) -> anyhow::Result<Option<T>> {
-	match env::var(env) {
-		Ok(val) => serde_json::from_str(&val)
-			.map(|v| Some(v))
-			.map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, val, e)),
 		Err(_) => Ok(None),
 	}
 }
@@ -554,6 +614,16 @@ fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
 			durfmt::parse(&ds).map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, ds, e))
 		})
 		.transpose()
+}
+
+fn parse_dynamic_ca_cert_cache_config() -> anyhow::Result<crate::DynamicCaCertCacheConfig> {
+	let defaults = crate::DynamicCaCertCacheConfig::default();
+	let ttl = parse_duration("DYNAMIC_CA_CERT_CACHE_TTL")?.unwrap_or(defaults.ttl);
+	let capacity = parse::<usize>("DYNAMIC_CA_CERT_CACHE_CAPACITY")?.unwrap_or(defaults.capacity);
+	if capacity == 0 {
+		anyhow::bail!("invalid env var DYNAMIC_CA_CERT_CACHE_CAPACITY=0 (must be greater than 0)");
+	}
+	Ok(crate::DynamicCaCertCacheConfig { ttl, capacity })
 }
 
 pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
@@ -634,6 +704,80 @@ fn parse_otlp_headers(
 		Err(env::VarError::NotPresent) => Ok(None),
 		Err(e) => Err(anyhow::anyhow!("error reading {}: {}", env_key, e)),
 	}
+}
+
+fn parse_otlp_protocol(env_key: &str) -> anyhow::Result<Option<trc::Protocol>> {
+	match env::var(env_key) {
+		Ok(raw) => {
+			let protocol = match raw.trim().trim_matches('"').to_ascii_lowercase().as_str() {
+				"grpc" => trc::Protocol::Grpc,
+				"http" | "http/protobuf" => trc::Protocol::Http,
+				"http/json" => {
+					anyhow::bail!(
+						"invalid env var {}={} (http/json is not supported; use grpc or http/protobuf)",
+						env_key,
+						raw
+					)
+				},
+				_ => {
+					anyhow::bail!(
+						"invalid env var {}={} (expected grpc or http/protobuf)",
+						env_key,
+						raw
+					)
+				},
+			};
+			Ok(Some(protocol))
+		},
+		Err(env::VarError::NotPresent) => Ok(None),
+		Err(e) => Err(anyhow::anyhow!("error reading {}: {}", env_key, e)),
+	}
+}
+
+fn resolve_tracing_env_overrides() -> anyhow::Result<TracingEnvOverrides> {
+	let endpoint = empty_to_none(parse::<String>("OTLP_ENDPOINT")?)
+		.or(empty_to_none(parse::<String>(
+			"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		)?))
+		.or(empty_to_none(parse::<String>(
+			"OTEL_EXPORTER_OTLP_ENDPOINT",
+		)?));
+	let headers = parse_otlp_headers("OTLP_HEADERS")?
+		.or(parse_otlp_headers("OTEL_EXPORTER_OTLP_TRACES_HEADERS")?)
+		.or(parse_otlp_headers("OTEL_EXPORTER_OTLP_HEADERS")?);
+	let protocol = parse_otlp_protocol("OTLP_PROTOCOL")?
+		.or(parse_otlp_protocol("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL")?)
+		.or(parse_otlp_protocol("OTEL_EXPORTER_OTLP_PROTOCOL")?);
+
+	Ok(TracingEnvOverrides {
+		endpoint,
+		headers,
+		protocol,
+	})
+}
+
+fn normalize_tracing_endpoint(
+	endpoint: Option<String>,
+	path: Option<String>,
+) -> anyhow::Result<(Option<String>, Option<String>)> {
+	let endpoint = validate_uri(empty_to_none(endpoint))?;
+	let Some(endpoint) = endpoint else {
+		return Ok((None, path));
+	};
+
+	let uri: http::Uri = endpoint.parse()?;
+	let endpoint = match (uri.scheme_str(), uri.authority()) {
+		(Some(scheme), Some(authority)) => format!("{scheme}://{authority}"),
+		_ => endpoint,
+	};
+	let path = match uri.path_and_query().map(|pq| pq.as_str()) {
+		Some(path_and_query) if !path_and_query.is_empty() && path_and_query != "/" => {
+			Some(path_and_query.to_string())
+		},
+		_ => path,
+	};
+
+	Ok((Some(endpoint), path))
 }
 
 /// If the resolved config has no nameservers, fall back to defaults while
@@ -723,10 +867,11 @@ fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
 
 #[cfg(test)]
 mod parse_headers_tests {
-	use super::*;
 	use std::env;
 	use std::ffi::OsString;
 	use std::sync::{LazyLock, Mutex};
+
+	use super::*;
 
 	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
@@ -798,14 +943,47 @@ mod parse_headers_tests {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::env;
+	use std::ffi::OsString;
 	use std::sync::{LazyLock, Mutex};
+
+	use super::*;
 
 	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 	fn lock_env() -> std::sync::MutexGuard<'static, ()> {
 		ENV_LOCK.lock().expect("env mutex poisoned")
+	}
+
+	struct TempEnvVar {
+		key: String,
+		previous: Option<OsString>,
+	}
+
+	impl TempEnvVar {
+		fn set(key: &str, value: &str) -> Self {
+			let previous = env::var_os(key);
+			unsafe {
+				env::set_var(key, value);
+			}
+			Self {
+				key: key.to_string(),
+				previous,
+			}
+		}
+	}
+
+	impl Drop for TempEnvVar {
+		fn drop(&mut self) {
+			match &self.previous {
+				Some(value) => unsafe {
+					env::set_var(&self.key, value);
+				},
+				None => unsafe {
+					env::remove_var(&self.key);
+				},
+			}
+		}
 	}
 
 	#[test]
@@ -857,6 +1035,168 @@ mod tests {
 
 		// Test missing env var
 		assert_eq!(parse_otlp_headers("NONEXISTENT_VAR").unwrap(), None);
+	}
+
+	#[test]
+	fn tracing_accepts_standard_otlp_env_vars() {
+		let _env_lock = lock_env();
+		let _endpoint = TempEnvVar::set(
+			"OTEL_EXPORTER_OTLP_ENDPOINT",
+			"http://collector.example:4318",
+		);
+		let _protocol = TempEnvVar::set("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf");
+
+		let config = parse_config(
+			r#"
+config:
+  tracing: {}
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		let tracing = config.tracing.expect("tracing config should exist");
+		assert_eq!(
+			tracing.endpoint.as_deref(),
+			Some("http://collector.example:4318")
+		);
+		assert_eq!(tracing.protocol, trc::Protocol::Http);
+		assert_eq!(tracing.path, "/v1/traces");
+	}
+
+	#[test]
+	fn tracing_prefers_signal_specific_otlp_env_vars() {
+		let _env_lock = lock_env();
+		let _endpoint = TempEnvVar::set(
+			"OTEL_EXPORTER_OTLP_ENDPOINT",
+			"http://collector.example:4318",
+		);
+		let _traces_endpoint = TempEnvVar::set(
+			"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+			"http://traces.example:4318/custom/traces",
+		);
+		let _headers = TempEnvVar::set("OTEL_EXPORTER_OTLP_HEADERS", "authorization=general");
+		let _traces_headers =
+			TempEnvVar::set("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "authorization=traces");
+		let _protocol = TempEnvVar::set("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc");
+		let _traces_protocol = TempEnvVar::set("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf");
+
+		let config = parse_config(
+			r#"
+config:
+  tracing: {}
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		let tracing = config.tracing.expect("tracing config should exist");
+		assert_eq!(
+			tracing.endpoint.as_deref(),
+			Some("http://traces.example:4318")
+		);
+		assert_eq!(tracing.path, "/custom/traces");
+		assert_eq!(
+			tracing.headers.get("authorization"),
+			Some(&"traces".to_string())
+		);
+		assert_eq!(tracing.protocol, trc::Protocol::Http);
+	}
+
+	#[test]
+	fn tracing_prefers_legacy_otlp_env_vars() {
+		let _env_lock = lock_env();
+		let _legacy_endpoint = TempEnvVar::set("OTLP_ENDPOINT", "http://legacy.example:4317");
+		let _standard_endpoint = TempEnvVar::set(
+			"OTEL_EXPORTER_OTLP_ENDPOINT",
+			"http://collector.example:4318",
+		);
+		let _legacy_headers = TempEnvVar::set("OTLP_HEADERS", "authorization=legacy");
+		let _standard_headers = TempEnvVar::set("OTEL_EXPORTER_OTLP_HEADERS", "authorization=standard");
+		let _legacy_protocol = TempEnvVar::set("OTLP_PROTOCOL", "grpc");
+		let _standard_protocol = TempEnvVar::set("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf");
+
+		let config = parse_config(
+			r#"
+config:
+  tracing: {}
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		let tracing = config.tracing.expect("tracing config should exist");
+		assert_eq!(
+			tracing.endpoint.as_deref(),
+			Some("http://legacy.example:4317")
+		);
+		assert_eq!(
+			tracing.headers.get("authorization"),
+			Some(&"legacy".to_string())
+		);
+		assert_eq!(tracing.protocol, trc::Protocol::Grpc);
+	}
+
+	#[test]
+	fn tracing_requires_endpoint_from_config_or_env() {
+		let _env_lock = lock_env();
+
+		let err = parse_config(
+			r#"
+config:
+  tracing: {}
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("missing tracing endpoint should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("config.tracing requires otlpEndpoint"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_uses_defaults_without_env() {
+		let _env_lock = lock_env();
+		let defaults = crate::DynamicCaCertCacheConfig::default();
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.dynamic_ca_cert_cache, defaults);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_uses_config_env_overrides() {
+		let _env_lock = lock_env();
+		let _ttl = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_TTL", "2m");
+		let _capacity = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_CAPACITY", "17");
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.dynamic_ca_cert_cache.ttl, Duration::from_secs(120));
+		assert_eq!(config.dynamic_ca_cert_cache.capacity, 17);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_rejects_zero_capacity() {
+		let _env_lock = lock_env();
+		let _capacity = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_CAPACITY", "0");
+
+		let err = parse_config("{}".to_string(), None).expect_err("zero capacity should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("invalid env var DYNAMIC_CA_CERT_CACHE_CAPACITY=0 (must be greater than 0)"),
+			"unexpected error: {err}"
+		);
 	}
 
 	#[test]

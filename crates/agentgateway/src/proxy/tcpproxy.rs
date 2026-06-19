@@ -1,9 +1,10 @@
-use crate::cel::SourceContext;
-use futures::pin_mut;
-use rand::prelude::IndexedRandom;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use futures::pin_mut;
+use rand::prelude::IndexedRandom;
+
+use crate::cel::SourceContext;
 use crate::proxy::httpproxy::BackendCall;
 use crate::proxy::{ProxyError, WaypointService, httpproxy};
 use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
@@ -12,11 +13,12 @@ use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo, WaypointTLSInfo};
 use crate::types::agent::{
-	BackendPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
+	BackendTrafficPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
 	TransportProtocol,
 };
-use crate::types::discovery::{NetworkAddress, WaypointIdentity, gatewayaddress::Destination};
+use crate::types::discovery::gatewayaddress::Destination;
+use crate::types::discovery::{NetworkAddress, WaypointIdentity};
 use crate::types::{agent, frontend};
 use crate::{ProxyInputs, Stores, *};
 
@@ -53,6 +55,7 @@ impl TCPProxy {
 				self.inputs.cfg.metrics.clone(),
 			),
 			self.inputs.metrics.clone(),
+			self.inputs.model_catalog.clone(),
 			start,
 			tcp.clone(),
 		)
@@ -70,12 +73,17 @@ impl TCPProxy {
 		connection: Socket,
 		log: &mut RequestLog,
 	) -> Result<(), ProxyError> {
-		let frontend_policies = self.inputs.stores.read_binds().listener_frontend_policies(
-			&self.selected_listener.name,
-			connection
-				.ext::<WaypointService>()
-				.map(WaypointService::as_policy_ref),
-		);
+		let frontend_policies = {
+			let binds = self.inputs.stores.read_binds();
+			let bind_port = binds.bind(&self.bind_name).map(|bind| bind.address.port());
+			binds.listener_frontend_policies(
+				&self.selected_listener.name,
+				bind_port,
+				connection
+					.ext::<WaypointService>()
+					.map(WaypointService::as_policy_ref),
+			)
+		};
 
 		// Apply frontend policies for access logging (skip tracing for TCP)
 		frontend_policies.register_cel_expressions(log.cel.ctx());
@@ -151,6 +159,7 @@ impl TCPProxy {
 			routes: vec![&selected_route.name],
 			service: selected_route.service_key.as_ref(),
 			listener: &selected_listener.name,
+			route_inlines: vec![&[]],
 		};
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
@@ -164,12 +173,17 @@ impl TCPProxy {
 			Some(route_path),
 		);
 
+		let hbone_source = connection
+			.ext::<WaypointService>()
+			.map(|_| crate::client::HboneSourceRole::Waypoint)
+			.or(Some(crate::client::HboneSourceRole::Gateway));
 		let backend_call = Self::build_backend_call(
 			&mut Some(log),
 			sni,
 			&inputs,
 			&selected_backend.backend.backend,
 			backend_policies,
+			hbone_source,
 		)?;
 
 		let bi = selected_backend.backend.backend.backend_info();
@@ -179,6 +193,7 @@ impl TCPProxy {
 		let transport = crate::proxy::httpproxy::build_transport(
 			&inputs,
 			&backend_call,
+			hbone_source,
 			backend_call.backend_policies.backend_tls.clone(),
 			backend_call.backend_policies.tunnel.as_ref(),
 			// TODO: for TCP we should actually probably do something here: telling it to not use ALPN at all?
@@ -207,39 +222,37 @@ impl TCPProxy {
 		inputs: &ProxyInputs,
 		selected_backend: &SimpleBackend,
 		backend_policies: BackendPolicies,
+		hbone_source: Option<crate::client::HboneSourceRole>,
 	) -> Result<BackendCall, ProxyError> {
 		let backend_call = match &selected_backend {
 			SimpleBackend::Service(svc, port) => httpproxy::build_service_call(
 				inputs,
-				backend_policies,
+				backend_policies.into(),
 				log,
 				httpproxy::ServiceCallOverride::default(),
 				svc,
 				port,
 				sni.as_deref(),
+				hbone_source,
 			)?,
-			SimpleBackend::Opaque(_, target) => BackendCall {
-				target: target.clone(),
-				http_version_override: None,
-				transport_override: None,
-				network_gateway: None,
-				backend_policies,
-			},
+			SimpleBackend::Opaque(_, target) => BackendCall::new(target.clone(), backend_policies),
 			SimpleBackend::Aws(_, config) => {
 				let default_policies = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 					backend_auth: Some(http::auth::BackendAuth::Aws(
-						http::auth::AwsAuth::Implicit {},
+						http::auth::AwsAuth::Implicit {
+							service_name: None,
+							assume_role: None,
+							source_credentials_cache: Default::default(),
+							assume_role_cache: Default::default(),
+						},
 					)),
 					..Default::default()
 				};
-				BackendCall {
-					target: Target::Hostname(config.get_host().into(), 443),
-					http_version_override: None,
-					transport_override: None,
-					network_gateway: None,
-					backend_policies: default_policies.merge(backend_policies),
-				}
+				BackendCall::new(
+					Target::Hostname(config.get_host().into(), 443),
+					default_policies.merge(backend_policies),
+				)
 			},
 			SimpleBackend::Invalid => return Err(ProxyError::BackendDoesNotExist),
 		};
@@ -314,7 +327,12 @@ fn select_best_route(
 		};
 		if let Some(svc_tcp_routes) = svc_tcp_routes {
 			for hnm in agent::HostnameMatch::all_matches(&svc.hostname) {
-				if let Some(r) = svc_tcp_routes.get_hostname(&hnm) {
+				// Match port-agnostic routes (service_port == 0) and those scoped to
+				// this port; being port-scoped is not itself a precedence tiebreaker.
+				if let Some(r) = svc_tcp_routes
+					.get_hostname_routes(&hnm)
+					.find(|r| r.service_port == 0 || r.service_port == dst.port())
+				{
 					return Some(Arc::new(r.clone()));
 				}
 			}
@@ -326,6 +344,7 @@ fn select_best_route(
 		return Some(Arc::new(TCPRoute {
 			key: strng::literal!("_waypoint-default-tcp"),
 			service_key: None,
+			service_port: 0,
 			name: crate::types::agent::RouteName {
 				name: strng::literal!("_waypoint-default-tcp"),
 				namespace: svc.namespace.clone(),
@@ -370,15 +389,12 @@ fn resolve_waypoint_service(
 	let is_ours = match &wp.destination {
 		Destination::Address(addr) => {
 			let stores_ref = stores.clone();
-			self_id.matches_address(addr, |ns, hostname| {
+			self_id.matches_address(addr, |a| {
 				let discovery = stores_ref.read_discovery();
-				let self_svc = discovery.services.get_by_namespaced_host(
-					&crate::types::discovery::NamespacedHostname {
-						namespace: ns.clone(),
-						hostname: hostname.clone(),
-					},
-				)?;
-				Some(self_svc.vips.clone())
+				discovery
+					.services
+					.get_by_vip(a)
+					.map(|s| (s.name.clone(), s.namespace.clone()))
 			})
 		},
 		Destination::Hostname(n) => self_id.matches_hostname(n),
@@ -417,7 +433,7 @@ fn resolve_backend(
 pub fn get_backend_policies(
 	inputs: &ProxyInputs,
 	backend: &SimpleBackendWithPolicies,
-	inline_policies: &[BackendPolicy],
+	inline_policies: &[BackendTrafficPolicy],
 	route_path: Option<RoutePath>,
 ) -> BackendPolicies {
 	inputs.stores.read_binds().backend_policies(
@@ -430,16 +446,16 @@ pub fn get_backend_policies(
 #[cfg(test)]
 mod tests {
 	use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-	use std::sync::Arc;
-	use std::sync::RwLock;
+	use std::sync::{Arc, RwLock};
 
 	use agent_core::strng;
 
+	use crate::llm::cost::ModelCatalog;
 	use crate::store::{BackendPolicies, Stores};
 	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
+	use crate::types::discovery::gatewayaddress::Destination;
 	use crate::types::discovery::{
 		GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
-		gatewayaddress::Destination,
 	};
 
 	fn stores_with_services(services: Vec<Service>) -> Stores {
@@ -598,6 +614,38 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn test_waypoint_default_tcp_route_custom_cluster_domain() {
+		let svc = make_service(
+			"mysql-db",
+			"default",
+			"mysql-db.default.custom.local",
+			"10.0.0.50",
+			"network",
+			Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: strng::new("istio-system"),
+					hostname: strng::new("my-waypoint.istio-system.custom.local"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+		);
+		let stores = stores_with_services(vec![svc]);
+		let network = strng::literal!("network");
+		let dst = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), 3306);
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
+
+		let route = super::select_best_route(
+			None,
+			hbone_listener(),
+			&stores,
+			&network,
+			dst,
+			Some(&self_addr),
+		);
+		assert!(route.is_some());
+	}
+
+	#[tokio::test]
 	async fn test_waypoint_default_tcp_route_no_waypoint_config() {
 		// Service has no waypoint configuration
 		let svc = make_service(
@@ -742,6 +790,7 @@ mod tests {
 				crate::types::agent::TCPRoute {
 					key: strng::literal!("mysql-tcp-route"),
 					service_key: Some(svc_key.clone()),
+					service_port: 0,
 					name: Default::default(),
 					hostnames: vec![],
 					backends: vec![],
@@ -763,6 +812,61 @@ mod tests {
 		);
 		assert!(route.is_some(), "should match service TCP route");
 		assert_eq!(route.unwrap().key.as_str(), "mysql-tcp-route");
+	}
+
+	#[tokio::test]
+	async fn test_service_tcp_route_port_scoping() {
+		// Two service TCP routes differ only by service_port. A connection selects
+		// the route scoped to its port; a port with no matching route is rejected.
+		let svc = make_service(
+			"mysql-db",
+			"default",
+			"mysql-db.default.svc.cluster.local",
+			"10.0.0.50",
+			"network",
+			Some(GatewayAddress {
+				destination: Destination::Hostname(NamespacedHostname {
+					namespace: strng::new("istio-system"),
+					hostname: strng::new("my-waypoint.istio-system.svc.cluster.local"),
+				}),
+				hbone_mtls_port: 15008,
+			}),
+		);
+		let stores = stores_with_services(vec![svc]);
+		let svc_key = NamespacedHostname {
+			namespace: strng::new("default"),
+			hostname: strng::new("mysql-db.default.svc.cluster.local"),
+		};
+		let route = |key: &'static str, port: u16| crate::types::agent::TCPRoute {
+			key: strng::new(key),
+			service_key: Some(svc_key.clone()),
+			service_port: port,
+			name: Default::default(),
+			hostnames: vec![],
+			backends: vec![],
+		};
+		{
+			let mut binds = stores.binds.write();
+			binds.insert_service_tcp_route(route("tcp-3306", 3306), svc_key.clone());
+			binds.insert_service_tcp_route(route("tcp-5432", 5432), svc_key.clone());
+		}
+		let network = strng::literal!("network");
+		let self_addr = make_self_addr("my-waypoint", "istio-system");
+		let pick = |port: u16| {
+			super::select_best_route(
+				None,
+				hbone_listener(),
+				&stores,
+				&network,
+				SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 50)), port),
+				Some(&self_addr),
+			)
+		};
+
+		assert_eq!(pick(3306).unwrap().key.as_str(), "tcp-3306");
+		assert_eq!(pick(5432).unwrap().key.as_str(), "tcp-5432");
+		// Routes exist but none match this port -> reject (GAMMA).
+		assert!(pick(9999).is_none());
 	}
 
 	#[tokio::test]
@@ -800,11 +904,12 @@ mod tests {
 	}
 
 	fn make_proxy_inputs() -> Arc<crate::ProxyInputs> {
-		use crate::client::Client;
-		use crate::{BackendConfig, client};
 		use agent_core::metrics;
 		use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 		use prometheus_client::registry::Registry;
+
+		use crate::client::Client;
+		use crate::{BackendConfig, client};
 
 		let config = crate::config::parse_config("{}".to_string(), None).unwrap();
 		let encoder = config.session_encoder.clone();
@@ -825,6 +930,7 @@ mod tests {
 				metrics::sub_registry(&mut Registry::default()),
 				Default::default(),
 			)),
+			model_catalog: ModelCatalog::empty(),
 			upstream: client,
 			ca: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
@@ -857,6 +963,7 @@ mod tests {
 			&inputs,
 			&backend,
 			BackendPolicies::default(),
+			None,
 		)
 		.unwrap();
 
@@ -873,7 +980,11 @@ mod tests {
 			matches!(
 				&result.backend_policies.backend_auth,
 				Some(crate::http::auth::BackendAuth::Aws(
-					crate::http::auth::AwsAuth::Implicit {}
+					crate::http::auth::AwsAuth::Implicit {
+						service_name: None,
+						assume_role: None,
+						..
+					}
 				))
 			),
 			"should default to AWS implicit auth"
@@ -885,8 +996,9 @@ mod tests {
 
 	#[test]
 	fn test_build_backend_call_aws_user_policies_override() {
-		use crate::http::auth::{AwsAuth, BackendAuth};
 		use secrecy::SecretString;
+
+		use crate::http::auth::{AwsAuth, BackendAuth};
 
 		let inputs = make_proxy_inputs();
 		let backend = make_aws_simple_backend();
@@ -897,18 +1009,22 @@ mod tests {
 				secret_access_key: SecretString::from("SECRET"),
 				region: Some("us-west-2".to_string()),
 				session_token: None,
+				service_name: None,
 			})),
 			..Default::default()
 		};
 
 		let result =
-			super::TCPProxy::build_backend_call(&mut None, None, &inputs, &backend, user_policies)
+			super::TCPProxy::build_backend_call(&mut None, None, &inputs, &backend, user_policies, None)
 				.unwrap();
 
 		assert!(
 			matches!(
 				&result.backend_policies.backend_auth,
-				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
+					service_name: None,
+					..
+				}))
 			),
 			"user-provided auth should override default implicit auth"
 		);

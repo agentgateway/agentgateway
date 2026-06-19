@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-use crate::client::{ApplicationTransport, Call, Client};
-use crate::types::agent::Target;
 use async_trait::async_trait;
 use azure_core::error::ResultExt;
 use azure_core::http::{AsyncRawResponse, Sanitizer};
@@ -11,6 +9,9 @@ use futures_util::TryStreamExt;
 use http_body_util::BodyExt;
 use tracing::{debug, error, warn};
 use typespec_client_core::http::DEFAULT_ALLOWED_QUERY_PARAMETERS;
+
+use crate::client::{ApplicationTransport, Call, Client};
+use crate::types::agent::Target;
 
 #[async_trait]
 impl azure_core::http::HttpClient for Client {

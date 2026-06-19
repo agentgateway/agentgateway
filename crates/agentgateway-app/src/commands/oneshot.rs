@@ -1,11 +1,8 @@
-use std::fs::OpenOptions;
-use std::process::{Child, Command, Stdio};
-
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::Read;
-use std::os::fd::AsRawFd;
-use std::os::fd::{FromRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::process::CommandExt;
+use std::process::{Child, Command, Stdio};
 
 use anyhow::Context;
 

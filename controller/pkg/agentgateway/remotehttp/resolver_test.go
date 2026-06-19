@@ -4,13 +4,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -48,7 +50,7 @@ func TestResolve(t *testing.T) {
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("oauth2-discovery.default.svc.cluster.local"),
-							WellKnownCACertificates: ptr.Of(systemCAs),
+							WellKnownCACertificates: new(systemCAs),
 						},
 					},
 				},
@@ -80,8 +82,8 @@ func TestResolve(t *testing.T) {
 				&agentgateway.AgentgatewayPolicy{
 					ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: "default"},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(wellknown.AgentgatewayBackendGVK.Group),
 								Kind:  gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind),
 								Name:  gwv1.ObjectName("discovery-backend"),
@@ -106,15 +108,15 @@ func TestResolve(t *testing.T) {
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("backendtls.example.com"),
-							WellKnownCACertificates: ptr.Of(systemCAs),
+							WellKnownCACertificates: new(systemCAs),
 						},
 					},
 				},
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name:  gwv1.ObjectName("discovery-backend"),
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-				Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+				Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+				Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 			},
 			wantURL:          "https://dummy-idp.default:8443/",
 			wantTLSConfig:    true,
@@ -135,8 +137,8 @@ func TestResolve(t *testing.T) {
 						CreationTimestamp: metav1.Unix(20, 0),
 					},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(""),
 								Kind:  gwv1.Kind("Service"),
 								Name:  gwv1.ObjectName("oauth2-discovery"),
@@ -156,8 +158,8 @@ func TestResolve(t *testing.T) {
 						CreationTimestamp: metav1.Unix(10, 0),
 					},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(""),
 								Kind:  gwv1.Kind("Service"),
 								Name:  gwv1.ObjectName("oauth2-discovery"),
@@ -205,7 +207,7 @@ func TestResolve(t *testing.T) {
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("whole.example.com"),
-							WellKnownCACertificates: ptr.Of(systemCAs),
+							WellKnownCACertificates: new(systemCAs),
 						},
 					},
 				},
@@ -226,7 +228,7 @@ func TestResolve(t *testing.T) {
 						}},
 						Validation: gwv1.BackendTLSPolicyValidation{
 							Hostname:                gwv1.PreciseHostname("port.example.com"),
-							WellKnownCACertificates: ptr.Of(systemCAs),
+							WellKnownCACertificates: new(systemCAs),
 						},
 					},
 				},
@@ -247,8 +249,8 @@ func TestResolve(t *testing.T) {
 				&agentgateway.AgentgatewayPolicy{
 					ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: "default"},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(""),
 								Kind:  gwv1.Kind("Service"),
 								Name:  gwv1.ObjectName("oauth2-discovery"),
@@ -288,8 +290,8 @@ func TestResolve(t *testing.T) {
 								TLS: &agentgateway.BackendTLS{},
 								Tunnel: &agentgateway.BackendTunnel{
 									BackendRef: gwv1.BackendObjectReference{
-										Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-										Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+										Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+										Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 										Name:  gwv1.ObjectName("corporate-proxy"),
 									},
 								},
@@ -306,8 +308,8 @@ func TestResolve(t *testing.T) {
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name:  gwv1.ObjectName("idp-jwks"),
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-				Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+				Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+				Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 			},
 			wantURL:       "https://idp.example.com:443/",
 			wantProxyURL:  "http://proxy.internal.example.com:8080",
@@ -325,8 +327,8 @@ func TestResolve(t *testing.T) {
 								TLS: &agentgateway.BackendTLS{},
 								Tunnel: &agentgateway.BackendTunnel{
 									BackendRef: gwv1.BackendObjectReference{
-										Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-										Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+										Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+										Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 										Name:  gwv1.ObjectName("tls-proxy"),
 									},
 								},
@@ -350,8 +352,8 @@ func TestResolve(t *testing.T) {
 			},
 			backendRef: gwv1.BackendObjectReference{
 				Name:  gwv1.ObjectName("idp-jwks"),
-				Group: ptr.Of(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-				Kind:  ptr.Of(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+				Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+				Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
 			},
 			wantURL:            "https://idp.example.com:443/",
 			wantProxyURL:       "https://proxy.internal.example.com:8443",
@@ -371,8 +373,8 @@ func TestResolve(t *testing.T) {
 				&agentgateway.AgentgatewayPolicy{
 					ObjectMeta: metav1.ObjectMeta{Name: "backend-policy", Namespace: "default"},
 					Spec: agentgateway.AgentgatewayPolicySpec{
-						TargetRefs: []shared.LocalPolicyTargetReferenceWithSectionName{{
-							LocalPolicyTargetReference: shared.LocalPolicyTargetReference{
+						TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
+							LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
 								Group: gwv1.Group(""),
 								Kind:  gwv1.Kind("Service"),
 								Name:  gwv1.ObjectName("oauth2-discovery"),
@@ -434,6 +436,42 @@ func TestResolve(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveWithAdditionalBackendResolver(t *testing.T) {
+	ctx := testutils.BuildMockPolicyContext(t, nil)
+	backendGK := schema.GroupKind{Group: "example.io", Kind: "ExampleBackend"}
+	group := new(gwv1.Group(backendGK.Group))
+	kind := new(gwv1.Kind(backendGK.Kind))
+	resolver := remotehttp.NewResolver(remotehttp.Inputs{
+		ConfigMaps: ctx.Collections.ConfigMaps,
+		Services:   ctx.Collections.Services,
+		BackendResolvers: map[schema.GroupKind]remotehttp.BackendResolver{
+			backendGK: func(_ krt.HandlerContext, nn types.NamespacedName) (*remotehttp.ResolvedBackend, bool, error) {
+				require.Equal(t, types.NamespacedName{Namespace: "default", Name: "custom"}, nn)
+				return &remotehttp.ResolvedBackend{
+					Static: &agentgateway.StaticBackend{
+						Host: "custom.example.com",
+						Port: 8443,
+					},
+				}, true, nil
+			},
+		},
+	})
+
+	resolved, err := resolver.Resolve(ctx.Krt, remotehttp.ResolveInput{
+		ParentName:       "policy",
+		DefaultNamespace: "default",
+		BackendRef: gwv1.BackendObjectReference{
+			Group: group,
+			Kind:  kind,
+			Name:  "custom",
+		},
+		Path: "/oauth2/v3/certs",
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, "http://custom.example.com:8443/oauth2/v3/certs", resolved.Target.URL)
 }
 
 func testService(name, namespace string, ports []corev1.ServicePort) *corev1.Service {

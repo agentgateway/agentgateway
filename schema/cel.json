@@ -99,6 +99,16 @@
           "maximum": 65535,
           "default": 0
         },
+        "grpcStatus": {
+          "description": "The gRPC status code of the response, when present.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
         "headers": {
           "description": "The headers of the response.",
           "type": "object",
@@ -109,6 +119,113 @@
         },
         "body": {
           "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "proxy": {
+      "description": "`proxy` contains proxy timing information for the request.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "bind": {
+          "description": "The bind that accepted the request.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gateway": {
+          "description": "The selected Gateway.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "namespace": {
+              "description": "The namespace of the selected Gateway.",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the selected Gateway.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        },
+        "listener": {
+          "description": "The selected listener.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "name": {
+              "description": "The name of the selected listener.",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        },
+        "route": {
+          "description": "The selected route.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "namespace": {
+              "description": "The namespace of the selected route.",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the selected route.",
+              "type": "string",
+              "default": ""
+            },
+            "kind": {
+              "description": "The kind of the selected route.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "rule": {
+              "description": "The selected route rule name, when available.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "requestProcessingDuration": {
+          "description": "Time spent processing the request before sending the primary outbound call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upstreamDuration": {
+          "description": "Time spent waiting for the primary outbound call.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "responseProcessingDuration": {
+          "description": "Time spent processing the primary outbound response before sending the downstream response.",
           "type": [
             "string",
             "null"
@@ -154,6 +271,12 @@
         "object",
         "null"
       ],
+      "properties": {
+        "rawToken": {
+          "description": "The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.",
+          "type": "string"
+        }
+      },
       "additionalProperties": true
     },
     "apiKey": {
@@ -164,6 +287,7 @@
       ],
       "properties": {
         "key": {
+          "description": "The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.",
           "type": "string"
         }
       },
@@ -196,7 +320,7 @@
       ],
       "properties": {
         "streaming": {
-          "description": "Whether the LLM response is streamed.",
+          "description": "Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.",
           "type": "boolean"
         },
         "requestModel": {
@@ -329,6 +453,20 @@
             "null"
           ]
         },
+        "timeToFirstToken": {
+          "description": "Time from request start until the first response token is received.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timePerOutputToken": {
+          "description": "Average time from first response token to response completion per output token.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "countTokens": {
           "description": "The number of tokens in the request, when using the token counting endpoint\nThese are not counted as 'input tokens' since they do not consume input tokens.",
           "type": [
@@ -434,6 +572,115 @@
               "minimum": 0
             }
           }
+        },
+        "cost": {
+          "description": "The realized USD cost of the request from the model cost catalog.\nUnset when the model could not be priced.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "total": {
+              "type": "number",
+              "format": "double"
+            },
+            "input": {
+              "type": "number",
+              "format": "double"
+            },
+            "output": {
+              "type": "number",
+              "format": "double"
+            },
+            "cacheRead": {
+              "type": "number",
+              "format": "double"
+            },
+            "cacheWrite": {
+              "type": "number",
+              "format": "double"
+            },
+            "reasoning": {
+              "type": "number",
+              "format": "double"
+            },
+            "inputAudio": {
+              "type": "number",
+              "format": "double"
+            },
+            "outputAudio": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "total",
+            "input",
+            "output",
+            "cacheRead",
+            "cacheWrite",
+            "reasoning",
+            "inputAudio",
+            "outputAudio"
+          ]
+        },
+        "costRates": {
+          "description": "Effective model catalog rates in USD per 1M tokens after tier selection.\nUnset when the model could not be priced.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "input": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "output": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "cacheRead": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "cacheWrite": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "reasoning": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "inputAudio": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            },
+            "outputAudio": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "format": "double"
+            }
+          }
         }
       },
       "additionalProperties": false,
@@ -530,6 +777,14 @@
         },
         "subjectCn": {
           "description": "The CN of the subject from the downstream certificate, if available.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "certificate": {
+          "description": "PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.",
           "type": [
             "string",
             "null"
@@ -705,6 +960,14 @@
     },
     "extproc": {
       "description": "`extproc` contains dynamic metadata from ext_proc filters",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "mcpGuardrails": {
+      "description": "`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.",
       "type": [
         "object",
         "null"

@@ -39,7 +39,7 @@ spec:
       labels:
         deployment-overlay-label1: from-overlay
         deployment-overlay-label2: from-overlay
-        app.kubernetes.io/managed-by: null
+        app.kubernetes.io/managed-by: ""
     spec:
       template:
         spec:

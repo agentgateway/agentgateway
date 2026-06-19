@@ -103,30 +103,39 @@ pub struct WaypointIdentity {
 }
 
 impl WaypointIdentity {
-	/// Returns the full Kubernetes FQDN for this waypoint.
+	/// Returns the default full Kubernetes FQDN for this waypoint.
+	/// TODO: we don't know the cluster domain, so we potentially return the wrong hostname for this waypoint.
 	pub fn hostname(&self) -> Strng {
 		strng::format!("{}.{}.svc.cluster.local", self.gateway, self.namespace)
 	}
 
 	/// Checks whether this waypoint identity matches a NamespacedHostname waypoint destination.
-	/// The hostname from xDS is always a FQDN (e.g., "waypoint.ns.svc.cluster.local").
+	/// Assumes the hostname from xDS always starts with `{gateway name}.{namespace}` but the suffix
+	/// may be customized.
 	pub fn matches_hostname(&self, nh: &NamespacedHostname) -> bool {
-		nh.hostname == self.hostname()
+		nh.namespace == self.namespace
+			&& nh
+				.hostname
+				.strip_prefix(self.gateway.as_str())
+				.and_then(|s| s.strip_prefix('.'))
+				.and_then(|s| s.strip_prefix(self.namespace.as_str()))
+				.is_some_and(|s| s.starts_with('.') && s.len() > 1)
 	}
 
 	/// Checks whether this waypoint identity matches an Address-based waypoint destination
-	/// by looking up this waypoint's own service VIPs.
+	/// by resolving the service at `addr` and comparing its (name, namespace) to this waypoint's
+	/// (gateway, namespace).
 	pub fn matches_address(
 		&self,
 		addr: &NetworkAddress,
-		get_self_vips: impl FnOnce(&Strng, &Strng) -> Option<Vec<NetworkAddress>>,
+		get_service_at: impl FnOnce(&NetworkAddress) -> Option<(Strng, Strng)>,
 	) -> bool {
-		match get_self_vips(&self.namespace, &self.hostname()) {
-			Some(vips) => vips.contains(addr),
+		match get_service_at(addr) {
+			Some((name, ns)) => name == self.gateway && ns == self.namespace,
 			None => {
 				warn!(
-					"waypoint {}.{} cannot find own service for address verification",
-					self.gateway, self.namespace
+					"waypoint {}.{} cannot resolve service at {} for address verification",
+					self.gateway, self.namespace, addr
 				);
 				false
 			},
@@ -215,7 +224,7 @@ pub enum SelfIdentitySource {
 	},
 }
 
-#[derive(Debug, Default, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Workload {
 	pub workload_ips: Vec<IpAddr>,
@@ -272,12 +281,48 @@ pub struct Workload {
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub services: HashMap<NamespacedHostname, HashMap<u16, u16>>,
 
+	#[serde(default, skip_serializing_if = "is_default")]
+	pub hbone_mtls_port: u16,
+
 	#[serde(default = "default_capacity")]
 	pub capacity: u32,
 }
 
-fn default_capacity() -> u32 {
+pub fn default_capacity() -> u32 {
 	1
+}
+
+impl Default for Workload {
+	fn default() -> Self {
+		Self {
+			workload_ips: Default::default(),
+			waypoint: Default::default(),
+			network_gateway: Default::default(),
+			protocol: Default::default(),
+			network_mode: Default::default(),
+			uid: Default::default(),
+			name: Default::default(),
+			namespace: Default::default(),
+			trust_domain: Default::default(),
+			service_account: Default::default(),
+			network: Default::default(),
+			workload_name: Default::default(),
+			workload_type: Default::default(),
+			canonical_name: Default::default(),
+			canonical_revision: Default::default(),
+			hostname: Default::default(),
+			node: Default::default(),
+			authorization_policies: Default::default(),
+			status: Default::default(),
+			cluster_id: Default::default(),
+			locality: Default::default(),
+			services: Default::default(),
+			hbone_mtls_port: Default::default(),
+
+			// default capacity to 1, as 0 means this workload should not receive traffic
+			capacity: default_capacity(),
+		}
+	}
 }
 
 impl Workload {
@@ -519,6 +564,11 @@ pub struct Service {
 
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub ip_families: Option<IpFamily>,
+
+	/// When true, ingress gateways should send traffic destined for this service
+	/// through the service's waypoint proxy.
+	#[serde(default, skip_serializing_if = "is_default")]
+	pub ingress_use_waypoint: bool,
 }
 
 impl Service {
@@ -818,6 +868,7 @@ impl Workload {
 			},
 
 			capacity: resource.capacity.unwrap_or(1),
+			hbone_mtls_port: Default::default(),
 			services,
 		};
 		// Return back part we did not use (service) so it can be consumed without cloning
@@ -921,6 +972,7 @@ impl TryFrom<&XdsService> for Service {
 			waypoint,
 			load_balancer: lb,
 			ip_families,
+			ingress_use_waypoint: s.ingress_use_waypoint,
 		};
 		Ok(svc)
 	}

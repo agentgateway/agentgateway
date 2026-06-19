@@ -6,6 +6,7 @@ package krtxds
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -63,6 +64,34 @@ type CollectionRegistration struct {
 
 type Registration func(*DiscoveryServer) CollectionRegistration
 
+type nackDiagnostic struct {
+	Key   string `json:"key"`
+	Warn  string `json:"warn,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+func parseNackDiagnostics(message string) ([]nackDiagnostic, bool) {
+	if !strings.HasPrefix(strings.TrimSpace(message), "[") {
+		return nil, false
+	}
+
+	var diagnostics []nackDiagnostic
+	if err := json.Unmarshal([]byte(message), &diagnostics); err != nil || len(diagnostics) == 0 {
+		return nil, false
+	}
+
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Key == "" {
+			return nil, false
+		}
+		if diagnostic.Warn == "" && diagnostic.Error == "" {
+			return nil, false
+		}
+	}
+
+	return diagnostics, true
+}
+
 func TypeName[T proto.Message]() string {
 	ft := new(T)
 	return "type.googleapis.com/" + string((*ft).ProtoReflect().Descriptor().FullName())
@@ -109,7 +138,7 @@ func PerGatewayCollection[T IntoProto[TT], TT proto.Message](collection krt.Coll
 		nc := krt.NewCollection(collection, func(ctx krt.HandlerContext, i T) *DiscoveryResource {
 			var forGateway *types.NamespacedName
 			if extract != nil {
-				forGateway = ptr.Of(extract(i))
+				forGateway = new(extract(i))
 			}
 			return &DiscoveryResource{
 				Resource: &discovery.Resource{
@@ -522,12 +551,19 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 	// We do not have to respond in that case. In this case request's version info
 	// will be different from the version sent. But it is fragile to rely on that.
 	if request.ErrorDetail != nil {
+		message := request.ErrorDetail.GetMessage()
 		// nolint: gosec // error side is bounded
 		errCode := codes.Code(request.ErrorDetail.Code)
-		log.Warn("ADS: ACK ERROR", "type", stype, "connection", con.ID(), "code", errCode.String(), "message", request.ErrorDetail.GetMessage())
+		var mlog any
+		if diagnostics, ok := parseNackDiagnostics(message); ok {
+			mlog = diagnostics
+		} else {
+			mlog = message
+		}
+		log.Warn("ADS: ACK ERROR", "type", stype, "connection", con.ID(), "code", errCode.String(), "message", mlog)
 		xdsRejectsTotal.Inc()
 		con.proxy.UpdateWatchedResource(request.TypeUrl, func(wr *model.WatchedResource) *model.WatchedResource {
-			wr.LastError = request.ErrorDetail.GetMessage()
+			wr.LastError = message
 			return wr
 		})
 
@@ -536,7 +572,7 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 			nackEvent := nack.NackEvent{
 				Gateway:   gateway,
 				TypeUrl:   request.TypeUrl,
-				ErrorMsg:  request.ErrorDetail.GetMessage(),
+				ErrorMsg:  message,
 				Timestamp: time.Now(),
 			}
 			nackPublisher.PublishNack(&nackEvent)
@@ -1242,6 +1278,35 @@ func (pr *PushRequest) Merge(other *PushRequest) *PushRequest {
 	}
 
 	return pr
+}
+
+// CopyMerge merges two update requests without mutating either input. This should be used after
+// a PushRequest has been fanned out and may be shared by multiple proxy queues or push goroutines.
+func (pr *PushRequest) CopyMerge(other *PushRequest) *PushRequest {
+	if pr == nil {
+		return other
+	}
+	if other == nil {
+		return pr
+	}
+
+	merged := *pr
+	if pr.ConfigsUpdated == nil && other.ConfigsUpdated == nil {
+		return &merged
+	}
+	merged.ConfigsUpdated = make(map[TypeUrl]sets.String, len(pr.ConfigsUpdated)+len(other.ConfigsUpdated))
+	for k, v := range pr.ConfigsUpdated {
+		merged.ConfigsUpdated[k] = v.Copy()
+	}
+	for k, v := range other.ConfigsUpdated {
+		if existing, found := merged.ConfigsUpdated[k]; found {
+			merged.ConfigsUpdated[k] = existing.Merge(v)
+		} else {
+			merged.ConfigsUpdated[k] = v.Copy()
+		}
+	}
+
+	return &merged
 }
 
 // Event represents a config or registry event that results in a push.

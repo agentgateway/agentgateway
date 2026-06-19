@@ -3,6 +3,16 @@
 The table below lists the CEL functions available in agentgateway.
 See the [CEL documentation](https://agentgateway.dev/docs/standalone/latest/reference/cel/) for more information.
 
+## Body Variables
+
+`request.body` and `response.body` expose body bytes to CEL. Capturing these values is bounded by the configured body buffer limit. The default limit is 2 MiB.
+
+When a body variable is used by request-time or response-time expressions, agentgateway eagerly buffers the body so the expression can inspect it before forwarding continues. If the body exceeds the configured limit, buffering fails and the expression cannot read a complete body.
+
+When a body variable is used only by logging, tracing, or other post request/response expressions, agentgateway does not eagerly buffer the body. Instead, it records bytes as the proxy stream is polled and makes the recorded bytes available to the log expression after the stream is done.
+
+If the recorded log-only body exceeds the configured limit, `request.body` or `response.body` contains the truncated prefix up to that limit. The proxied stream itself is still forwarded in full and is not failed due to the logging capture limit. There is currently no CEL field that indicates truncation.
+
 ## Functions
 
 | Function           | Purpose                                                                                                                                                                                                                                                                          |
@@ -19,6 +29,8 @@ See the [CEL documentation](https://agentgateway.dev/docs/standalone/latest/refe
 | `flattenRecursive` | Usable only for logging and tracing. Like `flatten` but recursively flattens multiple levels.                                                                                                                                                                                    |
 | `base64.encode`    | Encodes a string to a base64 string. Example: `base64.encode("hello")`.                                                                                                                                                                                                          |
 | `base64.decode`    | Decodes a string in base64 format. Example: `string(base64.decode("aGVsbG8K"))`. Warning: this returns `bytes`, not a `String`. Various parts of agentgateway will display bytes in base64 format, which may appear like the function does nothing if not converted to a string. |
+| `url.encode`       | Percent-encodes a string for use as a URL component. Example: `url.encode("hello world/?x=1")` returns `hello%20world%2F%3Fx%3D1`.                                                                                                                                            |
+| `url.decode`       | Percent-decodes a URL-encoded string. Example: `url.decode("hello%20world")` returns `hello world`. This does not decode `+` as a space; use `form.decode` for `application/x-www-form-urlencoded` values.                                                                    |
 | `sha1.encode`      | Computes the SHA-1 digest of a string or bytes value and returns the lowercase hex string. Example: `sha1.encode("hello")`.                                                                                                                                                     |
 | `sha256.encode`    | Computes the SHA-256 digest of a string or bytes value and returns the lowercase hex string. Example: `sha256.encode("hello")`.                                                                                                                                                 |
 | `md5.encode`       | Computes the MD5 digest of a string or bytes value and returns the lowercase hex string. Example: `md5.encode("hello")`.                                                                                                                                                        |

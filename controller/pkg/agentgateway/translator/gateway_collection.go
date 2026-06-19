@@ -2,6 +2,7 @@ package translator
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -43,8 +44,6 @@ func ToAgwResource(t any) *api.Resource {
 		return &api.Resource{Kind: &api.Resource_Listener{Listener: tt.Listener}}
 	case AgwRoute:
 		return &api.Resource{Kind: &api.Resource_Route{Route: tt.Route}}
-	case AgwRouteGroup:
-		return &api.Resource{Kind: &api.Resource_RouteGroup{RouteGroup: tt.RouteGroup}}
 	case AgwTCPRoute:
 		return &api.Resource{Kind: &api.Resource_TcpRoute{TcpRoute: tt.TCPRoute}}
 	case AgwPolicy:
@@ -123,18 +122,6 @@ func (g AgwRoute) Equals(other AgwRoute) bool {
 	return protoconv.Equals(g, other)
 }
 
-type AgwRouteGroup struct {
-	*api.RouteGroup
-}
-
-func (g AgwRouteGroup) ResourceName() string {
-	return g.Key
-}
-
-func (g AgwRouteGroup) Equals(other AgwRouteGroup) bool {
-	return protoconv.Equals(g, other)
-}
-
 // AgwTCPRoute is a wrapper type that contains the tcp route on the gateway, as well as the status for the tcp route.
 type AgwTCPRoute struct {
 	*api.TCPRoute
@@ -154,6 +141,9 @@ type TLSInfo struct {
 	Key                 []byte `json:"-"`
 	CaCert              []byte
 	MtlsFallbackEnabled bool
+	IstioWorkloadCert   bool
+	IstioMutual         bool
+	DynamicCA           bool
 }
 
 // PortBindings is a wrapper type that contains the listener on the gateway, as well as the status for the listener.
@@ -197,7 +187,10 @@ func (g GatewayListener) Equals(other GatewayListener) bool {
 		if !bytes.Equal(g.TLSInfo.Cert, other.TLSInfo.Cert) ||
 			!bytes.Equal(g.TLSInfo.Key, other.TLSInfo.Key) ||
 			!bytes.Equal(g.TLSInfo.CaCert, other.TLSInfo.CaCert) ||
-			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled {
+			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled ||
+			g.TLSInfo.IstioWorkloadCert != other.TLSInfo.IstioWorkloadCert ||
+			g.TLSInfo.IstioMutual != other.TLSInfo.IstioMutual ||
+			g.TLSInfo.DynamicCA != other.TLSInfo.DynamicCA {
 			return false
 		}
 	}
@@ -233,7 +226,7 @@ func GatewayCollection(
 	krt.Collection[*GatewayListener],
 ) {
 	processGatewayCollectionOptions(&cfg, opts...)
-	statusCol, gw := krt.NewStatusManyCollection(cfg.Gateways, cfg.transformationFunc(cfg), cfg.KrtOpts.ToOptions("KubernetesGateway")...)
+	statusCol, gw := krt.NewStatusManyCollection(cfg.Gateways, cfg.transformationFunc(cfg), cfg.KrtOpts.ToOptions("translator/GatewayListeners")...)
 	return statusCol, gw
 }
 
@@ -338,11 +331,14 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 		// - ListenerSet ordered alphabetically by “{namespace}/{name}”
 		slices.SortFunc(listenersFromSets, func(a, b ListenerSet) int {
 			// primary sort: creation timestamp (oldest first)
-			if cmp := a.ParentInfo.CreationTimestamp.Compare(b.ParentInfo.CreationTimestamp.Time); cmp != 0 {
-				return cmp
+			if r := a.ParentInfo.CreationTimestamp.Compare(b.ParentInfo.CreationTimestamp.Time); r != 0 {
+				return r
 			}
 			// secondary sort: alphabetically by "{namespace}/{name}"
-			return strings.Compare(a.Parent.String(), b.Parent.String())
+			if r := cmp.Compare(a.Parent.Namespace, b.Parent.Namespace); r != 0 {
+				return r
+			}
+			return cmp.Compare(a.Parent.Name, b.Parent.Name)
 		})
 
 		for _, ls := range listenersFromSets {
@@ -391,20 +387,19 @@ const (
 func validateListenerConflicts(listeners []*GatewayListener) {
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
 	for _, listener := range listeners {
-		hset := sets.New(listener.ParentInfo.Hostnames...)
 		if p, ok := portMap[listener.ParentInfo.Port]; ok {
 			if p.protocol == listener.ParentInfo.Protocol {
-				if p.hostnames.Intersection(hset).Len() == 0 {
-					p.hostnames = p.hostnames.Union(hset)
-				} else {
+				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) {
 					listener.Conflict = ListenerConflictHostname
+				} else {
+					p.hostnames.InsertAll(listener.ParentInfo.Hostnames...)
 				}
 			} else {
 				listener.Conflict = ListenerConflictProtocol
 			}
 		} else {
 			portMap[listener.ParentInfo.Port] = &portProtocol{
-				hostnames: hset,
+				hostnames: sets.New(listener.ParentInfo.Hostnames...),
 				protocol:  listener.ParentInfo.Protocol,
 			}
 		}
@@ -432,7 +427,10 @@ func (g ListenerSet) Equals(other ListenerSet) bool {
 		if !bytes.Equal(g.TLSInfo.Cert, other.TLSInfo.Cert) ||
 			!bytes.Equal(g.TLSInfo.Key, other.TLSInfo.Key) ||
 			!bytes.Equal(g.TLSInfo.CaCert, other.TLSInfo.CaCert) ||
-			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled {
+			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled ||
+			g.TLSInfo.IstioWorkloadCert != other.TLSInfo.IstioWorkloadCert ||
+			g.TLSInfo.IstioMutual != other.TLSInfo.IstioMutual ||
+			g.TLSInfo.DynamicCA != other.TLSInfo.DynamicCA {
 			return false
 		}
 	}
@@ -458,7 +456,7 @@ func ListenerSetBuilder(
 	status := obj.Status.DeepCopy()
 
 	p := ls.ParentRef
-	if NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK) != wellknown.GatewayGVK {
+	if NormalizeReference(p.Group, p.Kind, wellknown.GatewayGVK.GroupKind()) != wellknown.GatewayGVK.GroupKind() {
 		// Cannot report status since we don't know if it is for us
 		return nil, nil
 	}

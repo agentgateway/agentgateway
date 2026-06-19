@@ -22,13 +22,12 @@ package deployer
 // KubernetesResourceOverlay.Spec for details.
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 	pkgdeployer "github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
@@ -66,16 +65,11 @@ JKLMNOPQRSTUVWXYZ1234567890abcdefghijklmnopqrstuvwxyz1234567890ABC
 DEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmnopqrstuvwxyz123456
 wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 -----END CERTIFICATE-----`
-	tmpDir := t.TempDir()
-	caCertPath := tmpDir + "/ca.crt"
-	err := os.WriteFile(caCertPath, []byte(caCertContent), 0o600)
-	require.NoError(t, err)
-
 	// TLS override function for tests that need TLS enabled
-	tlsOverride := func(caCertPath string) func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator {
+	tlsOverride := func(caCert string) func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator {
 		return func(inputs *pkgdeployer.Inputs) pkgdeployer.HelmValuesGenerator {
 			inputs.ControlPlane.XdsTLS = true
-			inputs.ControlPlane.XdsTlsCaPath = caCertPath
+			inputs.ControlPlane.XdsTlsCaCert = caCert
 			return nil
 		}
 	}
@@ -137,8 +131,109 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway-shutdown",
 		},
 		{
-			Name:      "agentgateway with Istio configuration",
+			Name:      "agentgateway with params level Istio configuration",
 			InputFile: "agentgateway-istio",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "CLUSTER_ID",
+					"deployment should set CLUSTER_ID env var from istio.clusterId")
+				assert.Contains(t, outputYaml, "cluster-1",
+					"deployment should set the correct value for CLUSTER_ID")
+				assert.Contains(t, outputYaml, "NETWORK",
+					"deployment should set NETWORK env var from istio.network")
+				assert.Contains(t, outputYaml, "network-1",
+					"deployment should set the correct value for NETWORK")
+				assert.Contains(t, outputYaml, "not.cluster.local",
+					"explicit params trustDomain should be used as-is")
+			},
+		},
+		{
+			Name:      "agentgateway with controller level Istio auto-enable and mesh trust domain",
+			InputFile: "agentgateway-istio-noparams",
+			Settings: &apisettings.Settings{
+				IstioAutoEnabled: true,
+				IstioClusterId:   "cluster-1",
+				IstioNetwork:     "network-1",
+				IstioNamespace:   "istio-system",
+				IstioRevision:    "1-30",
+			},
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "CLUSTER_ID",
+					"deployment should set CLUSTER_ID env var from control-plane istio settings")
+				assert.Contains(t, outputYaml, "cluster-1",
+					"deployment should set the correct value for CLUSTER_ID")
+				assert.Contains(t, outputYaml, "NETWORK",
+					"deployment should set NETWORK env var from control-plane istio settings")
+				assert.Contains(t, outputYaml, "network-1",
+					"deployment should set the correct value for NETWORK")
+				assert.Contains(t, outputYaml, "TRUST_DOMAIN",
+					"deployment should set TRUST_DOMAIN env var")
+				assert.Contains(t, outputYaml, "custom.example.com",
+					"trust domain should be auto-detected from the revisioned mesh ConfigMap")
+			},
+		},
+		{
+			Name:      "agentgateway empty params istio block opts in with defaults",
+			InputFile: "agentgateway-istio-empty",
+			// No control-plane istio settings and auto-enable off: `istio: {}` alone must enable.
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "/var/run/secrets/istio",
+					"an empty istio block should enable integration (istio secret mounts present)")
+				assert.Contains(t, outputYaml, "CA_ADDRESS",
+					"integration enabled via empty istio block should set CA_ADDRESS")
+				assert.Contains(t, outputYaml, "https://istiod.istio-system.svc:15012",
+					"CA_ADDRESS should fall back to the default")
+				assert.Contains(t, outputYaml, "cluster.local",
+					"trust domain should fall back to the istio default")
+			},
+		},
+		{
+			Name:      "agentgateway control-plane istio values without auto-enable stay off",
+			InputFile: "agentgateway-istio-noauto",
+			Settings: &apisettings.Settings{
+				// Mesh values set but auto-enable off: integration must not turn on.
+				IstioClusterId: "cluster-1",
+				IstioNetwork:   "network-1",
+				IstioNamespace: "istio-system",
+				IstioRevision:  "1-30",
+			},
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.NotContains(t, outputYaml, "CLUSTER_ID",
+					"control-plane mesh values alone must not enable Istio integration")
+				assert.NotContains(t, outputYaml, "/var/run/secrets/istio",
+					"istio secret mounts should be absent when integration is off")
+			},
+		},
+		{
+			Name:      "agentgateway opts out of auto-enabled istio via params",
+			InputFile: "agentgateway-istio-optout",
+			Settings: &apisettings.Settings{
+				IstioAutoEnabled: true,
+				IstioClusterId:   "cluster-1",
+				IstioNamespace:   "istio-system",
+				IstioRevision:    "1-30",
+			},
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.NotContains(t, outputYaml, "CLUSTER_ID",
+					"spec.istio.enabled=false must opt the gateway out of auto-enabled integration")
+				assert.NotContains(t, outputYaml, "/var/run/secrets/istio",
+					"istio secret mounts should be absent when the gateway opts out")
+			},
+		},
+		{
+			Name:      "agentgateway with Istio additional trust domains",
+			InputFile: "agentgateway-istio-additional-trust-domains",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "ADDITIONAL_TRUST_DOMAINS",
+					"deployment should set ADDITIONAL_TRUST_DOMAINS env var")
+				assert.Contains(t, outputYaml, "extra.domain.com,another.domain.com",
+					"deployment should set the correct value for ADDITIONAL_TRUST_DOMAINS")
+			},
 		},
 		{
 			Name:      "agentgateway with logging format json",
@@ -251,13 +346,26 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 				assert.Contains(t, outputYaml, "service-overlay-annotation: from-overlay",
 					"service annotation from overlay should be present")
 
-				// Label nulled to empty string
+				// Label set to empty string
 				assert.Contains(t, outputYaml, `app.kubernetes.io/managed-by: ""`,
-					"label should be nulled to empty string")
+					"label should be set to empty string")
 
 				// Volume mount added via merge
 				assert.Contains(t, outputYaml, "mountPath: /etc/custom-config",
 					"custom volumeMount should be added via merge")
+			},
+		},
+		{
+			Name:      "agentgateway resource requests overlay",
+			InputFile: "agentgateway-resource-requests-overlay",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "resources:\n          requests:\n            cpu: 250m\n        securityContext:",
+					"deployment overlay should override the default CPU request and unset the default memory request")
+				assert.NotContains(t, outputYaml, "cpu: 100m",
+					"default CPU request should not remain after overlay override")
+				assert.NotContains(t, outputYaml, "memory: 128Mi",
+					"default memory request should not remain after overlay unsets it")
 			},
 		},
 		{
@@ -403,7 +511,12 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 		{
 			Name:                        "agentgateway with TLS enabled",
 			InputFile:                   "agentgateway-tls",
-			HelmValuesGeneratorOverride: tlsOverride(caCertPath),
+			HelmValuesGeneratorOverride: tlsOverride(caCertContent),
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "checksum/xds-ca:",
+					"deployment pod template should roll when the xDS CA bundle changes")
+			},
 		},
 		{
 			// Custom configmap name via AgentgatewayParameters deployment overlay:
@@ -421,6 +534,21 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 		{
 			Name:      "agentgateway with name over 63 characters",
 			InputFile: "agentgateway-long-gateway-name-over-63-chars",
+		},
+		{
+			Name:      "agentgateway with model catalog ConfigMap source",
+			InputFile: "agentgateway-model-catalog-configmap",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "MODEL_CATALOG_PATHS",
+					"deployment should set MODEL_CATALOG_PATHS to the mounted ConfigMap file path")
+				assert.Contains(t, outputYaml, "/config/model-catalog/my-model-costs.json",
+					"MODEL_CATALOG_PATHS should point to the ConfigMap mount path")
+				assert.Contains(t, outputYaml, "mountPath: /config/model-catalog/my-model-costs.json",
+					"deployment should have a volume mount for the model catalog ConfigMap")
+				assert.Contains(t, outputYaml, "name: my-model-costs",
+					"deployment volumes should reference the model catalog ConfigMap by name")
+			},
 		},
 		{
 			Name:      "gateway with no listeners uses dummy port",

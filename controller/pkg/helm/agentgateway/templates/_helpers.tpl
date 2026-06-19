@@ -39,13 +39,6 @@ gateway.networking.k8s.io/gateway-name: {{ include "kgateway.gateway.fullname" .
 {{- end }}
 
 {{/*
-Gateway name annotation - always contains the full gateway name
-*/}}
-{{- define "kgateway.gateway.gatewayNameAnnotation" -}}
-gateway.kgateway.dev/gateway-full-name: {{ .Values.agentgateway.name }}
-{{- end }}
-
-{{/*
 All labels including selector labels, standard labels, and custom gateway labels
 */}}
 {{- define "kgateway.gateway.allLabels" -}}

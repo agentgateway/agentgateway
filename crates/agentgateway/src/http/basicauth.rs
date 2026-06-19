@@ -4,7 +4,8 @@ use macro_rules_attribute::apply;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
-use crate::proxy::ProxyError;
+use crate::proxy::dtrace::{self};
+use crate::proxy::{ProxyError, ProxyResponse};
 use crate::*;
 
 #[cfg(test)]
@@ -20,15 +21,16 @@ pub enum Error {
 	InvalidCredentials { realm: String },
 }
 
-/// Validation mode for basic authentication
+/// Validation mode for Basic Auth.
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "BasicAuthMode"))]
 #[derive(Copy, PartialEq, Eq, Default)]
 pub enum Mode {
-	/// A valid username/password must be present.
+	/// Require a valid username and password.
 	Strict,
-	/// If credentials exist, validate them.
+	/// Validate credentials when present.
 	/// This is the default option.
-	/// Warning: this allows requests without credentials!
+	/// Warning: this allows requests without Basic Auth credentials.
 	#[default]
 	Optional,
 }
@@ -63,6 +65,8 @@ fn default_realm() -> String {
 	"Restricted".to_string()
 }
 
+const TRACE_POLICY_KIND: &str = "basic_auth";
+
 impl BasicAuthentication {
 	/// Create a new BasicAuthentication from a file path
 	pub fn new(
@@ -81,26 +85,25 @@ impl BasicAuthentication {
 		}
 	}
 
-	/// Apply basic authentication to a request
-	pub async fn apply(&self, req: &mut Request) -> Result<(), ProxyError> {
-		let res = self.verify(req).await?;
-		if let Some(claims) = res {
-			self.authorization_location.remove(req)?;
-			// Insert the claims into extensions so we can reference it later
-			req.extensions_mut().insert(claims);
-		}
-		Ok(())
-	}
-
 	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
 		let Some(encoded_credentials) = self.authorization_location.extract(req) else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
+				dtrace::pol_result!(
+					dtrace::Error,
+					Apply,
+					"rejected request because basic auth credentials are required but missing"
+				);
 				return Err(ProxyError::BasicAuthenticationFailure(Error::Missing {
 					realm: self.realm.clone().unwrap_or_else(default_realm),
 				}));
 			}
 			// Otherwise without credentials, don't attempt to authenticate
+			dtrace::pol_result!(
+				dtrace::Info,
+				Skip,
+				"request has no basic auth credentials and auth mode is optional"
+			);
 			return Ok(None);
 		};
 
@@ -125,12 +128,46 @@ impl BasicAuthentication {
 
 		if valid {
 			// Authentication successful
+			dtrace::pol_result!(
+				dtrace::Info,
+				Apply,
+				"authenticated request as basic auth user {username}"
+			);
 			Ok(Some(Claims {
 				username: username.into(),
 			}))
 		} else {
+			dtrace::pol_result!(
+				dtrace::Error,
+				Apply,
+				"rejected request because basic auth credentials are invalid"
+			);
 			Err(invalid_credentials())
 		}
+	}
+}
+
+impl crate::store::RequestPolicyTrait for BasicAuthentication {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut Request,
+	) -> Result<crate::http::PolicyResponse, ProxyResponse> {
+		let res = self.verify(req).await.map_err(ProxyResponse::from)?;
+		if let Some(claims) = res {
+			self
+				.authorization_location
+				.remove(req)
+				.map_err(ProxyResponse::from)?;
+			// Insert the claims into extensions so we can reference it later
+			req.extensions_mut().insert(claims);
+		}
+		Ok(crate::http::PolicyResponse::default())
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &crate::cel::Expression> {
+		self.authorization_location.expression().into_iter()
 	}
 }
 
@@ -146,17 +183,18 @@ impl std::fmt::Debug for BasicAuthentication {
 }
 #[apply(schema_de!)]
 pub struct LocalBasicAuth {
-	/// .htpasswd file contents/reference
+	/// User database in htpasswd format. Can be inline or loaded from a file.
 	pub htpasswd: FileOrInline,
 
-	/// Realm name for the WWW-Authenticate header
+	/// Realm shown in the `WWW-Authenticate` response header when credentials are missing or invalid.
 	#[serde(default)]
 	pub realm: Option<String>,
 
-	/// Validation mode for basic authentication
+	/// Controls whether requests must include valid Basic Auth credentials.
 	#[serde(default)]
 	pub mode: Mode,
 
+	/// Where to read the Basic Auth credentials from in incoming requests.
 	#[serde(default = "default_authorization_location")]
 	pub authorization_location: AuthorizationLocation,
 }

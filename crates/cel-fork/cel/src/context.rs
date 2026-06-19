@@ -5,7 +5,7 @@ use hashbrown::Equivalent;
 use crate::common::ast::OptimizedExpr;
 use crate::functions;
 use crate::magic::{Function, IntoFunction};
-use crate::objects::{TryIntoValue, Value};
+use crate::objects::{KeyRef, MapValue, TryIntoValue, Value};
 
 /// Context is a collection of variables and functions that can be used
 /// by the interpreter to resolve expressions.
@@ -94,6 +94,7 @@ impl Default for Context {
 		ctx.add_function("double", functions::double);
 		ctx.add_function("int", functions::int);
 		ctx.add_function("uint", functions::uint);
+		ctx.add_function("type", functions::type_);
 
 		ctx.add_qualified_function("optional", "none", functions::optional_none);
 		ctx.add_qualified_function("optional", "of", functions::optional_of);
@@ -130,6 +131,9 @@ impl Default for Context {
 
 pub trait VariableResolver<'a> {
 	fn resolve(&self, expr: &str) -> Option<Value<'a>>;
+	fn variables(&self) -> Option<Value<'a>> {
+		None
+	}
 	fn resolve_member(&self, _expr: &str, _member: &str) -> Option<Value<'a>> {
 		None
 	}
@@ -165,6 +169,15 @@ impl<'a, 'rf> VariableResolver<'a> for SingleVarResolver<'a, 'rf> {
 		} else {
 			self.base.resolve(expr)
 		}
+	}
+
+	fn variables(&self) -> Option<Value<'a>> {
+		let mut variables = match self.base.variables() {
+			Some(Value::Map(map)) => map.iter().map(|(k, v)| (k, v.clone())).collect(),
+			_ => vector_map::VecMap::new(),
+		};
+		variables.insert(KeyRef::String(self.name.into()), self.val.clone());
+		Some(Value::Map(MapValue::Borrow(variables)))
 	}
 }
 
@@ -209,5 +222,14 @@ impl<'a> MapResolver<'a> {
 impl<'a> VariableResolver<'a> for MapResolver<'a> {
 	fn resolve(&self, expr: &str) -> Option<Value<'a>> {
 		self.variables.get(expr).cloned()
+	}
+
+	fn variables(&self) -> Option<Value<'a>> {
+		let variables = self
+			.variables
+			.iter()
+			.map(|(k, v)| (KeyRef::String((*k).into()), v.clone()))
+			.collect();
+		Some(Value::Map(MapValue::Borrow(variables)))
 	}
 }

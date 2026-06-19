@@ -7,6 +7,12 @@ mod tls;
 use std::str::FromStr;
 use std::task;
 
+use ::http::HeaderValue;
+use ::http::uri::{Authority, Scheme};
+use agent_pool::pool::ExpectedCapacity;
+use agent_pool::rt::TokioIo;
+use tracing::event;
+
 use crate::http::backendtls::VersionedBackendTLS;
 use crate::http::filters;
 use crate::http::filters::BackendRequestTimeout;
@@ -15,11 +21,6 @@ use crate::transport::stream::{LoggingMode, Socket};
 use crate::transport::{hbone, stream};
 use crate::types::agent::Target;
 use crate::*;
-use ::http::HeaderValue;
-use ::http::uri::{Authority, Scheme};
-use agent_pool::pool::ExpectedCapacity;
-use agent_pool::rt::TokioIo;
-use tracing::event;
 
 #[derive(Clone)]
 pub struct Client {
@@ -77,15 +78,64 @@ pub struct TunnelConfig {
 	pub token: Option<HeaderValue>,
 }
 
+/// The role this agentgateway is acting as when originating an HBONE CONNECT.
+/// Will be used as the `x-istio-source` header value.
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[non_exhaustive]
+pub enum HboneSourceRole {
+	Waypoint,
+	Gateway,
+}
+
+impl HboneSourceRole {
+	pub fn as_header_value(self) -> &'static str {
+		match self {
+			HboneSourceRole::Waypoint => "waypoint",
+			HboneSourceRole::Gateway => "gateway",
+		}
+	}
+
+	/// Map an originating bind's tunnel protocol to the role it identifies as on
+	/// outbound HBONE CONNECTs. Returns `None` when no source role applies.
+	pub fn from_tunnel(tp: types::agent::TunnelProtocol) -> Option<Self> {
+		use types::agent::TunnelProtocol;
+		match tp {
+			TunnelProtocol::HboneWaypoint => Some(HboneSourceRole::Waypoint),
+			TunnelProtocol::HboneGateway => Some(HboneSourceRole::Gateway),
+			TunnelProtocol::Direct | TunnelProtocol::Proxy | TunnelProtocol::Connect => None,
+		}
+	}
+}
+
+/// Headers added to outbound HBONE CONNECT requests so that downstream Istio
+/// components can identify the originator.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct HboneHeaders {
+	pub source: Option<HboneSourceRole>,
+	pub forwarded_network: Strng,
+	/// Baggage describing the originating workload (cluster/namespace/etc.).
+	/// Only emitted on the inner CONNECT.
+	pub baggage: Option<Strng>,
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Transport {
 	Plain(ApplicationTransport),
 	Tunnel(ApplicationTransport, TunnelConfig),
-	Hbone(ApplicationTransport, Vec<Identity>),
+	Hbone(ApplicationTransport, u16, Vec<Identity>, HboneHeaders),
 	DoubleHbone {
 		gateway_address: SocketAddr, // Address of network gateway to connect to
-		gateway_identity: Identity,  // Identity of network gateway
+		gateway_identities: Vec<Identity>, // Identities of network gateway (workload + service SANs)
 		waypoint_identities: Vec<Identity>, // Identities of waypoint/workload (workload + service SANs)
+		inner: ApplicationTransport,
+		headers: HboneHeaders,
+	},
+	/// HBONE tunnel to a waypoint proxy. The CONNECT URI uses the service target
+	/// (VIP or hostname) so the waypoint can route, while the physical connection
+	/// goes to the waypoint address.
+	HboneWaypoint {
+		waypoint_address: SocketAddr, // Physical address of waypoint (IP:hbone_port)
+		identities: Vec<Identity>,    // Service SANs for mTLS verification
 		inner: ApplicationTransport,
 	},
 }
@@ -107,25 +157,26 @@ impl Transport {
 		match self {
 			Transport::Plain(inner) => inner,
 			Transport::Tunnel(inner, _) => inner,
-			Transport::Hbone(inner, _) => inner,
+			Transport::Hbone(inner, _, _, _) => inner,
 			Transport::DoubleHbone { inner, .. } => inner,
+			Transport::HboneWaypoint { inner, .. } => inner,
 		}
 	}
 
 	pub fn skip_dns_resolution(&self) -> bool {
 		// For double HBONE, we don't need to resolve the hostname locally
 		// The gateway will resolve it. Use a placeholder dest (won't be used).
-		// Same with Tunnel
+		// Same with Tunnel and HboneWaypoint (we connect to the waypoint address directly).
 		matches!(
 			self,
-			Transport::DoubleHbone { .. } | Transport::Tunnel(_, _)
+			Transport::DoubleHbone { .. } | Transport::Tunnel(_, _) | Transport::HboneWaypoint { .. }
 		)
 	}
 
 	pub fn name(&self) -> &'static str {
 		match self {
-			Transport::Hbone(ApplicationTransport::Plaintext, _) => "hbone",
-			Transport::Hbone(ApplicationTransport::Tls(_), _) => "hbone-tls",
+			Transport::Hbone(ApplicationTransport::Plaintext, _, _, _) => "hbone",
+			Transport::Hbone(ApplicationTransport::Tls(_), _, _, _) => "hbone-tls",
 			Transport::Plain(ApplicationTransport::Plaintext) => "plaintext",
 			Transport::Plain(ApplicationTransport::Tls(_)) => "tls",
 			Transport::Tunnel(ApplicationTransport::Plaintext, _) => "tunnel",
@@ -138,6 +189,14 @@ impl Transport {
 				inner: ApplicationTransport::Tls(_),
 				..
 			} => "doublehbone-tls",
+			Transport::HboneWaypoint {
+				inner: ApplicationTransport::Plaintext,
+				..
+			} => "hbone-waypoint",
+			Transport::HboneWaypoint {
+				inner: ApplicationTransport::Tls(_),
+				..
+			} => "hbone-waypoint-tls",
 		}
 	}
 }
@@ -257,10 +316,9 @@ impl Connector {
 					.map_err(crate::http::Error::new)?;
 				let dest = target.to_string();
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
-				let mut con =
-					Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.transport, false)).await?;
+				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.transport, false)).await?;
 
-				connect_tunnel::handshake(&mut con, &dest, tcfg.token)
+				let con = connect_tunnel::handshake(con, &dest, tcfg.token)
 					.await
 					.map_err(crate::http::Error::new)?;
 				debug!(%dest, "connected to tunnel proxy (CONNECT)");
@@ -280,19 +338,20 @@ impl Connector {
 				socket.ext_mut().insert(stream::HttpProxy);
 				socket
 			},
-			Transport::Hbone(_, identities) => {
+			Transport::Hbone(_, hbone_port, identities, headers) => {
 				let pool = self
 					.hbone_pool
 					.clone()
 					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
-				hbone_tunnel::handshake(pool, ep, identities).await?
+				hbone_tunnel::handshake(pool, ep, hbone_port, identities, headers).await?
 			},
 
 			Transport::DoubleHbone {
 				gateway_address,
-				gateway_identity,
+				gateway_identities,
 				waypoint_identities,
 				inner: _,
+				headers,
 			} => {
 				let pool = self
 					.hbone_pool
@@ -303,10 +362,23 @@ impl Connector {
 					&target,
 					ep,
 					gateway_address,
-					gateway_identity,
+					gateway_identities,
 					waypoint_identities,
+					headers,
 				)
 				.await?
+			},
+
+			Transport::HboneWaypoint {
+				waypoint_address,
+				identities,
+				inner: _,
+			} => {
+				let pool = self
+					.hbone_pool
+					.clone()
+					.ok_or_else(|| crate::http::Error::new(anyhow::anyhow!("hbone pool disabled")))?;
+				hbone_tunnel::handshake_waypoint(pool, &target, waypoint_address, identities).await?
 			},
 		};
 
@@ -417,6 +489,7 @@ impl Client {
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
 		b.timer(hyper_util::rt::tokio::TokioTimer::new());
+		b.http1_preserve_header_case(true);
 		if let Some(pool_max) = backend_config.pool_max_size {
 			b.pool_max_idle_per_host(pool_max);
 		};
@@ -515,6 +588,23 @@ impl Client {
 		Ok(())
 	}
 
+	pub async fn connect_raw(
+		&self,
+		target: Target,
+		transport: Transport,
+	) -> Result<Socket, ProxyError> {
+		let dest = self
+			.connector
+			.resolve_target(transport.skip_dns_resolution(), &target)
+			.await?;
+		self
+			.connector
+			.clone()
+			.connect(target, dest, transport, false)
+			.await
+			.map_err(ProxyError::UpstreamTCPCallFailed)
+	}
+
 	pub async fn call(&self, call: Call) -> Result<http::Response, ProxyError> {
 		let start = std::time::Instant::now();
 		let Call {
@@ -526,7 +616,6 @@ impl Client {
 			.connector
 			.resolve_target(transport.skip_dns_resolution(), &target)
 			.await?;
-		let auto_host = req.extensions().get::<filters::AutoHostname>().is_some();
 		http::modify_req_uri(&mut req, |uri| {
 			let scheme = transport.scheme();
 			// Strip the port from the hostname if its the default already
@@ -539,15 +628,12 @@ impl Client {
 			}
 			uri.scheme = Some(scheme);
 
-			if let Target::Hostname(h, _) = &target
-				&& auto_host
-				&& let Some(a) = uri.authority.as_mut()
-			{
-				*a = Authority::from_str(h)?
-			}
 			Ok(())
 		})
 		.map_err(ProxyError::Processing)?;
+		if req.extensions().get::<filters::AutoHostname>().is_some() {
+			req.headers_mut().remove(::http::header::HOST);
+		}
 		let version = req.version();
 		let transport_name = transport.name();
 		// We are going to do a HTTP absolute form tunnel request. For CONNECT this is handled
@@ -622,5 +708,42 @@ impl Client {
 			.insert(transport::BufferLimit::new(buffer_limit));
 		resp.extensions_mut().insert(ResolvedDestination(dest));
 		Ok(resp)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::agent::TunnelProtocol;
+
+	#[test]
+	fn waypoint_bind_renders_as_waypoint() {
+		assert_eq!(
+			HboneSourceRole::from_tunnel(TunnelProtocol::HboneWaypoint).map(|r| r.as_header_value()),
+			Some("waypoint"),
+		);
+	}
+
+	#[test]
+	fn gateway_bind_renders_as_gateway() {
+		assert_eq!(
+			HboneSourceRole::from_tunnel(TunnelProtocol::HboneGateway).map(|r| r.as_header_value()),
+			Some("gateway"),
+		);
+	}
+
+	#[test]
+	fn non_role_tunnel_protocols_have_no_source_role() {
+		for tp in [
+			TunnelProtocol::Direct,
+			TunnelProtocol::Proxy,
+			TunnelProtocol::Connect,
+		] {
+			assert_eq!(
+				HboneSourceRole::from_tunnel(tp),
+				None,
+				"tunnel protocol {tp:?} should map to no source role",
+			);
+		}
 	}
 }

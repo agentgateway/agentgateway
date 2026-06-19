@@ -4,13 +4,6 @@
 //! For now, to enable people to use hyper 1.0 quicker, this `Client` exists
 //! in much the same way it did in hyper 0.14.
 
-use axum_core::BoxError;
-use futures_util::future::{FutureExt, TryFutureExt};
-use http::uri::Scheme;
-use hyper::body::{Body, Bytes, Frame, SizeHint};
-use hyper::header::{HOST, HeaderValue};
-use hyper::rt::Timer;
-use hyper::{Method, Request, Response, Uri, Version};
 use std::error::Error as StdError;
 use std::fmt;
 use std::fmt::Debug;
@@ -20,6 +13,14 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{self, Context, Poll, ready};
 use std::time::Duration;
+
+use axum_core::BoxError;
+use futures_util::future::{FutureExt, TryFutureExt};
+use http::uri::Scheme;
+use hyper::body::{Body, Bytes, Frame, SizeHint};
+use hyper::header::{HOST, HeaderValue};
+use hyper::rt::Timer;
+use hyper::{Method, Request, Response, Uri, Version};
 use tracing::{debug, trace, warn};
 
 use super::connect::{Alpn, Connect, Connected, Connection};

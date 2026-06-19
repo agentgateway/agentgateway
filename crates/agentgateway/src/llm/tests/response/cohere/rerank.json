@@ -1,0 +1,11 @@
+{
+  "id": "abc123",
+  "results": [
+    { "index": 2, "relevance_score": 0.91 },
+    { "index": 0, "relevance_score": 0.42 }
+  ],
+  "meta": {
+    "billed_units": { "search_units": 1 },
+    "tokens": { "input_tokens": 214.0, "output_tokens": 2.0 }
+  }
+}

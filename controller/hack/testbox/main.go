@@ -14,7 +14,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	shutdowns := make([]shutdownFunc, 0, 7)
+	shutdowns := make([]shutdownFunc, 0, 8)
 
 	start := func(name string, fn func() (shutdownFunc, error)) {
 		shutdown, err := fn()
@@ -30,10 +30,13 @@ func main() {
 	start("dummy-idp", startDummyIDP)
 	start("extproc", startExtProcServer)
 	start("ext-authz", startExtAuthzServer)
+	start("ext-mcp", startExtMcpServer)
 	start("mcp-website-fetcher", startMCPWebsiteServer)
 	start("mcp-admin-server", startMCPAdminServer)
 	start("test-a2a-server", startA2AServer)
+	start("llm", startLLMServer)
 	start("app", startEchoAppServer)
+	start("raw-headers", startRawHeadersServer)
 
 	<-ctx.Done()
 	log.Printf("received shutdown signal")

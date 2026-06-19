@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -10,7 +11,6 @@ use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use serde_json::Value;
-use shellexpand::LookupError;
 use tempfile::TempDir;
 use tracing::info;
 use url::Url;
@@ -43,21 +43,12 @@ pub struct AgentGateway {
 impl AgentGateway {
 	pub async fn new(raw_config: impl Into<String>) -> anyhow::Result<Self> {
 		agent_core::telemetry::testing::setup_test_logging();
-		let port = Arc::new(std::sync::Mutex::new(0u16));
 		let raw_config = raw_config.into();
-		let config = shellexpand::env_with_context(&raw_config, |key| match key {
-			"PORT" => futures::executor::block_on(async {
-				let p = crate::common::compare::find_free_port().await?;
-				*port.lock().unwrap() = p;
-				Ok(Some(p.to_string()))
-			}),
-			_ => Ok(None),
-		})
-		.map_err(|e: LookupError<anyhow::Error>| anyhow::anyhow!("failed to expand env: {}", e))?;
+		// Use port 0 for $PORT so the OS assigns a free port at bind time
+		let config = raw_config.replace("$PORT", "0");
 		let mut js: Value =
 			yamlviajson::from_str(&config).unwrap_or_else(|_| panic!("invalid yaml: {config}"));
 		let config = js.pointer_mut("/config").unwrap();
-		let readiness_port = crate::common::compare::find_free_port().await?;
 		config.as_object_mut().unwrap().insert(
 			"adminAddr".to_string(),
 			Value::String("127.0.0.1:0".to_string()),
@@ -68,20 +59,28 @@ impl AgentGateway {
 		);
 		config.as_object_mut().unwrap().insert(
 			"readinessAddr".to_string(),
-			Value::String(format!("127.0.0.1:{readiness_port}")),
+			Value::String("127.0.0.1:0".to_string()),
 		);
 
 		let js = serde_json::to_string(&js).unwrap();
 		let mut temp_dirs = Vec::new();
-		let (temp, config) = crate::common::compare::create_temp_config_file(&js).await?;
+		let (temp, config) = create_temp_config_file(&js).await?;
 		temp_dirs.push(temp);
 		info!("starting agent...");
 
 		let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+		let (port_tx, port_rx) = tokio::sync::oneshot::channel::<u16>();
 
 		let task = tokio::task::spawn(async move {
-			let config = agentgateway::config::parse_config(js, Some(config)).unwrap();
+			let config =
+				agentgateway::config::parse_config(js, Some(agentgateway::ConfigSource::File(config)))
+					.unwrap();
 			let app = agentgateway::app::run(Arc::new(config)).await.unwrap();
+
+			// Report the actual bound port back to the test.
+			let addrs = app.bind_addresses();
+			let port = addrs.first().map(|a| a.port()).unwrap_or(0);
+			let _ = port_tx.send(port);
 
 			// Wait for either shutdown signal or termination
 			tokio::select! {
@@ -94,10 +93,10 @@ impl AgentGateway {
 			}
 		});
 
+		let port = port_rx.await?;
+		anyhow::ensure!(port != 0, "bind port was not assigned");
 		info!("waiting for agent...");
-		let port = *port.lock().unwrap();
-		crate::common::compare::wait_for_port(port).await?;
-		wait_for_readiness(readiness_port).await?;
+		wait_for_port(port).await?;
 		info!("agent ready!...");
 		let client = ::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
@@ -152,25 +151,29 @@ impl AgentGateway {
 	}
 }
 
-async fn wait_for_readiness(readiness_port: u16) -> anyhow::Result<()> {
+async fn wait_for_port(port: u16) -> anyhow::Result<()> {
 	let timeout_duration = Duration::from_secs(10);
 	let start = std::time::Instant::now();
-	let client = reqwest::Client::new();
-	let url = format!("http://127.0.0.1:{readiness_port}/healthz/ready");
 
 	while start.elapsed() < timeout_duration {
-		if let Ok(resp) = client.get(&url).send().await
-			&& resp.status().is_success()
+		if tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
+			.await
+			.is_ok()
 		{
 			return Ok(());
 		}
 		tokio::time::sleep(Duration::from_millis(100)).await;
 	}
 
-	Err(anyhow::anyhow!(
-		"Timeout waiting for readiness endpoint {}",
-		url
-	))
+	Err(anyhow::anyhow!("Timeout waiting for port {}", port))
+}
+
+async fn create_temp_config_file(content: &str) -> anyhow::Result<(TempDir, PathBuf)> {
+	let temp_dir = TempDir::new()?;
+	let config_path = temp_dir.path().join("config.yaml");
+	tokio::fs::write(&config_path, content).await?;
+
+	Ok((temp_dir, config_path))
 }
 
 impl Drop for AgentGateway {

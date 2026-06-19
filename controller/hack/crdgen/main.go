@@ -26,6 +26,7 @@ import (
 
 const (
 	atLeastOneFieldSetMarker  = "kubebuilder:validation:AtLeastOneFieldSet"
+	conditionalPolicyMarker   = "kubebuilder:validation:ConditionalPolicy"
 	ifThenOnlyFieldsMarker    = "kubebuilder:validation:IfThenOnlyFields"
 	overrideXValidationMarker = "kubebuilder:validation:OverrideXValidation"
 	controllerGenVersion      = "v0.20.0"
@@ -63,6 +64,12 @@ type IfThenOnlyFields struct {
 }
 
 // +controllertools:marker:generateHelp:category="CRD validation"
+type ConditionalPolicy struct {
+	Fields  []string `marker:",optional"`
+	Message string   `marker:",optional"`
+}
+
+// +controllertools:marker:generateHelp:category="CRD validation"
 type OverrideXValidation struct {
 	MessageContains   string `marker:"messageContains"`
 	Rule              string `marker:",optional"`
@@ -73,7 +80,7 @@ type OverrideXValidation struct {
 	OptionalOldSelf   *bool  `marker:"optionalOldSelf,optional"`
 }
 
-func (m AtLeastOneFieldSet) ApplyToSchema(schema *apiextensionsv1.JSONSchemaProps) error {
+func (m AtLeastOneFieldSet) ApplyToSchema(_ *crdmarkers.SchemaContext, schema *apiextensionsv1.JSONSchemaProps) error {
 	allFields := sortedPropertyNames(schema)
 	if len(m.Fields) > 0 {
 		allFields = dedupeAndSort(append(allFields, m.Fields...))
@@ -174,6 +181,7 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 		if !ok {
 			return fmt.Errorf("unexpected converted type %T", converted)
 		}
+		fixIntOrStringSchemas(crdV1)
 		removeDescriptionFromMetadata(crdV1)
 
 		out, err := marshalCRD(crdV1)
@@ -196,9 +204,52 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 	return nil
 }
 
+func fixIntOrStringSchemas(crdObj *apiextensionsv1.CustomResourceDefinition) {
+	for i := range crdObj.Spec.Versions {
+		version := &crdObj.Spec.Versions[i]
+		if version.Schema == nil || version.Schema.OpenAPIV3Schema == nil {
+			continue
+		}
+		crd.EditSchema(version.Schema.OpenAPIV3Schema, intOrStringSchemaFixer{})
+	}
+}
+
+type intOrStringSchemaFixer struct{}
+
+func (intOrStringSchemaFixer) Visit(schema *apiextensionsv1.JSONSchemaProps) crd.SchemaVisitor {
+	if schema == nil {
+		return nil
+	}
+	if schema.XIntOrString && schema.Type == "object" {
+		schema.Type = ""
+		if !hasIntegerAndStringAnyOf(schema.AnyOf) {
+			schema.AnyOf = append(schema.AnyOf,
+				apiextensionsv1.JSONSchemaProps{Type: "integer"},
+				apiextensionsv1.JSONSchemaProps{Type: "string"},
+			)
+		}
+	}
+	return intOrStringSchemaFixer{}
+}
+
+func hasIntegerAndStringAnyOf(anyOf []apiextensionsv1.JSONSchemaProps) bool {
+	hasInteger := false
+	hasString := false
+	for _, schema := range anyOf {
+		switch schema.Type {
+		case "integer":
+			hasInteger = true
+		case "string":
+			hasString = true
+		}
+	}
+	return hasInteger && hasString
+}
+
 func registerCustomMarkers(registry *markers.Registry) error {
 	defs := []*markers.Definition{
 		markers.Must(markers.MakeDefinition(atLeastOneFieldSetMarker, markers.DescribesType, AtLeastOneFieldSet{})),
+		markers.Must(markers.MakeDefinition(conditionalPolicyMarker, markers.DescribesType, ConditionalPolicy{})),
 		markers.Must(markers.MakeDefinition(ifThenOnlyFieldsMarker, markers.DescribesType, IfThenOnlyFields{})),
 		markers.Must(markers.MakeDefinition(overrideXValidationMarker, markers.DescribesType, OverrideXValidation{})),
 	}
@@ -214,43 +265,72 @@ func populateInferredMarkerFields(parser *crd.Parser) error {
 	fieldCache := make(map[crd.TypeIdent][]string)
 	inProgress := make(map[crd.TypeIdent]bool)
 
+	candidates, err := inferredMarkerCandidates(parser)
+	if err != nil {
+		return err
+	}
+
+	for _, candidate := range candidates {
+		inferredFields, err := allJSONFieldNamesForType(parser, candidate.typ, candidate.info, fieldCache, inProgress)
+		if err != nil {
+			return fmt.Errorf("%s: %w", candidate.typ, err)
+		}
+
+		markerVals := candidate.info.Markers[atLeastOneFieldSetMarker]
+		for i, raw := range markerVals {
+			marker, err := asAtLeastOneFieldSet(raw)
+			if err != nil {
+				return fmt.Errorf("%s: %w", candidate.typ, err)
+			}
+			if len(marker.Fields) == 0 {
+				marker.Fields = append([]string(nil), inferredFields...)
+				markerVals[i] = marker
+			}
+		}
+	}
+
+	return nil
+}
+
+type inferredMarkerCandidate struct {
+	typ  crd.TypeIdent
+	info *markers.TypeInfo
+}
+
+// inferredMarkerCandidates returns types with AtLeastOneFieldSet markers that need field
+// inference. Snapshot before inference: walking inline embedded fields can call
+// parser.NeedPackage and mutate parser.Types. Late-loaded types must not join this pass by
+// map-iteration luck; markers left without inferred fields are resolved later from their
+// generated schema node in ApplyToSchema.
+func inferredMarkerCandidates(parser *crd.Parser) ([]inferredMarkerCandidate, error) {
+	candidates := make([]inferredMarkerCandidate, 0, len(parser.Types))
 	for typ, info := range parser.Types {
 		needInferredFields := false
 		for _, raw := range info.Markers[atLeastOneFieldSetMarker] {
 			marker, err := asAtLeastOneFieldSet(raw)
 			if err != nil {
-				return fmt.Errorf("%s: %w", typ, err)
+				return nil, fmt.Errorf("%s: %w", typ, err)
 			}
 			if len(marker.Fields) == 0 {
 				needInferredFields = true
 				break
 			}
 		}
-		if !needInferredFields {
-			continue
-		}
-
-		inferredFields, err := allJSONFieldNamesForType(parser, typ, info, fieldCache, inProgress)
-		if err != nil {
-			return fmt.Errorf("%s: %w", typ, err)
-		}
-
-		if markerVals, ok := info.Markers[atLeastOneFieldSetMarker]; ok {
-			for i, raw := range markerVals {
-				marker, err := asAtLeastOneFieldSet(raw)
-				if err != nil {
-					return fmt.Errorf("%s: %w", typ, err)
-				}
-				if len(marker.Fields) == 0 {
-					marker.Fields = append([]string(nil), inferredFields...)
-					markerVals[i] = marker
-				}
-			}
-			info.Markers[atLeastOneFieldSetMarker] = markerVals
+		if needInferredFields {
+			candidates = append(candidates, inferredMarkerCandidate{typ: typ, info: info})
 		}
 	}
 
-	return nil
+	// Sort so processing order (and which error surfaces first) is deterministic.
+	sort.Slice(candidates, func(i, j int) bool {
+		iPkg := loader.NonVendorPath(candidates[i].typ.Package.PkgPath)
+		jPkg := loader.NonVendorPath(candidates[j].typ.Package.PkgPath)
+		if iPkg != jPkg {
+			return iPkg < jPkg
+		}
+		return candidates[i].typ.Name < candidates[j].typ.Name
+	})
+	return candidates, nil
 }
 
 func asAtLeastOneFieldSet(raw any) (AtLeastOneFieldSet, error) {
@@ -281,6 +361,20 @@ func asOverrideXValidation(raw any) (OverrideXValidation, error) {
 	}
 }
 
+func asConditionalPolicy(raw any) (ConditionalPolicy, error) {
+	switch marker := raw.(type) {
+	case ConditionalPolicy:
+		return marker, nil
+	case *ConditionalPolicy:
+		if marker == nil {
+			return ConditionalPolicy{}, fmt.Errorf("unexpected nil marker for %s", conditionalPolicyMarker)
+		}
+		return *marker, nil
+	default:
+		return ConditionalPolicy{}, fmt.Errorf("unexpected marker value %T for %s", raw, conditionalPolicyMarker)
+	}
+}
+
 func asIfThenOnlyFields(raw any) (IfThenOnlyFields, error) {
 	switch marker := raw.(type) {
 	case IfThenOnlyFields:
@@ -293,6 +387,61 @@ func asIfThenOnlyFields(raw any) (IfThenOnlyFields, error) {
 	default:
 		return IfThenOnlyFields{}, fmt.Errorf("unexpected marker value %T for %s", raw, ifThenOnlyFieldsMarker)
 	}
+}
+
+func applyConditionalPolicy(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker ConditionalPolicy) error {
+	const conditionalField = "conditional"
+	if _, err := validateFieldList(allFields, []string{conditionalField}, "fields"); err != nil {
+		return err
+	}
+
+	requiredFields, err := validateFieldList(allFields, marker.Fields, "fields")
+	if err != nil {
+		return err
+	}
+	if slices.Contains(requiredFields, conditionalField) {
+		return errors.New("fields: conditional cannot be required by ConditionalPolicy")
+	}
+
+	otherFields := make([]string, 0, len(allFields))
+	for _, field := range allFields {
+		if field != conditionalField {
+			otherFields = append(otherFields, field)
+		}
+	}
+
+	conditionalRule := "true"
+	if len(otherFields) > 0 {
+		conditionalRule = fmt.Sprintf("%s == 0", fieldsToOneOfCelRuleStr(otherFields))
+	}
+	if err := (crdmarkers.XValidation{
+		Rule:    fmt.Sprintf("has(self.%s) ? %s : true", conditionalField, conditionalRule),
+		Message: "conditional cannot be set with any other field",
+	}).ApplyToSchema(nil, schema); err != nil {
+		return err
+	}
+
+	if len(requiredFields) == 0 {
+		return nil
+	}
+
+	var requiredRule string
+	message := marker.Message
+	if len(requiredFields) == 1 {
+		requiredRule = fmt.Sprintf("has(self.%s)", requiredFields[0])
+		if message == "" {
+			message = fmt.Sprintf("%s: Required value", requiredFields[0])
+		}
+	} else {
+		requiredRule = fmt.Sprintf("%s == %d", fieldsToOneOfCelRuleStr(requiredFields), len(requiredFields))
+		if message == "" {
+			message = fmt.Sprintf("all fields in %v must be set", requiredFields)
+		}
+	}
+	return crdmarkers.XValidation{
+		Rule:    fmt.Sprintf("has(self.%s) ? true : %s", conditionalField, requiredRule),
+		Message: message,
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyAtLeastOneFieldSet(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker AtLeastOneFieldSet) error {
@@ -312,7 +461,7 @@ func applyAtLeastOneFieldSet(schema *apiextensionsv1.JSONSchemaProps, allFields 
 	return crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("%s >= 1", fieldsToOneOfCelRuleStr(fields)),
 		Message: message,
-	}.ApplyToSchema(schema)
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyIfThenOnlyFields(schema *apiextensionsv1.JSONSchemaProps, allFields []string, marker IfThenOnlyFields) error {
@@ -351,7 +500,7 @@ func applyIfThenOnlyFields(schema *apiextensionsv1.JSONSchemaProps, allFields []
 	return crdmarkers.XValidation{
 		Rule:    fmt.Sprintf("%s ? %s == 0 : true", marker.If, fieldsToOneOfCelRuleStr(disallowedFields)),
 		Message: message,
-	}.ApplyToSchema(schema)
+	}.ApplyToSchema(nil, schema)
 }
 
 func applyOverrideXValidation(schema *apiextensionsv1.JSONSchemaProps, override OverrideXValidation) error {
@@ -491,6 +640,19 @@ func applyPostSchemaMarkersForType(
 				return err
 			}
 			if err := applyIfThenOnlyFields(schema, allFields, marker); err != nil {
+				return err
+			}
+		}
+	}
+
+	if rawMarkers, ok := info.Markers[conditionalPolicyMarker]; ok {
+		allFields := sortedPropertyNames(schema)
+		for _, raw := range rawMarkers {
+			marker, err := asConditionalPolicy(raw)
+			if err != nil {
+				return err
+			}
+			if err := applyConditionalPolicy(schema, allFields, marker); err != nil {
 				return err
 			}
 		}

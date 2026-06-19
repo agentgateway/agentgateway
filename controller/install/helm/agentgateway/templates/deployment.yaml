@@ -26,6 +26,9 @@ spec:
         {{- toYaml .Values.podAnnotations | nindent 8 }}
       labels:
         {{- include "agentgateway.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -111,6 +114,33 @@ spec:
                  from pkg/deployer/wellknown.go rather than AGW_DEFAULT_IMAGE_* env vars. */}}
             - name: AGW_DISCOVERY_NAMESPACE_SELECTORS
               value: {{ .Values.discoveryNamespaceSelectors | toJson | quote }}
+            {{- /* Control-plane-wide Istio mesh defaults */}}
+            {{- with .Values.istio }}
+            {{- if .autoEnabled }}
+            - name: AGW_ISTIO_AUTO_ENABLED
+              value: "true"
+            {{- end }}
+            {{- if .namespace }}
+            - name: AGW_ISTIO_NAMESPACE
+              value: {{ .namespace | quote }}
+            {{- end }}
+            {{- if .revision }}
+            - name: AGW_ISTIO_REVISION
+              value: {{ .revision | quote }}
+            {{- end }}
+            {{- if .clusterId }}
+            - name: AGW_ISTIO_CLUSTER_ID
+              value: {{ .clusterId | quote }}
+            {{- end }}
+            {{- if .network }}
+            - name: AGW_ISTIO_NETWORK
+              value: {{ .network | quote }}
+            {{- end }}
+            {{- if .caAddress }}
+            - name: AGW_ISTIO_CA_ADDRESS
+              value: {{ .caAddress | quote }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.controller.extraEnv }}
             {{- $extraEnv := .Values.controller.extraEnv }}
             {{- range $key := keys $extraEnv | sortAlpha }}
@@ -142,10 +172,8 @@ spec:
             - name: AGW_ENABLE_INFER_EXT
               value: "true"
             {{- end }}
-            {{- if .Values.controller.xds.tls.enabled }}
-            - name: AGW_XDS_TLS_ENABLED
-              value: "true"
-            {{- end }}
+            - name: AGW_XDS_MODE
+              value: {{ .Values.controller.xds.mode | quote }}
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
               value: {{ .Values.gatewayClassParametersRefs | toJson | quote }}
             - name: POD_NAMESPACE
@@ -154,17 +182,17 @@ spec:
                   fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if .Values.controller.xds.tls.enabled }}
+          {{- if .Values.controller.extraVolumeMounts }}
           volumeMounts:
-            - name: xds-tls
-              mountPath: /etc/xds-tls
-              readOnly: true
+            {{- with .Values.controller.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
-      {{- if .Values.controller.xds.tls.enabled }}
+      {{- if.Values.controller.extraVolumes }}
       volumes:
-        - name: xds-tls
-          secret:
-            secretName: agentgateway-xds-cert
+        {{- with .Values.controller.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

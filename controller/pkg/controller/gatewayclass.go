@@ -16,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -191,7 +190,7 @@ func (r *gatewayClassReconciler) buildDesiredGatewayClass(name string, info *dep
 		},
 	}
 	if info.Description != "" {
-		gwc.Spec.Description = ptr.To(info.Description)
+		gwc.Spec.Description = new(info.Description)
 	}
 	return gwc
 }
@@ -212,7 +211,7 @@ func (r *gatewayClassReconciler) applyGatewayClass(gwc *gwv1.GatewayClass, contr
 	}
 
 	_, err = c.Patch(context.Background(), gwc.Name, types.ApplyPatchType, js, metav1.PatchOptions{
-		Force:        ptr.To(true),
+		Force:        new(true),
 		FieldManager: controllerName,
 	})
 	return err

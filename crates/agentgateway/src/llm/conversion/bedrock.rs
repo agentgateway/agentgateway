@@ -10,12 +10,130 @@ use crate::llm::types::{bedrock, messages, responses};
 #[path = "bedrock_tests.rs"]
 mod tests;
 
+fn error_message(bytes: &[u8]) -> String {
+	serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
+		.map(|res| res.message)
+		.unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned())
+}
+
+/// Translate a Bedrock error body into the OpenAI-shaped error envelope clients expect.
+/// Bedrock returns the same error format across models, so every `from_*` module shares this.
+fn invalid_request_error(bytes: &[u8]) -> Result<bytes::Bytes, AIError> {
+	let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
+		event_id: None,
+		error: crate::llm::types::completions::typed::ChatCompletionError {
+			r#type: Some("invalid_request_error".to_string()),
+			message: error_message(bytes),
+			param: None,
+			code: None,
+			event_id: None,
+		},
+	};
+	Ok(bytes::Bytes::from(
+		serde_json::to_vec(&m).map_err(AIError::ResponseMarshal)?,
+	))
+}
+
+pub mod from_rerank {
+	use crate::llm::bedrock::Provider;
+	use crate::llm::types::ResponseType;
+	use crate::llm::{AIError, logged_response_parsing, types};
+
+	/// Build a full Bedrock model ARN if the caller supplied a bare model id.
+	fn model_arn(model: &str, region: &str) -> String {
+		if model.starts_with("arn:") {
+			model.to_string()
+		} else {
+			format!("arn:aws:bedrock:{region}::foundation-model/{model}")
+		}
+	}
+
+	/// `max_tokens_per_doc` plus any unknown passthrough fields, for `additionalModelRequestFields`.
+	fn additional_model_request_fields(req: &types::rerank::Request) -> Option<serde_json::Value> {
+		let mut fields = match req.rest.as_object() {
+			Some(map) if !map.is_empty() => map.clone(),
+			_ => serde_json::Map::new(),
+		};
+		if let Some(max) = req.max_tokens_per_doc {
+			fields.insert("max_tokens_per_doc".to_string(), max.into());
+		}
+		(!fields.is_empty()).then(|| serde_json::Value::Object(fields))
+	}
+
+	pub fn translate(req: &types::rerank::Request, provider: &Provider) -> Result<Vec<u8>, AIError> {
+		if req.documents.is_empty() {
+			return Err(AIError::MissingField("rerank documents".into()));
+		}
+		let model = provider
+			.model
+			.as_deref()
+			.or(req.model.as_deref())
+			.unwrap_or_default();
+		let sources = req
+			.documents
+			.iter()
+			.map(|d| types::bedrock::RerankSource {
+				r#type: types::bedrock::RerankSourceType::Inline,
+				inline_document_source: types::bedrock::RerankInlineDoc {
+					r#type: types::bedrock::RerankContentType::Text,
+					text_document: types::bedrock::RerankText { text: d.as_text() },
+				},
+			})
+			.collect();
+		let bedrock_req = types::bedrock::RerankRequest {
+			queries: vec![types::bedrock::RerankQuery {
+				r#type: types::bedrock::RerankContentType::Text,
+				text_query: types::bedrock::RerankText {
+					text: req.query.clone(),
+				},
+			}],
+			sources,
+			reranking_configuration: types::bedrock::RerankConfiguration {
+				r#type: types::bedrock::RerankConfigType::BedrockRerankingModel,
+				bedrock_reranking_configuration: types::bedrock::RerankInner {
+					model_configuration: types::bedrock::RerankModelConfig {
+						model_arn: model_arn(model, provider.region.as_str()),
+						additional_model_request_fields: additional_model_request_fields(req),
+					},
+					number_of_results: req.top_n.unwrap_or(req.documents.len() as u32),
+				},
+			},
+		};
+		serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)
+	}
+
+	/// Bedrock returns only `index` + `relevanceScore`; it does not echo document text.
+	pub fn translate_response(bytes: &[u8]) -> Result<Box<dyn ResponseType>, AIError> {
+		let resp: types::bedrock::RerankResponse =
+			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+		let results = resp
+			.results
+			.into_iter()
+			.map(|r| types::rerank::RerankResult {
+				index: r.index,
+				relevance_score: r.relevance_score,
+				document: None,
+			})
+			.collect();
+		let out = types::rerank::Response {
+			id: None,
+			results,
+			meta: None,
+			rest: serde_json::Value::Null,
+		};
+		Ok(Box::new(out))
+	}
+
+	pub fn translate_error(bytes: &bytes::Bytes) -> Result<bytes::Bytes, AIError> {
+		super::invalid_request_error(bytes)
+	}
+}
+
 pub mod from_embeddings {
 	use crate::json;
-	use crate::llm::AIError;
 	use crate::llm::bedrock::Provider;
-	use crate::llm::types;
 	use crate::llm::types::ResponseType;
+	use crate::llm::{AIError, logged_response_parsing, types};
 
 	pub fn translate(
 		req: &types::embeddings::Request,
@@ -81,7 +199,7 @@ pub mod from_embeddings {
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		if model.contains("cohere") {
 			let resp: types::bedrock::CohereEmbeddingResponse =
-				serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+				serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 
 			// Cohere doesn't include token counts in the JSON body;
 			// Bedrock surfaces them via response headers instead.
@@ -115,7 +233,7 @@ pub mod from_embeddings {
 			Ok(Box::new(openai_resp))
 		} else {
 			let mut resp: types::bedrock::AmazonTitanV2EmbeddingResponse =
-				serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+				serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 			let typed_resp = types::embeddings::typed::Response {
 				object: "list".to_string(),
 				data: vec![types::embeddings::typed::Embedding {
@@ -149,22 +267,7 @@ pub mod from_embeddings {
 	}
 
 	pub fn translate_error(bytes: &bytes::Bytes) -> Result<bytes::Bytes, AIError> {
-		// Bedrock usually returns the same error format for all models
-		let res = serde_json::from_slice::<types::bedrock::ConverseErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
-		let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
-			event_id: None,
-			error: crate::llm::types::completions::typed::ChatCompletionError {
-				r#type: Some("invalid_request_error".to_string()),
-				message: res.message,
-				param: None,
-				code: None,
-				event_id: None,
-			},
-		};
-		Ok(bytes::Bytes::from(
-			serde_json::to_vec(&m).map_err(AIError::ResponseMarshal)?,
-		))
+		super::invalid_request_error(bytes)
 	}
 }
 
@@ -185,8 +288,7 @@ pub mod from_completions {
 	use crate::llm::conversion::completions::{extract_system_text, parse_data_url};
 	use crate::llm::types::ResponseType;
 	use crate::llm::types::completions::typed::UsagePromptDetails;
-	use crate::llm::{AIError, AmendOnDrop, types};
-
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::{json, parse};
 
 	fn text_blocks_from_user_content(
@@ -234,6 +336,20 @@ pub mod from_completions {
 		msg: &completions::RequestAssistantMessage,
 	) -> Vec<bedrock::ContentBlock> {
 		let mut content = Vec::new();
+		// Replay a previously-emitted thinking block first. Anthropic (via Bedrock Converse) requires
+		// the reasoningContent block to precede the text/toolUse blocks of the same assistant turn,
+		// and to carry the original cryptographic signature so Bedrock can validate it. Only replay
+		// when a non-empty signature is present — Bedrock rejects an unsigned thinking block.
+		if let Some(signature) = msg.reasoning_signature.as_deref().filter(|s| !s.is_empty()) {
+			content.push(bedrock::ContentBlock::ReasoningContent(
+				bedrock::ReasoningContentBlock::Structured {
+					reasoning_text: bedrock::ReasoningText {
+						text: msg.reasoning_content.clone().unwrap_or_default(),
+						signature: Some(signature.to_string()),
+					},
+				},
+			));
+		}
 		if let Some(content_field) = &msg.content {
 			match content_field {
 				completions::RequestAssistantMessageContent::Text(text) => {
@@ -327,7 +443,7 @@ pub mod from_completions {
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestParsing)?;
 		let model_id = typed.model.clone().unwrap_or_default();
 		let xlated = translate_internal(typed, model_id, provider, headers, prompt_caching);
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
@@ -422,29 +538,9 @@ pub mod from_completions {
 			None
 		};
 
-		// Build metadata from:
-		// - OpenAI `user` field (normalized as user_id)
-		// - OpenAI `metadata` field (agentgateway uses this to carry guardrail/model-armor knobs through Messages→Completions)
-		// - x-bedrock-metadata header (set by ExtAuthz or transformation policy)
-		let mut metadata = req
-			.user
-			.map(|user| HashMap::from([("user_id".to_string(), user)]))
-			.unwrap_or_default();
-
-		// Merge OpenAI request `metadata` when it is an object of string values
-		if let Some(serde_json::Value::Object(obj)) = &req.metadata {
-			for (k, v) in obj {
-				if let serde_json::Value::String(s) = v {
-					metadata.insert(k.clone(), s.clone());
-				}
-			}
-		}
-
-		// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
-		if let Some(header_metadata) = super::helpers::extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
-		}
-
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
+		let metadata = super::helpers::extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -555,7 +651,6 @@ pub mod from_completions {
 			request_metadata: metadata,
 			performance_config: None,
 		};
-
 		if let Some(caching) = prompt_caching {
 			if caching.cache_messages && supports_caching {
 				helpers::insert_message_cache_point(
@@ -598,19 +693,11 @@ pub mod from_completions {
 					serde_json::json!({ "type": "object", "additionalProperties": true }),
 				),
 			),
-			completions::ResponseFormat::JsonSchema { json_schema } => {
-				let Some(schema) = json_schema.schema.as_ref() else {
-					tracing::warn!(
-						"Dropping response_format.json_schema for Bedrock conversion because schema is missing"
-					);
-					return None;
-				};
-				(
-					Some(json_schema.name.clone()),
-					json_schema.description.clone(),
-					std::borrow::Cow::Borrowed(schema),
-				)
-			},
+			completions::ResponseFormat::JsonSchema { json_schema } => (
+				Some(json_schema.name.clone()),
+				json_schema.description.clone(),
+				std::borrow::Cow::Borrowed(&json_schema.schema),
+			),
 		};
 
 		let Ok(schema_json) = serde_json::to_string(schema.as_ref()) else {
@@ -636,7 +723,7 @@ pub mod from_completions {
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
+			.map_err(logged_response_parsing(bytes))?;
 		let openai = translate_response_internal(resp, model)?;
 		let passthrough = json::convert::<_, types::completions::Response>(&openai)
 			.map_err(AIError::ResponseParsing)?;
@@ -652,13 +739,12 @@ pub mod from_completions {
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-		let res = serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
+		let message = super::error_message(bytes);
 		let m = completions::ChatCompletionErrorResponse {
 			event_id: None,
 			error: completions::ChatCompletionError {
 				r#type: Some("invalid_request_error".to_string()),
-				message: res.message,
+				message,
 				param: None,
 				code: None,
 				event_id: None,
@@ -749,7 +835,22 @@ pub mod from_completions {
 							) => {
 								dr.reasoning_content = Some("[REDACTED]".to_string());
 							},
-							bedrock::ContentBlockDelta::ReasoningContent(_) => {},
+							bedrock::ContentBlockDelta::ReasoningContent(
+								bedrock::ReasoningContentBlockDelta::Signature(sig),
+							) => {
+								// Forward the cryptographic signature so a replayed thinking block can be
+								// validated by Bedrock on the next turn. Bedrock emits a single Signature
+								// delta per reasoning block as the terminal piece, so a later overwrite
+								// here would be a protocol change, not normal multi-chunk accumulation.
+								dr.reasoning_signature = Some(sig);
+							},
+							bedrock::ContentBlockDelta::ReasoningContent(other) => {
+								// `ReasoningContentBlockDelta` is `#[non_exhaustive]`; this arm catches
+								// the `Unknown` variant and any future protocol additions that we have
+								// not yet wired up explicitly. Log so a silently-introduced delta type
+								// shows up in dev rather than being invisibly dropped.
+								tracing::debug!(?other, "unhandled Bedrock reasoning content delta variant",);
+							},
 							bedrock::ContentBlockDelta::Text(t) => {
 								dr.content = Some(t);
 							},
@@ -899,10 +1000,10 @@ pub mod from_completions {
 }
 
 pub mod from_messages {
-	use agent_core::strng;
 	use std::collections::HashSet;
 	use std::time::Instant;
 
+	use agent_core::strng;
 	use bytes::Bytes;
 	use types::bedrock;
 	use types::messages::typed as messages;
@@ -911,8 +1012,7 @@ pub mod from_messages {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, types};
-
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::{json, parse};
 
 	/// translate an Anthropic messages request to a Bedrock converse request
@@ -921,7 +1021,7 @@ pub mod from_messages {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 	) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestParsing)?;
 		let xlated = translate_internal(typed, provider, headers)?;
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
@@ -968,7 +1068,7 @@ pub mod from_messages {
 
 		// Convert system prompt to Bedrock format with cache point insertion
 		// Note: Anthropic MessagesRequest.system is Option<SystemPrompt>, Bedrock wants Option<Vec<SystemContentBlock>>
-		let system_content = req.system.as_ref().map(|sys| {
+		let mut system_content = req.system.as_ref().map(|sys| {
 			let mut result = Vec::new();
 			match sys {
 				messages::SystemPrompt::Text(text) => {
@@ -999,151 +1099,168 @@ pub mod from_messages {
 		});
 
 		// Convert typed Anthropic messages to Bedrock messages
-		let messages: Vec<bedrock::Message> = req
-			.messages
-			.into_iter()
-			.map(|msg| -> Result<bedrock::Message, AIError> {
-				let role = match msg.role {
-					messages::Role::Assistant => bedrock::Role::Assistant,
-					messages::Role::User => bedrock::Role::User,
-				};
-
-				// Convert ContentBlocks from Anthropic → Bedrock, inserting cache points
-				let mut content = Vec::with_capacity(msg.content.len() * 2);
-				for block in msg.content {
-					let (bedrock_block, has_cache_control) = match block {
-						messages::ContentBlock::Text(messages::ContentTextBlock {
+		let mut messages = Vec::new();
+		for msg in req.messages {
+			let role = match msg.role {
+				messages::Role::Assistant => bedrock::Role::Assistant,
+				messages::Role::User => bedrock::Role::User,
+				messages::Role::System => {
+					for block in msg.content {
+						if let messages::ContentBlock::Text(messages::ContentTextBlock {
 							text,
 							cache_control,
 							..
-						}) => (bedrock::ContentBlock::Text(text), cache_control.is_some()),
-						messages::ContentBlock::Image(messages::ContentImageBlock {
-							source,
-							cache_control,
-						}) => {
-							if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
-								&& let Some(data) = source.get("data").and_then(|v| v.as_str())
-							{
-								let format = media_type
-									.strip_prefix("image/")
-									.unwrap_or(media_type)
-									.to_string();
-								(
-									bedrock::ContentBlock::Image(bedrock::ImageBlock {
-										format,
-										source: bedrock::ImageSource {
-											bytes: data.to_string(),
-										},
-									}),
-									cache_control.is_some(),
-									)
-								} else {
-									return Err(AIError::UnsupportedConversion(strng::literal!(
-										"bedrock image source must be base64 (media_type + data); URL image sources are unsupported"
-									)));
-								}
-							},
-						messages::ContentBlock::ToolUse {
-							id,
-							name,
-							input,
-							cache_control,
-						} => (
-							bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
-								tool_use_id: id,
-								name,
-								input,
-							}),
-							cache_control.is_some(),
-						),
-						messages::ContentBlock::ToolResult {
-							tool_use_id,
-							content: tool_content,
-							is_error,
-							cache_control,
-						} => {
-							let bedrock_content = match tool_content {
-								messages::ToolResultContent::Text(text) => {
-									vec![bedrock::ToolResultContentBlock::Text(text)]
-								},
-								messages::ToolResultContent::Array(parts) => parts
-									.into_iter()
-									.filter_map(|part| match part {
-										messages::ToolResultContentPart::Text { text, .. } => {
-											Some(bedrock::ToolResultContentBlock::Text(text))
-										},
-										messages::ToolResultContentPart::Image { source, .. } => {
-											if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
-												&& let Some(data) = source.get("data").and_then(|v| v.as_str())
-											{
-												let format = media_type
-													.strip_prefix("image/")
-													.unwrap_or(media_type)
-													.to_string();
-												Some(bedrock::ToolResultContentBlock::Image(
-													bedrock::ImageBlock {
-														format,
-														source: bedrock::ImageSource {
-															bytes: data.to_string(),
-														},
-													},
-												))
-											} else {
-												None
-											}
-										},
-										_ => None,
-									})
-									.collect(),
-							};
+						}) = block
+						{
+							let system_content = system_content.get_or_insert_with(Vec::new);
+							system_content.push(bedrock::SystemContentBlock::Text { text });
+							if cache_control.is_some() && cache_points_used < 4 {
+								system_content.push(bedrock::SystemContentBlock::CachePoint {
+									cache_point: helpers::create_cache_point(),
+								});
+								cache_points_used += 1;
+							}
+						}
+					}
+					continue;
+				},
+			};
 
-							let status = is_error.map(|is_err| match is_err {
-								true => bedrock::ToolResultStatus::Error,
-								false => bedrock::ToolResultStatus::Success,
-							});
-
+			// Convert ContentBlocks from Anthropic → Bedrock, inserting cache points
+			let mut content = Vec::with_capacity(msg.content.len() * 2);
+			for block in msg.content {
+				let (bedrock_block, has_cache_control) = match block {
+					messages::ContentBlock::Text(messages::ContentTextBlock {
+						text,
+						cache_control,
+						..
+					}) => (bedrock::ContentBlock::Text(text), cache_control.is_some()),
+					messages::ContentBlock::Image(messages::ContentImageBlock {
+						source,
+						cache_control,
+					}) => {
+						if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
+							&& let Some(data) = source.get("data").and_then(|v| v.as_str())
+						{
+							let format = media_type
+								.strip_prefix("image/")
+								.unwrap_or(media_type)
+								.to_string();
 							(
-								bedrock::ContentBlock::ToolResult(bedrock::ToolResultBlock {
-									tool_use_id,
-									content: bedrock_content,
-									status,
+								bedrock::ContentBlock::Image(bedrock::ImageBlock {
+									format,
+									source: bedrock::ImageSource {
+										bytes: data.to_string(),
+									},
 								}),
 								cache_control.is_some(),
 							)
-						},
-						messages::ContentBlock::Thinking {
-							thinking,
-							signature,
-						} => (
-							bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Structured {
-								reasoning_text: bedrock::ReasoningText {
-									text: thinking,
-									signature: Some(signature),
-								},
+						} else {
+							return Err(AIError::UnsupportedConversion(strng::literal!(
+								"bedrock image source must be base64 (media_type + data); URL image sources are unsupported"
+							)));
+						}
+					},
+					messages::ContentBlock::ToolUse {
+						id,
+						name,
+						input,
+						cache_control,
+					} => (
+						bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
+							tool_use_id: id,
+							name,
+							input,
+						}),
+						cache_control.is_some(),
+					),
+					messages::ContentBlock::ToolResult {
+						tool_use_id,
+						content: tool_content,
+						is_error,
+						cache_control,
+					} => {
+						let bedrock_content = match tool_content {
+							messages::ToolResultContent::Text(text) => {
+								vec![bedrock::ToolResultContentBlock::Text(text)]
+							},
+							messages::ToolResultContent::Array(parts) => parts
+								.into_iter()
+								.filter_map(|part| match part {
+									messages::ToolResultContentPart::Text { text, .. } => {
+										Some(bedrock::ToolResultContentBlock::Text(text))
+									},
+									messages::ToolResultContentPart::Image { source, .. } => {
+										if let Some(media_type) = source.get("media_type").and_then(|v| v.as_str())
+											&& let Some(data) = source.get("data").and_then(|v| v.as_str())
+										{
+											let format = media_type
+												.strip_prefix("image/")
+												.unwrap_or(media_type)
+												.to_string();
+											Some(bedrock::ToolResultContentBlock::Image(
+												bedrock::ImageBlock {
+													format,
+													source: bedrock::ImageSource {
+														bytes: data.to_string(),
+													},
+												},
+											))
+										} else {
+											None
+										}
+									},
+									_ => None,
+								})
+								.collect(),
+						};
+
+						let status = is_error.map(|is_err| match is_err {
+							true => bedrock::ToolResultStatus::Error,
+							false => bedrock::ToolResultStatus::Success,
+						});
+
+						(
+							bedrock::ContentBlock::ToolResult(bedrock::ToolResultBlock {
+								tool_use_id,
+								content: bedrock_content,
+								status,
 							}),
-							false,
-						),
-						messages::ContentBlock::WebSearchToolResult { .. } => continue,
-						messages::ContentBlock::RedactedThinking { .. } => continue,
-						messages::ContentBlock::Document(_) => continue,
-						messages::ContentBlock::SearchResult(_) => continue,
-						messages::ContentBlock::ServerToolUse { .. } => continue,
-						messages::ContentBlock::Unknown => continue,
-					};
+							cache_control.is_some(),
+						)
+					},
+					messages::ContentBlock::Thinking {
+						thinking,
+						signature,
+					} => (
+						bedrock::ContentBlock::ReasoningContent(bedrock::ReasoningContentBlock::Structured {
+							reasoning_text: bedrock::ReasoningText {
+								text: thinking,
+								signature: Some(signature),
+							},
+						}),
+						false,
+					),
+					messages::ContentBlock::WebSearchToolResult { .. } => continue,
+					messages::ContentBlock::RedactedThinking { .. } => continue,
+					messages::ContentBlock::Document(_) => continue,
+					messages::ContentBlock::SearchResult(_) => continue,
+					messages::ContentBlock::ServerToolUse { .. } => continue,
+					messages::ContentBlock::Unknown => continue,
+				};
 
-					content.push(bedrock_block);
+				content.push(bedrock_block);
 
-					if has_cache_control && cache_points_used < 4 {
-						content.push(bedrock::ContentBlock::CachePoint(
-							helpers::create_cache_point(),
-						));
-						cache_points_used += 1;
-					}
+				if has_cache_control && cache_points_used < 4 {
+					content.push(bedrock::ContentBlock::CachePoint(
+						helpers::create_cache_point(),
+					));
+					cache_points_used += 1;
 				}
+			}
 
-					Ok(bedrock::Message { role, content })
-				})
-				.collect::<Result<Vec<_>, AIError>>()?;
+			messages.push(bedrock::Message { role, content });
+		}
 
 		// Build inference config from typed fields
 		let inference_config = bedrock::InferenceConfiguration {
@@ -1269,14 +1386,17 @@ pub mod from_messages {
 			None
 		};
 
-		// Build metadata from request field and x-bedrock-metadata header
-		let mut metadata = req.metadata.map(|m| m.fields).unwrap_or_default();
-
-		// Extract metadata from x-bedrock-metadata header (set by ExtAuthz or transformation policy)
-		if let Some(header_metadata) = helpers::extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
+		if let Some(metadata) = req.metadata.map(|m| m.fields)
+			&& !metadata.is_empty()
+		{
+			// Anthropic metadata is opaque to Bedrock requestMetadata validation. Preserve it
+			// in the Anthropic model request envelope instead of dropping provider-specific data.
+			upsert_additional_field("metadata", serde_json::json!(metadata));
 		}
 
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
+		let metadata = helpers::extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -1328,7 +1448,7 @@ pub mod from_messages {
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
+			.map_err(logged_response_parsing(bytes))?;
 		let openai = translate_response_internal(resp, model)?;
 		let passthrough =
 			json::convert::<_, types::messages::Response>(&openai).map_err(AIError::ResponseParsing)?;
@@ -1344,13 +1464,12 @@ pub mod from_messages {
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-		let res = serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
+		let message = super::error_message(bytes);
 		let m = types::messages::typed::MessagesErrorResponse {
 			r#type: "".to_owned(),
 			error: types::messages::typed::MessagesError {
 				r#type: "invalid_request_error".to_string(),
-				message: res.message,
+				message,
 			},
 		};
 		Ok(Bytes::from(
@@ -1364,11 +1483,13 @@ pub mod from_messages {
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
+		include_completion_in_log: bool,
 	) -> Body {
 		let mut saw_token = false;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
+		let mut completion = include_completion_in_log.then(String::new);
 		let model = model.to_string();
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
@@ -1489,6 +1610,9 @@ pub mod from_messages {
 
 						let anthropic_delta = match d {
 							bedrock::ContentBlockDelta::Text(text) => {
+								if let Some(c) = completion.as_mut() {
+									c.push_str(&text);
+								}
 								messages::ContentBlockDelta::TextDelta { text }
 							},
 							bedrock::ContentBlockDelta::ReasoningContent(rc) => match rc {
@@ -1548,6 +1672,9 @@ pub mod from_messages {
 							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
+							if let Some(c) = completion.take() {
+								r.response.completion = Some(vec![c]);
+							}
 						});
 					}
 
@@ -1626,8 +1753,7 @@ pub mod from_responses {
 	use crate::http::Body;
 	use crate::llm::bedrock::Provider;
 	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, types};
-
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::{json, parse};
 
 	/// translate an OpenAI responses request to a Bedrock converse request
@@ -2022,13 +2148,9 @@ pub mod from_responses {
 			None
 		};
 
-		// Extract metadata from request body and merge with headers (consistent with Messages/Completions)
-		let mut metadata = req.metadata.unwrap_or_default();
-
-		if let Some(header_metadata) = extract_metadata_from_headers(headers) {
-			metadata.extend(header_metadata);
-		}
-
+		// x-bedrock-metadata is an explicit Bedrock requestMetadata escape hatch. Forward it
+		// unchanged so Bedrock, not the gateway, rejects operator-supplied invalid values.
+		let metadata = extract_metadata_from_headers(headers).unwrap_or_default();
 		let metadata = if metadata.is_empty() {
 			None
 		} else {
@@ -2118,19 +2240,11 @@ pub mod from_responses {
 					serde_json::json!({ "type": "object", "additionalProperties": true }),
 				),
 			),
-			responses::TextResponseFormatConfiguration::JsonSchema(json_schema) => {
-				let Some(schema) = json_schema.schema.as_ref() else {
-					tracing::warn!(
-						"Dropping text.format.json_schema for Bedrock conversion because schema is missing"
-					);
-					return None;
-				};
-				(
-					Some(json_schema.name.clone()),
-					json_schema.description.clone(),
-					std::borrow::Cow::Borrowed(schema),
-				)
-			},
+			responses::TextResponseFormatConfiguration::JsonSchema(json_schema) => (
+				Some(json_schema.name.clone()),
+				json_schema.description.clone(),
+				std::borrow::Cow::Borrowed(&json_schema.schema),
+			),
 		};
 
 		let Ok(schema_json) = serde_json::to_string(schema.as_ref()) else {
@@ -2154,7 +2268,7 @@ pub mod from_responses {
 
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
-			.map_err(AIError::ResponseParsing)?;
+			.map_err(logged_response_parsing(bytes))?;
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
 		let typed = adapter.to_responses_typed();
 		let mut passthrough =
@@ -2170,13 +2284,12 @@ pub mod from_responses {
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
-		let res = serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
-			.map_err(AIError::ResponseMarshal)?;
+		let message = super::error_message(bytes);
 		let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
 			event_id: None,
 			error: crate::llm::types::completions::typed::ChatCompletionError {
 				r#type: Some("invalid_request_error".to_string()),
-				message: res.message,
+				message,
 				param: None,
 				code: None,
 				event_id: None,
@@ -2577,8 +2690,50 @@ pub mod from_anthropic_token_count {
 
 mod helpers {
 	use std::collections::HashMap;
+	use std::sync::LazyLock;
 
 	use crate::llm::AIError;
+
+	// From https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
+	const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
+		"computer-use-2025-01-24",
+		"token-efficient-tools-2025-02-19",
+		"interleaved-thinking-2025-05-14",
+		"output-128k-2025-02-19",
+		"dev-full-thinking-2025-05-14",
+		"context-1m-2025-08-07",
+		"context-management-2025-06-27",
+		"effort-2025-11-24",
+		"tool-search-tool-2025-10-19",
+		"tool-examples-2025-10-29",
+	];
+	const ALLOWED_BETA_HEADERS_ENV: &str = "AGENTGATEWAY_BEDROCK_ANTHROPIC_BETA_HEADERS";
+	const DEFAULT_SENTINEL: &str = "default";
+
+	static ALLOWED_BETA_HEADERS: LazyLock<Vec<String>> = LazyLock::new(|| {
+		let default_allowed_beta_headers = || {
+			DEFAULT_ALLOWED_BETA_HEADERS
+				.iter()
+				.map(|feature| feature.to_string())
+				.collect::<Vec<_>>()
+		};
+		let Ok(env) = std::env::var(ALLOWED_BETA_HEADERS_ENV) else {
+			return default_allowed_beta_headers();
+		};
+
+		env
+			.split(',')
+			.map(str::trim)
+			.filter(|feature| !feature.is_empty())
+			.flat_map(|feature| {
+				if feature == DEFAULT_SENTINEL {
+					default_allowed_beta_headers()
+				} else {
+					vec![feature.to_string()]
+				}
+			})
+			.collect()
+	});
 	use crate::llm::types::bedrock;
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
@@ -2597,6 +2752,12 @@ mod helpers {
 			return true;
 		}
 		if model_lower.contains("amazon.nova") {
+			return true;
+		}
+		if model_lower.contains(":application-inference-profile/") {
+			// If they are using inference profiles, the model name is obscured; we have no clue whether
+			// It's supported or not.
+			// Instead, we assume true; if users want to use models without support they can turn off caching manually.
 			return true;
 		}
 		false
@@ -2690,6 +2851,13 @@ mod helpers {
 	pub fn extract_beta_headers(
 		headers: &crate::http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
+		extract_beta_headers_with_allowed(headers, &ALLOWED_BETA_HEADERS)
+	}
+
+	pub fn extract_beta_headers_with_allowed(
+		headers: &crate::http::HeaderMap,
+		allowed_beta_headers: &[String],
+	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
 		let mut beta_features = Vec::new();
 
 		// Collect all anthropic-beta header values
@@ -2701,7 +2869,10 @@ mod helpers {
 			// Handle comma-separated values within a single header
 			for feature in header_str.split(',') {
 				let trimmed = feature.trim();
-				if !trimmed.is_empty() {
+				if allowed_beta_headers
+					.iter()
+					.any(|feature| feature == trimmed)
+				{
 					// Add each beta feature as a string value in the array
 					beta_features.push(serde_json::Value::String(trimmed.to_string()));
 				}
@@ -2779,20 +2950,32 @@ impl ConverseResponseAdapter {
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
 		let mut reasoning_content = None;
+		let mut reasoning_signature = None;
 		for block in &self.message.content {
 			match block {
 				bedrock::ContentBlock::Text(text) => {
-					content = Some(text.clone());
+					// A message may contain multiple text blocks (e.g. text split around
+					// citations); concatenate them into the single OpenAI `content` field.
+					content.get_or_insert_with(String::new).push_str(text);
 				},
 				bedrock::ContentBlock::ReasoningContent(reasoning) => {
-					// Extract text from either format
-					let text = match reasoning {
-						bedrock::ReasoningContentBlock::Structured { reasoning_text } => {
-							reasoning_text.text.clone()
-						},
-						bedrock::ReasoningContentBlock::Simple { text } => text.clone(),
+					// Extract text and signature from either format. The signature is forwarded so
+					// downstream consumers can preserve thinking blocks across conversation turns;
+					// empty signatures are excluded so callers can use Option::is_some() as the
+					// "safe to replay" guard.
+					let (text, signature) = match reasoning {
+						bedrock::ReasoningContentBlock::Structured { reasoning_text } => (
+							reasoning_text.text.clone(),
+							reasoning_text.signature.clone(),
+						),
+						bedrock::ReasoningContentBlock::Simple { text } => (text.clone(), None),
 					};
 					reasoning_content = Some(text);
+					if let Some(sig) = signature
+						&& !sig.is_empty()
+					{
+						reasoning_signature = Some(sig);
+					}
 				},
 				bedrock::ContentBlock::ToolUse(tu) => {
 					let Some(args) = serde_json::to_string(&tu.input).ok() else {
@@ -2830,6 +3013,7 @@ impl ConverseResponseAdapter {
 			audio: None,
 			extra: None,
 			reasoning_content,
+			reasoning_signature,
 		};
 
 		let choice = completions::ChatChoice {

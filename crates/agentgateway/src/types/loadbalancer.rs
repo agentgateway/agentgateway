@@ -1,12 +1,16 @@
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use std::future::pending;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
+
 use arc_swap::ArcSwap;
+use futures_util::SinkExt;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use rand::RngExt;
+use rand::distr::Distribution;
+use rand::distr::weighted::WeightedIndex;
 use serde::ser::SerializeSeq;
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use tokio::sync::mpsc;
 use tokio::time::sleep_until;
 
 use crate::types::discovery::{
@@ -20,21 +24,144 @@ type EndpointKey = Strng;
 pub struct EndpointWithInfo<T> {
 	pub endpoint: Arc<T>,
 	pub info: Arc<EndpointInfo>,
+	pub capacity: u32,
 }
 
 impl<T> EndpointWithInfo<T> {
 	pub fn new(ep: T) -> Self {
+		Self::with_capacity(ep, 1)
+	}
+
+	pub fn with_capacity(ep: T, capacity: u32) -> Self {
 		Self {
 			endpoint: Arc::new(ep),
 			info: Default::default(),
+			capacity,
 		}
 	}
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum Sampler {
+	/// Every endpoint has the default capacity of 1. No need for weighted sampling.
+	#[default]
+	Uniform,
+	/// Weighted sampling by capacity via a cached prefix sum.
+	Weighted(WeightedIndex<u64>),
+	/// At least one endpoint is present, but total capacity is zero — every
+	/// active endpoint is drained. Distinct from the zero-endpoints case,
+	/// which keeps the default `Uniform` sampler.
+	Drained,
+}
+
+impl Sampler {
+	pub fn is_drained(&self) -> bool {
+		matches!(self, Sampler::Drained)
+	}
+}
+
+fn build_sampler<T>(active: &IndexMap<EndpointKey, EndpointWithInfo<T>>) -> Sampler {
+	if active.is_empty() {
+		return Sampler::default();
+	}
+	let mut all_ones = true;
+	let mut any_nonzero = false;
+	for ewi in active.values() {
+		if ewi.capacity != 0 {
+			any_nonzero = true;
+		}
+		if ewi.capacity != 1 {
+			all_ones = false;
+		}
+	}
+	if !any_nonzero {
+		return Sampler::Drained;
+	}
+	if all_ones {
+		return Sampler::Uniform;
+	}
+
+	let dist = WeightedIndex::new(active.values().map(|e| e.capacity as u64))
+		.expect("non-empty, non-all-zero u64 weights cannot fail WeightedIndex::new");
+	Sampler::Weighted(dist)
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct EndpointGroup<T> {
 	active: IndexMap<EndpointKey, EndpointWithInfo<T>>,
 	rejected: IndexMap<EndpointKey, EndpointWithInfo<T>>,
+	#[serde(skip)]
+	sampler: Sampler,
+}
+
+impl<T> EndpointGroup<T> {
+	fn from_pools(
+		active: IndexMap<EndpointKey, EndpointWithInfo<T>>,
+		rejected: IndexMap<EndpointKey, EndpointWithInfo<T>>,
+	) -> Self {
+		let sampler = build_sampler(&active);
+		Self {
+			active,
+			rejected,
+			sampler,
+		}
+	}
+
+	/// Promote an endpoint to active, removing any prior rejected entry under the same key.
+	fn add(&mut self, key: EndpointKey, ep: EndpointWithInfo<T>) {
+		self.rejected.swap_remove(&key);
+		let cap = ep.capacity;
+		self.active.insert(key, ep);
+		self.update_sampler(Some(cap));
+	}
+
+	/// Remove an endpoint from both pools.
+	fn remove(&mut self, key: &EndpointKey) {
+		if self.active.swap_remove(key).is_some() || self.rejected.swap_remove(key).is_some() {
+			self.update_sampler(None);
+		}
+	}
+
+	/// Move an endpoint from active -> rejected (eviction). No-op if not active.
+	fn evict(&mut self, key: EndpointKey) {
+		if let Some(ep) = self.active.swap_remove(&key) {
+			self.rejected.insert(key, ep);
+			self.update_sampler(None);
+		}
+	}
+
+	/// Move an endpoint from rejected -> active (uneviction). The closure mutates
+	/// the endpoint info before re-insertion and returns whether promotion should
+	/// proceed. No-op if not rejected.
+	fn unevict(&mut self, key: EndpointKey, edit: impl FnOnce(&EndpointWithInfo<T>) -> bool) {
+		if let Some(ep) = self.rejected.swap_remove(&key) {
+			if edit(&ep) {
+				let cap = ep.capacity;
+				self.active.insert(key, ep);
+				self.update_sampler(Some(cap));
+			} else {
+				self.rejected.insert(key, ep);
+			}
+		}
+	}
+
+	// rebuilds the sampler, unless the change is guaranteed to preserve the same distribution
+	fn update_sampler(&mut self, added_ep_cap: Option<u32>) {
+		let preserved = match (&self.sampler, added_ep_cap) {
+			// change doesn't modify any capacity, still Uniform
+			// this is the common case for unweighted EndpointGroups
+			(Sampler::Uniform, Some(1)) => true,
+			(Sampler::Uniform, None) => true,
+			(Sampler::Drained, Some(0)) => true,
+			(Sampler::Drained, None) if !self.active.is_empty() => true,
+
+			// must rebuild
+			_ => false,
+		};
+		if !preserved {
+			self.sampler = build_sampler(&self.active);
+		}
+	}
 }
 
 impl<T> Default for EndpointGroup<T> {
@@ -42,6 +169,7 @@ impl<T> Default for EndpointGroup<T> {
 		EndpointGroup::<T> {
 			active: IndexMap::new(),
 			rejected: IndexMap::new(),
+			sampler: Sampler::default(),
 		}
 	}
 }
@@ -49,7 +177,8 @@ impl<T> Default for EndpointGroup<T> {
 #[derive(Debug, Clone)]
 pub struct EndpointSet<T> {
 	buckets: Vec<Atomic<EndpointGroup<T>>>,
-	tx_eviction: mpsc::Sender<EvictionEvent>,
+	tx_eviction: futures::channel::mpsc::Sender<EvictionEvent>,
+	eviction_worker: Arc<EvictionWorkerState<T>>,
 
 	// Updates to `buckets` are atomically swapped to make reads fast, but every writer does
 	// load→modify→store, which races when two writers touch the same bucket concurrently.
@@ -60,13 +189,21 @@ pub struct EndpointSet<T> {
 fn contains_target_port(ep: &Endpoint, wanted_target: u16) -> bool {
 	ep.port.values().any(|tp| *tp == wanted_target)
 }
+struct Candidate {
+	endpoint: Arc<Endpoint>,
+	info: Arc<EndpointInfo>,
+	workload: Arc<Workload>,
+}
+
 impl EndpointSet<Endpoint> {
 	pub fn insert(&self, ep: Endpoint, dest_workload: &Workload, ranker: &LocalityRanker) {
 		let bucket = match ranker.bucket_for(dest_workload) {
 			Some(b) => b,
 			None => return, // Strict mode mismatch — drop
 		};
-		self.insert_key(ep.workload_uid.clone(), ep, bucket)
+		let key = ep.workload_uid.clone();
+		let ewi = EndpointWithInfo::with_capacity(ep, dest_workload.capacity);
+		self.event(EndpointEvent::Add(key, ewi, bucket))
 	}
 
 	pub fn select_endpoint(
@@ -81,86 +218,145 @@ impl EndpointSet<Endpoint> {
 			return None;
 		};
 
-		let viable = |endpoint: &Arc<Endpoint>| -> Option<Arc<Workload>> {
-			let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
-				debug!("failed to fetch workload for {}", endpoint.workload_uid);
-				return None;
-			};
-			if target_port == 0 && !endpoint.port.contains_key(&svc_port) {
-				trace!(
-					"filter endpoint {}, no service port {}",
-					endpoint.workload_uid, svc_port
-				);
-				return None;
-			}
-			Some(wl)
+		let c = match override_dest {
+			Some(o) => self.select_override(workloads, o)?,
+			None => self
+				.select_p2c(workloads, svc, svc_port, target_port)
+				.or_else(|| self.select_fallback(workloads, svc_port, target_port))?,
 		};
 
-		let selected = if let Some(o) = override_dest {
-			// Explicit destination bypasses bucketing and health — search every endpoint
-			// (active + rejected) so an evicted-but-explicitly-targeted backend is still reachable.
-			self.all_endpoints().find_map(|(ep, info)| {
-				let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
-					debug!("failed to fetch workload for {}", ep.workload_uid);
-					return None;
-				};
-				if !wl.workload_ips.contains(&o.ip()) {
-					return None;
-				}
-				if !contains_target_port(&ep, o.port()) {
-					return None;
-				}
-				Some((ep, info, wl))
-			})
-		} else {
-			// best_bucket() picks the first non-empty bucket (best locality tier).
-			let iter = svc.endpoints.iter();
-			let index = iter.index();
-			if index.is_empty() {
-				return None;
-			}
-			// Do not use `rand::seq::index::sample` so we can pick the same element twice
-			// This avoids starvation where the worst endpoint gets 0 traffic
-			let mut rng = rand::rng();
-			let a = rng.random_range(0..index.len());
-			let b = rng.random_range(0..index.len());
-			let best = [a, b]
-				.into_iter()
-				.filter_map(|idx| {
-					let (_, EndpointWithInfo { endpoint, info }) =
-						index.get_index(idx).expect("index already checked");
-					let wl = viable(endpoint)?;
-					Some((endpoint.clone(), info.clone(), wl))
-				})
-				.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()));
-
-			best.or_else(|| {
-				// Slow fallback: scan buckets in locality order, returning the first bucket
-				// that yields any match. Per-bucket: prefer active, fall back to rejected
-				// when active is empty (mirrors the fast path's `index()` semantics).
-				self.buckets.iter().find_map(|bucket| {
-					let group = bucket.load_full();
-					let map = if !group.active.is_empty() {
-						&group.active
-					} else {
-						&group.rejected
-					};
-					map
-						.iter()
-						.filter_map(|(_, ewi)| {
-							let wl = viable(&ewi.endpoint)?;
-							Some((ewi.endpoint.clone(), ewi.info.clone(), wl))
-						})
-						.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()))
-				})
-			})
-		};
-		let (ep, ep_info, wl) = selected?;
 		let handle = svc
 			.endpoints
-			.start_request(ep.workload_uid.clone(), &ep_info);
-		Some((ep, handle, wl))
+			.start_request(c.endpoint.workload_uid.clone(), &c.info);
+		Some((c.endpoint, handle, c.workload))
 	}
+
+	/// Explicit destination bypasses bucketing and health — search every endpoint
+	/// (active + rejected) so an evicted-but-explicitly-targeted backend is still reachable.
+	fn select_override(&self, workloads: &store::WorkloadStore, o: SocketAddr) -> Option<Candidate> {
+		self.find_endpoint(|ep, info| {
+			if !contains_target_port(ep, o.port()) {
+				return None;
+			}
+			let Some(wl) = workloads.find_uid(&ep.workload_uid) else {
+				debug!("failed to fetch workload for {}", ep.workload_uid);
+				return None;
+			};
+			if !wl.workload_ips.contains(&o.ip()) {
+				return None;
+			}
+			Some(Candidate {
+				endpoint: ep.clone(),
+				info: info.clone(),
+				workload: wl,
+			})
+		})
+	}
+
+	/// P2C: pick two random endpoints from the best non-empty bucket, return the
+	/// higher-scored one. Sampling with replacement (vs `rand::seq::index::sample`)
+	/// keeps the worst endpoint reachable instead of starving it of traffic.
+	///
+	/// sets of endpoints that define non-uniform capacity will use weighted sampling
+	/// when making the random picks.
+	fn select_p2c(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc: &Service,
+		svc_port: u16,
+		target_port: u16,
+	) -> Option<Candidate> {
+		let iter = svc.endpoints.iter();
+		let index = iter.index();
+		if index.is_empty() {
+			return None;
+		}
+		let mut rng = rand::rng();
+		let (a, b) = match iter.sampler() {
+			Some(Sampler::Drained) => return None,
+			Some(Sampler::Weighted(dist)) => (dist.sample(&mut rng), dist.sample(&mut rng)),
+			Some(Sampler::Uniform) | None => {
+				let len = index.len();
+				(rng.random_range(0..len), rng.random_range(0..len))
+			},
+		};
+		[a, b]
+			.into_iter()
+			.filter_map(|idx| {
+				let (_, ewi) = index.get_index(idx).expect("index already checked");
+				let wl = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+				Some(Candidate {
+					endpoint: ewi.endpoint.clone(),
+					info: ewi.info.clone(),
+					workload: wl,
+				})
+			})
+			.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
+	}
+
+	/// Slow fallback when P2C finds nothing viable: scan buckets in locality order
+	/// and take the best-scored match in the first bucket that yields any.
+	/// Per-bucket: prefer active, fall back to rejected when active is empty.
+	/// Fully-drained buckets (`sampler.is_drained()` — every active endpoint at
+	/// capacity=0) are skipped entirely: the operator's drain signal supersedes
+	/// the rejected-set fallback. Partially-drained buckets are scanned, but
+	/// individual cap=0 endpoints are filtered out.
+	fn select_fallback(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc_port: u16,
+		target_port: u16,
+	) -> Option<Candidate> {
+		self.buckets.iter().find_map(|bucket| {
+			let group = bucket.load_full();
+			if group.sampler.is_drained() {
+				return None;
+			}
+			let map = if !group.active.is_empty() {
+				&group.active
+			} else {
+				&group.rejected
+			};
+			map
+				.iter()
+				.filter_map(|(_, ewi)| {
+					let wl = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+					Some(Candidate {
+						endpoint: ewi.endpoint.clone(),
+						info: ewi.info.clone(),
+						workload: wl,
+					})
+				})
+				.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
+		})
+	}
+}
+
+fn viable(
+	workloads: &store::WorkloadStore,
+	target_port: u16,
+	svc_port: u16,
+	endpoint: &Arc<Endpoint>,
+) -> Option<Arc<Workload>> {
+	let Some(wl) = workloads.find_uid(&endpoint.workload_uid) else {
+		debug!("failed to fetch workload for {}", endpoint.workload_uid);
+		return None;
+	};
+	if target_port == 0 && !endpoint.port.contains_key(&svc_port) {
+		trace!(
+			"filter endpoint {}, no service port {}",
+			endpoint.workload_uid, svc_port
+		);
+		return None;
+	}
+	if wl.capacity == 0 {
+		trace!(
+			"filter endpoint {}, workload {} capacity is 0",
+			endpoint.workload_uid, wl.name
+		);
+		return None;
+	}
+	Some(wl)
 }
 
 /// Computes an endpoint's locality bucket from a service's `routing_preferences`.
@@ -260,6 +456,24 @@ pub enum EvictionEvent {
 #[derive(Debug)]
 struct UnevictEntry(Instant, EndpointKey, Option<f64>);
 
+struct EvictionWorkerState<T> {
+	buckets: Vec<Atomic<EndpointGroup<T>>>,
+	action_mutex: Arc<Mutex<()>>,
+	eviction_events: Mutex<Option<futures::channel::mpsc::Receiver<EvictionEvent>>>,
+	started: AtomicBool,
+}
+
+impl<T> std::fmt::Debug for EvictionWorkerState<T> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("EvictionWorkerState")
+			.finish_non_exhaustive()
+	}
+}
+
+trait EvictionStarter: std::fmt::Debug + Send + Sync {
+	fn start(&self);
+}
+
 impl PartialEq for UnevictEntry {
 	fn eq(&self, other: &Self) -> bool {
 		self.0 == other.0 && self.1 == other.1
@@ -278,6 +492,32 @@ impl Ord for UnevictEntry {
 	}
 }
 
+impl<T: Clone + Sync + Send + 'static> EvictionStarter for EvictionWorkerState<T> {
+	fn start(&self) {
+		if self
+			.started
+			.compare_exchange(false, true, AtomicOrdering::AcqRel, AtomicOrdering::Acquire)
+			.is_err()
+		{
+			return;
+		}
+
+		let Some(eviction_events) = self
+			.eviction_events
+			.lock()
+			.expect("eviction worker receiver mutex poisoned")
+			.take()
+		else {
+			return;
+		};
+		EndpointSet::<T>::worker(
+			eviction_events,
+			self.buckets.clone(),
+			self.action_mutex.clone(),
+		);
+	}
+}
+
 impl<T: Clone + Sync + Send + 'static> Default for EndpointSet<T> {
 	fn default() -> Self {
 		Self::new_empty(1)
@@ -289,14 +529,12 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		let buckets = initial_set
 			.into_iter()
 			.map(|items| {
-				let eg = EndpointGroup {
-					active: IndexMap::from_iter(
-						items
-							.into_iter()
-							.map(|(k, v)| (k, EndpointWithInfo::new(v))),
-					),
-					rejected: Default::default(),
-				};
+				let active = IndexMap::from_iter(
+					items
+						.into_iter()
+						.map(|(k, v)| (k, EndpointWithInfo::new(v))),
+				);
+				let eg = EndpointGroup::from_pools(active, IndexMap::new());
 				Arc::new(ArcSwap::new(Arc::new(eg)))
 			})
 			.collect_vec();
@@ -308,18 +546,24 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		Self::new_with_buckets((0..priority_levels).map(|_| Default::default()).collect())
 	}
 	fn new_with_buckets(buckets: Vec<Atomic<EndpointGroup<T>>>) -> Self {
-		let (tx_eviction, rx_eviction) = mpsc::channel(10);
+		let (tx_eviction, rx_eviction) = futures::channel::mpsc::channel(1);
 		let action_mutex = Arc::new(Mutex::new(()));
-		Self::worker(rx_eviction, buckets.clone(), action_mutex.clone());
+		let eviction_worker = Arc::new(EvictionWorkerState {
+			buckets: buckets.clone(),
+			action_mutex: action_mutex.clone(),
+			eviction_events: Mutex::new(Some(rx_eviction)),
+			started: AtomicBool::new(false),
+		});
 		Self {
 			buckets,
 			tx_eviction,
+			eviction_worker,
 			action_mutex,
 		}
 	}
 
 	pub fn start_request(&self, key: Strng, info: &Arc<EndpointInfo>) -> ActiveHandle {
-		info.start_request(key, self.tx_eviction.clone())
+		info.start_request(key, self.tx_eviction.clone(), self.eviction_worker.clone())
 	}
 
 	fn find_bucket(&self, key: &EndpointKey) -> Option<Arc<EndpointGroup<T>>> {
@@ -384,19 +628,36 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		ActiveEndpointsIter(self.best_bucket())
 	}
 
-	/// Iterate every endpoint across all buckets. Active endpoints from all buckets
-	/// are yielded before any rejected endpoint, e.g.:
+	/// Visit every endpoint, returning the first `Some` produced by `f`. Active
+	/// endpoints from all buckets are visited before any rejected endpoint, e.g.:
 	///   active in bucket 0
 	///   active in bucket 1
 	///   rejected in bucket 0
 	///   rejected in bucket 1
-	pub fn all_endpoints(&self) -> AllEndpointsIter<'_, T> {
-		AllEndpointsIter {
-			buckets: &self.buckets,
-			bucket_idx: 0,
-			current: None,
-			in_rejected: false,
+	///
+	/// Each bucket is loaded separately, not as one atomic snapshot. If another
+	/// thread moves or evicts an endpoint mid-iteration, we may see it twice or
+	/// not at all — safe for "pick one and stop", unsafe for counting.
+	pub fn find_endpoint<F, R>(&self, mut f: F) -> Option<R>
+	where
+		F: FnMut(&Arc<T>, &Arc<EndpointInfo>) -> Option<R>,
+	{
+		for active_phase in [true, false] {
+			for bucket in self.buckets.iter() {
+				let group = bucket.load_full();
+				let map = if active_phase {
+					&group.active
+				} else {
+					&group.rejected
+				};
+				for (_, ewi) in map {
+					if let Some(r) = f(&ewi.endpoint, &ewi.info) {
+						return Some(r);
+					}
+				}
+			}
 		}
+		None
 	}
 
 	pub fn insert_key(&self, key: EndpointKey, ep: T, bucket: usize) {
@@ -423,11 +684,17 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 		let _mu = self.action_mutex.lock();
 		let n = self.buckets.len();
 
-		let mut new_groups: Vec<EndpointGroup<T>> = (0..n).map(|_| EndpointGroup::default()).collect();
+		let mut new_active: Vec<IndexMap<EndpointKey, EndpointWithInfo<T>>> =
+			(0..n).map(|_| IndexMap::new()).collect();
+		let mut new_rejected: Vec<IndexMap<EndpointKey, EndpointWithInfo<T>>> =
+			(0..n).map(|_| IndexMap::new()).collect();
 
 		for bucket in &self.buckets {
 			let g = bucket.load_full();
-			for (entries, rejected) in [(&g.active, false), (&g.rejected, true)] {
+			for (entries, into) in [
+				(&g.active, &mut new_active),
+				(&g.rejected, &mut new_rejected),
+			] {
 				for (key, ep) in entries {
 					let Some(b) = ranker(ep.endpoint.as_ref()) else {
 						continue;
@@ -435,18 +702,15 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					if b >= n {
 						continue;
 					}
-					let target = if rejected {
-						&mut new_groups[b].rejected
-					} else {
-						&mut new_groups[b].active
-					};
-					target.insert(key.clone(), ep.clone());
+					into[b].insert(key.clone(), ep.clone());
 				}
 			}
 		}
 
-		for (i, group) in new_groups.into_iter().enumerate() {
-			self.buckets[i].store(Arc::new(group));
+		for (i, (active, rejected)) in new_active.into_iter().zip(new_rejected).enumerate() {
+			// Redistributed EWIs may have any capacity, so derive the sampler
+			// from scratch — no trusted prior to incrementally update from.
+			self.buckets[i].store(Arc::new(EndpointGroup::from_pools(active, rejected)));
 		}
 	}
 
@@ -466,8 +730,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(slot.load_full());
-				eps.rejected.swap_remove(&key);
-				eps.active.insert(key, ep);
+				eps.add(key, ep);
 				slot.store(Arc::new(eps));
 			},
 			EndpointEvent::Delete(key) => {
@@ -475,21 +738,20 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				eps.active.swap_remove(&key);
-				eps.rejected.swap_remove(&key);
+				eps.remove(&key);
 				bucket.store(Arc::new(eps));
 			},
 		}
 	}
 	fn worker(
-		mut eviction_events: mpsc::Receiver<EvictionEvent>,
+		mut eviction_events: futures::channel::mpsc::Receiver<EvictionEvent>,
 		buckets: Vec<Atomic<EndpointGroup<T>>>,
 		action_mutex: Arc<Mutex<()>>,
 	) {
 		tokio::task::spawn(async move {
 			let mut uneviction_heap: BinaryHeap<UnevictEntry> = Default::default();
 			let handle_eviction = |uneviction_heap: &mut BinaryHeap<UnevictEntry>| {
-				let UnevictEntry(_until, key, restore_health) =
+				let UnevictEntry(until, key, restore_health) =
 					uneviction_heap.pop().expect("heap is empty");
 
 				trace!(%key, "unevict");
@@ -500,22 +762,26 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 					return;
 				};
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
-				if let Some(ep) = eps.rejected.swap_remove(&key) {
+				eps.unevict(key, |ep| {
+					// Uneviction timers are queued independently from endpoint config changes.
+					// A rejected endpoint can be removed, re-added with the same key, and evicted
+					// again before the first timer fires. In that case the heap still contains the
+					// old timer, but the endpoint's current eviction deadline is different; keep
+					// the endpoint rejected and let the current timer handle restoration.
+					if ep.info.evicted_until.load().as_deref() != Some(&until) {
+						return false;
+					}
 					ep.info.evicted_until.store(None);
 					if let Some(h) = restore_health {
 						// Health scoring assumes normalized values in [0.0, 1.0].
 						ep.info.health.set(h.clamp(0.0, 1.0));
 					}
-					eps.active.insert(key, ep);
-				}
+					true
+				});
 				bucket.store(Arc::new(eps));
 			};
 			let handle_recv_evict = |uneviction_heap: &mut BinaryHeap<UnevictEntry>,
-			                         o: Option<EvictionEvent>| {
-				let Some(item) = o else {
-					return;
-				};
-
+			                         item: EvictionEvent| {
 				let EvictionEvent::Evict {
 					key,
 					until,
@@ -529,24 +795,22 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				let mut eps = Arc::unwrap_or_clone(bucket.load_full());
 
 				uneviction_heap.push(UnevictEntry(until, key.clone(), restore_health));
-				if let Some(ep) = eps.active.swap_remove(&key) {
-					eps.rejected.insert(key, ep);
-				}
+				eps.evict(key);
 				bucket.store(Arc::new(eps));
 			};
 			loop {
 				let evict_at = uneviction_heap.peek().map(|e| e.0);
 				tokio::select! {
-					true = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
+					_ = maybe_sleep_until(evict_at) => handle_eviction(&mut uneviction_heap),
 					item = eviction_events.recv() => {
-						if item.is_none() { return };
+						let Ok(item) = item else { return };
 						handle_recv_evict(&mut uneviction_heap, item)
 					}
 				}
 			}
 		});
 	}
-	pub async fn evict(&mut self, key: EndpointKey, time: Instant) {
+	pub fn evict(&self, key: EndpointKey, time: Instant) {
 		let Some(bucket) = self.find_bucket(&key) else {
 			return;
 		};
@@ -556,7 +820,8 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
-				let tx = self.tx_eviction.clone();
+				self.eviction_worker.start();
+				let mut tx = self.tx_eviction.clone();
 				tokio::spawn(async move {
 					let _ = tx
 						.send(EvictionEvent::Evict {
@@ -574,6 +839,7 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 const ALPHA: f64 = 0.3;
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct EndpointInfo {
 	/// health keeps track of the success rate for the endpoint.
 	health: Ewma,
@@ -629,16 +895,18 @@ impl EndpointInfo {
 			self.request_latency.load() * (1.0 + self.pending_requests.countf() * 0.1);
 		self.health.load() / (1.0 + latency_penalty)
 	}
-	pub fn start_request(
+	fn start_request(
 		self: &Arc<Self>,
 		key: Strng,
-		tx_sender: mpsc::Sender<EvictionEvent>,
+		tx_sender: futures::channel::mpsc::Sender<EvictionEvent>,
+		eviction_starter: Arc<dyn EvictionStarter>,
 	) -> ActiveHandle {
 		self.total_requests.fetch_add(1, AtomicOrdering::Relaxed);
 		ActiveHandle {
 			info: self.clone(),
 			key,
 			tx: tx_sender,
+			eviction_starter,
 			counter: self.pending_requests.0.clone(),
 		}
 	}
@@ -687,7 +955,8 @@ impl Serialize for ActiveCounter {
 pub struct ActiveHandle {
 	info: Arc<EndpointInfo>,
 	key: Strng,
-	tx: mpsc::Sender<EvictionEvent>,
+	tx: futures::channel::mpsc::Sender<EvictionEvent>,
+	eviction_starter: Arc<dyn EvictionStarter>,
 	#[allow(dead_code)]
 	counter: Arc<()>,
 }
@@ -726,17 +995,22 @@ impl ActiveHandle {
 				.fetch_add(1, AtomicOrdering::Relaxed);
 		};
 		if let Some(eviction_time) = eviction_time {
-			self
-				.info
-				.times_ejected
-				.fetch_add(1, AtomicOrdering::Relaxed);
 			let time = Instant::now() + eviction_time;
 			let prev = self
 				.info
 				.evicted_until
 				.compare_and_swap(&None::<Arc<_>>, Some(Arc::new(time)));
 			if prev.is_none() {
-				let tx = self.tx.clone();
+				// Only count an ejection when this request actually starts a new
+				// eviction window. Failures of in-flight requests during an existing
+				// window are no-ops here, so bumping the counter would inflate the
+				// ejection-duration multiplier without extending the eviction.
+				self
+					.info
+					.times_ejected
+					.fetch_add(1, AtomicOrdering::Relaxed);
+				self.eviction_starter.start();
+				let mut tx = self.tx.clone();
 				let key = self.key.clone();
 				tokio::spawn(async move {
 					let _ = tx
@@ -766,15 +1040,11 @@ impl ActiveCounter {
 	}
 }
 
-// tokio::select evaluates each pattern before checking the (optional) associated condition. Work
-// around that by returning false to fail the pattern match when sleep is not viable.
-async fn maybe_sleep_until(till: Option<Instant>) -> bool {
-	match till {
-		Some(till) => {
-			sleep_until(till.into()).await;
-			true
-		},
-		None => false,
+async fn maybe_sleep_until(till: Option<Instant>) {
+	if let Some(till) = till {
+		sleep_until(till.into()).await;
+	} else {
+		pending::<()>().await;
 	}
 }
 
@@ -795,65 +1065,26 @@ where
 	}
 }
 
-/// Non-allocating iterator over every endpoint across all buckets. Yields all active
-/// endpoints first (across every bucket), then all rejected.
-///
-/// Snapshot is per-bucket-per-phase, not whole-set: a concurrent rebucket or eviction
-/// can be partially observed across loads. Callers that scan-then-discard (e.g. selection)
-/// are unaffected; do not use for invariants that span buckets.
-pub struct AllEndpointsIter<'a, T> {
-	buckets: &'a [Atomic<EndpointGroup<T>>],
-	bucket_idx: usize,
-	current: Option<(Arc<EndpointGroup<T>>, usize)>,
-	in_rejected: bool,
-}
-
-impl<T> Iterator for AllEndpointsIter<'_, T> {
-	type Item = (Arc<T>, Arc<EndpointInfo>);
-
-	fn next(&mut self) -> Option<Self::Item> {
-		loop {
-			if let Some((group, idx)) = &mut self.current {
-				let map = if self.in_rejected {
-					&group.rejected
-				} else {
-					&group.active
-				};
-				if let Some((_, ewi)) = map.get_index(*idx) {
-					*idx += 1;
-					return Some((ewi.endpoint.clone(), ewi.info.clone()));
-				}
-				self.current = None;
-			}
-			if self.bucket_idx < self.buckets.len() {
-				let bucket = &self.buckets[self.bucket_idx];
-				self.bucket_idx += 1;
-				self.current = Some((bucket.load_full(), 0));
-				continue;
-			}
-			// Active phase exhausted across all buckets — restart for rejected phase.
-			if !self.in_rejected {
-				self.in_rejected = true;
-				self.bucket_idx = 0;
-				continue;
-			}
-			return None;
-		}
-	}
-}
-
 pub struct ActiveEndpointsIter<T>(Arc<EndpointGroup<T>>);
 impl<T> ActiveEndpointsIter<T> {
 	pub fn iter(&self) -> impl ExactSizeIterator<Item = (&Arc<T>, &Arc<EndpointInfo>)> {
 		self.index().iter().map(|(_k, v)| (&v.endpoint, &v.info))
 	}
 	pub fn index(&self) -> &IndexMap<EndpointKey, EndpointWithInfo<T>> {
-		if self.0.active.is_empty() {
+		if self.is_active_phase() {
+			&self.0.active
+		} else {
 			// If we have no active endpoints, return the rejected ones
 			&self.0.rejected
-		} else {
-			&self.0.active
 		}
+	}
+	pub fn is_active_phase(&self) -> bool {
+		!self.0.active.is_empty()
+	}
+	/// The sampler for the active pool. `None` in the rejected-fallback phase,
+	/// where capacity weighting doesn't apply.
+	pub fn sampler(&self) -> Option<&Sampler> {
+		self.is_active_phase().then_some(&self.0.sampler)
 	}
 }
 
@@ -975,6 +1206,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn endpoint_set_eviction_and_uneviction() {
+		tokio::time::pause();
 		let key: Strng = "ep1".into();
 		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
 
@@ -993,30 +1225,55 @@ mod tests {
 			Some(1.0),
 		);
 
-		// Poll until the eviction event is processed
-		agent_core::test_helpers::check_eventually(
-			Duration::from_millis(500),
-			|| async { eps.best_bucket().rejected.contains_key(&key) },
-			|rejected| *rejected,
-		)
-		.await
-		.expect("endpoint should be evicted");
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("endpoint should be evicted");
 
-		// Wait for uneviction (100ms eviction duration + buffer)
-		tokio::time::sleep(Duration::from_millis(150)).await;
+		tokio::time::advance(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().active.contains_key(&key))
+			.await
+			.expect("endpoint should be unevicted");
 
 		// Endpoint should be back in active with health reset to 1.0
 		let group = eps.best_bucket();
-		assert!(
-			group.active.contains_key(&key),
-			"endpoint should be unevicted"
-		);
 		let ep_info = &group.active.get(&key).unwrap().info;
 		assert_eq!(ep_info.health_score(), 1.0, "health should be reset to 1.0");
 	}
 
 	#[tokio::test]
+	async fn endpoint_set_repeated_failure_during_window_does_not_bump_times_ejected() {
+		let key: Strng = "ep1".into();
+		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
+
+		let info = eps.best_bucket().active.get(&key).unwrap().info.clone();
+
+		// First failure starts a 100ms eviction window.
+		eps.start_request(key.clone(), &info).finish_request(
+			false,
+			Duration::from_millis(10),
+			Some(Duration::from_millis(100)),
+			Some(1.0),
+		);
+		assert_eq!(info.times_ejected(), 1);
+
+		// A second failure while still inside the window must not bump the counter:
+		// the eviction CAS no-ops, so counting it would inflate the multiplier.
+		eps.start_request(key.clone(), &info).finish_request(
+			false,
+			Duration::from_millis(10),
+			Some(Duration::from_millis(100)),
+			Some(1.0),
+		);
+		assert_eq!(
+			info.times_ejected(),
+			1,
+			"repeated failure during eviction window should not bump times_ejected"
+		);
+	}
+
+	#[tokio::test]
 	async fn endpoint_set_uneviction_restore_health_zero() {
+		tokio::time::pause();
 		let key: Strng = "ep1".into();
 		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
 
@@ -1030,15 +1287,15 @@ mod tests {
 			Some(0.0),
 		);
 
-		tokio::time::sleep(Duration::from_millis(50)).await;
-		let group = eps.best_bucket();
-		assert!(group.rejected.contains_key(&key));
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("endpoint should be evicted");
+		tokio::time::advance(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().active.contains_key(&key))
+			.await
+			.expect("endpoint should be unevicted");
 
-		// Wait for uneviction
-		tokio::time::sleep(Duration::from_millis(150)).await;
-
 		let group = eps.best_bucket();
-		assert!(group.active.contains_key(&key));
 		let ep_info = &group.active.get(&key).unwrap().info;
 		assert_eq!(
 			ep_info.health_score(),
@@ -1049,6 +1306,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn endpoint_set_uneviction_no_restore_health() {
+		tokio::time::pause();
 		let key: Strng = "ep1".into();
 		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
 
@@ -1066,13 +1324,15 @@ mod tests {
 			None,
 		);
 
-		tokio::time::sleep(Duration::from_millis(50)).await;
-
-		// Wait for uneviction
-		tokio::time::sleep(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("endpoint should be evicted");
+		tokio::time::advance(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().active.contains_key(&key))
+			.await
+			.expect("endpoint should be unevicted");
 
 		let group = eps.best_bucket();
-		assert!(group.active.contains_key(&key));
 		let ep_info = &group.active.get(&key).unwrap().info;
 		// Health was recorded as 0.0 in finish_request (failure),
 		// starting from 0.7: 0.3*0 + 0.7*0.7 = 0.49
@@ -1081,6 +1341,50 @@ mod tests {
 			"health should be unchanged from pre-eviction EWMA, got {}",
 			ep_info.health_score()
 		);
+	}
+
+	#[tokio::test]
+	async fn stale_unevict_timer_does_not_restore_readded_endpoint() {
+		tokio::time::pause();
+		let key: Strng = "ep1".into();
+		let eps = EndpointSet::new(vec![vec![(key.clone(), "backend1")]]);
+
+		eps.evict(key.clone(), Instant::now() + Duration::from_millis(50));
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("first endpoint should be evicted");
+
+		eps.remove(key.clone());
+		eps.insert_key(key.clone(), "backend2", 0);
+		eps.evict(key.clone(), Instant::now() + Duration::from_millis(200));
+		yield_until(|| eps.best_bucket().rejected.contains_key(&key))
+			.await
+			.expect("re-added endpoint should be evicted");
+
+		tokio::time::advance(Duration::from_millis(100)).await;
+		tokio::task::yield_now().await;
+		let group = eps.best_bucket();
+		assert!(
+			group.rejected.contains_key(&key),
+			"old unevict timer must not restore the re-added endpoint early"
+		);
+
+		tokio::time::advance(Duration::from_millis(150)).await;
+		yield_until(|| eps.best_bucket().active.contains_key(&key))
+			.await
+			.expect("current unevict timer should eventually restore the endpoint");
+		let group = eps.best_bucket();
+		assert_eq!(*group.active.get(&key).unwrap().endpoint, "backend2");
+	}
+
+	async fn yield_until(mut f: impl FnMut() -> bool) -> Result<(), ()> {
+		for _ in 0..100 {
+			if f() {
+				return Ok(());
+			}
+			tokio::task::yield_now().await;
+		}
+		Err(())
 	}
 
 	#[test]
@@ -1119,16 +1423,15 @@ mod tests {
 		active: &[&'static str],
 		rejected: &[&'static str],
 	) -> EndpointGroup<&'static str> {
-		let mut group = EndpointGroup::default();
-		for v in active {
-			group.active.insert((*v).into(), EndpointWithInfo::new(*v));
-		}
-		for v in rejected {
-			group
-				.rejected
-				.insert((*v).into(), EndpointWithInfo::new(*v));
-		}
-		group
+		let active_map = active
+			.iter()
+			.map(|v| ((*v).into(), EndpointWithInfo::new(*v)))
+			.collect();
+		let rejected_map = rejected
+			.iter()
+			.map(|v| ((*v).into(), EndpointWithInfo::new(*v)))
+			.collect();
+		EndpointGroup::from_pools(active_map, rejected_map)
 	}
 
 	fn install(eps: &EndpointSet<&'static str>, idx: usize, g: EndpointGroup<&'static str>) {
@@ -1136,7 +1439,12 @@ mod tests {
 	}
 
 	fn collect_values(eps: &EndpointSet<&'static str>) -> Vec<&'static str> {
-		eps.all_endpoints().map(|(ep, _)| *ep).collect()
+		let mut out = Vec::new();
+		eps.find_endpoint(|ep, _| -> Option<()> {
+			out.push(**ep);
+			None
+		});
+		out
 	}
 
 	#[tokio::test]
@@ -1338,6 +1646,179 @@ mod tests {
 		assert_eq!(r.rank(&wl("n1", "_", "z1", "_", "_")), Some(2));
 		assert_eq!(r.rank(&wl("n1", "_", "z2", "_", "_")), None);
 		assert_eq!(r.rank(&wl("n2", "_", "z1", "_", "_")), None);
+	}
+
+	// --- Sampler / capacity weighting ---
+
+	fn make_active(caps: &[u32]) -> IndexMap<EndpointKey, EndpointWithInfo<()>> {
+		let mut map = IndexMap::new();
+		for (i, &cap) in caps.iter().enumerate() {
+			let key: Strng = format!("ep{i}").into();
+			map.insert(key, EndpointWithInfo::with_capacity((), cap));
+		}
+		map
+	}
+
+	#[test]
+	fn sampler_empty_map_is_uniform() {
+		// Vacuously uniform; the empty-len check in callers prevents sampling.
+		let active = make_active(&[]);
+		assert!(matches!(build_sampler(&active), Sampler::Uniform));
+	}
+
+	#[test]
+	fn sampler_all_default_capacity_is_uniform() {
+		let active = make_active(&[1, 1, 1, 1]);
+		assert!(matches!(build_sampler(&active), Sampler::Uniform));
+	}
+
+	#[test]
+	fn sampler_all_equal_nonone_is_weighted() {
+		// Uniform fast path only fires for the default cap=1. All-equal non-1
+		// caps fall through to Weighted — correct, just not optimized.
+		let active = make_active(&[5, 5, 5]);
+		assert!(matches!(build_sampler(&active), Sampler::Weighted(_)));
+	}
+
+	#[test]
+	fn sampler_all_zero_is_drained() {
+		let active = make_active(&[0, 0, 0]);
+		assert!(matches!(build_sampler(&active), Sampler::Drained));
+		assert!(build_sampler(&active).is_drained());
+	}
+
+	#[test]
+	fn sampler_single_zero_is_drained() {
+		let active = make_active(&[0]);
+		assert!(matches!(build_sampler(&active), Sampler::Drained));
+	}
+
+	#[test]
+	fn sampler_weighted_3_1_distribution() {
+		let active = make_active(&[3, 1]);
+		let sampler = build_sampler(&active);
+		let Sampler::Weighted(dist) = &sampler else {
+			panic!("expected Weighted, got {sampler:?}");
+		};
+		assert_eq!(dist.weights().collect::<Vec<_>>(), vec![3u64, 1]);
+
+		let mut rng = rand::rng();
+		let mut counts = [0u32; 2];
+		let n = 100_000u32;
+		for _ in 0..n {
+			let idx = dist.sample(&mut rng);
+			counts[idx] += 1;
+		}
+		// Expect ~75/25; ±2% is comfortable for n=100k.
+		let ratio0 = counts[0] as f64 / n as f64;
+		assert!(
+			(ratio0 - 0.75).abs() < 0.02,
+			"index 0 share = {ratio0} (counts={counts:?})"
+		);
+	}
+
+	#[test]
+	fn sampler_zero_cap_endpoint_is_never_sampled() {
+		// Mixed 0 and nonzero — the 0-cap index must never be returned.
+		let active = make_active(&[0, 1, 1]);
+		let sampler = build_sampler(&active);
+		let Sampler::Weighted(dist) = &sampler else {
+			panic!("expected Weighted, got {sampler:?}");
+		};
+		let mut rng = rand::rng();
+		for _ in 0..1_000 {
+			assert_ne!(
+				dist.sample(&mut rng),
+				0,
+				"cap=0 endpoint must never be sampled"
+			);
+		}
+	}
+
+	#[test]
+	fn build_sampler_reflects_active_state() {
+		let mut group = EndpointGroup::<()>::default();
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 1));
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 1));
+		assert!(matches!(group.sampler, Sampler::Uniform));
+
+		// Replace "a" with cap=3 — now mixed, should become Weighted.
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 3));
+		let Sampler::Weighted(dist) = &group.sampler else {
+			panic!("expected Weighted, got {:?}", group.sampler);
+		};
+		assert_eq!(dist.weights().collect::<Vec<_>>(), vec![3u64, 1]);
+
+		// Drain everything — should become Drained.
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 0));
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 0));
+		assert!(group.sampler.is_drained());
+	}
+
+	#[test]
+	fn update_sampler_preserves_uniform_when_cap_matches() {
+		// Common XDS case: all endpoints share the default cap=1. Adds and
+		// deletes should leave the sampler as Uniform.
+		let mut group = EndpointGroup::<()>::default();
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 1));
+		assert!(matches!(group.sampler, Sampler::Uniform));
+
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 1));
+		assert!(matches!(group.sampler, Sampler::Uniform));
+
+		group.remove(&Strng::from("b"));
+		assert!(matches!(group.sampler, Sampler::Uniform));
+	}
+
+	#[test]
+	fn update_sampler_rebuilds_on_cap_mismatch() {
+		// Adding a cap=2 endpoint to a Uniform group must transition to Weighted.
+		let mut group = EndpointGroup::<()>::default();
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 1));
+		assert!(matches!(group.sampler, Sampler::Uniform));
+
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 2));
+		assert!(matches!(group.sampler, Sampler::Weighted(_)));
+	}
+
+	#[test]
+	fn update_sampler_drained_stays_drained_on_zero_cap_add() {
+		let mut group = EndpointGroup::<()>::default();
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 0));
+		assert!(matches!(group.sampler, Sampler::Drained));
+
+		group.add("b".into(), EndpointWithInfo::with_capacity((), 0));
+		assert!(matches!(group.sampler, Sampler::Drained));
+	}
+
+	#[test]
+	fn update_sampler_remove_last_uniform_stays_uniform() {
+		// Deleting the last active entry leaves the sampler as Uniform
+		let mut group = EndpointGroup::<()>::default();
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 1));
+
+		group.remove(&Strng::from("a"));
+		assert!(matches!(group.sampler, Sampler::Uniform));
+		assert!(!group.sampler.is_drained());
+	}
+
+	#[test]
+	fn update_sampler_drops_drained_state_when_active_becomes_empty() {
+		// Setup: one cap=0 endpoint → sampler is Drained.
+		// Action: remove that endpoint.
+		// Expect: sampler must NOT stay Drained. A drained sampler tells
+		// select_fallback to skip the whole bucket, which would also skip
+		// the rejected pool — the wrong behavior when active is empty.
+		let mut group = EndpointGroup::<()>::default();
+		group.add("a".into(), EndpointWithInfo::with_capacity((), 0));
+		assert!(matches!(group.sampler, Sampler::Drained));
+
+		group.remove(&Strng::from("a"));
+		assert!(
+			!group.sampler.is_drained(),
+			"sampler stayed drained after removing the last cap=0 endpoint; \
+			 select_fallback would now skip this bucket's rejected pool"
+		);
 	}
 
 	#[test]

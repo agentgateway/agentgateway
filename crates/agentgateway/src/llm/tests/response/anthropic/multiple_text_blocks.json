@@ -1,0 +1,37 @@
+{
+  "id": "msg_012JYtNYb8sv6Hb67TcGT7xW",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-4-5-20251001",
+  "content": [
+    {
+      "type": "text",
+      "text": "The sky is "
+    },
+    {
+      "type": "text",
+      "text": "blue during the day",
+      "citations": [
+        {
+          "type": "char_location",
+          "cited_text": "the sky appears blue",
+          "document_index": 0,
+          "document_title": "Sky Facts",
+          "start_char_index": 0,
+          "end_char_index": 20
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "text": "."
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 15,
+    "output_tokens": 21,
+    "service_tier": "standard"
+  }
+}

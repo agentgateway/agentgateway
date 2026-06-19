@@ -99,17 +99,18 @@ verifySupported() {
 # checkDesiredVersion checks if the desired version is available.
 checkDesiredVersion() {
   if [ "x$DESIRED_VERSION" == "x" ]; then
-    # Get tag from release URL
-    local latest_release_url="https://api.github.com/repos/agentgateway/agentgateway/releases/latest"
+    # Pick the highest stable tag (vX.Y.Z, no suffix), skipping drafts and
+    # pre-releases. Use --version to install a pre-release.
+    local latest_release_url="https://api.github.com/repos/agentgateway/agentgateway/releases?per_page=100"
     local latest_release_response=""
     if [ "${HAS_CURL}" == "true" ]; then
       latest_release_response=$( curl -L --silent --show-error --fail "$latest_release_url" 2>&1 || true )
     elif [ "${HAS_WGET}" == "true" ]; then
       latest_release_response=$( wget "$latest_release_url" -q -O - 2>&1 || true )
     fi
-    TAG=$( echo "$latest_release_response" | jq -r .tag_name | grep '^v[0-9]' )
+    TAG=$( echo "$latest_release_response" | jq -r '[.[] | select(.draft == false and .prerelease == false) | .tag_name | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))] | sort_by(ltrimstr("v") | split(".") | map(tonumber)) | last // empty' )
     if [ "x$TAG" == "x" ]; then
-      printf "Could not retrieve the latest release tag information from %s: %s\n" "${latest_release_url}" "${latest_release_response}"
+      printf "Could not retrieve the latest stable release tag information from %s: %s\n" "${latest_release_url}" "${latest_release_response}"
       exit 1
     fi
   else
@@ -127,11 +128,28 @@ function current-version() {
   fi
 }
 
+binaryFileName() {
+  if [[ "$OS" == "windows" ]]; then
+    echo "$BINARY_NAME.exe"
+  else
+    echo "$BINARY_NAME"
+  fi
+}
+
+agentGatewayDist() {
+  if [[ "$OS" == "windows" ]]; then
+    echo "$BINARY_NAME-$OS-$ARCH.exe"
+  else
+    echo "$BINARY_NAME-$OS-$ARCH"
+  fi
+}
+
 # checkAgentGatewayInstalledVersion checks which version of    is installed and
 # if it needs to be changed.
 checkAgentGatewayInstalledVersion() {
-  if [[ -f "${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    local version="$(current-version "${AGENTGATEWAY_INSTALL_DIR}/${BINARY_NAME}")"
+  local binary_name="$(binaryFileName)"
+  if [[ -f "${AGENTGATEWAY_INSTALL_DIR}/${binary_name}" ]]; then
+    local version="$(current-version "${AGENTGATEWAY_INSTALL_DIR}/${binary_name}")"
     if [[ "$version" == "$TAG" ]]; then
       echo "agentgateway ${version} is already ${DESIRED_VERSION:-latest}"
       return 0
@@ -147,19 +165,32 @@ checkAgentGatewayInstalledVersion() {
 # downloadFile downloads the latest binary package and also the checksum
 # for that binary.
 downloadFile() {
-  AGENTGATEWAY_DIST="agentgateway-$OS-$ARCH"
+  AGENTGATEWAY_DIST="$(agentGatewayDist)"
   DOWNLOAD_URL="https://github.com/agentgateway/agentgateway/releases/download/$TAG/$AGENTGATEWAY_DIST"
   CHECKSUM_URL="$DOWNLOAD_URL.sha256"
   AGENTGATEWAY_TMP_ROOT="$(mktemp -dt agentgateway-installer-XXXXXX)"
   AGENTGATEWAY_TMP_FILE="$AGENTGATEWAY_TMP_ROOT/$AGENTGATEWAY_DIST"
   AGENTGATEWAY_SUM_FILE="$AGENTGATEWAY_TMP_ROOT/$AGENTGATEWAY_DIST.sha256"
   echo "Downloading $DOWNLOAD_URL"
+  # Fail on HTTP errors so a missing asset (404) is not mistaken for a bad checksum.
+  if ! downloadToFile "$DOWNLOAD_URL" "$AGENTGATEWAY_TMP_FILE"; then
+    echo "Failed to download ${DOWNLOAD_URL}."
+    echo "Release ${TAG} may not ship a ${OS}-${ARCH} binary. See https://github.com/agentgateway/agentgateway/releases"
+    exit 1
+  fi
+  if ! downloadToFile "$CHECKSUM_URL" "$AGENTGATEWAY_SUM_FILE"; then
+    echo "Failed to download checksum ${CHECKSUM_URL}."
+    exit 1
+  fi
+}
+
+# downloadToFile fetches a URL to a path, failing on HTTP errors.
+downloadToFile() {
+  local url="$1" dest="$2"
   if [ "${HAS_CURL}" == "true" ]; then
-    curl -SsL "$CHECKSUM_URL" -o "$AGENTGATEWAY_SUM_FILE"
-    curl -SsL "$DOWNLOAD_URL" -o "$AGENTGATEWAY_TMP_FILE"
-  elif [ "${HAS_WGET}" == "true" ]; then
-    wget -q -O "$AGENTGATEWAY_SUM_FILE" "$CHECKSUM_URL"
-    wget -q -O "$AGENTGATEWAY_TMP_FILE" "$DOWNLOAD_URL"
+    curl -SsL --fail "$url" -o "$dest"
+  else
+    wget -nv -O "$dest" "$url"
   fi
 }
 
@@ -174,10 +205,11 @@ verifyFile() {
 
 # installFile installs the agentgateway binary.
 installFile() {
-  echo "Preparing to install $BINARY_NAME into ${AGENTGATEWAY_INSTALL_DIR}"
-  runAsRoot chmod +x "$AGENTGATEWAY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH"
-  runAsRoot cp "$AGENTGATEWAY_TMP_ROOT/$BINARY_NAME-$OS-$ARCH" "$AGENTGATEWAY_INSTALL_DIR/$BINARY_NAME"
-  echo "$BINARY_NAME installed into $AGENTGATEWAY_INSTALL_DIR/$BINARY_NAME"
+  local binary_name="$(binaryFileName)"
+  echo "Preparing to install $binary_name into ${AGENTGATEWAY_INSTALL_DIR}"
+  runAsRoot chmod +x "$AGENTGATEWAY_TMP_FILE"
+  runAsRoot cp "$AGENTGATEWAY_TMP_FILE" "$AGENTGATEWAY_INSTALL_DIR/$binary_name"
+  echo "$binary_name installed into $AGENTGATEWAY_INSTALL_DIR/$binary_name"
 }
 
 # verifyChecksum verifies the SHA256 checksum of the binary package.
@@ -211,7 +243,7 @@ fail_trap() {
 # testVersion tests the installed client to make sure it is working.
 testVersion() {
   set +e
-  AGENTGATEWAY="$(command -v $BINARY_NAME)"
+  AGENTGATEWAY="$(command -v "$(binaryFileName)")"
   if [ "$?" = "1" ]; then
     echo "$BINARY_NAME not found. Is $AGENTGATEWAY_INSTALL_DIR on your "'$PATH?'
     exit 1

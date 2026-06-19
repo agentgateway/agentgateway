@@ -2,19 +2,19 @@ package controller
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"log/slog"
 	"maps"
 	"net/http"
+	"strings"
 
 	"istio.io/istio/pkg/kube/krt"
 	istiolog "istio.io/istio/pkg/log"
-	"istio.io/istio/pkg/ptr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -28,7 +28,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
-	"github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
+	agentgatewaybackend "github.com/agentgateway/agentgateway/controller/pkg/syncer/backend"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
 	"github.com/agentgateway/agentgateway/controller/pkg/version"
@@ -43,11 +43,15 @@ type SetupOpts struct {
 
 	// CertWatcher is the shared certificate watcher for xDS TLS
 	// Used by the Gateway controller to trigger reconciliation on cert changes
-	CertWatcher *certwatcher.CertWatcher
+	CertWatcher CertificateWatcher
 
 	PprofBindAddress       string
 	HealthProbeBindAddress string
 	MetricsBindAddress     string
+}
+
+type CertificateWatcher interface {
+	RegisterCallback(func(tls.Certificate))
 }
 
 var setupLog = ctrl.Log.WithName("setup")
@@ -73,6 +77,9 @@ type StartConfig struct {
 	AgwCollections *agwplugins.AgwCollections
 	Resolver       remotehttp.Resolver
 	JWKSLookup     jwks.Lookup
+	// CredentialResolverFactory builds the complete credential resolver chain.
+	// If unset, the built-in Secret resolver is used.
+	CredentialResolverFactory agwplugins.CredentialResolverFactory
 
 	KrtOptions                     krtutil.KrtOptions
 	ExtraAgwResourceStatusHandlers map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
@@ -171,20 +178,24 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 	return cb, nil
 }
 
-// Plugins registers all built-in policy plugins
-func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) []agwplugins.AgwPlugin {
+// Plugins registers built-in policy plugins with a shared credential resolver.
+func Plugins(agw *agwplugins.AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) []agwplugins.AgwPlugin {
 	return []agwplugins.AgwPlugin{
-		agwplugins.NewAgentPlugin(agw, resolver, jwksLookup),
+		agwplugins.NewAgentPlugin(agw, resolver, jwksLookup, credentialResolver),
 		agwplugins.NewInferencePlugin(agw),
 		agwplugins.NewA2APlugin(agw),
 		agwplugins.NewBackendTLSPlugin(agw),
-		agentgatewaybackend.NewBackendPlugin(agw, resolver, jwksLookup),
+		agentgatewaybackend.NewBackendPlugin(agw, resolver, jwksLookup, credentialResolver),
 	}
 }
 
 func agwPluginFactory(cfg StartConfig) func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
 	return func(ctx context.Context, agw *agwplugins.AgwCollections) agwplugins.AgwPlugin {
-		plugins := Plugins(agw, cfg.Resolver, cfg.JWKSLookup)
+		credentialResolverFactory := cfg.CredentialResolverFactory
+		if credentialResolverFactory == nil {
+			credentialResolverFactory = agwplugins.DefaultCredentialResolverFactory
+		}
+		plugins := Plugins(agw, cfg.Resolver, cfg.JWKSLookup, credentialResolverFactory(agw))
 		if cfg.ExtraAgwPlugins != nil {
 			plugins = append(plugins, cfg.ExtraAgwPlugins(ctx, agw)...)
 		}
@@ -213,12 +224,12 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 	if defaultTag == nil {
 		// Else, the binary is built with an explicit version
 		if version.Version != "" {
-			defaultTag = ptr.Of("v" + version.Version)
+			defaultTag = new(normalizeProxyImageTag(version.Version))
 		} else {
 			// Else, detect automatically based on the build.
 			// TODO: probably what we really want here is to have a file in the repo that has a floating version like v1.0.0-dev
 			// that is used here + for nightly builds.
-			defaultTag = ptr.Of(version.GitVersion)
+			defaultTag = new(version.GitVersion)
 		}
 	}
 	gwCfg := GatewayConfig{
@@ -231,10 +242,11 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 			Tag:        defaultTag,
 		},
 		ControlPlane: deployer.ControlPlaneInfo{
-			XdsHost:      xdsHost,
-			AgwXdsPort:   agwXdsPort,
-			XdsTLS:       globalSettings.XdsTLS,
-			XdsTlsCaPath: apisettings.TLSRootCAPath,
+			XdsHost:          xdsHost,
+			AgwXdsPort:       agwXdsPort,
+			XdsTLS:           globalSettings.IsXdsTLSEnabled(),
+			XdsTLSSecretName: apisettings.TLSSecretName,
+			ControlPlaneNs:   namespaces.GetPodNamespace(),
 		},
 		AgwCollections:        c.cfg.AgwCollections,
 		AgentgatewayClassName: c.cfg.AgentgatewayClassName,
@@ -253,6 +265,10 @@ func (c *ControllerBuilder) Build() (*syncer.Syncer, error) {
 	}
 
 	return c.agwSyncer, nil
+}
+
+func normalizeProxyImageTag(tag string) string {
+	return "v" + strings.TrimPrefix(tag, "v")
 }
 
 func (c *ControllerBuilder) HasSynced() bool {
@@ -283,6 +299,9 @@ func GetDefaultClassInfo(
 	}
 	applyGatewayClassParametersRef(classInfos[agwClassName], agwClassName, refOverrides)
 	maps.Copy(classInfos, additionalClassInfos)
+	for name, info := range additionalClassInfos {
+		applyGatewayClassParametersRef(info, name, refOverrides)
+	}
 	return classInfos
 }
 

@@ -11,6 +11,8 @@ import (
 
 // DnsLookupFamily controls the DNS lookup family for all static clusters created via Backend resources.
 type DnsLookupFamily string
+type XdsMode string
+type BackendRefGrantMode string
 
 const (
 	// DnsLookupFamilyV4Preferred is the default value for DnsLookupFamily.
@@ -33,6 +35,14 @@ const (
 	// non-existent V6_PREFERRED option and is a legacy name that will be
 	// deprecated in favor of V6_PREFERRED in a future major version.
 	DnsLookupFamilyAuto DnsLookupFamily = "AUTO"
+
+	XdsModePlaintext XdsMode = "plaintext"
+	XdsModeTLS       XdsMode = "tls"
+	XdsModeEither    XdsMode = "either"
+
+	BackendRefGrantModeRouteAndPolicy BackendRefGrantMode = "route-and-policy"
+	BackendRefGrantModeRoute          BackendRefGrantMode = "route"
+	BackendRefGrantModeNone           BackendRefGrantMode = "none"
 )
 
 // Decode implements envconfig.Decoder.
@@ -45,6 +55,44 @@ func (m *DnsLookupFamily) Decode(value string) error {
 	default:
 		return fmt.Errorf("invalid DNS lookup family: %q", value)
 	}
+}
+
+// Decode implements envconfig.Decoder.
+func (m *XdsMode) Decode(value string) error {
+	mode := XdsMode(strings.ToLower(value))
+	switch mode {
+	case XdsModePlaintext, XdsModeTLS, XdsModeEither:
+		*m = mode
+		return nil
+	case "true":
+		*m = XdsModeTLS
+		return nil
+	case "false":
+		*m = XdsModePlaintext
+		return nil
+	default:
+		return fmt.Errorf("invalid xDS mode: %q (supported: plaintext, tls, either)", value)
+	}
+}
+
+// Decode implements envconfig.Decoder.
+func (m *BackendRefGrantMode) Decode(value string) error {
+	mode := BackendRefGrantMode(strings.ToLower(value))
+	switch mode {
+	case BackendRefGrantModeRouteAndPolicy, BackendRefGrantModeRoute, BackendRefGrantModeNone:
+		*m = mode
+		return nil
+	default:
+		return fmt.Errorf("invalid backend ReferenceGrant mode: %q (supported: route-and-policy, route, none)", value)
+	}
+}
+
+func (m BackendRefGrantMode) RequireRouteBackendGrant() bool {
+	return m == "" || m == BackendRefGrantModeRouteAndPolicy || m == BackendRefGrantModeRoute
+}
+
+func (m BackendRefGrantMode) RequirePolicyBackendGrant() bool {
+	return m == BackendRefGrantModeRouteAndPolicy
 }
 
 // GatewayClassParametersRefs maps GatewayClass names to ParametersReference
@@ -98,22 +146,13 @@ func (r *GatewayClassParametersRefs) Decode(value string) error {
 const (
 	// TLSSecretName is the name of the Kubernetes Secret containing the TLS certificate,
 	// private key, and CA certificate for xDS communication. This secret must exist in the
-	// kgateway installation namespace when TLS is enabled.
+	// agentgateway installation namespace when TLS is enabled.
 	TLSSecretName = "kgateway-xds-cert" //nolint:gosec // G101: This is a well-known xDS TLS secret name, not a credential
-
-	// TLSCertPath is the path to the TLS certificate
-	TLSCertPath = "/etc/xds-tls/tls.crt"
-
-	// TLSKeyPath is the path to the TLS key
-	TLSKeyPath = "/etc/xds-tls/tls.key"
-
-	// TLSRootCAPath is the path to the TLS root CA
-	TLSRootCAPath = "/etc/xds-tls/ca.crt"
 )
 
 type Settings struct {
 	// Controls the DnsLookupFamily for all static clusters created via Backend resources.
-	// If not set, kgateway will default to "V4_PREFERRED". Note that this is different
+	// If not set, agentgateway will default to "V4_PREFERRED". Note that this is different
 	// from the Envoy default of "AUTO", which is effectively "V6_PREFERRED".
 	// Supported values are: "ALL", "AUTO", "V4_PREFERRED", "V4_ONLY", "V6_ONLY"
 	// Details on the behavior of these options are available on the Envoy documentation:
@@ -131,9 +170,24 @@ type Settings struct {
 	// Defaults to "default".
 	IstioRevision string `split_words:"true" default:"default"`
 
+	// IstioAutoEnabled, when true, enables Istio integration by default on all built-in-class
+	// gateways. Individual gateways can opt out via AgentgatewayParameters spec.istio.enabled=false.
+	// Defaults to false, meaning gateways opt in to Istio integration via spec.istio.
+	IstioAutoEnabled bool `split_words:"true"`
+
+	// IstioClusterId, IstioNetwork, and IstioCaAddress are mesh values applied to gateways that have
+	// Istio integration enabled; they do not enable it themselves. GatewayParameters override per gateway.
+	IstioClusterId string `split_words:"true"`
+	IstioNetwork   string `split_words:"true"`
+	// Defaults to "https://istiod.istio-system.svc:15012".
+	IstioCaAddress string `split_words:"true"`
+
 	// XdsServiceHost is the host that serves xDS config.
 	// It overrides xdsServiceName if set.
 	XdsServiceHost string `split_words:"true"`
+
+	// AdditionalXdsTLSHosts are extra DNS names or IP addresses to include in the generated xDS serving certificate.
+	AdditionalXdsTLSHosts []string `split_words:"true"`
 
 	// XdsServiceName is the name of the Kubernetes Service that serves xDS config.
 	// It is assumed to be in the agentgateway install namespace.
@@ -144,14 +198,22 @@ type Settings struct {
 	// By default, this is enabled.
 	XdsAuth bool `split_words:"true" default:"true"`
 
-	// XdsTLS enables or disables TLS encryption for xDS communication between the data-plane and control-plane.
-	// By default, this is disabled.
-	XdsTLS bool `split_words:"true" default:"false"`
+	// XdsMode configures how xDS is served by the control-plane:
+	// - plaintext: serve only plaintext xDS
+	// - tls: serve only TLS xDS
+	// - either: serve both TLS and plaintext xDS
+	XdsMode XdsMode `split_words:"true" default:"plaintext"`
+
+	// BackendRefGrantMode controls when ReferenceGrant is required for cross-namespace backend refs.
+	// Secret refs always require ReferenceGrant.
+	// - route-and-policy: require ReferenceGrant for Route -> Backend and AgentgatewayPolicy -> Backend
+	// - route: require ReferenceGrant only for Route -> Backend
+	// - none: do not require ReferenceGrant for backend refs
+	BackendRefGrantMode BackendRefGrantMode `split_words:"true" default:"route"`
 
 	// AgentgatewayXdsServicePort is the port of the Kubernetes Service that serves xDS config for agentgateway.
-	// This corresponds to the value of the `grpc-xds-agw` port in the service.
+	// This is the primary xDS port and is used for TLS mode and for plaintext when mode=plaintext.
 	AgentgatewayXdsServicePort uint32 `split_words:"true" default:"9978"`
-
 	// NoListenersDummyPort is the port exposed on the generated Service when a Gateway has no listeners.
 	// This keeps the LoadBalancer provisioned and address stable across transitions to zero listeners.
 	NoListenersDummyPort uint16 `split_words:"true" default:"443"`
@@ -205,4 +267,12 @@ func BuildSettings() (*Settings, error) {
 		return settings, err
 	}
 	return settings, nil
+}
+
+func (s *Settings) IsXdsTLSEnabled() bool {
+	return s.XdsMode == XdsModeTLS || s.XdsMode == XdsModeEither
+}
+
+func (s *Settings) IsXdsPlaintextEnabled() bool {
+	return s.XdsMode == XdsModePlaintext || s.XdsMode == XdsModeEither
 }

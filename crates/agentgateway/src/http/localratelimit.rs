@@ -27,13 +27,17 @@ impl<'de> serde::Deserialize<'de> for RateLimit {
 
 #[apply(schema!)]
 pub struct RateLimitSpec {
+	/// Maximum number of tokens that can accumulate in the local bucket.
 	#[serde(default)]
 	pub max_tokens: u64,
+	/// Number of tokens added to the local bucket each fill interval.
 	#[serde(default)]
 	pub tokens_per_fill: u64,
+	/// How often the local bucket is refilled.
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub fill_interval: Duration,
+	/// Whether this limit counts requests or LLM tokens.
 	#[serde(default)]
 	#[serde(rename = "type")]
 	pub limit_type: RateLimitType,
@@ -42,9 +46,11 @@ pub struct RateLimitSpec {
 #[apply(schema!)]
 #[derive(Default, Eq, PartialEq)]
 pub enum RateLimitType {
+	/// Count each request as one unit.
 	#[serde(rename = "requests")]
 	#[default]
 	Requests,
+	/// Count LLM token usage.
 	#[serde(rename = "tokens")]
 	Tokens,
 }
@@ -118,6 +124,20 @@ impl RateLimit {
 	/// will be set to 0.
 	pub fn amend_tokens(&self, tokens_to_remove: i64) {
 		self.ratelimit.amend_tokens(tokens_to_remove);
+	}
+}
+
+impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		_req: &mut http::Request,
+	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+		for rate_limit in self {
+			rate_limit.check_request()?;
+		}
+		Ok(http::PolicyResponse::default())
 	}
 }
 
@@ -433,61 +453,66 @@ mod ratelimit {
 	#[cfg(test)]
 	mod tests {
 		use std::sync::Arc;
-		use std::time::{Duration, Instant};
+		use std::time::Duration;
+
+		use clocksource::precise::{Duration as ClockDuration, Instant as ClockInstant};
 
 		use super::*;
+
+		fn force_refill_due(rl: &Ratelimiter, elapsed: ClockDuration) {
+			rl.refill_at.store(
+				ClockInstant::now()
+					.checked_sub(elapsed)
+					.unwrap_or_else(|| ClockInstant::from_nanos(0)),
+				std::sync::atomic::Ordering::Relaxed,
+			);
+		}
 
 		// quick test that a ratelimiter yields tokens at the desired rate
 		#[test]
 		pub fn wait() {
-			let rl = Ratelimiter::builder(1, Duration::from_micros(10))
+			let rl = Ratelimiter::builder(1, Duration::from_secs(1))
 				.build()
 				.unwrap();
 
-			let mut count = 0;
-
-			let now = Instant::now();
-			let end = now + Duration::from_millis(10);
-			while Instant::now() < end {
-				if rl.try_wait().is_ok() {
-					count += 1;
-				}
-			}
-
-			assert!(count >= 100, "{count}");
-			assert!(count <= 10000, "{count}");
+			assert!(rl.try_wait().is_err());
+			force_refill_due(&rl, ClockDuration::from_nanos(1));
+			assert!(rl.try_wait().is_ok());
+			assert!(rl.try_wait().is_err());
 		}
 
 		// quick test that an idle ratelimiter doesn't build up excess capacity
 		#[test]
 		pub fn idle() {
-			let rl = Ratelimiter::builder(1, Duration::from_millis(1))
-				.initial_available(1)
+			let rl = Ratelimiter::builder(10, Duration::from_secs(3600))
+				.max_tokens(10)
+				.initial_available(10)
 				.build()
 				.unwrap();
 
-			std::thread::sleep(Duration::from_millis(10));
-			assert!(rl.next_refill() < clocksource::precise::Instant::now());
+			force_refill_due(&rl, ClockDuration::from_nanos(1));
+			assert!(rl.next_refill() < ClockInstant::now());
 
-			assert!(rl.try_wait().is_ok());
+			assert_eq!(rl.available_refill(), 10);
+			assert!(rl.dropped() >= 10);
+			assert!(rl.try_wait_n(10).is_ok());
 			assert!(rl.try_wait().is_err());
-			assert!(rl.dropped() >= 8);
-			assert!(rl.next_refill() >= clocksource::precise::Instant::now());
+			assert!(rl.next_refill() >= ClockInstant::now());
 
-			std::thread::sleep(Duration::from_millis(5));
-			assert!(rl.next_refill() < clocksource::precise::Instant::now());
+			force_refill_due(&rl, ClockDuration::from_nanos(1));
+			assert!(rl.next_refill() < ClockInstant::now());
 		}
 
 		// quick test that capacity acts as expected
 		#[test]
 		pub fn capacity() {
-			let rl = Ratelimiter::builder(1, Duration::from_millis(10))
+			let rl = Ratelimiter::builder(10, Duration::from_secs(3600))
 				.max_tokens(10)
 				.initial_available(0)
 				.build()
 				.unwrap();
 
-			std::thread::sleep(Duration::from_millis(100));
+			force_refill_due(&rl, ClockDuration::from_nanos(1));
 			assert!(rl.try_wait().is_ok());
 			assert!(rl.try_wait().is_ok());
 			assert!(rl.try_wait().is_ok());
@@ -504,7 +529,7 @@ mod ratelimit {
 		// Test that try_wait_n correctly acquires multiple tokens
 		#[test]
 		pub fn try_wait_n() {
-			let rl = Ratelimiter::builder(10, Duration::from_millis(10))
+			let rl = Ratelimiter::builder(10, Duration::from_secs(3600))
 				.max_tokens(20)
 				.initial_available(15)
 				.build()
@@ -532,7 +557,7 @@ mod ratelimit {
 		#[test]
 		pub fn try_wait_n_atomicity() {
 			let rl = Arc::new(
-				Ratelimiter::builder(1, Duration::from_millis(10))
+				Ratelimiter::builder(1, Duration::from_secs(3600))
 					.max_tokens(10)
 					.initial_available(5)
 					.build()
@@ -567,7 +592,7 @@ mod ratelimit {
 		// Test that try_wait_n works correctly with refills
 		#[test]
 		pub fn try_wait_n_with_refill() {
-			let rl = Ratelimiter::builder(5, Duration::from_millis(10))
+			let rl = Ratelimiter::builder(5, Duration::from_secs(3600))
 				.max_tokens(10)
 				.initial_available(5)
 				.build()
@@ -580,12 +605,8 @@ mod ratelimit {
 			assert_eq!(rl.available(), 0);
 			assert!(rl.try_wait_n(1).is_err());
 
-			// Acquire refilled tokens
-			let deadline = Instant::now() + Duration::from_secs(1);
-			while let Err((_, _, wait)) = rl.try_wait_n(5) {
-				assert!(Instant::now() < deadline, "timed out waiting for refills");
-				std::thread::sleep(wait.max(Duration::from_millis(1)));
-			}
+			force_refill_due(&rl, ClockDuration::from_nanos(1));
+			assert!(rl.try_wait_n(5).is_ok());
 
 			let remain = rl.available();
 			assert!(remain <= 5, "expected <5 remaining tokens, got {remain}");
@@ -685,7 +706,7 @@ mod ratelimit {
 		// Test amend_tokens in combination with try_wait
 		#[test]
 		pub fn amend_tokens_with_try_wait() {
-			let rl = Ratelimiter::builder(1, Duration::from_millis(10))
+			let rl = Ratelimiter::builder(1, Duration::from_secs(3600))
 				.max_tokens(10)
 				.initial_available(8)
 				.build()
@@ -716,7 +737,7 @@ mod ratelimit {
 		// Test amend_tokens with refills
 		#[test]
 		pub fn amend_tokens_with_refills() {
-			let rl = Ratelimiter::builder(5, Duration::from_millis(10))
+			let rl = Ratelimiter::builder(5, Duration::from_secs(3600))
 				.max_tokens(10)
 				.initial_available(5)
 				.build()
@@ -728,20 +749,13 @@ mod ratelimit {
 			rl.amend_tokens(5);
 			assert_eq!(rl.available(), 0);
 
-			// Wait for a refill (increase wait time to ensure refill happens)
-			std::thread::sleep(Duration::from_millis(20));
+			force_refill_due(&rl, ClockDuration::from_nanos(1));
+			assert!(rl.try_wait().is_ok());
 
-			// Should have refilled tokens (but let's be more flexible about timing)
 			let available_after_refill = rl.available();
-			assert!(
-				available_after_refill > 0 || rl.next_refill() < clocksource::precise::Instant::now()
-			);
-
-			// If we have tokens, amend some of them
-			if available_after_refill > 0 {
-				rl.amend_tokens(2);
-				assert_eq!(rl.available(), available_after_refill - 2);
-			}
+			assert!(available_after_refill > 0);
+			rl.amend_tokens(2);
+			assert_eq!(rl.available(), available_after_refill - 2);
 		}
 	}
 }

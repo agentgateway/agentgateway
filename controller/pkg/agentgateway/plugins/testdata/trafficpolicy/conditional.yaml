@@ -1,0 +1,328 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-auth-conditional
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    transformation:
+      conditional:
+        - condition: "request.path == '/transform'"
+          policy:
+            request:
+              set:
+                - name: x-conditional-transform
+                  value: "'enabled'"
+        - policy:
+            response:
+              add:
+                - name: x-conditional-transform
+                  value: "'fallback'"
+    extProc:
+      conditional:
+        - condition: "request.path == '/process'"
+          policy:
+            backendRef:
+              name: extproc
+              port: 4444
+        - policy:
+            backendRef:
+              name: extproc
+              port: 4444
+    extAuth:
+      conditional:
+        - condition: "random() > .5"
+          policy:
+            backendRef:
+              name: extauthz
+              port: 1024
+            grpc: {}
+        - condition: "request.path == '/secure'"
+          policy:
+            backendRef:
+              name: extauthz
+              port: 1024
+            grpc: {}
+        - policy:
+            backendRef:
+              name: extauthz
+              port: 1024
+            grpc: {}
+    rateLimit:
+      conditional:
+        - condition: "request.path == '/local-limit'"
+          policy:
+            local:
+              - requests: 10
+                unit: Seconds
+        - condition: "request.path == '/global-limit'"
+          policy:
+            global:
+              backendRef:
+                name: ratelimit
+                port: 8081
+              domain: api-gateway
+              descriptors:
+                - entries:
+                    - name: user-agent
+                      expression: 'request.headers["user-agent"]'
+        - policy:
+            local:
+              - requests: 1
+                unit: Minutes
+    directResponse:
+      conditional:
+        - condition: "request.path == '/direct'"
+          policy:
+            status: 403
+            bodyExpression: "'denied ' + request.path"
+            headers:
+              - name: x-direct
+                value: "'direct'"
+        - condition: "request.path == '/gone'"
+          policy:
+            status: 410
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extauthz
+  namespace: default
+spec:
+  ports:
+    - port: 1024
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extproc
+  namespace: default
+spec:
+  ports:
+    - port: 4444
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ratelimit
+  namespace: default
+spec:
+  ports:
+    - port: 8081
+---
+# Output
+output:
+- gateway:
+    Name: dummy
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - condition: request.path == '/direct'
+          traffic:
+            directResponse:
+              bodyExpression: '''denied '' + request.path'
+              headers:
+              - expression: '''direct'''
+                name: x-direct
+              status: 403
+        - condition: request.path == '/gone'
+          traffic:
+            directResponse:
+              status: 410
+      key: traffic/default/ext-auth-conditional:direct-response:default/dummy
+      name:
+        kind: AgentgatewayPolicy
+        name: ext-auth-conditional
+        namespace: default
+      target:
+        gateway:
+          name: dummy
+          namespace: default
+- gateway:
+    Name: dummy
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - condition: random() > .5
+          traffic:
+            extAuthz:
+              grpc: {}
+              target:
+                port: 1024
+                service:
+                  hostname: extauthz.default.svc.cluster.local
+                  namespace: default
+        - condition: request.path == '/secure'
+          traffic:
+            extAuthz:
+              grpc: {}
+              target:
+                port: 1024
+                service:
+                  hostname: extauthz.default.svc.cluster.local
+                  namespace: default
+        - traffic:
+            extAuthz:
+              grpc: {}
+              target:
+                port: 1024
+                service:
+                  hostname: extauthz.default.svc.cluster.local
+                  namespace: default
+      key: traffic/default/ext-auth-conditional:extauth:default/dummy
+      name:
+        kind: AgentgatewayPolicy
+        name: ext-auth-conditional
+        namespace: default
+      target:
+        gateway:
+          name: dummy
+          namespace: default
+- gateway:
+    Name: dummy
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - condition: request.path == '/process'
+          traffic:
+            extProc:
+              target:
+                port: 4444
+                service:
+                  hostname: extproc.default.svc.cluster.local
+                  namespace: default
+        - traffic:
+            extProc:
+              target:
+                port: 4444
+                service:
+                  hostname: extproc.default.svc.cluster.local
+                  namespace: default
+      key: traffic/default/ext-auth-conditional:extproc:default/dummy
+      name:
+        kind: AgentgatewayPolicy
+        name: ext-auth-conditional
+        namespace: default
+      target:
+        gateway:
+          name: dummy
+          namespace: default
+- gateway:
+    Name: dummy
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - condition: request.path == '/global-limit'
+          traffic:
+            remoteRateLimit:
+              descriptors:
+              - entries:
+                - key: user-agent
+                  value: request.headers["user-agent"]
+              domain: api-gateway
+              target:
+                port: 8081
+                service:
+                  hostname: ratelimit.default.svc.cluster.local
+                  namespace: default
+      key: traffic/default/ext-auth-conditional:rl-global:default/dummy
+      name:
+        kind: AgentgatewayPolicy
+        name: ext-auth-conditional
+        namespace: default
+      target:
+        gateway:
+          name: dummy
+          namespace: default
+- gateway:
+    Name: dummy
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - condition: request.path == '/local-limit'
+          traffic:
+            localRateLimit:
+              fillInterval: 1s
+              maxTokens: "10"
+              tokensPerFill: "10"
+        - traffic:
+            localRateLimit:
+              fillInterval: 60s
+              maxTokens: "1"
+              tokensPerFill: "1"
+      key: traffic/default/ext-auth-conditional:rl-local:default/dummy
+      name:
+        kind: AgentgatewayPolicy
+        name: ext-auth-conditional
+        namespace: default
+      target:
+        gateway:
+          name: dummy
+          namespace: default
+- gateway:
+    Name: dummy
+    Namespace: default
+  resource:
+    policy:
+      conditional:
+        policies:
+        - condition: request.path == '/transform'
+          traffic:
+            transformation:
+              request:
+                set:
+                - expression: '''enabled'''
+                  name: x-conditional-transform
+        - traffic:
+            transformation:
+              response:
+                add:
+                - expression: '''fallback'''
+                  name: x-conditional-transform
+      key: traffic/default/ext-auth-conditional:transformation:default/dummy
+      name:
+        kind: AgentgatewayPolicy
+        name: ext-auth-conditional
+        namespace: default
+      target:
+        gateway:
+          name: dummy
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: ext-auth-conditional
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: Gateway default/dummy not found'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

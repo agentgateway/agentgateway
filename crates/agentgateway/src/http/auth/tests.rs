@@ -6,6 +6,57 @@ use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
 use crate::test_helpers::proxymock::setup_proxy_test;
 
+#[test]
+fn test_aws_auth_deserializes_assume_role() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/backend"
+		}
+	}))
+	.expect("implicit AWS assume role auth should deserialize");
+	assert!(
+		matches!(
+			implicit,
+			AwsAuth::Implicit {
+				assume_role: Some(_),
+				..
+			}
+		),
+		"expected implicit AWS auth with assume role"
+	);
+}
+
+#[test]
+fn test_authorization_location_expression_extracts_from_cel() {
+	let req = ::http::Request::builder()
+		.uri("http://example.com/")
+		.header("x-token", "from-cel")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let location = AuthorizationLocation::Expression {
+		expression: std::sync::Arc::new(
+			crate::cel::Expression::new_strict(r#"request.headers["x-token"]"#).unwrap(),
+		),
+	};
+
+	assert_eq!(location.extract(&req).as_deref(), Some("from-cel"));
+}
+
+#[test]
+fn test_authorization_location_expression_cannot_insert() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let location = AuthorizationLocation::Expression {
+		expression: std::sync::Arc::new(crate::cel::Expression::new_strict(r#""token""#).unwrap()),
+	};
+
+	let err = location.insert(&mut req, "token").unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("only supported for credential extraction")
+	);
+}
+
 #[tokio::test]
 async fn test_backend_auth_passthrough_happy_path() {
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
@@ -31,9 +82,7 @@ async fn test_backend_auth_passthrough_happy_path() {
 	};
 	apply_backend_auth(
 		&backend_info,
-		&BackendAuth::Passthrough {
-			location: AuthorizationLocation::default(),
-		},
+		&BackendAuth::Passthrough { location: None },
 		&mut req,
 	)
 	.await
@@ -69,7 +118,7 @@ async fn test_backend_auth_key() {
 
 	let key_auth = BackendAuth::Key {
 		value: SecretString::new("my-secret-key".into()),
-		location: AuthorizationLocation::default(),
+		location: None,
 	};
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
@@ -104,7 +153,7 @@ async fn test_backend_auth_key_query_parameter() {
 
 	let key_auth = BackendAuth::Key {
 		value: SecretString::new("my-secret-key".into()),
-		location: AuthorizationLocation::QueryParameter { name: "key".into() },
+		location: Some(AuthorizationLocation::QueryParameter { name: "key".into() }),
 	};
 	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
@@ -114,6 +163,73 @@ async fn test_backend_auth_key_query_parameter() {
 		req.uri().to_string(),
 		"http://example.com/search?keep=yes&key=my-secret-key"
 	);
+}
+
+#[tokio::test]
+async fn test_backend_auth_key_default_sets_non_explicit_extension() {
+	// When location is None (defaulted), the extension must have explicit=false.
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let key_auth = BackendAuth::Key {
+		value: SecretString::new("my-secret-key".into()),
+		location: None,
+	};
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let ext = req
+		.extensions()
+		.get::<AppliedBackendAuthLocation>()
+		.expect("extension must be set");
+	assert!(
+		!ext.explicit,
+		"default location must not be marked explicit"
+	);
+}
+
+#[tokio::test]
+async fn test_backend_auth_key_explicit_location_sets_explicit_extension() {
+	// When location is Some(...), the extension must have explicit=true.
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let key_auth = BackendAuth::Key {
+		value: SecretString::new("my-secret-key".into()),
+		location: Some(AuthorizationLocation::bearer_header()),
+	};
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let ext = req
+		.extensions()
+		.get::<AppliedBackendAuthLocation>()
+		.expect("extension must be set");
+	assert!(ext.explicit, "explicit location must be marked explicit");
 }
 
 #[tokio::test]
@@ -130,6 +246,7 @@ async fn test_aws_sign_request_explicit_region() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: Some("us-west-2".to_string()),
 		session_token: None,
+		service_name: None,
 	};
 
 	// No default region in request extensions.
@@ -186,6 +303,7 @@ async fn test_aws_sign_requestallback() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: None, // No region in config
 		session_token: None,
+		service_name: None,
 	};
 
 	// Insert default AwsRegion into request extensions
@@ -218,6 +336,7 @@ async fn test_aws_sign_request_no_region_error() {
 		secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 		region: None, // No region in config
 		session_token: None,
+		service_name: None,
 	};
 
 	// No default region in request extensions.
@@ -257,7 +376,12 @@ async fn test_aws_sign_request_implicit_with_extension() {
 		region: "ap-southeast-1".to_string(),
 	});
 
-	let aws_auth = AwsAuth::Implicit {};
+	let aws_auth = AwsAuth::Implicit {
+		service_name: None,
+		assume_role: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	};
 
 	// Should use region from request extensions
 	let result = aws::sign_request(&mut req, &aws_auth).await;

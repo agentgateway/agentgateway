@@ -1,5 +1,58 @@
-use super::*;
 use ::http::{HeaderName, HeaderValue};
+
+use super::*;
+
+/// When a webhook guard fails open, exactly one metric must be emitted (`FailOpen`); the caller
+/// must not additionally record `Allow`.
+#[tokio::test]
+async fn webhook_fail_open_emits_single_metric() {
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailLabels, GuardrailPhase};
+	use crate::types::agent::SimpleBackendReference;
+
+	let guard = PromptGuard {
+		streaming: Default::default(),
+		request: vec![RequestGuard {
+			rejection: Default::default(),
+			kind: RequestGuardKind::Webhook(Webhook {
+				target: SimpleBackendReference::Invalid,
+				forward_header_matches: vec![],
+				failure_mode: FailureMode::FailOpen,
+			}),
+		}],
+		response: vec![],
+	};
+
+	let client = crate::test_helpers::policy_client();
+	let blocked = guard
+		.apply_realtime_request_guards("hello world", &client)
+		.await;
+	assert!(blocked.is_none(), "FailOpen must not block the request");
+
+	let fail_open = client
+		.inputs
+		.metrics
+		.guardrail_checks
+		.get_or_create(&GuardrailLabels {
+			phase: GuardrailPhase::Request,
+			action: GuardrailAction::FailOpen,
+		})
+		.get();
+	let allow = client
+		.inputs
+		.metrics
+		.guardrail_checks
+		.get_or_create(&GuardrailLabels {
+			phase: GuardrailPhase::Request,
+			action: GuardrailAction::Allow,
+		})
+		.get();
+
+	assert_eq!(fail_open, 1, "FailOpen should be recorded exactly once");
+	assert_eq!(
+		allow, 0,
+		"Allow must not be recorded for a FailOpen outcome"
+	);
+}
 
 #[test]
 fn test_get_webhook_forward_headers() {
@@ -342,8 +395,9 @@ fn test_model_alias_pattern_validation() {
 // ============================================================================
 
 mod bedrock_guardrails_tests {
-	use super::super::bedrock_guardrails::*;
 	use serde_json::json;
+
+	use super::super::bedrock_guardrails::*;
 
 	#[test]
 	fn test_apply_guardrail_response_is_blocked_true() {
@@ -548,8 +602,9 @@ mod bedrock_guardrails_tests {
 // ============================================================================
 
 mod google_model_armor_tests {
-	use super::super::google_model_armor::*;
 	use serde_json::json;
+
+	use super::super::google_model_armor::*;
 
 	#[test]
 	fn test_match_state_deserialization() {
@@ -891,8 +946,9 @@ mod google_model_armor_tests {
 // ============================================================================
 
 mod prompt_guard_config_tests {
-	use super::*;
 	use serde_json::json;
+
+	use super::*;
 
 	#[test]
 	fn test_bedrock_guardrails_config_deserialization() {
@@ -1020,6 +1076,7 @@ mod prompt_guard_config_tests {
 		let policy: Policy = serde_json::from_value(json).unwrap();
 		let prompt_guard = policy.prompt_guard.unwrap();
 		assert_eq!(prompt_guard.response.len(), 1);
+		assert!(prompt_guard.streaming.is_disabled());
 
 		match &prompt_guard.response[0].kind {
 			ResponseGuardKind::BedrockGuardrails(bg) => {
@@ -1029,6 +1086,56 @@ mod prompt_guard_config_tests {
 			},
 			_ => panic!("Expected BedrockGuardrails response guard kind"),
 		}
+	}
+
+	#[test]
+	fn test_streaming_response_guards_are_opt_in() {
+		let json = json!({
+			"promptGuard": {
+				"response": [{
+					"regex": {
+						"action": "reject",
+						"rules": [{
+							"pattern": "secret"
+						}]
+					}
+				}]
+			}
+		});
+
+		let policy: Policy = serde_json::from_value(json).unwrap();
+
+		assert!(
+			policy
+				.prompt_guard
+				.as_ref()
+				.unwrap()
+				.streaming
+				.is_disabled()
+		);
+		assert!(!policy.has_streaming_response_guards());
+	}
+
+	#[test]
+	fn test_streaming_response_guards_enable_with_streaming_true() {
+		let json = json!({
+			"promptGuard": {
+				"streaming": "Enabled",
+				"response": [{
+					"regex": {
+						"action": "reject",
+						"rules": [{
+							"pattern": "secret"
+						}]
+					}
+				}]
+			}
+		});
+
+		let policy: Policy = serde_json::from_value(json).unwrap();
+
+		assert!(policy.prompt_guard.as_ref().unwrap().streaming.is_enabled());
+		assert!(policy.has_streaming_response_guards());
 	}
 
 	#[test]
@@ -1213,21 +1320,23 @@ mod prompt_guard_config_tests {
 
 #[test]
 fn test_bedrock_guardrails_user_credentials_take_precedence() {
+	use secrecy::SecretString;
+
 	use crate::http::auth::{AwsAuth, BackendAuth};
 	use crate::store::BindStore;
-	use crate::types::agent::BackendPolicy;
-	use secrecy::SecretString;
+	use crate::types::agent::BackendTrafficPolicy;
 
 	let guardrails = BedrockGuardrails {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
-		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Aws(
+		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
 			AwsAuth::ExplicitConfig {
 				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
 				secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
 				region: Some("us-east-1".to_string()),
 				session_token: None,
+				service_name: None,
 			},
 		))],
 	};
@@ -1269,7 +1378,11 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Aws(AwsAuth::Implicit {}))
+			Some(BackendAuth::Aws(AwsAuth::Implicit {
+				service_name: None,
+				assume_role: None,
+				..
+			}))
 		),
 		"Expected implicit AWS auth when no user credentials are provided, but got: {:?}",
 		resolved.backend_auth
@@ -1278,18 +1391,19 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 
 #[test]
 fn test_google_model_armor_user_credentials_take_precedence() {
+	use secrecy::SecretString;
+
 	use crate::http::auth::BackendAuth;
 	use crate::store::BindStore;
-	use crate::types::agent::BackendPolicy;
-	use secrecy::SecretString;
+	use crate::types::agent::BackendTrafficPolicy;
 
 	let model_armor = GoogleModelArmor {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
-		policies: vec![BackendPolicy::BackendAuth(BackendAuth::Key {
+		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
 			value: SecretString::new("user-provided-api-key".into()),
-			location: crate::http::auth::AuthorizationLocation::default(),
+			location: None,
 		})],
 	};
 

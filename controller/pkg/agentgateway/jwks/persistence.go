@@ -81,12 +81,15 @@ func NewPersistedEntries(client apiclient.Client, krtOptions krtutil.KrtOptions,
 		ObjectFilter:  client.ObjectFilter(),
 		Namespace:     deploymentNamespace,
 		LabelSelector: JwksStoreLabelSelector(storePrefix),
-	}, krtOptions.ToOptions("persisted_jwks/ConfigMaps")...)
+	}, krtOptions.ToOptions("informer/jwks/ConfigMaps")...)
 
-	return NewPersistedEntriesFromCollection(configMaps, storePrefix, deploymentNamespace)
+	return NewPersistedEntriesFromCollection(configMaps, storePrefix, deploymentNamespace, krtOptions.ToOptions("jwks/PersistedEntries")...)
 }
 
-func NewPersistedEntriesFromCollection(configMaps krt.Collection[*corev1.ConfigMap], storePrefix, deploymentNamespace string) *PersistedEntries {
+func NewPersistedEntriesFromCollection(configMaps krt.Collection[*corev1.ConfigMap], storePrefix, deploymentNamespace string, opts ...krt.CollectionOption) *PersistedEntries {
+	if len(opts) == 0 {
+		opts = []krt.CollectionOption{krt.WithName("jwks/PersistedEntries")}
+	}
 	entries := krt.NewCollection(configMaps, func(krtctx krt.HandlerContext, cm *corev1.ConfigMap) *PersistedEntry {
 		if cm == nil {
 			return nil
@@ -109,10 +112,9 @@ func NewPersistedEntriesFromCollection(configMaps krt.Collection[*corev1.ConfigM
 			entry.ParseError = err.Error()
 			return &entry
 		}
-		keyset = normalizePersistedKeyset(storePrefix, cm.Name, keyset)
 		entry.Keyset = &keyset
 		return &entry
-	})
+	}, opts...)
 
 	return &PersistedEntries{
 		storePrefix: storePrefix,
@@ -323,17 +325,4 @@ func keysetsEqual(a, b *Keyset) bool {
 	default:
 		return *a == *b
 	}
-}
-
-func normalizePersistedKeyset(storePrefix, configMapName string, keyset Keyset) Keyset {
-	if keyset.URL == "" {
-		return keyset
-	}
-
-	requestKeyFromURL := remotehttp.FetchTarget{URL: keyset.URL}.Key()
-	if JwksConfigMapName(storePrefix, requestKeyFromURL) == configMapName {
-		keyset.RequestKey = requestKeyFromURL
-	}
-
-	return keyset
 }

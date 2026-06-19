@@ -12,8 +12,7 @@ use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
-	InitializeRequest, JsonRpcRequest, ProtocolVersion, RequestId, RootsCapabilities,
-	ServerJsonRpcMessage,
+	InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -26,6 +25,7 @@ use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
+use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop};
 use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
@@ -138,6 +138,92 @@ impl Session {
 		self
 	}
 
+	fn authorize_prompt_request<'a, 'b: 'a>(
+		&'a self,
+		name: &'b str,
+		method: &str,
+		span: &mut SpanWriteOnDrop,
+		log: &AsyncLog<mcp::MCPInfo>,
+		cel: &rbac::CelExecWrapper,
+	) -> Result<(&'a str, &'b str), UpstreamError> {
+		let (service_name, prompt) = self.relay.parse_resource_name(name)?;
+		span.rename_span(format!("{method} {service_name}"));
+		log.non_atomic_mutate(|l| {
+			l.set_prompt(service_name.to_string(), prompt.to_string());
+		});
+		if !self.relay.policies.validate(
+			&rbac::ResourceType::Prompt(rbac::ResourceId::new(
+				service_name.to_string(),
+				prompt.to_string(),
+			)),
+			cel,
+		) {
+			return Err(UpstreamError::Authorization {
+				resource_type: "prompt".to_string(),
+				resource_name: name.to_string(),
+			});
+		}
+		Ok((service_name, prompt))
+	}
+
+	fn authorize_resource_request(
+		&self,
+		service_name: &str,
+		uri: &str,
+		method: &str,
+		span: &mut SpanWriteOnDrop,
+		log: &AsyncLog<mcp::MCPInfo>,
+		cel: &rbac::CelExecWrapper,
+	) -> Result<(), UpstreamError> {
+		span.rename_span(format!("{method} {service_name}"));
+		log.non_atomic_mutate(|l| {
+			l.set_resource(service_name.to_string(), uri.to_string());
+		});
+		if !self.relay.policies.validate(
+			&rbac::ResourceType::Resource(rbac::ResourceId::new(
+				service_name.to_string(),
+				uri.to_string(),
+			)),
+			cel,
+		) {
+			return Err(UpstreamError::Authorization {
+				resource_type: "resource".to_string(),
+				resource_name: uri.to_string(),
+			});
+		}
+		Ok(())
+	}
+
+	#[allow(clippy::too_many_arguments)]
+	async fn authorize_with_ctx<P>(
+		&self,
+		backend: &str,
+		method: &str,
+		params: &mut P,
+		ctx: &mut IncomingRequestContext,
+		res: rbac::ResourceType,
+		resource_type: &str,
+		resource_name: &str,
+	) -> Result<(), UpstreamError>
+	where
+		P: serde::Serialize + serde::de::DeserializeOwned,
+	{
+		// run guardrails before other policies, as it may add context to CEL
+		self
+			.relay
+			.maybe_run_guardrails_call_request(backend, method, params, ctx)
+			.await?;
+		let cel = rbac::CelExecWrapper::new(ctx.as_request().map(|_| ()));
+		if self.relay.policies.validate(&res, &cel) {
+			Ok(())
+		} else {
+			Err(UpstreamError::Authorization {
+				resource_type: resource_type.to_string(),
+				resource_name: resource_name.to_string(),
+			})
+		}
+	}
+
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
@@ -226,6 +312,9 @@ impl Session {
 			}) if req_id.is_some() => {
 				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
 			},
+			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
+				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
+			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
 		}
@@ -246,7 +335,7 @@ impl Session {
 			l.session_id = Some(session_id);
 		});
 
-		init_request.params.capabilities.roots = self.get_roots_capabilities();
+		self.strip_unsupported_client_capabilities(&mut init_request.params.capabilities);
 		self
 			.relay
 			.send_single(
@@ -297,7 +386,7 @@ impl Session {
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method().to_string();
-				let ctx = IncomingRequestContext::new(&parts);
+				let mut ctx = IncomingRequestContext::new(&parts);
 				let (mut span, log, cel) = mcp::handler::setup_request_log(parts, &method);
 				let session_id = self.id.to_string();
 				log.non_atomic_mutate(|l| {
@@ -306,12 +395,7 @@ impl Session {
 				});
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
-						// Currently, we cannot support roots until we have a mapping of downstream and upstream ID.
-						// However, the clients can tell the server they support roots.
-						// Instead, we hijack this to tell them not to so they do not send requests that we cannot
-						// actually support
-						// This could probably be more easily done without multiplexing but for now neither supports.
-						ir.params.capabilities.roots = self.get_roots_capabilities();
+						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
 
 						let pv = ir.params.protocol_version.clone();
 						let res = self
@@ -337,7 +421,7 @@ impl Session {
 					ClientRequest::ListToolsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_tools(cel))
+							.send_fanout(r, ctx, self.relay.merge_tools())
 							.await
 					},
 					// TODO(keithmattix): should we forward pings or should we do our own independent pings
@@ -351,28 +435,20 @@ impl Session {
 					ClientRequest::ListPromptsRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_prompts(cel))
+							.send_fanout(r, ctx, self.relay.merge_prompts())
 							.await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
 						self
 							.relay
-							.send_fanout(r, ctx, self.relay.merge_resources(cel))
+							.send_fanout(r, ctx, self.relay.merge_resources())
 							.await
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
-						if !self.relay.is_multiplexing() {
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel))
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						self
+							.relay
+							.send_fanout(r, ctx, self.relay.merge_resource_templates())
+							.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
@@ -383,21 +459,22 @@ impl Session {
 							l.set_tool(service_name.to_string(), tool.to_string());
 							l.capture_call_arguments(call_arguments);
 						});
-						if !self.relay.policies.validate(
-							&rbac::ResourceType::Tool(rbac::ResourceId::new(
-								service_name.to_string(),
-								tool.to_string(),
-							)),
-							&cel,
-						) {
-							return Err(UpstreamError::Authorization {
-								resource_type: "tool".to_string(),
-								resource_name: name.to_string(),
-							});
-						}
-
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
+						self
+							.authorize_with_ctx(
+								service_name,
+								mcp::guardrails::methods::TOOLS_CALL,
+								&mut ctr.params,
+								&mut ctx,
+								rbac::ResourceType::Tool(rbac::ResourceId::new(
+									service_name.to_string(),
+									tool.to_string(),
+								)),
+								"tool",
+								&name,
+							)
+							.await?;
 						self
 							.relay
 							.send_single(r, ctx, service_name, Some(log.clone()))
@@ -410,70 +487,106 @@ impl Session {
 						log.non_atomic_mutate(|l| {
 							l.set_prompt(service_name.to_string(), prompt.to_string());
 						});
-						if !self.relay.policies.validate(
-							&rbac::ResourceType::Prompt(rbac::ResourceId::new(
-								service_name.to_string(),
-								prompt.to_string(),
-							)),
-							&cel,
-						) {
-							return Err(UpstreamError::Authorization {
-								resource_type: "prompt".to_string(),
-								resource_name: name.to_string(),
-							});
-						}
 						gpr.params.name = prompt.to_string();
+						self
+							.authorize_with_ctx(
+								service_name,
+								mcp::guardrails::methods::PROMPTS_GET,
+								&mut gpr.params,
+								&mut ctx,
+								rbac::ResourceType::Prompt(rbac::ResourceId::new(
+									service_name.to_string(),
+									prompt.to_string(),
+								)),
+								"prompt",
+								&name,
+							)
+							.await?;
 						self.relay.send_single(r, ctx, service_name, None).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
-						if let Some(service_name) = self.relay.default_target_name() {
-							let uri = rrr.params.uri.clone();
-							span.rename_span(format!("{method} {service_name}"));
-							log.non_atomic_mutate(|l| {
-								l.set_resource(service_name.to_string(), uri.to_string());
-							});
-							if !self.relay.policies.validate(
-								&rbac::ResourceType::Resource(rbac::ResourceId::new(
+						let uri = rrr.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), original_uri.to_string());
+						});
+						rrr.params.uri = original_uri.clone();
+						self
+							.authorize_with_ctx(
+								service_name,
+								mcp::guardrails::methods::RESOURCES_READ,
+								&mut rrr.params,
+								&mut ctx,
+								rbac::ResourceType::Resource(rbac::ResourceId::new(
 									service_name.to_string(),
-									uri.to_string(),
+									original_uri,
 								)),
-								&cel,
-							) {
-								return Err(UpstreamError::Authorization {
-									resource_type: "resource".to_string(),
-									resource_name: uri.to_string(),
-								});
-							}
-							self
-								.relay
-								.send_single_without_multiplexing(r, ctx, None)
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+								"resource",
+								&uri,
+							)
+							.await?;
+						self.relay.send_single(r, ctx, service_name, None).await
+					},
+					ClientRequest::SubscribeRequest(sr) => {
+						let uri = sr.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						self.authorize_resource_request(
+							service_name,
+							&original_uri,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						sr.params.uri = original_uri;
+						self.relay.send_single(r, ctx, service_name, None).await
+					},
+					ClientRequest::UnsubscribeRequest(ur) => {
+						let uri = ur.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						self.authorize_resource_request(
+							service_name,
+							&original_uri,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						ur.params.uri = original_uri;
+						self.relay.send_single(r, ctx, service_name, None).await
 					},
 
 					ClientRequest::ListTasksRequest(_)
 					| ClientRequest::GetTaskInfoRequest(_)
 					| ClientRequest::GetTaskResultRequest(_)
 					| ClientRequest::CancelTaskRequest(_)
-					| ClientRequest::SubscribeRequest(_)
-					| ClientRequest::UnsubscribeRequest(_)
 					| ClientRequest::CustomRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
 					},
-					ClientRequest::CompleteRequest(_) => {
-						// For now, we don't have a sane mapping of incoming requests to a specific
-						// downstream service when multiplexing. Only forward when we have only one backend.
-						self
-							.relay
-							.send_single_without_multiplexing(r, ctx, None)
-							.await
+					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
+						Reference::Prompt(prompt) => {
+							let name = prompt.name.clone();
+							let (service_name, prompt_name) =
+								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
+							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
+							self.relay.send_single(r, ctx, service_name, None).await
+						},
+						Reference::Resource(resource) => {
+							let uri = resource.uri.clone();
+							let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+							self.authorize_resource_request(
+								service_name,
+								&original_uri,
+								&method,
+								&mut span,
+								&log,
+								&cel,
+							)?;
+							cr.params.r#ref = Reference::for_resource(original_uri);
+							self.relay.send_single(r, ctx, service_name, None).await
+						},
 					},
 				}
 			},
@@ -503,8 +616,16 @@ impl Session {
 		}
 	}
 
-	fn get_roots_capabilities(&self) -> Option<RootsCapabilities> {
-		None
+	fn strip_unsupported_client_capabilities(
+		&self,
+		capabilities: &mut rmcp::model::ClientCapabilities,
+	) {
+		// Until server-to-client request routing is implemented, do not advertise
+		// capabilities that require the proxy to route upstream requests back to
+		// the downstream client and route the client's JSON-RPC response upstream.
+		capabilities.roots = None;
+		capabilities.sampling = None;
+		capabilities.elicitation = None;
 	}
 }
 

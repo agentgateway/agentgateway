@@ -1,6 +1,3 @@
-use hashbrown::HashMap;
-use hashbrown::hash_map::EntryRef;
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 use std::collections::VecDeque;
 use std::collections::hash_map::DefaultHasher;
 use std::error::Error as StdError;
@@ -14,18 +11,22 @@ use std::sync::{Arc, Weak};
 use std::task::{self, Poll};
 use std::time::{Duration, Instant};
 
+use futures_channel::oneshot;
+use futures_core::ready;
+use futures_util::future::Either;
+use hashbrown::HashMap;
+use hashbrown::hash_map::EntryRef;
+use http::{Request, Response};
+use hyper::rt::{Sleep, Timer as _};
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
+use tracing::{debug, trace};
+
 use crate::client::RequestBody;
 use crate::common::exec;
 use crate::common::exec::Exec;
 use crate::common::timer::Timer;
 use crate::connect::Connected;
 use crate::pool;
-use futures_channel::oneshot;
-use futures_core::ready;
-use futures_util::future::Either;
-use http::{Request, Response};
-use hyper::rt::{Sleep, Timer as _};
-use tracing::{debug, trace};
 
 // per https://datatracker.ietf.org/doc/html/rfc9113#section-6.5.2-2.6.1, servers are expected to
 // but not required to set this to at least 100. In practice, a wide range of clients will have failures
@@ -1222,10 +1223,15 @@ impl<K: Key> Future for IdleTask<K> {
 
 #[cfg(all(test, not(miri)))]
 mod tests {
-	use super::*;
-	use super::{ExpectedCapacity, Key, Pool};
-	use crate::connect::Connected;
-	use crate::rt::{TokioExecutor, TokioIo};
+	use std::collections::HashSet;
+	use std::fmt::Debug;
+	use std::future::Future;
+	use std::hash::Hash;
+	use std::pin::Pin;
+	use std::sync::{Arc, Once};
+	use std::task::{self, Poll};
+	use std::time::{Duration, Instant};
+
 	use assert_matches::assert_matches;
 	use bytes::Bytes;
 	use futures_channel::oneshot::Receiver;
@@ -1235,16 +1241,11 @@ mod tests {
 	use hyper::server::conn::{http1, http2};
 	use hyper::service::service_fn;
 	use hyper::{Request, Response};
-	use std::collections::HashSet;
-	use std::fmt::Debug;
-	use std::future::Future;
-	use std::hash::Hash;
-	use std::pin::Pin;
-	use std::sync::Arc;
-	use std::sync::Once;
-	use std::task::{self, Poll};
-	use std::time::{Duration, Instant};
 	use tracing_subscriber::EnvFilter;
+
+	use super::{ExpectedCapacity, Key, Pool, *};
+	use crate::connect::Connected;
+	use crate::rt::{TokioExecutor, TokioIo};
 
 	#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 	struct KeyImpl(http::uri::Scheme, http::uri::Authority, ExpectedCapacity);

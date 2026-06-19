@@ -5,19 +5,24 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/soheilhy/cmux"
+	"istio.io/istio/pkg/kube"
+	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/security"
 	"istio.io/istio/pkg/util/sets"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -34,9 +39,11 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk"
+	pluginsdkcol "github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/schemes"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -64,6 +71,9 @@ type Options struct {
 	GlobalSettings              *apisettings.Settings
 	LeaderElectionID            string
 	ExtraStatusHandlers         map[schema.GroupVersionKind]syncer.ResourceStatusSyncer
+	// CredentialResolverFactory builds the complete credential resolver chain.
+	// If unset, the built-in Secret resolver is used.
+	CredentialResolverFactory agwplugins.CredentialResolverFactory
 
 	AgentGatewaySyncerOptions []syncer.AgentgatewaySyncerOption
 
@@ -111,7 +121,7 @@ func New(opts Options) (*setup, error) {
 		s.RestConfig = ctrl.GetConfigOrDie()
 	}
 	if s.APIClient == nil {
-		apiClient, err := apiclient.New(s.RestConfig)
+		apiClient, err := apiclient.New(s.RestConfig, s.GlobalSettings.IstioClusterId)
 		if err != nil {
 			return nil, fmt.Errorf("error creating API client: %w", err)
 		}
@@ -182,25 +192,23 @@ func (s *setup) Start(ctx context.Context) error {
 
 	// Create shared certificate watcher if TLS is enabled. This watcher is used by both the xDS server
 	// and the Gateway controller to kick reconciliation on cert changes.
-	var certWatcher *certwatcher.CertWatcher
-	if s.GlobalSettings.XdsTLS {
+	var certWatcher *xdsTLSMaterial
+	if s.GlobalSettings.IsXdsTLSEnabled() {
 		var err error
-		certWatcher, err = certwatcher.New(apisettings.TLSCertPath, apisettings.TLSKeyPath)
+		certWatcher, err = setupXdsTLSMaterial(ctx, s.APIClient, namespaces.GetPodNamespace(), apisettings.TLSSecretName, s.xdsTLSHosts())
 		if err != nil {
 			return err
 		}
-		go func() {
-			if err := certWatcher.Start(ctx); err != nil {
-				slog.Error("failed to start TLS certificate watcher", "error", err)
-			}
-			slog.Info("started TLS certificate watcher")
-		}()
 	}
 
 	setupOpts := &controller.SetupOpts{
 		KrtDebugger:    s.KrtDebugger,
 		GlobalSettings: s.GlobalSettings,
 		CertWatcher:    certWatcher,
+	}
+
+	if err := initDiscoveryNSFilter(ctx, s.APIClient, s.GlobalSettings.DiscoveryNamespaceSelectors); err != nil {
+		return err
 	}
 
 	slog.Info("creating krt collections")
@@ -213,7 +221,6 @@ func (s *setup) Start(ctx context.Context) error {
 		*s.GlobalSettings,
 		// control plane system namespace (default is agentgateway-system)
 		namespaces.GetPodNamespace(),
-		s.APIClient.ClusterID().String(),
 	)
 	if err != nil {
 		slog.Error("error creating agw collections", "error", err)
@@ -267,7 +274,23 @@ func (s *setup) Start(ctx context.Context) error {
 	}
 
 	if s.XDSListener != nil && agw != nil {
-		runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.Registrations...)
+		if s.GlobalSettings.XdsMode == apisettings.XdsModeEither {
+			xdsMux := cmux.New(s.XDSListener)
+			tlsListener := xdsMux.Match(cmux.TLS())
+			plaintextListener := xdsMux.Match(cmux.Any())
+			runXDSServer(ctx, tlsListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.Registrations...)
+			runXDSServer(ctx, plaintextListener, authenticators, s.GlobalSettings.XdsAuth, nil, agw.NackPublisher, agw.Registrations...)
+			context.AfterFunc(ctx, xdsMux.Close)
+			go func() {
+				if err := xdsMux.Serve(); err != nil && err != cmux.ErrListenerClosed && err != cmux.ErrServerClosed {
+					slog.Error("xDS listener mux stopped", "error", err)
+				}
+			}()
+		} else if s.GlobalSettings.IsXdsTLSEnabled() {
+			runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, certWatcher, agw.NackPublisher, agw.Registrations...)
+		} else if s.GlobalSettings.IsXdsPlaintextEnabled() {
+			runXDSServer(ctx, s.XDSListener, authenticators, s.GlobalSettings.XdsAuth, nil, agw.NackPublisher, agw.Registrations...)
+		}
 	}
 
 	slog.Info("starting admin server")
@@ -275,6 +298,28 @@ func (s *setup) Start(ctx context.Context) error {
 
 	slog.Info("starting manager")
 	return mgr.Start(ctx)
+}
+
+func (s *setup) xdsTLSHosts() []string {
+	var hosts []string
+	if s.GlobalSettings.XdsServiceHost != "" {
+		hosts = []string{s.GlobalSettings.XdsServiceHost}
+	} else {
+		namespace := namespaces.GetPodNamespace()
+		serviceName := s.GlobalSettings.XdsServiceName
+		hosts = []string{
+			serviceName + "." + namespace,
+			serviceName + "." + namespace + ".svc",
+			kubeutils.ServiceFQDN(metav1.ObjectMeta{Name: serviceName, Namespace: namespace}),
+		}
+	}
+	for _, host := range s.GlobalSettings.AdditionalXdsTLSHosts {
+		host = strings.TrimSpace(host)
+		if host != "" {
+			hosts = append(hosts, host)
+		}
+	}
+	return hosts
 }
 
 func newXDSListener(ip string, port uint32) (net.Listener, error) {
@@ -317,6 +362,7 @@ func (s *setup) buildSyncer(
 		AgwCollections:                 agwCollections,
 		Resolver:                       resolver,
 		JWKSLookup:                     jwksLookup,
+		CredentialResolverFactory:      s.CredentialResolverFactory,
 		ExtraAgwResourceStatusHandlers: s.ExtraStatusHandlers,
 		GatewayControllerExtension:     s.GatewayControllerExtension,
 		AgentgatewaySyncerOptions:      s.AgentGatewaySyncerOptions,
@@ -358,6 +404,23 @@ func SetupLogging(levelStr string) {
 		klogLogger := logr.FromSlogHandler(logging.New("klog").Handler())
 		klog.SetLogger(klogLogger)
 	})
+}
+
+func initDiscoveryNSFilter(
+	ctx context.Context,
+	cli apiclient.Client,
+	discoveryNamespaceSetting string,
+) error {
+	// NOTE: Do not apply an ObjectFilter to namespaces as the discovery namespace ObjectFilter for other clients
+	// requires all namespaces to be watched
+	nsClient := kclient.New[*corev1.Namespace](cli) //nolint:forbidigo // okay to use non-filtered client
+	// Initialize discovery namespace filter
+	discoveryNamespacesFilter, err := pluginsdkcol.NewDiscoveryNamespacesFilter(nsClient, discoveryNamespaceSetting, ctx.Done())
+	if err != nil {
+		return fmt.Errorf("error creating discovery namespace filter: %w", err)
+	}
+	kube.SetObjectFilter(cli.Core(), discoveryNamespacesFilter)
+	return nil
 }
 
 func buildJwksStore(

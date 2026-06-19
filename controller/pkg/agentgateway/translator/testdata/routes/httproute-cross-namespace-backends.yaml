@@ -1,0 +1,192 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cross-ns-with-grant
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cross-ns-without-grant
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: cross-ns-with-refgrant
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - backendRefs:
+        - name: cross-ns-service-with-grant
+          namespace: cross-ns-with-grant
+          port: 8080
+        - name: cross-ns-backend-with-grant
+          namespace: cross-ns-with-grant
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: cross-ns-without-refgrant
+  namespace: default
+spec:
+  parentRefs:
+    - name: test-gateway
+  rules:
+    - backendRefs:
+        - name: cross-ns-service-without-grant
+          namespace: cross-ns-without-grant
+          port: 8080
+        - name: cross-ns-backend-without-grant
+          namespace: cross-ns-without-grant
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cross-ns-service-with-grant
+  namespace: cross-ns-with-grant
+spec:
+  ports:
+    - port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: cross-ns-backend-with-grant
+  namespace: cross-ns-with-grant
+spec:
+  static:
+    host: with-grant.example.com
+    port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-default-httproute
+  namespace: cross-ns-with-grant
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: default
+  to:
+    - group: ""
+      kind: Service
+      name: cross-ns-service-with-grant
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: cross-ns-backend-with-grant
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cross-ns-service-without-grant
+  namespace: cross-ns-without-grant
+spec:
+  ports:
+    - port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: cross-ns-backend-without-grant
+  namespace: cross-ns-without-grant
+spec:
+  static:
+    host: without-grant.example.com
+    port: 80
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: cross-ns-service-with-grant.cross-ns-with-grant.svc.cluster.local
+            namespace: cross-ns-with-grant
+        weight: 1
+      - backend:
+          backend: cross-ns-with-grant/cross-ns-backend-with-grant
+        weight: 1
+      key: default/cross-ns-with-refgrant.00.http
+      listenerKey: default/test-gateway.http
+      name:
+        kind: HTTPRoute
+        name: cross-ns-with-refgrant
+        namespace: default
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - weight: 1
+      - weight: 1
+      key: default/cross-ns-without-refgrant.00.http
+      listenerKey: default/test-gateway.http
+      name:
+        kind: HTTPRoute
+        name: cross-ns-without-refgrant
+        namespace: default
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: cross-ns-with-refgrant
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: cross-ns-without-refgrant
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: backendRef cross-ns-without-grant/cross-ns-backend-without-grant
+          not accessible to a HTTPRoute in namespace "default" (missing a ReferenceGrant?)
+        reason: RefNotPermitted
+        status: "False"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test-gateway
+        namespace: default

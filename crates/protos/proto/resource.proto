@@ -38,6 +38,7 @@ message Bind {
     PROXY = 1;
     HBONE_WAYPOINT = 2;
     HBONE_GATEWAY = 3;
+    CONNECT = 4;
   }
   string key = 1;
   uint32 port = 2;
@@ -93,6 +94,8 @@ message Route {
   string listener_key = 2;
   // Service this route targets (set when parentRef is a Service).
   istio.workload.NamespacedHostname service_key = 9;
+  // Port of the targeted service this route is scoped to. Zero matches any port.
+  uint32 service_port = 11;
   // Key for the route group this route is a part of.
   optional string route_group_key = 10;
 
@@ -118,6 +121,8 @@ message TCPRoute {
   string listener_key = 2;
   // Service this route targets (set when parentRef is a Service).
   istio.workload.NamespacedHostname service_key = 9;
+  // Port of the targeted service this route is scoped to. Zero matches any port.
+  uint32 service_port = 11;
   // User facing name for this resource
   RouteName name = 3;
 
@@ -125,17 +130,38 @@ message TCPRoute {
   repeated RouteBackend backends = 6;
 }
 
+message ConditionalPolicies {
+    repeated ConditionalPolicy policies = 1;
+}
+message ConditionalPolicy {
+  optional string condition = 1;
+  oneof kind {
+    // Currently only traffic is supported
+    TrafficPolicySpec traffic = 2;
+//    BackendPolicySpec backend = 3;
+//    FrontendPolicySpec frontend = 4;
+  }
+}
 message Policy {
+  enum Inheritance {
+    DEFAULT = 0;
+    OVERRIDE = 1;
+  }
+
   // Unique key for this policy
   string key = 1;
   // User facing name for this resource
   TypedResourceName name = 2;
   PolicyTarget target = 3;
+  // Controls whether more-specific child policy levels can be included when
+  // computing the effective policy.
+  Inheritance inheritance = 8;
 
   oneof kind {
     TrafficPolicySpec traffic = 4;
     BackendPolicySpec backend = 5;
     FrontendPolicySpec frontend = 6;
+    ConditionalPolicies conditional = 7;
   }
 }
 message Backend {
@@ -149,11 +175,64 @@ message Backend {
     MCPBackend mcp = 5;
     DynamicForwardProxy dynamic = 6;
     AwsBackend aws = 8;
+    // Not yet implemented. Reserved for a future release.
+    GuardrailBackend guardrail = 9;
   }
   repeated BackendPolicySpec inline_policies = 7;
 }
 
+// GuardrailBackend is a typed backend for AI guardrail provider integrations.
+// The gateway owns the transport (endpoint host, TLS, protocol, implicit auth);
+// the user supplies only the instance-specific configuration for the provider.
+// Guardrail backends are referenced from prompt guard policies via backend_ref;
+// they are not intended to be used as route targets.
+message GuardrailBackend {
+  // AWS Bedrock Guardrails (ApplyGuardrail API)
+  message Bedrock {
+    // The unique identifier of the guardrail
+    string identifier = 1;
+    // The version of the guardrail
+    string version = 2;
+    // AWS region where the guardrail is deployed (e.g., "us-west-2").
+    // Used to construct the endpoint host.
+    string region = 3;
+  }
+  // Google Cloud Model Armor (sanitizeUserPrompt/sanitizeModelResponse APIs)
+  message GoogleModelArmor {
+    // The template ID for the Model Armor configuration
+    string template_id = 1;
+    // The GCP project ID
+    string project_id = 2;
+    // The GCP region, used to construct the endpoint host (default: us-central1)
+    optional string location = 3;
+  }
+  // Azure AI Content Safety (text:analyze/text:detectJailbreak APIs)
+  message AzureContentSafety {
+    // The Azure resource name used to construct the endpoint host
+    // (<resource_name>.cognitiveservices.azure.com).
+    // Exactly one of resource_name and endpoint must be set.
+    optional string resource_name = 1;
+    // The full endpoint host or URL (e.g., "https://<resource-name>.cognitiveservices.azure.com"),
+    // for endpoints whose host cannot be derived from the resource name.
+    optional string endpoint = 2;
+  }
+  // OpenAI moderations API (api.openai.com/v1/moderations)
+  message OpenAIModeration {}
+  oneof provider {
+    Bedrock bedrock = 1;
+    GoogleModelArmor google_model_armor = 2;
+    AzureContentSafety azure_content_safety = 3;
+    OpenAIModeration openai_moderation = 4;
+  }
+}
+
 message TLSConfig {
+  enum CertificateSource {
+    INLINE = 0;
+    ISTIO_WORKLOAD = 1;
+    DYNAMIC_CA = 2;
+  }
+
   enum TLSVersion {
     TLS_VERSION_UNSPECIFIED = 0;
 
@@ -172,6 +251,9 @@ message TLSConfig {
 
     // Request a TLS certificate, but if one is not presented or invalid, allow the connection.
     ALLOW_INSECURE_FALLBACK = 1;
+
+    // Do not request or require a client TLS certificate.
+    DISABLE = 2;
   }
 
   // Cipher suites supported by agentgateway
@@ -193,6 +275,16 @@ message TLSConfig {
     TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 = 9;
   }
 
+  // Key exchange groups supported by agentgateway.
+  // Keep in sync with `crates/agentgateway/src/transport/tls.rs` (`DEFAULT_KEY_EXCHANGE_GROUPS`).
+  enum KeyExchangeGroup {
+    KEY_EXCHANGE_GROUP_UNSPECIFIED = 0;
+    X25519 = 1;
+    P256 = 2;
+    P384 = 3;
+    X25519_MLKEM768 = 4;
+  }
+
   bytes cert = 1;
   bytes private_key = 2;
   // Root to verify client certificates. If not set, mTLS will not be used
@@ -201,6 +293,10 @@ message TLSConfig {
   optional TLSVersion min_version = 5;
   optional TLSVersion max_version = 6;
   MTLSMode mtls_mode = 7;
+  // Key exchange groups allowed for negotiating TLS.
+  // If empty, defaults are used.
+  repeated KeyExchangeGroup key_exchange_groups = 8;
+  CertificateSource certificate_source = 9;
 }
 
 enum Protocol {
@@ -221,6 +317,13 @@ message Retry {
   repeated int32 retry_status_codes = 1;
   int32 attempts = 2;
   google.protobuf.Duration backoff = 3;
+  // CEL expression evaluated against the request before any attempt. When it evaluates
+  // to false, retries are disabled (only the initial attempt is made). This avoids
+  // buffering request bodies for replay when the request is known to be non-retriable.
+  string precondition = 4;
+  // CEL expression evaluated against each response. A response is retried when its status
+  // code is in retry_status_codes or this expression evaluates to true.
+  string condition = 5;
 }
 
 message BackendAuthPolicy {
@@ -251,6 +354,7 @@ message AuthorizationLocation {
     Header header = 1;
     QueryParameter query_parameter = 2;
     Cookie cookie = 3;
+    string expression = 4; // CEL expression
   }
 }
 
@@ -273,6 +377,9 @@ message Gcp {
     optional string audience = 1;
   }
 
+  // ADC-compatible Google credential JSON. If unset, ambient credentials are used.
+  optional string credential = 3;
+
   oneof token_type {
     // Default if unset
     AccessToken access_token = 1;
@@ -286,6 +393,11 @@ message Aws {
     AwsExplicitConfig explicit_config = 1;
     AwsImplicit implicit = 2;
   }
+  // AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
+  // If unset, typed AWS backends may provide this automatically.
+  string service_name = 3;
+  // Optional STS role to assume before signing requests.
+  AwsAssumeRole assume_role = 4;
 }
 
 // Azure-specific backend authentication.
@@ -307,11 +419,16 @@ message AwsExplicitConfig {
   string region = 3;
   // Optional session token for temporary credentials
   optional string session_token = 4;
-  // TODO: make service configurable
 }
 
 // Use implicit AWS authentication (environment variables, IAM roles, etc.)
 message AwsImplicit {}
+
+// AWS STS AssumeRole configuration.
+message AwsAssumeRole {
+  // Role ARN to assume before signing backend requests.
+  string role_arn = 1;
+}
 
 // Explicit Azure credentials configuration
 message AzureExplicitConfig {
@@ -404,6 +521,23 @@ message CORS {
 message DirectResponse {
   uint32 status = 1;
   bytes body = 2;
+  string body_expression = 3;
+  repeated ExpressionHeader headers = 4;
+}
+
+message BufferBody {
+  optional uint32 max_bytes = 1;
+}
+
+message Buffer {
+  optional BufferBody request = 1;
+  optional BufferBody response = 2;
+}
+
+
+message ExpressionHeader {
+  string name = 1;
+  string expression = 2;
 }
 
 message HeaderModifier {
@@ -469,6 +603,7 @@ message PolicyTarget {
     string name = 1;
     string namespace = 2;
     optional string listener = 3;
+    optional uint32 port = 4;
   }
   message RouteTarget {
     string name = 1;
@@ -476,11 +611,17 @@ message PolicyTarget {
     optional string route_rule = 3;
     string kind = 4;
   }
+  message ListenerSetTarget {
+    string name = 1;
+    string namespace = 2;
+    optional string section = 3;
+  }
   oneof kind {
     GatewayTarget gateway = 1;
     RouteTarget route = 2;
     BackendTarget backend = 3;
     ServiceTarget service = 4;
+    ListenerSetTarget listener_set = 5;
   }
 }
 
@@ -497,6 +638,11 @@ message KeepaliveConfig {
 
 message FrontendPolicySpec {
   message HTTP {
+    enum HTTPHeaderCase {
+      LOWERCASE = 0;
+      PRESERVE = 1;
+    }
+
     optional uint32 max_buffer_size = 1;
     optional uint32 http1_max_headers = 2;
     google.protobuf.Duration http1_idle_timeout = 3;
@@ -506,6 +652,9 @@ message FrontendPolicySpec {
     google.protobuf.Duration http2_keepalive_interval = 7;
     google.protobuf.Duration http2_keepalive_timeout = 8;
     google.protobuf.Duration max_connection_duration = 9;
+    optional uint32 http2_max_header_size = 10;
+    // Controls HTTP/1 request header casing when encoding responses.
+    HTTPHeaderCase http1_header_case = 11;
   }
   message TLS {
     // TLS handshake timeout
@@ -524,6 +673,9 @@ message FrontendPolicySpec {
     // If unset, defaults are used.
     optional TLSConfig.TLSVersion min_version = 4;
     optional TLSConfig.TLSVersion max_version = 5;
+    // Key exchange groups allowed for negotiating TLS.
+    // If empty, defaults are used.
+    repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 6;
 
     // TODO: allow setting mTLS things as well
   }
@@ -620,6 +772,45 @@ message FrontendPolicySpec {
     string value = 2; // CEL expression
   }
 
+  message ProxyProtocol {
+    enum Version {
+      V2 = 0;
+      V1 = 1;
+      ALL = 2;
+    }
+
+    enum Mode {
+      STRICT = 0;
+      OPTIONAL = 1;
+    }
+
+    Version version = 1;
+    Mode mode = 2;
+  }
+
+  message Connect {
+    enum Mode {
+      DENY = 0;
+      ROUTE = 1;
+      TUNNEL = 2;
+    }
+
+    Mode mode = 1;
+  }
+
+  // Custom Prometheus metric label configuration policy.
+  // CEL expressions are evaluated per-request and added as labels to all metrics.
+  message Metrics {
+    message Field {
+      string name = 1;
+      string expression = 2; // CEL expression
+    }
+    message Fields {
+      repeated Field add = 1;
+    }
+    Fields fields = 1;
+  }
+
   oneof kind {
     TCP tcp = 1;
     TLS tls = 2;
@@ -627,6 +818,9 @@ message FrontendPolicySpec {
     Logging logging = 4;
     Tracing tracing = 5;
     NetworkAuthorization network_authorization = 6;
+    ProxyProtocol proxy_protocol = 7;
+    Metrics metrics = 8;
+    Connect connect = 9;
   }
 }
 
@@ -659,6 +853,7 @@ message TrafficPolicySpec {
       repeated Entry entries = 1;
       Type type = 2;
       optional string limit_override = 3; // CEL expr returning {unit, requestsPerUnit}
+      optional string cost = 4; // CEL expr
     }
     message Entry {
       string key = 1;
@@ -687,6 +882,11 @@ message TrafficPolicySpec {
       bool allow_partial_message = 2;
       bool pack_as_bytes = 3;
     }
+    message Cache {
+      repeated string key = 1;
+      string ttl = 2; // CEL expr returning duration or timestamp
+      uint32 max_entries = 3;
+    }
     message GRPCProtocol {
       map<string, string> context = 1;
       map<string, string> metadata = 2;
@@ -707,7 +907,7 @@ message TrafficPolicySpec {
     optional uint32 status_on_error = 5;
     repeated string include_request_headers = 6;
     BodyOptions include_request_body = 7;
-    reserved 8;
+    Cache cache = 8;
     reserved "timeout";
   }
   message RBAC {
@@ -736,6 +936,7 @@ message TrafficPolicySpec {
     message MCP {
       BackendPolicySpec.McpAuthentication.McpIDP provider = 1;
       BackendPolicySpec.McpAuthentication.ResourceMetadata resource_metadata = 2;
+      optional string client_id = 3;
     }
 
     // Validation mode for JWT authentication
@@ -785,6 +986,8 @@ message TrafficPolicySpec {
       STRICT = 0;
       // If credentials exist, validate them (default)
       OPTIONAL = 1;
+      // Requests are never rejected for missing or invalid API keys
+      PERMISSIVE = 2;
     }
 
     message User {
@@ -834,6 +1037,19 @@ message TrafficPolicySpec {
       FAIL_CLOSED = 0;
       FAIL_OPEN = 1;
     }
+    // TODO(keithmattix): Should we depend on the actual Envoy types?
+    enum BodySendMode {
+      NONE = 0;
+      reserved 1; // STREAMED
+      BUFFERED = 2;
+      BUFFERED_PARTIAL = 3;
+      FULL_DUPLEX_STREAMED = 4;
+    }
+    enum HeaderTrailerSendMode {
+      UNSET = 0;
+      SEND = 1;
+      SKIP = 2;
+    }
     BackendReference target = 1;
     FailureMode failure_mode = 2;
 
@@ -843,7 +1059,19 @@ message TrafficPolicySpec {
     message NamespacedMetadataContext {
       map<string, string> context = 1;
     }
+    message ProcessingOptions {
+      BodySendMode request_body_mode = 1;
+      BodySendMode response_body_mode = 2;
+      HeaderTrailerSendMode request_header_mode = 3;
+      HeaderTrailerSendMode response_header_mode = 4;
+      HeaderTrailerSendMode request_trailer_mode = 5;
+      HeaderTrailerSendMode response_trailer_mode = 6;
+      // Allow ext_proc mode_override values from matching headers responses to update
+      // subsequent request/response processing phases for this exchange.
+      bool allow_mode_override = 7;
+    }
     map<string, NamespacedMetadataContext> metadata_context = 5;
+    ProcessingOptions processing_options = 6;
   }
   enum PolicyPhase {
     ROUTE = 0;
@@ -880,6 +1108,7 @@ message TrafficPolicySpec {
     BasicAuthentication basic_auth = 19;
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
+    Buffer buffer = 22;
   }
 }
 
@@ -925,12 +1154,22 @@ message BackendPolicySpec {
     message Webhook {
       BackendReference backend = 1;
       repeated HeaderMatch forward_header_matches = 3;
+
+      // Behavior when the webhook guardrail is unavailable or returns an
+      // error. Defaults to FAIL_CLOSED.
+      enum FailureMode {
+        FAIL_CLOSED = 0;
+        FAIL_OPEN = 1;
+      }
+      FailureMode failure_mode = 4;
     }
 
     message Moderation {
       // Model to use. Defaults to `omni-moderation-latest`
       optional string model = 1;
       repeated BackendPolicySpec inline_policies = 2;
+      // Not yet implemented. Reserved for a future release.
+      BackendReference backend_ref = 3;
     }
 
     message BedrockGuardrails {
@@ -940,6 +1179,9 @@ message BackendPolicySpec {
       string region = 3;
 
       repeated BackendPolicySpec inline_policies = 4;
+
+      // Not yet implemented. Reserved for a future release.
+      BackendReference backend_ref = 5;
     }
 
     message GoogleModelArmor {
@@ -950,6 +1192,9 @@ message BackendPolicySpec {
       optional string location = 3;
 
       repeated BackendPolicySpec inline_policies = 4;
+
+      // Not yet implemented. Reserved for a future release.
+      BackendReference backend_ref = 5;
     }
 
     message AzureContentSafety {
@@ -969,6 +1214,9 @@ message BackendPolicySpec {
       optional bool halt_on_blocklist_hit = 5;
 
       repeated BackendPolicySpec inline_policies = 6;
+
+      // Not yet implemented. Reserved for a future release.
+      BackendReference backend_ref = 7;
     }
 
     // Response sent when rejecting a request
@@ -1005,10 +1253,18 @@ message BackendPolicySpec {
     }
 
     message PromptGuard {
+      enum Streaming {
+        DISABLED = 0;
+        ENABLED = 1;
+      }
+
       // Guards applied to client requests before they reach the LLM
       repeated RequestGuard request = 1;
       // Guards applied to LLM responses before they reach the client
       repeated ResponseGuard response = 2;
+      // Apply guardrails to streaming responses and realtime websocket messages.
+      // Defaults to disabled to preserve streaming throughput unless explicitly enabled.
+      Streaming streaming = 3;
     }
 
     PromptGuard prompt_guard = 1;
@@ -1055,6 +1311,8 @@ message BackendPolicySpec {
       EMBEDDINGS = 7;
       // OpenAI /v1/realtime
       REALTIME = 8;
+      // Processes Cohere /v2/rerank format requests
+      RERANK = 10;
     }
 
     // Routes defines how to identify the type of LLM request to handle.
@@ -1137,6 +1395,9 @@ message BackendPolicySpec {
     // Set but empty: send none
     // Set with values: send those values
     Alpn alpn = 7;
+    // Key exchange groups allowed for negotiating TLS.
+    // If empty, defaults are used.
+    repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 8;
   }
   message BackendHTTP {
     enum HttpVersion {
@@ -1169,6 +1430,7 @@ message BackendPolicySpec {
       UNSPECIFIED = 0;
       AUTH0 = 1;
       KEYCLOAK = 2;
+      OKTA = 3;
     }
 
     // Validation mode for JWT authentication
@@ -1191,6 +1453,67 @@ message BackendPolicySpec {
     // JWT validation options controlling which claims must be present.
     JWTValidationOptions jwt_validation_options = 7;
     AuthorizationLocation authorization_location = 8;
+    optional string client_id = 9;
+  }
+
+  // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of
+  // policy processors. Today only the `remote` processor is defined — a custom
+  // gRPC policy server (the ExtMcp service) modeled on Envoy ext_authz.
+  message McpGuardrails {
+    // Phase controls whether the request side, response side, or both of a
+    // method are run through the guardrails pipeline.
+    enum Phase {
+      OFF = 0;
+      REQUEST = 1;
+      RESPONSE = 2;
+      FULL = 3;
+    }
+
+    enum FailureMode {
+      DENY = 0;
+      ALLOW = 1;
+    }
+
+    // Configuration for the custom gRPC policy server. TLS, retries, and
+    // load balancing to the policy server come from the backend referenced
+    // by `target` (same pattern as TrafficPolicySpec.ExternalAuth).
+    message Remote {
+      BackendReference target = 1;
+      FailureMode failure_mode = 2;
+      // Static or CEL-evaluated context, surfaced to the policy server as
+      // fields of the `metadata_context` google.protobuf.Struct, keyed by
+      // config key.
+      map<string, string> metadata = 3;
+      // Request headers forwarded to the policy server in `McpRequest.headers`.
+      // Empty means send all headers (modeled on Envoy ext_authz gRPC). When
+      // non-empty, only listed header names are sent. Matching is
+      // case-insensitive.
+      repeated string allowed_request_headers = 4;
+      // Header names never forwarded to the policy server, even if they appear
+      // in `allowed_request_headers`. Case-insensitive.
+      repeated string disallowed_request_headers = 5;
+    }
+
+    // Processor is a single policy processor. Today only `remote` is defined.
+    message Processor {
+      oneof kind {
+        Remote remote = 1;
+      }
+
+      // Allowlist of JSON-RPC methods (e.g. "tools/call", "tools/list") that run
+      // through this processor, keyed by method name with the phase it runs in.
+      // Keys may be exact, prefix ("tools/*") or suffix ("*/list") wildcards, or
+      // "*" for all methods; the most specific match wins when a method would match
+      // multiple entries.
+      map<string, Phase> methods = 2;
+    }
+
+    // Ordered list of processors applied to matched methods. Processors run in
+    // the order listed; the first to reject a request short-circuits the chain.
+    repeated Processor processors = 3;
+
+    reserved 1, 2;
+    reserved "remote", "methods";
   }
 
   oneof kind {
@@ -1210,6 +1533,8 @@ message BackendPolicySpec {
     TrafficPolicySpec.TransformationPolicy transformation = 14;
     Health health = 15;
     BackendTunnel backend_tunnel = 16;
+    TrafficPolicySpec.ExternalAuth ext_authz = 17;
+    McpGuardrails mcp_guardrails = 18;
   }
 }
 
@@ -1281,12 +1606,32 @@ message AIBackend {
     OPEN_AI = 0;
     FOUNDRY = 1;
   }
+  enum ProviderFormat {
+    PROVIDER_FORMAT_UNSPECIFIED = 0;
+    COMPLETIONS = 1;
+    MESSAGES = 2;
+    RESPONSES = 3;
+    EMBEDDINGS = 4;
+    ANTHROPIC_TOKEN_COUNT = 5;
+    REALTIME = 6;
+    RERANK = 7;
+  }
+  message ProviderFormatConfig {
+    ProviderFormat format = 1;
+    optional string path = 2;
+  }
+  message Custom {
+    repeated ProviderFormatConfig formats = 1;
+    optional string model = 2;
+    optional string provider_override = 3;
+  }
 
   message Provider {
     string name = 1;
     HostOverride host_override = 2;
     optional string path_override = 3;
     optional string path_prefix = 12;
+    BackendReference provider_backend = 14;
     oneof provider {
       OpenAI openai = 4;
       Gemini gemini = 5;
@@ -1295,6 +1640,7 @@ message AIBackend {
       Bedrock bedrock = 8;
       AzureOpenAI azureopenai = 11;
       Azure azure = 13;
+      Custom custom = 15;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }

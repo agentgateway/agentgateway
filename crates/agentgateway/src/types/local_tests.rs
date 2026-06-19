@@ -1,14 +1,17 @@
-use crate::serdes::FileInlineOrRemote;
-use crate::types::agent::HeaderValueMatch;
-use crate::types::agent::{
-	ListenerTarget, PolicyPhase, PolicyTarget, PolicyType, ResourceName, TrafficPolicy,
-};
-use crate::types::local::NormalizedLocalConfig;
-use crate::*;
-use secrecy::SecretString;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+
+use secrecy::SecretString;
+
+use crate::llm::{AIProvider, NamedAIProvider};
+use crate::serdes::FileInlineOrRemote;
+use crate::types::agent::{
+	Backend, BackendTrafficPolicy, ListenerTarget, PolicyPhase, PolicyTarget, PolicyType,
+	ResourceName, RouteBackendTarget, Target, TrafficPolicy,
+};
+use crate::types::local::NormalizedLocalConfig;
+use crate::*;
 
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
@@ -70,6 +73,7 @@ async fn normalize_test_policies(
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: None,
+			port: None,
 		},
 		&test_config(),
 		super::LocalConfig {
@@ -96,6 +100,7 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: None,
+			port: None,
 		},
 		yaml,
 	)
@@ -113,10 +118,72 @@ async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocal
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: None,
+			port: None,
 		},
 		yaml_str,
 	)
 	.await
+}
+
+fn selected_ai_provider(normalized: &NormalizedLocalConfig) -> Arc<NamedAIProvider> {
+	let backend = normalized
+		.backends
+		.iter()
+		.find(|backend| matches!(backend.backend, Backend::AI(_, _)))
+		.expect("expected generated AI backend");
+	let Backend::AI(_, ai) = &backend.backend else {
+		panic!("expected generated AI backend");
+	};
+	let (provider, _handle) = ai.select_provider().expect("expected selected provider");
+	provider
+}
+
+fn assert_hostname_target(target: &Target, expected_host: &str, expected_port: u16) {
+	match target {
+		Target::Hostname(host, port) => {
+			assert_eq!(host.as_str(), expected_host);
+			assert_eq!(*port, expected_port);
+		},
+		other => panic!("expected hostname target, got {other:?}"),
+	}
+}
+
+#[tokio::test]
+async fn test_local_dynamic_backend_reference_uses_generated_backend() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect("dynamic backend should normalize");
+
+	let route = &normalized.listener_routes[0].1[0];
+	let RouteBackendTarget::Backend(backend_key) = &route.backends[0].target else {
+		panic!("expected route backend target");
+	};
+	assert_eq!(
+		backend_key,
+		"/ns/name/bind/1080/listener0/default/route0/backend0"
+	);
+
+	let backend = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Dynamic(name, ()) => Some(name),
+			_ => None,
+		})
+		.expect("normalized dynamic backend");
+	assert_eq!(
+		backend.to_string(),
+		"/ns/name/bind/1080/listener0/default/route0/backend0"
+	);
 }
 
 async fn test_config_parsing(test_name: &str) {
@@ -172,6 +239,388 @@ async fn test_llm_simple_config() {
 }
 
 #[tokio::test]
+async fn test_llm_provider_reference_config() {
+	test_config_parsing("llm_provider_reference").await;
+}
+
+#[tokio::test]
+async fn test_llm_virtual_model_config() {
+	test_config_parsing("llm_virtual_model").await;
+}
+
+#[tokio::test]
+async fn test_llm_virtual_model_failover_config() {
+	test_config_parsing("llm_virtual_model_failover").await;
+}
+
+#[tokio::test]
+async fn test_llm_virtual_model_conditional_config() {
+	test_config_parsing("llm_virtual_model_conditional").await;
+}
+
+#[tokio::test]
+async fn test_llm_conditional_virtual_model_requires_fallback_last() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - model: concrete
+        - when: json(request.body).route == "fast"
+          model: concrete
+"#,
+	)
+	.await
+	.expect_err("fallback target must be last");
+	assert!(
+		err
+			.to_string()
+			.contains("virtual model smart conditional fallback target must be last"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_conditional_virtual_model_rejects_unknown_target() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - model: missing
+"#,
+	)
+	.await
+	.expect_err("unknown target should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("virtual model target missing does not match any llm.models entry"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_conditional_virtual_model_rejects_unknown_target_before_expression_compile() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - model: concrete
+  - name: simple
+    routing:
+      conditional:
+        targets:
+        - when: json(request.body).route == "legacy"
+          model: concrete
+        - model: missing
+"#,
+	)
+	.await
+	.expect_err("unknown target should fail before expression compilation");
+	assert!(
+		err
+			.to_string()
+			.contains("virtual model target missing does not match any llm.models entry"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_multiple_wildcards() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: '*foo*'
+    provider: openAI
+"#,
+	)
+	.await
+	.expect_err("model name with multiple wildcards should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("model name wildcard may only appear once: '*foo*'"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_middle_wildcard() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: foo*bar
+    provider: openAI
+"#,
+	)
+	.await
+	.expect_err("model name with middle wildcard should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("model name wildcard must be either at the beginning or the end: 'foo*bar'"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_weighted_virtual_model_allows_authorized_target() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-user"] == "admin"'
+  virtualModels:
+  - name: smart
+    routing:
+      weighted:
+        targets:
+        - model: concrete
+"#,
+	)
+	.await
+	.expect("weighted target authorization should be preserved on selected target");
+
+	let routes = &normalized.listener_routes[0].1;
+	let llm_route = routes
+		.iter()
+		.find(|route| route.key == "llm:request")
+		.expect("expected single LLM request route");
+	assert!(
+		llm_route.llm_router.is_some(),
+		"LLM request route should carry the native model router"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_failover_virtual_model_rejects_authorized_target() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-user"] == "admin"'
+  virtualModels:
+  - name: smart
+    routing:
+      failover:
+        targets:
+        - model: concrete
+          priority: 0
+"#,
+	)
+	.await
+	.expect_err("failover target authorization cannot be enforced after provider selection");
+	assert!(
+		err.to_string().contains(
+			"virtual model target concrete has authorization; failover virtual models cannot target authorized models"
+		),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_conditional_virtual_model_allows_authorized_internal_target() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: concrete
+    visibility: internal
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-user"] == "admin"'
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - model: concrete
+"#,
+	)
+	.await
+	.expect("conditional virtual model should preserve target authorization");
+
+	let routes = &normalized.listener_routes[0].1;
+	assert!(
+		!routes
+			.iter()
+			.any(|route| route.key.contains("model:concrete")),
+		"internal concrete model should not have a direct route"
+	);
+	let llm_route = routes
+		.iter()
+		.find(|route| route.key == "llm:request")
+		.expect("expected single LLM request route");
+	assert!(
+		llm_route.llm_router.is_some(),
+		"LLM request route should carry the native model router"
+	);
+	assert!(
+		!routes
+			.iter()
+			.any(|route| route.key.contains("virtual-model")),
+		"virtual model routing should not generate HTTP routes"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_custom_provider_config() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: local-custom
+    provider:
+      custom:
+        formats:
+        - type: completions
+        - type: messages
+          path: /api/messages
+    params:
+      model: upstream-custom
+      baseUrl: http://custom.example.com:8080
+"#,
+	)
+	.await
+	.expect("custom LLM provider should normalize");
+
+	let provider = selected_ai_provider(&normalized);
+	let AIProvider::Custom(custom_provider) = &provider.provider else {
+		panic!("expected custom provider");
+	};
+	assert_eq!(custom_provider.model.as_deref(), Some("upstream-custom"));
+	assert!(custom_provider.formats.iter().any(|format| format.format
+		== crate::llm::custom::ProviderFormat::Messages
+		&& format.path.as_deref() == Some("/api/messages")));
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override"),
+		"custom.example.com",
+		8080,
+	);
+}
+
+#[tokio::test]
+async fn test_llm_synthetic_provider_defaults_do_not_override_host_override() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: hosted-groq
+    provider: groq
+    params:
+      hostOverride: proxy.example.com:8443
+      pathPrefix: /proxy/openai
+"#,
+	)
+	.await
+	.expect("synthetic LLM provider should normalize with explicit host override");
+
+	let provider = selected_ai_provider(&normalized);
+	assert!(matches!(provider.provider, AIProvider::Custom(_)));
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override"),
+		"proxy.example.com",
+		8443,
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/proxy/openai"));
+}
+
+#[tokio::test]
+async fn test_llm_base_url_does_not_override_explicit_path_prefix() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: proxied-groq
+    provider: groq
+    params:
+      baseUrl: https://api.groq.com/openai/v1
+      pathPrefix: /gateway/openai
+"#,
+	)
+	.await
+	.expect("synthetic LLM provider should normalize with explicit path prefix");
+
+	let provider = selected_ai_provider(&normalized);
+	assert!(matches!(provider.provider, AIProvider::Custom(_)));
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override"),
+		"api.groq.com",
+		443,
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/gateway/openai"));
+}
+
+#[tokio::test]
+async fn test_llm_base_url_does_not_override_explicit_host_override() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: proxied-fireworks
+    provider: fireworks
+    params:
+      baseUrl: https://api.fireworks.ai/inference/v1
+      hostOverride: proxy.example.com:8443
+"#,
+	)
+	.await
+	.expect("synthetic LLM provider should normalize with explicit host override");
+
+	let provider = selected_ai_provider(&normalized);
+	assert!(matches!(provider.provider, AIProvider::Custom(_)));
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override"),
+		"proxy.example.com",
+		8443,
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/inference/v1"));
+}
+
+#[tokio::test]
 async fn test_mcp_simple_config() {
 	test_config_parsing("mcp_simple").await;
 }
@@ -188,6 +637,20 @@ mcp:
 	normalize_test_yaml(yaml)
 		.await
 		.expect_err("MCP target name containing '+' should be rejected");
+}
+
+#[tokio::test]
+async fn test_local_mcp_target_name_wiring_rejects_underscore() {
+	let yaml = r#"
+mcp:
+  targets:
+  - name: "bad_name"
+    stdio:
+      cmd: echo
+"#;
+	normalize_test_yaml(yaml)
+		.await
+		.expect_err("MCP target name containing '_' should be rejected");
 }
 
 #[tokio::test]
@@ -239,11 +702,260 @@ binds:
           inferenceRouting:
             endpointPicker:
               host: 127.0.0.1:9002
+            destinationMode: passthrough
 "#;
 
 	normalize_test_config(input)
 		.await
 		.expect("service backends should allow inference routing");
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_conditional_policy() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - condition: request.path == "/admin"
+            host: 127.0.0.1:9000
+          - host: 127.0.0.1:9001
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let route = &normalized.listener_routes[0].1[0];
+	let Some(TrafficPolicy::ExtAuthz(ext_authz)) = route
+		.inline_policies
+		.iter()
+		.find(|policy| matches!(policy, TrafficPolicy::ExtAuthz(_)))
+	else {
+		panic!("expected extAuthz policy");
+	};
+	let entries = ext_authz.iter().collect::<Vec<_>>();
+	assert_eq!(entries.len(), 2);
+	assert_eq!(
+		entries[0].condition.as_ref().unwrap().original_expression,
+		"request.path == \"/admin\""
+	);
+	assert!(entries[1].condition.is_none());
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_http_include_response_headers() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          host: 127.0.0.1:9000
+          protocol:
+            http:
+              includeResponseHeaders:
+              - x-auth-request-user
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	normalize_test_yaml(input)
+		.await
+		.expect("http extAuthz includeResponseHeaders should accept header names");
+}
+
+#[tokio::test]
+async fn test_local_backend_ext_authz_policy() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8000
+        policies:
+          extAuthz:
+            host: 127.0.0.1:9000
+      - host: 127.0.0.1:8001
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let route = &normalized.listener_routes[0].1[0];
+	assert!(route.inline_policies.is_empty());
+	assert!(matches!(
+		route.backends[0].inline_policies.as_slice(),
+		[BackendTrafficPolicy::ExtAuthz(_)]
+	));
+	assert!(route.backends[1].inline_policies.is_empty());
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_conditional_fallback_must_be_last() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - host: 127.0.0.1:9000
+          - condition: request.path == "/admin"
+            host: 127.0.0.1:9001
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let err = normalize_test_yaml(input).await.unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("conditional policy entries without condition must be last"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_local_ext_authz_conditional_reports_field_errors() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - condition: 1
+            host: 127.0.0.1:9000
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let err = normalize_test_yaml(input).await.unwrap_err();
+	assert!(
+		err.to_string().contains("invalid type: integer `1`"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_local_conditional_policy_types() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        directResponse:
+          conditional:
+          - condition: request.path == "/direct"
+            status: 403
+            body: denied
+          - status: 404
+            body: missing
+        transformations:
+          conditional:
+          - condition: request.path == "/transform"
+            request:
+              set:
+                x-test: "'transform'"
+          - response:
+              add:
+                x-fallback: "'true'"
+        extProc:
+          conditional:
+          - condition: request.path == "/process"
+            host: 127.0.0.1:9000
+          - host: 127.0.0.1:9001
+        localRateLimit:
+          conditional:
+          - condition: request.path == "/local-limit"
+            maxTokens: 10
+            tokensPerFill: 1
+            fillInterval: 1s
+          - maxTokens: 1
+            tokensPerFill: 1
+            fillInterval: 60s
+        remoteRateLimit:
+          conditional:
+          - condition: request.path == "/remote-limit"
+            domain: agentgateway
+            host: 127.0.0.1:9002
+            descriptors:
+            - entries:
+              - key: user
+                value: '"test-user"'
+          - domain: fallback
+            host: 127.0.0.1:9003
+            descriptors:
+            - entries:
+              - key: user
+                value: '"fallback"'
+        buffer:
+          request:
+            maxBytes: 10
+          response:
+            maxBytes: 20
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let route = &normalized.listener_routes[0].1[0];
+
+	for policy in [
+		"directResponse",
+		"transformation",
+		"extProc",
+		"localRateLimit",
+		"remoteRateLimit",
+	] {
+		let (len, fallback_is_none) = route
+			.inline_policies
+			.iter()
+			.find_map(|p| match (policy, p) {
+				("directResponse", TrafficPolicy::DirectResponse(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				("transformation", TrafficPolicy::Transformation(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				("extProc", TrafficPolicy::ExtProc(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				("localRateLimit", TrafficPolicy::LocalRateLimit(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				("remoteRateLimit", TrafficPolicy::RemoteRateLimit(p)) => {
+					let entries = p.iter().collect::<Vec<_>>();
+					Some((entries.len(), entries[1].condition.is_none()))
+				},
+				_ => None,
+			})
+			.unwrap_or_else(|| panic!("expected {policy} policy"));
+
+		assert_eq!(len, 2, "expected two {policy} entries");
+		assert!(fallback_is_none, "expected {policy} fallback condition");
+	}
+
+	let buffer = route
+		.inline_policies
+		.iter()
+		.find_map(|p| match p {
+			TrafficPolicy::Buffer(p) => Some(p.iter().next().expect("buffer policy entry").pol.as_ref()),
+			_ => None,
+		})
+		.expect("expected buffer policy");
+	assert_eq!(buffer.request.as_ref().unwrap().max_bytes, Some(10));
+	assert_eq!(buffer.response.as_ref().unwrap().max_bytes, Some(20));
 }
 
 #[tokio::test]
@@ -326,35 +1038,6 @@ binds:
 }
 
 #[test]
-fn test_llm_model_name_header_match_valid_patterns() {
-	match super::llm_model_name_header_match("*").unwrap() {
-		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), ".*"),
-		other => panic!("expected regex for '*', got {other:?}"),
-	}
-
-	match super::llm_model_name_header_match("*gpt-4.1").unwrap() {
-		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), ".*gpt\\-4\\.1"),
-		other => panic!("expected regex for '*gpt-4.1', got {other:?}"),
-	}
-
-	match super::llm_model_name_header_match("gpt-4.1*").unwrap() {
-		HeaderValueMatch::Regex(re) => assert_eq!(re.as_str(), "gpt\\-4\\.1.*"),
-		other => panic!("expected regex for 'gpt-4.1*', got {other:?}"),
-	}
-
-	match super::llm_model_name_header_match("gpt-4.1").unwrap() {
-		HeaderValueMatch::Exact(v) => assert_eq!(v, ::http::HeaderValue::from_static("gpt-4.1")),
-		other => panic!("expected exact header value for 'gpt-4.1', got {other:?}"),
-	}
-}
-
-#[test]
-fn test_llm_model_name_header_match_invalid_patterns() {
-	assert!(super::llm_model_name_header_match("*gpt*").is_err());
-	assert!(super::llm_model_name_header_match("g*pt").is_err());
-}
-
-#[test]
 fn test_migrate_deprecated_local_config_moves_fields() {
 	let input = r#"
 config:
@@ -400,6 +1083,46 @@ config:
 	assert_eq!(tracing.get("protocol").unwrap(), "http");
 }
 
+#[rstest::rstest]
+#[case::https_scheme("https://tracing.example.com:4318", "http", "tracing.example.com:4318")]
+#[case::http_scheme("http://tracing.example.com:4318", "http", "tracing.example.com:4318")]
+#[case::grpc_scheme("grpc://tracing.example.com:4317", "grpc", "tracing.example.com:4317")]
+#[case::no_scheme("tracing.example.com:4317", "grpc", "tracing.example.com:4317")]
+fn test_deprecated_tracing_endpoint_schemes(
+	#[case] endpoint: &str,
+	#[case] protocol: &str,
+	#[case] expected: &str,
+) {
+	let input =
+		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: {protocol}\n");
+	let out = super::migrate_deprecated_local_config(&input).unwrap();
+	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
+	assert_eq!(tracing.get("inlineBackend").unwrap(), expected);
+}
+
+#[rstest::rstest]
+#[case::unrecognized_scheme("nateisgreat://tracing.example.com:4317")]
+fn test_deprecated_tracing_endpoint_unrecognized_scheme_error(#[case] endpoint: &str) {
+	let input =
+		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: grpc\n");
+	let err = super::migrate_deprecated_local_config(&input)
+		.unwrap_err()
+		.to_string();
+	assert!(
+		err.contains("tracing"),
+		"error message should mention 'tracing': {err}"
+	);
+	assert!(
+		err.contains("failed"),
+		"error message should mention 'failed': {err}"
+	);
+	assert!(
+		err.contains(endpoint),
+		"error message should include the invalid endpoint: {err}"
+	);
+}
+
 #[tokio::test]
 async fn test_targeted_gateway_phase_oidc_accepts_gateway_and_listener_targets() {
 	for target in [
@@ -407,11 +1130,13 @@ async fn test_targeted_gateway_phase_oidc_accepts_gateway_and_listener_targets()
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: None,
+			port: None,
 		}),
 		PolicyTarget::Gateway(ListenerTarget {
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
 			listener_name: Some("listener".into()),
+			port: None,
 		}),
 	] {
 		let normalized = normalize_test_policies(vec![super::LocalPolicy {

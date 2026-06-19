@@ -32,6 +32,7 @@ spec:
         interval: 30s
     http:
       http2FrameSize: 17000
+      http2MaxHeaderSize: 16Ki
       maxBufferSize: 1000
     accessLog:
       filter: 'response.code != 200'
@@ -58,6 +59,11 @@ spec:
         add:
           - expression: 'request.headers["user-agent"]'
             name: http.useragent
+    metrics:
+      attributes:
+        add:
+          - expression: 'request.headers["x-org-id"]'
+            name: org
 
 ---
 # Output
@@ -70,6 +76,7 @@ output:
       frontend:
         http:
           http2FrameSize: 17000
+          http2MaxHeaderSize: 16384
           maxBufferSize: 1000
       key: frontend/default/agw:frontend-http:default/test
       name:
@@ -95,6 +102,26 @@ output:
             - response.code
           filter: response.code != 200
       key: frontend/default/agw:frontend-logging:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      frontend:
+        metrics:
+          fields:
+            add:
+            - expression: request.headers["x-org-id"]
+              name: org
+      key: frontend/default/agw:frontend-metrics:default/test
       name:
         kind: AgentgatewayPolicy
         name: agw

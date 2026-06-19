@@ -40,14 +40,17 @@ impl Server {
 	) -> anyhow::Result<Self> {
 		hyper_helpers::Server::<State>::bind("readiness", address, drain_rx, State::new(ready.clone()))
 			.await
-			.map(|s| Server { s, ready })
+			.map(|s| Server {
+				s: s.with_optional_proxy_protocol(),
+				ready,
+			})
 	}
 
 	pub fn ready(&self) -> readiness::Ready {
 		self.ready.clone()
 	}
 
-	pub fn address(&self) -> SocketAddr {
+	pub fn address(&self) -> Option<SocketAddr> {
 		self.s.address()
 	}
 

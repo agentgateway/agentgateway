@@ -1,0 +1,315 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agentgateway-base
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: base-gateway-params
+  namespace: agentgateway-base
+spec:
+  env:
+    # Drop export time from 5s to 200ms to speed up tests
+    - name: OTEL_BSP_SCHEDULE_DELAY
+      value: "200"
+    - name: OTEL_BLRP_SCHEDULE_DELAY
+      value: "200"
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gateway
+  namespace: agentgateway-base
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: base-gateway-params
+  listeners:
+    - protocol: HTTP
+      port: 80
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: All
+    - protocol: TCP
+      port: 9090
+      name: tcp
+      allowedRoutes:
+        namespaces:
+          from: All
+        kinds:
+          - kind: TCPRoute
+            group: gateway.networking.k8s.io
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: agentgateway-base
+spec:
+  ports:
+    - name: http
+      port: 80
+    - name: https
+      port: 443
+    - name: tcp
+      port: 9090
+    - name: grpc
+      port: 7070
+    - name: raw-headers
+      port: 18081
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testbox
+  namespace: agentgateway-base
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: testbox
+  template:
+    metadata:
+      labels:
+        app: testbox
+        app.kubernetes.io/name: testbox
+    spec:
+      securityContext:
+        sysctls:
+        - name: net.ipv4.ip_unprivileged_port_start
+          value: "0"
+      containers:
+      - image: ghcr.io/agentgateway/testbox:0.0.1
+        imagePullPolicy: IfNotPresent
+        name: testbox
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+        env:
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 1
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+          - mountPath: /tls
+            name: certs
+      volumes:
+      - name: certs
+        secret:
+          secretName: certs
+          optional: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: testbox
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: testbox
+  template:
+    metadata:
+      labels:
+        app: testbox
+        app.kubernetes.io/name: testbox
+    spec:
+      securityContext:
+        sysctls:
+        - name: net.ipv4.ip_unprivileged_port_start
+          value: "0"
+      containers:
+      - image: ghcr.io/agentgateway/testbox:0.0.1
+        imagePullPolicy: IfNotPresent
+        name: testbox
+        env:
+        - name: INSTANCE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        startupProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 1
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          periodSeconds: 5
+          failureThreshold: 3
+---
+# From https://github.com/agentgateway/agentgateway/tree/main/examples/tls/certs
+# We use this since Istio's builtin cert is self signed which is not supported (https://github.com/agentgateway/agentgateway/issues/680)
+apiVersion: v1
+kind: Secret
+data:
+  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJlekNDQVNDZ0F3SUJBZ0lSQU9ubW9jOWFWU1preUo1OVU5cis2S0F3Q2dZSUtvWkl6ajBFQXdJd0d6RVoKTUJjR0ExVUVBeE1RWVdkbGJuUm5ZWFJsZDJGNUxtUmxkakFlRncweU5URXdNVFV4T1RRek16WmFGdzB6TlRFdwpNVE14T1RRek16WmFNQnN4R1RBWEJnTlZCQU1URUdGblpXNTBaMkYwWlhkaGVTNWtaWFl3V1RBVEJnY3Foa2pPClBRSUJCZ2dxaGtqT1BRTUJCd05DQUFTY1B1QWc2NSs5RDJZdU9yRmw0eEFZT0I2aDI0NjBRaFpUSVN0RTFQSFAKTUlPVUpBQXFCZEFXQUg1Skc0VWlWVUgvdEtZRWQ3M0NmYUJzSFNOck9KbExvMFV3UXpBT0JnTlZIUThCQWY4RQpCQU1DQVFZd0VnWURWUjBUQVFIL0JBZ3dCZ0VCL3dJQkFUQWRCZ05WSFE0RUZnUVVjd3RNaC85RmZKdmNSOUpVCmJJU091czdZRE1vd0NnWUlLb1pJemowRUF3SURTUUF3UmdJaEFMMmFnZkVJOVRCbDA2MFkwYUdRN1NYNjlhTEMKNy9pZmpMbUgzOFNHT1dDSkFpRUE2M05SeWY1b3o2cnp2dklIcEs4T00yaFNIcVdRRlFuaEJUQ2J5ek5BZTVVPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJ0ekNDQVYyZ0F3SUJBZ0lSQU5BbWxodzVHb3F0WGRYejNxZTVuTHd3Q2dZSUtvWkl6ajBFQXdJd0d6RVoKTUJjR0ExVUVBeE1RWVdkbGJuUm5ZWFJsZDJGNUxtUmxkakFlRncweU5URXdNVFl5TURFMU5UWmFGdzB6TlRFdwpNVFF5TURFMU5UWmFNQlF4RWpBUUJnTlZCQU1UQ1d4dlkyRnNhRzl6ZERCWk1CTUdCeXFHU000OUFnRUdDQ3FHClNNNDlBd0VIQTBJQUJHVEtzRXZWdjZzWGNCbU00cGJybGRoenQyVjUwNFEvL3cyOEdRV1NGdS9hNzZvR3o5cWQKVDlPdlFvTnRuZ1BjbG9FUnZTVWNhV3N5ai81V3FiSzhMQWlqZ1lnd2dZVXdEZ1lEVlIwUEFRSC9CQVFEQWdlQQpNQjBHQTFVZEpRUVdNQlFHQ0NzR0FRVUZCd01CQmdnckJnRUZCUWNEQWpBZEJnTlZIUTRFRmdRVUlSSmNVQVFBCkJJSElyRFBnU1VKcENZMUtCWWN3SHdZRFZSMGpCQmd3Rm9BVWN3dE1oLzlGZkp2Y1I5SlViSVNPdXM3WURNb3cKRkFZRFZSMFJCQTB3QzRJSmJHOWpZV3hvYjNOME1Bb0dDQ3FHU000OUJBTUNBMGdBTUVVQ0lRQ1RUWHY2WEVNaApvWUlsbnA4REtWZVJHWUdQM1oxOUVFQ1BiTnpkYVllbDRRSWdMYmZKYllVdnBaQmtBVWlBck1ISStKVElMSGhLCldPaXhLL2NHSmZqbTFSRT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+  tls.key: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUxFUkhVZmdKRG5uVWRPZDRKdndBVVJMRy9WNFRKalNTN05nOCt4Y21rMStvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFWk1xd1M5Vy9xeGR3R1l6aWx1dVYySE8zWlhuVGhELy9EYndaQlpJVzc5cnZxZ2JQMnAxUAowNjlDZzIyZUE5eVdnUkc5SlJ4cGF6S1AvbGFwc3J3c0NBPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
+metadata:
+  name: certs
+  namespace: agentgateway-base
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ext-authz
+  namespace: agentgateway-base
+  labels:
+    app: ext-authz
+spec:
+  ports:
+    - port: 4444
+      targetPort: 9000
+      protocol: TCP
+      appProtocol: kubernetes.io/h2c
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ext-mcp
+  namespace: agentgateway-base
+  labels:
+    app: ext-mcp
+spec:
+  ports:
+    - port: 4445
+      targetPort: 9001
+      protocol: TCP
+      appProtocol: kubernetes.io/h2c
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: a2a-helloworld
+  namespace: agentgateway-base
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 9999
+      targetPort: 9999
+      appProtocol: agentgateway.dev/a2a
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ext-proc-grpc
+  namespace: agentgateway-base
+  labels:
+    app: ext-proc-grpc
+spec:
+  ports:
+    - port: 4444
+      targetPort: 18080
+      protocol: TCP
+      appProtocol: kubernetes.io/h2c
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth0-mock
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+    - protocol: TCP
+      port: 8443
+      targetPort: 8443
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-website-fetcher
+  labels:
+    app: mcp-website-fetcher
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+    - port: 80
+      targetPort: 8000
+      appProtocol: agentgateway.dev/mcp
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-admin-server
+  labels:
+    app: mcp-admin-server
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3001
+      appProtocol: agentgateway.dev/mcp
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-testbox
+  namespace: default
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9234
+      targetPort: 9234
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dummy-idp
+  namespace: default
+  labels:
+    app: dummy-idp
+spec:
+  ports:
+    - name: http
+      port: 8443
+      targetPort: 8443
+  selector:
+    app.kubernetes.io/name: testbox

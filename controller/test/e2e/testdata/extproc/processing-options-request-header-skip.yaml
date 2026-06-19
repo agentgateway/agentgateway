@@ -1,0 +1,77 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-extproc-default
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "default-extproc.example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-extproc-request-header-skip
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "skip-extproc.example.com"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: extproc-default-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: route-extproc-default
+  traffic:
+    extProc:
+      backendRef:
+        name: ext-proc-grpc
+        port: 4444
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: extproc-request-header-skip-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: route-extproc-request-header-skip
+  traffic:
+    extProc:
+      backendRef:
+        name: ext-proc-grpc
+        port: 4444
+      processingOptions:
+        requestBodyMode: None
+        responseBodyMode: None
+        requestHeaderMode: Skip
+        responseHeaderMode: Send
+        requestTrailerMode: Skip
+        responseTrailerMode: Skip

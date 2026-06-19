@@ -7,11 +7,11 @@ import (
 
 	"istio.io/istio/pkg/kube/controllers"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/testutils"
@@ -21,6 +21,21 @@ import (
 func TestReferences(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/references", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
 		sq, ri := testutils.Syncer(t, ctx, "")
+		r := ri.Outputs.Resources.List()
+		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
+			x := ir.GetAgwResourceName(resource.Resource)
+			return strings.HasPrefix(x, "policy/") || strings.HasPrefix(x, "backend/")
+		})
+		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
+			return a.ResourceName()
+		})
+	})
+}
+
+func TestPolicyReferenceGrants(t *testing.T) {
+	testutils.RunForDirectory(t, "testdata/references-policy-refgrants", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
+		ctx.Collections.Settings.BackendRefGrantMode = apisettings.BackendRefGrantModeRouteAndPolicy
+		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
 		r := ri.Outputs.Resources.List()
 		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
 			x := ir.GetAgwResourceName(resource.Resource)
@@ -73,7 +88,10 @@ func TestGatewayCollection(t *testing.T) {
 func TestBackends(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/backends", func(t *testing.T, ctx plugins.PolicyCtx) (any, []any) {
 		dummyRoutes := setupDummyAncestorMapping(ctx)
-		ctx.Collections.HTTPRoutes = krt.JoinCollection([]krt.Collection[*gwv1.HTTPRoute]{ctx.Collections.HTTPRoutes, krt.NewStaticCollection(nil, dummyRoutes)})
+		ctx.Collections.HTTPRoutes = krt.JoinCollection([]krt.Collection[*gwv1.HTTPRoute]{
+			ctx.Collections.HTTPRoutes,
+			krt.NewStaticCollection(nil, dummyRoutes, ctx.Collections.KrtOpts.ToOptions("translator/GoldenHTTPRouteOverrides")...),
+		}, ctx.Collections.KrtOpts.ToOptions("translator/HTTPRoutesWithGoldenOverrides")...)
 		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayBackend", "BackendTLSPolicy", "InferencePool")
 		r := ri.Outputs.Resources.List()
 		r = slices.SortBy(r, func(a ir.AgwResource) string {
@@ -136,10 +154,10 @@ func setupDummyAncestorMapping(ctx plugins.PolicyCtx) []*gwv1.HTTPRoute {
 					BackendRefs: []gwv1.HTTPBackendRef{{
 						BackendRef: gwv1.BackendRef{
 							BackendObjectReference: gwv1.BackendObjectReference{
-								Group:     ptr.Of(gwv1.Group(backend.GetObjectKind().GroupVersionKind().Group)),
-								Kind:      ptr.Of(gwv1.Kind(backend.GetObjectKind().GroupVersionKind().Kind)),
+								Group:     new(gwv1.Group(backend.GetObjectKind().GroupVersionKind().Group)),
+								Kind:      new(gwv1.Kind(backend.GetObjectKind().GroupVersionKind().Kind)),
 								Name:      gwv1.ObjectName(backend.GetName()),
-								Namespace: ptr.Of(gwv1.Namespace(backend.GetNamespace())),
+								Namespace: new(gwv1.Namespace(backend.GetNamespace())),
 								Port:      nil,
 							},
 						},

@@ -2,29 +2,19 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
-use crate::http::ext_authz::ExtAuthzDynamicMetadata;
-use crate::http::ext_proc::ExtProcDynamicMetadata;
-use crate::http::transformation_cel::TransformationMetadata;
-use crate::http::{apikey, basicauth, jwt};
-use crate::llm::{LLMInfo, LLMRequest};
-use crate::mcp::{MCPInfo, MCPTool};
-use crate::serdes::schema;
-use crate::transport::tls::TlsInfo;
-use crate::{apply, llm};
 use agent_core::env::ENV;
 use agent_core::strng::Strng;
 use bytes::Bytes;
-use cel::Value;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
-use cel::objects::{BytesValue, ListValue, StringValue};
+use cel::objects::{BytesValue, ListValue, MapValue, StringValue};
 use cel::types::dynamic::{DynamicType, DynamicValue};
-use cel::{ExecutionError, FunctionContext};
+use cel::{ExecutionError, FunctionContext, Value};
 use chrono::{DateTime, FixedOffset};
 use http::{Extensions, HeaderMap, Method, Uri, Version};
+use once_cell::sync::Lazy;
 use prometheus_client::encoding::EncodeLabelValue;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
@@ -33,12 +23,27 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
 use tracing::event;
 
+use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
+use crate::http::ext_authz::ExtAuthzDynamicMetadata;
+use crate::http::ext_proc::ExtProcDynamicMetadata;
+use crate::http::transformation_cel::TransformationMetadata;
+use crate::http::{RecordedBodyHandle, apikey, basicauth, jwt};
+use crate::llm::{LLMInfo, LLMRequest};
+use crate::mcp::guardrails::McpGuardrailsDynamicMetadata;
+use crate::mcp::{MCPInfo, MCPTool};
+use crate::proxy::dtrace;
+use crate::serdes::schema;
+use crate::transport::tls::TlsInfo;
+use crate::{apply, llm};
+
 #[derive(Debug, Default, cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct Executor<'a> {
 	pub request: Option<RequestRef<'a>>,
 
 	pub response: Option<ResponseRef<'a>>,
+
+	pub proxy: ExtensionOrDirect<'a, ProxyContext>,
 
 	pub env: EnvContext,
 
@@ -65,11 +70,172 @@ pub struct Executor<'a> {
 
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
 
+	#[dynamic(rename = "mcpGuardrails")]
+	pub mcp_guardrails: ExtensionOrDirect<'a, McpGuardrailsDynamicMetadata>,
+
 	pub metadata: ExtensionOrDirect<'a, TransformationMetadata>,
+}
+
+#[apply(schema!)]
+#[derive(Default, cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct ProxyContext {
+	/// The bind that accepted the request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub bind: Option<Strng>,
+	/// The selected Gateway.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub gateway: Option<ProxyGatewayContext>,
+	/// The selected listener.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub listener: Option<ProxyListenerContext>,
+	/// The selected route.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub route: Option<ProxyRouteContext>,
+	/// Time spent processing the request before sending the primary outbound call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub request_processing_duration: Option<CelDuration>,
+	/// Time spent waiting for the primary outbound call.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub upstream_duration: Option<CelDuration>,
+	/// Time spent processing the primary outbound response before sending the downstream response.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub response_processing_duration: Option<CelDuration>,
+}
+
+impl ProxyContext {
+	pub fn mutate<B>(req: &mut ::http::Request<B>, f: impl FnOnce(&mut Self)) {
+		if req.extensions().get::<Self>().is_none() {
+			req.extensions_mut().insert(Self::default());
+		}
+		f(req
+			.extensions_mut()
+			.get_mut::<Self>()
+			.expect("proxy context must be present"));
+	}
+
+	pub fn from_std_durations(
+		request_processing_duration: Option<std::time::Duration>,
+		upstream_duration: Option<std::time::Duration>,
+		response_processing_duration: Option<std::time::Duration>,
+	) -> Self {
+		Self {
+			bind: None,
+			gateway: None,
+			listener: None,
+			route: None,
+			request_processing_duration: request_processing_duration.and_then(CelDuration::from_std),
+			upstream_duration: upstream_duration.and_then(CelDuration::from_std),
+			response_processing_duration: response_processing_duration.and_then(CelDuration::from_std),
+		}
+	}
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct ProxyGatewayContext {
+	/// The namespace of the selected Gateway.
+	#[serde(default)]
+	pub namespace: Strng,
+	/// The name of the selected Gateway.
+	#[serde(default)]
+	pub name: Strng,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct ProxyListenerContext {
+	/// The name of the selected listener.
+	#[serde(default)]
+	pub name: Strng,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct ProxyRouteContext {
+	/// The namespace of the selected route.
+	#[serde(default)]
+	pub namespace: Strng,
+	/// The name of the selected route.
+	#[serde(default)]
+	pub name: Strng,
+	/// The kind of the selected route.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub kind: Option<Strng>,
+	/// The selected route rule name, when available.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub rule: Option<Strng>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CelDuration(pub chrono::Duration);
+
+impl CelDuration {
+	pub fn from_std(duration: std::time::Duration) -> Option<Self> {
+		chrono::Duration::from_std(duration).ok().map(Into::into)
+	}
+}
+
+impl From<chrono::Duration> for CelDuration {
+	fn from(duration: chrono::Duration) -> Self {
+		Self(duration)
+	}
+}
+
+impl From<CelDuration> for chrono::Duration {
+	fn from(duration: CelDuration) -> Self {
+		duration.0
+	}
+}
+
+impl Serialize for CelDuration {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let duration = ::cel::format_duration(&self.0).ok_or_else(|| {
+			serde::ser::Error::custom(format!("duration too large to serialize: {:?}", self.0))
+		})?;
+		duration.serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for CelDuration {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let duration = String::deserialize(deserializer)?;
+		let (remaining, duration) = ::cel::parse_duration(&duration)
+			.map_err(|err| serde::de::Error::custom(format!("invalid duration: {err:?}")))?;
+		if !remaining.is_empty() {
+			return Err(serde::de::Error::custom(format!(
+				"invalid duration: trailing input {remaining:?}"
+			)));
+		}
+		Ok(Self(duration))
+	}
+}
+
+impl DynamicType for CelDuration {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		Value::Duration(self.0)
+	}
 }
 
 fn is_extension_or_direct_none<T: Send + Sync + 'static>(e: &ExtensionOrDirect<T>) -> bool {
 	e.deref().is_none()
+}
+
+fn is_body_extension_or_direct_none(e: &BodyExtensionOrDirect) -> bool {
+	e.is_none()
 }
 
 #[apply(schema!)]
@@ -265,9 +431,40 @@ pub enum BackendProtocol {
 struct ExecutorResolver<'a> {
 	executor: &'a Executor<'a>,
 }
+
+static DUMP: Lazy<Expression> =
+	Lazy::new(|| Expression::new_strict("variables()").expect("failed to compile"));
+
+impl ExecutorResolver<'_> {
+	pub fn slow_debug(&self) -> serde_json::Value {
+		let expr = &DUMP;
+		let cel_value = Value::resolve(expr.expression.expression(), ROOT_CONTEXT.as_ref(), self)
+			.unwrap_or(Value::Null);
+		let mut v = cel_value.json().unwrap_or(serde_json::Value::Null);
+		// Filter nulls which are just noisy
+		if let serde_json::Value::Object(obj) = &mut v {
+			obj.retain(|_k, v| v != &serde_json::Value::Null)
+		}
+		v
+	}
+}
+
 impl<'a> VariableResolver<'a> for ExecutorResolver<'a> {
 	fn resolve(&self, variable: &str) -> Option<Value<'a>> {
 		self.executor.field(variable)
+	}
+	fn variables(&self) -> Option<Value<'a>> {
+		match self.executor.materialize() {
+			Value::Map(map) => {
+				let variables = map
+					.iter()
+					.filter(|(_, value)| !matches!(value, Value::Null))
+					.map(|(key, value)| (key, value.clone()))
+					.collect();
+				Some(Value::Map(MapValue::Borrow(variables)))
+			},
+			_ => None,
+		}
 	}
 	// A bit annoying, but a nice speed up for us
 	fn resolve_member(&self, expr: &str, member: &str) -> Option<Value<'a>> {
@@ -317,8 +514,10 @@ impl<'a> Executor<'a> {
 		self.basic_auth = ExtensionOrDirect::Extension(ext);
 		self.extauthz = ExtensionOrDirect::Extension(ext);
 		self.extproc = ExtensionOrDirect::Extension(ext);
+		self.mcp_guardrails = ExtensionOrDirect::Extension(ext);
 		self.metadata = ExtensionOrDirect::Extension(ext);
 		self.backend = ExtensionOrDirect::Extension(ext);
+		self.proxy = ExtensionOrDirect::Extension(ext);
 		self.source = ExtensionOrDirect::Extension(ext);
 	}
 	fn set_request_snapshot(&mut self, req: &'a RequestSnapshot) {
@@ -329,15 +528,31 @@ impl<'a> Executor<'a> {
 		self.basic_auth = ExtensionOrDirect::Direct(req.basic_auth.as_ref());
 		self.extauthz = ExtensionOrDirect::Direct(req.extauthz.as_ref());
 		self.extproc = ExtensionOrDirect::Direct(req.extproc.as_ref());
+		self.mcp_guardrails = ExtensionOrDirect::Direct(req.mcp_guardrails.as_ref());
 		self.metadata = ExtensionOrDirect::Direct(req.metadata.as_ref());
 		self.backend = ExtensionOrDirect::Direct(req.backend.as_ref());
+		self.proxy = ExtensionOrDirect::Direct(req.proxy.as_ref());
 		self.source = ExtensionOrDirect::Direct(req.source.as_ref());
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
+		self.proxy = ExtensionOrDirect::Extension(resp.extensions());
+		if let Some(llm) = resp.extensions().get::<LLMContext>() {
+			self.llm = ExtensionOrDirect::Direct(Some(llm));
+		}
+		if let Some(extproc) = resp.extensions().get::<ExtProcDynamicMetadata>() {
+			self.extproc = ExtensionOrDirect::Direct(Some(extproc));
+		}
+		if let Some(metadata) = resp.extensions().get::<TransformationMetadata>() {
+			self.metadata = ExtensionOrDirect::Direct(Some(metadata));
+		}
 	}
 	fn set_response_snapshot(&mut self, resp: &'a ResponseSnapshot) {
 		self.response = Some(resp.into());
+		self.proxy = ExtensionOrDirect::Direct(resp.proxy.as_ref());
+		if let Some(metadata) = resp.metadata.as_ref() {
+			self.metadata = ExtensionOrDirect::Direct(Some(metadata));
+		}
 	}
 	pub fn new_empty() -> Self {
 		Default::default()
@@ -370,6 +585,7 @@ impl<'a> Executor<'a> {
 		llm: Option<&'a LLMContext>,
 		mcp: Option<&'a MCPInfo>,
 		end_time: Option<&'a RequestTime>,
+		proxy: Option<&'a ProxyContext>,
 	) -> Self {
 		let mut this = Self::new_empty();
 		if let Some(req) = req {
@@ -380,9 +596,23 @@ impl<'a> Executor<'a> {
 		}
 		this.llm = ExtensionOrDirect::Direct(llm);
 		this.mcp = mcp;
+		if let Some(proxy) = proxy {
+			this.proxy = ExtensionOrDirect::Direct(Some(proxy));
+		}
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = end_time;
 		}
+		this
+	}
+	pub fn new_llm_rate_limit_streaming(
+		req: Option<&'a RequestSnapshot>,
+		llm: &'a LLMContext,
+	) -> Self {
+		let mut this = Self::new_empty();
+		if let Some(req) = req {
+			this.set_request_snapshot(req);
+		}
+		this.llm = ExtensionOrDirect::Direct(Some(llm));
 		this
 	}
 	pub fn new_tcp_logger(
@@ -427,14 +657,33 @@ impl<'a> Executor<'a> {
 		this.set_response(response);
 		this
 	}
+	pub fn debug_snapshot(&'a self) -> serde_json::Value {
+		let resolver = ExecutorResolver { executor: self };
+		resolver.slow_debug()
+	}
 
 	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
 		let resolver = ExecutorResolver { executor: self };
-		match Value::resolve(
+		let start = dtrace::timed_start();
+		let res = Value::resolve(
 			expr.expression.expression(),
 			ROOT_CONTEXT.as_ref(),
 			&resolver,
-		) {
+		);
+		dtrace::trace(|t| {
+			t.cel_eval(
+				start,
+				Instant::now(),
+				// TODO: include the source policy of the expression
+				&expr.original_expression,
+				resolver.slow_debug(),
+				res
+					.clone()
+					.map(|v| v.json().unwrap_or_else(|e| json!({"error": e.to_string()})))
+					.unwrap_or_else(|e| json!({"error": e.to_string()})),
+			)
+		});
+		match res {
 			Ok(v) => Ok(v),
 			Err(e) => {
 				event!(
@@ -502,14 +751,17 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		version: req.version(),
 		headers: req.headers().clone(),
 		body: ext::<BufferedBody>(req, clear),
+		recorded_body: ext::<RecordedBodyHandle>(req, clear),
 
 		jwt: ext::<jwt::Claims>(req, clear),
 		api_key: ext::<apikey::Claims>(req, clear),
 		basic_auth: ext::<basicauth::Claims>(req, clear),
 		backend: ext::<BackendContext>(req, clear),
+		proxy: ext::<ProxyContext>(req, clear),
 		source: ext::<SourceContext>(req, clear),
 		extauthz: ext::<ExtAuthzDynamicMetadata>(req, clear),
 		extproc: ext::<ExtProcDynamicMetadata>(req, clear),
+		mcp_guardrails: ext::<McpGuardrailsDynamicMetadata>(req, clear),
 		metadata: ext::<TransformationMetadata>(req, clear),
 		llm: ext::<LLMContext>(req, clear),
 		start_time: ext::<RequestTime>(req, clear),
@@ -521,31 +773,31 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 pub fn snapshot_response(resp: &mut crate::http::Response) -> ResponseSnapshot {
 	ResponseSnapshot {
 		code: resp.status(),
+		grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 		headers: resp.headers().clone(),
 		body: resp.extensions_mut().remove::<BufferedBody>(),
+		recorded_body: resp.extensions_mut().remove::<RecordedBodyHandle>(),
+		metadata: resp.extensions_mut().remove::<TransformationMetadata>(),
+		proxy: resp.extensions_mut().remove::<ProxyContext>(),
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct RequestSnapshot {
-	/// The request's method
 	pub method: http::Method,
 
-	/// The request's URI
 	pub path: http::Uri,
 
 	pub host: Option<::http::uri::Authority>,
 
 	pub scheme: Option<::http::uri::Scheme>,
 
-	/// The request's version
 	pub version: http::Version,
 
-	// TODO: do not use header_map, which will make multi-headers a list
-	/// The request's headers
 	pub headers: http::HeaderMap,
 
 	pub body: Option<BufferedBody>,
+	pub recorded_body: Option<RecordedBodyHandle>,
 
 	pub jwt: Option<jwt::Claims>,
 
@@ -555,12 +807,15 @@ pub struct RequestSnapshot {
 
 	pub backend: Option<BackendContext>,
 
+	pub proxy: Option<ProxyContext>,
+
 	pub source: Option<SourceContext>,
 
 	pub start_time: Option<RequestTime>,
 
 	pub extauthz: Option<ExtAuthzDynamicMetadata>,
 	pub extproc: Option<ExtProcDynamicMetadata>,
+	pub mcp_guardrails: Option<McpGuardrailsDynamicMetadata>,
 	pub metadata: Option<TransformationMetadata>,
 
 	pub llm: Option<LLMContext>,
@@ -599,8 +854,8 @@ pub struct RequestRef<'a> {
 	/// The request's headers
 	pub headers: Headers<'a>,
 
-	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
-	pub body: ExtensionOrDirect<'a, BufferedBody>,
+	#[serde(skip_serializing_if = "is_body_extension_or_direct_none")]
+	pub body: BodyExtensionOrDirect<'a>,
 
 	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
 	pub start_time: ExtensionOrDirect<'a, RequestTime>,
@@ -609,14 +864,15 @@ pub struct RequestRef<'a> {
 	pub end_time: Option<&'a RequestTime>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ResponseSnapshot {
-	#[serde(with = "http_serde::status_code")]
 	pub code: http::StatusCode,
-	#[serde(with = "http_serde::header_map")]
+	pub grpc_status: Option<u8>,
 	pub headers: http::HeaderMap,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<BufferedBody>,
+	pub recorded_body: Option<RecordedBodyHandle>,
+	pub metadata: Option<TransformationMetadata>,
+	pub proxy: Option<ProxyContext>,
 }
 
 #[derive(Debug, Clone, Serialize, cel::DynamicType)]
@@ -624,19 +880,28 @@ pub struct ResponseRef<'a> {
 	/// The HTTP status code of the response.
 	pub code: u16,
 
+	/// The gRPC status code of the response, when present.
+	#[serde(rename = "grpcStatus", skip_serializing_if = "Option::is_none")]
+	#[dynamic(rename = "grpcStatus")]
+	pub grpc_status: Option<u8>,
+
 	/// The headers of the response.
 	pub headers: Headers<'a>,
 
-	#[serde(skip_serializing_if = "is_extension_or_direct_none")]
-	pub body: ExtensionOrDirect<'a, BufferedBody>,
+	#[serde(skip_serializing_if = "is_body_extension_or_direct_none")]
+	pub body: BodyExtensionOrDirect<'a>,
 }
 
 impl<'a> From<&'a ResponseSnapshot> for ResponseRef<'a> {
 	fn from(value: &'a ResponseSnapshot) -> Self {
 		Self {
 			code: value.code.as_u16(),
+			grpc_status: value.grpc_status,
 			headers: Headers::new(&value.headers),
-			body: value.body.as_ref().into(),
+			body: BodyExtensionOrDirect::Direct {
+				buffered: value.body.as_ref(),
+				recorded: value.recorded_body.as_ref(),
+			},
 		}
 	}
 }
@@ -704,6 +969,14 @@ pub struct ResponseRefSerde {
 	#[serde(default)]
 	pub code: u16,
 
+	/// The gRPC status code of the response, when present.
+	#[serde(
+		default,
+		rename = "grpcStatus",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub grpc_status: Option<u8>,
+
 	/// The headers of the response.
 	#[serde(default, with = "http_serde::header_map")]
 	#[cfg_attr(
@@ -728,7 +1001,10 @@ impl<'a> From<&'a RequestSnapshot> for RequestRef<'a> {
 			scheme: value.scheme.as_ref(),
 			version: value.version,
 			headers: Headers::new(&value.headers),
-			body: value.body.as_ref().into(),
+			body: BodyExtensionOrDirect::Direct {
+				buffered: value.body.as_ref(),
+				recorded: value.recorded_body.as_ref(),
+			},
 			start_time: value.start_time.as_ref().into(),
 			end_time: None,
 		}
@@ -745,7 +1021,7 @@ impl<'a, B> From<&'a ::http::Request<B>> for RequestRef<'a> {
 			scheme: req.uri().scheme(),
 			version: req.version(),
 			headers: Headers::new(req.headers()),
-			body: req.extensions().into(),
+			body: BodyExtensionOrDirect::Extension(req.extensions()),
 			start_time: req.extensions().into(),
 			// Only known in snapshot phase...
 			end_time: None,
@@ -757,8 +1033,9 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 	fn from(resp: &'a crate::http::Response) -> Self {
 		Self {
 			code: resp.status().as_u16(),
+			grpc_status: crate::proxy::httpproxy::parse_grpc_status(resp.headers()),
 			headers: Headers::new(resp.headers()),
-			body: resp.extensions().into(),
+			body: BodyExtensionOrDirect::Extension(resp.extensions()),
 		}
 	}
 }
@@ -799,6 +1076,77 @@ impl DynamicType for BufferedBody {
 
 	fn materialize(&self) -> Value<'_> {
 		Value::Bytes(BytesValue::Bytes(self.0.clone()))
+	}
+}
+
+#[derive(Debug, Clone)]
+pub enum BodyExtensionOrDirect<'a> {
+	Extension(&'a http::Extensions),
+	Direct {
+		buffered: Option<&'a BufferedBody>,
+		recorded: Option<&'a RecordedBodyHandle>,
+	},
+}
+
+impl BodyExtensionOrDirect<'_> {
+	fn buffered(&self) -> Option<&BufferedBody> {
+		match self {
+			BodyExtensionOrDirect::Extension(e) => e.get::<BufferedBody>(),
+			BodyExtensionOrDirect::Direct { buffered, .. } => *buffered,
+		}
+	}
+
+	fn recorded(&self) -> Option<&RecordedBodyHandle> {
+		match self {
+			BodyExtensionOrDirect::Extension(e) => e.get::<RecordedBodyHandle>(),
+			BodyExtensionOrDirect::Direct { recorded, .. } => *recorded,
+		}
+	}
+
+	fn bytes(&self) -> Option<Bytes> {
+		if let Some(buffered) = self.buffered() {
+			Some(buffered.0.clone())
+		} else {
+			self.recorded().map(RecordedBodyHandle::bytes)
+		}
+	}
+
+	fn is_none(&self) -> bool {
+		self.buffered().is_none() && self.recorded().is_none()
+	}
+}
+
+impl Default for BodyExtensionOrDirect<'_> {
+	fn default() -> Self {
+		Self::Direct {
+			buffered: None,
+			recorded: None,
+		}
+	}
+}
+
+impl Serialize for BodyExtensionOrDirect<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		match self.bytes() {
+			Some(bytes) => BufferedBody(bytes).serialize(serializer),
+			None => serializer.serialize_none(),
+		}
+	}
+}
+
+impl DynamicType for BodyExtensionOrDirect<'_> {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		match self.bytes() {
+			Some(bytes) => Value::Bytes(BytesValue::Bytes(bytes)),
+			None => Value::Null,
+		}
 	}
 }
 
@@ -846,9 +1194,9 @@ impl PartialEq for RequestRef<'_> {
 }
 
 #[apply(schema!)]
-#[derive(Eq, PartialEq, cel::DynamicType)]
+#[derive(cel::DynamicType)]
 pub struct LLMContext {
-	/// Whether the LLM response is streamed.
+	/// Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
 	pub streaming: bool,
 	/// The model requested for the LLM request. This may differ from the actual model used.
 	#[dynamic(rename = "requestModel")]
@@ -920,6 +1268,16 @@ pub struct LLMContext {
 	#[serde(skip)]
 	#[dynamic(skip)]
 	pub first_token: Option<Instant>,
+	/// Time from request start until the first response token is received.
+	#[dynamic(rename = "timeToFirstToken")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub time_to_first_token: Option<CelDuration>,
+	/// Average time from first response token to response completion per output token.
+	#[dynamic(rename = "timePerOutputToken")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub time_per_output_token: Option<CelDuration>,
 	/// The number of tokens in the request, when using the token counting endpoint
 	/// These are not counted as 'input tokens' since they do not consume input tokens.
 	#[dynamic(rename = "countTokens")]
@@ -933,10 +1291,24 @@ pub struct LLMContext {
 	pub completion: Option<Vec<String>>,
 	/// The parameters for the LLM request.
 	pub params: llm::LLMRequestParams,
+	/// The realized USD cost of the request from the model cost catalog.
+	/// Unset when the model could not be priced.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cost: Option<llm::cost::Breakdown>,
+	/// Effective model catalog rates in USD per 1M tokens after tier selection.
+	/// Unset when the model could not be priced.
+	#[dynamic(rename = "costRates")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cost_rates: Option<llm::cost::CostRates>,
+	#[serde(skip)]
+	#[dynamic(skip)]
+	pub cost_status: Option<llm::cost::CostLookupStatus>,
 }
 
-impl From<llm::LLMInfo> for LLMContext {
-	fn from(value: LLMInfo) -> Self {
+impl LLMContext {
+	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::cost::ModelCatalog>) -> Self {
+		let projection = model_catalog.map(|catalog| catalog.project(&value));
+
 		let resp = value.response;
 		let mut base = LLMContext {
 			output_tokens: resp.output_tokens,
@@ -946,6 +1318,8 @@ impl From<llm::LLMInfo> for LLMContext {
 			count_tokens: resp.count_tokens,
 			total_tokens: resp.total_tokens,
 			first_token: resp.first_token,
+			time_to_first_token: None,
+			time_per_output_token: None,
 			reasoning_tokens: resp.reasoning_tokens,
 			input_image_tokens: resp.input_image_tokens,
 			input_text_tokens: resp.input_text_tokens,
@@ -963,14 +1337,45 @@ impl From<llm::LLMInfo> for LLMContext {
 			// Better info, override
 			base.input_tokens = Some(pt);
 		}
+
+		if let Some(projection) = projection {
+			base.cost = projection.cost;
+			base.cost_rates = projection.cost_rates;
+			base.cost_status = Some(projection.status);
+		}
+
 		base
 	}
+
+	pub fn set_token_timing(&mut self, request_start: Instant, response_end: Instant) {
+		let Some(first_token) = self.first_token else {
+			return;
+		};
+		self.time_to_first_token =
+			chrono::Duration::from_std(first_token.duration_since(request_start))
+				.ok()
+				.map(Into::into);
+		if let Some(output_tokens) = self
+			.output_tokens
+			.filter(|output_tokens| *output_tokens > 0)
+		{
+			let first_to_last = response_end.duration_since(first_token);
+			let time_per_output_token =
+				Duration::from_secs_f64(first_to_last.as_secs_f64() / output_tokens as f64);
+			self.time_per_output_token = chrono::Duration::from_std(time_per_output_token)
+				.ok()
+				.map(Into::into);
+		}
+	}
 }
+
 impl From<llm::LLMRequest> for LLMContext {
 	fn from(info: LLMRequest) -> Self {
 		let LLMRequest {
 			input_tokens,
 			input_format: _, // Expose this?
+			native_format: _,
+			cache_convention: _,
 			request_model,
 			provider,
 			streaming,
@@ -986,6 +1391,8 @@ impl From<llm::LLMRequest> for LLMContext {
 			prompt,
 
 			first_token: None,
+			time_to_first_token: None,
+			time_per_output_token: None,
 			count_tokens: None,
 			response_model: None,
 			output_tokens: None,
@@ -1001,6 +1408,9 @@ impl From<llm::LLMRequest> for LLMContext {
 			cached_input_tokens: None,
 			cache_creation_input_tokens: None,
 			service_tier: None,
+			cost: None,
+			cost_rates: None,
+			cost_status: None,
 		}
 	}
 }
@@ -1014,8 +1424,39 @@ fn to_value_str_opt<'a, T: AsRef<str>>(c: &'a Option<&'a T>) -> Value<'a> {
 		Some(c) => Value::String(c.as_ref().into()),
 	}
 }
-pub fn to_value_redacted<'a>(c: &'a SecretString) -> Value<'a> {
-	Value::String(c.expose_secret().into())
+#[derive(Debug, Clone, Copy)]
+pub struct SecretStringValue<'a>(&'a SecretString);
+
+impl DynamicType for SecretStringValue<'_> {
+	fn materialize(&self) -> Value<'_> {
+		Value::String("<redacted>".into())
+	}
+
+	fn call_function<'a, 'rf>(
+		&self,
+		name: &str,
+		ftx: &mut FunctionContext<'a, 'rf>,
+	) -> Option<cel::ResolveResult<'a>>
+	where
+		Self: 'a,
+	{
+		match name {
+			"unredacted" => {
+				if !ftx.args.is_empty() {
+					return Some(Err(ExecutionError::invalid_argument_count(
+						0,
+						ftx.args.len(),
+					)));
+				}
+				Some(Ok(Value::String(self.0.expose_secret().into())))
+			},
+			_ => None,
+		}
+	}
+}
+
+pub fn secret_string_to_value(secret: &SecretString) -> Value<'_> {
+	Value::Dynamic(DynamicValue::new_owned(SecretStringValue(secret)))
 }
 fn version_to_value<'a>(c: &'a http::Version) -> Value<'a> {
 	Value::String(crate::http::version_str(c).into())
@@ -1224,33 +1665,38 @@ impl DynamicType for Headers<'_> {
 	where
 		Self: 'a,
 	{
-		if name == "cookie" {
-			if ftx.args.len() != 1 {
-				return Some(Err(ExecutionError::invalid_argument_count(
-					1,
-					ftx.args.len(),
-				)));
-			}
-			let name = match ftx.arg::<StringValue>(0) {
-				Ok(name) => name,
-				Err(err) => return Some(Err(err)),
-			};
-			return Some(self.cookie_value(name.as_ref()));
+		match name {
+			"cookie" => {
+				if ftx.args.len() != 1 {
+					return Some(Err(ExecutionError::invalid_argument_count(
+						1,
+						ftx.args.len(),
+					)));
+				}
+				let name = match ftx.arg::<StringValue>(0) {
+					Ok(name) => name,
+					Err(err) => return Some(Err(err)),
+				};
+				Some(self.cookie_value(name.as_ref()))
+			},
+			"redacted" | "join" | "raw" | "split" => {
+				if !ftx.args.is_empty() {
+					return Some(Err(ExecutionError::invalid_argument_count(
+						0,
+						ftx.args.len(),
+					)));
+				}
+				let next = match name {
+					"redacted" => self.clone().redacted(),
+					"join" => self.clone().join(),
+					"raw" => self.clone().raw(),
+					"split" => self.clone().split(),
+					_ => unreachable!(),
+				};
+				Some(Ok(Value::Dynamic(DynamicValue::new_owned(next))))
+			},
+			_ => None,
 		}
-		if !ftx.args.is_empty() {
-			return Some(Err(ExecutionError::invalid_argument_count(
-				0,
-				ftx.args.len(),
-			)));
-		}
-		let next = match name {
-			"redacted" => self.clone().redacted(),
-			"join" => self.clone().join(),
-			"raw" => self.clone().raw(),
-			"split" => self.clone().split(),
-			_ => return None,
-		};
-		Some(Ok(Value::Dynamic(DynamicValue::new_owned(next))))
 	}
 }
 
@@ -1356,6 +1802,10 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response: Option<ResponseRefSerde>,
 
+	/// `proxy` contains proxy timing information for the request.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub proxy: Option<ProxyContext>,
+
 	/// `env` contains selected process environment attributes exposed to CEL.
 	/// This does NOT expose raw environment variables, but rather a subset of well-known variables.
 	//  TODO: in the future we can, but we should add an allow-list of vars to avoid security issues.
@@ -1405,16 +1855,17 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub extproc: Option<ExtProcDynamicMetadata>,
 
-	/// `metadata` contains values set by transformation metadata expressions.
+	/// `mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.
 	#[serde(
 		default,
-		skip_serializing_if = "is_transformation_metadata_none_or_empty"
+		skip_serializing_if = "Option::is_none",
+		rename = "mcpGuardrails"
 	)]
-	pub metadata: Option<TransformationMetadata>,
-}
+	pub mcp_guardrails: Option<McpGuardrailsDynamicMetadata>,
 
-fn is_transformation_metadata_none_or_empty(metadata: &Option<TransformationMetadata>) -> bool {
-	metadata.as_ref().is_none_or(|m| m.0.is_empty())
+	/// `metadata` contains values set by transformation metadata expressions.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub metadata: Option<TransformationMetadata>,
 }
 
 impl ExecutorSerde {
@@ -1464,7 +1915,10 @@ impl ExecutorSerde {
 				scheme: req.scheme.as_ref(),
 				version: req.version,
 				headers: Headers::new(&req.headers),
-				body: ExtensionOrDirect::Direct(req.body.as_ref()),
+				body: BodyExtensionOrDirect::Direct {
+					buffered: req.body.as_ref(),
+					recorded: None,
+				},
 				start_time: ExtensionOrDirect::Direct(req.start_time.as_ref()),
 				end_time: req.end_time.as_ref(),
 			});
@@ -1474,10 +1928,15 @@ impl ExecutorSerde {
 		if let Some(resp) = &self.response {
 			exec.response = Some(ResponseRef {
 				code: resp.code,
+				grpc_status: resp.grpc_status,
 				headers: Headers::new(&resp.headers),
-				body: ExtensionOrDirect::Direct(resp.body.as_ref()),
+				body: BodyExtensionOrDirect::Direct {
+					buffered: resp.body.as_ref(),
+					recorded: None,
+				},
 			});
 		}
+		exec.proxy = ExtensionOrDirect::Direct(self.proxy.as_ref());
 		exec.llm_request = self.llm_request.as_ref();
 
 		// Set all the ExtensionOrDirect fields
@@ -1489,6 +1948,7 @@ impl ExecutorSerde {
 		exec.backend = ExtensionOrDirect::Direct(self.backend.as_ref());
 		exec.extauthz = ExtensionOrDirect::Direct(self.extauthz.as_ref());
 		exec.extproc = ExtensionOrDirect::Direct(self.extproc.as_ref());
+		exec.mcp_guardrails = ExtensionOrDirect::Direct(self.mcp_guardrails.as_ref());
 		exec.metadata = ExtensionOrDirect::Direct(self.metadata.as_ref());
 		exec.mcp = self.mcp.as_ref();
 
@@ -1524,8 +1984,28 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		response: Some(ResponseRefSerde {
 			code: 200,
+			grpc_status: None,
 			headers: resp_headers,
 			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+		}),
+		proxy: Some(ProxyContext {
+			bind: Some("bind".into()),
+			gateway: Some(ProxyGatewayContext {
+				namespace: "ns-1".into(),
+				name: "gw-1".into(),
+			}),
+			listener: Some(ProxyListenerContext {
+				name: "http".into(),
+			}),
+			route: Some(ProxyRouteContext {
+				namespace: "ns-1".into(),
+				name: "route-1".into(),
+				kind: Some("HTTPRoute".into()),
+				rule: Some("rule-1".into()),
+			}),
+			request_processing_duration: Some(chrono::Duration::milliseconds(12).into()),
+			upstream_duration: Some(chrono::Duration::milliseconds(675).into()),
+			response_processing_duration: Some(chrono::Duration::milliseconds(6).into()),
 		}),
 		env: Some(EnvContext {
 			pod_name: Some("pod-1".to_string()),
@@ -1543,6 +2023,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 				issuer: Default::default(),
 				subject: Default::default(),
 				subject_cn: Some("cn".into()),
+				certificate: Default::default(),
 			}),
 			unverified_workload: Some(WorkloadContext {
 				name: "pod-1".into(),
@@ -1587,6 +2068,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 			total_tokens: Some(150),
 			service_tier: Some("default".into()),
 			first_token: None,
+			time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
+			time_per_output_token: Some(chrono::Duration::milliseconds(7).into()),
 			count_tokens: Some(10),
 
 			prompt: None,
@@ -1601,6 +2084,9 @@ pub fn full_example_executor() -> ExecutorSerde {
 				encoding_format: None,
 				dimensions: None,
 			},
+			cost: None,
+			cost_rates: None,
+			cost_status: None,
 		}),
 		mcp: Some(MCPInfo {
 			method_name: Some("tools/call".to_string()),
@@ -1632,6 +2118,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		}),
 		extauthz: Some(ExtAuthzDynamicMetadata::default()),
 		extproc: Some(ExtProcDynamicMetadata::default()),
+		mcp_guardrails: Some(McpGuardrailsDynamicMetadata::default()),
 		metadata: Some(TransformationMetadata::default()),
 	}
 }

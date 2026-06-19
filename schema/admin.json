@@ -1,0 +1,803 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StoresDump",
+  "type": "object",
+  "properties": {
+    "workloads": {
+      "type": "array",
+      "items": true
+    },
+    "services": {
+      "type": "array",
+      "items": true
+    },
+    "binds": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DumpBind"
+      }
+    },
+    "routes": {
+      "$ref": "#/$defs/RoutesDump"
+    },
+    "policies": {
+      "type": "array",
+      "items": true
+    },
+    "backends": {
+      "type": "array",
+      "items": true
+    }
+  },
+  "required": [
+    "workloads",
+    "services",
+    "binds",
+    "routes",
+    "policies",
+    "backends"
+  ],
+  "$defs": {
+    "DumpBind": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "address": {
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/BindProtocol"
+        },
+        "tunnelProtocol": {
+          "$ref": "#/$defs/TunnelProtocol"
+        },
+        "listeners": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/DumpListener"
+          }
+        }
+      },
+      "required": [
+        "key",
+        "address",
+        "protocol",
+        "tunnelProtocol",
+        "listeners",
+        "listeners"
+      ]
+    },
+    "BindProtocol": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "http",
+            "tls",
+            "tcp"
+          ]
+        },
+        {
+          "description": "Auto-detect protocol by peeking at the first byte of each connection.\nIf the byte is 0x16 (TLS ClientHello), dispatch as `tls`; otherwise as `http`.",
+          "type": "string",
+          "const": "auto"
+        }
+      ]
+    },
+    "TunnelProtocol": {
+      "type": "string",
+      "enum": [
+        "direct",
+        "hboneWaypoint",
+        "hboneGateway",
+        "proxy",
+        "connect"
+      ]
+    },
+    "Listener": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "gatewayName": {
+          "type": "string"
+        },
+        "gatewayNamespace": {
+          "type": "string"
+        },
+        "listenerName": {
+          "type": "string"
+        },
+        "listenerSet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hostname": {
+          "description": "Can be a wildcard",
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ListenerProtocol"
+        }
+      },
+      "required": [
+        "key",
+        "gatewayName",
+        "gatewayNamespace",
+        "listenerName",
+        "hostname",
+        "protocol"
+      ]
+    },
+    "ResourceName": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "namespace"
+      ]
+    },
+    "ListenerProtocol": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "HBONE"
+          ]
+        },
+        {
+          "description": "HTTP",
+          "type": "string",
+          "const": "HTTP"
+        },
+        {
+          "description": "HTTPS, terminating TLS then treating as HTTP",
+          "type": "object",
+          "properties": {
+            "HTTPS": {
+              "$ref": "#/$defs/ServerTLSConfig"
+            }
+          },
+          "required": [
+            "HTTPS"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "TLS (passthrough or termination)",
+          "type": "object",
+          "properties": {
+            "TLS": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ServerTLSConfig"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "TLS"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Opaque TCP",
+          "type": "string",
+          "const": "TCP"
+        }
+      ]
+    },
+    "ServerTLSConfig": {
+      "type": "null"
+    },
+    "DumpListener": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "gatewayName": {
+          "type": "string"
+        },
+        "gatewayNamespace": {
+          "type": "string"
+        },
+        "listenerName": {
+          "type": "string"
+        },
+        "listenerSet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hostname": {
+          "description": "Can be a wildcard",
+          "type": "string"
+        },
+        "protocol": {
+          "$ref": "#/$defs/ListenerProtocol"
+        },
+        "routes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Route"
+          }
+        },
+        "tcpRoutes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/TCPRoute"
+          }
+        }
+      },
+      "required": [
+        "key",
+        "gatewayName",
+        "gatewayNamespace",
+        "listenerName",
+        "hostname",
+        "protocol"
+      ]
+    },
+    "Route": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "serviceKey": {
+          "description": "Service this route targets (set when parentRef is a Service).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NamespacedHostname"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "servicePort": {
+          "description": "Port of the targeted service this route is scoped to. Zero matches any port.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "ruleName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hostnames": {
+          "description": "Can be a wildcard",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RouteMatch"
+          }
+        },
+        "backends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RouteBackendReference"
+          }
+        },
+        "llmRouter": {
+          "readOnly": true
+        },
+        "inlinePolicies": {
+          "type": "array",
+          "items": true
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "namespace"
+      ]
+    },
+    "NamespacedHostname": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace",
+        "hostname"
+      ]
+    },
+    "RouteMatch": {
+      "type": "object",
+      "properties": {
+        "headers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderMatch"
+          }
+        },
+        "path": {
+          "$ref": "#/$defs/PathMatch",
+          "default": {
+            "pathPrefix": "/"
+          }
+        },
+        "method": {
+          "type": "string"
+        },
+        "query": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QueryMatch"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ]
+    },
+    "HeaderMatch": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/HeaderValueMatch"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value"
+      ]
+    },
+    "HeaderValueMatch": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exact": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "exact"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "regex": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "regex"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PathMatch": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exact": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "exact"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "pathPrefix": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pathPrefix"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "regex": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "regex"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "QueryMatch": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/QueryValueMatch"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value"
+      ]
+    },
+    "QueryValueMatch": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "invalid"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exact": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "exact"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "regex": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "regex"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RouteBackendReference": {
+      "type": "object",
+      "properties": {
+        "weight": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 1
+        },
+        "inlinePolicies": {
+          "type": "array",
+          "items": true
+        }
+      },
+      "required": [
+        "weight"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "routeGroup": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "routeGroup"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "invalid": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "invalid"
+          ]
+        }
+      ]
+    },
+    "TCPRoute": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "serviceKey": {
+          "description": "Service this route targets (set when parentRef is a Service).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NamespacedHostname"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "servicePort": {
+          "description": "Port of the targeted service this route is scoped to. Zero matches any port.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "ruleName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hostnames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "backends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TCPRouteBackendReference"
+          }
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "namespace"
+      ]
+    },
+    "TCPRouteBackendReference": {
+      "type": "object",
+      "properties": {
+        "weight": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 1
+        },
+        "backend": {
+          "$ref": "#/$defs/SimpleLocalBackend"
+        },
+        "inlinePolicies": {
+          "type": "array",
+          "items": true
+        }
+      },
+      "required": [
+        "weight",
+        "backend"
+      ]
+    },
+    "SimpleLocalBackend": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": []
+        },
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RoutesDump": {
+      "type": "object",
+      "properties": {
+        "httpMesh": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/Route"
+            }
+          }
+        },
+        "tcpMesh": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/TCPRoute"
+            }
+          }
+        },
+        "routeGroups": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/Route"
+            }
+          }
+        }
+      },
+      "required": [
+        "httpMesh",
+        "tcpMesh",
+        "routeGroups"
+      ]
+    }
+  }
+}

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use agent_core::strng;
 use agent_core::strng::Strng;
 use futures_util::TryFutureExt;
-use rustls::crypto::CryptoProvider;
+use rustls::crypto::{CryptoProvider, SupportedKxGroup};
 use rustls::server::ParsedCertificate;
 use rustls::{ServerConfig, SupportedCipherSuite};
 use rustls_pki_types::{CertificateDer, InvalidDnsNameError, ServerName};
@@ -23,6 +23,7 @@ pub static ALL_TLS_VERSIONS: &[&rustls::SupportedProtocolVersion] =
 	&[&rustls::version::TLS12, &rustls::version::TLS13];
 
 /// All currently supported cipher suites.
+#[cfg(feature = "tls-aws-lc")]
 pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	// TLS 1.3 cipher suites
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
@@ -37,7 +38,21 @@ pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
 ];
 
+/// All currently supported cipher suites (OpenSSL provider).
+#[cfg(feature = "tls-openssl")]
+pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
+	// TLS 1.3 cipher suites
+	rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
+	// TLS 1.2 cipher suites
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
+
 // Default cipher suites to use if user does not specify cipher suites
+#[cfg(feature = "tls-aws-lc")]
 pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256,
@@ -45,6 +60,33 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
+
+#[cfg(feature = "tls-openssl")]
+pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
+	rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+];
+
+#[cfg(feature = "tls-aws-lc")]
+pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
+	KeyExchangeGroup::X25519.to_supported_kx_group(),
+	KeyExchangeGroup::P256.to_supported_kx_group(),
+	KeyExchangeGroup::P384.to_supported_kx_group(),
+	KeyExchangeGroup::X25519_MLKEM768.to_supported_kx_group(),
+];
+
+#[cfg(feature = "tls-openssl")]
+pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
+	rustls_openssl::kx_group::X25519,
+	rustls_openssl::kx_group::SECP256R1,
+	rustls_openssl::kx_group::SECP384R1,
+	#[cfg(ossl350)]
+	rustls_openssl::kx_group::X25519MLKEM768,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -100,6 +142,7 @@ impl CipherSuite {
 		}
 	}
 
+	#[cfg(feature = "tls-aws-lc")]
 	pub const fn to_supported_cipher_suite(&self) -> SupportedCipherSuite {
 		match self {
 			// TLS 1.3 cipher suites
@@ -134,39 +177,166 @@ impl CipherSuite {
 			},
 		}
 	}
+
+	#[cfg(feature = "tls-openssl")]
+	pub fn to_supported_cipher_suite(&self) -> SupportedCipherSuite {
+		match self {
+			// TLS 1.3 cipher suites
+			CipherSuite::TLS_AES_256_GCM_SHA384 => rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
+			CipherSuite::TLS_AES_128_GCM_SHA256 => rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
+			// ChaCha20 is not universally available in OpenSSL; fall back to AES
+			CipherSuite::TLS_CHACHA20_POLY1305_SHA256 => {
+				rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256
+			},
+
+			// TLS 1.2 cipher suites
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+			},
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+			},
+			CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 => {
+				rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+			},
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[allow(non_camel_case_types)]
+pub enum KeyExchangeGroup {
+	X25519,
+	#[serde(rename = "P-256")]
+	P256,
+	#[serde(rename = "P-384")]
+	P384,
+	X25519_MLKEM768,
+}
+
+impl KeyExchangeGroup {
+	pub const fn as_str_name(&self) -> &'static str {
+		match self {
+			KeyExchangeGroup::X25519 => "X25519",
+			KeyExchangeGroup::P256 => "P-256",
+			KeyExchangeGroup::P384 => "P-384",
+			KeyExchangeGroup::X25519_MLKEM768 => "X25519_MLKEM768",
+		}
+	}
+
+	#[cfg(feature = "tls-aws-lc")]
+	pub const fn to_supported_kx_group(&self) -> &'static dyn SupportedKxGroup {
+		match self {
+			KeyExchangeGroup::X25519 => rustls::crypto::aws_lc_rs::kx_group::X25519,
+			KeyExchangeGroup::P256 => rustls::crypto::aws_lc_rs::kx_group::SECP256R1,
+			KeyExchangeGroup::P384 => rustls::crypto::aws_lc_rs::kx_group::SECP384R1,
+			KeyExchangeGroup::X25519_MLKEM768 => rustls::crypto::aws_lc_rs::kx_group::X25519MLKEM768,
+		}
+	}
+
+	#[cfg(feature = "tls-openssl")]
+	pub fn to_supported_kx_group(&self) -> &'static dyn SupportedKxGroup {
+		match self {
+			KeyExchangeGroup::X25519 => rustls_openssl::kx_group::X25519,
+			KeyExchangeGroup::P256 => rustls_openssl::kx_group::SECP256R1,
+			KeyExchangeGroup::P384 => rustls_openssl::kx_group::SECP384R1,
+			#[cfg(ossl350)]
+			KeyExchangeGroup::X25519_MLKEM768 => rustls_openssl::kx_group::X25519MLKEM768,
+			#[cfg(not(ossl350))]
+			KeyExchangeGroup::X25519_MLKEM768 => rustls_openssl::kx_group::X25519,
+		}
+	}
 }
 
 pub fn provider() -> Arc<CryptoProvider> {
-	Arc::new(CryptoProvider {
-		// Restrict negotiation to our allowlist.
-		cipher_suites: DEFAULT_CIPHER_SUITES.to_vec(),
-		..rustls::crypto::aws_lc_rs::default_provider()
-	})
+	provider_with_options(&[], &[])
 }
 
-pub fn provider_with_cipher_suites(
-	cipher_suites: &[CipherSuite],
-) -> anyhow::Result<Arc<CryptoProvider>> {
-	let mut out = Vec::with_capacity(cipher_suites.len());
-	for suite in cipher_suites {
-		out.push(suite.to_supported_cipher_suite());
+/// Returns a shared rustls `KeyLog`. On release builds this always returns
+/// `NoKeyLog` so TLS session secrets can never be logged in production. On
+/// debug builds, honors `SSLKEYLOGFILE` (NSS keylog format) for use with
+/// Wireshark/tcpdump decryption.
+#[cfg(debug_assertions)]
+pub fn key_log() -> Arc<dyn rustls::KeyLog> {
+	static KEY_LOG: std::sync::LazyLock<Arc<dyn rustls::KeyLog>> = std::sync::LazyLock::new(|| {
+		// KeyLogFile uses an internal mutex even when SSLKEYLOGFILE is unset, so
+		// guard the env check to avoid any overhead when the user is not using it.
+		if std::env::var("SSLKEYLOGFILE").is_ok() {
+			Arc::new(rustls::KeyLogFile::new())
+		} else {
+			Arc::new(rustls::NoKeyLog)
+		}
+	});
+	(*KEY_LOG).clone()
+}
+
+#[cfg(not(debug_assertions))]
+pub fn key_log() -> Arc<dyn rustls::KeyLog> {
+	Arc::new(rustls::NoKeyLog)
+}
+
+/// Startup warning when SSLKEYLOGFILE is honored (debug builds only).
+pub fn warn_if_key_log_enabled() {
+	#[cfg(debug_assertions)]
+	if let Ok(path) = std::env::var("SSLKEYLOGFILE")
+		&& !path.is_empty()
+	{
+		warn!("SSLKEYLOGFILE={path}; TLS session secrets will be written to disk (debug build only).");
 	}
-	Ok(Arc::new(CryptoProvider {
-		cipher_suites: out,
-		..rustls::crypto::aws_lc_rs::default_provider()
-	}))
 }
 
-// pub fn provider() -> Arc<CryptoProvider> {
-// 	Arc::new(CryptoProvider {
-// 		// Limit to only the subset of ciphers that are FIPS compatible
-// 		cipher_suites: vec![
-// 			rustls::crypto::ring::cipher_suite::TLS13_AES_256_GCM_SHA384,
-// 			rustls::crypto::ring::cipher_suite::TLS13_AES_128_GCM_SHA256,
-// 		],
-// 		..rustls::crypto::ring::default_provider()
-// 	})
-// }
+pub fn provider_with_options(
+	cipher_suites: &[CipherSuite],
+	key_exchange_groups: &[KeyExchangeGroup],
+) -> Arc<CryptoProvider> {
+	let cipher_suites = if cipher_suites.is_empty() {
+		DEFAULT_CIPHER_SUITES.to_vec()
+	} else {
+		cipher_suites
+			.iter()
+			.map(CipherSuite::to_supported_cipher_suite)
+			.collect()
+	};
+
+	let key_exchange_groups = if key_exchange_groups.is_empty() {
+		DEFAULT_KEY_EXCHANGE_GROUPS.to_vec()
+	} else {
+		key_exchange_groups
+			.iter()
+			.map(KeyExchangeGroup::to_supported_kx_group)
+			.collect()
+	};
+
+	let mut provider = default_crypto_provider();
+	// Restrict negotiation to our allowlist.
+	provider.cipher_suites = cipher_suites;
+	provider.kx_groups = key_exchange_groups;
+	Arc::new(provider)
+}
+
+#[cfg(feature = "tls-aws-lc")]
+fn default_crypto_provider() -> CryptoProvider {
+	rustls::crypto::aws_lc_rs::default_provider()
+}
+
+#[cfg(feature = "tls-openssl")]
+fn default_crypto_provider() -> CryptoProvider {
+	rustls_openssl::default_provider()
+}
+
+pub fn provider_with_cipher_suites(cipher_suites: &[CipherSuite]) -> Arc<CryptoProvider> {
+	provider_with_options(cipher_suites, &[])
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -247,12 +417,13 @@ impl ExtendedServerName {
 pub mod insecure {
 	use std::sync::Arc;
 
-	use crate::transport::tls::provider;
 	use rustls::client::WebPkiServerVerifier;
 	use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 	use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 	use rustls::server::danger::{ClientCertVerified, ClientCertVerifier};
 	use rustls::{DigitallySignedStruct, DistinguishedName, SignatureScheme};
+
+	use crate::transport::tls::provider;
 
 	#[derive(Debug)]
 	pub struct NoServerNameVerification {
@@ -569,7 +740,7 @@ pub mod trustdomain {
 			}
 			let (_, c) = X509Certificate::from_der(client_cert)
 				.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
-			let (ids, _) = super::sans(c).map_err(|_e| {
+			let (ids, _) = super::sans(&c).map_err(|_e| {
 				rustls::Error::InvalidCertificate(rustls::CertificateError::ApplicationVerificationFailure)
 			})?;
 			trace!(
@@ -796,7 +967,7 @@ pub mod identity {
 			use x509_parser::prelude::*;
 			let (_, c) = X509Certificate::from_der(server_cert)
 				.map_err(|_e| rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding))?;
-			let (id, _) = super::sans(c).map_err(|_e| {
+			let (id, _) = super::sans(&c).map_err(|_e| {
 				rustls::Error::InvalidCertificate(rustls::CertificateError::ApplicationVerificationFailure)
 			})?;
 			trace!(
@@ -911,6 +1082,9 @@ pub struct TlsInfo {
 	/// The CN of the subject from the downstream certificate, if available.
 	#[serde(default)]
 	pub subject_cn: Option<Strng>,
+	/// PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.
+	#[serde(default)]
+	pub certificate: Option<Strng>,
 }
 
 #[apply(schema!)]
@@ -959,7 +1133,8 @@ pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<TlsInfo> {
 		})?;
 
 	let (issuer, subject, subject_cn) = names(&cert);
-	let (istio, sans) = sans(cert).ok()?;
+	let (istio, sans) = sans(&cert).ok()?;
+	let certificate = Some(certificate(cert));
 	Some(TlsInfo {
 		identity: istio.into_iter().next().map(|i| {
 			let Identity::Spiffe {
@@ -977,6 +1152,7 @@ pub fn identity_from_connection(conn: &rustls::CommonState) -> Option<TlsInfo> {
 		issuer,
 		subject,
 		subject_cn,
+		certificate,
 	})
 }
 fn names(cert: &X509Certificate) -> (Strng, Strng, Option<Strng>) {
@@ -989,7 +1165,7 @@ fn names(cert: &X509Certificate) -> (Strng, Strng, Option<Strng>) {
 		.map(strng::new);
 	(issuer, subject, subject_cn)
 }
-fn sans(cert: X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
+fn sans(cert: &X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
 	use x509_parser::prelude::*;
 	let names = cert
 		.subject_alternative_name()?
@@ -1035,6 +1211,11 @@ fn sans(cert: X509Certificate) -> anyhow::Result<(Vec<Identity>, Vec<Strng>)> {
 		return Ok((istio, generic));
 	}
 	Ok((Vec::default(), Vec::default()))
+}
+fn certificate(cert: X509Certificate) -> Strng {
+	let pem_block = pem::Pem::new("CERTIFICATE", cert.as_raw().to_vec());
+	let pem_string = pem::encode(&pem_block);
+	Strng::from(pem_string)
 }
 
 #[derive(thiserror::Error, Debug)]

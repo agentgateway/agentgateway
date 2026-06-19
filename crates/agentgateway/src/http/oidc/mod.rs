@@ -4,14 +4,12 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ::http::{HeaderValue, StatusCode, header};
-use secrecy::ExposeSecret;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use tracing::debug;
 
-use crate::http::jwt;
-use crate::http::{Body, PolicyResponse, Request, Response};
+use crate::http::{Body, PolicyResponse, Request, Response, jwt};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 
@@ -24,13 +22,14 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub use crate::http::oauth::TokenEndpointAuth;
 pub use local::LocalOidcConfig;
 pub use redirect::RedirectUri;
 pub use session::{
 	BrowserSession, CookieSecureMode, RESERVED_COOKIE_PREFIX, SameSiteMode, SessionConfig,
 	TransactionState,
 };
+
+pub use crate::http::oauth::TokenEndpointAuth;
 
 #[derive(
 	Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
@@ -197,7 +196,7 @@ struct CallbackQuery {
 impl OidcPolicy {
 	pub async fn apply(
 		&self,
-		log: Option<&mut RequestLog>,
+		log: &mut RequestLog,
 		req: &mut Request,
 		client: PolicyClient,
 	) -> Result<PolicyResponse, Error> {
@@ -218,9 +217,7 @@ impl OidcPolicy {
 							.id_token_validator
 							.validate_claims(browser_session.raw_id_token.expose_secret())
 					{
-						if let Some(Value::String(sub)) = claims.inner.get("sub")
-							&& let Some(log) = log
-						{
+						if let Some(Value::String(sub)) = claims.inner.get("sub") {
 							log.jwt_sub = Some(sub.clone());
 						}
 						req.extensions_mut().insert(claims);
@@ -275,6 +272,20 @@ impl OidcPolicy {
 		)
 		.await?;
 		Ok(Some(response))
+	}
+}
+
+impl crate::store::RequestPolicyTrait for OidcPolicy {
+	async fn apply(
+		&self,
+		client: &PolicyClient,
+		log: &mut RequestLog,
+		req: &mut Request,
+	) -> Result<PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(log, req, client.clone())
+			.await
+			.map_err(|e| crate::proxy::ProxyResponse::from(crate::proxy::ProxyError::OidcFailure(e)))
 	}
 }
 

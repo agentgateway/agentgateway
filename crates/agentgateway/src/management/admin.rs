@@ -1,25 +1,34 @@
 // Originally derived from https://github.com/istio/ztunnel (Apache 2.0 licensed)
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use agent_core::drain::DrainWatcher;
 use agent_core::version::BuildInfo;
 use agent_core::{signal, telemetry};
-use hyper::Request;
-use hyper::body::Incoming;
+use axum::Router;
+use axum::extract::State as AxumState;
+use axum::response::IntoResponse;
+use axum::routing::{get, post};
+use bytes::Bytes;
+use futures_util::StreamExt;
+use http::header::{AUTHORIZATION, CONTENT_LENGTH};
+use http::{HeaderName, Method};
 use hyper::header::{CONTENT_TYPE, HeaderValue};
 use tokio::runtime::Handle;
 use tokio::time;
+use tower::ServiceExt;
+use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 use tracing_subscriber::filter;
 
-use super::hyper_helpers::{Server, empty_response, plaintext_response};
+use super::hyper_helpers::{Server, plaintext_response};
 use crate::Config;
-use crate::http::Response;
+use crate::http::{Request, Response};
 
 // Constants for pprof profiling
 #[cfg(target_os = "linux")]
@@ -37,26 +46,37 @@ pub trait ConfigDumpHandler: Sync + Send {
 	fn handle(&self) -> anyhow::Result<serde_json::Value>;
 }
 
-pub type AdminResponse = std::pin::Pin<Box<dyn Future<Output = crate::http::Response> + Send>>;
+struct AdminError(anyhow::Error);
 
-pub trait AdminFallback: Sync + Send {
-	// sadly can't use async trait because no Sync
-	// see: https://github.com/dtolnay/async-trait/issues/248, https://github.com/dtolnay/async-trait/issues/142
-	// we can't use FutureExt::shared because our result is not clonable
-	fn handle(&self, req: http::Request<Incoming>) -> AdminResponse;
+impl IntoResponse for AdminError {
+	fn into_response(self) -> axum::response::Response {
+		plaintext_response(hyper::StatusCode::INTERNAL_SERVER_ERROR, self.0.to_string()).into_response()
+	}
 }
 
-struct State {
+impl<E> From<E> for AdminError
+where
+	E: Into<anyhow::Error>,
+{
+	fn from(error: E) -> Self {
+		Self(error.into())
+	}
+}
+
+#[derive(Clone)]
+struct AdminState {
 	stores: crate::store::Stores,
 	config: Arc<Config>,
+	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+	model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 	shutdown_trigger: signal::ShutdownTrigger,
 	config_dump_handlers: Vec<Arc<dyn ConfigDumpHandler>>,
-	admin_fallback: Option<Arc<dyn AdminFallback>>,
+	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 	dataplane_handle: Handle,
 }
 
 pub struct Service {
-	s: Server<State>,
+	s: Server<AdminState>,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -90,21 +110,22 @@ pub struct CertsDump {
 impl Service {
 	pub async fn new(
 		config: Arc<Config>,
+		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 		stores: crate::store::Stores,
 		shutdown_trigger: signal::ShutdownTrigger,
 		drain_rx: DrainWatcher,
 		dataplane_handle: Handle,
 	) -> anyhow::Result<Self> {
-		Server::<State>::bind(
+		Server::<AdminState>::bind(
 			"admin",
-			config.admin_addr,
+			config.admin_addr.clone(),
 			drain_rx,
-			State {
+			AdminState {
 				config,
+				model_catalog,
 				stores,
 				shutdown_trigger,
 				config_dump_handlers: vec![],
-				admin_fallback: None,
 				dataplane_handle,
 			},
 		)
@@ -112,7 +133,7 @@ impl Service {
 		.map(|s| Service { s })
 	}
 
-	pub fn address(&self) -> SocketAddr {
+	pub fn address(&self) -> Option<SocketAddr> {
 		self.s.address()
 	}
 
@@ -120,53 +141,75 @@ impl Service {
 		self.s.state_mut().config_dump_handlers.push(handler);
 	}
 
-	pub fn set_admin_handler(&mut self, handler: Arc<dyn AdminFallback>) {
-		self.s.state_mut().admin_fallback = Some(handler);
-	}
-
 	pub fn spawn(self) {
-		self.s.spawn(|state, req| async move {
-			match req.uri().path() {
-				#[cfg(target_os = "linux")]
-				"/debug/pprof/profile" => handle_pprof(req).await,
-				#[cfg(target_os = "linux")]
-				"/debug/pprof/heap" => handle_jemalloc_pprof_heapgen(req).await,
-				"/quitquitquit" => Ok(
-					handle_server_shutdown(
-						state.shutdown_trigger.clone(),
-						req,
-						state.config.termination_min_deadline,
-					)
-					.await,
-				),
-				"/debug/tasks" => handle_tokio_tasks(req, &state.dataplane_handle).await,
-				"/config_dump" => {
-					handle_config_dump(
-						&state.config_dump_handlers,
-						ConfigDump {
-							stores: state.stores.clone(),
-							version: BuildInfo::new(),
-							config: state.config.clone(),
-						},
-					)
-					.await
-				},
-				"/logging" => Ok(handle_logging(req).await),
-				_ => {
-					if let Some(h) = &state.admin_fallback {
-						Ok(h.handle(req).await)
-					} else if req.uri().path() == "/" {
-						Ok(handle_dashboard(req).await)
-					} else {
-						Ok(empty_response(hyper::StatusCode::NOT_FOUND))
-					}
-				},
+		let router = Arc::new(OnceLock::new());
+		self.s.spawn(move |state, req| {
+			let router = router.clone();
+			async move {
+				let router = router.get_or_init(|| admin_router(state)).clone();
+				Ok(router.oneshot(req).await.unwrap())
 			}
 		})
 	}
 }
 
-async fn handle_dashboard(_req: Request<Incoming>) -> Response {
+fn admin_router(state: Arc<AdminState>) -> Router {
+	let router = Router::new();
+	#[cfg(target_os = "linux")]
+	let router = router.route("/debug/pprof/profile", get(handle_pprof));
+	let router = router
+		.route("/debug/pprof/heap", get(handle_heap_pprof))
+		.route("/memory", get(handle_memory))
+		.route("/quitquitquit", post(handle_server_shutdown))
+		.route("/debug/tasks", get(handle_tokio_tasks))
+		.route("/debug/trace", post(handle_debug_trace))
+		.route("/config_dump", get(handle_config_dump))
+		.route("/logging", post(handle_logging))
+		.with_state(state.clone());
+
+	#[cfg(feature = "ui")]
+	let router = router.merge(crate::ui::router(
+		state.config.clone(),
+		state.model_catalog.clone(),
+	));
+	#[cfg(not(feature = "ui"))]
+	let router = router.route("/", get(handle_dashboard));
+
+	router.layer(add_cors_layer())
+}
+
+fn add_cors_layer() -> CorsLayer {
+	CorsLayer::new()
+		.allow_origin(
+			[
+				"http://0.0.0.0:3000",
+				"http://localhost:3000",
+				"http://127.0.0.1:3000",
+				"http://0.0.0.0:19000",
+				"http://127.0.0.1:19000",
+				"http://localhost:19000",
+			]
+			.map(|origin| origin.parse::<HeaderValue>().unwrap()),
+		)
+		.allow_headers([
+			CONTENT_TYPE,
+			AUTHORIZATION,
+			HeaderName::from_static("x-requested-with"),
+		])
+		.allow_methods([
+			Method::GET,
+			Method::POST,
+			Method::PUT,
+			Method::DELETE,
+			Method::OPTIONS,
+		])
+		.allow_credentials(true)
+		.expose_headers([CONTENT_TYPE, CONTENT_LENGTH])
+		.max_age(Duration::from_secs(3600))
+}
+
+#[cfg(not(feature = "ui"))]
+async fn handle_dashboard(_req: Request) -> Response {
 	let apis = &[
 		(
 			"debug/pprof/profile",
@@ -174,8 +217,9 @@ async fn handle_dashboard(_req: Request<Incoming>) -> Response {
 		),
 		(
 			"debug/pprof/heap",
-			"collect heap profiling data (if supported, requires jmalloc)",
+			"collect heap profiling data (if supported)",
 		),
+		("memory", "dump allocator and process memory statistics"),
 		("quitquitquit", "shut down the server"),
 		("config_dump", "dump the current agentgateway configuration"),
 		("logging", "query/changing logging levels"),
@@ -205,7 +249,7 @@ async fn handle_dashboard(_req: Request<Incoming>) -> Response {
 }
 
 #[cfg(target_os = "linux")]
-async fn handle_pprof(req: Request<Incoming>) -> anyhow::Result<Response> {
+async fn handle_pprof(req: Request) -> Result<Response, AdminError> {
 	use pprof::protos::Message;
 
 	// Parse query parameters to extract optional "seconds" parameter
@@ -248,24 +292,77 @@ async fn handle_pprof(req: Request<Incoming>) -> anyhow::Result<Response> {
 	)
 }
 
-async fn handle_server_shutdown(
-	shutdown_trigger: signal::ShutdownTrigger,
-	_req: Request<Incoming>,
-	self_term_wait: Duration,
-) -> Response {
-	match *_req.method() {
-		hyper::Method::POST => {
-			match time::timeout(self_term_wait, shutdown_trigger.shutdown_now()).await {
-				Ok(()) => info!("Shutdown completed gracefully"),
-				Err(_) => warn!(
-					"Graceful shutdown did not complete in {:?}, terminating now",
-					self_term_wait
-				),
-			}
-			plaintext_response(hyper::StatusCode::OK, "shutdown now\n".into())
-		},
-		_ => empty_response(hyper::StatusCode::METHOD_NOT_ALLOWED),
+async fn handle_server_shutdown(AxumState(state): AxumState<Arc<AdminState>>) -> Response {
+	match time::timeout(
+		state.config.termination_min_deadline,
+		state.shutdown_trigger.clone().shutdown_now(),
+	)
+	.await
+	{
+		Ok(()) => info!("Shutdown completed gracefully"),
+		Err(_) => warn!(
+			"Graceful shutdown did not complete in {:?}, terminating now",
+			state.config.termination_min_deadline
+		),
 	}
+	plaintext_response(hyper::StatusCode::OK, "shutdown now\n".into())
+}
+
+pub async fn handle_debug_trace(req: Request) -> Response {
+	let expression = req.uri().query().and_then(|query| {
+		url::form_urlencoded::parse(query.as_bytes())
+			.find(|(key, _)| key == "expression")
+			.map(|(_, value)| value.into_owned())
+	});
+	let expression = match expression {
+		Some(expression) => match crate::cel::Expression::new_strict(&expression) {
+			Ok(expression) => Some(expression),
+			Err(err) => {
+				return plaintext_response(
+					hyper::StatusCode::BAD_REQUEST,
+					format!("invalid expression: {err}\n"),
+				);
+			},
+		},
+		None => None,
+	};
+	let rx = crate::proxy::dtrace::track_expression(expression);
+	let sse_stream = trace_sse_stream(rx);
+	::http::Response::builder()
+		.status(hyper::StatusCode::OK)
+		.header("Content-Type", "text/event-stream")
+		.header("Cache-Control", "no-cache")
+		.body(crate::http::Body::from_stream(sse_stream))
+		.expect("builder with known status code should not fail")
+}
+
+fn trace_sse_stream(
+	rx: crate::proxy::dtrace::TraceReceiver,
+) -> impl futures_util::Stream<Item = Result<Bytes, Infallible>> {
+	let keepalive = time::interval_at(
+		time::Instant::now() + Duration::from_secs(1),
+		Duration::from_secs(1),
+	);
+	let events =
+		futures_util::stream::unfold((rx, keepalive), |(mut rx, mut keepalive)| async move {
+			tokio::select! {
+				msg = rx.next() => {
+					let msg = msg?;
+					let payload = serde_json::to_string(&msg).unwrap_or_else(|e| {
+						serde_json::json!({
+							"type": "serialization_error",
+							"error": e.to_string(),
+						})
+						.to_string()
+					});
+					Some((Ok(Bytes::from(format!("data: {payload}\n\n"))), (rx, keepalive)))
+				},
+				_ = keepalive.tick() => {
+					Some((Ok(Bytes::from_static(b": keepalive\n\n")), (rx, keepalive)))
+				},
+			}
+		});
+	futures_util::stream::once(async { Ok(Bytes::from_static(b": ready\n\n")) }).chain(events)
 }
 
 #[cfg(target_os = "linux")]
@@ -277,9 +374,9 @@ struct TaskDump {
 
 #[cfg(target_os = "linux")]
 async fn handle_tokio_tasks(
-	_req: Request<Incoming>,
-	dataplane_handle: &Handle,
-) -> anyhow::Result<Response> {
+	AxumState(state): AxumState<Arc<AdminState>>,
+	_req: Request,
+) -> Result<Response, AdminError> {
 	let mut task_dump = TaskDump {
 		admin: Vec::new(),
 		workload: Vec::new(),
@@ -297,7 +394,9 @@ async fn handle_tokio_tasks(
 			.push("failed to dump admin workload tasks".to_string());
 	}
 
-	if let Ok(dump) = tokio::time::timeout(Duration::from_secs(10), dataplane_handle.dump()).await {
+	if let Ok(dump) =
+		tokio::time::timeout(Duration::from_secs(10), state.dataplane_handle.dump()).await
+	{
 		for task in dump.tasks().iter() {
 			let trace = task.trace();
 			task_dump.workload.push(trace.to_string());
@@ -321,9 +420,9 @@ async fn handle_tokio_tasks(
 
 #[cfg(not(target_os = "linux"))]
 async fn handle_tokio_tasks(
-	_req: Request<Incoming>,
-	_dataplane_handle: &Handle,
-) -> anyhow::Result<Response> {
+	AxumState(_state): AxumState<Arc<AdminState>>,
+	_req: Request,
+) -> Result<Response, AdminError> {
 	Ok(
 		::http::Response::builder()
 			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
@@ -333,14 +432,20 @@ async fn handle_tokio_tasks(
 }
 
 async fn handle_config_dump(
-	handlers: &[Arc<dyn ConfigDumpHandler>],
-	dump: ConfigDump,
-) -> anyhow::Result<Response> {
+	AxumState(state): AxumState<Arc<AdminState>>,
+) -> Result<Response, AdminError> {
+	let dump = ConfigDump {
+		stores: state.stores.clone(),
+		version: BuildInfo::new(),
+		config: state.config.clone(),
+	};
 	let serde_json::Value::Object(mut kv) = serde_json::to_value(&dump)? else {
-		anyhow::bail!("config dump is not a key-value pair")
+		return Err(AdminError(anyhow::anyhow!(
+			"config dump is not a key-value pair"
+		)));
 	};
 
-	for h in handlers {
+	for h in &state.config_dump_handlers {
 		let x = h.handle()?;
 		kv.insert(h.key().to_string(), x);
 	}
@@ -365,30 +470,22 @@ usage: POST /logging?level={mod1}:{level1},{mod2}:{level2}\t(To change specific 
 hint: loglevel:\terror|warn|info|debug|trace|off
 hint: mod_name:\tthe module name, i.e. ztunnel::agentgateway
 ";
-async fn handle_logging(req: Request<Incoming>) -> Response {
-	match *req.method() {
-		hyper::Method::POST => {
-			let qp: HashMap<String, String> = req
-				.uri()
-				.query()
-				.map(|v| {
-					url::form_urlencoded::parse(v.as_bytes())
-						.into_owned()
-						.collect()
-				})
-				.unwrap_or_default();
-			let level = qp.get("level").cloned();
-			let reset = qp.get("reset").cloned();
-			if level.is_some() || reset.is_some() {
-				change_log_level(reset.is_some(), &level.unwrap_or_default())
-			} else {
-				list_loggers()
-			}
-		},
-		_ => plaintext_response(
-			hyper::StatusCode::METHOD_NOT_ALLOWED,
-			format!("Invalid HTTP method\n {HELP_STRING}"),
-		),
+async fn handle_logging(req: Request) -> Response {
+	let qp: HashMap<String, String> = req
+		.uri()
+		.query()
+		.map(|v| {
+			url::form_urlencoded::parse(v.as_bytes())
+				.into_owned()
+				.collect()
+		})
+		.unwrap_or_default();
+	let level = qp.get("level").cloned();
+	let reset = qp.get("reset").cloned();
+	if level.is_some() || reset.is_some() {
+		change_log_level(reset.is_some(), &level.unwrap_or_default())
+	} else {
+		list_loggers()
 	}
 }
 
@@ -444,26 +541,8 @@ fn change_log_level(reset: bool, level: &str) -> Response {
 	}
 }
 
-#[cfg(all(feature = "jemalloc", target_os = "linux"))]
-async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Result<Response> {
-	let Some(prof_ctrl) = jemalloc_pprof::PROF_CTL.as_ref() else {
-		return Ok(
-			::http::Response::builder()
-				.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-				.body("jemalloc profiling is not enabled".into())
-				.expect("builder with known status code should not fail"),
-		);
-	};
-	let mut prof_ctl = prof_ctrl.lock().await;
-	if !prof_ctl.activated() {
-		return Ok(
-			::http::Response::builder()
-				.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-				.body("jemalloc not enabled".into())
-				.expect("builder with known status code should not fail"),
-		);
-	}
-	let pprof = prof_ctl.dump_pprof()?;
+async fn handle_heap_pprof() -> Result<Response, AdminError> {
+	let pprof = pprof_alloc::generate_pprof()?;
 	Ok(
 		::http::Response::builder()
 			.status(hyper::StatusCode::OK)
@@ -472,12 +551,14 @@ async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Resul
 	)
 }
 
-#[cfg(all(not(feature = "jemalloc"), target_os = "linux"))]
-async fn handle_jemalloc_pprof_heapgen(_req: Request<Incoming>) -> anyhow::Result<Response> {
+async fn handle_memory() -> Result<Response, AdminError> {
+	let snap = pprof_alloc::snapshot();
+	let body = serde_json::to_string_pretty(&snap)?;
 	Ok(
 		::http::Response::builder()
-			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-			.body("jemalloc not enabled".into())
+			.status(hyper::StatusCode::OK)
+			.header(hyper::header::CONTENT_TYPE, "application/json")
+			.body(body.into())
 			.expect("builder with known status code should not fail"),
 	)
 }

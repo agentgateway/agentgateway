@@ -11,8 +11,10 @@ mod worker;
 
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Write as FmtWrite};
+use std::future::Future;
 use std::str::FromStr;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 use std::{env, fmt, io};
 
@@ -21,6 +23,7 @@ use nonblocking::NonBlocking;
 use once_cell::sync::{Lazy, OnceCell};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
+use serde_json::value::RawValue;
 use thiserror::Error;
 use tracing::{Event, Subscriber, field, info, warn};
 use tracing_core::Field;
@@ -40,6 +43,55 @@ pub static APPLICATION_START_TIME: Lazy<Instant> = Lazy::new(Instant::now);
 static LOG_HANDLE: OnceCell<LogHandle> = OnceCell::new();
 static DEFAULT_LEVEL: OnceCell<String> = OnceCell::new();
 static NON_BLOCKING: OnceCell<(NonBlocking, bool)> = OnceCell::new();
+static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+
+tokio::task_local! {
+	static CONNECTION_ID: u64;
+	static REQUEST_ID: u64;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct TaskLocalIds {
+	connection_id: Option<u64>,
+	request_id: Option<u64>,
+}
+
+pub fn connection_scope<F>(future: F) -> impl Future<Output = F::Output>
+where
+	F: Future,
+{
+	connection_scope_with(NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed), future)
+}
+
+pub fn connection_scope_with<F>(id: u64, future: F) -> impl Future<Output = F::Output>
+where
+	F: Future,
+{
+	CONNECTION_ID.scope(id, future)
+}
+
+pub fn request_scope<F>(future: F) -> impl Future<Output = F::Output>
+where
+	F: Future,
+{
+	REQUEST_ID.scope(NEXT_REQUEST_ID.fetch_add(1, Ordering::Relaxed), future)
+}
+
+pub fn current_connection_id() -> Option<u64> {
+	CONNECTION_ID.try_with(|id| *id).ok()
+}
+
+pub fn current_request_id() -> Option<u64> {
+	REQUEST_ID.try_with(|id| *id).ok()
+}
+
+fn current_task_local_ids() -> TaskLocalIds {
+	TaskLocalIds {
+		connection_id: current_connection_id(),
+		request_id: current_request_id(),
+	}
+}
 
 pub trait OtelLogSink: Send + Sync {
 	fn emit<'v>(&self, level: &str, target: &str, kv: &[(&str, Option<ValueBag<'v>>)]);
@@ -142,20 +194,7 @@ pub fn log(level: &str, target: &str, kv: &[(&str, Option<ValueBag>)]) {
 		};
 
 		if *json {
-			let mut sx = serde_json::Serializer::new(StringWriteAdaptor::new(buf));
-			let mut s = sx.serialize_map(Some(kv.len() + 3))?;
-			s.serialize_entry("level", level)?;
-			s.serialize_entry("time", &date::build())?;
-			s.serialize_entry("scope", target)?;
-			for (k, v) in kv {
-				match v {
-					None => {},
-					Some(i) => {
-						s.serialize_entry(k, i)?;
-					},
-				}
-			}
-			s.end()?;
+			write_json_log(buf, level, target, kv)?;
 		} else {
 			date::write(buf);
 			write!(buf, "\t{level}\t{target}")?;
@@ -178,6 +217,47 @@ pub fn log(level: &str, target: &str, kv: &[(&str, Option<ValueBag>)]) {
 	if let Some(sink) = OTEL_LOG_SINK.get() {
 		sink.emit(level, target, kv);
 	}
+}
+
+fn write_json_log(
+	buf: &mut String,
+	level: &str,
+	target: &str,
+	kv: &[(&str, Option<ValueBag>)],
+) -> anyhow::Result<()> {
+	let mut sx = serde_json::Serializer::new(StringWriteAdaptor::new(buf));
+	let mut s = sx.serialize_map(Some(kv.len() + 3))?;
+	s.serialize_entry("level", level)?;
+	s.serialize_entry("time", &date::build())?;
+	s.serialize_entry("scope", target)?;
+	for (k, v) in kv {
+		match v {
+			None => {},
+			Some(i) => {
+				s.serialize_key(k)?;
+				if i.to_i64().is_none()
+					&& i.to_u64().is_none()
+					&& let Some(f) = i.to_f64()
+					&& f.is_finite()
+					&& serde_json_float_uses_exponent(f)
+				{
+					let raw = RawValue::from_string(f.to_string())?;
+					s.serialize_value(&*raw)?;
+				} else {
+					s.serialize_value(i)?;
+				}
+			},
+		}
+	}
+	s.end()?;
+	Ok(())
+}
+
+fn serde_json_float_uses_exponent(value: f64) -> bool {
+	let abs = value.abs();
+	// serde_json delegates finite float formatting to zmij, which writes f64
+	// values in fixed notation only for decimal exponents in -5..=15.
+	abs != 0.0 && !(1e-5..1e16).contains(&abs)
 }
 
 pub fn setup_logging(default_level: &str, json: bool) -> nonblocking::WorkerGuard {
@@ -311,6 +391,7 @@ struct Visitor<'writer> {
 	res: std::fmt::Result,
 	is_empty: bool,
 	writer: Writer<'writer>,
+	task_local_ids: Option<TaskLocalIds>,
 }
 
 impl Visitor<'_> {
@@ -322,6 +403,19 @@ impl Visitor<'_> {
 			" "
 		};
 		write!(self.writer, "{padding}{value:?}")
+	}
+
+	fn write_task_local_ids(&mut self) -> std::fmt::Result {
+		let Some(ids) = self.task_local_ids.take() else {
+			return Ok(());
+		};
+		if let Some(id) = ids.connection_id {
+			self.write_padded(&format_args!("connection.id={id}"))?;
+		}
+		if let Some(id) = ids.request_id {
+			self.write_padded(&format_args!("request.id={id}"))?;
+		}
+		Ok(())
 	}
 }
 
@@ -339,9 +433,11 @@ impl field::Visit for Visitor<'_> {
 			// Skip fields that are actually log metadata that have already been handled
 			name if name.starts_with("log.") => Ok(()),
 			// For the message, write out the message and a tab to separate the future fields
-			"message" => write!(self.writer, "{val:?}\t"),
+			"message" => write!(self.writer, "{val:?}\t").and_then(|_| self.write_task_local_ids()),
 			// For the rest, k=v.
-			_ => self.write_padded(&format_args!("{}={:?}", field.name(), val)),
+			_ => self
+				.write_task_local_ids()
+				.and_then(|_| self.write_padded(&format_args!("{}={:?}", field.name(), val))),
 		}
 	}
 }
@@ -356,8 +452,10 @@ impl<'writer> FormatFields<'writer> for IstioFormat {
 			writer,
 			res: Ok(()),
 			is_empty: true,
+			task_local_ids: None,
 		};
 		fields.record(&mut visitor);
+		visitor.write_task_local_ids()?;
 		visitor.res
 	}
 }
@@ -386,6 +484,7 @@ where
 		// No need to prefix everything
 		let target = target.strip_prefix("agentgateway::").unwrap_or(target);
 		write!(writer, "{target}")?;
+		let task_local_ids = current_task_local_ids();
 
 		// Write out span fields. Istio logging outside of Rust doesn't really have this concept
 		if let Some(scope) = ctx.event_scope() {
@@ -399,12 +498,21 @@ where
 				}
 			}
 		};
-		// Insert tab only if there is fields
-		if event.fields().any(|_| true) {
+		let has_fields = event.fields().any(|_| true);
+		// Insert tab only if there are fields or formatter-level context.
+		if has_fields || task_local_ids.connection_id.is_some() || task_local_ids.request_id.is_some() {
 			write!(writer, "\t")?;
 		}
 
-		ctx.format_fields(writer.by_ref(), event)?;
+		let mut visitor = Visitor {
+			writer: writer.by_ref(),
+			res: Ok(()),
+			is_empty: true,
+			task_local_ids: Some(task_local_ids),
+		};
+		event.record(&mut visitor);
+		visitor.write_task_local_ids()?;
+		visitor.res?;
 
 		writeln!(writer)
 	}
@@ -531,6 +639,13 @@ where
 			serializer.serialize_entry("level", &meta.level().as_str().to_ascii_lowercase())?;
 			serializer.serialize_entry("time", &timestamp)?;
 			serializer.serialize_entry("scope", meta.target())?;
+			let task_local_ids = current_task_local_ids();
+			if let Some(id) = task_local_ids.connection_id {
+				serializer.serialize_entry("connection.id", &id)?;
+			}
+			if let Some(id) = task_local_ids.request_id {
+				serializer.serialize_entry("request.id", &id)?;
+			}
 			let mut v = JsonVisitory {
 				serializer,
 				state: Ok(()),
@@ -580,14 +695,15 @@ impl<'a> FormatFields<'a> for IstioJsonFormat {
 /// Mod testing gives access to a test logger, which stores logs in memory for querying.
 /// Inspired by https://github.com/dbrgn/tracing-test
 pub mod testing {
-	use once_cell::sync::Lazy;
-	use serde_json::Value;
 	use std::collections::HashMap;
 	use std::fmt::{Debug, Display, Formatter};
 	use std::io;
 	use std::io::IoSlice;
 	use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 	use std::time::Duration;
+
+	use once_cell::sync::Lazy;
+	use serde_json::Value;
 	use tracing_subscriber::fmt;
 	use tracing_subscriber::fmt::writer::Tee;
 	use tracing_subscriber::layer::SubscriberExt;
@@ -627,7 +743,7 @@ pub mod testing {
 	/// If not found, panics
 	pub async fn eventually_find(want: &[(&str, &str)]) -> Option<Value> {
 		crate::test_helpers::check_eventually(
-			Duration::from_secs(1),
+			Duration::from_secs(5),
 			|| async { find(want).into_iter().next() },
 			|log| log.is_some(),
 		)
@@ -758,5 +874,47 @@ pub mod testing {
 			.with(fmt_layer(non_blocking, "", true))
 			.with(layer)
 			.init();
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn json_log_writes_floats_without_exponents() {
+		let value = ValueBag::from_f64(1.2e41);
+		let kv = [("large_float", Some(value))];
+		let mut buf = String::new();
+
+		write_json_log(&mut buf, "info", "test", &kv).expect("log should serialize");
+
+		let value = json_field_value(&buf, "large_float");
+		assert!(!value.contains('e'));
+		assert!(!value.contains('E'));
+		assert!(!value.starts_with('"'));
+		let parsed: serde_json::Value = serde_json::from_str(&buf).expect("log must be valid json");
+		assert_eq!(parsed["large_float"].as_f64(), Some(1.2e41));
+	}
+
+	#[test]
+	fn json_log_uses_normal_float_path_without_exponents() {
+		let value = ValueBag::from_f64(123.456);
+		let kv = [("ordinary_float", Some(value))];
+		let mut buf = String::new();
+
+		write_json_log(&mut buf, "info", "test", &kv).expect("log should serialize");
+
+		assert_eq!(json_field_value(&buf, "ordinary_float"), "123.456");
+	}
+
+	fn json_field_value<'a>(json: &'a str, field: &str) -> &'a str {
+		let prefix = format!("\"{field}\":");
+		let start = json.find(&prefix).expect("field should be present") + prefix.len();
+		let end = json[start..]
+			.find([',', '}'])
+			.map(|idx| start + idx)
+			.expect("field should be followed by delimiter");
+		&json[start..end]
 	}
 }

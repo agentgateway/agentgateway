@@ -1,4 +1,0 @@
-controller:
-  xds:
-    tls:
-      enabled: true

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use agent_core::prelude::Strng;
 use axum::response::Response;
@@ -7,13 +7,11 @@ use axum::response::Response;
 use crate::http::authorization::RuleSets;
 use crate::http::sessionpersistence::Encoder;
 use crate::http::*;
-use crate::mcp::FailureMode;
-use crate::mcp::auth;
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
 use crate::mcp::sse::LegacySSEService;
 use crate::mcp::streamablehttp::{StreamableHttpServerConfig, StreamableHttpService};
-use crate::mcp::{MCPInfo, McpAuthorizationSet};
+use crate::mcp::{FailureMode, MCPInfo, McpAuthorizationSet, auth};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
 use crate::store::{BackendPolicies, Stores};
@@ -21,7 +19,7 @@ use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
 	BackendTargetRef, McpBackend, McpTargetSpec, ResourceName, SimpleBackend, SimpleBackendReference,
 };
-use crate::{ProxyInputs, mcp};
+use crate::{ProxyInputs, cel, mcp};
 
 #[derive(Debug, Clone)]
 pub struct App {
@@ -108,11 +106,12 @@ impl App {
 		};
 		let sessions = self.session.clone();
 		sessions.ensure_idle_running();
-		let client = PolicyClient { inputs: pi.clone() };
+		let client = PolicyClient::new(pi.clone());
 		let authorization_policies = backend_policies
 			.mcp_authorization
 			.unwrap_or_else(|| McpAuthorizationSet::new(RuleSets::from(Vec::new())));
 		let authn = backend_policies.mcp_authentication;
+		let mcp_guardrails = backend_policies.mcp_guardrails.clone();
 
 		// Store an empty value, we will populate each field async
 		let logy = log.mcp_status.clone();
@@ -128,6 +127,10 @@ impl App {
 		// MCP context is added later. The context is inserted after
 		// authentication so it can include verified claims
 
+		// Take a request snapshot before authentication can mutate or partially consume the
+		// request. If authentication lets the request continue, the normal snapshot below
+		// replaces this with the post-authentication request state.
+		Self::snapshot_request_without_clearing_extensions(&mut req, log);
 		if let Some(auth) = authn.as_ref()
 			&& let Some(resp) = auth::enforce_authentication(&mut req, auth, &client).await?
 		{
@@ -136,7 +139,12 @@ impl App {
 
 		// MCP requires CEL execution after the snapshot so we do not clear extensions
 		let req = req.take_and_snapshot_without_clearing_extensions(Some(&mut log))?;
-		if req.uri().path() == "/sse" {
+		if log.request_processing_duration.is_none() {
+			// This is a bit inaccurate but the best we can do for the MCP path without very invasive changes.
+			log.request_processing_duration = Some(log.request_processing_start.elapsed());
+		}
+		let upstream_start = Instant::now();
+		let mut response = if req.uri().path() == "/sse" {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise
 			let sse = LegacySSEService::new(sessions);
@@ -145,6 +153,7 @@ impl App {
 				RelayInputs {
 					backend: backends.clone(),
 					policies: authorization_policies.clone(),
+					mcp_guardrails: mcp_guardrails.clone(),
 					client: client.clone(),
 				},
 			))
@@ -161,11 +170,39 @@ impl App {
 				RelayInputs {
 					backend: backends.clone(),
 					policies: authorization_policies.clone(),
+					mcp_guardrails: mcp_guardrails.clone(),
 					client: client.clone(),
 				},
 			))
 			.await
+		};
+		let upstream_end = Instant::now();
+		// This aggregates the total time; no per-backend timings for fanout.
+		log.upstream_duration = Some(upstream_end - upstream_start);
+		if response.is_ok() {
+			log.response_processing_start = Some(upstream_end);
 		}
+		if let Ok(response) = response.as_mut() {
+			response
+				.extensions_mut()
+				.insert(cel::ProxyContext::from_std_durations(
+					log.request_processing_duration,
+					log.upstream_duration,
+					log.response_processing_duration,
+				));
+		}
+		response
+	}
+
+	fn snapshot_request_without_clearing_extensions(
+		req: &mut MustSnapshot<'_>,
+		log: &mut RequestLog,
+	) {
+		log.request_snapshot = log
+			.cel
+			.cel_context
+			.maybe_snapshot_request(req, false)
+			.map(Arc::new);
 	}
 }
 

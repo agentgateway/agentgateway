@@ -1,26 +1,27 @@
-use crate::Client;
-use crate::pool::{ExpectedCapacity, Key};
-use crate::rt::{TokioExecutor, TokioIo, TokioTimer};
-use bytes::Bytes;
-use http::{Request, Response, Uri, Version};
-use http_body_util::Empty;
-use hyper::body::{Frame, Incoming, SizeHint};
-use hyper::server::conn::http2;
-use hyper::service::service_fn;
 use std::collections::VecDeque;
 use std::convert::Infallible;
 use std::future::Future;
 use std::io;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
+
+use bytes::Bytes;
+use http::{Request, Response, Uri, Version};
+use http_body_util::Empty;
+use hyper::body::{Frame, Incoming, SizeHint};
+use hyper::server::conn::http2;
+use hyper::service::service_fn;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{oneshot, watch};
 use tower_service::Service;
+
+use crate::Client;
+use crate::pool::{ExpectedCapacity, Key};
+use crate::rt::{TokioExecutor, TokioIo, TokioTimer};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct TestKey {

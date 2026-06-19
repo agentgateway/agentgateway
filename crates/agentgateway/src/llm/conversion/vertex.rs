@@ -1,10 +1,80 @@
-use crate::llm::AIError;
-use crate::llm::types;
 use crate::llm::types::ResponseType;
+use crate::llm::{AIError, logged_response_parsing, types};
 
 #[cfg(test)]
 #[path = "vertex_tests.rs"]
 mod tests;
+
+pub mod from_rerank {
+	use super::*;
+
+	pub fn translate(
+		req: &types::rerank::Request,
+		_provider: &crate::llm::vertex::Provider,
+	) -> Result<Vec<u8>, AIError> {
+		if req.documents.is_empty() {
+			return Err(AIError::MissingField("rerank documents".into()));
+		}
+		let model = req.model.clone().unwrap_or_default();
+		let records = req
+			.documents
+			.iter()
+			.enumerate()
+			.map(|(idx, d)| types::vertex::RankRecord {
+				// Numeric id = original position, so the response can be inverted back to the index.
+				id: idx.to_string(),
+				content: d.as_text(),
+			})
+			.collect();
+		let vertex_req = types::vertex::RankRequest {
+			model,
+			query: req.query.clone(),
+			records,
+			top_n: req.top_n,
+			// Cohere `return_documents` -> Vertex inverse `ignoreRecordDetailsInResponse`.
+			ignore_record_details_in_response: !req.return_documents.unwrap_or(false),
+		};
+		serde_json::to_vec(&vertex_req).map_err(AIError::RequestMarshal)
+	}
+
+	/// Discovery Engine returns synthetic ids + scores in rank order; it does not echo document text.
+	pub fn translate_response(bytes: &[u8]) -> Result<Box<dyn ResponseType>, AIError> {
+		let resp: types::vertex::RankResponse =
+			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+		let results: Vec<types::rerank::RerankResult> = resp
+			.records
+			.into_iter()
+			.map(|r| {
+				// Invert the synthetic id back to the original document index; a wrong mapping here
+				// attaches scores to the wrong documents.
+				let index = r.id.parse::<u32>().map_err(|_| {
+					AIError::ResponseParsing(serde::de::Error::custom(format!(
+						"vertex rerank returned non-numeric record id: {}",
+						r.id
+					)))
+				})?;
+				Ok(types::rerank::RerankResult {
+					index,
+					// Vertex omits score when details are suppressed; default to 1.0.
+					relevance_score: r.score.unwrap_or(1.0),
+					document: None,
+				})
+			})
+			.collect::<Result<_, AIError>>()?;
+		let out = types::rerank::Response {
+			id: None,
+			results,
+			meta: None,
+			rest: serde_json::Value::Null,
+		};
+		Ok(Box::new(out))
+	}
+
+	pub fn translate_error(bytes: &bytes::Bytes) -> Result<bytes::Bytes, AIError> {
+		// Reuse the Google error normalizer used by completions.
+		crate::llm::conversion::completions::translate_google_error(bytes)
+	}
+}
 
 pub mod from_embeddings {
 	use super::*;
@@ -58,7 +128,7 @@ pub mod from_embeddings {
 
 	pub fn translate_response(bytes: &[u8], model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp: types::vertex::PredictResponse =
-			serde_json::from_slice(bytes).map_err(AIError::ResponseParsing)?;
+			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 
 		let mut total_prompt_tokens = 0;
 		let mut data = Vec::new();

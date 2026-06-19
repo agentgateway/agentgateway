@@ -1,12 +1,12 @@
 use std::time::Instant;
 
 use agent_core::strng;
+use bytes::Bytes;
 use tracing::debug;
 
 use crate::http::Response;
-use crate::llm::{AmendOnDrop, types};
+use crate::llm::{AmendOnDrop, logged_response_parsing, types};
 use crate::{llm, parse};
-use bytes::Bytes;
 
 /// Parse a Google error response, handling both single object and array-wrapped formats.
 /// Google's OpenAI-compatible endpoints consistently return `[{"error": {...}}]`
@@ -16,7 +16,7 @@ pub(crate) fn parse_google_error(
 ) -> Result<types::completions::typed::GoogleErrorResponse, llm::AIError> {
 	serde_json::from_slice::<types::completions::typed::GoogleErrorResponse>(bytes).or_else(|_| {
 		serde_json::from_slice::<Vec<types::completions::typed::GoogleErrorResponse>>(bytes)
-			.map_err(llm::AIError::ResponseParsing)?
+			.map_err(logged_response_parsing(bytes))?
 			.into_iter()
 			.next()
 			.ok_or_else(|| {
@@ -41,7 +41,7 @@ pub(crate) fn parse_chat_completion_error(
 	bytes: &Bytes,
 ) -> Result<types::completions::typed::ChatCompletionErrorResponse, llm::AIError> {
 	serde_json::from_slice::<types::completions::typed::ChatCompletionErrorResponse>(bytes)
-		.map_err(llm::AIError::ResponseParsing)
+		.map_err(logged_response_parsing(bytes))
 }
 
 /// Translate a Google error response into an OpenAI Chat Completions error response.
@@ -122,21 +122,20 @@ pub(crate) fn extract_system_text(
 
 pub mod from_messages {
 	use std::collections::{HashMap, HashSet};
+	use std::time::Instant;
 
+	use agent_core::strng;
+	use bytes::Bytes;
 	use itertools::Itertools;
 	use messages::{ToolResultContent, ToolResultContentPart};
+	use serde_json::Value;
 	use types::completions::typed as completions;
 	use types::messages::typed as messages;
 
 	use crate::json;
-	use crate::llm::{AIError, AmendOnDrop, types};
-
 	use crate::llm::types::ResponseType;
+	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::parse::sse::SseJsonEvent;
-	use agent_core::strng;
-	use bytes::Bytes;
-	use serde_json::Value;
-	use std::time::Instant;
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
@@ -146,8 +145,8 @@ pub mod from_messages {
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
-		let resp =
-			serde_json::from_slice::<completions::Response>(bytes).map_err(AIError::ResponseParsing)?;
+		let resp = serde_json::from_slice::<completions::Response>(bytes)
+			.map_err(logged_response_parsing(bytes))?;
 		let anthropic = translate_response_internal(resp)?;
 		Ok(Box::new(anthropic))
 	}
@@ -494,7 +493,7 @@ pub mod from_messages {
 					}
 
 					if let Some(choice) = f.choices.first() {
-						if let Some(content) = &choice.delta.content {
+						if let Some(content) = choice.delta.content.as_deref().filter(|s| !s.is_empty()) {
 							let index = open_text_block(&mut state, &mut events);
 							maybe_set_first_token(&mut state, &log);
 							push_event(
@@ -502,7 +501,7 @@ pub mod from_messages {
 								messages::MessagesStreamEvent::ContentBlockDelta {
 									index,
 									delta: messages::ContentBlockDelta::TextDelta {
-										text: content.clone(),
+										text: content.to_string(),
 									},
 								},
 							);
@@ -626,6 +625,19 @@ pub mod from_messages {
 		}
 	}
 
+	fn system_message_text(content: Vec<messages::ContentBlock>) -> Option<String> {
+		let text = content
+			.into_iter()
+			.filter_map(|block| match block {
+				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => Some(text),
+				_ => None,
+			})
+			.collect::<Vec<_>>()
+			.join("\n");
+
+		(!text.is_empty()).then_some(text)
+	}
+
 	#[allow(deprecated)]
 	fn translate_internal(req: messages::Request) -> completions::Request {
 		let messages::Request {
@@ -654,7 +666,9 @@ pub mod from_messages {
 				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
 				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
 				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
-				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Xhigh,
+				Some(messages::ThinkingEffort::Xhigh | messages::ThinkingEffort::Max) => {
+					completions::ReasoningEffort::Xhigh
+				},
 				// Anthropic adaptive thinking defaults to high effort when omitted.
 				None => completions::ReasoningEffort::High,
 			})
@@ -669,7 +683,7 @@ pub mod from_messages {
 					json_schema: completions::ResponseFormatJsonSchema {
 						description: None,
 						name: "structured_output".to_string(),
-						schema: Some(schema.clone()),
+						schema: schema.clone(),
 						strict: None,
 					},
 				},
@@ -814,6 +828,18 @@ pub mod from_messages {
 								refusal: None,
 								audio: None,
 								function_call: None,
+								reasoning_content: None,
+								reasoning_signature: None,
+							},
+						));
+					}
+				},
+				messages::Role::System => {
+					if let Some(text) = system_message_text(msg.content) {
+						msgs.push(completions::RequestMessage::System(
+							completions::RequestSystemMessage {
+								content: completions::RequestSystemMessageContent::Text(text),
+								name: None,
 							},
 						));
 					}
@@ -985,6 +1011,7 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.cached_tokens);
+								r.response.cache_creation_input_tokens = u.cache_creation_input_tokens;
 								r.response.reasoning_tokens = u
 									.completion_tokens_details
 									.as_ref()

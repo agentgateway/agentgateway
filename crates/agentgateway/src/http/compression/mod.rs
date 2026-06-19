@@ -238,10 +238,11 @@ fn is_length_limit_error(err: &axum_core::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::http::Body;
 	use headers::HeaderMapExt;
 	use http_body_util::BodyExt;
+
+	use super::*;
+	use crate::http::Body;
 
 	#[tokio::test]
 	async fn test_decompress_unsupported() {

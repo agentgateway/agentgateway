@@ -1,13 +1,18 @@
+pub(crate) mod dtrace;
 mod gateway;
 pub mod httpproxy;
 pub mod proxy_protocol;
 pub mod request_builder;
 pub mod tcpproxy;
 
+use std::sync::Arc;
+
 use agent_pool::Error as HyperError;
 pub use gateway::Gateway;
+use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rmcp::ErrorData;
 use rmcp::model::{ErrorCode, JsonRpcError};
+use tonic::Code;
 
 use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
 use crate::types::agent::{
@@ -16,6 +21,11 @@ use crate::types::agent::{
 };
 use crate::types::discovery::Service;
 use crate::*;
+
+// grpc-message is percent-encoded. At minimum, space, percent, and control
+// bytes must be escaped.
+// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#responses
+const GRPC_MESSAGE_ENCODE_SET: &AsciiSet = &CONTROLS.add(b' ').add(b'%');
 
 #[derive(thiserror::Error, Debug)]
 pub enum ProxyResponse {
@@ -43,6 +53,7 @@ impl ProxyResponse {
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
 			| ProxyError::InvalidRequest
+			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
 			| ProxyError::RouteCycleDetected
@@ -199,6 +210,8 @@ pub enum ProxyError {
 	RateLimitFailed,
 	#[error("invalid request")]
 	InvalidRequest,
+	#[error("method not allowed")]
+	MethodNotAllowed,
 	#[error("request upgrade failed, backend tried {1:?} but {0:?} was requested")]
 	UpgradeFailed(Option<HeaderValue>, Option<HeaderValue>),
 	#[error("mcp: {0}")]
@@ -210,12 +223,12 @@ impl ProxyError {
 	pub fn is_retryable(&self) -> bool {
 		match self {
 			ProxyError::UpstreamCallFailed(_) => true,
-			ProxyError::RequestTimeout => true,
+			ProxyError::UpstreamCallTimeout => true,
 			ProxyError::DnsResolution => true,
 			_ => false,
 		}
 	}
-	pub fn into_response(self) -> Response {
+	pub fn into_response_with_grpc(self, is_grpc_request: bool) -> Response {
 		let msg = self.to_string();
 		let code = match self {
 			ProxyError::BindNotFound => StatusCode::NOT_FOUND,
@@ -237,6 +250,7 @@ impl ProxyError {
 			// Should it be 4xx?
 			ProxyError::FilterError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
+			ProxyError::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::OidcFailure(ref error) => match error {
@@ -288,10 +302,11 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::Deserialize(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::StartSession(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::UnknownSession) => StatusCode::NOT_FOUND,
-			ProxyError::MCP(mcp::Error::MissingSessionHeader) => StatusCode::UNPROCESSABLE_ENTITY,
-			ProxyError::MCP(mcp::Error::SessionIdRequired) => StatusCode::UNPROCESSABLE_ENTITY,
+			ProxyError::MCP(mcp::Error::MissingSessionHeader) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::SessionIdRequired) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::InvalidSessionIdQuery) => StatusCode::UNPROCESSABLE_ENTITY,
 			ProxyError::MCP(mcp::Error::InvalidSessionIdHeader) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::InvalidProtocolVersion) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::CreateSseUrl(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::EstablishGetStream(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::ForwardLegacySse(_)) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -302,7 +317,9 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::BAD_REQUEST,
 		};
+		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
 		let mut rb = ::http::Response::builder().status(code);
 
 		// Apply per-error headers
@@ -333,6 +350,19 @@ impl ProxyError {
 			if let Ok(hv) = HeaderValue::try_from(auth_header) {
 				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
 			}
+		}
+
+		if let Some(grpc_status) = grpc_status {
+			return rb
+				.status(StatusCode::OK)
+				.header(hyper::header::CONTENT_TYPE, "application/grpc")
+				.header("grpc-status", i32::from(grpc_status).to_string())
+				.header(
+					"grpc-message",
+					utf8_percent_encode(&msg, GRPC_MESSAGE_ENCODE_SET).to_string(),
+				)
+				.body(http::Body::empty())
+				.unwrap();
 		}
 
 		// Add WWW-Authenticate header for MCP failures
@@ -384,10 +414,49 @@ impl ProxyError {
 				.body(http::Body::from(msg))
 				.unwrap();
 		}
+		if let ProxyError::MCP(mcp::Error::McpGuardrails(req_id, rej)) = self {
+			let msg = serde_json::to_string(&JsonRpcError {
+				jsonrpc: Default::default(),
+				id: req_id.clone(),
+				error: rej.clone(),
+			})
+			.unwrap_or_default();
+			return rb
+				.header("content-type", "application/json")
+				.body(http::Body::from(msg))
+				.unwrap();
+		}
 
 		rb.header(hyper::header::CONTENT_TYPE, "text/plain")
 			.body(http::Body::from(msg))
 			.unwrap()
+	}
+}
+
+fn proxy_error_to_grpc_status(error: &ProxyError, http_status: StatusCode) -> Code {
+	match error {
+		// Gateway API requires invalid backend references to be HTTP 500 for HTTP
+		// requests, but gRPC callers should see the backend as unavailable.
+		ProxyError::NoValidBackends => Code::Unavailable,
+		_ => http_status_to_grpc_status(http_status),
+	}
+}
+
+fn http_status_to_grpc_status(status: StatusCode) -> Code {
+	// Keep in sync with the gRPC HTTP-to-status fallback table:
+	// https://grpc.github.io/grpc/core/md_doc_http-grpc-status-mapping.html
+	match status {
+		StatusCode::OK => Code::Ok,
+		StatusCode::BAD_REQUEST => Code::Internal,
+		StatusCode::UNAUTHORIZED => Code::Unauthenticated,
+		StatusCode::FORBIDDEN => Code::PermissionDenied,
+		// HTTP 404 maps to UNIMPLEMENTED, not gRPC NOT_FOUND.
+		StatusCode::NOT_FOUND => Code::Unimplemented,
+		StatusCode::TOO_MANY_REQUESTS
+		| StatusCode::BAD_GATEWAY
+		| StatusCode::SERVICE_UNAVAILABLE
+		| StatusCode::GATEWAY_TIMEOUT => Code::Unavailable,
+		_ => Code::Unknown,
 	}
 }
 
@@ -409,6 +478,7 @@ impl WaypointService {
 		})
 	}
 }
+
 pub fn resolve_backend(
 	b: &BackendReference,
 	pi: &ProxyInputs,
@@ -481,4 +551,69 @@ pub fn resolve_simple_backend_with_policies(
 		backend,
 		inline_policies,
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn grpc_error_response_maps_http_status_to_grpc_status() {
+		let response = ProxyError::NoHealthyEndpoints.into_response_with_grpc(true);
+
+		assert_eq!(response.status(), StatusCode::OK);
+		assert_eq!(
+			response.headers().get(hyper::header::CONTENT_TYPE).unwrap(),
+			"application/grpc"
+		);
+		assert_eq!(
+			response.headers().get("grpc-status").unwrap(),
+			&i32::from(Code::Unavailable).to_string()
+		);
+		assert_eq!(
+			response.headers().get("grpc-message").unwrap(),
+			"no%20healthy%20backends"
+		);
+	}
+
+	#[test]
+	fn http_error_response_keeps_http_status() {
+		let response = ProxyError::NoHealthyEndpoints.into_response_with_grpc(false);
+
+		assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+		assert_eq!(
+			response.headers().get(hyper::header::CONTENT_TYPE).unwrap(),
+			"text/plain"
+		);
+		assert!(response.headers().get("grpc-status").is_none());
+	}
+
+	#[test]
+	fn grpc_error_response_uses_standard_fallback_mapping() {
+		let not_found = ProxyError::RouteNotFound.into_response_with_grpc(true);
+		let forbidden = ProxyError::AuthorizationFailed.into_response_with_grpc(true);
+
+		assert_eq!(
+			not_found.headers().get("grpc-status").unwrap(),
+			&i32::from(Code::Unimplemented).to_string()
+		);
+		assert_eq!(
+			forbidden.headers().get("grpc-status").unwrap(),
+			&i32::from(Code::PermissionDenied).to_string()
+		);
+	}
+
+	#[test]
+	fn no_valid_backends_is_http_500_but_grpc_unavailable() {
+		let http = ProxyError::NoValidBackends.into_response_with_grpc(false);
+		let grpc = ProxyError::NoValidBackends.into_response_with_grpc(true);
+
+		assert_eq!(http.status(), StatusCode::INTERNAL_SERVER_ERROR);
+		assert!(http.headers().get("grpc-status").is_none());
+		assert_eq!(grpc.status(), StatusCode::OK);
+		assert_eq!(
+			grpc.headers().get("grpc-status").unwrap(),
+			&i32::from(Code::Unavailable).to_string()
+		);
+	}
 }

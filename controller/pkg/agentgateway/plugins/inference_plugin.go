@@ -34,8 +34,8 @@ func NewInferencePlugin(agw *AgwCollections) AgwPlugin {
 				Build: func(input PolicyPluginInput) (krt.StatusCollection[controllers.Object, any], krt.Collection[AgwPolicy]) {
 					status, policyCol := krt.NewStatusManyCollection(agw.InferencePools, func(krtctx krt.HandlerContext, infPool *inf.InferencePool) (*inf.InferencePoolStatus, []AgwPolicy) {
 						return translatePoliciesForInferencePool(krtctx, agw.ControllerName, input.References, agw.Services, infPool)
-					}, agw.KrtOpts.ToOptions("agentgateway/InferencePools")...)
-					return ConvertStatusCollection(status), policyCol
+					}, agw.KrtOpts.ToOptions("policies/InferencePool")...)
+					return ConvertStatusCollection(status, agw.KrtOpts.ToOptions, "policies/InferencePool"), policyCol
 				},
 			},
 		},
@@ -59,8 +59,22 @@ func translatePoliciesForInferencePool(
 
 	// 'service/{namespace}/{hostname}:{port}'
 	hostname := kubeutils.GetInferenceServiceHostname(pool.Name, pool.Namespace)
-	eppPort := epr.Port.Number
-	eppSvc := kubeutils.GetServiceHostname(string(epr.Name), pool.Namespace)
+	eppPort := int32(0)
+	eppSvc := ""
+	endpointPicker := &api.BackendReference{}
+	if validationErr == nil {
+		eppPort = int32(epr.Port.Number)
+		eppSvc = kubeutils.GetServiceHostname(string(epr.Name), pool.Namespace)
+		endpointPicker = &api.BackendReference{
+			Kind: &api.BackendReference_Service_{
+				Service: &api.BackendReference_Service{
+					Hostname:  eppSvc,
+					Namespace: pool.Namespace,
+				},
+			},
+			Port: uint32(eppPort), //nolint:gosec // G115: eppPort is derived from validated port numbers
+		}
+	}
 
 	failureMode := api.BackendPolicySpec_InferenceRouting_FAIL_CLOSED
 	if epr.FailureMode == inf.EndpointPickerFailOpen {
@@ -76,16 +90,8 @@ func translatePoliciesForInferencePool(
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_InferenceRouting_{
 					InferenceRouting: &api.BackendPolicySpec_InferenceRouting{
-						EndpointPicker: &api.BackendReference{
-							Kind: &api.BackendReference_Service_{
-								Service: &api.BackendReference_Service{
-									Hostname:  eppSvc,
-									Namespace: pool.Namespace,
-								},
-							},
-							Port: uint32(eppPort), //nolint:gosec // G115: eppPort is derived from validated port numbers
-						},
-						FailureMode: failureMode,
+						EndpointPicker: endpointPicker,
+						FailureMode:    failureMode,
 					},
 				},
 			},
@@ -97,12 +103,20 @@ func translatePoliciesForInferencePool(
 	}
 	infPolicies = appendPolicyForGateways(infPolicies, gatewayTargets, inferencePolicy)
 
+	if validationErr != nil {
+		logger.Debug("generated invalid inference pool policy",
+			"pool", pool.Name,
+			"namespace", pool.Namespace,
+			"inference_policy", inferencePolicy.Name)
+		return status, infPolicies
+	}
+
 	// Create the TLS policy for the endpoint picker
 	// TODO: we would want some way if they explicitly set a BackendTLSPolicy for the EPP to respect that
 	inferencePolicyTLS := &api.Policy{
 		Key:    pool.Namespace + "/" + pool.Name + ":inferencetls",
 		Name:   TypedResourceName(wellknown.InferencePoolGVK.Kind, pool),
-		Target: &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, eppSvc, ptr.Of(strconv.Itoa(int(eppPort))))},
+		Target: &api.PolicyTarget{Kind: utils.ServiceTargetWithHostname(pool.Namespace, eppSvc, new(strconv.Itoa(int(eppPort))))},
 		Kind: &api.Policy_Backend{
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTls{
@@ -277,24 +291,24 @@ func desiredInferencePoolParentRefs(attachedGateways map[types.NamespacedName]st
 	return refs
 }
 
-func inferencePoolConditionMap(controllerName string, validationErr error) map[string]*condition {
+func inferencePoolConditionMap(controllerName string, validationErr error) map[string]*Condition {
 	msg := "InferencePool has been accepted"
 	if controllerName != "" {
 		msg = fmt.Sprintf("InferencePool has been accepted by controller %s", controllerName)
 	}
 
-	conds := map[string]*condition{
+	conds := map[string]*Condition{
 		string(inf.InferencePoolConditionAccepted): {
-			reason:  string(inf.InferencePoolReasonAccepted),
-			message: msg,
+			Reason:  string(inf.InferencePoolReasonAccepted),
+			Message: msg,
 		},
 		string(inf.InferencePoolConditionResolvedRefs): {
-			reason:  string(inf.InferencePoolReasonResolvedRefs),
-			message: "All InferencePool references have been resolved",
+			Reason:  string(inf.InferencePoolReasonResolvedRefs),
+			Message: "All InferencePool references have been resolved",
 		},
 	}
 	if validationErr != nil {
-		conds[string(inf.InferencePoolConditionResolvedRefs)].error = &ConfigError{
+		conds[string(inf.InferencePoolConditionResolvedRefs)].Error = &ConfigError{
 			Reason:  string(inf.InferencePoolReasonInvalidExtensionRef),
 			Message: "error: " + validationErr.Error(),
 		}
