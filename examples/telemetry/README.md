@@ -50,7 +50,7 @@ agentgateway_requests_total{gateway="bind/3000",method="DELETE",status="202"} 2
 
 The metrics can be retrived in either text format or protobuf, controlled via the `Accept` header on the request. Specifying multiple formats with a quality parameter will cause the gateway to choose the best match of highest quality (standard accept header behaviour).
 
-If you use protobuf, the returned data is of `io.prometheus.client.MetricsSet`, not customisable via the `proto=<type>` accept header parameter. Ideally, this should be deserialised using the offical [OpenMetrics protobuf definition](https://github.com/prometheus/OpenMetrics/blob/main/proto/openmetrics_data_model.proto).
+If you use protobuf, the returned data is of `io.prometheus.client.MetricsSet`, not customisable via the `proto=<type>` accept header parameter. Ideally, this should be deserialised using the offical [Prometheus protobuf definition](https://github.com/prometheus/client_rust/blob/master/src/encoding/proto/metrics.proto)
 
 For text format use `Accept: text/plain`.
 
