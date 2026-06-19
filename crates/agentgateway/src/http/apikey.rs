@@ -3,6 +3,7 @@ use std::hash::Hash;
 use ::cel::Value;
 use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
+use sha2::{Digest, Sha256};
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
@@ -15,6 +16,16 @@ use crate::*;
 mod tests;
 
 const TRACE_POLICY_KIND: &str = "api_key";
+
+/// SHA-256 digest format must stay byte-identical to the `sha256.encode` CEL function
+/// (lowercase hex) so digests are interchangeable between the native field and the
+/// `location.expression` workaround.
+const SHA256_PREFIX: &str = "sha256:";
+
+/// bcrypt entries are verified by a linear scan running the intentionally-slow bcrypt
+/// KDF (each digest embeds its own salt, so no O(1) lookup is possible). Past this count,
+/// per-request latency degrades; sha256/plaintext entries are unaffected.
+const MAX_BCRYPT_ENTRIES: usize = 100;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -88,11 +99,51 @@ impl PartialEq for APIKey {
 
 impl Eq for APIKey {}
 
+fn sha256_hex(raw: &str) -> String {
+	hex::encode(Sha256::digest(raw.as_bytes()))
+}
+
+fn is_bcrypt(s: &str) -> bool {
+	s.starts_with("$2a$") || s.starts_with("$2b$") || s.starts_with("$2y$")
+}
+
+enum StoredKey {
+	Plain(String),
+	Sha256Hex(String),
+	Bcrypt(String),
+}
+
+fn parse_stored_key(raw: &str) -> StoredKey {
+	if let Some(hexpart) = raw.strip_prefix(SHA256_PREFIX) {
+		let normalized = hexpart.to_ascii_lowercase();
+		if normalized.len() == 64 && normalized.bytes().all(|b| b.is_ascii_hexdigit()) {
+			return StoredKey::Sha256Hex(normalized);
+		}
+		warn!("ignoring malformed sha256 API key digest; falling back to plaintext comparison");
+		return StoredKey::Plain(raw.to_string());
+	}
+	if is_bcrypt(raw) {
+		return StoredKey::Bcrypt(raw.to_string());
+	}
+	StoredKey::Plain(raw.to_string())
+}
+
+#[derive(Debug, Clone)]
+struct SaltedEntry {
+	hash: String,
+	metadata: UserMetadata,
+}
+
 #[apply(schema_ser!)]
 pub struct APIKeyAuthentication {
-	// A map of API keys to the metadata for that key
+	/// Exact-match lookup keyed by a deterministic token: the raw key for plaintext
+	/// entries, or the lowercase-hex SHA-256 digest for sha256 entries.
 	#[serde(serialize_with = "ser_redact")]
 	pub users: Arc<HashMap<APIKey, UserMetadata>>,
+
+	/// bcrypt entries, scanned linearly because each digest embeds its own salt.
+	#[serde(skip)]
+	salted: Arc<Vec<SaltedEntry>>,
 
 	/// Validation mode for API Key authentication
 	pub mode: Mode,
@@ -107,12 +158,48 @@ impl APIKeyAuthentication {
 		mode: Mode,
 		location: AuthorizationLocation,
 	) -> Self {
+		let mut exact = HashMap::new();
+		let mut salted = Vec::new();
+		for (key, metadata) in keys {
+			match parse_stored_key(key.0.expose_secret()) {
+				StoredKey::Plain(token) => {
+					exact.insert(APIKey::new(token), metadata);
+				},
+				StoredKey::Sha256Hex(digest) => {
+					exact.insert(APIKey::new(digest), metadata);
+				},
+				StoredKey::Bcrypt(hash) => salted.push(SaltedEntry { hash, metadata }),
+			}
+		}
+		if salted.len() > MAX_BCRYPT_ENTRIES {
+			warn!(
+				count = salted.len(),
+				limit = MAX_BCRYPT_ENTRIES,
+				"large number of bcrypt API keys; each request scans them linearly, degrading latency"
+			);
+		}
 		Self {
-			users: Arc::new(keys.into_iter().collect()),
+			users: Arc::new(exact),
+			salted: Arc::new(salted),
 			mode,
 			location,
 		}
 	}
+
+	fn lookup(&self, presented: &str) -> Option<UserMetadata> {
+		if let Some(meta) = self.users.get(&APIKey::new(presented)) {
+			return Some(meta.clone());
+		}
+		if let Some(meta) = self.users.get(&APIKey::new(sha256_hex(presented))) {
+			return Some(meta.clone());
+		}
+		self
+			.salted
+			.iter()
+			.find(|entry| bcrypt::verify(presented, &entry.hash).unwrap_or(false))
+			.map(|entry| entry.metadata.clone())
+	}
+
 	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
 		let Some(key) = self.location.extract(req) else {
 			// In strict mode, we require credentials
@@ -133,19 +220,17 @@ impl APIKeyAuthentication {
 			return Ok(None);
 		};
 
-		let key = APIKey::new(key);
-		if let Some(meta) = self.users.get(&key) {
+		if let Some(metadata) = self.lookup(key.as_ref()) {
 			pol_result!(
 				dtrace::Info,
 				Apply,
 				"authenticated request with API key with metadata {}",
-				serde_json::to_string(meta).unwrap_or_default()
+				serde_json::to_string(&metadata).unwrap_or_default()
 			);
-			let claims = Claims {
-				key,
-				metadata: meta.clone(),
-			};
-			Ok(Some(claims))
+			Ok(Some(Claims {
+				key: APIKey::new(key),
+				metadata,
+			}))
 		} else if self.mode == Mode::Permissive {
 			pol_result!(
 				dtrace::Warn,

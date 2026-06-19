@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        apiKey:
+          mode: strict
+          keys:
+          # SHA-256 digest of the raw key "my-secret-key".
+          # The raw key is unrecoverable from this config.
+          - key: "sha256:1311f8fc80a7ea28d78dd7723f09c44c1754cd35160ca8e7133ae3d7f636a19a"
+            metadata:
+              group: sales
+          # A plaintext key is still accepted (default, backward compatible).
+          - key: "k-plaintext-456"
+      backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

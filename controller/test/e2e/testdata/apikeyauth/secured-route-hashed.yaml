@@ -1,0 +1,45 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-secure-hashed
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "securehashedroute.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: route-policy-hashed
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: route-secure-hashed
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretRef:
+        name: route-apikey-auth-hashed
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: route-apikey-auth-hashed
+  namespace: agentgateway-base
+stringData:
+  client1: |
+    {
+      "key": "sha256:fd2e16548fd953437af2ea091aab6106246868de7e4d95a956a6fbeb96b3f30c",
+      "metadata": {
+        "group": "sales"
+      }
+    }
+  client2: "sha256:041b6283f21ef6b2fe300a1f5f211b811baebc49c109c9f35938ce85bf0d7d23"

@@ -19,6 +19,19 @@ func TestApiKeyAuth(tt *testing.T) {
 	t.Run("GatewayPolicy", func(t base.Test) {
 		testApiKeyAuthGatewayPolicy(t)
 	})
+	t.Run("HashedRoutePolicy", func(t base.Test) {
+		testApiKeyAuthHashedRoutePolicy(t)
+	})
+}
+
+func testApiKeyAuthHashedRoutePolicy(t base.Test) {
+	t.Apply(manifest("apikeyauth", "secured-route-hashed.yaml"))
+
+	t.HTTPRouteAccepted("route-secure-hashed", base.Namespace)
+	assertApiKeyResponse(t, "securehashedroute.com", "hashed-key-1", http.StatusOK)
+	assertApiKeyResponse(t, "securehashedroute.com", "hashed-key-2", http.StatusOK)
+	assertApiKeyResponse(t, "securehashedroute.com", "nosuchkey", http.StatusUnauthorized)
+	assertApiKeyResponse(t, "securehashedroute.com", "", http.StatusUnauthorized)
 }
 
 func testApiKeyAuthRoutePolicy(t base.Test) {

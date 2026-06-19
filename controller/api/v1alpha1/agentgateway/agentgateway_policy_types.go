@@ -1204,6 +1204,17 @@ type APIKeyAuthentication struct {
 	//   with the key, which may be used by other policies. For example, you
 	//   may write an authorization policy allowing `apiKey.group == 'sales'`.
 	//
+	// The `key` value may be a plaintext key or a self-describing digest, so the
+	// raw key is unrecoverable at rest:
+	// * `sha256:<lowercase-hex>` for a SHA-256 digest (recommended; produce with
+	//   `printf '%s' '<raw-key>' | sha256sum`). This matches the `sha256.encode`
+	//   CEL function output.
+	// * A bcrypt digest in modular crypt format (`$2a$`, `$2b$`, or `$2y$`).
+	// Any other value is treated as a plaintext key (the default, preserving
+	// backward compatibility). Plaintext and hashed entries may be mixed in one
+	// Secret. Prefer SHA-256: API keys are high-entropy, so bcrypt only adds
+	// per-request latency, and many bcrypt entries are verified by a linear scan.
+	//
 	// Example:
 	//
 	//	apiVersion: v1
@@ -1213,13 +1224,14 @@ type APIKeyAuthentication struct {
 	//	stringData:
 	//	  client1: |
 	//	    {
-	//	      "key": "k-123",
+	//	      "key": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
 	//	      "metadata": {
 	//	        "group": "sales",
 	//	        "created_at": "2024-10-01T12:00:00Z"
 	//	      }
 	//	    }
-	//	  client2: "k-456"
+	//	  client2: "sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9"
+	//	  client3: "k-456"
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
@@ -1236,6 +1248,11 @@ type APIKeyAuthentication struct {
 	//   with the key, which may be used by other policies. For example, you
 	//   may write an authorization policy allowing `apiKey.group == 'sales'`.
 	//
+	// As with `secretRef`, the `key` value may be a plaintext key, a
+	// `sha256:<lowercase-hex>` digest (recommended), or a bcrypt digest in
+	// modular crypt format (`$2a$`, `$2b$`, or `$2y$`). Any other value is
+	// treated as plaintext. See `secretRef` for details.
+	//
 	// Example:
 	//
 	//	apiVersion: v1
@@ -1245,7 +1262,7 @@ type APIKeyAuthentication struct {
 	//	stringData:
 	//	  client1: |
 	//	    {
-	//	      "key": "k-123",
+	//	      "key": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
 	//	      "metadata": {
 	//	        "group": "sales",
 	//	        "created_at": "2024-10-01T12:00:00Z"
