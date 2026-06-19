@@ -102,7 +102,6 @@ protos.workspace = true
 prost-types.workspace = true
 prost-wkt-types.workspace = true
 prost.workspace = true
-prost_v12 = { package = "prost", version = "0.12.6" }
 rand.workspace = true
 quick_cache.workspace = true
 libc.workspace = true

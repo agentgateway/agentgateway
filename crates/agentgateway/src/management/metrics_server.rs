@@ -9,10 +9,9 @@ use headers_accept::Accept;
 use hyper::Request;
 use hyper::body::Incoming;
 use mediatype::MediaType;
-use prometheus_client::encoding::protobuf::encode as encode_protobuf;
+use prometheus_client::encoding::prometheus_protobuf::encode_to_vec as encode_protobuf;
 use prometheus_client::encoding::text::encode as encode_text;
 use prometheus_client::registry::Registry;
-use prost_v12::Message;
 
 use super::hyper_helpers;
 use crate::Address;
@@ -51,13 +50,13 @@ async fn handle_metrics(reg: Arc<Mutex<Registry>>, req: Request<Incoming>) -> Re
 	let reg = reg.lock().expect("mutex");
 	let content_type = content_type(&req);
 	let result = match content_type {
-		ContentType::PlainText | ContentType::OpenMetrics => {
+		ContentType::PlainText => {
 			let mut str_buf = String::new();
-			encode_text(&mut str_buf, &reg).map(|_| str_buf.into_bytes())
+			encode_text(&mut str_buf, &reg)
+				.map(|_| str_buf.into_bytes())
+				.map_err(|err| err.to_string())
 		},
-		ContentType::Protobuf => {
-			encode_protobuf(&reg).map(|metrics| metrics.encode_length_delimited_to_vec())
-		},
+		ContentType::Protobuf => encode_protobuf(&reg).map_err(|err| err.to_string()),
 	};
 	match result {
 		Ok(buf) => ::http::Response::builder()
@@ -69,7 +68,7 @@ async fn handle_metrics(reg: Arc<Mutex<Registry>>, req: Request<Incoming>) -> Re
 			.body(buf.into()),
 		Err(err) => ::http::Response::builder()
 			.status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-			.body(err.to_string().into()),
+			.body(err.into()),
 	}
 	.expect("builder with known status code should not fail")
 }
@@ -78,7 +77,6 @@ async fn handle_metrics(reg: Arc<Mutex<Registry>>, req: Request<Incoming>) -> Re
 enum ContentType {
 	#[default]
 	PlainText,
-	OpenMetrics,
 	Protobuf,
 }
 
@@ -86,7 +84,6 @@ impl From<ContentType> for &str {
 	fn from(c: ContentType) -> Self {
 		match c {
 			ContentType::PlainText => "text/plain;charset=utf-8",
-			ContentType::OpenMetrics => "application/openmetrics-text;charset=utf-8;version=1.0.0",
 			ContentType::Protobuf => {
 				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
 			},
@@ -102,13 +99,12 @@ fn content_type_from_media_type(m: MediaType) -> Option<ContentType> {
 		return None;
 	}
 	match m.subty.as_str() {
-		"openmetrics-text" => Some(ContentType::OpenMetrics),
 		"vnd.google.protobuf" | "protobuf" | "x-protobuf" => Some(ContentType::Protobuf),
 		_ => None,
 	}
 }
 
-const AVAILABLE_MEDIA_TYPES: [MediaType<'static>; 5] = [
+const AVAILABLE_MEDIA_TYPES: [MediaType<'static>; 4] = [
 	MediaType::new(
 		mediatype::names::APPLICATION,
 		mediatype::Name::new_unchecked("vnd.google.protobuf"),
@@ -120,10 +116,6 @@ const AVAILABLE_MEDIA_TYPES: [MediaType<'static>; 5] = [
 	MediaType::new(
 		mediatype::names::APPLICATION,
 		mediatype::Name::new_unchecked("x-protobuf"),
-	),
-	MediaType::new(
-		mediatype::names::APPLICATION,
-		mediatype::Name::new_unchecked("openmetrics-text"),
 	),
 	MediaType::new(mediatype::names::TEXT, mediatype::names::PLAIN),
 ];
@@ -160,26 +152,15 @@ mod test {
 			"text/plain;charset=utf-8"
 		);
 
-		let openmetrics_req = http::Request::builder()
+		let json_or_text_req = http::Request::builder()
 			.header("X-Custom-Beep", "boop")
 			.header("Accept", "application/json")
-			.header("Accept", "application/openmetrics-text; other stuff")
+			.header("Accept", "application/text; other stuff")
 			.body("Invalid header defaulting to text/plain")
 			.unwrap();
 		assert_eq!(
-			Into::<&str>::into(super::content_type(&openmetrics_req)),
+			Into::<&str>::into(super::content_type(&json_or_text_req)),
 			"text/plain;charset=utf-8"
-		);
-
-		let openmetrics_req = http::Request::builder()
-			.header("X-Custom-Beep", "boop")
-			.header("Accept", "application/json")
-			.header("Accept", "application/openmetrics-text;version=1.0.0")
-			.body("I would like openmetrics")
-			.unwrap();
-		assert_eq!(
-			Into::<&str>::into(super::content_type(&openmetrics_req)),
-			"application/openmetrics-text;charset=utf-8;version=1.0.0"
 		);
 
 		let mixed_req = http::Request::builder()
