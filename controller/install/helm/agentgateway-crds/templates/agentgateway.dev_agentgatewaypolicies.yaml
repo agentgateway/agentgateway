@@ -6704,12 +6704,24 @@ spec:
                           `metadata`. `key` contains\n  the API key. `metadata` contains
                           arbitrary JSON metadata associated\n  with the key, which
                           may be used by other policies. For example, you\n  may write
-                          an authorization policy allowing `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
+                          an authorization policy allowing `apiKey.group == 'sales'`.\n\nThe
+                          `key` value may be a plaintext key or a self-describing
+                          digest, so the\nraw key is unrecoverable at rest:\n* `sha256:<lowercase-hex>`
+                          for a SHA-256 digest (recommended; produce with\n  `printf
+                          '%s' '<raw-key>' | sha256sum`). This matches the `sha256.encode`\n
+                          \ CEL function output.\n* A bcrypt digest in modular crypt
+                          format (`$2a$`, `$2b$`, or `$2y$`).\nAny other value is
+                          treated as a plaintext key (the default, preserving\nbackward
+                          compatibility). Plaintext and hashed entries may be mixed
+                          in one\nSecret. Prefer SHA-256: API keys are high-entropy,
+                          so bcrypt only adds\nper-request latency, and many bcrypt
+                          entries are verified by a linear scan.\n\nExample:\n\n\tapiVersion:
                           v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
-                          \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
-                          {\n\t        \"group\": \"sales\",\n\t        \"created_at\":
-                          \"2024-10-01T12:00:00Z\"\n\t      }\n\t    }\n\t  client2:
-                          \"k-456\""
+                          \ client1: |\n\t    {\n\t      \"key\": \"sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae\",\n\t
+                          \     \"metadata\": {\n\t        \"group\": \"sales\",\n\t
+                          \       \"created_at\": \"2024-10-01T12:00:00Z\"\n\t      }\n\t
+                          \   }\n\t  client2: \"sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9\"\n\t
+                          \ client3: \"k-456\""
                         properties:
                           group:
                             description: |-
@@ -6747,12 +6759,16 @@ spec:
                           contains\n  the API key. `metadata` contains arbitrary JSON
                           metadata associated\n  with the key, which may be used by
                           other policies. For example, you\n  may write an authorization
-                          policy allowing `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
+                          policy allowing `apiKey.group == 'sales'`.\n\nAs with `secretRef`,
+                          the `key` value may be a plaintext key, a\n`sha256:<lowercase-hex>`
+                          digest (recommended), or a bcrypt digest in\nmodular crypt
+                          format (`$2a$`, `$2b$`, or `$2y$`). Any other value is\ntreated
+                          as plaintext. See `secretRef` for details.\n\nExample:\n\n\tapiVersion:
                           v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
-                          \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
-                          {\n\t        \"group\": \"sales\",\n\t        \"created_at\":
-                          \"2024-10-01T12:00:00Z\"\n\t      }\n\t    }\n\t  client2:
-                          \"k-456\""
+                          \ client1: |\n\t    {\n\t      \"key\": \"sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae\",\n\t
+                          \     \"metadata\": {\n\t        \"group\": \"sales\",\n\t
+                          \       \"created_at\": \"2024-10-01T12:00:00Z\"\n\t      }\n\t
+                          \   }\n\t  client2: \"k-456\""
                         properties:
                           matchLabels:
                             additionalProperties:
