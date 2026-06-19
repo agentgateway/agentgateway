@@ -155,7 +155,7 @@ mod test {
 		let json_or_text_req = http::Request::builder()
 			.header("X-Custom-Beep", "boop")
 			.header("Accept", "application/json")
-			.header("Accept", "application/text; other stuff")
+			.header("Accept", "application/openmetrics-text; other stuff")
 			.body("Invalid header defaulting to text/plain")
 			.unwrap();
 		assert_eq!(
