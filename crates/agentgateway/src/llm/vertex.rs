@@ -138,6 +138,9 @@ impl Provider {
 		match &self.region {
 			None => strng::literal!("aiplatform.googleapis.com"),
 			Some(region) if region == "global" => strng::literal!("aiplatform.googleapis.com"),
+			Some(region) if region == "us" || region == "eu" => {
+				strng::format!("aiplatform.{region}.rep.googleapis.com")
+			},
 			Some(region) => strng::format!("{region}-aiplatform.googleapis.com"),
 		}
 	}
@@ -252,6 +255,7 @@ mod tests {
 	#[rstest::rstest]
 	#[case::no_region(None, "aiplatform.googleapis.com")]
 	#[case::global_region(Some("global"), "aiplatform.googleapis.com")]
+	#[case::multi_region(Some("us"), "aiplatform.us.rep.googleapis.com")]
 	#[case::regional(Some("us-central1"), "us-central1-aiplatform.googleapis.com")]
 	fn test_get_host(#[case] region: Option<&str>, #[case] expected: &str) {
 		let p = Provider {
