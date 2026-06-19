@@ -6,12 +6,13 @@ complete the [basic](../basic) example first.
 
 ### How it works
 
-`apiKey` entries accept a self-describing `key` value:
+Each `apiKey` entry sets exactly one of:
 
-- `sha256:<lowercase-hex>` — a SHA-256 digest (recommended). The gateway hashes
-  the presented key and compares digests, so the raw key is unrecoverable at rest.
-- A bcrypt digest in modular crypt format (`$2a$`, `$2b$`, `$2y$`).
-- Any other value is treated as a plaintext key (the default, backward compatible).
+- `key` — a plaintext API key (the default, backward compatible).
+- `keyHash` — a hashed API key, so the raw key is unrecoverable at rest:
+  - `sha256:<lowercase-hex>` — a SHA-256 digest (recommended). The gateway hashes
+    the presented key and compares digests.
+  - A bcrypt digest in modular crypt format (`$2a$`, `$2b$`, `$2y$`).
 
 Plaintext and hashed entries can be mixed in the same policy.
 

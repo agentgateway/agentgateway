@@ -129,46 +129,65 @@ fn bearer_request(token: &str) -> crate::http::Request {
 		.unwrap()
 }
 
+fn sha256_hex(raw: &str) -> String {
+	hex::encode(Sha256::digest(raw.as_bytes()))
+}
+
+fn auth_from_json(value: serde_json::Value) -> APIKeyAuthentication {
+	let local: LocalAPIKeys =
+		serde_json::from_value(value).expect("API key config should deserialize");
+	local.into()
+}
+
 #[test]
-fn test_parse_stored_key_classifies_by_prefix() {
-	assert!(matches!(parse_stored_key("plain-key"), StoredKey::Plain(_)));
+fn test_apikeyhash_parse_accepts_lowercase_and_uppercase() {
+	let lower = format!("sha256:{}", sha256_hex("k"));
+	let upper = format!("sha256:{}", sha256_hex("k").to_ascii_uppercase());
+	assert_eq!(
+		APIKeyHash::parse(&lower).unwrap(),
+		APIKeyHash::parse(&upper).unwrap()
+	);
+	assert_eq!(
+		APIKeyHash::parse(&lower).unwrap(),
+		APIKeyHash::from_raw_key("k")
+	);
+}
+
+#[test]
+fn test_apikeyhash_parse_rejects_malformed() {
+	assert!(APIKeyHash::parse("no-prefix").is_err());
+	assert!(APIKeyHash::parse("sha256:not-hex").is_err());
+	assert!(APIKeyHash::parse("sha256:abcd").is_err());
+}
+
+#[test]
+fn test_stored_key_parse_hash_routes_bcrypt_and_sha256() {
 	assert!(matches!(
-		parse_stored_key(&format!("sha256:{}", sha256_hex("k"))),
-		StoredKey::Sha256Hex(_)
+		StoredKey::parse_hash(&format!("sha256:{}", sha256_hex("k"))),
+		Ok(StoredKey::Sha256(_))
 	));
 	let bhash = bcrypt::hash("k", 4).unwrap();
-	assert!(matches!(parse_stored_key(&bhash), StoredKey::Bcrypt(_)));
+	assert!(matches!(
+		StoredKey::parse_hash(&bhash),
+		Ok(StoredKey::Bcrypt(_))
+	));
 }
 
 #[test]
-fn test_parse_stored_key_sha256_uppercase_normalized() {
-	let upper = format!("sha256:{}", sha256_hex("k").to_ascii_uppercase());
-	match parse_stored_key(&upper) {
-		StoredKey::Sha256Hex(h) => assert_eq!(h, sha256_hex("k")),
-		_ => panic!("expected sha256 digest"),
-	}
-}
-
-#[test]
-fn test_parse_stored_key_malformed_sha256_falls_back_to_plain() {
-	assert!(matches!(
-		parse_stored_key("sha256:not-hex"),
-		StoredKey::Plain(_)
-	));
-	assert!(matches!(
-		parse_stored_key("sha256:abcd"),
-		StoredKey::Plain(_)
-	));
+fn test_local_apikey_rejects_invalid_keyhash() {
+	let err = serde_json::from_value::<LocalAPIKeys>(serde_json::json!({
+		"keys": [{ "keyHash": "sha256:not-hex" }],
+		"mode": "strict"
+	}));
+	assert!(err.is_err(), "invalid keyHash must fail to deserialize");
 }
 
 #[tokio::test]
 async fn test_apikey_sha256_valid_authenticates() {
-	let stored = format!("sha256:{}", sha256_hex("raw-secret"));
-	let auth = APIKeyAuthentication::new(
-		[(APIKey::new(stored), serde_json::Value::Null)],
-		Mode::Strict,
-		AuthorizationLocation::bearer_header(),
-	);
+	let auth = auth_from_json(serde_json::json!({
+		"keys": [{ "keyHash": format!("sha256:{}", sha256_hex("raw-secret")) }],
+		"mode": "strict"
+	}));
 	let mut req = bearer_request("raw-secret");
 	let _ = crate::test_helpers::test_policy(&auth, &mut req)
 		.await
@@ -178,12 +197,10 @@ async fn test_apikey_sha256_valid_authenticates() {
 
 #[tokio::test]
 async fn test_apikey_sha256_wrong_key_rejected() {
-	let stored = format!("sha256:{}", sha256_hex("raw-secret"));
-	let auth = APIKeyAuthentication::new(
-		[(APIKey::new(stored), serde_json::Value::Null)],
-		Mode::Strict,
-		AuthorizationLocation::bearer_header(),
-	);
+	let auth = auth_from_json(serde_json::json!({
+		"keys": [{ "keyHash": format!("sha256:{}", sha256_hex("raw-secret")) }],
+		"mode": "strict"
+	}));
 	let mut req = bearer_request("wrong-secret");
 	assert!(
 		crate::test_helpers::test_policy(&auth, &mut req)
@@ -195,12 +212,10 @@ async fn test_apikey_sha256_wrong_key_rejected() {
 
 #[tokio::test]
 async fn test_apikey_bcrypt_valid_authenticates() {
-	let stored = bcrypt::hash("raw-secret", 4).unwrap();
-	let auth = APIKeyAuthentication::new(
-		[(APIKey::new(stored), serde_json::Value::Null)],
-		Mode::Strict,
-		AuthorizationLocation::bearer_header(),
-	);
+	let auth = auth_from_json(serde_json::json!({
+		"keys": [{ "keyHash": bcrypt::hash("raw-secret", 4).unwrap() }],
+		"mode": "strict"
+	}));
 	let mut req = bearer_request("raw-secret");
 	let _ = crate::test_helpers::test_policy(&auth, &mut req)
 		.await
@@ -210,12 +225,10 @@ async fn test_apikey_bcrypt_valid_authenticates() {
 
 #[tokio::test]
 async fn test_apikey_bcrypt_wrong_key_rejected() {
-	let stored = bcrypt::hash("raw-secret", 4).unwrap();
-	let auth = APIKeyAuthentication::new(
-		[(APIKey::new(stored), serde_json::Value::Null)],
-		Mode::Strict,
-		AuthorizationLocation::bearer_header(),
-	);
+	let auth = auth_from_json(serde_json::json!({
+		"keys": [{ "keyHash": bcrypt::hash("raw-secret", 4).unwrap() }],
+		"mode": "strict"
+	}));
 	let mut req = bearer_request("wrong-secret");
 	assert!(
 		crate::test_helpers::test_policy(&auth, &mut req)
@@ -227,27 +240,14 @@ async fn test_apikey_bcrypt_wrong_key_rejected() {
 
 #[tokio::test]
 async fn test_apikey_mixed_secret_each_kind_authenticates() {
-	let plain = (
-		"plain-key".to_string(),
-		serde_json::json!({"kind": "plain"}),
-	);
-	let sha = (
-		format!("sha256:{}", sha256_hex("sha-key")),
-		serde_json::json!({"kind": "sha"}),
-	);
-	let bc = (
-		bcrypt::hash("bcrypt-key", 4).unwrap(),
-		serde_json::json!({"kind": "bcrypt"}),
-	);
-	let auth = APIKeyAuthentication::new(
-		[
-			(APIKey::new(plain.0), plain.1),
-			(APIKey::new(sha.0), sha.1),
-			(APIKey::new(bc.0), bc.1),
+	let auth = auth_from_json(serde_json::json!({
+		"keys": [
+			{ "key": "plain-key", "metadata": {"kind": "plain"} },
+			{ "keyHash": format!("sha256:{}", sha256_hex("sha-key")), "metadata": {"kind": "sha"} },
+			{ "keyHash": bcrypt::hash("bcrypt-key", 4).unwrap(), "metadata": {"kind": "bcrypt"} }
 		],
-		Mode::Strict,
-		AuthorizationLocation::bearer_header(),
-	);
+		"mode": "strict"
+	}));
 
 	for (raw, expected_kind) in [
 		("plain-key", "plain"),
@@ -272,13 +272,32 @@ async fn test_apikey_mixed_secret_each_kind_authenticates() {
 }
 
 #[tokio::test]
-async fn test_apikey_sha256_permissive_invalid_key_no_claims() {
-	let stored = format!("sha256:{}", sha256_hex("raw-secret"));
-	let auth = APIKeyAuthentication::new(
-		[(APIKey::new(stored), serde_json::Value::Null)],
-		Mode::Permissive,
-		AuthorizationLocation::bearer_header(),
+async fn test_apikey_sha256_claims_expose_presented_key() {
+	let auth = auth_from_json(serde_json::json!({
+		"keys": [{ "keyHash": format!("sha256:{}", sha256_hex("raw-secret")) }],
+		"mode": "strict"
+	}));
+	let mut req = bearer_request("raw-secret");
+	let _ = crate::test_helpers::test_policy(&auth, &mut req)
+		.await
+		.expect("sha256 hashed key should validate");
+	let expr = crate::cel::Expression::new_strict("apiKey.key.unredacted()").unwrap();
+	assert_eq!(
+		crate::cel::Executor::new_request(&req)
+			.eval(&expr)
+			.unwrap()
+			.json()
+			.unwrap(),
+		serde_json::json!("raw-secret")
 	);
+}
+
+#[tokio::test]
+async fn test_apikey_sha256_permissive_invalid_key_no_claims() {
+	let auth = auth_from_json(serde_json::json!({
+		"keys": [{ "keyHash": format!("sha256:{}", sha256_hex("raw-secret")) }],
+		"mode": "permissive"
+	}));
 	let mut req = bearer_request("wrong-secret");
 	let _ = crate::test_helpers::test_policy(&auth, &mut req)
 		.await

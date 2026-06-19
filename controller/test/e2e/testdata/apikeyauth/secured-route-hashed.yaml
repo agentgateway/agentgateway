@@ -37,9 +37,12 @@ metadata:
 stringData:
   client1: |
     {
-      "key": "sha256:fd2e16548fd953437af2ea091aab6106246868de7e4d95a956a6fbeb96b3f30c",
+      "keyHash": "sha256:fd2e16548fd953437af2ea091aab6106246868de7e4d95a956a6fbeb96b3f30c",
       "metadata": {
         "group": "sales"
       }
     }
-  client2: "sha256:041b6283f21ef6b2fe300a1f5f211b811baebc49c109c9f35938ce85bf0d7d23"
+  client2: |
+    {
+      "keyHash": "sha256:041b6283f21ef6b2fe300a1f5f211b811baebc49c109c9f35938ce85bf0d7d23"
+    }

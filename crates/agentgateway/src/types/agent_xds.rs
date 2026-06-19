@@ -2331,11 +2331,16 @@ fn traffic_policy_from_proto(
 						.map(serde_json::to_value)
 						.transpose()?
 						.unwrap_or_default();
-					Ok::<_, ProtoError>((http::apikey::APIKey::new(u.key.clone()), meta))
+					let key = if u.key_hash.is_empty() {
+						http::apikey::StoredKey::Sha256(http::apikey::APIKey::new(u.key.clone()).sha256())
+					} else {
+						http::apikey::StoredKey::parse_hash(&u.key_hash).map_err(ProtoError::Generic)?
+					};
+					Ok::<_, ProtoError>((key, meta))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
 			TrafficPolicy::APIKey(RequestPolicy::single(
-				http::apikey::APIKeyAuthentication::new(
+				http::apikey::APIKeyAuthentication::from_entries(
 					keys,
 					mode,
 					authorization_location(

@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -839,7 +840,32 @@ func processBasicAuthenticationPolicy(
 
 type APIKeyEntry struct {
 	Key      string          `json:"key"`
+	KeyHash  string          `json:"keyHash"`
 	Metadata json.RawMessage `json:"metadata"`
+}
+
+func isBcryptHash(keyHash string) bool {
+	return strings.HasPrefix(keyHash, "$2a$") ||
+		strings.HasPrefix(keyHash, "$2b$") ||
+		strings.HasPrefix(keyHash, "$2y$")
+}
+
+func validateAPIKeyHash(keyHash string) error {
+	if isBcryptHash(keyHash) {
+		return nil
+	}
+	const prefix = "sha256:"
+	if !strings.HasPrefix(keyHash, prefix) {
+		return fmt.Errorf("keyHash must use the %s<hex> or bcrypt ($2...) format", prefix)
+	}
+	decoded, err := hex.DecodeString(strings.TrimPrefix(keyHash, prefix))
+	if err != nil {
+		return fmt.Errorf("keyHash must contain a valid sha256 hex digest: %w", err)
+	}
+	if len(decoded) != 32 {
+		return fmt.Errorf("keyHash sha256 digest must decode to 32 bytes")
+	}
+	return nil
 }
 
 func processAPIKeyAuthenticationPolicy(
@@ -904,6 +930,16 @@ func processAPIKeyAuthenticationPolicy(
 				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
 				continue
 			}
+			if (ke.Key == "") == (ke.KeyHash == "") {
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: exactly one of key or keyHash must be set", s.name, k))
+				continue
+			}
+			if ke.KeyHash != "" {
+				if err := validateAPIKeyHash(ke.KeyHash); err != nil {
+					errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
+					continue
+				}
+			}
 
 			pbs, err := toStruct(ke.Metadata)
 			if err != nil {
@@ -912,13 +948,14 @@ func processAPIKeyAuthenticationPolicy(
 			}
 			p.ApiKeys = append(p.ApiKeys, &api.TrafficPolicySpec_APIKey_User{
 				Key:      ke.Key,
+				KeyHash:  ke.KeyHash,
 				Metadata: pbs,
 			})
 		}
 	}
 	// Ensure deterministic ordering
 	slices.SortBy(p.ApiKeys, func(a *api.TrafficPolicySpec_APIKey_User) string {
-		return a.Key
+		return a.Key + a.KeyHash
 	})
 	apiKeyPolicy := &api.Policy{
 		Key:  basePolicyName + apiKeyPolicySuffix,

@@ -1199,21 +1199,16 @@ type APIKeyAuthentication struct {
 	// Each entry in the credential data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
-	// * A JSON object with two fields, `key` and `metadata`. `key` contains
-	//   the API key. `metadata` contains arbitrary JSON metadata associated
-	//   with the key, which may be used by other policies. For example, you
-	//   may write an authorization policy allowing `apiKey.group == 'sales'`.
-	//
-	// The `key` value may be a plaintext key or a self-describing digest, so the
-	// raw key is unrecoverable at rest:
-	// * `sha256:<lowercase-hex>` for a SHA-256 digest (recommended; produce with
-	//   `printf '%s' '<raw-key>' | sha256sum`). This matches the `sha256.encode`
-	//   CEL function output.
-	// * A bcrypt digest in modular crypt format (`$2a$`, `$2b$`, or `$2y$`).
-	// Any other value is treated as a plaintext key (the default, preserving
-	// backward compatibility). Plaintext and hashed entries may be mixed in one
-	// Secret. Prefer SHA-256: API keys are high-entropy, so bcrypt only adds
-	// per-request latency, and many bcrypt entries are verified by a linear scan.
+	// * A JSON object with `key` or `keyHash`, plus optional `metadata`.
+	//   `key` contains the plaintext API key. `keyHash` contains a hashed API
+	//   key, so the raw key is unrecoverable at rest; it is either a
+	//   `sha256:<hex>` digest (produce with `printf '%s' '<raw-key>' | sha256sum`,
+	//   matching the `sha256.encode` CEL function) or a bcrypt digest in modular
+	//   crypt format (`$2a$`, `$2b$`, or `$2y$`). Exactly one of `key` or
+	//   `keyHash` must be set. `metadata` contains arbitrary JSON metadata
+	//   associated with the key, which may be used by other policies. For
+	//   example, you may write an authorization policy allowing
+	//   `apiKey.group == 'sales'`.
 	//
 	// Example:
 	//
@@ -1224,14 +1219,20 @@ type APIKeyAuthentication struct {
 	//	stringData:
 	//	  client1: |
 	//	    {
-	//	      "key": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+	//	      "key": "k-123",
 	//	      "metadata": {
 	//	        "group": "sales",
 	//	        "created_at": "2024-10-01T12:00:00Z"
 	//	      }
 	//	    }
-	//	  client2: "sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9"
-	//	  client3: "k-456"
+	//	  client2: "k-456"
+	//	  client3: |
+	//	    {
+	//	      "keyHash": "sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad",
+	//	      "metadata": {
+	//	        "group": "engineering"
+	//	      }
+	//	    }
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
@@ -1243,15 +1244,13 @@ type APIKeyAuthentication struct {
 	// Each entry in the `Secret` data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
-	// * A JSON object with two fields, `key` and `metadata`. `key` contains
-	//   the API key. `metadata` contains arbitrary JSON metadata associated
-	//   with the key, which may be used by other policies. For example, you
-	//   may write an authorization policy allowing `apiKey.group == 'sales'`.
-	//
-	// As with `secretRef`, the `key` value may be a plaintext key, a
-	// `sha256:<lowercase-hex>` digest (recommended), or a bcrypt digest in
-	// modular crypt format (`$2a$`, `$2b$`, or `$2y$`). Any other value is
-	// treated as plaintext. See `secretRef` for details.
+	// * A JSON object with `key` or `keyHash`, plus optional `metadata`.
+	//   `key` contains the plaintext API key. `keyHash` contains a hashed API
+	//   key in `sha256:<hex>` or bcrypt (`$2a$`, `$2b$`, `$2y$`) format. Exactly
+	//   one of `key` or `keyHash` must be set. `metadata` contains arbitrary JSON
+	//   metadata associated with the key, which may be used by other policies.
+	//   For example, you may write an authorization policy allowing
+	//   `apiKey.group == 'sales'`. See `secretRef` for details.
 	//
 	// Example:
 	//
@@ -1262,7 +1261,7 @@ type APIKeyAuthentication struct {
 	//	stringData:
 	//	  client1: |
 	//	    {
-	//	      "key": "sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+	//	      "keyHash": "sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad",
 	//	      "metadata": {
 	//	        "group": "sales",
 	//	        "created_at": "2024-10-01T12:00:00Z"

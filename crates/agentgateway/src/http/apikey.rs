@@ -3,6 +3,7 @@ use std::hash::Hash;
 use ::cel::Value;
 use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Deserializer};
 use sha2::{Digest, Sha256};
 
 use crate::http::Request;
@@ -16,11 +17,6 @@ use crate::*;
 mod tests;
 
 const TRACE_POLICY_KIND: &str = "api_key";
-
-/// SHA-256 digest format must stay byte-identical to the `sha256.encode` CEL function
-/// (lowercase hex) so digests are interchangeable between the native field and the
-/// `location.expression` workaround.
-const SHA256_PREFIX: &str = "sha256:";
 
 /// bcrypt entries are verified by a linear scan running the intentionally-slow bcrypt
 /// KDF (each digest embeds its own salt, so no O(1) lookup is possible). Past this count,
@@ -76,6 +72,10 @@ impl APIKey {
 	pub fn new(s: impl Into<Box<str>>) -> Self {
 		APIKey(SecretString::new(s.into()))
 	}
+
+	pub(crate) fn sha256(&self) -> APIKeyHash {
+		APIKeyHash::from_raw_key(self.0.expose_secret())
+	}
 }
 
 pub fn api_key_to_value<'a>(key: &'a APIKey) -> Value<'a> {
@@ -98,47 +98,82 @@ impl PartialEq for APIKey {
 
 impl Eq for APIKey {}
 
-fn sha256_hex(raw: &str) -> String {
-	hex::encode(Sha256::digest(raw.as_bytes()))
+/// SHA-256 hex digest of an API key. The hex string (without the `sha256:` prefix)
+/// is byte-identical to the `sha256.encode` CEL function output, so a `keyHash` is
+/// interchangeable with the `location.expression` hashing workaround.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct APIKeyHash(String);
+
+impl APIKeyHash {
+	pub fn from_raw_key(key: &str) -> Self {
+		let digest = Sha256::digest(key.as_bytes());
+		APIKeyHash(hex::encode(digest))
+	}
+
+	pub fn parse(key_hash: &str) -> Result<Self, String> {
+		let Some(digest) = key_hash.strip_prefix("sha256:") else {
+			return Err("keyHash must use the sha256:<hex> format".to_string());
+		};
+		let decoded = hex::decode(digest).map_err(|e| e.to_string())?;
+		if decoded.len() != 32 {
+			return Err("sha256 keyHash must decode to 32 bytes".to_string());
+		}
+		Ok(APIKeyHash(digest.to_ascii_lowercase()))
+	}
 }
 
 fn is_bcrypt(s: &str) -> bool {
 	s.starts_with("$2a$") || s.starts_with("$2b$") || s.starts_with("$2y$")
 }
 
-enum StoredKey {
-	Plain(String),
-	Sha256Hex(String),
-	Bcrypt(String),
+pub(crate) enum StoredKey {
+	Sha256(APIKeyHash),
+	Bcrypt(SecretString),
 }
 
-fn parse_stored_key(raw: &str) -> StoredKey {
-	if let Some(hexpart) = raw.strip_prefix(SHA256_PREFIX) {
-		let normalized = hexpart.to_ascii_lowercase();
-		if normalized.len() == 64 && normalized.bytes().all(|b| b.is_ascii_hexdigit()) {
-			return StoredKey::Sha256Hex(normalized);
+impl StoredKey {
+	pub(crate) fn parse_hash(key_hash: &str) -> Result<Self, String> {
+		if is_bcrypt(key_hash) {
+			return Ok(StoredKey::Bcrypt(SecretString::new(key_hash.into())));
 		}
-		warn!("ignoring malformed sha256 API key digest; falling back to plaintext comparison");
-		return StoredKey::Plain(raw.to_string());
+		APIKeyHash::parse(key_hash).map(StoredKey::Sha256)
 	}
-	if is_bcrypt(raw) {
-		return StoredKey::Bcrypt(raw.to_string());
-	}
-	StoredKey::Plain(raw.to_string())
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct HashedKey(#[cfg_attr(feature = "schema", schemars(with = "String"))] String);
+
+impl HashedKey {
+	fn into_stored(self) -> StoredKey {
+		StoredKey::parse_hash(&self.0).expect("validated during deserialization")
+	}
+}
+
+fn deser_stored_hash<'de, D>(deserializer: D) -> Result<HashedKey, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let input = String::deserialize(deserializer)?;
+	StoredKey::parse_hash(&input).map_err(serde::de::Error::custom)?;
+	Ok(HashedKey(input))
+}
+
+/// A bcrypt-hashed key. bcrypt embeds a per-entry salt, so these cannot be looked up
+/// by digest and are verified by a linear scan. The hash is itself a credential, so it
+/// is wrapped in `SecretString` for consistent redaction.
+#[derive(Debug, Clone)]
 struct SaltedEntry {
-	hash: String,
+	hash: SecretString,
 	metadata: UserMetadata,
 }
 
 #[apply(schema_ser!)]
 pub struct APIKeyAuthentication {
-	/// Exact-match lookup keyed by a deterministic token: the raw key for plaintext
-	/// entries, or the lowercase-hex SHA-256 digest for sha256 entries.
+	/// Exact-match lookup of every plaintext/sha256 key by its SHA-256 digest, so raw
+	/// keys are never retained at rest.
 	#[serde(serialize_with = "ser_redact")]
-	pub users: Arc<HashMap<APIKey, UserMetadata>>,
+	pub users: Arc<HashMap<APIKeyHash, UserMetadata>>,
 
 	/// bcrypt entries, scanned linearly because each digest embeds its own salt.
 	#[serde(skip)]
@@ -157,15 +192,26 @@ impl APIKeyAuthentication {
 		mode: Mode,
 		location: AuthorizationLocation,
 	) -> Self {
-		let mut exact = HashMap::new();
+		Self::from_entries(
+			keys
+				.into_iter()
+				.map(|(key, meta)| (StoredKey::Sha256(key.sha256()), meta)),
+			mode,
+			location,
+		)
+	}
+
+	pub(crate) fn from_entries(
+		entries: impl IntoIterator<Item = (StoredKey, UserMetadata)>,
+		mode: Mode,
+		location: AuthorizationLocation,
+	) -> Self {
+		let mut users = HashMap::new();
 		let mut salted = Vec::new();
-		for (key, metadata) in keys {
-			match parse_stored_key(key.0.expose_secret()) {
-				StoredKey::Plain(token) => {
-					exact.insert(APIKey::new(token), metadata);
-				},
-				StoredKey::Sha256Hex(digest) => {
-					exact.insert(APIKey::new(digest), metadata);
+		for (key, metadata) in entries {
+			match key {
+				StoredKey::Sha256(digest) => {
+					users.insert(digest, metadata);
 				},
 				StoredKey::Bcrypt(hash) => salted.push(SaltedEntry { hash, metadata }),
 			}
@@ -178,7 +224,7 @@ impl APIKeyAuthentication {
 			);
 		}
 		Self {
-			users: Arc::new(exact),
+			users: Arc::new(users),
 			salted: Arc::new(salted),
 			mode,
 			location,
@@ -186,16 +232,13 @@ impl APIKeyAuthentication {
 	}
 
 	fn lookup(&self, presented: &str) -> Option<UserMetadata> {
-		if let Some(meta) = self.users.get(&APIKey::new(presented)) {
-			return Some(meta.clone());
-		}
-		if let Some(meta) = self.users.get(&APIKey::new(sha256_hex(presented))) {
+		if let Some(meta) = self.users.get(&APIKeyHash::from_raw_key(presented)) {
 			return Some(meta.clone());
 		}
 		self
 			.salted
 			.iter()
-			.find(|entry| bcrypt::verify(presented, &entry.hash).unwrap_or(false))
+			.find(|entry| bcrypt::verify(presented, entry.hash.expose_secret()).unwrap_or(false))
 			.map(|entry| entry.metadata.clone())
 	}
 
@@ -286,20 +329,42 @@ pub struct LocalAPIKeys {
 }
 
 #[apply(schema_de!)]
-pub struct LocalAPIKey {
-	/// API key value to accept.
-	pub key: APIKey,
-	/// Optional metadata attached to requests authenticated with this key.
-	pub metadata: Option<UserMetadata>,
+#[serde(untagged)]
+pub enum LocalAPIKey {
+	Key {
+		/// API key value to accept.
+		key: APIKey,
+		/// Optional metadata attached to requests authenticated with this key.
+		metadata: Option<UserMetadata>,
+	},
+	Hashed {
+		/// Hashed API key to accept, either a `sha256:<hex>` digest or a bcrypt digest
+		/// (modular crypt format, e.g. `$2b$...`).
+		#[serde(rename = "keyHash", deserialize_with = "deser_stored_hash")]
+		key_hash: HashedKey,
+		/// Optional metadata attached to requests authenticated with this key.
+		metadata: Option<UserMetadata>,
+	},
+}
+
+impl LocalAPIKey {
+	fn into_parts(self) -> (StoredKey, UserMetadata) {
+		match self {
+			LocalAPIKey::Key { key, metadata } => (
+				StoredKey::Sha256(key.sha256()),
+				metadata.unwrap_or_default(),
+			),
+			LocalAPIKey::Hashed { key_hash, metadata } => {
+				(key_hash.into_stored(), metadata.unwrap_or_default())
+			},
+		}
+	}
 }
 
 impl LocalAPIKeys {
 	pub fn into(self) -> APIKeyAuthentication {
-		APIKeyAuthentication::new(
-			self
-				.keys
-				.into_iter()
-				.map(|k| (k.key, k.metadata.unwrap_or_default())),
+		APIKeyAuthentication::from_entries(
+			self.keys.into_iter().map(LocalAPIKey::into_parts),
 			self.mode,
 			self.location,
 		)
