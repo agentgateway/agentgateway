@@ -1,0 +1,7 @@
+apiVersion: v2
+name: agentgateway-standalone
+description: A Helm chart for standalone Agentgateway
+icon: https://raw.githubusercontent.com/agentgateway/website/refs/heads/main/static/favicon.svg
+type: application
+version: "0.0.1"
+appVersion: "0.0.0-dev"

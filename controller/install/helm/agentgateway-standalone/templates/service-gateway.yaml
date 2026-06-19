@@ -1,0 +1,31 @@
+{{- if .Values.gateway.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" . }}-gateway
+  namespace: {{ include "agentgateway-standalone.namespace" . }}
+  labels:
+    {{- include "agentgateway-standalone.labels" . | nindent 4 }}
+    {{- with .Values.gateway.service.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.gateway.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.gateway.service.type | quote }}
+{{- $serviceSpecFields := include "agentgateway-standalone.serviceSpecFields" .Values.gateway.service }}
+{{- if $serviceSpecFields }}
+{{ $serviceSpecFields | trim | nindent 2 }}
+{{- end }}
+  ports:
+  {{- range .Values.gateway.service.ports }}
+  - name: {{ .name | quote }}
+    protocol: {{ .protocol | default "TCP" | quote }}
+    port: {{ .port }}
+    targetPort: {{ .targetPort | default .port }}
+  {{- end }}
+  selector:
+    {{- include "agentgateway-standalone.selectorLabels" . | nindent 4 }}
+{{- end }}
