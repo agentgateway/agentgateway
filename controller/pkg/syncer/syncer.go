@@ -430,29 +430,39 @@ func (s *Syncer) buildAgwResources(
 
 	baseBinds := krt.NewManyCollection(ports, func(ctx krt.HandlerContext, object krt.IndexObject[string, *translator.GatewayListener]) []agwir.AgwResource {
 		port, _ := strconv.Atoi(object.Key)
+		type bindConfig struct {
+			protocol       api.Bind_Protocol
+			tunnelProtocol api.Bind_TunnelProtocol
+		}
 		uniq := sets.New[types.NamespacedName]()
-		protocol := api.Bind_Protocol(0)
-		var tunnelProtocol = api.Bind_DIRECT
+		bindConfigs := map[types.NamespacedName]bindConfig{}
 		for _, gw := range object.Objects {
-			uniq.Insert(types.NamespacedName{
+			gateway := types.NamespacedName{
 				Namespace: gw.ParentGateway.Namespace,
 				Name:      gw.ParentGateway.Name,
-			})
+			}
+			uniq.Insert(gateway)
+			config, found := bindConfigs[gateway]
+			if !found {
+				config.tunnelProtocol = api.Bind_DIRECT
+			}
 			// TODO: better handle conflicts of protocols. For now, we arbitrarily treat TLS > plain
 			if gw.Conflict == "" {
-				protocol = max(protocol, s.getBindProtocol(gw))
+				config.protocol = max(config.protocol, s.getBindProtocol(gw))
 				if tp := s.getTunnelProtocol(gw); tp != api.Bind_DIRECT {
-					tunnelProtocol = tp
+					config.tunnelProtocol = tp
 				}
 			}
+			bindConfigs[gateway] = config
 		}
 		return slices.Map(uniq.UnsortedList(), func(e types.NamespacedName) agwir.AgwResource {
+			config := bindConfigs[e]
 			bind := translator.AgwBind{
 				Bind: &api.Bind{
 					Key:            object.Key + "/" + e.String(),
 					Port:           uint32(port), //nolint:gosec // G115: port is always in valid port range
-					Protocol:       protocol,
-					TunnelProtocol: tunnelProtocol,
+					Protocol:       config.protocol,
+					TunnelProtocol: config.tunnelProtocol,
 				},
 			}
 			return translator.ToResourceForGateway(e, bind)

@@ -1,0 +1,170 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gateway-http
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      port: 8080
+      protocol: HTTP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gateway-tls
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: tls
+      port: 8080
+      protocol: TLS
+      tls:
+        mode: Passthrough
+
+---
+# Output
+output:
+- gateway:
+    Name: gateway-http
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/gateway-http
+      port: 8080
+- gateway:
+    Name: gateway-http
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/gateway-http
+      key: default/gateway-http.http
+      name:
+        gatewayName: gateway-http
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: gateway-tls
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/gateway-tls
+      port: 8080
+      protocol: TLS
+- gateway:
+    Name: gateway-tls
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/gateway-tls
+      key: default/gateway-tls.tls
+      name:
+        gatewayName: gateway-tls
+        gatewayNamespace: default
+        listenerName: tls
+      protocol: TLS
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: gateway-http
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: gateway-tls
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: tls
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: TLSRoute
