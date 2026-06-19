@@ -106,6 +106,8 @@ libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
+gcf = "2.1.1"
+
 rmcp = { version = "1.5", features = [
     "client",
     "server",

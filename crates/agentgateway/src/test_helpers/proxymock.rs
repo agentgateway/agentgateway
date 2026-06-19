@@ -720,6 +720,7 @@ impl TestBind {
 				always_use_prefix: false,
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+					gcf_encoding: false,
 			},
 		);
 		{
@@ -785,6 +786,7 @@ impl TestBind {
 				always_use_prefix: false,
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+					gcf_encoding: false,
 			},
 		);
 		{

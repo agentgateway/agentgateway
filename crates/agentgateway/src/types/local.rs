@@ -1426,6 +1426,7 @@ impl LocalBackend {
 					}),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
+					gcf_encoding: tgt.gcf_encoding.unwrap_or(false),
 				};
 				backends.push(Backend::MCP(name, m).into());
 				backends
@@ -1497,6 +1498,10 @@ pub struct LocalMcpBackend {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub failure_mode: Option<FailureMode>,
+	/// When true, re-encode JSON text content in tool call responses using GCF
+	/// (Graph Compact Format) for reduced token usage.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub gcf_encoding: Option<bool>,
 }
 
 #[apply(schema_de!)]
