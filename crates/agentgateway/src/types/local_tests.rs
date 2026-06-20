@@ -621,6 +621,34 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_requesty_provider_defaults_base_url() {
+	let normalized = normalize_test_config(
+		r#"
+llm:
+  models:
+  - name: requesty-gpt
+    provider: requesty
+    params:
+      model: openai/gpt-4o-mini
+"#,
+	)
+	.await
+	.expect("requesty synthetic LLM provider should normalize with default base URL");
+
+	let provider = selected_ai_provider(&normalized);
+	assert!(matches!(provider.provider, AIProvider::Custom(_)));
+	assert_hostname_target(
+		provider
+			.host_override
+			.as_ref()
+			.expect("expected host override derived from default base URL"),
+		"router.requesty.ai",
+		443,
+	);
+	assert_eq!(provider.path_prefix.as_deref(), Some("/v1"));
+}
+
+#[tokio::test]
 async fn test_mcp_simple_config() {
 	test_config_parsing("mcp_simple").await;
 }

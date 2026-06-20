@@ -8702,6 +8702,7 @@
             "huggingface",
             "mistral",
             "openrouter",
+            "requesty",
             "togetherai",
             "xai",
             "fireworks"
