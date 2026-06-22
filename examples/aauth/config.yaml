@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# AAuth (HTTP Message Signing) example.
+#
+# AAuth is an OAuth-adjacent protocol that authenticates agents via per-request HTTP signatures
+# rather than bearer tokens. See:
+#   - https://datatracker.ietf.org/doc/draft-hardt-oauth-aauth-protocol/
+#   - https://datatracker.ietf.org/doc/draft-hardt-httpbis-signature-key/
+#
+# This gateway is configured to accept three signature-key schemes:
+#   - hwk:      pseudonymous; the public key is inlined in the Signature-Key header.
+#   - jwks_uri: identified; the agent is identified by its issuer URL and a JWKS the gateway
+#               discovers under {iss}/.well-known/aauth-agent.json.
+#   - jwt:      authorized; the Signature-Key carries a JWT (aa-agent+jwt or aa-auth+jwt)
+#               whose cnf.jwk binds the HTTP-signing public key.
+#
+# AAuth claims are exposed to CEL expressions as `aauth.*` (scheme, agent, agent_delegate,
+# user, scope, jwt_claims, thumbprint).
+
+frontendPolicies:
+  accessLog:
+    add:
+      aauth.scheme: aauth.scheme
+      aauth.agent: aauth.agent
+
+binds:
+  - port: 3000
+    listeners:
+      - name: default
+        protocol: HTTP
+        routes:
+          - name: aauth-protected
+            matches:
+              - path:
+                  pathPrefix: /api
+            backends:
+              - host: localhost:18080
+            policies:
+              aauth:
+                # `requiredScheme` selects the minimum signature-key strength the route
+                # accepts. The strength hierarchy is hwk < jwks < agentJwt.
+                #
+                #   hwk      — any signed request; pseudonymous (no verified identity).
+                #   jwks     — agent identity via the issuer's jwks_uri discovery.
+                #   agentJwt — verified agent identity via aa-agent+jwt (or aa-auth+jwt,
+                #              which also carries agent identity). This is the typical
+                #              production choice when you want a known caller.
+                #
+                # On rejection the gateway emits the spec-defined challenge header
+                # `AAuth-Requirement: requirement=<token>` (`pseudonym`, `identity`, or
+                # `agent-token`) per draft-hardt-oauth-aauth-protocol §6.
+                requiredScheme: agentJwt
+                # Defaults to 60. Tighten for production deployments behind a synced clock.
+                timestampTolerance: 60
+                # MUST stay false in production. Only enable for local development against
+                # loopback http://localhost (or 127.0.0.0/8, ::1) issuers.
+                allowInsecureHttpIssuer: false
+              # Example: only allow agents known to a specific issuer presenting a jwt-scheme
+              # signature. Authorization rules are CEL expressions evaluated against the
+              # verified `aauth.*` claims.
+              authorization:
+                rules:
+                  - |
+                    aauth.agent == "https://trusted-agent.example.com"
+                      && aauth.scheme == "jwt"

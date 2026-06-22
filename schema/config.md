@@ -1537,6 +1537,11 @@
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`binds[].listeners[].routes[].policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
 |`binds[].listeners[].routes[].policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.aauth`|object|Authenticate incoming requests using AAuth (HTTP Message Signing).|
+|`binds[].listeners[].routes[].policies.aauth.mode`|enum|Controls whether requests must carry a valid AAuth signature.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`binds[].listeners[].routes[].policies.aauth.requiredScheme`|enum|Minimum acceptable signature-key scheme.<br><br>The schemes are ordered by strength: `hwk` < `jwks` < `jwt`. A request signed with a<br>stronger scheme always satisfies a weaker requirement.<br>Possible values: `hwk`, `jwks`, `agentJwt`.|
+|`binds[].listeners[].routes[].policies.aauth.timestampTolerance`|integer|Maximum permitted clock skew in seconds between the signer's `created` timestamp and<br>local time. Defaults to 60.|
+|`binds[].listeners[].routes[].policies.aauth.allowInsecureHttpIssuer`|boolean|Accept `http://` in JWT `iss` claims for agent and auth tokens.<br><br>Intended for local development against `http://localhost` only. Production deployments<br>MUST leave this `false` — enabling it lets unauthenticated HTTP origins pose as AAuth<br>servers.|
 |`binds[].listeners[].routes[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -6124,6 +6129,11 @@
 |`binds[].listeners[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`binds[].listeners[].policies.aauth`|object|Authenticate incoming requests using AAuth (HTTP Message Signing).|
+|`binds[].listeners[].policies.aauth.mode`|enum|Controls whether requests must carry a valid AAuth signature.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`binds[].listeners[].policies.aauth.requiredScheme`|enum|Minimum acceptable signature-key scheme.<br><br>The schemes are ordered by strength: `hwk` < `jwks` < `jwt`. A request signed with a<br>stronger scheme always satisfies a weaker requirement.<br>Possible values: `hwk`, `jwks`, `agentJwt`.|
+|`binds[].listeners[].policies.aauth.timestampTolerance`|integer|Maximum permitted clock skew in seconds between the signer's `created` timestamp and<br>local time. Defaults to 60.|
+|`binds[].listeners[].policies.aauth.allowInsecureHttpIssuer`|boolean|Accept `http://` in JWT `iss` claims for agent and auth tokens.<br><br>Intended for local development against `http://localhost` only. Production deployments<br>MUST leave this `false` — enabling it lets unauthenticated HTTP origins pose as AAuth<br>servers.|
 |`binds[].listeners[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`binds[].listeners[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -8532,6 +8542,11 @@
 |`policies[].policy.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`policies[].policy.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
 |`policies[].policy.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.aauth`|object|Authenticate incoming requests using AAuth (HTTP Message Signing).|
+|`policies[].policy.aauth.mode`|enum|Controls whether requests must carry a valid AAuth signature.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`policies[].policy.aauth.requiredScheme`|enum|Minimum acceptable signature-key scheme.<br><br>The schemes are ordered by strength: `hwk` < `jwks` < `jwt`. A request signed with a<br>stronger scheme always satisfies a weaker requirement.<br>Possible values: `hwk`, `jwks`, `agentJwt`.|
+|`policies[].policy.aauth.timestampTolerance`|integer|Maximum permitted clock skew in seconds between the signer's `created` timestamp and<br>local time. Defaults to 60.|
+|`policies[].policy.aauth.allowInsecureHttpIssuer`|boolean|Accept `http://` in JWT `iss` claims for agent and auth tokens.<br><br>Intended for local development against `http://localhost` only. Production deployments<br>MUST leave this `false` — enabling it lets unauthenticated HTTP origins pose as AAuth<br>servers.|
 |`policies[].policy.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`policies[].policy.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -14472,6 +14487,11 @@
 |`routeGroups[].routes[].policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`routeGroups[].routes[].policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
 |`routeGroups[].routes[].policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.aauth`|object|Authenticate incoming requests using AAuth (HTTP Message Signing).|
+|`routeGroups[].routes[].policies.aauth.mode`|enum|Controls whether requests must carry a valid AAuth signature.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`routeGroups[].routes[].policies.aauth.requiredScheme`|enum|Minimum acceptable signature-key scheme.<br><br>The schemes are ordered by strength: `hwk` < `jwks` < `jwt`. A request signed with a<br>stronger scheme always satisfies a weaker requirement.<br>Possible values: `hwk`, `jwks`, `agentJwt`.|
+|`routeGroups[].routes[].policies.aauth.timestampTolerance`|integer|Maximum permitted clock skew in seconds between the signer's `created` timestamp and<br>local time. Defaults to 60.|
+|`routeGroups[].routes[].policies.aauth.allowInsecureHttpIssuer`|boolean|Accept `http://` in JWT `iss` claims for agent and auth tokens.<br><br>Intended for local development against `http://localhost` only. Production deployments<br>MUST leave this `false` — enabling it lets unauthenticated HTTP origins pose as AAuth<br>servers.|
 |`routeGroups[].routes[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`routeGroups[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -20128,6 +20148,11 @@
 |`llm.policies.jwtAuth.jwks.url`|string||
 |`llm.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
+|`llm.policies.aauth`|object|Authenticate incoming requests using AAuth (HTTP Message Signing).|
+|`llm.policies.aauth.mode`|enum|Controls whether requests must carry a valid AAuth signature.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`llm.policies.aauth.requiredScheme`|enum|Minimum acceptable signature-key scheme.<br><br>The schemes are ordered by strength: `hwk` < `jwks` < `jwt`. A request signed with a<br>stronger scheme always satisfies a weaker requirement.<br>Possible values: `hwk`, `jwks`, `agentJwt`.|
+|`llm.policies.aauth.timestampTolerance`|integer|Maximum permitted clock skew in seconds between the signer's `created` timestamp and<br>local time. Defaults to 60.|
+|`llm.policies.aauth.allowInsecureHttpIssuer`|boolean|Accept `http://` in JWT `iss` claims for agent and auth tokens.<br><br>Intended for local development against `http://localhost` only. Production deployments<br>MUST leave this `false` — enabling it lets unauthenticated HTTP origins pose as AAuth<br>servers.|
 |`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`llm.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`llm.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -23298,6 +23323,11 @@
 |`mcp.policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`mcp.policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
 |`mcp.policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.aauth`|object|Authenticate incoming requests using AAuth (HTTP Message Signing).|
+|`mcp.policies.aauth.mode`|enum|Controls whether requests must carry a valid AAuth signature.<br>Possible values: `strict`, `optional`, `permissive`.|
+|`mcp.policies.aauth.requiredScheme`|enum|Minimum acceptable signature-key scheme.<br><br>The schemes are ordered by strength: `hwk` < `jwks` < `jwt`. A request signed with a<br>stronger scheme always satisfies a weaker requirement.<br>Possible values: `hwk`, `jwks`, `agentJwt`.|
+|`mcp.policies.aauth.timestampTolerance`|integer|Maximum permitted clock skew in seconds between the signer's `created` timestamp and<br>local time. Defaults to 60.|
+|`mcp.policies.aauth.allowInsecureHttpIssuer`|boolean|Accept `http://` in JWT `iss` claims for agent and auth tokens.<br><br>Intended for local development against `http://localhost` only. Production deployments<br>MUST leave this `false` — enabling it lets unauthenticated HTTP origins pose as AAuth<br>servers.|
 |`mcp.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`mcp.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
