@@ -17,6 +17,8 @@ pub const DISCOVERY_ENGINE_HOST: Strng = strng::literal!("discoveryengine.google
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	/// Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`
+	/// use restricted multi-region endpoints. Other values are treated as regional locations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub region: Option<Strng>,
 	pub project_id: Strng,

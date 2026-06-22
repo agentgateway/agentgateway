@@ -6601,6 +6601,7 @@
           ]
         },
         "region": {
+          "description": "Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`\nuse restricted multi-region endpoints. Other values are treated as regional locations.",
           "type": [
             "string",
             "null"

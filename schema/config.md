@@ -2368,7 +2368,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.gemini.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.vertex`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.vertex.model`|string||
-|`binds[].listeners[].routes[].backends[].ai.provider.vertex.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`binds[].listeners[].routes[].backends[].ai.provider.vertex.projectId`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.anthropic`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.anthropic.model`|string||
@@ -3620,7 +3620,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.gemini.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.model`|string||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.region`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.projectId`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.anthropic`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.anthropic.model`|string||
@@ -9419,7 +9419,7 @@
 |`backends[].ai.provider.gemini.model`|string||
 |`backends[].ai.provider.vertex`|object||
 |`backends[].ai.provider.vertex.model`|string||
-|`backends[].ai.provider.vertex.region`|string||
+|`backends[].ai.provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`backends[].ai.provider.vertex.projectId`|string||
 |`backends[].ai.provider.anthropic`|object||
 |`backends[].ai.provider.anthropic.model`|string||
@@ -10671,7 +10671,7 @@
 |`backends[].ai.groups[].providers[].provider.gemini.model`|string||
 |`backends[].ai.groups[].providers[].provider.vertex`|object||
 |`backends[].ai.groups[].providers[].provider.vertex.model`|string||
-|`backends[].ai.groups[].providers[].provider.vertex.region`|string||
+|`backends[].ai.groups[].providers[].provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`backends[].ai.groups[].providers[].provider.vertex.projectId`|string||
 |`backends[].ai.groups[].providers[].provider.anthropic`|object||
 |`backends[].ai.groups[].providers[].provider.anthropic.model`|string||
@@ -15409,7 +15409,7 @@
 |`routeGroups[].routes[].backends[].ai.provider.gemini.model`|string||
 |`routeGroups[].routes[].backends[].ai.provider.vertex`|object||
 |`routeGroups[].routes[].backends[].ai.provider.vertex.model`|string||
-|`routeGroups[].routes[].backends[].ai.provider.vertex.region`|string||
+|`routeGroups[].routes[].backends[].ai.provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`routeGroups[].routes[].backends[].ai.provider.vertex.projectId`|string||
 |`routeGroups[].routes[].backends[].ai.provider.anthropic`|object||
 |`routeGroups[].routes[].backends[].ai.provider.anthropic.model`|string||
@@ -16661,7 +16661,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.gemini.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.model`|string||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.region`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.projectId`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.anthropic`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.anthropic.model`|string||
