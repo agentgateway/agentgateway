@@ -28,16 +28,28 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 				Regex: processRegex(req.Regex),
 			}
 		} else if req.OpenAIModeration != nil {
+			md, err := processModeration(ctx, namespace, req.OpenAIModeration)
+			if err != nil {
+				return nil, err
+			}
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_OpenaiModeration{
-				OpenaiModeration: processModeration(ctx, namespace, req.OpenAIModeration),
+				OpenaiModeration: md,
 			}
 		} else if req.BedrockGuardrails != nil {
+			bg, err := processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails)
+			if err != nil {
+				return nil, err
+			}
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_BedrockGuardrails{
-				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails),
+				BedrockGuardrails: bg,
 			}
 		} else if req.GoogleModelArmor != nil {
+			gma, err := processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor)
+			if err != nil {
+				return nil, err
+			}
 			pgReq.Kind = &api.BackendPolicySpec_Ai_RequestGuard_GoogleModelArmor{
-				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor),
+				GoogleModelArmor: gma,
 			}
 		}
 
@@ -70,12 +82,20 @@ func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.
 				Regex: processRegex(req.Regex),
 			}
 		} else if req.BedrockGuardrails != nil {
+			bg, err := processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails)
+			if err != nil {
+				return nil, err
+			}
 			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_BedrockGuardrails{
-				BedrockGuardrails: processBedrockGuardrails(ctx, namespace, req.BedrockGuardrails),
+				BedrockGuardrails: bg,
 			}
 		} else if req.GoogleModelArmor != nil {
+			gma, err := processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor)
+			if err != nil {
+				return nil, err
+			}
 			pgReq.Kind = &api.BackendPolicySpec_Ai_ResponseGuard_GoogleModelArmor{
-				GoogleModelArmor: processGoogleModelArmor(ctx, namespace, req.GoogleModelArmor),
+				GoogleModelArmor: gma,
 			}
 		}
 
@@ -222,13 +242,23 @@ func processRegex(regex *agentgateway.Regex) *api.BackendPolicySpec_Ai_RegexRule
 	return rules
 }
 
-func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway.OpenAIModeration) *api.BackendPolicySpec_Ai_Moderation {
+func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway.OpenAIModeration) (*api.BackendPolicySpec_Ai_Moderation, error) {
 	if moderation == nil {
-		return nil
+		return nil, nil
 	}
 
 	pgModeration := &api.BackendPolicySpec_Ai_Moderation{}
 	pgModeration.Model = moderation.Model
+
+	// backendRef and the inline policies are mutually exclusive (enforced by CRD validation).
+	if moderation.BackendRef != nil {
+		be, err := BuildBackendRef(ctx, *moderation.BackendRef, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build openAIModeration backendRef: %w", err)
+		}
+		pgModeration.BackendRef = be
+		return pgModeration, nil
+	}
 
 	if moderation.Policies != nil {
 		pol := &agentgateway.BackendFull{
@@ -242,14 +272,25 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 		}
 	}
 
-	return pgModeration
+	return pgModeration, nil
 }
 
-func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agentgateway.BedrockGuardrails) *api.BackendPolicySpec_Ai_BedrockGuardrails {
+func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agentgateway.BedrockGuardrails) (*api.BackendPolicySpec_Ai_BedrockGuardrails, error) {
 	if guardrails == nil {
-		return nil
+		return nil, nil
 	}
 
+	// backendRef and the inline provider fields are mutually exclusive (enforced by CRD validation).
+	if guardrails.BackendRef != nil {
+		be, err := BuildBackendRef(ctx, *guardrails.BackendRef, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build bedrockGuardrails backendRef: %w", err)
+		}
+		return &api.BackendPolicySpec_Ai_BedrockGuardrails{BackendRef: be}, nil
+	}
+
+	// Inline (deprecated) provider fields; set via composite literal so referencing the
+	// deprecated proto fields does not trip staticcheck on this back-compat path.
 	pgGuardrails := &api.BackendPolicySpec_Ai_BedrockGuardrails{
 		Identifier: guardrails.GuardrailIdentifier,
 		Version:    guardrails.GuardrailVersion,
@@ -268,12 +309,21 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 		}
 	}
 
-	return pgGuardrails
+	return pgGuardrails, nil
 }
 
-func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgateway.GoogleModelArmor) *api.BackendPolicySpec_Ai_GoogleModelArmor {
+func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgateway.GoogleModelArmor) (*api.BackendPolicySpec_Ai_GoogleModelArmor, error) {
 	if armor == nil {
-		return nil
+		return nil, nil
+	}
+
+	// backendRef and the inline provider fields are mutually exclusive (enforced by CRD validation).
+	if armor.BackendRef != nil {
+		be, err := BuildBackendRef(ctx, *armor.BackendRef, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build googleModelArmor backendRef: %w", err)
+		}
+		return &api.BackendPolicySpec_Ai_GoogleModelArmor{BackendRef: be}, nil
 	}
 
 	// Default location if not specified.
@@ -281,7 +331,8 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	if armor.Location != nil {
 		location = *armor.Location
 	}
-
+	// Inline (deprecated) provider fields; set via composite literal so referencing the
+	// deprecated proto fields does not trip staticcheck on this back-compat path.
 	pgArmor := &api.BackendPolicySpec_Ai_GoogleModelArmor{
 		TemplateId: armor.TemplateID,
 		ProjectId:  armor.ProjectID,
@@ -300,5 +351,5 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 		}
 	}
 
-	return pgArmor
+	return pgArmor, nil
 }

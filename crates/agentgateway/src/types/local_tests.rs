@@ -313,6 +313,82 @@ llm:
 }
 
 #[tokio::test]
+async fn test_guardrail_backend_ref_resolves_to_declared_backend() {
+	let normalized = normalize_test_config(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            - bedrockGuardrails:
+                backendRef: my-guard
+            response:
+            - bedrockGuardrails:
+                backendRef: my-guard
+backends:
+- name: my-guard
+  guardrail:
+    bedrock:
+      identifier: gid
+      version: DRAFT
+      region: us-west-2
+"#,
+	)
+	.await
+	.expect("guardrail backendRef to a declared guardrail backend should normalize");
+
+	assert!(
+		normalized
+			.backends
+			.iter()
+			.any(|b| matches!(b.backend, Backend::Guardrail(..))),
+		"expected a guardrail backend in the normalized config"
+	);
+}
+
+#[tokio::test]
+async fn test_guardrail_backend_ref_rejects_unknown_backend() {
+	let err = normalize_test_config(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            response:
+            - bedrockGuardrails:
+                backendRef: missing-guard
+"#,
+	)
+	.await
+	.expect_err("backendRef to a missing guardrail backend should fail to load");
+	assert!(
+		err
+			.to_string()
+			.contains("does not reference a declared guardrail backend"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
 async fn test_llm_conditional_virtual_model_rejects_unknown_target_before_expression_compile() {
 	let err = normalize_test_config(
 		r#"

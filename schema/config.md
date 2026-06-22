@@ -4887,6 +4887,19 @@
 |`binds[].listeners[].routes[].backends[].aws.agentCore`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore.agentRuntimeArn`|string||
 |`binds[].listeners[].routes[].backends[].aws.agentCore.qualifier`|string||
+|`binds[].listeners[].routes[].backends[].guardrail`|object|A typed guardrail integration backend, with one variant per supported provider.<br>Exactly one of bedrock, googleModelArmor, azureContentSafety, or openAIModeration may be set.|
+|`binds[].listeners[].routes[].backends[].guardrail.bedrock`|object|AWS Bedrock Guardrails (ApplyGuardrail API)|
+|`binds[].listeners[].routes[].backends[].guardrail.bedrock.identifier`|string|The unique identifier of the guardrail|
+|`binds[].listeners[].routes[].backends[].guardrail.bedrock.version`|string|The version of the guardrail|
+|`binds[].listeners[].routes[].backends[].guardrail.bedrock.region`|string|AWS region where the guardrail is deployed (e.g. "us-west-2"). Used to construct the endpoint host.|
+|`binds[].listeners[].routes[].backends[].guardrail.googleModelArmor`|object|Google Cloud Model Armor|
+|`binds[].listeners[].routes[].backends[].guardrail.googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
+|`binds[].listeners[].routes[].backends[].guardrail.googleModelArmor.projectId`|string|The GCP project ID|
+|`binds[].listeners[].routes[].backends[].guardrail.googleModelArmor.location`|string|The GCP region, used to construct the endpoint host (default: us-central1)|
+|`binds[].listeners[].routes[].backends[].guardrail.azureContentSafety`|object|Azure AI Content Safety|
+|`binds[].listeners[].routes[].backends[].guardrail.azureContentSafety.resourceName`|string|The Azure resource name, used to construct the endpoint host<br>(`<resourceName>.cognitiveservices.azure.com`).<br>Exactly one of resourceName and endpoint must be set.|
+|`binds[].listeners[].routes[].backends[].guardrail.azureContentSafety.endpoint`|string|The full endpoint host or URL (e.g. "https://<resource-name>.cognitiveservices.azure.com"),<br>for endpoints whose host cannot be derived from the resource name.|
+|`binds[].listeners[].routes[].backends[].guardrail.openAIModeration`|object|OpenAI moderations API|
 |`binds[].listeners[].routes[].backends[].routeGroup`|string||
 |`binds[].listeners[].routes[].backends[].invalid`|||
 |`binds[].listeners[].routes[].backends[].weight`|integer||
@@ -11966,6 +11979,19 @@
 |`backends[].aws.agentCore`|object||
 |`backends[].aws.agentCore.agentRuntimeArn`|string||
 |`backends[].aws.agentCore.qualifier`|string||
+|`backends[].guardrail`|object|A typed guardrail integration backend, with one variant per supported provider.<br>Exactly one of bedrock, googleModelArmor, azureContentSafety, or openAIModeration may be set.|
+|`backends[].guardrail.bedrock`|object|AWS Bedrock Guardrails (ApplyGuardrail API)|
+|`backends[].guardrail.bedrock.identifier`|string|The unique identifier of the guardrail|
+|`backends[].guardrail.bedrock.version`|string|The version of the guardrail|
+|`backends[].guardrail.bedrock.region`|string|AWS region where the guardrail is deployed (e.g. "us-west-2"). Used to construct the endpoint host.|
+|`backends[].guardrail.googleModelArmor`|object|Google Cloud Model Armor|
+|`backends[].guardrail.googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
+|`backends[].guardrail.googleModelArmor.projectId`|string|The GCP project ID|
+|`backends[].guardrail.googleModelArmor.location`|string|The GCP region, used to construct the endpoint host (default: us-central1)|
+|`backends[].guardrail.azureContentSafety`|object|Azure AI Content Safety|
+|`backends[].guardrail.azureContentSafety.resourceName`|string|The Azure resource name, used to construct the endpoint host<br>(`<resourceName>.cognitiveservices.azure.com`).<br>Exactly one of resourceName and endpoint must be set.|
+|`backends[].guardrail.azureContentSafety.endpoint`|string|The full endpoint host or URL (e.g. "https://<resource-name>.cognitiveservices.azure.com"),<br>for endpoints whose host cannot be derived from the resource name.|
+|`backends[].guardrail.openAIModeration`|object|OpenAI moderations API|
 |`backends[].name`|string||
 |`backends[].policies`|object||
 |`backends[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
@@ -17984,6 +18010,19 @@
 |`routeGroups[].routes[].backends[].aws.agentCore`|object||
 |`routeGroups[].routes[].backends[].aws.agentCore.agentRuntimeArn`|string||
 |`routeGroups[].routes[].backends[].aws.agentCore.qualifier`|string||
+|`routeGroups[].routes[].backends[].guardrail`|object|A typed guardrail integration backend, with one variant per supported provider.<br>Exactly one of bedrock, googleModelArmor, azureContentSafety, or openAIModeration may be set.|
+|`routeGroups[].routes[].backends[].guardrail.bedrock`|object|AWS Bedrock Guardrails (ApplyGuardrail API)|
+|`routeGroups[].routes[].backends[].guardrail.bedrock.identifier`|string|The unique identifier of the guardrail|
+|`routeGroups[].routes[].backends[].guardrail.bedrock.version`|string|The version of the guardrail|
+|`routeGroups[].routes[].backends[].guardrail.bedrock.region`|string|AWS region where the guardrail is deployed (e.g. "us-west-2"). Used to construct the endpoint host.|
+|`routeGroups[].routes[].backends[].guardrail.googleModelArmor`|object|Google Cloud Model Armor|
+|`routeGroups[].routes[].backends[].guardrail.googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
+|`routeGroups[].routes[].backends[].guardrail.googleModelArmor.projectId`|string|The GCP project ID|
+|`routeGroups[].routes[].backends[].guardrail.googleModelArmor.location`|string|The GCP region, used to construct the endpoint host (default: us-central1)|
+|`routeGroups[].routes[].backends[].guardrail.azureContentSafety`|object|Azure AI Content Safety|
+|`routeGroups[].routes[].backends[].guardrail.azureContentSafety.resourceName`|string|The Azure resource name, used to construct the endpoint host<br>(`<resourceName>.cognitiveservices.azure.com`).<br>Exactly one of resourceName and endpoint must be set.|
+|`routeGroups[].routes[].backends[].guardrail.azureContentSafety.endpoint`|string|The full endpoint host or URL (e.g. "https://<resource-name>.cognitiveservices.azure.com"),<br>for endpoints whose host cannot be derived from the resource name.|
+|`routeGroups[].routes[].backends[].guardrail.openAIModeration`|object|OpenAI moderations API|
 |`routeGroups[].routes[].backends[].routeGroup`|string||
 |`routeGroups[].routes[].backends[].invalid`|||
 |`routeGroups[].routes[].backends[].weight`|integer||

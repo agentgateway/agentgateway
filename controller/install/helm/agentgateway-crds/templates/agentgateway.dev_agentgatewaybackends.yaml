@@ -629,16 +629,95 @@ spec:
                                                     AWS Bedrock Guardrails settings for prompt
                                                     guarding.
                                                   properties:
+                                                    backendRef:
+                                                      description: |-
+                                                        Reference to a guardrail backend (with a `bedrock` provider) defined in the
+                                                        top level backends list. Mutually exclusive with the inline provider fields
+                                                        (identifier, version, region) below.
+
+                                                        Supported types: Backend.
+                                                      properties:
+                                                        group:
+                                                          default: ""
+                                                          description: |-
+                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                            When unspecified or empty string, core API group is inferred.
+                                                          maxLength: 253
+                                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                          type: string
+                                                        kind:
+                                                          default: Service
+                                                          description: |-
+                                                            Kind is the Kubernetes resource kind of the referent. For example
+                                                            "Service".
+
+                                                            Defaults to "Service" when not specified.
+
+                                                            ExternalName services can refer to CNAME DNS records that may live
+                                                            outside of the cluster and as such are difficult to reason about in
+                                                            terms of conformance. They also may not be safe to forward to (see
+                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                            support ExternalName Services.
+
+                                                            Support: Core (Services with a type other than ExternalName)
+
+                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                          type: string
+                                                        name:
+                                                          description: Name is the
+                                                            name of the referent.
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        namespace:
+                                                          description: |-
+                                                            Namespace is the namespace of the backend. When unspecified, the local
+                                                            namespace is inferred.
+
+                                                            Note that when a namespace different than the local namespace is specified,
+                                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                                            documentation for details.
+
+                                                            Support: Core
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                          type: string
+                                                        port:
+                                                          description: |-
+                                                            Port specifies the destination port number to use for this resource.
+                                                            Port is required when the referent is a Kubernetes Service. In this
+                                                            case, the port number is the service port number, not the target port.
+                                                            For other resources, destination port might be derived from the referent
+                                                            resource or this field.
+                                                          format: int32
+                                                          maximum: 65535
+                                                          minimum: 1
+                                                          type: integer
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-validations:
+                                                      - message: Must have port for
+                                                          Service reference
+                                                        rule: '(size(self.group) ==
+                                                          0 && self.kind == ''Service'')
+                                                          ? has(self.port) : true'
                                                     identifier:
-                                                      description: Identifier of the
-                                                        Guardrail policy to use for
-                                                        the backend.
+                                                      description: |-
+                                                        Identifier of the Guardrail policy to use for the backend.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
                                                     policies:
-                                                      description: Policies for communicating
-                                                        with AWS Bedrock Guardrails.
+                                                      description: |-
+                                                        Policies for communicating with AWS Bedrock Guardrails.
+                                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                                       properties:
                                                         auth:
                                                           description: Settings for
@@ -1354,36 +1433,120 @@ spec:
                                                       description: |-
                                                         AWS region where the guardrail is deployed, for example
                                                         `us-west-2`).
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
                                                     version:
-                                                      description: Version of the
-                                                        Guardrail policy to use for
-                                                        the backend.
+                                                      description: |-
+                                                        Version of the Guardrail policy to use for the backend.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
-                                                  required:
-                                                  - identifier
-                                                  - region
-                                                  - version
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: 'bedrockGuardrails: set
+                                                      either backendRef or all of
+                                                      identifier, version, and region'
+                                                    rule: 'has(self.backendRef) ?
+                                                      (!has(self.identifier) && !has(self.version)
+                                                      && !has(self.region)) : (has(self.identifier)
+                                                      && has(self.version) && has(self.region))'
                                                 googleModelArmor:
                                                   description: Google Model Armor
                                                     settings for prompt guarding.
                                                   properties:
+                                                    backendRef:
+                                                      description: |-
+                                                        Reference to a guardrail backend (with a `googleModelArmor` provider) defined in
+                                                        the top level backends list. Mutually exclusive with the inline provider fields
+                                                        (templateId, projectId, location) below.
+
+                                                        Supported types: Backend.
+                                                      properties:
+                                                        group:
+                                                          default: ""
+                                                          description: |-
+                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                            When unspecified or empty string, core API group is inferred.
+                                                          maxLength: 253
+                                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                          type: string
+                                                        kind:
+                                                          default: Service
+                                                          description: |-
+                                                            Kind is the Kubernetes resource kind of the referent. For example
+                                                            "Service".
+
+                                                            Defaults to "Service" when not specified.
+
+                                                            ExternalName services can refer to CNAME DNS records that may live
+                                                            outside of the cluster and as such are difficult to reason about in
+                                                            terms of conformance. They also may not be safe to forward to (see
+                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                            support ExternalName Services.
+
+                                                            Support: Core (Services with a type other than ExternalName)
+
+                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                          type: string
+                                                        name:
+                                                          description: Name is the
+                                                            name of the referent.
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        namespace:
+                                                          description: |-
+                                                            Namespace is the namespace of the backend. When unspecified, the local
+                                                            namespace is inferred.
+
+                                                            Note that when a namespace different than the local namespace is specified,
+                                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                                            documentation for details.
+
+                                                            Support: Core
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                          type: string
+                                                        port:
+                                                          description: |-
+                                                            Port specifies the destination port number to use for this resource.
+                                                            Port is required when the referent is a Kubernetes Service. In this
+                                                            case, the port number is the service port number, not the target port.
+                                                            For other resources, destination port might be derived from the referent
+                                                            resource or this field.
+                                                          format: int32
+                                                          maximum: 65535
+                                                          minimum: 1
+                                                          type: integer
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-validations:
+                                                      - message: Must have port for
+                                                          Service reference
+                                                        rule: '(size(self.group) ==
+                                                          0 && self.kind == ''Service'')
+                                                          ? has(self.port) : true'
                                                     location:
-                                                      default: us-central1
                                                       description: |-
                                                         Google Cloud location, for example `us-central1`.
                                                         Defaults to `us-central1` if not specified.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
                                                     policies:
-                                                      description: Policies for communicating
-                                                        with Google Model Armor.
+                                                      description: |-
+                                                        Policies for communicating with Google Model Armor.
+                                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                                       properties:
                                                         auth:
                                                           description: Settings for
@@ -2096,35 +2259,121 @@ spec:
                                                           type: object
                                                       type: object
                                                     projectId:
-                                                      description: Google Cloud project
-                                                        ID.
+                                                      description: |-
+                                                        Google Cloud project ID.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
                                                     templateId:
-                                                      description: Template ID for
-                                                        Google Model Armor.
+                                                      description: |-
+                                                        Template ID for Google Model Armor.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
-                                                  required:
-                                                  - projectId
-                                                  - templateId
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: 'googleModelArmor: set
+                                                      either backendRef or templateId
+                                                      and projectId'
+                                                    rule: 'has(self.backendRef) ?
+                                                      (!has(self.templateId) && !has(self.projectId)
+                                                      && !has(self.location)) : (has(self.templateId)
+                                                      && has(self.projectId))'
                                                 openAIModeration:
                                                   description: |-
                                                     Passes prompt data through the OpenAI Moderations
                                                     endpoint.
                                                     See https://developers.openai.com/api/reference/resources/moderations for more information.
                                                   properties:
+                                                    backendRef:
+                                                      description: |-
+                                                        Reference to a guardrail backend (with an `openAIModeration` provider) defined
+                                                        in the top level backends list. Mutually exclusive with `policies`; attach
+                                                        connection policies to the referenced backend instead.
+
+                                                        Supported types: Backend.
+                                                      properties:
+                                                        group:
+                                                          default: ""
+                                                          description: |-
+                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                            When unspecified or empty string, core API group is inferred.
+                                                          maxLength: 253
+                                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                          type: string
+                                                        kind:
+                                                          default: Service
+                                                          description: |-
+                                                            Kind is the Kubernetes resource kind of the referent. For example
+                                                            "Service".
+
+                                                            Defaults to "Service" when not specified.
+
+                                                            ExternalName services can refer to CNAME DNS records that may live
+                                                            outside of the cluster and as such are difficult to reason about in
+                                                            terms of conformance. They also may not be safe to forward to (see
+                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                            support ExternalName Services.
+
+                                                            Support: Core (Services with a type other than ExternalName)
+
+                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                          type: string
+                                                        name:
+                                                          description: Name is the
+                                                            name of the referent.
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        namespace:
+                                                          description: |-
+                                                            Namespace is the namespace of the backend. When unspecified, the local
+                                                            namespace is inferred.
+
+                                                            Note that when a namespace different than the local namespace is specified,
+                                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                                            documentation for details.
+
+                                                            Support: Core
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                          type: string
+                                                        port:
+                                                          description: |-
+                                                            Port specifies the destination port number to use for this resource.
+                                                            Port is required when the referent is a Kubernetes Service. In this
+                                                            case, the port number is the service port number, not the target port.
+                                                            For other resources, destination port might be derived from the referent
+                                                            resource or this field.
+                                                          format: int32
+                                                          maximum: 65535
+                                                          minimum: 1
+                                                          type: integer
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-validations:
+                                                      - message: Must have port for
+                                                          Service reference
+                                                        rule: '(size(self.group) ==
+                                                          0 && self.kind == ''Service'')
+                                                          ? has(self.port) : true'
                                                     model:
                                                       description: |-
                                                         Moderation model to use. For example,
                                                         `omni-moderation`.
                                                       type: string
                                                     policies:
-                                                      description: Policies for communicating
-                                                        with OpenAI.
+                                                      description: |-
+                                                        Policies for communicating with OpenAI.
+                                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                                       properties:
                                                         auth:
                                                           description: Settings for
@@ -2837,6 +3086,11 @@ spec:
                                                           type: object
                                                       type: object
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: 'openAIModeration: backendRef
+                                                      and policies are mutually exclusive'
+                                                    rule: '!(has(self.backendRef)
+                                                      && has(self.policies))'
                                                 regex:
                                                   description: Regular expression
                                                     (regex) matching for prompt guards
@@ -3088,16 +3342,95 @@ spec:
                                                     AWS Bedrock Guardrails settings for prompt
                                                     guarding.
                                                   properties:
+                                                    backendRef:
+                                                      description: |-
+                                                        Reference to a guardrail backend (with a `bedrock` provider) defined in the
+                                                        top level backends list. Mutually exclusive with the inline provider fields
+                                                        (identifier, version, region) below.
+
+                                                        Supported types: Backend.
+                                                      properties:
+                                                        group:
+                                                          default: ""
+                                                          description: |-
+                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                            When unspecified or empty string, core API group is inferred.
+                                                          maxLength: 253
+                                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                          type: string
+                                                        kind:
+                                                          default: Service
+                                                          description: |-
+                                                            Kind is the Kubernetes resource kind of the referent. For example
+                                                            "Service".
+
+                                                            Defaults to "Service" when not specified.
+
+                                                            ExternalName services can refer to CNAME DNS records that may live
+                                                            outside of the cluster and as such are difficult to reason about in
+                                                            terms of conformance. They also may not be safe to forward to (see
+                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                            support ExternalName Services.
+
+                                                            Support: Core (Services with a type other than ExternalName)
+
+                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                          type: string
+                                                        name:
+                                                          description: Name is the
+                                                            name of the referent.
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        namespace:
+                                                          description: |-
+                                                            Namespace is the namespace of the backend. When unspecified, the local
+                                                            namespace is inferred.
+
+                                                            Note that when a namespace different than the local namespace is specified,
+                                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                                            documentation for details.
+
+                                                            Support: Core
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                          type: string
+                                                        port:
+                                                          description: |-
+                                                            Port specifies the destination port number to use for this resource.
+                                                            Port is required when the referent is a Kubernetes Service. In this
+                                                            case, the port number is the service port number, not the target port.
+                                                            For other resources, destination port might be derived from the referent
+                                                            resource or this field.
+                                                          format: int32
+                                                          maximum: 65535
+                                                          minimum: 1
+                                                          type: integer
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-validations:
+                                                      - message: Must have port for
+                                                          Service reference
+                                                        rule: '(size(self.group) ==
+                                                          0 && self.kind == ''Service'')
+                                                          ? has(self.port) : true'
                                                     identifier:
-                                                      description: Identifier of the
-                                                        Guardrail policy to use for
-                                                        the backend.
+                                                      description: |-
+                                                        Identifier of the Guardrail policy to use for the backend.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
                                                     policies:
-                                                      description: Policies for communicating
-                                                        with AWS Bedrock Guardrails.
+                                                      description: |-
+                                                        Policies for communicating with AWS Bedrock Guardrails.
+                                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                                       properties:
                                                         auth:
                                                           description: Settings for
@@ -3813,36 +4146,120 @@ spec:
                                                       description: |-
                                                         AWS region where the guardrail is deployed, for example
                                                         `us-west-2`).
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
                                                     version:
-                                                      description: Version of the
-                                                        Guardrail policy to use for
-                                                        the backend.
+                                                      description: |-
+                                                        Version of the Guardrail policy to use for the backend.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
-                                                  required:
-                                                  - identifier
-                                                  - region
-                                                  - version
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: 'bedrockGuardrails: set
+                                                      either backendRef or all of
+                                                      identifier, version, and region'
+                                                    rule: 'has(self.backendRef) ?
+                                                      (!has(self.identifier) && !has(self.version)
+                                                      && !has(self.region)) : (has(self.identifier)
+                                                      && has(self.version) && has(self.region))'
                                                 googleModelArmor:
                                                   description: Google Model Armor
                                                     settings for prompt guarding.
                                                   properties:
+                                                    backendRef:
+                                                      description: |-
+                                                        Reference to a guardrail backend (with a `googleModelArmor` provider) defined in
+                                                        the top level backends list. Mutually exclusive with the inline provider fields
+                                                        (templateId, projectId, location) below.
+
+                                                        Supported types: Backend.
+                                                      properties:
+                                                        group:
+                                                          default: ""
+                                                          description: |-
+                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                            When unspecified or empty string, core API group is inferred.
+                                                          maxLength: 253
+                                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                          type: string
+                                                        kind:
+                                                          default: Service
+                                                          description: |-
+                                                            Kind is the Kubernetes resource kind of the referent. For example
+                                                            "Service".
+
+                                                            Defaults to "Service" when not specified.
+
+                                                            ExternalName services can refer to CNAME DNS records that may live
+                                                            outside of the cluster and as such are difficult to reason about in
+                                                            terms of conformance. They also may not be safe to forward to (see
+                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                            support ExternalName Services.
+
+                                                            Support: Core (Services with a type other than ExternalName)
+
+                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                          type: string
+                                                        name:
+                                                          description: Name is the
+                                                            name of the referent.
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        namespace:
+                                                          description: |-
+                                                            Namespace is the namespace of the backend. When unspecified, the local
+                                                            namespace is inferred.
+
+                                                            Note that when a namespace different than the local namespace is specified,
+                                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                                            documentation for details.
+
+                                                            Support: Core
+                                                          maxLength: 63
+                                                          minLength: 1
+                                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                          type: string
+                                                        port:
+                                                          description: |-
+                                                            Port specifies the destination port number to use for this resource.
+                                                            Port is required when the referent is a Kubernetes Service. In this
+                                                            case, the port number is the service port number, not the target port.
+                                                            For other resources, destination port might be derived from the referent
+                                                            resource or this field.
+                                                          format: int32
+                                                          maximum: 65535
+                                                          minimum: 1
+                                                          type: integer
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-validations:
+                                                      - message: Must have port for
+                                                          Service reference
+                                                        rule: '(size(self.group) ==
+                                                          0 && self.kind == ''Service'')
+                                                          ? has(self.port) : true'
                                                     location:
-                                                      default: us-central1
                                                       description: |-
                                                         Google Cloud location, for example `us-central1`.
                                                         Defaults to `us-central1` if not specified.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
                                                     policies:
-                                                      description: Policies for communicating
-                                                        with Google Model Armor.
+                                                      description: |-
+                                                        Policies for communicating with Google Model Armor.
+                                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                                       properties:
                                                         auth:
                                                           description: Settings for
@@ -4555,21 +4972,28 @@ spec:
                                                           type: object
                                                       type: object
                                                     projectId:
-                                                      description: Google Cloud project
-                                                        ID.
+                                                      description: |-
+                                                        Google Cloud project ID.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
                                                     templateId:
-                                                      description: Template ID for
-                                                        Google Model Armor.
+                                                      description: |-
+                                                        Template ID for Google Model Armor.
+                                                        Deprecated: use backendRef.
                                                       maxLength: 256
                                                       minLength: 1
                                                       type: string
-                                                  required:
-                                                  - projectId
-                                                  - templateId
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: 'googleModelArmor: set
+                                                      either backendRef or templateId
+                                                      and projectId'
+                                                    rule: 'has(self.backendRef) ?
+                                                      (!has(self.templateId) && !has(self.projectId)
+                                                      && !has(self.location)) : (has(self.templateId)
+                                                      && has(self.projectId))'
                                                 regex:
                                                   description: Regular expression
                                                     (regex) matching for prompt guards
@@ -6291,6 +6715,68 @@ spec:
                   Warning: this backend type can send requests to arbitrary destinations. Proper
                   access controls must be put in place when using this backend type.
                 type: object
+              guardrail:
+                description: Guardrail backend, referenced from prompt guards via
+                  backendRef.
+                properties:
+                  bedrock:
+                    description: AWS Bedrock Guardrails provider.
+                    properties:
+                      identifier:
+                        description: The unique identifier of the guardrail.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      region:
+                        description: AWS region where the guardrail is deployed, for
+                          example `us-west-2`.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      version:
+                        description: The version of the guardrail.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    required:
+                    - identifier
+                    - region
+                    - version
+                    type: object
+                  googleModelArmor:
+                    description: Google Cloud Model Armor provider.
+                    properties:
+                      location:
+                        default: us-central1
+                        description: |-
+                          Google Cloud location, for example `us-central1`.
+                          Defaults to `us-central1` if not specified.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      projectId:
+                        description: Google Cloud project ID.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      templateId:
+                        description: Template ID for Google Model Armor.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    required:
+                    - projectId
+                    - templateId
+                    type: object
+                  openAIModeration:
+                    description: OpenAI moderations provider.
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: exactly one of the fields in [bedrock googleModelArmor
+                    openAIModeration] must be set
+                  rule: '[has(self.bedrock),has(self.googleModelArmor),has(self.openAIModeration)].filter(x,x==true).size()
+                    == 1'
               mcp:
                 description: MCP backend.
                 properties:
@@ -7345,15 +7831,92 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    backendRef:
+                                      description: |-
+                                        Reference to a guardrail backend (with a `bedrock` provider) defined in the
+                                        top level backends list. Mutually exclusive with the inline provider fields
+                                        (identifier, version, region) below.
+
+                                        Supported types: Backend.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: |-
+                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                            When unspecified or empty string, core API group is inferred.
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: |-
+                                            Kind is the Kubernetes resource kind of the referent. For example
+                                            "Service".
+
+                                            Defaults to "Service" when not specified.
+
+                                            ExternalName services can refer to CNAME DNS records that may live
+                                            outside of the cluster and as such are difficult to reason about in
+                                            terms of conformance. They also may not be safe to forward to (see
+                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                            support ExternalName Services.
+
+                                            Support: Core (Services with a type other than ExternalName)
+
+                                            Support: Implementation-specific (Services with type ExternalName)
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: |-
+                                            Namespace is the namespace of the backend. When unspecified, the local
+                                            namespace is inferred.
+
+                                            Note that when a namespace different than the local namespace is specified,
+                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                            documentation for details.
+
+                                            Support: Core
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: |-
+                                            Port specifies the destination port number to use for this resource.
+                                            Port is required when the referent is a Kubernetes Service. In this
+                                            case, the port number is the service port number, not the target port.
+                                            For other resources, destination port might be derived from the referent
+                                            resource or this field.
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
                                     identifier:
-                                      description: Identifier of the Guardrail policy
-                                        to use for the backend.
+                                      description: |-
+                                        Identifier of the Guardrail policy to use for the backend.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
                                     policies:
-                                      description: Policies for communicating with
-                                        AWS Bedrock Guardrails.
+                                      description: |-
+                                        Policies for communicating with AWS Bedrock Guardrails.
+                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                       properties:
                                         auth:
                                           description: Settings for managing authentication
@@ -7991,35 +8554,116 @@ spec:
                                       description: |-
                                         AWS region where the guardrail is deployed, for example
                                         `us-west-2`).
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
                                     version:
-                                      description: Version of the Guardrail policy
-                                        to use for the backend.
+                                      description: |-
+                                        Version of the Guardrail policy to use for the backend.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
-                                  required:
-                                  - identifier
-                                  - region
-                                  - version
                                   type: object
+                                  x-kubernetes-validations:
+                                  - message: 'bedrockGuardrails: set either backendRef
+                                      or all of identifier, version, and region'
+                                    rule: 'has(self.backendRef) ? (!has(self.identifier)
+                                      && !has(self.version) && !has(self.region))
+                                      : (has(self.identifier) && has(self.version)
+                                      && has(self.region))'
                                 googleModelArmor:
                                   description: Google Model Armor settings for prompt
                                     guarding.
                                   properties:
+                                    backendRef:
+                                      description: |-
+                                        Reference to a guardrail backend (with a `googleModelArmor` provider) defined in
+                                        the top level backends list. Mutually exclusive with the inline provider fields
+                                        (templateId, projectId, location) below.
+
+                                        Supported types: Backend.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: |-
+                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                            When unspecified or empty string, core API group is inferred.
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: |-
+                                            Kind is the Kubernetes resource kind of the referent. For example
+                                            "Service".
+
+                                            Defaults to "Service" when not specified.
+
+                                            ExternalName services can refer to CNAME DNS records that may live
+                                            outside of the cluster and as such are difficult to reason about in
+                                            terms of conformance. They also may not be safe to forward to (see
+                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                            support ExternalName Services.
+
+                                            Support: Core (Services with a type other than ExternalName)
+
+                                            Support: Implementation-specific (Services with type ExternalName)
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: |-
+                                            Namespace is the namespace of the backend. When unspecified, the local
+                                            namespace is inferred.
+
+                                            Note that when a namespace different than the local namespace is specified,
+                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                            documentation for details.
+
+                                            Support: Core
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: |-
+                                            Port specifies the destination port number to use for this resource.
+                                            Port is required when the referent is a Kubernetes Service. In this
+                                            case, the port number is the service port number, not the target port.
+                                            For other resources, destination port might be derived from the referent
+                                            resource or this field.
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
                                     location:
-                                      default: us-central1
                                       description: |-
                                         Google Cloud location, for example `us-central1`.
                                         Defaults to `us-central1` if not specified.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
                                     policies:
-                                      description: Policies for communicating with
-                                        Google Model Armor.
+                                      description: |-
+                                        Policies for communicating with Google Model Armor.
+                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                       properties:
                                         auth:
                                           description: Settings for managing authentication
@@ -8654,33 +9298,116 @@ spec:
                                           type: object
                                       type: object
                                     projectId:
-                                      description: Google Cloud project ID.
+                                      description: |-
+                                        Google Cloud project ID.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
                                     templateId:
-                                      description: Template ID for Google Model Armor.
+                                      description: |-
+                                        Template ID for Google Model Armor.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
-                                  required:
-                                  - projectId
-                                  - templateId
                                   type: object
+                                  x-kubernetes-validations:
+                                  - message: 'googleModelArmor: set either backendRef
+                                      or templateId and projectId'
+                                    rule: 'has(self.backendRef) ? (!has(self.templateId)
+                                      && !has(self.projectId) && !has(self.location))
+                                      : (has(self.templateId) && has(self.projectId))'
                                 openAIModeration:
                                   description: |-
                                     Passes prompt data through the OpenAI Moderations
                                     endpoint.
                                     See https://developers.openai.com/api/reference/resources/moderations for more information.
                                   properties:
+                                    backendRef:
+                                      description: |-
+                                        Reference to a guardrail backend (with an `openAIModeration` provider) defined
+                                        in the top level backends list. Mutually exclusive with `policies`; attach
+                                        connection policies to the referenced backend instead.
+
+                                        Supported types: Backend.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: |-
+                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                            When unspecified or empty string, core API group is inferred.
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: |-
+                                            Kind is the Kubernetes resource kind of the referent. For example
+                                            "Service".
+
+                                            Defaults to "Service" when not specified.
+
+                                            ExternalName services can refer to CNAME DNS records that may live
+                                            outside of the cluster and as such are difficult to reason about in
+                                            terms of conformance. They also may not be safe to forward to (see
+                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                            support ExternalName Services.
+
+                                            Support: Core (Services with a type other than ExternalName)
+
+                                            Support: Implementation-specific (Services with type ExternalName)
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: |-
+                                            Namespace is the namespace of the backend. When unspecified, the local
+                                            namespace is inferred.
+
+                                            Note that when a namespace different than the local namespace is specified,
+                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                            documentation for details.
+
+                                            Support: Core
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: |-
+                                            Port specifies the destination port number to use for this resource.
+                                            Port is required when the referent is a Kubernetes Service. In this
+                                            case, the port number is the service port number, not the target port.
+                                            For other resources, destination port might be derived from the referent
+                                            resource or this field.
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
                                     model:
                                       description: |-
                                         Moderation model to use. For example,
                                         `omni-moderation`.
                                       type: string
                                     policies:
-                                      description: Policies for communicating with
-                                        OpenAI.
+                                      description: |-
+                                        Policies for communicating with OpenAI.
+                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                       properties:
                                         auth:
                                           description: Settings for managing authentication
@@ -9315,6 +10042,10 @@ spec:
                                           type: object
                                       type: object
                                   type: object
+                                  x-kubernetes-validations:
+                                  - message: 'openAIModeration: backendRef and policies
+                                      are mutually exclusive'
+                                    rule: '!(has(self.backendRef) && has(self.policies))'
                                 regex:
                                   description: Regular expression (regex) matching
                                     for prompt guards and data masking.
@@ -9559,15 +10290,92 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    backendRef:
+                                      description: |-
+                                        Reference to a guardrail backend (with a `bedrock` provider) defined in the
+                                        top level backends list. Mutually exclusive with the inline provider fields
+                                        (identifier, version, region) below.
+
+                                        Supported types: Backend.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: |-
+                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                            When unspecified or empty string, core API group is inferred.
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: |-
+                                            Kind is the Kubernetes resource kind of the referent. For example
+                                            "Service".
+
+                                            Defaults to "Service" when not specified.
+
+                                            ExternalName services can refer to CNAME DNS records that may live
+                                            outside of the cluster and as such are difficult to reason about in
+                                            terms of conformance. They also may not be safe to forward to (see
+                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                            support ExternalName Services.
+
+                                            Support: Core (Services with a type other than ExternalName)
+
+                                            Support: Implementation-specific (Services with type ExternalName)
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: |-
+                                            Namespace is the namespace of the backend. When unspecified, the local
+                                            namespace is inferred.
+
+                                            Note that when a namespace different than the local namespace is specified,
+                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                            documentation for details.
+
+                                            Support: Core
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: |-
+                                            Port specifies the destination port number to use for this resource.
+                                            Port is required when the referent is a Kubernetes Service. In this
+                                            case, the port number is the service port number, not the target port.
+                                            For other resources, destination port might be derived from the referent
+                                            resource or this field.
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
                                     identifier:
-                                      description: Identifier of the Guardrail policy
-                                        to use for the backend.
+                                      description: |-
+                                        Identifier of the Guardrail policy to use for the backend.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
                                     policies:
-                                      description: Policies for communicating with
-                                        AWS Bedrock Guardrails.
+                                      description: |-
+                                        Policies for communicating with AWS Bedrock Guardrails.
+                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                       properties:
                                         auth:
                                           description: Settings for managing authentication
@@ -10205,35 +11013,116 @@ spec:
                                       description: |-
                                         AWS region where the guardrail is deployed, for example
                                         `us-west-2`).
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
                                     version:
-                                      description: Version of the Guardrail policy
-                                        to use for the backend.
+                                      description: |-
+                                        Version of the Guardrail policy to use for the backend.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
-                                  required:
-                                  - identifier
-                                  - region
-                                  - version
                                   type: object
+                                  x-kubernetes-validations:
+                                  - message: 'bedrockGuardrails: set either backendRef
+                                      or all of identifier, version, and region'
+                                    rule: 'has(self.backendRef) ? (!has(self.identifier)
+                                      && !has(self.version) && !has(self.region))
+                                      : (has(self.identifier) && has(self.version)
+                                      && has(self.region))'
                                 googleModelArmor:
                                   description: Google Model Armor settings for prompt
                                     guarding.
                                   properties:
+                                    backendRef:
+                                      description: |-
+                                        Reference to a guardrail backend (with a `googleModelArmor` provider) defined in
+                                        the top level backends list. Mutually exclusive with the inline provider fields
+                                        (templateId, projectId, location) below.
+
+                                        Supported types: Backend.
+                                      properties:
+                                        group:
+                                          default: ""
+                                          description: |-
+                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                            When unspecified or empty string, core API group is inferred.
+                                          maxLength: 253
+                                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                          type: string
+                                        kind:
+                                          default: Service
+                                          description: |-
+                                            Kind is the Kubernetes resource kind of the referent. For example
+                                            "Service".
+
+                                            Defaults to "Service" when not specified.
+
+                                            ExternalName services can refer to CNAME DNS records that may live
+                                            outside of the cluster and as such are difficult to reason about in
+                                            terms of conformance. They also may not be safe to forward to (see
+                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                            support ExternalName Services.
+
+                                            Support: Core (Services with a type other than ExternalName)
+
+                                            Support: Implementation-specific (Services with type ExternalName)
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                          type: string
+                                        name:
+                                          description: Name is the name of the referent.
+                                          maxLength: 253
+                                          minLength: 1
+                                          type: string
+                                        namespace:
+                                          description: |-
+                                            Namespace is the namespace of the backend. When unspecified, the local
+                                            namespace is inferred.
+
+                                            Note that when a namespace different than the local namespace is specified,
+                                            a ReferenceGrant object is required in the referent namespace to allow that
+                                            namespace's owner to accept the reference. See the ReferenceGrant
+                                            documentation for details.
+
+                                            Support: Core
+                                          maxLength: 63
+                                          minLength: 1
+                                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                          type: string
+                                        port:
+                                          description: |-
+                                            Port specifies the destination port number to use for this resource.
+                                            Port is required when the referent is a Kubernetes Service. In this
+                                            case, the port number is the service port number, not the target port.
+                                            For other resources, destination port might be derived from the referent
+                                            resource or this field.
+                                          format: int32
+                                          maximum: 65535
+                                          minimum: 1
+                                          type: integer
+                                      required:
+                                      - name
+                                      type: object
+                                      x-kubernetes-validations:
+                                      - message: Must have port for Service reference
+                                        rule: '(size(self.group) == 0 && self.kind
+                                          == ''Service'') ? has(self.port) : true'
                                     location:
-                                      default: us-central1
                                       description: |-
                                         Google Cloud location, for example `us-central1`.
                                         Defaults to `us-central1` if not specified.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
                                     policies:
-                                      description: Policies for communicating with
-                                        Google Model Armor.
+                                      description: |-
+                                        Policies for communicating with Google Model Armor.
+                                        Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
                                       properties:
                                         auth:
                                           description: Settings for managing authentication
@@ -10868,19 +11757,26 @@ spec:
                                           type: object
                                       type: object
                                     projectId:
-                                      description: Google Cloud project ID.
+                                      description: |-
+                                        Google Cloud project ID.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
                                     templateId:
-                                      description: Template ID for Google Model Armor.
+                                      description: |-
+                                        Template ID for Google Model Armor.
+                                        Deprecated: use backendRef.
                                       maxLength: 256
                                       minLength: 1
                                       type: string
-                                  required:
-                                  - projectId
-                                  - templateId
                                   type: object
+                                  x-kubernetes-validations:
+                                  - message: 'googleModelArmor: set either backendRef
+                                      or templateId and projectId'
+                                    rule: 'has(self.backendRef) ? (!has(self.templateId)
+                                      && !has(self.projectId) && !has(self.location))
+                                      : (has(self.templateId) && has(self.projectId))'
                                 regex:
                                   description: Regular expression (regex) matching
                                     for prompt guards and data masking.
@@ -12804,8 +13700,8 @@ spec:
               rule: 'has(self.policies) && has(self.policies.mcp) ? has(self.mcp)
                 : true'
             - message: exactly one of the fields in [ai static dynamicForwardProxy
-                mcp aws a2a] must be set
-              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws),has(self.a2a)].filter(x,x==true).size()
+                mcp aws a2a guardrail] must be set
+              rule: '[has(self.ai),has(self.static),has(self.dynamicForwardProxy),has(self.mcp),has(self.aws),has(self.a2a),has(self.guardrail)].filter(x,x==true).size()
                 == 1'
           status:
             description: Current backend status.

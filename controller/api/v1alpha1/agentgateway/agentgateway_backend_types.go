@@ -52,7 +52,7 @@ type AgentgatewayBackendList struct {
 	Items           []AgentgatewayBackend `json:"items"`
 }
 
-// +kubebuilder:validation:ExactlyOneOf=ai;static;dynamicForwardProxy;mcp;aws;a2a
+// +kubebuilder:validation:ExactlyOneOf=ai;static;dynamicForwardProxy;mcp;aws;a2a;guardrail
 // +kubebuilder:validation:XValidation:rule="has(self.policies) && has(self.policies.ai) ? has(self.ai) : true",message="AI policies require AI backend"
 // +kubebuilder:validation:XValidation:rule="has(self.policies) && has(self.policies.mcp) ? has(self.mcp) : true",message="MCP policies require MCP backend"
 type AgentgatewayBackendSpec struct {
@@ -84,6 +84,10 @@ type AgentgatewayBackendSpec struct {
 	// +optional
 	Aws *AwsBackend `json:"aws,omitempty"`
 
+	// Guardrail backend, referenced from prompt guards via backendRef.
+	// +optional
+	Guardrail *GuardrailBackend `json:"guardrail,omitempty"`
+
 	// Policies for communicating with this backend. Policies may also be set
 	// with AgentgatewayPolicy. Backend policies take precedence over policy
 	// resources when they set the same field.
@@ -110,6 +114,60 @@ type AwsAgentCoreBackend struct {
 	// Alias or version qualifier.
 	// +optional
 	Qualifier *string `json:"qualifier,omitempty"`
+}
+
+// GuardrailBackend is a reusable guardrail provider integration that prompt
+// guards reference via `backendRef`. Exactly one provider must be set, and it
+// must match the guard kind that references it.
+// +kubebuilder:validation:ExactlyOneOf=bedrock;googleModelArmor;openAIModeration
+type GuardrailBackend struct {
+	// AWS Bedrock Guardrails provider.
+	// +optional
+	Bedrock *GuardrailBedrockProvider `json:"bedrock,omitempty"`
+
+	// Google Cloud Model Armor provider.
+	// +optional
+	GoogleModelArmor *GuardrailGoogleModelArmorProvider `json:"googleModelArmor,omitempty"`
+
+	// OpenAI moderations provider.
+	// +optional
+	OpenAIModeration *GuardrailOpenAIModerationProvider `json:"openAIModeration,omitempty"`
+}
+
+// GuardrailBedrockProvider configures an AWS Bedrock Guardrails backend.
+type GuardrailBedrockProvider struct {
+	// The unique identifier of the guardrail.
+	// +required
+	GuardrailIdentifier ShortString `json:"identifier"`
+
+	// The version of the guardrail.
+	// +required
+	GuardrailVersion ShortString `json:"version"`
+
+	// AWS region where the guardrail is deployed, for example `us-west-2`.
+	// +required
+	Region ShortString `json:"region"`
+}
+
+// GuardrailGoogleModelArmorProvider configures a Google Cloud Model Armor backend.
+type GuardrailGoogleModelArmorProvider struct {
+	// Template ID for Google Model Armor.
+	// +required
+	TemplateID ShortString `json:"templateId"`
+
+	// Google Cloud project ID.
+	// +required
+	ProjectID ShortString `json:"projectId"`
+
+	// Google Cloud location, for example `us-central1`.
+	// Defaults to `us-central1` if not specified.
+	// +kubebuilder:default="us-central1"
+	// +optional
+	Location *ShortString `json:"location,omitempty"`
+}
+
+// GuardrailOpenAIModerationProvider configures an OpenAI moderations backend.
+type GuardrailOpenAIModerationProvider struct {
 }
 
 // Static backend endpoint, either TCP (`host` and `port`) or Unix Domain Socket.

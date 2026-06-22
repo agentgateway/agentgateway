@@ -206,7 +206,48 @@ func BuildAgwBackend(
 		}
 		return be, errors.Join(errs...)
 	}
+	if b := backend.Spec.Guardrail; b != nil {
+		gb, err := translateGuardrailBackend(b)
+		if err != nil {
+			return nil, errors.Join(append(errs, err)...)
+		}
+		return []*api.Backend{{
+			Key:            backend.Namespace + "/" + backend.Name,
+			Name:           plugins.ResourceName(backend),
+			Kind:           &api.Backend_Guardrail{Guardrail: gb},
+			InlinePolicies: pols,
+		}}, errors.Join(errs...)
+	}
 	return nil, errors.Join(append(errs, errors.New("unknown backend"))...)
+}
+
+// translateGuardrailBackend maps a GuardrailBackend CRD provider to its proto message.
+func translateGuardrailBackend(b *agentgateway.GuardrailBackend) (*api.GuardrailBackend, error) {
+	switch {
+	case b.Bedrock != nil:
+		return &api.GuardrailBackend{Provider: &api.GuardrailBackend_Bedrock_{
+			Bedrock: &api.GuardrailBackend_Bedrock{
+				Identifier: string(b.Bedrock.GuardrailIdentifier),
+				Version:    string(b.Bedrock.GuardrailVersion),
+				Region:     string(b.Bedrock.Region),
+			},
+		}}, nil
+	case b.GoogleModelArmor != nil:
+		gma := &api.GuardrailBackend_GoogleModelArmor{
+			TemplateId: string(b.GoogleModelArmor.TemplateID),
+			ProjectId:  string(b.GoogleModelArmor.ProjectID),
+		}
+		if b.GoogleModelArmor.Location != nil {
+			gma.Location = new(string(*b.GoogleModelArmor.Location))
+		}
+		return &api.GuardrailBackend{Provider: &api.GuardrailBackend_GoogleModelArmor_{GoogleModelArmor: gma}}, nil
+	case b.OpenAIModeration != nil:
+		return &api.GuardrailBackend{Provider: &api.GuardrailBackend_OpenaiModeration{
+			OpenaiModeration: &api.GuardrailBackend_OpenAIModeration{},
+		}}, nil
+	default:
+		return nil, errors.New("guardrail backend requires exactly one provider")
+	}
 }
 
 func TranslateAgwBackend(

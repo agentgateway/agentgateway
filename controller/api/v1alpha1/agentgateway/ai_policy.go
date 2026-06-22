@@ -166,54 +166,85 @@ type CustomResponse struct {
 	StatusCode int32 `json:"statusCode,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!(has(self.backendRef) && has(self.policies))",message="openAIModeration: backendRef and policies are mutually exclusive"
 type OpenAIModeration struct {
+	// Reference to a guardrail backend (with an `openAIModeration` provider) defined
+	// in the top level backends list. Mutually exclusive with `policies`; attach
+	// connection policies to the referenced backend instead.
+	//
+	// Supported types: Backend.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 	// Moderation model to use. For example,
 	// `omni-moderation`.
 	// +optional
 	Model *string `json:"model,omitempty"`
 	// Policies for communicating with OpenAI.
-	// +kubebuilder:validation:AtLeastOneFieldSet
+	// Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="has(self.backendRef) ? (!has(self.identifier) && !has(self.version) && !has(self.region)) : (has(self.identifier) && has(self.version) && has(self.region))",message="bedrockGuardrails: set either backendRef or all of identifier, version, and region"
 type BedrockGuardrails struct {
+	// Reference to a guardrail backend (with a `bedrock` provider) defined in the
+	// top level backends list. Mutually exclusive with the inline provider fields
+	// (identifier, version, region) below.
+	//
+	// Supported types: Backend.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
 	// Identifier of the Guardrail policy to use for the backend.
-	// +required
-	GuardrailIdentifier ShortString `json:"identifier"`
+	// Deprecated: use backendRef.
+	// +optional
+	GuardrailIdentifier ShortString `json:"identifier,omitempty"`
 
 	// Version of the Guardrail policy to use for the backend.
-	// +required
-	GuardrailVersion ShortString `json:"version"`
+	// Deprecated: use backendRef.
+	// +optional
+	GuardrailVersion ShortString `json:"version,omitempty"`
 
 	// AWS region where the guardrail is deployed, for example
 	// `us-west-2`).
-	// +required
-	Region ShortString `json:"region"`
+	// Deprecated: use backendRef.
+	// +optional
+	Region ShortString `json:"region,omitempty"`
 
 	// Policies for communicating with AWS Bedrock Guardrails.
-	// +kubebuilder:validation:AtLeastOneFieldSet
+	// Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="has(self.backendRef) ? (!has(self.templateId) && !has(self.projectId) && !has(self.location)) : (has(self.templateId) && has(self.projectId))",message="googleModelArmor: set either backendRef or templateId and projectId"
 type GoogleModelArmor struct {
+	// Reference to a guardrail backend (with a `googleModelArmor` provider) defined in
+	// the top level backends list. Mutually exclusive with the inline provider fields
+	// (templateId, projectId, location) below.
+	//
+	// Supported types: Backend.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
 	// Template ID for Google Model Armor.
-	// +required
-	TemplateID ShortString `json:"templateId"`
+	// Deprecated: use backendRef.
+	// +optional
+	TemplateID ShortString `json:"templateId,omitempty"`
 
 	// Google Cloud project ID.
-	// +required
-	ProjectID ShortString `json:"projectId"`
+	// Deprecated: use backendRef.
+	// +optional
+	ProjectID ShortString `json:"projectId,omitempty"`
 
 	// Google Cloud location, for example `us-central1`.
 	// Defaults to `us-central1` if not specified.
-	// +kubebuilder:default="us-central1"
+	// Deprecated: use backendRef.
 	// +optional
 	Location *ShortString `json:"location,omitempty"`
 
 	// Policies for communicating with Google Model Armor.
-	// +kubebuilder:validation:AtLeastOneFieldSet
+	// Deprecated: reference a guardrail backend via backendRef and attach policies to it instead.
 	// +optional
 	Policies *BackendSimple `json:"policies,omitempty"`
 }

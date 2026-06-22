@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -18,6 +18,7 @@ use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
+use crate::llm::policy::guardrail::GuardrailBackend;
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, anthropic, copilot, custom, openai};
 use crate::mcp::{FailureMode, McpAuthorization};
@@ -1145,6 +1146,8 @@ pub enum FullLocalBackendSpec {
 	AI(LocalAIBackend),
 	#[serde(rename = "aws")]
 	Aws(LocalAwsBackend),
+	#[serde(rename = "guardrail")]
+	Guardrail(GuardrailBackend),
 }
 
 impl From<FullLocalBackendSpec> for LocalBackend {
@@ -1154,6 +1157,7 @@ impl From<FullLocalBackendSpec> for LocalBackend {
 			FullLocalBackendSpec::MCP(m) => LocalBackend::MCP(m),
 			FullLocalBackendSpec::AI(a) => LocalBackend::AI(a),
 			FullLocalBackendSpec::Aws(a) => LocalBackend::Aws(a),
+			FullLocalBackendSpec::Guardrail(g) => LocalBackend::Guardrail(g),
 		}
 	}
 }
@@ -1196,6 +1200,8 @@ pub enum LocalBackend {
 	AI(LocalAIBackend),
 	#[serde(rename = "aws")]
 	Aws(LocalAwsBackend),
+	#[serde(rename = "guardrail")]
+	Guardrail(GuardrailBackend),
 	#[serde(rename = "routeGroup")]
 	RouteGroup(RouteGroupKey),
 	Invalid,
@@ -1446,6 +1452,7 @@ impl LocalBackend {
 				};
 				vec![Backend::Aws(name, config).into()]
 			},
+			LocalBackend::Guardrail(gb) => vec![Backend::Guardrail(name, gb.clone()).into()],
 			LocalBackend::RouteGroup(_) => vec![], // Route groups stay as references
 			LocalBackend::Invalid => vec![Backend::Invalid.into()],
 		})
@@ -2388,7 +2395,73 @@ async fn convert(
 		workloads,
 		services,
 	};
+	validate_guardrail_backend_refs(&normalized)?;
 	Ok(normalized)
+}
+
+/// Eagerly enforce that every guardrail `backendRef` in a prompt guard resolves to a
+/// guardrail backend declared in the same config. This is the load-time counterpart to
+/// the request-time check in [`crate::llm::policy::resolve_guardrail_backend`]; surfacing
+/// it here turns a misconfiguration into a config-load failure rather than a per-request
+/// error. (The xDS path keeps the per-resource syntactic check + lazy resolution, since
+/// its resources stream independently and the full backend set is not known at parse time.)
+fn validate_guardrail_backend_refs(cfg: &NormalizedLocalConfig) -> anyhow::Result<()> {
+	// Declared guardrail backends, keyed as the request-time resolver expects ("/<name>").
+	let guardrail_keys: HashSet<Strng> = cfg
+		.backends
+		.iter()
+		.filter(|b| matches!(b.backend, Backend::Guardrail(..)))
+		.map(|b| b.backend.name())
+		.collect();
+
+	// An AI prompt guard can be attached as a route-level traffic policy, a backend-level
+	// policy, or a standalone targeted policy; gather all of them.
+	let from_traffic = |p: &TrafficPolicy| match p {
+		TrafficPolicy::AI(ai) => ai.prompt_guard.clone(),
+		_ => None,
+	};
+	let from_backend = |p: &BackendTrafficPolicy| match p {
+		BackendTrafficPolicy::AI(ai) => ai.prompt_guard.clone(),
+		_ => None,
+	};
+
+	let mut guards: Vec<PromptGuard> = Vec::new();
+	for pol in &cfg.policies {
+		match &pol.policy {
+			PolicyType::Backend(b) => guards.extend(from_backend(b)),
+			PolicyType::Traffic(t) => guards.extend(from_traffic(&t.policy)),
+			PolicyType::Frontend(_) => {},
+		}
+	}
+	let routes = cfg
+		.listener_routes
+		.iter()
+		.flat_map(|(_, rs)| rs)
+		.chain(cfg.route_groups.iter().flat_map(|(_, rs)| rs));
+	for r in routes {
+		guards.extend(r.inline_policies.iter().filter_map(&from_traffic));
+		for be in &r.backends {
+			guards.extend(be.inline_policies.iter().filter_map(&from_backend));
+		}
+	}
+	for b in &cfg.backends {
+		guards.extend(b.inline_policies.iter().filter_map(&from_backend));
+	}
+
+	for pg in &guards {
+		for key in pg.backend_refs() {
+			// Local-config backends are keyed "/<name>"; normalize bare references to match.
+			let normalized = if key.contains('/') {
+				key.clone()
+			} else {
+				strng::format!("/{key}")
+			};
+			if !guardrail_keys.contains(&normalized) {
+				anyhow::bail!("guardrail backendRef {key} does not reference a declared guardrail backend");
+			}
+		}
+	}
+	Ok(())
 }
 
 fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {

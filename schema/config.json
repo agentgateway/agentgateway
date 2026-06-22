@@ -6039,6 +6039,17 @@
         {
           "type": "object",
           "properties": {
+            "guardrail": {
+              "$ref": "#/$defs/GuardrailBackend"
+            }
+          },
+          "required": [
+            "guardrail"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "routeGroup": {
               "type": "string"
             }
@@ -7157,6 +7168,135 @@
       "required": [
         "agentRuntimeArn"
       ]
+    },
+    "GuardrailBackend": {
+      "description": "A typed guardrail integration backend, with one variant per supported provider.",
+      "oneOf": [
+        {
+          "description": "AWS Bedrock Guardrails (ApplyGuardrail API)",
+          "type": "object",
+          "properties": {
+            "bedrock": {
+              "$ref": "#/$defs/GuardrailBedrock"
+            }
+          },
+          "required": [
+            "bedrock"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Google Cloud Model Armor",
+          "type": "object",
+          "properties": {
+            "googleModelArmor": {
+              "$ref": "#/$defs/GuardrailGoogleModelArmor"
+            }
+          },
+          "required": [
+            "googleModelArmor"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Azure AI Content Safety",
+          "type": "object",
+          "properties": {
+            "azureContentSafety": {
+              "$ref": "#/$defs/GuardrailAzureContentSafety"
+            }
+          },
+          "required": [
+            "azureContentSafety"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "OpenAI moderations API",
+          "type": "object",
+          "properties": {
+            "openAIModeration": {
+              "$ref": "#/$defs/GuardrailOpenAIModeration"
+            }
+          },
+          "required": [
+            "openAIModeration"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "GuardrailBedrock": {
+      "type": "object",
+      "properties": {
+        "identifier": {
+          "description": "The unique identifier of the guardrail",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version of the guardrail",
+          "type": "string"
+        },
+        "region": {
+          "description": "AWS region where the guardrail is deployed (e.g. \"us-west-2\"). Used to construct the endpoint host.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "identifier",
+        "version",
+        "region"
+      ]
+    },
+    "GuardrailGoogleModelArmor": {
+      "type": "object",
+      "properties": {
+        "templateId": {
+          "description": "The template ID for the Model Armor configuration",
+          "type": "string"
+        },
+        "projectId": {
+          "description": "The GCP project ID",
+          "type": "string"
+        },
+        "location": {
+          "description": "The GCP region, used to construct the endpoint host (default: us-central1)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "templateId",
+        "projectId"
+      ]
+    },
+    "GuardrailAzureContentSafety": {
+      "type": "object",
+      "properties": {
+        "resourceName": {
+          "description": "The Azure resource name, used to construct the endpoint host\n(`<resourceName>.cognitiveservices.azure.com`).\nExactly one of resourceName and endpoint must be set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endpoint": {
+          "description": "The full endpoint host or URL (e.g. \"https://<resource-name>.cognitiveservices.azure.com\"),\nfor endpoints whose host cannot be derived from the resource name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "GuardrailOpenAIModeration": {
+      "type": "object",
+      "additionalProperties": false
     },
     "LocalTCPRoute": {
       "type": "object",
@@ -8479,6 +8619,17 @@
           },
           "required": [
             "aws"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "guardrail": {
+              "$ref": "#/$defs/GuardrailBackend"
+            }
+          },
+          "required": [
+            "guardrail"
           ]
         }
       ]

@@ -249,6 +249,29 @@ pub struct PromptGuard {
 	pub response: Vec<ResponseGuard>,
 }
 
+impl PromptGuard {
+	/// All guardrail `backend_ref`s referenced by this guard's request and response
+	/// rules. The shared rule for "a backendRef must resolve to a guardrail backend"
+	/// is enforced lazily at request time in [`resolve_guardrail_backend`]; this lets
+	/// the local-config loader enforce it eagerly against declared backends.
+	pub fn backend_refs(&self) -> impl Iterator<Item = &BackendKey> {
+		let request = self.request.iter().filter_map(|g| match &g.kind {
+			RequestGuardKind::OpenAIModeration(m) => m.backend_ref.as_ref(),
+			RequestGuardKind::BedrockGuardrails(b) => b.backend_ref.as_ref(),
+			RequestGuardKind::GoogleModelArmor(g) => g.backend_ref.as_ref(),
+			RequestGuardKind::AzureContentSafety(a) => a.backend_ref.as_ref(),
+			RequestGuardKind::Regex(_) | RequestGuardKind::Webhook(_) => None,
+		});
+		let response = self.response.iter().filter_map(|g| match &g.kind {
+			ResponseGuardKind::BedrockGuardrails(b) => b.backend_ref.as_ref(),
+			ResponseGuardKind::GoogleModelArmor(g) => g.backend_ref.as_ref(),
+			ResponseGuardKind::AzureContentSafety(a) => a.backend_ref.as_ref(),
+			ResponseGuardKind::Regex(_) | ResponseGuardKind::Webhook(_) => None,
+		});
+		request.chain(response)
+	}
+}
+
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum PromptGuardStreamingMode {
