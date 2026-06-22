@@ -23,6 +23,10 @@ The oidc example shows the built-in `oidc` flow using a local Keycloak issuer.
 
 The oauth2-proxy example shows how to integrate with an external `oauth2-proxy` deployment. Most new browser-auth setups should prefer the built-in `oidc` flow instead.
 
+### [RFC 8693 Token Exchange](token-exchange/README.md)
+
+The token exchange example shows how to use `extAuthz` to exchange an incoming bearer token for a Keycloak-issued token targeted at an upstream service.
+
 ### [TLS](tls/README.md)
 
 The tls example shows how to use agentgateway to terminate TLS connections.
