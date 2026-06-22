@@ -23,9 +23,9 @@ The oidc example shows the built-in `oidc` flow using a local Keycloak issuer.
 
 The oauth2-proxy example shows how to integrate with an external `oauth2-proxy` deployment. Most new browser-auth setups should prefer the built-in `oidc` flow instead.
 
-### [RFC 8693 Token Exchange](token-exchange/README.md)
+### [Backend OAuth](backend-oauth/README.md)
 
-The token exchange example shows how to use `extAuthz` to exchange an incoming bearer token for a Keycloak-issued token targeted at an upstream service.
+The backend OAuth example shows how to use `extAuthz` to acquire Keycloak tokens for upstream requests using token exchange or client credentials.
 
 ### [TLS](tls/README.md)
 

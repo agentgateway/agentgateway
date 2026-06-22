@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config: {}
+frontendPolicies:
+  accessLog:
+    add:
+      backend_oauth.grant: extauthz.grant
+      backend_oauth.subject: extauthz.subject
+      backend_oauth.audience: extauthz.audience
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: token-exchange
+      matches:
+      - path:
+          pathPrefix: /exchange
+      backends:
+      - host: localhost:18080
+      policies:
+        extAuthz:
+          host: localhost:7080
+          cache:
+            key:
+            - request.headers["authorization"]
+            ttl: extauthz.expires - 5
+            maxEntries: 1024
+          protocol:
+            http:
+              path: '"/realms/backend-oauth/protocol/openid-connect/token"'
+              addRequestHeaders:
+                content-type: '"application/x-www-form-urlencoded"'
+                authorization: '"Basic " + base64.encode("requester-client:requester-secret")'
+                :method: '"POST"'
+              body: |
+                form.encode({
+                  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                  "subject_token": request.headers["authorization"].split(" ")[1],
+                  "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                  "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                  "audience": "target-client"
+                })
+              metadata:
+                grant: '"token-exchange"'
+                token: json(response.body).access_token
+                subject: unvalidatedJwtPayload(json(response.body).access_token).sub
+                audience: unvalidatedJwtPayload(json(response.body).access_token).aud
+                expires: unvalidatedJwtPayload(json(response.body).access_token).exp
+        transformations:
+          request:
+            set:
+              authorization: '"Bearer " + extauthz.token'
+    - name: client-credentials
+      matches:
+      - path:
+          pathPrefix: /client-credentials
+      backends:
+      - host: localhost:18080
+      policies:
+        extAuthz:
+          host: localhost:7080
+          cache:
+            key:
+            - '"client-credentials:target-client"'
+            ttl: extauthz.expires - 5
+            maxEntries: 1024
+          protocol:
+            http:
+              path: '"/realms/backend-oauth/protocol/openid-connect/token"'
+              addRequestHeaders:
+                content-type: '"application/x-www-form-urlencoded"'
+                authorization: '"Basic " + base64.encode("requester-client:requester-secret")'
+                :method: '"POST"'
+              body: |
+                form.encode({
+                  "grant_type": "client_credentials",
+                  "audience": "target-client"
+                })
+              metadata:
+                grant: '"client-credentials"'
+                token: json(response.body).access_token
+                subject: unvalidatedJwtPayload(json(response.body).access_token).sub
+                audience: unvalidatedJwtPayload(json(response.body).access_token).aud
+                expires: unvalidatedJwtPayload(json(response.body).access_token).exp
+        transformations:
+          request:
+            set:
+              authorization: '"Bearer " + extauthz.token'

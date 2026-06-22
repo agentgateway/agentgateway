@@ -5097,6 +5097,17 @@
                     }
                   ]
                 },
+                "body": {
+                  "description": "CEL expression that computes the authorization request body.\nStrings and bytes are used directly; other values are JSON-encoded.\nIf set, this replaces forwarding the incoming request body.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "includeResponseHeaders": {
                   "description": "Authorization response headers to copy into the backend request.",
                   "type": "array",

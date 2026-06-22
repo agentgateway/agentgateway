@@ -1,6 +1,6 @@
 services:
   keycloak:
-    container_name: token-exchange-keycloak
+    container_name: backend-oauth-keycloak
     image: quay.io/keycloak/keycloak:26.3
     command: ["start-dev", "--import-realm", "--http-port", "7080", "--https-port", "7443"]
     environment:
@@ -12,13 +12,13 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_LOG_LEVEL: info
     volumes:
-    - ./agentgateway-token-exchange-realm.json:/opt/keycloak/data/import/agentgateway-token-exchange-realm.json:ro
+    - ./backend-oauth-realm.json:/opt/keycloak/data/import/backend-oauth-realm.json:ro
     ports:
     - "7080:7080"
     - "7443:7443"
 
   app:
-    container_name: token-exchange-upstream
+    container_name: backend-oauth-upstream
     image: registry.istio.io/testing/app
     ports:
     - "18080:8080"

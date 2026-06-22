@@ -1,5 +1,5 @@
 {
-  "realm": "agentgateway-token-exchange",
+  "realm": "backend-oauth",
   "enabled": true,
   "sslRequired": "NONE",
   "displayName": "Agentgateway Token Exchange",
@@ -38,7 +38,7 @@
       "secret": "requester-secret",
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": false,
+      "serviceAccountsEnabled": true,
       "implicitFlowEnabled": false,
       "attributes": {
         "standard.token.exchange.enabled": "true"
