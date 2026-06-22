@@ -892,7 +892,7 @@ type TrafficBackend = TrafficRouteBackend | TrafficTcpRouteBackend;
 type HostBackend = TrafficBackend & { host: string };
 type BackendReference = TrafficBackend & { backend: string };
 type ServiceBackend = TrafficBackend & {
-  service: { name: { namespace: string; hostname: string }; port: number };
+  service: { name: string; port: number };
 };
 type RouteGroupBackend = TrafficBackend & { routeGroup: string };
 
@@ -1145,18 +1145,22 @@ function BackendTargetFields(props: {
 
   if (props.targetKind === "service" && isServiceBackend(props.backend)) {
     const service = props.backend.service;
+    const serviceName = splitServiceName(service.name);
     return (
       <div className="route-backend-target-grid service">
         <Field label="Namespace">
           <input
-            value={service.name.namespace}
+            value={serviceName.namespace}
             onChange={(event) =>
               props.onChange(
                 cleanBackendCommon({
                   ...props.backend,
                   service: {
                     ...service,
-                    name: { ...service.name, namespace: event.target.value },
+                    name: formatServiceName(
+                      event.target.value,
+                      serviceName.hostname,
+                    ),
                   },
                 }),
               )
@@ -1166,14 +1170,17 @@ function BackendTargetFields(props: {
         </Field>
         <Field label="Hostname">
           <input
-            value={service.name.hostname}
+            value={serviceName.hostname}
             onChange={(event) =>
               props.onChange(
                 cleanBackendCommon({
                   ...props.backend,
                   service: {
                     ...service,
-                    name: { ...service.name, hostname: event.target.value },
+                    name: formatServiceName(
+                      serviceName.namespace,
+                      event.target.value,
+                    ),
                   },
                 }),
               )
@@ -1312,7 +1319,7 @@ function makeBackend(
     return cleanBackendCommon({
       ...common,
       service: {
-        name: { namespace: "default", hostname: "" },
+        name: "default/",
         port: 80,
       },
     } as TrafficBackend);
@@ -1380,12 +1387,10 @@ function cleanBackendCommon<T extends TrafficBackend>(backend: T): T {
   if (isBackendReference(next)) next.backend = next.backend.trimStart();
   if (isRouteGroupBackend(next)) next.routeGroup = next.routeGroup.trimStart();
   if (isServiceBackend(next)) {
+    const name = splitServiceName(next.service.name);
     next.service = {
       ...next.service,
-      name: {
-        namespace: next.service.name.namespace.trim() || "default",
-        hostname: next.service.name.hostname.trimStart(),
-      },
+      name: formatServiceName(name.namespace, name.hostname),
       port: Number(next.service.port) || 80,
     };
   }
@@ -1401,10 +1406,10 @@ function backendIsConfigured(backend: TrafficBackend) {
     return Boolean(backend.backend.trim());
   if (kind === "routeGroup" && isRouteGroupBackend(backend))
     return Boolean(backend.routeGroup.trim());
-  if (kind === "service" && isServiceBackend(backend))
-    return Boolean(
-      backend.service.name.hostname.trim() && backend.service.port,
-    );
+  if (kind === "service" && isServiceBackend(backend)) {
+    const name = splitServiceName(backend.service.name);
+    return Boolean(name.hostname.trim() && backend.service.port);
+  }
   return true;
 }
 
@@ -1451,15 +1456,24 @@ function isServiceBackend(backend: TrafficBackend): backend is ServiceBackend {
   )
     return false;
   const name = service.name;
-  return Boolean(
-    name &&
-    typeof name === "object" &&
-    "namespace" in name &&
-    "hostname" in name &&
-    typeof name.namespace === "string" &&
-    typeof name.hostname === "string" &&
-    typeof service.port === "number",
-  );
+  return typeof name === "string" && typeof service.port === "number";
+}
+
+function splitServiceName(name: string): {
+  namespace: string;
+  hostname: string;
+} {
+  const [namespace, hostname] = name.includes("/")
+    ? name.split("/", 2)
+    : ["default", name];
+  return {
+    namespace: namespace.trim() || "default",
+    hostname: hostname.trimStart(),
+  };
+}
+
+function formatServiceName(namespace: string, hostname: string): string {
+  return `${namespace.trim() || "default"}/${hostname.trimStart()}`;
 }
 
 function cleanHttpMatch(match: HttpMatch): HttpMatch {

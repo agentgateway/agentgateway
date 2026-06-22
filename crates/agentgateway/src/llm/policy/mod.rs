@@ -224,7 +224,6 @@ impl Default for PromptCachingConfig {
 }
 
 #[apply(schema!)]
-#[cfg_attr(feature = "schema", schemars(extend("minProperties" = 1)))]
 pub struct PromptEnrichment {
 	/// Messages appended to the end of each chat request.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]

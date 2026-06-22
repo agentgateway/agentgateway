@@ -7,6 +7,7 @@ import type {
   LocalAPIKeys,
   LocalConfig,
   BackendAuth,
+  BackendAuthCompat,
   LocalJwtConfig,
   LocalLLMConfig,
   LocalLLMModels,
@@ -42,7 +43,8 @@ export type ProviderName =
 export type ProviderFormat = GeneratedProviderFormat;
 export type CustomProvider = GeneratedCustomProvider;
 export type ModelProvider = LocalLLMModels["provider"];
-export type ProviderAuth = BackendAuth;
+export type ProviderAuth = BackendAuthCompat;
+export type CanonicalProviderAuth = BackendAuth;
 export type SecretFromFile = Extract<FileOrInline, { file: string }>;
 export type LlmParams = LocalLLMParams;
 export type LlmModel = LocalLLMModels;

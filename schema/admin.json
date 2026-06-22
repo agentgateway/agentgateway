@@ -346,19 +346,7 @@
       ]
     },
     "NamespacedHostname": {
-      "type": "object",
-      "properties": {
-        "namespace": {
-          "type": "string"
-        },
-        "hostname": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "namespace",
-        "hostname"
-      ]
+      "type": "string"
     },
     "RouteMatch": {
       "type": "object",
@@ -686,7 +674,7 @@
           "default": 1
         },
         "backend": {
-          "$ref": "#/$defs/SimpleLocalBackend"
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
         },
         "inlinePolicies": {
           "type": "array",
@@ -698,12 +686,8 @@
         "backend"
       ]
     },
-    "SimpleLocalBackend": {
+    "SimpleLocalBackendSerde": {
       "oneOf": [
-        {
-          "type": "string",
-          "enum": []
-        },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",

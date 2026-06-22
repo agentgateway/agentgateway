@@ -138,8 +138,7 @@ impl Default for Protocol {
 
 #[apply(schema!)]
 pub struct CacheConfig {
-	/// Non-empty list of CEL expressions that make up the cache key.
-	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
+	/// CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.
 	pub key: Vec<Arc<cel::Expression>>,
 	/// CEL expression that returns how long cached authorization results are reused.
 	/// The expression is evaluated after the authorization response has been applied

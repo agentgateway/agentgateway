@@ -436,8 +436,8 @@ impl schemars::JsonSchema for Claims {
 			"type": "object",
 			"properties": {
 				"rawToken": {
-					"description": "The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.",
-					"type": "string"
+					"type": "string",
+					"description": "The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value."
 				}
 			},
 			"additionalProperties": true

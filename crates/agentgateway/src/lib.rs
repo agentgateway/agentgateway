@@ -198,7 +198,6 @@ pub struct RawConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_min_termination_deadline: Option<Duration>,
 
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	worker_threads: Option<StringOrInt>,
 
 	tracing: Option<RawTracing>,
@@ -440,6 +439,23 @@ impl<'de> Deserialize<'de> for StringOrInt {
 		}
 
 		deserializer.deserialize_any(StringOrIntVisitor())
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for StringOrInt {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"StringOrInt".into()
+	}
+
+	fn schema_id() -> std::borrow::Cow<'static, str> {
+		"StringOrInt".into()
+	}
+
+	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": ["string", "integer"]
+		})
 	}
 }
 

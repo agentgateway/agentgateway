@@ -263,7 +263,7 @@ pub struct NormalizedLocalConfig {
 #[apply(schema_de!)]
 pub struct LocalConfig {
 	#[serde(default)]
-	#[cfg_attr(feature = "schema", schemars(with = "RawConfig"))]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
 	config: Arc<Option<serde_json::Value>>,
 	#[serde(default)]
@@ -275,10 +275,16 @@ pub struct LocalConfig {
 	#[serde(default)]
 	policies: Vec<LocalPolicy>,
 	#[serde(default)]
-	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Vec<std::collections::HashMap<String, serde_json::Value>>")
+	)]
 	workloads: Vec<LocalWorkload>,
 	#[serde(default)]
-	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Vec<std::collections::HashMap<String, serde_json::Value>>")
+	)]
 	services: Vec<Service>,
 	#[serde(default)]
 	backends: Vec<FullLocalBackend>,
@@ -347,6 +353,7 @@ pub struct LocalLLMProviderDefaults {
 	#[serde(rename = "tls", alias = "backendTLS", default)]
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
 	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	auth: Option<BackendAuth>,
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -660,6 +667,7 @@ pub struct LocalLLMModels {
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
 	/// auth configures authentication when connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	auth: Option<BackendAuth>,
 	/// health configures outlier detection for this model backend.
 	#[serde(default)]
@@ -1524,9 +1532,27 @@ pub enum McpBackendHost {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(untagged)]
+#[allow(dead_code)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-struct McpBackendHostSerde {
+enum McpBackendHostSerde {
+	HostUri {
+		host: String,
+	},
+	HostParts {
+		host: String,
+		port: u16,
+		path: String,
+	},
+	Backend {
+		backend: BackendKey,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		path: Option<String>,
+	},
+}
+
+#[apply(schema_de!)]
+struct McpBackendHostInput {
 	host: Option<String>,
 	port: Option<u16>,
 	path: Option<String>,
@@ -1550,7 +1576,7 @@ impl<'de> serde::Deserialize<'de> for McpBackendHost {
 	where
 		D: serde::Deserializer<'de>,
 	{
-		let raw = McpBackendHostSerde::deserialize(deserializer)?;
+		let raw = McpBackendHostInput::deserialize(deserializer)?;
 		match (raw.host, raw.port, raw.path, raw.backend) {
 			(Some(host), port, path, None) => Ok(Self::Host { host, port, path }),
 			(None, None, path, Some(backend)) => Ok(Self::Backend { backend, path }),
@@ -1680,6 +1706,7 @@ pub struct LocalTCPRouteBackend {
 }
 
 #[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackendSerde"))]
 pub enum SimpleLocalBackend {
 	/// Service reference. Service must be defined in the top level services list.
 	Service { name: NamespacedHostname, port: u16 },
@@ -1696,6 +1723,25 @@ pub enum SimpleLocalBackend {
 	#[serde(skip_deserializing)] // No need to deserialize an intentionally invalid entry
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	Invalid,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[allow(dead_code)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+enum SimpleLocalBackendSerde {
+	/// Service reference. Service must be defined in the top level services list.
+	Service { name: NamespacedHostname, port: u16 },
+	/// Hostname or IP address
+	#[serde(rename = "host")]
+	Opaque(
+		/// Hostname or IP address
+		Target,
+	),
+	Backend(
+		/// Explicit backend reference. Backend must be defined in the top level backends list
+		BackendKey,
+	),
 }
 
 impl SimpleLocalBackend {
@@ -1740,16 +1786,6 @@ pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D
 where
 	D: Deserializer<'de>,
 {
-	#[derive(serde::Deserialize)]
-	#[serde(untagged)]
-	enum BackendAuthCompat {
-		PlainKey {
-			#[serde(deserialize_with = "deser_key_from_file")]
-			key: SecretString,
-		},
-		Full(BackendAuth),
-	}
-
 	Option::<BackendAuthCompat>::deserialize(deserializer).map(|auth| {
 		auth.map(|auth| match auth {
 			BackendAuthCompat::Full(auth) => auth,
@@ -1759,6 +1795,18 @@ where
 			},
 		})
 	})
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+enum BackendAuthCompat {
+	PlainKey {
+		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+		#[serde(deserialize_with = "deser_key_from_file")]
+		key: SecretString,
+	},
+	Full(BackendAuth),
 }
 
 #[apply(schema_de!)]
@@ -1863,6 +1911,7 @@ pub struct SimpleLocalBackendPolicies {
 	pub backend_tls: Option<http::backendtls::LocalBackendTLS>,
 	/// Authentication credentials sent to this backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	pub backend_auth: Option<BackendAuth>,
 
 	/// HTTP protocol settings for this backend.
@@ -2160,6 +2209,7 @@ pub struct FilterOrPolicy {
 	backend_tunnel: Option<backend::Tunnel>,
 	/// Authentication credentials sent to the backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	backend_auth: Option<BackendAuth>,
 	/// Local rate limits for incoming requests.
 	#[serde(default)]

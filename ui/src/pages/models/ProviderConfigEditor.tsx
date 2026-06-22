@@ -15,6 +15,7 @@ import type {
   LlmParams,
   LlmProvider,
   ModelProvider,
+  CanonicalProviderAuth,
   ProviderAuth,
   ProviderName,
   SecretFromFile,
@@ -31,7 +32,7 @@ export function ProviderConfigEditor(props: {
   apiKeyError?: string | null;
   onProviderChange: (provider: ModelProvider, params: LlmParams) => void;
   onParamsChange: (params: LlmParams) => void;
-  onAuthChange?: (auth: ProviderAuth | null) => void;
+  onAuthChange?: (auth: CanonicalProviderAuth | null) => void;
 }) {
   const providerReference = providerReferenceName(props.provider);
   const provider = providerLabel(props.provider) as ProviderName;
@@ -472,14 +473,26 @@ const vertexRegions = [
   "us-west4",
 ];
 
+type ProviderAuthKey = "aws" | "gcp" | "azure";
+type ProviderAuthVariant<K extends ProviderAuthKey> = Extract<
+  CanonicalProviderAuth,
+  Record<K, unknown>
+>;
+
+function canonicalAuth<K extends ProviderAuthKey>(
+  auth: ProviderAuth | null | undefined,
+  key: K,
+): ProviderAuthVariant<K> | null {
+  return typeof auth === "object" && auth !== null && key in auth
+    ? (auth as ProviderAuthVariant<K>)
+    : null;
+}
+
 function AwsCredentials(props: {
   value?: ProviderAuth | null;
-  onChange?: (auth: ProviderAuth | null) => void;
+  onChange?: (auth: CanonicalProviderAuth | null) => void;
 }) {
-  const aws =
-    typeof props.value === "object" && props.value && "aws" in props.value
-      ? props.value.aws
-      : null;
+  const aws = canonicalAuth(props.value, "aws")?.aws ?? null;
   const staticAws = aws && "accessKeyId" in aws ? aws : null;
   const [mode, setMode] = useState<AwsCredentialMode>(
     staticAws ? "static" : "ambient",
@@ -595,12 +608,9 @@ function AwsCredentials(props: {
 
 function GcpCredentials(props: {
   value?: ProviderAuth | null;
-  onChange?: (auth: ProviderAuth | null) => void;
+  onChange?: (auth: CanonicalProviderAuth | null) => void;
 }) {
-  const gcp =
-    typeof props.value === "object" && props.value && "gcp" in props.value
-      ? props.value.gcp
-      : null;
+  const gcp = canonicalAuth(props.value, "gcp")?.gcp ?? null;
   const file =
     gcp &&
     "credential" in gcp &&
@@ -662,13 +672,10 @@ function GcpCredentials(props: {
 function AzureCredentials(props: {
   auth?: ProviderAuth | null;
   apiKey?: SecretFromFile | string | null;
-  onAuthChange?: (auth: ProviderAuth | null) => void;
+  onAuthChange?: (auth: CanonicalProviderAuth | null) => void;
   onApiKeyChange: (apiKey: SecretFromFile | string | null) => void;
 }) {
-  const azure =
-    typeof props.auth === "object" && props.auth && "azure" in props.auth
-      ? props.auth.azure
-      : null;
+  const azure = canonicalAuth(props.auth, "azure")?.azure ?? null;
   const managed =
     azure &&
     "explicitConfig" in azure &&
