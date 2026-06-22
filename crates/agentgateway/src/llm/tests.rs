@@ -550,6 +550,7 @@ mod response {
 	const MESSAGES_TO_DETECT: &str = "messages-detect";
 	const COMPLETIONS_TO_MESSAGES: &str = "completions-messages";
 	const COMPLETIONS_TO_DETECT: &str = "completions-detect";
+	const COMPLETIONS_TO_RESPONSES: &str = "completions-responses";
 	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
@@ -607,6 +608,7 @@ mod response {
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream", ALL_COMPLETIONS),
 		("stream_tool_empty_content", &[COMPLETIONS_TO_MESSAGES]),
+		("stream_terminal_text", &[COMPLETIONS_TO_RESPONSES]),
 	];
 
 	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
@@ -780,6 +782,20 @@ mod response {
 			COMPLETIONS_TO_DETECT => (
 				AIProvider::OpenAI(openai::Provider { model: None }),
 				dummy_llm_req(InputFormat::Detect),
+			),
+			COMPLETIONS_TO_RESPONSES => (
+				AIProvider::Custom(custom::Provider {
+					model: None,
+					provider_override: None,
+					formats: vec![custom::ProviderFormatConfig {
+						format: custom::ProviderFormat::Completions,
+						path: None,
+					}],
+				}),
+				LLMRequest {
+					native_format: Some(custom::ProviderFormat::Completions),
+					..dummy_llm_req(InputFormat::Responses)
+				},
 			),
 			MESSAGES_TO_DETECT => (
 				AIProvider::Anthropic(anthropic::Provider { model: None }),
