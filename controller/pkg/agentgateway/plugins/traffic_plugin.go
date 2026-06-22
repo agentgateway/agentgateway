@@ -1195,6 +1195,9 @@ func buildExtAuthSpec(
 		redirect := castCELPtr(h.Redirect, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http redirect is not a valid CEL expression: %s", expr))
 		})
+		body := castCELPtr(h.Body, func(expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("extAuth http body is not a valid CEL expression: %s", expr))
+		})
 		addRequestHeaders := castCELMap(h.AddRequestHeaders, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http addRequestHeaders %q is not a valid CEL expression: %s", key, expr))
 		})
@@ -1204,6 +1207,7 @@ func buildExtAuthSpec(
 		p := &api.TrafficPolicySpec_ExternalAuth_HTTPProtocol{
 			Path:                   path,
 			Redirect:               redirect,
+			Body:                   body,
 			IncludeResponseHeaders: h.AllowedResponseHeaders,
 			AddRequestHeaders:      addRequestHeaders,
 			Metadata:               metadata,

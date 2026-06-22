@@ -2066,6 +2066,7 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 	}
 }
 
+// +kubebuilder:validation:XValidation:rule="!(has(self.forwardBody) && has(self.http) && has(self.http.body))",message="forwardBody cannot be used with http.body"
 type ExtAuth struct {
 	// External Authorization server to reach.
 	//
@@ -2152,6 +2153,11 @@ type AgentExtAuthHTTP struct {
 	// sign-in page.
 	// +optional
 	Redirect *CELExpression `json:"redirect,omitempty"`
+
+	// Body is a CEL expression that produces the HTTP authorization request body.
+	// Strings and bytes are used directly; other values are JSON-encoded.
+	// +optional
+	Body *CELExpression `json:"body,omitempty"`
 
 	// Additional headers from the client request that
 	// will be sent to the authorization server.

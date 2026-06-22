@@ -11710,6 +11710,13 @@ spec:
                               type: string
                             maxItems: 64
                             type: array
+                          body:
+                            description: |-
+                              Body is a CEL expression that produces the HTTP authorization request body.
+                              Strings and bytes are used directly; other values are JSON-encoded.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           path:
                             description: |-
                               Path to send to the authorization server. If
@@ -11744,6 +11751,9 @@ spec:
                             type: object
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: forwardBody cannot be used with http.body
+                      rule: '!(has(self.forwardBody) && has(self.http) && has(self.http.body))'
                   health:
                     description: Settings for passive and active health checking.
                     properties:

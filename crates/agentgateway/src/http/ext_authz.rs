@@ -113,6 +113,10 @@ pub enum Protocol {
 		/// CEL expression that computes a redirect URL when authorization fails.
 		/// When the authorization service returns unauthorized, this redirects instead of returning the error directly.
 		redirect: Option<Arc<cel::Expression>>,
+		/// CEL expression that computes the authorization request body.
+		/// Strings and bytes are used directly; other values are JSON-encoded.
+		/// If set, this replaces forwarding the incoming request body.
+		body: Option<Arc<cel::Expression>>,
 		/// Authorization response headers to copy into the backend request.
 		#[serde(default, skip_serializing_if = "Vec::is_empty")]
 		#[serde_as(as = "Vec<crate::serdes::SerAsStr>")]
@@ -730,6 +734,7 @@ impl ExtAuthz {
 			include_response_headers,
 			add_request_headers,
 			path,
+			body: body_expr,
 			metadata,
 		} = &self.protocol
 		else {
@@ -743,9 +748,17 @@ impl ExtAuthz {
 		}
 		pol_event!(Severity::Info, "{}", cache_lookup);
 
-		let (body, is_partial_body) = if let Some(body_opts) = &self.include_request_body {
+		let (body, is_partial_body, include_partial_body_header) = if let Some(body_expr) = body_expr {
+			match Self::eval_http_body(req, body_expr) {
+				Ok(body) => (body, false, false),
+				Err(e) => {
+					tracing::warn!("fail to evaluate body: {e}");
+					return Err(ProxyError::ExternalAuthorizationFailed(None));
+				},
+			}
+		} else if let Some(body_opts) = &self.include_request_body {
 			match Self::buffer_request_body(req, body_opts).await {
-				Ok(buffered) => (buffered.body, buffered.is_partial),
+				Ok(buffered) => (buffered.body, buffered.is_partial, true),
 				Err(BufferRequestBodyError::TooLarge) => {
 					return Err(ProxyError::ExternalAuthorizationFailed(Some(
 						StatusCode::PAYLOAD_TOO_LARGE,
@@ -754,7 +767,7 @@ impl ExtAuthz {
 				Err(BufferRequestBodyError::Read(e)) => return Err(ProxyError::Processing(e)),
 			}
 		} else {
-			(Bytes::new(), false)
+			(Bytes::new(), false, false)
 		};
 
 		let path: Uri = match path {
@@ -809,7 +822,7 @@ impl ExtAuthz {
 				);
 			}
 		}
-		if self.include_request_body.is_some() {
+		if include_partial_body_header {
 			check_req.headers_mut().insert(
 				// Don't love this but its part of the "specification" so we follow it.
 				HeaderName::from_static("x-envoy-auth-partial-body"),
@@ -1001,6 +1014,12 @@ impl ExtAuthz {
 		Ok(pb)
 	}
 
+	fn eval_http_body(req: &Request, v: &Expression) -> anyhow::Result<Bytes> {
+		let exec = cel::Executor::new_request(req);
+		let res = exec.eval(v)?;
+		cel::value_as_byte_or_json(res)
+	}
+
 	fn eval_to_json(
 		req: &Request,
 		resp: &Response,
@@ -1057,6 +1076,7 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 			Protocol::Http {
 				redirect,
 				path,
+				body,
 				add_request_headers,
 				// TODO: this runs on the response. We would ideally have a way to NOT consider the response
 				// attributes from this.
@@ -1068,7 +1088,8 @@ impl crate::store::RequestPolicyTrait for ExtAuthz {
 					.map(|v| v.as_ref())
 					.chain(m.values().map(|v| v.as_ref()))
 					.chain(redirect.as_deref())
-					.chain(path.as_deref()),
+					.chain(path.as_deref())
+					.chain(body.as_deref()),
 			),
 			_ => Box::new(std::iter::empty()),
 		};

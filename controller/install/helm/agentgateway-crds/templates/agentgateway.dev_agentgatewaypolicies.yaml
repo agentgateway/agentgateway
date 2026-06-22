@@ -4642,6 +4642,13 @@ spec:
                               type: string
                             maxItems: 64
                             type: array
+                          body:
+                            description: |-
+                              Body is a CEL expression that produces the HTTP authorization request body.
+                              Strings and bytes are used directly; other values are JSON-encoded.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           path:
                             description: |-
                               Path to send to the authorization server. If
@@ -4676,6 +4683,9 @@ spec:
                             type: object
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: forwardBody cannot be used with http.body
+                      rule: '!(has(self.forwardBody) && has(self.http) && has(self.http.body))'
                   health:
                     description: Settings for passive and active health checking.
                     properties:
@@ -7856,6 +7866,13 @@ spec:
                                         type: string
                                       maxItems: 64
                                       type: array
+                                    body:
+                                      description: |-
+                                        Body is a CEL expression that produces the HTTP authorization request body.
+                                        Strings and bytes are used directly; other values are JSON-encoded.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
                                     path:
                                       description: |-
                                         Path to send to the authorization server. If
@@ -7898,6 +7915,9 @@ spec:
                                   must be set
                                 rule: '[has(self.grpc),has(self.http)].filter(x,x==true).size()
                                   == 1'
+                              - message: forwardBody cannot be used with http.body
+                                rule: '!(has(self.forwardBody) && has(self.http) &&
+                                  has(self.http.body))'
                           required:
                           - policy
                           type: object
@@ -8012,6 +8032,13 @@ spec:
                               type: string
                             maxItems: 64
                             type: array
+                          body:
+                            description: |-
+                              Body is a CEL expression that produces the HTTP authorization request body.
+                              Strings and bytes are used directly; other values are JSON-encoded.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           path:
                             description: |-
                               Path to send to the authorization server. If
@@ -8050,6 +8077,8 @@ spec:
                     - message: exactly one of the fields in [grpc http] must be set
                       rule: has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 1
+                    - message: forwardBody cannot be used with http.body
+                      rule: '!(has(self.forwardBody) && has(self.http) && has(self.http.body))'
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.backendRef),has(self.cache),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 0 : true'

@@ -897,6 +897,7 @@ message TrafficPolicySpec {
       repeated string include_response_headers = 3;
       map<string, string> add_request_headers = 4;
       map<string, string> metadata = 5;
+      optional string body = 6;
     }
     BackendReference target = 1;
     oneof protocol {

@@ -11073,6 +11073,7 @@ type TrafficPolicySpec_ExternalAuth_HTTPProtocol struct {
 	IncludeResponseHeaders []string               `protobuf:"bytes,3,rep,name=include_response_headers,json=includeResponseHeaders,proto3" json:"include_response_headers,omitempty"`
 	AddRequestHeaders      map[string]string      `protobuf:"bytes,4,rep,name=add_request_headers,json=addRequestHeaders,proto3" json:"add_request_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Metadata               map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Body                   *string                `protobuf:"bytes,6,opt,name=body,proto3,oneof" json:"body,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -11140,6 +11141,13 @@ func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) GetMetadata() map[string]s
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) GetBody() string {
+	if x != nil && x.Body != nil {
+		return *x.Body
+	}
+	return ""
 }
 
 type TrafficPolicySpec_JWT_MCP struct {
@@ -15046,7 +15054,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xaaL\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xccL\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -15105,7 +15113,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04type\x18\x04 \x01(\x0e2@.agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.TypeR\x04type\"\x1e\n" +
 	"\x04Type\x12\v\n" +
 	"\aREQUEST\x10\x00\x12\t\n" +
-	"\x05TOKEN\x10\x01\x1a\xfe\x0e\n" +
+	"\x05TOKEN\x10\x01\x1a\xa0\x0f\n" +
 	"\fExternalAuth\x12C\n" +
 	"\x06target\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12\\\n" +
 	"\x04grpc\x18\x02 \x01(\v2F.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocolH\x00R\x04grpc\x12\\\n" +
@@ -15132,13 +15140,14 @@ const file_resource_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\x9d\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\xbf\x04\n" +
 	"\fHTTPProtocol\x12\x17\n" +
 	"\x04path\x18\x01 \x01(\tH\x00R\x04path\x88\x01\x01\x12\x1f\n" +
 	"\bredirect\x18\x02 \x01(\tH\x01R\bredirect\x88\x01\x01\x128\n" +
 	"\x18include_response_headers\x18\x03 \x03(\tR\x16includeResponseHeaders\x12\x8d\x01\n" +
 	"\x13add_request_headers\x18\x04 \x03(\v2].agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntryR\x11addRequestHeaders\x12p\n" +
-	"\bmetadata\x18\x05 \x03(\v2T.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntryR\bmetadata\x1aD\n" +
+	"\bmetadata\x18\x05 \x03(\v2T.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntryR\bmetadata\x12\x17\n" +
+	"\x04body\x18\x06 \x01(\tH\x02R\x04body\x88\x01\x01\x1aD\n" +
 	"\x16AddRequestHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
@@ -15146,7 +15155,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
 	"\x05_pathB\v\n" +
-	"\t_redirect\"8\n" +
+	"\t_redirectB\a\n" +
+	"\x05_body\"8\n" +
 	"\vFailureMode\x12\b\n" +
 	"\x04DENY\x10\x00\x12\t\n" +
 	"\x05ALLOW\x10\x01\x12\x14\n" +

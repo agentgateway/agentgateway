@@ -2700,6 +2700,49 @@ async fn gateway_http_ext_authz_does_not_cache_server_error_response() {
 }
 
 #[tokio::test]
+async fn gateway_http_ext_authz_body_expression_sets_auth_request_body() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	let authz = MockServer::start().await;
+	Mock::given(wiremock::matchers::any())
+		.respond_with(move |req: &wiremock::Request| {
+			ResponseTemplate::new(StatusCode::OK.as_u16()).insert_header(
+				"x-authz-body",
+				String::from_utf8(req.body.clone()).expect("authz request body is utf8"),
+			)
+		})
+		.mount(&authz)
+		.await;
+
+	bind
+		.attach_gateway_policy(json!({
+			"extAuthz": {
+				"host": authz.address().to_string(),
+				"protocol": {
+					"http": {
+						"body": r#"{"path": request.path, "method": request.method}"#,
+						"includeResponseHeaders": ["x-authz-body"],
+					},
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request_body(io.clone(), Method::POST, "http://lo/p", b"original").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let body = read_body(res.into_body()).await;
+	let authz_body: serde_json::Value =
+		serde_json::from_slice(body.headers.get("x-authz-body").unwrap().as_bytes()).unwrap();
+	assert_eq!(
+		authz_body,
+		json!({
+			"path": "/p",
+			"method": "POST",
+		})
+	);
+	assert_eq!(body.body.as_ref(), b"original");
+}
+
+#[tokio::test]
 async fn gateway_transformation_response_headers_are_applied() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind

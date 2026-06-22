@@ -2438,74 +2438,77 @@ fn external_auth_from_proto(
 			})
 		})
 		.transpose()?;
-	let protocol = match ea
-		.protocol
-		.as_ref()
-		.ok_or(ProtoError::MissingRequiredField)?
-	{
-		external_auth::Protocol::Grpc(g) => {
-			let metadata: HashMap<_, _> = g
-				.metadata
-				.iter()
-				.map(|(k, v)| {
-					let ve = permissive_cel_expression_arc(
-						diagnostics,
-						format!("traffic.extAuthz.grpc.metadata.{k}"),
-						v,
-					);
-					Ok::<_, ProtoError>((k.to_owned(), ve))
-				})
-				.collect::<Result<_, _>>()?;
-			http::ext_authz::Protocol::Grpc {
-				context: Some(g.context.clone()),
-				metadata: if metadata.is_empty() {
-					None
-				} else {
-					Some(metadata)
-				},
-			}
-		},
-		external_auth::Protocol::Http(h) => http::ext_authz::Protocol::Http {
-			path: h
-				.path
-				.as_ref()
-				.map(|expr| permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.path", expr)),
-			redirect: h.redirect.as_ref().map(|expr| {
-				permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.redirect", expr)
-			}),
-			include_response_headers: h
-				.include_response_headers
-				.iter()
-				.map(|k| HeaderName::try_from(k.as_str()))
-				.collect::<Result<_, _>>()?,
-			add_request_headers: h
-				.add_request_headers
-				.iter()
-				.map(|(k, v)| {
-					let tk = HeaderOrPseudo::try_from(k.as_str())?;
-					let tv = permissive_cel_expression_arc(
-						diagnostics,
-						format!("traffic.extAuthz.http.addRequestHeaders.{k}"),
-						v.as_str(),
-					);
-					Ok::<_, anyhow::Error>((tk, tv))
-				})
-				.collect::<Result<_, _>>()
-				.map_err(|e| ProtoError::Generic(e.to_string()))?,
-			metadata: h
-				.metadata
-				.iter()
-				.map(|(k, v)| {
-					let ve = permissive_cel_expression(
-						diagnostics,
-						format!("traffic.extAuthz.http.metadata.{k}"),
-						v,
-					);
-					Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
-				})
-				.collect::<Result<_, _>>()?,
-		},
-	};
+	let protocol =
+		match ea
+			.protocol
+			.as_ref()
+			.ok_or(ProtoError::MissingRequiredField)?
+		{
+			external_auth::Protocol::Grpc(g) => {
+				let metadata: HashMap<_, _> = g
+					.metadata
+					.iter()
+					.map(|(k, v)| {
+						let ve = permissive_cel_expression_arc(
+							diagnostics,
+							format!("traffic.extAuthz.grpc.metadata.{k}"),
+							v,
+						);
+						Ok::<_, ProtoError>((k.to_owned(), ve))
+					})
+					.collect::<Result<_, _>>()?;
+				http::ext_authz::Protocol::Grpc {
+					context: Some(g.context.clone()),
+					metadata: if metadata.is_empty() {
+						None
+					} else {
+						Some(metadata)
+					},
+				}
+			},
+			external_auth::Protocol::Http(h) => http::ext_authz::Protocol::Http {
+				path: h.path.as_ref().map(|expr| {
+					permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.path", expr)
+				}),
+				redirect: h.redirect.as_ref().map(|expr| {
+					permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.redirect", expr)
+				}),
+				body: h.body.as_ref().map(|expr| {
+					permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.body", expr)
+				}),
+				include_response_headers: h
+					.include_response_headers
+					.iter()
+					.map(|k| HeaderName::try_from(k.as_str()))
+					.collect::<Result<_, _>>()?,
+				add_request_headers: h
+					.add_request_headers
+					.iter()
+					.map(|(k, v)| {
+						let tk = HeaderOrPseudo::try_from(k.as_str())?;
+						let tv = permissive_cel_expression_arc(
+							diagnostics,
+							format!("traffic.extAuthz.http.addRequestHeaders.{k}"),
+							v.as_str(),
+						);
+						Ok::<_, anyhow::Error>((tk, tv))
+					})
+					.collect::<Result<_, _>>()
+					.map_err(|e| ProtoError::Generic(e.to_string()))?,
+				metadata: h
+					.metadata
+					.iter()
+					.map(|(k, v)| {
+						let ve = permissive_cel_expression(
+							diagnostics,
+							format!("traffic.extAuthz.http.metadata.{k}"),
+							v,
+						);
+						Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
+					})
+					.collect::<Result<_, _>>()?,
+			},
+		};
 	let cache_store = cache
 		.as_ref()
 		.map(|cache| crate::http::ext_authz::cache_store(cache.max_entries))
