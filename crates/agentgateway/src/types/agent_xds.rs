@@ -21,7 +21,6 @@ use std::sync::Arc;
 
 use ::http::{HeaderName, StatusCode};
 use frozen_collections::FzHashSet;
-use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
@@ -815,89 +814,94 @@ fn convert_backend_ai_policy(
 			})
 			.collect::<Result<Vec<_>, ProtoError>>()?;
 
-		let response = pg.response.iter().flat_map(|reqp| {
-			let rejection = if let Some(resp) = &reqp.rejection {
-				let status = u16::try_from(resp.status)
-					.ok()
-					.and_then(|c| StatusCode::from_u16(c).ok())
-					.unwrap_or(StatusCode::FORBIDDEN);
-				llm::policy::RequestRejection {
-					body: Bytes::from(resp.body.clone()),
-					status,
-					headers: None, // TODO: map from proto if headers are added there
-				}
-			} else {
-				//  use default response, since the response field is not optional on RequestGuard
-				llm::policy::RequestRejection::default()
-			};
+		let response = pg
+			.response
+			.iter()
+			.map(|reqp| {
+				let rejection = if let Some(resp) = &reqp.rejection {
+					let status = u16::try_from(resp.status)
+						.ok()
+						.and_then(|c| StatusCode::from_u16(c).ok())
+						.unwrap_or(StatusCode::FORBIDDEN);
+					llm::policy::RequestRejection {
+						body: Bytes::from(resp.body.clone()),
+						status,
+						headers: None, // TODO: map from proto if headers are added there
+					}
+				} else {
+					//  use default response, since the response field is not optional on RequestGuard
+					llm::policy::RequestRejection::default()
+				};
 
-			let kind = match reqp.kind.as_ref()? {
-				response_guard::Kind::Regex(rr) => {
-					llm::policy::ResponseGuardKind::Regex(convert_regex_rules(rr, diagnostics))
-				},
-				response_guard::Kind::Webhook(wh) => {
-					llm::policy::ResponseGuardKind::Webhook(convert_webhook(wh, diagnostics).ok()?)
-				},
-				response_guard::Kind::GoogleModelArmor(gma) => {
-					let pols = gma
-						.inline_policies
-						.iter()
-						.filter_map(|p| backend_policy_from_proto(p, diagnostics).ok())
-						.collect::<Vec<_>>();
-					llm::policy::ResponseGuardKind::GoogleModelArmor(llm::policy::GoogleModelArmor {
-						backend_ref: guardrail_backend_ref(gma.backend_ref.as_ref()).ok()?,
-						template_id: (!gma.template_id.is_empty()).then(|| strng::new(&gma.template_id)),
-						project_id: (!gma.project_id.is_empty()).then(|| strng::new(&gma.project_id)),
-						location: gma.location.as_ref().map(strng::new),
-						policies: pols,
-					})
-				},
-				response_guard::Kind::BedrockGuardrails(bg) => {
-					let pols = bg
-						.inline_policies
-						.iter()
-						.filter_map(|p| backend_policy_from_proto(p, diagnostics).ok())
-						.collect::<Vec<_>>();
-					llm::policy::ResponseGuardKind::BedrockGuardrails(llm::policy::BedrockGuardrails {
-						backend_ref: guardrail_backend_ref(bg.backend_ref.as_ref()).ok()?,
-						guardrail_identifier: (!bg.identifier.is_empty()).then(|| strng::new(&bg.identifier)),
-						guardrail_version: (!bg.version.is_empty()).then(|| strng::new(&bg.version)),
-						region: (!bg.region.is_empty()).then(|| strng::new(&bg.region)),
-						policies: pols,
-					})
-				},
-				response_guard::Kind::AzureContentSafety(acs) => {
-					let pols = acs
-						.inline_policies
-						.iter()
-						.filter_map(|p| backend_policy_from_proto(p, diagnostics).ok())
-						.collect::<Vec<_>>();
-					llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
-						backend_ref: guardrail_backend_ref(acs.backend_ref.as_ref()).ok()?,
-						endpoint: (!acs.endpoint.is_empty()).then(|| strng::new(&acs.endpoint)),
-						policies: pols,
-						cached_azure_auth: Default::default(),
-						analyze_text: Some(llm::policy::AnalyzeTextConfig {
-							severity_threshold: acs.severity_threshold,
-							api_version: acs.api_version.as_ref().map(strng::new),
-							blocklist_names: if acs.blocklist_names.is_empty() {
-								None
-							} else {
-								Some(acs.blocklist_names.clone())
-							},
-							halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
-						}),
-						detect_jailbreak: None,
-					})
-				},
-			};
-			Some(llm::policy::ResponseGuard { rejection, kind })
-		});
+				let kind = match reqp
+					.kind
+					.as_ref()
+					.ok_or_else(|| ProtoError::EnumParse("unknown kind".to_string()))?
+				{
+					response_guard::Kind::Regex(rr) => {
+						llm::policy::ResponseGuardKind::Regex(convert_regex_rules(rr, diagnostics))
+					},
+					response_guard::Kind::Webhook(wh) => {
+						llm::policy::ResponseGuardKind::Webhook(convert_webhook(wh, diagnostics)?)
+					},
+					response_guard::Kind::GoogleModelArmor(gma) => {
+						let pols = gma
+							.inline_policies
+							.iter()
+							.map(|policy| backend_policy_from_proto(policy, diagnostics))
+							.collect::<Result<Vec<_>, _>>()?;
+						llm::policy::ResponseGuardKind::GoogleModelArmor(llm::policy::GoogleModelArmor {
+							backend_ref: guardrail_backend_ref(gma.backend_ref.as_ref())?,
+							template_id: (!gma.template_id.is_empty()).then(|| strng::new(&gma.template_id)),
+							project_id: (!gma.project_id.is_empty()).then(|| strng::new(&gma.project_id)),
+							location: gma.location.as_ref().map(strng::new),
+							policies: pols,
+						})
+					},
+					response_guard::Kind::BedrockGuardrails(bg) => {
+						let pols = bg
+							.inline_policies
+							.iter()
+							.map(|policy| backend_policy_from_proto(policy, diagnostics))
+							.collect::<Result<Vec<_>, _>>()?;
+						llm::policy::ResponseGuardKind::BedrockGuardrails(llm::policy::BedrockGuardrails {
+							backend_ref: guardrail_backend_ref(bg.backend_ref.as_ref())?,
+							guardrail_identifier: (!bg.identifier.is_empty()).then(|| strng::new(&bg.identifier)),
+							guardrail_version: (!bg.version.is_empty()).then(|| strng::new(&bg.version)),
+							region: (!bg.region.is_empty()).then(|| strng::new(&bg.region)),
+							policies: pols,
+						})
+					},
+					response_guard::Kind::AzureContentSafety(acs) => {
+						let pols = acs
+							.inline_policies
+							.iter()
+							.map(|policy| backend_policy_from_proto(policy, diagnostics))
+							.collect::<Result<Vec<_>, _>>()?;
+						llm::policy::ResponseGuardKind::AzureContentSafety(llm::policy::AzureContentSafety {
+							backend_ref: guardrail_backend_ref(acs.backend_ref.as_ref())?,
+							endpoint: (!acs.endpoint.is_empty()).then(|| strng::new(&acs.endpoint)),
+							policies: pols,
+							cached_azure_auth: Default::default(),
+							analyze_text: Some(llm::policy::AnalyzeTextConfig {
+								severity_threshold: acs.severity_threshold,
+								api_version: acs.api_version.as_ref().map(strng::new),
+								blocklist_names: if acs.blocklist_names.is_empty() {
+									None
+								} else {
+									Some(acs.blocklist_names.clone())
+								},
+								halt_on_blocklist_hit: acs.halt_on_blocklist_hit,
+							}),
+							detect_jailbreak: None,
+						})
+					},
+				};
+				Ok(llm::policy::ResponseGuard { rejection, kind })
+			})
+			.collect::<Result<Vec<_>, ProtoError>>()?;
 
-		Ok(llm::policy::PromptGuard {
-			request,
-			response: response.collect_vec(),
-		})
+		Ok(llm::policy::PromptGuard { request, response })
 	});
 
 	let mut policy = llm::Policy {
@@ -3992,6 +3996,96 @@ mod tests {
 		}
 
 		Ok(())
+	}
+
+	#[test]
+	fn test_prompt_guard_rejects_non_backend_backend_ref() {
+		use proto::agent::backend_policy_spec::ai::{
+			BedrockGuardrails, PromptGuard, RequestGuard, ResponseGuard, request_guard, response_guard,
+		};
+
+		// A guardrail backendRef pointing at a Service (rather than a Backend) is invalid.
+		// It must reject the whole policy update (NACK) so the existing good config is
+		// retained, rather than being silently dropped. Request and response guards must
+		// behave identically here.
+		let service_ref = || proto::agent::BackendReference {
+			kind: Some(proto::agent::backend_reference::Kind::Service(
+				proto::agent::backend_reference::Service {
+					namespace: "default".to_string(),
+					hostname: "guardrail.example.com".to_string(),
+				},
+			)),
+			port: 443,
+		};
+		let backend_ref = || proto::agent::BackendReference {
+			kind: Some(proto::agent::backend_reference::Kind::Backend(
+				"default/my-guardrail".to_string(),
+			)),
+			port: 0,
+		};
+		let bedrock = |br: proto::agent::BackendReference| BedrockGuardrails {
+			identifier: String::new(),
+			version: String::new(),
+			region: String::new(),
+			inline_policies: Vec::new(),
+			backend_ref: Some(br),
+		};
+		let spec = |pg: PromptGuard| proto::agent::BackendPolicySpec {
+			kind: Some(proto::agent::backend_policy_spec::Kind::Ai(Ai {
+				defaults: Default::default(),
+				overrides: Default::default(),
+				transformations: Default::default(),
+				prompt_guard: Some(pg),
+				prompts: None,
+				model_aliases: Default::default(),
+				prompt_caching: None,
+				routes: Default::default(),
+			})),
+		};
+
+		// Bad backendRef on a request guard -> rejected.
+		let req_bad = spec(PromptGuard {
+			request: vec![RequestGuard {
+				rejection: None,
+				kind: Some(request_guard::Kind::BedrockGuardrails(bedrock(
+					service_ref(),
+				))),
+			}],
+			response: Vec::new(),
+		});
+		backend_policy_from_proto(&req_bad, &mut Diagnostics::default())
+			.expect_err("request guard with a Service backendRef should be rejected");
+
+		// Bad backendRef on a response guard -> rejected (previously silently dropped).
+		let resp_bad = spec(PromptGuard {
+			request: Vec::new(),
+			response: vec![ResponseGuard {
+				rejection: None,
+				kind: Some(response_guard::Kind::BedrockGuardrails(bedrock(
+					service_ref(),
+				))),
+			}],
+		});
+		backend_policy_from_proto(&resp_bad, &mut Diagnostics::default())
+			.expect_err("response guard with a Service backendRef should be rejected");
+
+		// A valid Backend backendRef on both guards -> accepted.
+		let ok = spec(PromptGuard {
+			request: vec![RequestGuard {
+				rejection: None,
+				kind: Some(request_guard::Kind::BedrockGuardrails(bedrock(
+					backend_ref(),
+				))),
+			}],
+			response: vec![ResponseGuard {
+				rejection: None,
+				kind: Some(response_guard::Kind::BedrockGuardrails(bedrock(
+					backend_ref(),
+				))),
+			}],
+		});
+		backend_policy_from_proto(&ok, &mut Diagnostics::default())
+			.expect("valid Backend backendRefs should be accepted");
 	}
 
 	#[test]
