@@ -45,3 +45,17 @@ agentgateway_requests_total{gateway="bind/3000",method="POST",status="202"} 4
 agentgateway_requests_total{gateway="bind/3000",method="GET",status="200"} 1
 agentgateway_requests_total{gateway="bind/3000",method="DELETE",status="202"} 2
 ```
+
+## Metrics Formats
+
+The metrics can be retrived in either text format or protobuf, controlled via the `Accept` header on the request. Specifying multiple formats with a quality parameter will cause the gateway to choose the best match of highest quality (standard accept header behaviour).
+
+If you use protobuf, the returned data is of `io.prometheus.client.MetricsSet`, not customisable via the `proto=<type>` accept header parameter. Ideally, this should be deserialised using the offical [Prometheus protobuf definition](https://github.com/prometheus/client_rust/blob/master/src/encoding/proto/metrics.proto)
+
+For text format use `Accept: text/plain`.
+
+For Protobuf use one of:
+* `Accept: application/vnd.google.protobuf`
+* `Accept: application/protobuf`
+* `Accept: application/x-protobuf`
+
