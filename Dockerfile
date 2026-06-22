@@ -6,6 +6,7 @@ FROM docker.io/library/node:23.11.0-bookworm AS node
 WORKDIR /app
 
 COPY ui .
+COPY schema /schema
 
 RUN --mount=type=cache,target=/app/npm/cache npm install
 
@@ -95,6 +96,8 @@ EOF
 FROM cgr.dev/chainguard/glibc-dynamic AS runner
 
 ARG TARGETARCH
+
+ENV AGENTGATEWAY_ENV=container
 
 WORKDIR /
 
