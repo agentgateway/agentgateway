@@ -144,7 +144,7 @@ pprof = { version = "0.15", features = [
     "criterion",
 ] }
 pretty_env_logger = "0.5"
-prometheus-client = "0.24"
+prometheus-client = "0.25"
 prost = "0.14"
 prost-build = "0.14"
 prost-types = "0.14"

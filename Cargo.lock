@@ -4776,7 +4776,7 @@ dependencies = [
  "nom",
  "once_cell",
  "postcard",
- "quick-xml",
+ "quick-xml 0.38.4",
  "regex",
  "regex-cache",
  "serde",
@@ -4958,9 +4958,9 @@ dependencies = [
 
 [[package]]
 name = "pprof-alloc"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a3532cd9e778313972a5649e9f661066fb4de2487048cebab216b684289e678"
+checksum = "ece0676c4b79fd8f624e1a7fc871c30f0f49696ddd0e8fa50df7f5f7c62f72d0"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4978,7 +4978,7 @@ dependencies = [
  "paste",
  "prometheus-client",
  "prost 0.13.5",
- "quick-xml",
+ "quick-xml 0.40.1",
  "regex",
  "serde",
  "smallvec",
@@ -5096,9 +5096,9 @@ dependencies = [
 
 [[package]]
 name = "prometheus-client"
-version = "0.24.1"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cca3d75b4566b9a29fe1ed623587fb058e826eb329a0be4b7c4da1ebb2d7a6ca"
+checksum = "ba70bf887030e45213b4a95c9b08d5a450b157f87c1d63661ed0847a12fa2aad"
 dependencies = [
  "dtoa",
  "itoa",
@@ -5411,6 +5411,15 @@ name = "quick-xml"
 version = "0.38.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.40.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2474bd2e5029e7ccb6abb2ba48cf2383a333851dedf495901544281590c7da7f"
 dependencies = [
  "memchr",
  "serde",
