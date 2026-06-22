@@ -389,6 +389,44 @@ binds:
 }
 
 #[tokio::test]
+async fn test_guardrail_backend_ref_rejects_provider_kind_mismatch() {
+	let err = normalize_test_config(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-4o-mini
+      policies:
+        ai:
+          promptGuard:
+            request:
+            - googleModelArmor:
+                backendRef: my-guard
+backends:
+- name: my-guard
+  guardrail:
+    bedrock:
+      identifier: gid
+      version: DRAFT
+      region: us-west-2
+"#,
+	)
+	.await
+	.expect_err("a googleModelArmor guard referencing a bedrock backend should fail to load");
+	assert!(
+		err.to_string().contains("references a bedrock backend")
+			&& err.to_string().contains("googleModelArmor"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
 async fn test_llm_conditional_virtual_model_rejects_unknown_target_before_expression_compile() {
 	let err = normalize_test_config(
 		r#"

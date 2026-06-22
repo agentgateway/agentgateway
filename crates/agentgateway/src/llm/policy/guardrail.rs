@@ -35,6 +35,38 @@ pub enum GuardrailBackend {
 	OpenAIModeration(GuardrailOpenAIModeration),
 }
 
+/// The provider a guardrail backend implements, used to check that a guard's
+/// `backendRef` points at a backend of the matching provider.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum GuardrailKind {
+	Bedrock,
+	GoogleModelArmor,
+	AzureContentSafety,
+	OpenAIModeration,
+}
+
+impl GuardrailKind {
+	pub fn as_str(self) -> &'static str {
+		match self {
+			GuardrailKind::Bedrock => "bedrock",
+			GuardrailKind::GoogleModelArmor => "googleModelArmor",
+			GuardrailKind::AzureContentSafety => "azureContentSafety",
+			GuardrailKind::OpenAIModeration => "openAIModeration",
+		}
+	}
+}
+
+impl GuardrailBackend {
+	pub fn kind(&self) -> GuardrailKind {
+		match self {
+			GuardrailBackend::Bedrock(_) => GuardrailKind::Bedrock,
+			GuardrailBackend::GoogleModelArmor(_) => GuardrailKind::GoogleModelArmor,
+			GuardrailBackend::AzureContentSafety(_) => GuardrailKind::AzureContentSafety,
+			GuardrailBackend::OpenAIModeration(_) => GuardrailKind::OpenAIModeration,
+		}
+	}
+}
+
 #[apply(schema!)]
 pub struct GuardrailBedrock {
 	/// The unique identifier of the guardrail

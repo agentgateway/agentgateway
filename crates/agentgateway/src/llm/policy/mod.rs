@@ -250,22 +250,44 @@ pub struct PromptGuard {
 }
 
 impl PromptGuard {
-	/// All guardrail `backend_ref`s referenced by this guard's request and response
-	/// rules. The shared rule for "a backendRef must resolve to a guardrail backend"
-	/// is enforced lazily at request time in [`resolve_guardrail_backend`]; this lets
-	/// the local-config loader enforce it eagerly against declared backends.
-	pub fn backend_refs(&self) -> impl Iterator<Item = &BackendKey> {
+	/// Every guardrail `backend_ref` in this guard's request and response rules, paired
+	/// with the [`GuardrailKind`] the referencing guard expects. The rule that a
+	/// `backendRef` must resolve to a guardrail backend of the matching provider is
+	/// enforced lazily at request time in the per-provider `resolve` functions; pairing
+	/// the kind here lets the local-config loader enforce it eagerly against declared
+	/// backends.
+	pub fn backend_refs(&self) -> impl Iterator<Item = (guardrail::GuardrailKind, &BackendKey)> {
+		use guardrail::GuardrailKind;
 		let request = self.request.iter().filter_map(|g| match &g.kind {
-			RequestGuardKind::OpenAIModeration(m) => m.backend_ref.as_ref(),
-			RequestGuardKind::BedrockGuardrails(b) => b.backend_ref.as_ref(),
-			RequestGuardKind::GoogleModelArmor(g) => g.backend_ref.as_ref(),
-			RequestGuardKind::AzureContentSafety(a) => a.backend_ref.as_ref(),
+			RequestGuardKind::OpenAIModeration(m) => m
+				.backend_ref
+				.as_ref()
+				.map(|r| (GuardrailKind::OpenAIModeration, r)),
+			RequestGuardKind::BedrockGuardrails(b) => {
+				b.backend_ref.as_ref().map(|r| (GuardrailKind::Bedrock, r))
+			},
+			RequestGuardKind::GoogleModelArmor(g) => g
+				.backend_ref
+				.as_ref()
+				.map(|r| (GuardrailKind::GoogleModelArmor, r)),
+			RequestGuardKind::AzureContentSafety(a) => a
+				.backend_ref
+				.as_ref()
+				.map(|r| (GuardrailKind::AzureContentSafety, r)),
 			RequestGuardKind::Regex(_) | RequestGuardKind::Webhook(_) => None,
 		});
 		let response = self.response.iter().filter_map(|g| match &g.kind {
-			ResponseGuardKind::BedrockGuardrails(b) => b.backend_ref.as_ref(),
-			ResponseGuardKind::GoogleModelArmor(g) => g.backend_ref.as_ref(),
-			ResponseGuardKind::AzureContentSafety(a) => a.backend_ref.as_ref(),
+			ResponseGuardKind::BedrockGuardrails(b) => {
+				b.backend_ref.as_ref().map(|r| (GuardrailKind::Bedrock, r))
+			},
+			ResponseGuardKind::GoogleModelArmor(g) => g
+				.backend_ref
+				.as_ref()
+				.map(|r| (GuardrailKind::GoogleModelArmor, r)),
+			ResponseGuardKind::AzureContentSafety(a) => a
+				.backend_ref
+				.as_ref()
+				.map(|r| (GuardrailKind::AzureContentSafety, r)),
 			ResponseGuardKind::Regex(_) | ResponseGuardKind::Webhook(_) => None,
 		});
 		request.chain(response)
@@ -1371,6 +1393,19 @@ enum RegexResult {
 	Reject,
 }
 
+/// Normalize a guard's `backend_ref` into the key the backend store is keyed by.
+/// Local-config backends are keyed as "/<name>" (empty-namespace prefix); route
+/// backendRefs apply this in local.rs, and guards must match. xDS keys already
+/// contain a "/" (e.g. "default/name"), so they pass through unchanged. Shared by the
+/// request-time resolver and the local-config load-time validator so they cannot drift.
+pub(crate) fn guardrail_backend_lookup_key(key: &BackendKey) -> Strng {
+	if key.contains('/') {
+		key.clone()
+	} else {
+		strng::format!("/{}", key)
+	}
+}
+
 /// Resolve the guardrail backend a guard should call: either a reference to a real,
 /// store-resident guardrail backend (which picks up any policies attached to it), or a
 /// synthetic one constructed from the guard's deprecated inline provider fields.
@@ -1382,16 +1417,10 @@ pub(crate) fn resolve_guardrail_backend(
 ) -> anyhow::Result<SimpleBackendWithPolicies> {
 	match backend_ref {
 		Some(key) => {
-			// Local-config backends are keyed as "/<name>" (empty-namespace prefix).
-			// Route backendRefs apply this normalization in local.rs; guards must too.
-			// xds keys already contain a "/" (e.g. "default/name"), so the check is safe.
-			let lookup_key = if key.contains('/') {
-				key.clone()
-			} else {
-				strng::format!("/{}", key)
-			};
 			let resolved = client
-				.resolve_backend(&SimpleBackendReference::Backend(lookup_key))
+				.resolve_backend(&SimpleBackendReference::Backend(
+					guardrail_backend_lookup_key(key),
+				))
 				.map_err(|e| anyhow::anyhow!("failed to resolve guardrail backend {key}: {e}"))?;
 			if !matches!(resolved.backend, SimpleBackend::Guardrail(_, _)) {
 				anyhow::bail!("backend {key} is not a guardrail backend");

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -18,8 +18,8 @@ use crate::http::auth::BackendAuth;
 use crate::http::backendtls::LocalBackendTLS;
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
-use crate::llm::policy::guardrail::GuardrailBackend;
-use crate::llm::policy::{PromptCachingConfig, PromptGuard};
+use crate::llm::policy::guardrail::{GuardrailBackend, GuardrailKind};
+use crate::llm::policy::{PromptCachingConfig, PromptGuard, guardrail_backend_lookup_key};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, anthropic, copilot, custom, openai};
 use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::{LocalWorkload, RequestPolicy};
@@ -2406,26 +2406,34 @@ async fn convert(
 /// error. (The xDS path keeps the per-resource syntactic check + lazy resolution, since
 /// its resources stream independently and the full backend set is not known at parse time.)
 fn validate_guardrail_backend_refs(cfg: &NormalizedLocalConfig) -> anyhow::Result<()> {
-	// Declared guardrail backends, keyed as the request-time resolver expects ("/<name>").
-	let guardrail_keys: HashSet<Strng> = cfg
+	// Declared guardrail backends keyed as the request-time resolver expects ("/<name>"),
+	// mapped to the provider they implement so we can also check the guard kind matches.
+	let guardrail_kinds: HashMap<Strng, GuardrailKind> = cfg
 		.backends
 		.iter()
-		.filter(|b| matches!(b.backend, Backend::Guardrail(..)))
-		.map(|b| b.backend.name())
+		.filter_map(|b| match &b.backend {
+			Backend::Guardrail(_, gb) => Some((b.backend.name(), gb.kind())),
+			_ => None,
+		})
 		.collect();
 
 	// An AI prompt guard can be attached as a route-level traffic policy, a backend-level
-	// policy, or a standalone targeted policy; gather all of them.
-	let from_traffic = |p: &TrafficPolicy| match p {
-		TrafficPolicy::AI(ai) => ai.prompt_guard.clone(),
-		_ => None,
-	};
-	let from_backend = |p: &BackendTrafficPolicy| match p {
-		BackendTrafficPolicy::AI(ai) => ai.prompt_guard.clone(),
-		_ => None,
-	};
+	// policy, or a standalone targeted policy; gather references to all of them. These are
+	// `fn` items (not closures) so the returned reference can borrow from the argument.
+	fn from_traffic(p: &TrafficPolicy) -> Option<&PromptGuard> {
+		match p {
+			TrafficPolicy::AI(ai) => ai.prompt_guard.as_ref(),
+			_ => None,
+		}
+	}
+	fn from_backend(p: &BackendTrafficPolicy) -> Option<&PromptGuard> {
+		match p {
+			BackendTrafficPolicy::AI(ai) => ai.prompt_guard.as_ref(),
+			_ => None,
+		}
+	}
 
-	let mut guards: Vec<PromptGuard> = Vec::new();
+	let mut guards: Vec<&PromptGuard> = Vec::new();
 	for pol in &cfg.policies {
 		match &pol.policy {
 			PolicyType::Backend(b) => guards.extend(from_backend(b)),
@@ -2439,25 +2447,27 @@ fn validate_guardrail_backend_refs(cfg: &NormalizedLocalConfig) -> anyhow::Resul
 		.flat_map(|(_, rs)| rs)
 		.chain(cfg.route_groups.iter().flat_map(|(_, rs)| rs));
 	for r in routes {
-		guards.extend(r.inline_policies.iter().filter_map(&from_traffic));
+		guards.extend(r.inline_policies.iter().filter_map(from_traffic));
 		for be in &r.backends {
-			guards.extend(be.inline_policies.iter().filter_map(&from_backend));
+			guards.extend(be.inline_policies.iter().filter_map(from_backend));
 		}
 	}
 	for b in &cfg.backends {
-		guards.extend(b.inline_policies.iter().filter_map(&from_backend));
+		guards.extend(b.inline_policies.iter().filter_map(from_backend));
 	}
 
-	for pg in &guards {
-		for key in pg.backend_refs() {
-			// Local-config backends are keyed "/<name>"; normalize bare references to match.
-			let normalized = if key.contains('/') {
-				key.clone()
-			} else {
-				strng::format!("/{key}")
-			};
-			if !guardrail_keys.contains(&normalized) {
-				anyhow::bail!("guardrail backendRef {key} does not reference a declared guardrail backend");
+	for pg in guards {
+		for (expected, key) in pg.backend_refs() {
+			match guardrail_kinds.get(&guardrail_backend_lookup_key(key)) {
+				None => anyhow::bail!(
+					"guardrail backendRef {key} does not reference a declared guardrail backend"
+				),
+				Some(actual) if *actual != expected => anyhow::bail!(
+					"guardrail backendRef {key} references a {} backend but the guard requires {}",
+					actual.as_str(),
+					expected.as_str()
+				),
+				Some(_) => {},
 			}
 		}
 	}
