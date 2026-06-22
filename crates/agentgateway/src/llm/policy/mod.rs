@@ -258,36 +258,31 @@ impl PromptGuard {
 	/// backends.
 	pub fn backend_refs(&self) -> impl Iterator<Item = (guardrail::GuardrailKind, &BackendKey)> {
 		use guardrail::GuardrailKind;
+		// Pair a guard's optional backend_ref with the provider kind it expects.
+		fn pair(k: GuardrailKind, r: &Option<BackendKey>) -> Option<(GuardrailKind, &BackendKey)> {
+			r.as_ref().map(|r| (k, r))
+		}
 		let request = self.request.iter().filter_map(|g| match &g.kind {
-			RequestGuardKind::OpenAIModeration(m) => m
-				.backend_ref
-				.as_ref()
-				.map(|r| (GuardrailKind::OpenAIModeration, r)),
-			RequestGuardKind::BedrockGuardrails(b) => {
-				b.backend_ref.as_ref().map(|r| (GuardrailKind::Bedrock, r))
+			RequestGuardKind::OpenAIModeration(m) => {
+				pair(GuardrailKind::OpenAIModeration, &m.backend_ref)
 			},
-			RequestGuardKind::GoogleModelArmor(g) => g
-				.backend_ref
-				.as_ref()
-				.map(|r| (GuardrailKind::GoogleModelArmor, r)),
-			RequestGuardKind::AzureContentSafety(a) => a
-				.backend_ref
-				.as_ref()
-				.map(|r| (GuardrailKind::AzureContentSafety, r)),
+			RequestGuardKind::BedrockGuardrails(b) => pair(GuardrailKind::Bedrock, &b.backend_ref),
+			RequestGuardKind::GoogleModelArmor(g) => {
+				pair(GuardrailKind::GoogleModelArmor, &g.backend_ref)
+			},
+			RequestGuardKind::AzureContentSafety(a) => {
+				pair(GuardrailKind::AzureContentSafety, &a.backend_ref)
+			},
 			RequestGuardKind::Regex(_) | RequestGuardKind::Webhook(_) => None,
 		});
 		let response = self.response.iter().filter_map(|g| match &g.kind {
-			ResponseGuardKind::BedrockGuardrails(b) => {
-				b.backend_ref.as_ref().map(|r| (GuardrailKind::Bedrock, r))
+			ResponseGuardKind::BedrockGuardrails(b) => pair(GuardrailKind::Bedrock, &b.backend_ref),
+			ResponseGuardKind::GoogleModelArmor(g) => {
+				pair(GuardrailKind::GoogleModelArmor, &g.backend_ref)
 			},
-			ResponseGuardKind::GoogleModelArmor(g) => g
-				.backend_ref
-				.as_ref()
-				.map(|r| (GuardrailKind::GoogleModelArmor, r)),
-			ResponseGuardKind::AzureContentSafety(a) => a
-				.backend_ref
-				.as_ref()
-				.map(|r| (GuardrailKind::AzureContentSafety, r)),
+			ResponseGuardKind::AzureContentSafety(a) => {
+				pair(GuardrailKind::AzureContentSafety, &a.backend_ref)
+			},
 			ResponseGuardKind::Regex(_) | ResponseGuardKind::Webhook(_) => None,
 		});
 		request.chain(response)

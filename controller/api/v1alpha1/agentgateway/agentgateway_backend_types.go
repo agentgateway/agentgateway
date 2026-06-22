@@ -119,6 +119,11 @@ type AwsAgentCoreBackend struct {
 // GuardrailBackend is a reusable guardrail provider integration that prompt
 // guards reference via `backendRef`. Exactly one provider must be set, and it
 // must match the guard kind that references it.
+//
+// Azure Content Safety is intentionally omitted here for now: there is no
+// azureContentSafety prompt guard in this CRD yet, so an Azure guardrail backend
+// would not be referenceable. The data plane supports it; add it here when the
+// corresponding guard is added.
 // +kubebuilder:validation:ExactlyOneOf=bedrock;googleModelArmor;openAIModeration
 type GuardrailBackend struct {
 	// AWS Bedrock Guardrails provider.
