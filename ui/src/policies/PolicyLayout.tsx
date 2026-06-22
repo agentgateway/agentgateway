@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 export function PolicySection(props: {
   icon: ReactNode;
@@ -54,7 +54,7 @@ export function CollapsiblePolicySection(props: {
           <h4>{props.title}</h4>
           <p>{props.description}</p>
         </div>
-        <ChevronDown size={17} />
+        {open ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
       </button>
       {open ? (
         <div

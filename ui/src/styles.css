@@ -1622,15 +1622,10 @@ a {
 
 .transform-section-toggle > svg {
   color: var(--muted);
-  transition: transform 120ms ease;
 }
 
-.transform-section.open .transform-section-toggle {
+.transform-section.open > .transform-section-toggle {
   margin-bottom: 16px;
-}
-
-.transform-section.open .transform-section-toggle > svg {
-  transform: rotate(180deg);
 }
 
 .transform-section:not(.open) .policy-form-section-header {
