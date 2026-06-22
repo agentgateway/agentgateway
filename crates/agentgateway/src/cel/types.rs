@@ -294,6 +294,16 @@ pub struct SourceContext {
 	/// authors should prefer `source.identity.*` for trust-sensitive checks.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub unverified_workload: Option<WorkloadContext>,
+	/// HTTP CONNECT request headers (lowercased name -> value), when this stream
+	/// originated from a CONNECT tunnel. Empty otherwise. Exposed in CEL as
+	/// `source.connectHeaders`.
+	///
+	/// CONNECT headers are client-supplied and unauthenticated at the transport
+	/// layer, so trust decisions should validate the values (e.g. signature or
+	/// issuer checks) rather than trusting header presence alone.
+	#[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+	#[dynamic(rename = "connectHeaders")]
+	pub connect_headers: std::collections::HashMap<String, String>,
 }
 
 #[apply(schema!)]
@@ -326,6 +336,7 @@ impl SourceContext {
 			raw_port: raw_peer_addr.port(),
 			tls,
 			unverified_workload,
+			connect_headers: std::collections::HashMap::new(),
 		}
 	}
 }
@@ -2030,6 +2041,10 @@ pub fn full_example_executor() -> ExecutorSerde {
 				namespace: "ns-1".into(),
 				service_account: "sa-1".into(),
 			}),
+			connect_headers: std::collections::HashMap::from([(
+				"x-custom-header".to_string(),
+				"custom-value".to_string(),
+			)]),
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![

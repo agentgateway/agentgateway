@@ -3045,6 +3045,88 @@ async fn incoming_connect_tunnel_reenters_bind_flow() {
 	);
 }
 
+/// Headers carried on a CONNECT request are captured and surfaced to CEL as
+/// `source.connectHeaders` on the re-entered (tunneled) request, so an
+/// authorization policy on the inner bind can match against them.
+#[tokio::test]
+async fn incoming_connect_tunnel_exposes_connect_headers_to_cel() {
+	async fn tunnel_inner_request(custom_header: Option<&str>) -> String {
+		let mock = simple_mock().await;
+		let mut outer = simple_bind();
+		outer.key = strng::literal!("outer");
+		outer.address = "127.0.0.1:15008".parse().unwrap();
+		let mut inner = simple_bind();
+		inner.address = "127.0.0.1:18080".parse().unwrap();
+		let mut t = setup_proxy_test("{}")
+			.unwrap()
+			.with_backend(*mock.address())
+			.with_bind(outer)
+			.with_bind(inner)
+			.with_route(basic_route(*mock.address()))
+			.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15008);
+		// Authorization on the re-entered request only allows when the custom header
+		// carried on the CONNECT request is present and matches.
+		t.attach_route_policy(json!({
+			"authorization": {
+				"rules": ["source.connectHeaders[\"x-custom-header\"] == \"custom-value\""],
+			},
+		}))
+		.await;
+
+		let mut io = t.serve_tunnel(strng::literal!("outer"));
+		let connect = match custom_header {
+			Some(v) => format!(
+				"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: httpbingo.org:18080\r\nx-custom-header: {v}\r\n\r\n"
+			),
+			None => {
+				"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: httpbingo.org:18080\r\n\r\n".to_string()
+			},
+		};
+		io.write_all(connect.as_bytes()).await.unwrap();
+
+		let mut response = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = io.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT response unexpectedly closed");
+			response.extend_from_slice(&chunk[..n]);
+			if response.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		assert!(
+			String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+			"unexpected CONNECT response: {}",
+			String::from_utf8_lossy(&response),
+		);
+
+		io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+		let mut tunneled = Vec::new();
+		tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+			.await
+			.expect("timed out waiting for tunneled HTTP response")
+			.unwrap();
+		String::from_utf8_lossy(&tunneled).to_string()
+	}
+
+	// Header present and matching: the inner request is authorized (200).
+	let allowed = tunnel_inner_request(Some("custom-value")).await;
+	assert!(
+		allowed.starts_with("HTTP/1.1 200 OK\r\n"),
+		"expected inner request to be authorized, got: {allowed}",
+	);
+
+	// Header absent: `source.connectHeaders` is empty, the rule does not match,
+	// and the inner request is denied (403).
+	let denied = tunnel_inner_request(None).await;
+	assert!(
+		denied.starts_with("HTTP/1.1 403 Forbidden\r\n"),
+		"expected inner request to be denied, got: {denied}",
+	);
+}
+
 #[tokio::test]
 async fn incoming_connect_applies_backend_tls() {
 	let (mock, certs) = tls_mock().await;

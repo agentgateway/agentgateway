@@ -27,7 +27,7 @@ use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
-	Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
+	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
 };
 use crate::transport::tls::TlsInfo;
 use crate::types::agent::{
@@ -690,6 +690,18 @@ impl Gateway {
 					let Some(upgrade) = req.extensions_mut().remove::<hyper::upgrade::OnUpgrade>() else {
 						return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
 					};
+					// Snapshot the CONNECT request headers (lowercased name -> value) so they
+					// can be surfaced to CEL policies on the tunneled request via
+					// `source.connectHeaders`. HeaderMap keys are already lowercase.
+					let connect_headers: std::collections::HashMap<String, String> = req
+						.headers()
+						.iter()
+						.filter_map(|(k, v)| {
+							v.to_str()
+								.ok()
+								.map(|s| (k.as_str().to_owned(), s.to_owned()))
+						})
+						.collect();
 					let authority = match req.uri().authority() {
 						Some(authority) => authority.as_str(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
@@ -725,7 +737,8 @@ impl Gateway {
 								return;
 							},
 						};
-						let downstream = Socket::from_upgraded(connection, target_address, downstream);
+						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
+						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
 					});
 
@@ -789,11 +802,16 @@ impl Gateway {
 			&inputs.cfg.network,
 			tcp.peer_addr.ip(),
 		);
-		let src = crate::cel::SourceContext::from_tcp_connection(
+		let mut src = crate::cel::SourceContext::from_tcp_connection(
 			tcp,
 			tls.and_then(|t| t.src_identity.clone()),
 			unverified_workload,
 		);
+		// Surface CONNECT tunnel headers (captured in `terminate_connect_tunnel`) on
+		// the source context so request policies can reference `source.connectHeaders`.
+		if let Some(ch) = stream.ext::<ConnectHeaders>() {
+			src.connect_headers = ch.0.clone();
+		}
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&src)
 		{

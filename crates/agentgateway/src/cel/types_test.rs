@@ -34,6 +34,7 @@ fn build_test_request() -> crate::http::Request {
 		raw_port: 54321,
 		tls: None,
 		unverified_workload: None,
+		connect_headers: std::collections::HashMap::new(),
 	};
 	req.extensions_mut().insert(source);
 
@@ -422,6 +423,7 @@ fn test_extension_or_direct_serialization() {
 		raw_port: 8080,
 		tls: None,
 		unverified_workload: None,
+		connect_headers: std::collections::HashMap::new(),
 	};
 	let ext_or_direct: ExtensionOrDirect<SourceContext> = ExtensionOrDirect::Direct(Some(&value));
 	let json = serde_json::to_value(&ext_or_direct).expect("failed to serialize");
@@ -434,4 +436,52 @@ fn test_extension_or_direct_serialization() {
 	let ext_or_direct_none: ExtensionOrDirect<SourceContext> = ExtensionOrDirect::Direct(None);
 	let json_none = serde_json::to_value(&ext_or_direct_none).expect("failed to serialize");
 	assert!(json_none.is_null());
+}
+
+#[test]
+fn test_source_connect_headers() {
+	// Populated map: `source.connectHeaders["x-custom-header"]` resolves to the value.
+	let src = SourceContext {
+		address: "10.0.0.1".parse().unwrap(),
+		port: 12345,
+		raw_address: "10.0.0.1".parse().unwrap(),
+		raw_port: 12345,
+		tls: None,
+		unverified_workload: None,
+		connect_headers: std::collections::HashMap::from([(
+			"x-custom-header".to_string(),
+			"custom-value".to_string(),
+		)]),
+	};
+	let exec = ExecutorSerde {
+		source: Some(src),
+		..Default::default()
+	};
+	let executor = exec.as_executor();
+	let expr =
+		Expression::new_strict(r#"source.connectHeaders["x-custom-header"] == "custom-value""#)
+			.expect("failed to compile");
+	assert!(executor.eval_bool(&expr));
+
+	// Empty map when unset: indexing a missing key yields a no-such-key error.
+	let src_empty = SourceContext {
+		address: "10.0.0.1".parse().unwrap(),
+		port: 12345,
+		raw_address: "10.0.0.1".parse().unwrap(),
+		raw_port: 12345,
+		tls: None,
+		unverified_workload: None,
+		connect_headers: std::collections::HashMap::new(),
+	};
+	let exec_empty = ExecutorSerde {
+		source: Some(src_empty),
+		..Default::default()
+	};
+	let executor_empty = exec_empty.as_executor();
+	let missing = Expression::new_strict(r#"source.connectHeaders["x-custom-header"]"#)
+		.expect("failed to compile");
+	assert!(
+		executor_empty.eval(&missing).is_err(),
+		"indexing an empty connectHeaders map should error"
+	);
 }
