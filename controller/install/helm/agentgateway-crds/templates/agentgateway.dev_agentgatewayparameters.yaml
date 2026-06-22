@@ -473,6 +473,36 @@ spec:
                       `rmcp=warn,hickory_server::server::server_future=off,typespec_client_core::http::policies::logging=warn`.
                     type: string
                 type: object
+              modelCatalog:
+                description: |-
+                  Model cost catalog sources. Only effective when set on a Gateway-level
+                  AgentgatewayParameters (via Gateway.spec.infrastructure.parametersRef);
+                  ignored on GatewayClass-level parameters because ConfigMap references
+                  are resolved from the Gateway's deployment namespace.
+                properties:
+                  sources:
+                    items:
+                      description: ModelCatalogSource is a single source of model
+                        cost catalog data.
+                      properties:
+                        configMap:
+                          description: |-
+                            ModelCatalogConfigMapRef identifies a ConfigMap holding model cost catalog JSON.
+                            The ConfigMap must be in the same namespace as the Gateway that references it.
+                          properties:
+                            key:
+                              description: Data key whose value is the catalog JSON.
+                                Defaults to "catalog.json".
+                              type: string
+                            name:
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
+                          type: object
+                      type: object
+                    type: array
+                type: object
               podDisruptionBudget:
                 description: |-
                   Creates a `PodDisruptionBudget` for the

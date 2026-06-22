@@ -101,6 +101,17 @@
             "$ref": "#/$defs/ModelCatalogSource"
           }
         },
+        "database": {
+          "description": "Primary database used by local runtime features.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caAddress": {
           "type": [
             "string",
@@ -180,6 +191,17 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "standardAttributes": {
+          "description": "Standard request log attributes populated for database-backed local runtime features.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawStandardAttributes"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "statsAddr": {
@@ -362,8 +384,51 @@
           "required": [
             "file"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "inline": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "inline"
+          ]
         }
       ]
+    },
+    "Config": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "url"
+      ]
+    },
+    "RawStandardAttributes": {
+      "type": "object",
+      "properties": {
+        "user": {
+          "description": "CEL expression used to populate the `agentgateway.user` request log attribute.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group": {
+          "description": "CEL expression used to populate the `agentgateway.group` request log attribute.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "RawSession": {
       "type": "object",
@@ -520,6 +585,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/LoggingFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "database": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Config"
             },
             {
               "type": "null"
@@ -1220,7 +1295,7 @@
           "description": "Return a configured response instead of forwarding the request.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional"
+              "$ref": "#/$defs/LocalExplicitOrConditional_DirectResponse"
             },
             {
               "type": "null"
@@ -1360,7 +1435,7 @@
           "description": "Remote rate limit checks for incoming requests.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional2"
+              "$ref": "#/$defs/LocalExplicitOrConditional_RemoteRateLimit"
             },
             {
               "type": "null"
@@ -1415,7 +1490,7 @@
           "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional3"
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
             },
             {
               "type": "null"
@@ -1426,7 +1501,7 @@
           "description": "Send request and response data to an external processing service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional4"
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtProc"
             },
             {
               "type": "null"
@@ -1437,7 +1512,7 @@
           "description": "Modify request and response headers, bodies, or metadata.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional5"
+              "$ref": "#/$defs/LocalExplicitOrConditional_LocalTransformationConfig"
             },
             {
               "type": "null"
@@ -1472,7 +1547,7 @@
           "description": "Set request timeout limits.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Policy2"
+              "$ref": "#/$defs/TimeoutPolicy"
             },
             {
               "type": "null"
@@ -1484,7 +1559,7 @@
           "description": "Retry matching failed upstream requests.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Policy3"
+              "$ref": "#/$defs/RetryPolicy"
             },
             {
               "type": "null"
@@ -1779,24 +1854,24 @@
         "hostname"
       ]
     },
-    "LocalExplicitOrConditional": {
+    "LocalExplicitOrConditional_DirectResponse": {
       "anyOf": [
         {
-          "$ref": "#/$defs/LocalConditionalPolicies"
+          "$ref": "#/$defs/LocalConditionalPolicies_DirectResponse"
         },
         {
           "$ref": "#/$defs/DirectResponse"
         }
       ]
     },
-    "LocalConditionalPolicies": {
+    "LocalConditionalPolicies_DirectResponse": {
       "type": "object",
       "properties": {
         "conditional": {
           "description": "conditional policy entries. An entry without a condition must be the final fallback.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/LocalConditionalPolicy"
+            "$ref": "#/$defs/LocalConditionalPolicy_DirectResponse"
           }
         }
       },
@@ -1805,7 +1880,7 @@
         "conditional"
       ]
     },
-    "LocalConditionalPolicy": {
+    "LocalConditionalPolicy_DirectResponse": {
       "type": "object",
       "properties": {
         "condition": {
@@ -3314,6 +3389,10 @@
     "PromptGuard": {
       "type": "object",
       "properties": {
+        "streaming": {
+          "description": "Apply prompt guards to streaming responses and realtime websocket messages.",
+          "$ref": "#/$defs/PromptGuardStreamingMode"
+        },
         "request": {
           "description": "Guards applied to client requests before they reach the LLM.",
           "type": "array",
@@ -3330,6 +3409,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "PromptGuardStreamingMode": {
+      "oneOf": [
+        {
+          "description": "Do not apply prompt guards to streaming responses or realtime websocket messages.",
+          "type": "string",
+          "const": "Disabled"
+        },
+        {
+          "description": "Apply prompt guards to streaming responses and realtime websocket messages.",
+          "type": "string",
+          "const": "Enabled"
+        }
+      ]
     },
     "RequestGuard": {
       "type": "object",
@@ -3561,7 +3654,7 @@
         },
         "failureMode": {
           "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
-          "$ref": "#/$defs/FailureMode2"
+          "$ref": "#/$defs/WebhookFailureMode"
         }
       },
       "additionalProperties": false,
@@ -3569,7 +3662,7 @@
         "target"
       ]
     },
-    "FailureMode2": {
+    "WebhookFailureMode": {
       "description": "Defines how the proxy behaves when a webhook guardrail is unreachable or\nreturns an error.\n\nDefaults to `failClosed`. When failing closed, the error is propagated and\nthe LLM request is rejected. When failing open, the request is allowed\nthrough despite the webhook failure.",
       "oneOf": [
         {
@@ -3989,7 +4082,7 @@
     "LocalRateLimitPolicy": {
       "anyOf": [
         {
-          "$ref": "#/$defs/LocalConditionalPolicies2"
+          "$ref": "#/$defs/LocalConditionalPolicies_RateLimitSpec"
         },
         {
           "type": "array",
@@ -3999,14 +4092,14 @@
         }
       ]
     },
-    "LocalConditionalPolicies2": {
+    "LocalConditionalPolicies_RateLimitSpec": {
       "type": "object",
       "properties": {
         "conditional": {
           "description": "conditional policy entries. An entry without a condition must be the final fallback.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/LocalConditionalPolicy2"
+            "$ref": "#/$defs/LocalConditionalPolicy_RateLimitSpec"
           }
         }
       },
@@ -4015,7 +4108,7 @@
         "conditional"
       ]
     },
-    "LocalConditionalPolicy2": {
+    "LocalConditionalPolicy_RateLimitSpec": {
       "type": "object",
       "properties": {
         "condition": {
@@ -4104,24 +4197,24 @@
         "fillInterval"
       ]
     },
-    "LocalExplicitOrConditional2": {
+    "LocalExplicitOrConditional_RemoteRateLimit": {
       "anyOf": [
         {
-          "$ref": "#/$defs/LocalConditionalPolicies3"
+          "$ref": "#/$defs/LocalConditionalPolicies_RemoteRateLimit"
         },
         {
           "$ref": "#/$defs/RemoteRateLimit"
         }
       ]
     },
-    "LocalConditionalPolicies3": {
+    "LocalConditionalPolicies_RemoteRateLimit": {
       "type": "object",
       "properties": {
         "conditional": {
           "description": "conditional policy entries. An entry without a condition must be the final fallback.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/LocalConditionalPolicy3"
+            "$ref": "#/$defs/LocalConditionalPolicy_RemoteRateLimit"
           }
         }
       },
@@ -4130,7 +4223,7 @@
         "conditional"
       ]
     },
-    "LocalConditionalPolicy3": {
+    "LocalConditionalPolicy_RemoteRateLimit": {
       "type": "object",
       "properties": {
         "condition": {
@@ -4166,7 +4259,7 @@
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode3",
+          "$ref": "#/$defs/RemoteRateLimitFailureMode",
           "default": "failClosed"
         }
       },
@@ -4296,7 +4389,7 @@
         "value"
       ]
     },
-    "FailureMode3": {
+    "RemoteRateLimitFailureMode": {
       "description": "Defines how the proxy behaves when the remote rate limit service is\nunavailable or returns an error.\n\nDefaults to `FailClosed`. When failing closed, a 500 Internal Server Error\nis returned when the service is unavailable. When failing open, requests are\nallowed through despite the service failure.\n\n# Configuration\n\nBoth camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,\n`FailClosed`) are accepted in configuration files",
       "oneOf": [
         {
@@ -4345,7 +4438,7 @@
         },
         "failureMode": {
           "description": "Behavior when the remote rate limit service is unavailable or returns an error.\nDefaults to failClosed, denying requests with a 500 status on service failure.",
-          "$ref": "#/$defs/FailureMode3",
+          "$ref": "#/$defs/RemoteRateLimitFailureMode",
           "default": "failClosed"
         }
       },
@@ -4656,7 +4749,7 @@
         },
         "mode": {
           "description": "Controls whether requests must include valid Basic Auth credentials.",
-          "$ref": "#/$defs/Mode2",
+          "$ref": "#/$defs/BasicAuthMode",
           "default": "optional"
         },
         "authorizationLocation": {
@@ -4675,7 +4768,7 @@
         "htpasswd"
       ]
     },
-    "Mode2": {
+    "BasicAuthMode": {
       "description": "Validation mode for Basic Auth.",
       "oneOf": [
         {
@@ -4702,7 +4795,7 @@
         },
         "mode": {
           "description": "Controls whether requests must include a valid API key.",
-          "$ref": "#/$defs/Mode3",
+          "$ref": "#/$defs/APIKeyMode",
           "default": "optional"
         },
         "location": {
@@ -4740,7 +4833,7 @@
     "APIKey": {
       "type": "string"
     },
-    "Mode3": {
+    "APIKeyMode": {
       "description": "Validation mode for API key authentication.",
       "oneOf": [
         {
@@ -4760,24 +4853,24 @@
         }
       ]
     },
-    "LocalExplicitOrConditional3": {
+    "LocalExplicitOrConditional_ExtAuthz": {
       "anyOf": [
         {
-          "$ref": "#/$defs/LocalConditionalPolicies4"
+          "$ref": "#/$defs/LocalConditionalPolicies_ExtAuthz"
         },
         {
           "$ref": "#/$defs/ExtAuthz"
         }
       ]
     },
-    "LocalConditionalPolicies4": {
+    "LocalConditionalPolicies_ExtAuthz": {
       "type": "object",
       "properties": {
         "conditional": {
           "description": "conditional policy entries. An entry without a condition must be the final fallback.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/LocalConditionalPolicy4"
+            "$ref": "#/$defs/LocalConditionalPolicy_ExtAuthz"
           }
         }
       },
@@ -4786,7 +4879,7 @@
         "conditional"
       ]
     },
-    "LocalConditionalPolicy4": {
+    "LocalConditionalPolicy_ExtAuthz": {
       "type": "object",
       "properties": {
         "condition": {
@@ -4814,14 +4907,14 @@
         },
         "protocol": {
           "description": "Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.",
-          "$ref": "#/$defs/Protocol2",
+          "$ref": "#/$defs/ExtAuthzProtocol",
           "default": {
             "grpc": {}
           }
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error.",
-          "$ref": "#/$defs/FailureMode4",
+          "$ref": "#/$defs/ExtAuthzFailureMode",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -4910,7 +5003,7 @@
         }
       ]
     },
-    "Protocol2": {
+    "ExtAuthzProtocol": {
       "oneOf": [
         {
           "description": "Call the authorization service using the gRPC authorization protocol.",
@@ -5009,7 +5102,7 @@
         }
       ]
     },
-    "FailureMode4": {
+    "ExtAuthzFailureMode": {
       "oneOf": [
         {
           "description": "Allow the request when the authorization service cannot make a decision.",
@@ -5107,14 +5200,14 @@
         },
         "protocol": {
           "description": "Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.",
-          "$ref": "#/$defs/Protocol2",
+          "$ref": "#/$defs/ExtAuthzProtocol",
           "default": {
             "grpc": {}
           }
         },
         "failureMode": {
           "description": "Behavior when the authorization service is unavailable or returns an error.",
-          "$ref": "#/$defs/FailureMode4",
+          "$ref": "#/$defs/ExtAuthzFailureMode",
           "default": "deny"
         },
         "includeRequestHeaders": {
@@ -5204,24 +5297,24 @@
         }
       ]
     },
-    "LocalExplicitOrConditional4": {
+    "LocalExplicitOrConditional_ExtProc": {
       "anyOf": [
         {
-          "$ref": "#/$defs/LocalConditionalPolicies5"
+          "$ref": "#/$defs/LocalConditionalPolicies_ExtProc"
         },
         {
           "$ref": "#/$defs/ExtProc"
         }
       ]
     },
-    "LocalConditionalPolicies5": {
+    "LocalConditionalPolicies_ExtProc": {
       "type": "object",
       "properties": {
         "conditional": {
           "description": "conditional policy entries. An entry without a condition must be the final fallback.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/LocalConditionalPolicy5"
+            "$ref": "#/$defs/LocalConditionalPolicy_ExtProc"
           }
         }
       },
@@ -5230,7 +5323,7 @@
         "conditional"
       ]
     },
-    "LocalConditionalPolicy5": {
+    "LocalConditionalPolicy_ExtProc": {
       "type": "object",
       "properties": {
         "condition": {
@@ -5258,7 +5351,7 @@
         },
         "failureMode": {
           "description": "Behavior when the external processing service is unavailable or returns an error.",
-          "$ref": "#/$defs/FailureMode5",
+          "$ref": "#/$defs/ExtProcFailureMode",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -5364,7 +5457,7 @@
         }
       ]
     },
-    "FailureMode5": {
+    "ExtProcFailureMode": {
       "oneOf": [
         {
           "description": "Reject the request when the external processing service fails.",
@@ -5487,7 +5580,7 @@
         },
         "failureMode": {
           "description": "Behavior when the external processing service is unavailable or returns an error.",
-          "$ref": "#/$defs/FailureMode5",
+          "$ref": "#/$defs/ExtProcFailureMode",
           "default": "failClosed"
         },
         "metadataContext": {
@@ -5594,24 +5687,24 @@
         }
       ]
     },
-    "LocalExplicitOrConditional5": {
+    "LocalExplicitOrConditional_LocalTransformationConfig": {
       "anyOf": [
         {
-          "$ref": "#/$defs/LocalConditionalPolicies6"
+          "$ref": "#/$defs/LocalConditionalPolicies_LocalTransformationConfig"
         },
         {
           "$ref": "#/$defs/LocalTransformationConfig"
         }
       ]
     },
-    "LocalConditionalPolicies6": {
+    "LocalConditionalPolicies_LocalTransformationConfig": {
       "type": "object",
       "properties": {
         "conditional": {
           "description": "conditional policy entries. An entry without a condition must be the final fallback.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/LocalConditionalPolicy6"
+            "$ref": "#/$defs/LocalConditionalPolicy_LocalTransformationConfig"
           }
         }
       },
@@ -5620,7 +5713,7 @@
         "conditional"
       ]
     },
-    "LocalConditionalPolicy6": {
+    "LocalConditionalPolicy_LocalTransformationConfig": {
       "type": "object",
       "properties": {
         "condition": {
@@ -5717,7 +5810,7 @@
       },
       "additionalProperties": false
     },
-    "Policy2": {
+    "TimeoutPolicy": {
       "type": "object",
       "properties": {
         "requestTimeout": {
@@ -5737,7 +5830,7 @@
       },
       "additionalProperties": false
     },
-    "Policy3": {
+    "RetryPolicy": {
       "type": "object",
       "properties": {
         "attempts": {
@@ -5959,7 +6052,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode6"
+              "$ref": "#/$defs/McpBackendFailureMode"
             },
             {
               "type": "null"
@@ -6287,7 +6380,7 @@
         "conditional"
       ]
     },
-    "FailureMode6": {
+    "McpBackendFailureMode": {
       "oneOf": [
         {
           "description": "Fail the entire session if any target fails to initialize or any\nupstream fails during a fanout. This is the default and matches\ncurrent behavior.",
@@ -6381,7 +6474,7 @@
           "type": "object",
           "properties": {
             "openAI": {
-              "$ref": "#/$defs/Provider"
+              "$ref": "#/$defs/OpenAIProvider"
             }
           },
           "required": [
@@ -6393,7 +6486,7 @@
           "type": "object",
           "properties": {
             "gemini": {
-              "$ref": "#/$defs/Provider2"
+              "$ref": "#/$defs/GeminiProvider"
             }
           },
           "required": [
@@ -6405,7 +6498,7 @@
           "type": "object",
           "properties": {
             "vertex": {
-              "$ref": "#/$defs/Provider3"
+              "$ref": "#/$defs/VertexProvider"
             }
           },
           "required": [
@@ -6417,7 +6510,7 @@
           "type": "object",
           "properties": {
             "anthropic": {
-              "$ref": "#/$defs/Provider4"
+              "$ref": "#/$defs/AnthropicProvider"
             }
           },
           "required": [
@@ -6429,7 +6522,7 @@
           "type": "object",
           "properties": {
             "bedrock": {
-              "$ref": "#/$defs/Provider5"
+              "$ref": "#/$defs/BedrockProvider"
             }
           },
           "required": [
@@ -6441,7 +6534,7 @@
           "type": "object",
           "properties": {
             "azure": {
-              "$ref": "#/$defs/Provider6"
+              "$ref": "#/$defs/AzureProvider"
             }
           },
           "required": [
@@ -6453,7 +6546,7 @@
           "type": "object",
           "properties": {
             "copilot": {
-              "$ref": "#/$defs/Provider7"
+              "$ref": "#/$defs/CopilotProvider"
             }
           },
           "required": [
@@ -6465,7 +6558,7 @@
           "type": "object",
           "properties": {
             "custom": {
-              "$ref": "#/$defs/Provider8"
+              "$ref": "#/$defs/CustomProvider"
             }
           },
           "required": [
@@ -6475,7 +6568,7 @@
         }
       ]
     },
-    "Provider": {
+    "OpenAIProvider": {
       "type": "object",
       "properties": {
         "model": {
@@ -6487,7 +6580,7 @@
       },
       "additionalProperties": false
     },
-    "Provider2": {
+    "GeminiProvider": {
       "type": "object",
       "properties": {
         "model": {
@@ -6498,7 +6591,7 @@
         }
       }
     },
-    "Provider3": {
+    "VertexProvider": {
       "type": "object",
       "properties": {
         "model": {
@@ -6522,7 +6615,7 @@
         "projectId"
       ]
     },
-    "Provider4": {
+    "AnthropicProvider": {
       "type": "object",
       "properties": {
         "model": {
@@ -6534,7 +6627,7 @@
       },
       "additionalProperties": false
     },
-    "Provider5": {
+    "BedrockProvider": {
       "type": "object",
       "properties": {
         "model": {
@@ -6563,7 +6656,7 @@
         "region"
       ]
     },
-    "Provider6": {
+    "AzureProvider": {
       "type": "object",
       "properties": {
         "model": {
@@ -6620,7 +6713,7 @@
         }
       ]
     },
-    "Provider7": {
+    "CopilotProvider": {
       "type": "object",
       "properties": {
         "model": {
@@ -6632,10 +6725,17 @@
       },
       "additionalProperties": false
     },
-    "Provider8": {
+    "CustomProvider": {
       "type": "object",
       "properties": {
         "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "providerOverride": {
+          "description": "Provider identity for cost-catalog lookup and telemetry. Built-in named providers\n(cohere, mistral, ...) set this so their cost resolves under the right catalog key;\na bare custom provider may set it to match a catalog entry. Falls back to \"custom\".",
           "type": [
             "string",
             "null"
@@ -7237,7 +7337,7 @@
           "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional3"
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
             },
             {
               "type": "null"
@@ -7248,7 +7348,7 @@
           "description": "Send request and response data to an external processing service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional4"
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtProc"
             },
             {
               "type": "null"
@@ -7271,7 +7371,7 @@
           "description": "Modify request and response headers, bodies, or metadata.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional5"
+              "$ref": "#/$defs/LocalExplicitOrConditional_LocalTransformationConfig"
             },
             {
               "type": "null"
@@ -7320,7 +7420,7 @@
           "description": "Settings for handling incoming HTTP requests.",
           "anyOf": [
             {
-              "$ref": "#/$defs/HTTP2"
+              "$ref": "#/$defs/FrontendHTTP"
             },
             {
               "type": "null"
@@ -7344,7 +7444,7 @@
           "description": "Settings for handling incoming TCP connections.",
           "anyOf": [
             {
-              "$ref": "#/$defs/TCP2"
+              "$ref": "#/$defs/FrontendTCP"
             },
             {
               "type": "null"
@@ -7457,7 +7557,7 @@
         }
       ]
     },
-    "HTTP2": {
+    "FrontendHTTP": {
       "type": "object",
       "properties": {
         "maxBufferSize": {
@@ -7638,7 +7738,7 @@
       },
       "additionalProperties": false
     },
-    "TCP2": {
+    "FrontendTCP": {
       "type": "object",
       "properties": {
         "keepalives": {
@@ -7775,6 +7875,17 @@
               "type": "null"
             }
           ]
+        },
+        "database": {
+          "description": "Database-specific access log settings.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatabaseLoggingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -7866,6 +7977,19 @@
         "grpc",
         "http"
       ]
+    },
+    "DatabaseLoggingConfig": {
+      "type": "object",
+      "properties": {
+        "add": {
+          "description": "Database-only fields to add, computed from CEL expressions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "TracingConfig": {
       "description": "Configuration for dynamic tracing policy",
@@ -8366,6 +8490,13 @@
             }
           ]
         },
+        "providers": {
+          "description": "providers defines reusable LLM provider defaults that models may reference.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalLLMProvider"
+          }
+        },
         "models": {
           "description": "models defines the set of models that can be served by this gateway. The model name refers to the\nmodel in the users request that is matched; the model sent to the actual LLM can be overridden\non a per-model basis.",
           "type": "array",
@@ -8395,6 +8526,334 @@
       "additionalProperties": false,
       "required": [
         "models"
+      ]
+    },
+    "LocalLLMProvider": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "name is referenced from llm.models[].provider.reference.",
+          "type": "string"
+        },
+        "params": {
+          "description": "params customizes parameters for outgoing requests that use this provider.",
+          "$ref": "#/$defs/LocalLLMParams"
+        },
+        "provider": {
+          "description": "provider of the LLM we are connecting to.",
+          "$ref": "#/$defs/LocalModelAIProvider"
+        },
+        "defaults": {
+          "description": "defaults defines provider-level policy defaults. Model-level policy fields override these.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalLLMProviderDefaults"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "provider"
+      ]
+    },
+    "LocalLLMParams": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "The model to send to the provider.\nIf unset, the same model will be used from the request.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "apiKey": {
+          "description": "An API key to attach to the request.\nIf unset this will be automatically detected from the environment.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecretFromFile"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "awsRegion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vertexRegion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vertexProject": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureResourceName": {
+          "description": "For Azure: the resource name of the deployment",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureResourceType": {
+          "description": "For Azure: the type of Azure endpoint (openAI or foundry)",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AzureResourceType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "azureApiVersion": {
+          "description": "For Azure: the API version to use",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "azureProjectName": {
+          "description": "For Azure: the Foundry project name (required for foundry resource type)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "baseUrl": {
+          "description": "Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "hostOverride": {
+          "description": "Override the upstream host for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "deprecated": true,
+          "default": null
+        },
+        "pathOverride": {
+          "description": "Override the upstream path for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "deprecated": true,
+          "default": null
+        },
+        "pathPrefix": {
+          "description": "Override the default base path prefix for this provider.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "deprecated": true,
+          "default": null
+        },
+        "tokenize": {
+          "description": "Whether to tokenize the request before forwarding it upstream.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "SecretFromFile": {
+      "$ref": "#/$defs/FileOrInline"
+    },
+    "LocalModelAIProvider": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "openai",
+            "openAI",
+            "gemini",
+            "vertex",
+            "anthropic",
+            "bedrock",
+            "azure",
+            "copilot",
+            "cohere",
+            "ollama",
+            "baseten",
+            "cerebras",
+            "deepinfra",
+            "deepseek",
+            "groq",
+            "huggingface",
+            "mistral",
+            "openrouter",
+            "togetherai",
+            "xai",
+            "fireworks"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reference"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "custom": {
+              "$ref": "#/$defs/CustomProvider"
+            }
+          },
+          "required": [
+            "custom"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "LocalLLMProviderDefaults": {
+      "type": "object",
+      "properties": {
+        "defaults": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "overrides": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "transformation": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "requestHeaders": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "responseHeaders": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HeaderModifier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "backendTLS": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tls": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "auth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BackendAuth"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "health": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalHealthPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backendTunnel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tunnel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "promptCaching": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "not": {
+            "required": [
+              "backendTLS",
+              "tls"
+            ]
+          }
+        }
       ]
     },
     "LocalLLMModels": {
@@ -8602,166 +9061,6 @@
           "description": "Internal models can be targeted by virtual models but cannot be requested directly.",
           "type": "string",
           "const": "internal"
-        }
-      ]
-    },
-    "LocalLLMParams": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "description": "The model to send to the provider.\nIf unset, the same model will be used from the request.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "apiKey": {
-          "description": "An API key to attach to the request.\nIf unset this will be automatically detected from the environment.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SecretFromFile"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "awsRegion": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "vertexRegion": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "vertexProject": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "azureResourceName": {
-          "description": "For Azure: the resource name of the deployment",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "azureResourceType": {
-          "description": "For Azure: the type of Azure endpoint (openAI or foundry)",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AzureResourceType"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "azureApiVersion": {
-          "description": "For Azure: the API version to use",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "azureProjectName": {
-          "description": "For Azure: the Foundry project name (required for foundry resource type)",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "baseUrl": {
-          "description": "Base URL for the upstream provider. Expands to hostOverride, pathPrefix, and tls for https URLs.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
-        "hostOverride": {
-          "description": "Override the upstream host for this provider.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "deprecated": true,
-          "default": null
-        },
-        "pathOverride": {
-          "description": "Override the upstream path for this provider.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "deprecated": true,
-          "default": null
-        },
-        "pathPrefix": {
-          "description": "Override the default base path prefix for this provider.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "deprecated": true,
-          "default": null
-        },
-        "tokenize": {
-          "description": "Whether to tokenize the request before forwarding it upstream.",
-          "type": "boolean",
-          "default": false
-        }
-      },
-      "additionalProperties": false
-    },
-    "SecretFromFile": {
-      "$ref": "#/$defs/FileOrInline"
-    },
-    "LocalModelAIProvider": {
-      "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "openai",
-            "openAI",
-            "gemini",
-            "vertex",
-            "anthropic",
-            "bedrock",
-            "azure",
-            "copilot",
-            "cohere",
-            "ollama",
-            "baseten",
-            "cerebras",
-            "deepinfra",
-            "deepseek",
-            "groq",
-            "huggingface",
-            "mistral",
-            "openrouter",
-            "togetherai",
-            "xai",
-            "fireworks"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "custom": {
-              "$ref": "#/$defs/Provider8"
-            }
-          },
-          "required": [
-            "custom"
-          ],
-          "additionalProperties": false
         }
       ]
     },
@@ -9001,7 +9300,7 @@
           "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional3"
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
             },
             {
               "type": "null"
@@ -9012,7 +9311,7 @@
           "description": "Send request and response data to an external processing service.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional4"
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtProc"
             },
             {
               "type": "null"
@@ -9035,7 +9334,7 @@
           "description": "Modify request and response headers, bodies, or metadata.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional5"
+              "$ref": "#/$defs/LocalExplicitOrConditional_LocalTransformationConfig"
             },
             {
               "type": "null"
@@ -9133,7 +9432,7 @@
           "description": "Behavior when one or more MCP targets fail to initialize or fail during fanout.\nDefaults to `failClosed`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FailureMode6"
+              "$ref": "#/$defs/McpBackendFailureMode"
             },
             {
               "type": "null"

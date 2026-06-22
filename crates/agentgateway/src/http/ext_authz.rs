@@ -77,6 +77,7 @@ impl Default for BodyOptions {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "ExtAuthzFailureMode"))]
 #[derive(Default)]
 pub enum FailureMode {
 	/// Allow the request when the authorization service cannot make a decision.
@@ -89,6 +90,7 @@ pub enum FailureMode {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "ExtAuthzProtocol"))]
 pub enum Protocol {
 	/// Call the authorization service using the gRPC authorization protocol.
 	#[serde(rename_all = "camelCase")]

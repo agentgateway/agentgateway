@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
-use ::http::{HeaderMap, HeaderValue, header};
+use ::http::{HeaderMap, HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
@@ -40,6 +40,7 @@ pub mod cost;
 pub mod policy;
 mod types;
 
+use policy::streaming_guardrails::GuardedSseBody;
 pub use types::SimpleChatCompletionMessage;
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
@@ -362,7 +363,10 @@ impl AIProvider {
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
 			AIProvider::Azure(_p) => azure::Provider::NAME,
 			AIProvider::Copilot(_p) => copilot::Provider::NAME,
-			AIProvider::Custom(_p) => custom::Provider::NAME,
+			AIProvider::Custom(p) => p
+				.provider_override
+				.clone()
+				.unwrap_or(custom::Provider::NAME),
 		}
 	}
 	pub fn override_model(&self) -> Option<Strng> {
@@ -707,6 +711,28 @@ impl AIProvider {
 				}
 			},
 			_ => Ok(()),
+		}
+	}
+
+	// Anthropic does not like CORS requests, but we are not really directly CORS since we are proxying requests.
+	// Securing the requests and management of CORS is handled by the proxy so we just directly send.
+	pub fn strip_browser_cors_headers(&self, req: &mut Request) {
+		if !matches!(self, AIProvider::Anthropic(_)) {
+			return;
+		}
+
+		let headers = req.headers_mut();
+		headers.remove("origin");
+		headers.remove("access-control-request-method");
+		headers.remove("access-control-request-headers");
+
+		let sec_fetch_headers: Vec<HeaderName> = headers
+			.keys()
+			.filter(|name| name.as_str().starts_with("sec-fetch-"))
+			.cloned()
+			.collect();
+		for name in sec_fetch_headers {
+			headers.remove(name);
 		}
 	}
 
@@ -1205,6 +1231,7 @@ impl AIProvider {
 		if req.streaming && resp.status().is_success() {
 			return self
 				.process_streaming(
+					client,
 					req,
 					rate_limit,
 					req_snapshot,
@@ -1626,8 +1653,9 @@ impl AIProvider {
 	#[allow(clippy::too_many_arguments)]
 	pub async fn process_streaming(
 		&self,
+		client: PolicyClient,
 		req: LLMRequest,
-		rate_limit: LLMResponsePolicies,
+		response_policies: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
@@ -1668,6 +1696,13 @@ impl AIProvider {
 			parts.headers.remove(header::CONTENT_LENGTH);
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}
+
+		// Build headers for guardrail evaluation (same as buffered path).
+		let prompt_guard_headers = response_prompt_guard_headers(
+			&parts.headers,
+			response_policies.request_traceparent.as_ref(),
+		);
+
 		let resp = Response::from_parts(parts, body);
 		let resp = if matches!(input_format, InputFormat::Detect) {
 			resp
@@ -1675,7 +1710,26 @@ impl AIProvider {
 			normalize_sse_response_headers(resp)
 		};
 
-		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot, model_catalog);
+		// Build evaluators before format translation so guardrails run against translated
+		// SSE output, not raw upstream bytes. Applying them before translation silently
+		// breaks Bedrock (AWS Event Stream is binary, not SSE) and any provider whose
+		// wire format differs from SSE. Detect paths are raw pass-throughs; skip them.
+		let evaluators = if response_policies.streaming_prompt_guard_enabled
+			&& !response_policies.prompt_guard.is_empty()
+			&& !matches!(input_format, InputFormat::Detect)
+		{
+			use policy::PromptGuard;
+			let temp_guard = PromptGuard {
+				streaming: policy::PromptGuardStreamingMode::Enabled,
+				request: vec![],
+				response: response_policies.prompt_guard.clone(),
+			};
+			temp_guard.begin_streaming_response_guard(&client, &prompt_guard_headers)
+		} else {
+			vec![]
+		};
+
+		let logger = AmendOnDrop::new(log, response_policies, req_snapshot, model_catalog);
 		let stream_format = match self {
 			AIProvider::Bedrock(_) => "awsEventStream",
 			_ => "sseJson",
@@ -1688,7 +1742,7 @@ impl AIProvider {
 				stream_format.to_string(),
 			)
 		});
-		Ok(match (self, input_format, native_format) {
+		let translated = match (self, input_format, native_format) {
 			(
 				AIProvider::Custom(_),
 				InputFormat::Completions,
@@ -1828,7 +1882,13 @@ impl AIProvider {
 					"custom provider cannot translate {native:?} stream to {input:?}"
 				)));
 			},
-		})
+		};
+
+		if !evaluators.is_empty() {
+			// `logger` is owned by the translated body; pass None to avoid double-logging.
+			return Ok(translated.map(|b| GuardedSseBody::new(b, evaluators, buffer, None)));
+		}
+		Ok(translated)
 	}
 
 	async fn read_body_and_default_model<T: RequestType + DeserializeOwned>(

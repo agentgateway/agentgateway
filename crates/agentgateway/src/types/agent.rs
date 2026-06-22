@@ -39,6 +39,7 @@ use crate::types::{agent, backend, frontend};
 use crate::*;
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Bind {
 	pub key: BindKey,
@@ -51,6 +52,7 @@ pub struct Bind {
 pub type BindKey = Strng;
 
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Listener {
 	pub key: ListenerKey,
@@ -552,6 +554,17 @@ impl serde::Serialize for ServerTLSConfig {
 	}
 }
 
+#[cfg(feature = "schema")]
+impl JsonSchema for ServerTLSConfig {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"ServerTLSConfig".into()
+	}
+
+	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({ "type": "null" })
+	}
+}
+
 pub fn parse_cert(cert: &[u8]) -> Result<Vec<CertificateDer<'static>>, anyhow::Error> {
 	let parsed = <(SectionKind, Vec<u8>)>::pem_slice_iter(cert).collect::<Result<Vec<_>, _>>()?;
 	if parsed.is_empty() {
@@ -582,6 +595,7 @@ pub fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
 	}
 }
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub enum ListenerProtocol {
 	/// HTTP
 	HTTP,
@@ -629,6 +643,7 @@ impl ListenerProtocol {
 
 // Protocol of the entire bind.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, EncodeLabelValue, Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[allow(non_camel_case_types)]
 pub enum BindProtocol {
 	http,
@@ -665,6 +680,7 @@ pub enum TransportProtocol {
 pub type ListenerKey = Strng;
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Route {
 	// Internal name
@@ -686,8 +702,10 @@ pub struct Route {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub backends: Vec<RouteBackendReference>,
 	#[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
+	#[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
 	pub llm_router: Option<Arc<llm::model_router::ModelRouter>>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
 	pub inline_policies: Vec<TrafficPolicy>,
 }
 
@@ -951,6 +969,7 @@ impl BackendTargetRef<'_> {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct TCPRoute {
 	// Internal name
@@ -972,6 +991,7 @@ pub struct TCPRoute {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct TCPRouteBackendReference {
 	#[serde(default = "default_weight")]
@@ -979,6 +999,7 @@ pub struct TCPRouteBackendReference {
 	pub backend: SimpleBackendReference,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
 	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
@@ -1101,6 +1122,7 @@ pub enum PathRedirect {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum RouteBackendTarget {
 	Service { name: NamespacedHostname, port: u16 },
@@ -1134,6 +1156,7 @@ impl RouteBackendTarget {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RouteBackendReference {
 	#[serde(default = "default_weight")]
@@ -1142,6 +1165,7 @@ pub struct RouteBackendReference {
 	pub target: RouteBackendTarget,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
 	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
@@ -1583,6 +1607,11 @@ pub struct OpenAPITarget {
 }
 
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(
+	feature = "schema",
+	schemars(with = "std::collections::HashMap<ListenerKey, Arc<Listener>>")
+)]
 pub struct ListenerSet {
 	pub inner: HashMap<ListenerKey, Arc<Listener>>,
 }
@@ -1771,6 +1800,11 @@ pub struct SingleRouteMatch {
 }
 
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(
+	feature = "schema",
+	schemars(with = "std::collections::HashMap<RouteKey, Arc<Route>>")
+)]
 pub struct RouteSet {
 	// Hostname -> []routes, sorted so that route matching can do a linear traversal
 	inner: hashbrown::HashMap<HostnameMatch, Vec<SingleRouteMatch>>,
@@ -1928,6 +1962,11 @@ impl RouteSet {
 }
 
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(
+	feature = "schema",
+	schemars(with = "std::collections::HashMap<RouteKey, TCPRoute>")
+)]
 pub struct TCPRouteSet {
 	// Hostname -> []routes, sorted so that route matching can do a linear traversal
 	inner: hashbrown::HashMap<HostnameMatch, Vec<RouteKey>>,

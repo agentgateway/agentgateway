@@ -5,6 +5,7 @@ use crate::llm::RouteType;
 use crate::*;
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "OpenAIProvider"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,

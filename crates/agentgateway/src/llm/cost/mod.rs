@@ -14,8 +14,10 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
 use super::{CacheTokenConvention, LLMInfo, LLMResponse};
+use crate::ModelCatalogSource;
 
 mod catalog;
+pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
 
@@ -40,16 +42,23 @@ impl Default for ModelCatalog {
 }
 
 impl ModelCatalog {
-	pub fn new(paths: Vec<PathBuf>) -> anyhow::Result<Arc<Self>> {
+	pub fn new(sources: Vec<ModelCatalogSource>) -> anyhow::Result<Arc<Self>> {
 		let catalog = Arc::new(Self::default());
-		if paths.is_empty() {
+		if sources.is_empty() {
 			return Ok(catalog);
 		}
+		let file_paths: Vec<PathBuf> = sources
+			.iter()
+			.filter_map(|s| match s {
+				ModelCatalogSource::File { file } => Some(file.clone()),
+				ModelCatalogSource::Inline { .. } => None,
+			})
+			.collect();
 		tokio::spawn({
-			let paths = paths.clone();
+			let sources = sources.clone();
 			let catalog = catalog.clone();
 			async move {
-				match load_files(&paths).await {
+				match load_sources(&sources).await {
 					Ok(loaded) => {
 						log_loaded_catalog("loaded model catalog", &loaded);
 						catalog.snapshot.store(Arc::new(loaded.snapshot));
@@ -60,7 +69,9 @@ impl ModelCatalog {
 				}
 			}
 		});
-		watch_catalog_files(paths, catalog.clone())?;
+		if !file_paths.is_empty() {
+			watch_catalog_files(file_paths, sources, catalog.clone())?;
+		}
 		Ok(catalog)
 	}
 
@@ -70,6 +81,14 @@ impl ModelCatalog {
 
 	pub fn snapshot(&self) -> Arc<CatalogSnapshot> {
 		self.snapshot.load_full()
+	}
+
+	pub fn list_models(&self) -> ModelCatalogModels {
+		self.snapshot.load().list_models()
+	}
+
+	pub fn replace(&self, snapshot: CatalogSnapshot) {
+		self.snapshot.store(Arc::new(snapshot));
 	}
 
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
@@ -125,6 +144,26 @@ impl CatalogSnapshot {
 
 	fn empty() -> Self {
 		CatalogSnapshot { catalog: None }
+	}
+
+	fn list_models(&self) -> ModelCatalogModels {
+		let Some(catalog) = &self.catalog else {
+			return ModelCatalogModels {
+				loaded: false,
+				providers: Vec::new(),
+			};
+		};
+		ModelCatalogModels {
+			loaded: true,
+			providers: catalog
+				.providers
+				.iter()
+				.map(|(provider, data)| ModelCatalogProviderModels {
+					provider: provider.clone(),
+					models: data.models.keys().cloned().collect(),
+				})
+				.collect(),
+		}
 	}
 
 	fn project(
@@ -227,6 +266,20 @@ impl CatalogSnapshot {
 			cost_rates: Some(cost_rates),
 		}
 	}
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogModels {
+	pub loaded: bool,
+	pub providers: Vec<ModelCatalogProviderModels>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogProviderModels {
+	pub provider: String,
+	pub models: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -404,31 +457,39 @@ struct LoadedCatalog {
 	missing: Vec<PathBuf>,
 }
 
-async fn load_files(paths: &[PathBuf]) -> anyhow::Result<LoadedCatalog> {
-	if paths.is_empty() {
-		bail!("no model catalog files supplied");
+async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCatalog> {
+	if sources.is_empty() {
+		bail!("no model catalog sources supplied");
 	}
 
-	let mut catalogs = Vec::with_capacity(paths.len());
+	let mut catalogs = Vec::with_capacity(sources.len());
 	let mut missing = Vec::new();
-	for path in paths {
-		let json = match fs_err::tokio::read_to_string(path).await {
-			Ok(json) => json,
-			Err(e) if e.kind() == ErrorKind::NotFound => {
-				missing.push(path.clone());
-				continue;
+	for source in sources {
+		match source {
+			ModelCatalogSource::File { file } => {
+				let json = match fs_err::tokio::read_to_string(file).await {
+					Ok(json) => json,
+					Err(e) if e.kind() == ErrorKind::NotFound => {
+						missing.push(file.clone());
+						continue;
+					},
+					Err(e) => {
+						return Err(e).context("reading model catalog");
+					},
+				};
+				let catalog = catalog::from_json(&json)
+					.with_context(|| format!("invalid model catalog at {}", file.display()))?;
+				catalogs.push(catalog);
 			},
-			Err(e) => {
-				return Err(e).context("reading model catalog");
+			ModelCatalogSource::Inline { inline } => {
+				let catalog = catalog::from_json(inline).context("invalid inline model catalog")?;
+				catalogs.push(catalog);
 			},
-		};
-		let catalog = catalog::from_json(&json)
-			.with_context(|| format!("invalid model catalog at {}", path.display()))?;
-		catalogs.push(catalog);
+		}
 	}
 	if catalogs.is_empty() {
 		bail!(
-			"no configured model catalog files are currently readable; missing files: {}",
+			"no configured model catalog sources are currently readable; missing files: {}",
 			missing
 				.iter()
 				.map(|p| p.display().to_string())
@@ -454,9 +515,13 @@ fn log_loaded_catalog(message: &'static str, loaded: &LoadedCatalog) {
 	}
 }
 
-fn watch_catalog_files(paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
+fn watch_catalog_files(
+	file_paths: Vec<PathBuf>,
+	all_sources: Vec<ModelCatalogSource>,
+	catalog: Arc<ModelCatalog>,
+) -> anyhow::Result<()> {
 	let mut watched = crate::util::watch_files_with_options(
-		paths,
+		file_paths,
 		crate::util::WatchFilesOptions::default().reload_on_disappearance(true),
 	)?;
 	info!(
@@ -465,7 +530,7 @@ fn watch_catalog_files(paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyho
 	);
 	tokio::task::spawn(async move {
 		while watched.changed().await {
-			match load_files(watched.paths()).await {
+			match load_sources(&all_sources).await {
 				Ok(loaded) => {
 					log_loaded_catalog("model catalog reloaded", &loaded);
 					catalog.snapshot.store(Arc::new(loaded.snapshot));
@@ -810,7 +875,14 @@ mod tests {
 			.await
 			.unwrap();
 
-		let loaded = load_files(&[base, override_file]).await.unwrap();
+		let loaded = load_sources(&[
+			ModelCatalogSource::File { file: base },
+			ModelCatalogSource::File {
+				file: override_file,
+			},
+		])
+		.await
+		.unwrap();
 		assert_eq!(loaded.missing.len(), 1);
 		assert_eq!(loaded.missing[0].file_name().unwrap(), "overrides.json");
 
@@ -830,14 +902,16 @@ mod tests {
 	#[tokio::test]
 	async fn all_missing_layers_are_not_loaded() {
 		let dir = tempfile::tempdir().unwrap();
-		let err = load_files(&[dir.path().join("base.json")])
-			.await
-			.unwrap_err();
+		let err = load_sources(&[ModelCatalogSource::File {
+			file: dir.path().join("base.json"),
+		}])
+		.await
+		.unwrap_err();
 
 		assert!(
 			err
 				.to_string()
-				.contains("no configured model catalog files are currently readable")
+				.contains("no configured model catalog sources are currently readable")
 		);
 	}
 
@@ -1033,5 +1107,67 @@ mod tests {
 		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(3.0));
+	}
+
+	#[tokio::test]
+	async fn inline_source_is_loaded() {
+		let inline_json = test_catalog("5");
+		let loaded = load_sources(&[ModelCatalogSource::Inline {
+			inline: inline_json,
+		}])
+		.await
+		.unwrap();
+		assert_eq!(loaded.missing.len(), 0);
+		let resp = LLMResponse {
+			input_tokens: Some(1_000_000),
+			..Default::default()
+		};
+		let (cost, status) = loaded.snapshot.price(
+			"openai",
+			"my-model",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
+		assert_eq!(status, CostLookupStatus::Exact);
+		assert_eq!(cost, Some(5.0));
+	}
+
+	#[tokio::test]
+	async fn inline_source_overrides_file_source() {
+		let dir = tempfile::tempdir().unwrap();
+		let base = dir.path().join("base.json");
+		fs_err::tokio::write(&base, test_catalog("1"))
+			.await
+			.unwrap();
+
+		let loaded = load_sources(&[
+			ModelCatalogSource::File { file: base },
+			ModelCatalogSource::Inline {
+				inline: test_catalog("7"),
+			},
+		])
+		.await
+		.unwrap();
+		let resp = LLMResponse {
+			input_tokens: Some(1_000_000),
+			..Default::default()
+		};
+		let (cost, _) = loaded.snapshot.price(
+			"openai",
+			"my-model",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
+		assert_eq!(cost, Some(7.0), "inline layer overrides file layer");
+	}
+
+	#[tokio::test]
+	async fn invalid_inline_source_is_an_error() {
+		let err = load_sources(&[ModelCatalogSource::Inline {
+			inline: "not valid json".to_string(),
+		}])
+		.await
+		.unwrap_err();
+		assert!(err.to_string().contains("invalid inline model catalog"));
 	}
 }

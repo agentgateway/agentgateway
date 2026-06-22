@@ -157,6 +157,9 @@ impl ContextBuilder {
 	pub fn register_log_expression(&mut self, expression: &Expression) {
 		self.logging_attributes |= expression.attributes
 	}
+	pub fn register_log_request(&mut self) {
+		self.logging_attributes |= Attributes::Request;
+	}
 	fn any_has(&self, attr: impl Into<FlagSet<Attributes>>) -> bool {
 		let x = attr.into();
 		self.request_attributes.contains(x)

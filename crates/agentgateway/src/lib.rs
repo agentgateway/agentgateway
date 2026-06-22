@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::{fmt, io};
+use std::{fmt, io, str};
 
 use agent_core::prelude::*;
 use control::caclient::CaClient;
@@ -60,6 +60,18 @@ use crate::types::local;
 /// and dynamic config
 pub struct NestedRawConfig {
 	config: Option<RawConfig>,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct RawStandardAttributes {
+	/// CEL expression used to populate the `agentgateway.user` request log attribute.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub user: Option<String>,
+	/// CEL expression used to populate the `agentgateway.group` request log attribute.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub group: Option<String>,
 }
 
 /// Controls which IP address families the DNS resolver will query for
@@ -145,6 +157,8 @@ pub struct RawConfig {
 
 	/// Model cost catalog sources; entries are merged in order, with later entries taking precedence.
 	model_catalog: Option<Vec<ModelCatalogSource>>,
+	/// Primary database used by local runtime features.
+	database: Option<telemetry::log_store::Config>,
 
 	ca_address: Option<String>,
 	ca_auth_token: Option<String>,
@@ -164,6 +178,8 @@ pub struct RawConfig {
 
 	/// Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	admin_addr: Option<String>,
+	/// Standard request log attributes populated for database-backed local runtime features.
+	standard_attributes: Option<RawStandardAttributes>,
 	/// Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	stats_addr: Option<String>,
 	/// Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
@@ -343,6 +359,7 @@ pub struct RawLogging {
 	fields: Option<RawLoggingFields>,
 	level: Option<RawLoggingLevel>,
 	format: Option<LoggingFormat>,
+	database: Option<telemetry::log_store::Config>,
 }
 
 #[apply(schema_de!)]
@@ -512,6 +529,7 @@ pub struct Config {
 	pub tracing: Option<trc::DeprecatedConfig>,
 	pub metrics: crate::telemetry::log::MetricsConfig,
 	pub logging: crate::telemetry::log::Config,
+	pub database: Option<telemetry::log_store::Config>,
 
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
@@ -535,24 +553,13 @@ pub struct ModelCatalogConfig {
 	pub sources: Vec<ModelCatalogSource>,
 }
 
-impl ModelCatalogConfig {
-	/// Resolve the configured sources to catalog file paths.
-	pub fn paths(&self) -> Vec<PathBuf> {
-		self
-			.sources
-			.iter()
-			.map(|ModelCatalogSource::File { file }| file.clone())
-			.collect()
-	}
-}
-
 /// A source of model cost catalog data.
-// TODO: Add support for inline cost config
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
 pub enum ModelCatalogSource {
 	File { file: PathBuf },
+	Inline { inline: String },
 }
 
 #[apply(schema!)]

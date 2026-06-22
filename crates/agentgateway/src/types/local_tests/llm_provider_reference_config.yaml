@@ -1,0 +1,30 @@
+llm:
+  providers:
+  - name: anthropic-shared
+    provider: anthropic
+    params:
+      model: claude-haiku-4-5-20251001
+      apiKey: "sk-provider"
+      baseUrl: https://anthropic.internal/v1
+      tokenize: true
+    defaults:
+      health:
+        unhealthyExpression: "response.code >= 500"
+        eviction:
+          duration: 30s
+      promptCaching:
+        cacheSystem: true
+        minTokens: 1024
+      transformation:
+        model: llmRequest.model.stripPrefix("anthropic/")
+  models:
+  - name: anthropic/*
+    provider:
+      reference: anthropic-shared
+    params:
+      model: claude-sonnet-4-5-20250929
+    health:
+      unhealthyExpression: "response.code >= 500 || response.code == 429"
+    promptCaching:
+      cacheMessages: true
+      minTokens: 2048

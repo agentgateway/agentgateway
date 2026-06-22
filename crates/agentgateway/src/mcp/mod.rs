@@ -29,6 +29,7 @@ use crate::proxy::ProxyError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "McpBackendFailureMode"))]
 #[serde(rename_all = "camelCase")]
 pub enum FailureMode {
 	/// Fail the entire session if any target fails to initialize or any

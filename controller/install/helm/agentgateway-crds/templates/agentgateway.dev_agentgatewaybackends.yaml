@@ -4808,6 +4808,13 @@ spec:
                                             maxItems: 8
                                             minItems: 1
                                             type: array
+                                          streaming:
+                                            description: |-
+                                              Apply prompt guards to streaming responses and realtime websocket messages.
+                                              Defaults to disabled to preserve streaming throughput unless explicitly enabled.
+                                            enum:
+                                            - Enabled
+                                            type: string
                                         type: object
                                         x-kubernetes-validations:
                                         - message: at least one of the fields in [request
@@ -11105,6 +11112,13 @@ spec:
                             maxItems: 8
                             minItems: 1
                             type: array
+                          streaming:
+                            description: |-
+                              Apply prompt guards to streaming responses and realtime websocket messages.
+                              Defaults to disabled to preserve streaming throughput unless explicitly enabled.
+                            enum:
+                            - Enabled
+                            type: string
                         type: object
                         x-kubernetes-validations:
                         - message: at least one of the fields in [request response]

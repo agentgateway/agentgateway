@@ -887,7 +887,20 @@ fn convert_backend_ai_policy(
 			Some(llm::policy::ResponseGuard { rejection, kind })
 		});
 
+		let streaming =
+			match proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::try_from(pg.streaming)
+				.map_err(|_| ProtoError::EnumParse("invalid prompt guard streaming mode".to_string()))?
+			{
+				proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::Enabled => {
+					llm::policy::PromptGuardStreamingMode::Enabled
+				},
+				proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::Disabled => {
+					llm::policy::PromptGuardStreamingMode::Disabled
+				},
+			};
+
 		Ok(llm::policy::PromptGuard {
+			streaming,
 			request,
 			response: response.collect_vec(),
 		})
@@ -1369,6 +1382,7 @@ pub(crate) fn backend_with_policies_from_proto(
 								.collect::<Result<Vec<_>, _>>()?;
 							AIProvider::Custom(llm::custom::Provider {
 								model: custom.model.as_deref().map(strng::new),
+								provider_override: custom.provider_override.as_deref().map(strng::new),
 								formats,
 							})
 						},
@@ -1451,6 +1465,10 @@ pub(crate) fn backend_with_policies_from_proto(
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 			},
 		),
+		Some(backend::Kind::Guardrail(_)) => {
+			diagnostics.add_warning("guardrail backends are not yet implemented and will be ignored");
+			Backend::Invalid
+		},
 		None => {
 			return Err(ProtoError::Generic("unknown backend".to_string()));
 		},
@@ -2771,6 +2789,7 @@ fn frontend_policy_from_proto(
 				add: Arc::new(add),
 				remove: Arc::new(FzHashSet::new(rm)),
 				otlp,
+				database: None,
 				access_log_policy: None,
 			};
 			logging_policy.init_access_log_policy();
@@ -4125,6 +4144,7 @@ mod tests {
 								},
 							],
 							model: None,
+							provider_override: None,
 						})),
 						inline_policies: vec![],
 					}],

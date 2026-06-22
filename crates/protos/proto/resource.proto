@@ -175,8 +175,55 @@ message Backend {
     MCPBackend mcp = 5;
     DynamicForwardProxy dynamic = 6;
     AwsBackend aws = 8;
+    // Not yet implemented. Reserved for a future release.
+    GuardrailBackend guardrail = 9;
   }
   repeated BackendPolicySpec inline_policies = 7;
+}
+
+// GuardrailBackend is a typed backend for AI guardrail provider integrations.
+// The gateway owns the transport (endpoint host, TLS, protocol, implicit auth);
+// the user supplies only the instance-specific configuration for the provider.
+// Guardrail backends are referenced from prompt guard policies via backend_ref;
+// they are not intended to be used as route targets.
+message GuardrailBackend {
+  // AWS Bedrock Guardrails (ApplyGuardrail API)
+  message Bedrock {
+    // The unique identifier of the guardrail
+    string identifier = 1;
+    // The version of the guardrail
+    string version = 2;
+    // AWS region where the guardrail is deployed (e.g., "us-west-2").
+    // Used to construct the endpoint host.
+    string region = 3;
+  }
+  // Google Cloud Model Armor (sanitizeUserPrompt/sanitizeModelResponse APIs)
+  message GoogleModelArmor {
+    // The template ID for the Model Armor configuration
+    string template_id = 1;
+    // The GCP project ID
+    string project_id = 2;
+    // The GCP region, used to construct the endpoint host (default: us-central1)
+    optional string location = 3;
+  }
+  // Azure AI Content Safety (text:analyze/text:detectJailbreak APIs)
+  message AzureContentSafety {
+    // The Azure resource name used to construct the endpoint host
+    // (<resource_name>.cognitiveservices.azure.com).
+    // Exactly one of resource_name and endpoint must be set.
+    optional string resource_name = 1;
+    // The full endpoint host or URL (e.g., "https://<resource-name>.cognitiveservices.azure.com"),
+    // for endpoints whose host cannot be derived from the resource name.
+    optional string endpoint = 2;
+  }
+  // OpenAI moderations API (api.openai.com/v1/moderations)
+  message OpenAIModeration {}
+  oneof provider {
+    Bedrock bedrock = 1;
+    GoogleModelArmor google_model_armor = 2;
+    AzureContentSafety azure_content_safety = 3;
+    OpenAIModeration openai_moderation = 4;
+  }
 }
 
 message TLSConfig {
@@ -1121,6 +1168,8 @@ message BackendPolicySpec {
       // Model to use. Defaults to `omni-moderation-latest`
       optional string model = 1;
       repeated BackendPolicySpec inline_policies = 2;
+      // Not yet implemented. Reserved for a future release.
+      BackendReference backend_ref = 3;
     }
 
     message BedrockGuardrails {
@@ -1130,6 +1179,9 @@ message BackendPolicySpec {
       string region = 3;
 
       repeated BackendPolicySpec inline_policies = 4;
+
+      // Not yet implemented. Reserved for a future release.
+      BackendReference backend_ref = 5;
     }
 
     message GoogleModelArmor {
@@ -1140,6 +1192,9 @@ message BackendPolicySpec {
       optional string location = 3;
 
       repeated BackendPolicySpec inline_policies = 4;
+
+      // Not yet implemented. Reserved for a future release.
+      BackendReference backend_ref = 5;
     }
 
     message AzureContentSafety {
@@ -1159,6 +1214,9 @@ message BackendPolicySpec {
       optional bool halt_on_blocklist_hit = 5;
 
       repeated BackendPolicySpec inline_policies = 6;
+
+      // Not yet implemented. Reserved for a future release.
+      BackendReference backend_ref = 7;
     }
 
     // Response sent when rejecting a request
@@ -1195,10 +1253,18 @@ message BackendPolicySpec {
     }
 
     message PromptGuard {
+      enum Streaming {
+        DISABLED = 0;
+        ENABLED = 1;
+      }
+
       // Guards applied to client requests before they reach the LLM
       repeated RequestGuard request = 1;
       // Guards applied to LLM responses before they reach the client
       repeated ResponseGuard response = 2;
+      // Apply guardrails to streaming responses and realtime websocket messages.
+      // Defaults to disabled to preserve streaming throughput unless explicitly enabled.
+      Streaming streaming = 3;
     }
 
     PromptGuard prompt_guard = 1;
@@ -1557,6 +1623,7 @@ message AIBackend {
   message Custom {
     repeated ProviderFormatConfig formats = 1;
     optional string model = 2;
+    optional string provider_override = 3;
   }
 
   message Provider {

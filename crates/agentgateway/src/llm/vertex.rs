@@ -13,6 +13,7 @@ const ANTHROPIC_VERSION: &str = "vertex-2023-10-16";
 pub const DISCOVERY_ENGINE_HOST: Strng = strng::literal!("discoveryengine.googleapis.com");
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "VertexProvider"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,

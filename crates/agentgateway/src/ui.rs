@@ -1,32 +1,35 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use agent_core::version::BuildInfo;
 use axum::extract::State;
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::get;
+use axum::http::{StatusCode, Uri};
+use axum::response::sse::Event;
+use axum::response::{IntoResponse, Redirect, Response, Sse};
+use axum::routing::{get, post};
 use axum::{Json, Router};
-use http::header::{AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE};
-use http::{HeaderName, HeaderValue, Method};
-use hyper::body::Incoming;
+use chrono::Utc;
 use include_dir::{Dir, include_dir};
 use serde::{Serialize, Serializer};
 use serde_json::Value;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tower::ServiceExt;
-use tower_http::cors::CorsLayer;
 use tower_serve_static::ServeDir;
 
 use crate::cel::{self, ExecutorSerde};
-use crate::management::admin::{AdminFallback, AdminResponse};
+use crate::llm::cost::ModelCatalog;
 use crate::{Config, ConfigSource, client, yamlviajson};
-pub struct UiHandler {
-	router: Router,
-}
+
+const BASE_COSTS_FILE: &str = "base-costs.json";
+const CONFIG_SCHEMA_HEADER: &str =
+	"# yaml-language-server: $schema=https://agentgateway.dev/schema/config\n";
 
 #[derive(Clone, Debug)]
 struct App {
 	state: Arc<Config>,
 	client: client::Client,
+	model_catalog: Arc<ModelCatalog>,
 }
 
 impl App {
@@ -44,22 +47,108 @@ lazy_static::lazy_static! {
 	static ref ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../ui/out");
 }
 
-impl UiHandler {
-	pub fn new(cfg: Arc<Config>) -> Self {
-		let ui_service = ServeDir::new(&ASSETS_DIR);
-		let router = Router::new()
-			// Redirect to the UI
-			.route("/config", get(get_config).post(write_config))
-			.route("/cel", axum::routing::post(handle_cel))
-			.nest_service("/ui", ui_service)
-			.route("/", get(|| async { Redirect::permanent("/ui") }))
-			.layer(add_cors_layer())
-			.with_state(App {
-				state: cfg.clone(),
-				client: client::Client::new(&cfg.dns, None, Default::default(), None),
-			});
-		Self { router }
-	}
+pub fn router(cfg: Arc<Config>, model_catalog: Arc<ModelCatalog>) -> Router {
+	let ui_service = tower::service_fn(move |req| serve_ui_asset(req, &ASSETS_DIR));
+	Router::new()
+		// Redirect to the UI
+		.route("/api/runtime", get(get_runtime))
+		.route("/api/config", get(get_config).post(write_config))
+		// Legacy path
+		.route("/cel", axum::routing::post(handle_cel))
+		.route("/api/cel", axum::routing::post(handle_cel))
+		.route("/api/logs/search", post(search_logs))
+		.route("/api/logs/get", post(get_log))
+		.route("/api/logs/tail", post(tail_logs))
+		.route("/api/logs/analytics/summary", post(analytics_summary))
+		.route("/api/costs/models", get(cost_models))
+		.route("/api/costs/refresh-base", post(refresh_base_costs))
+		.nest_service("/ui", ui_service)
+		.route("/", get(|| async { Redirect::permanent("/ui") }))
+		.with_state(App {
+			state: cfg.clone(),
+			client: client::Client::new(&cfg.dns, None, Default::default(), None),
+			model_catalog,
+		})
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeInfo {
+	build: RuntimeBuildInfo,
+	ui: RuntimeUiInfo,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeBuildInfo {
+	version: &'static str,
+	git_revision: &'static str,
+	rust_version: &'static str,
+	build_profile: &'static str,
+	build_target: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeUiInfo {
+	gateway_mode: GatewayRuntimeMode,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+enum GatewayRuntimeMode {
+	Standalone,
+	Xds,
+}
+
+async fn get_runtime(State(app): State<App>) -> Json<RuntimeInfo> {
+	let build = BuildInfo::new();
+	Json(RuntimeInfo {
+		build: RuntimeBuildInfo {
+			version: build.version,
+			git_revision: build.git_revision,
+			rust_version: build.rust_version,
+			build_profile: build.build_profile,
+			build_target: build.build_target,
+		},
+		ui: RuntimeUiInfo {
+			gateway_mode: if app.state.xds.address.is_some() {
+				GatewayRuntimeMode::Xds
+			} else {
+				GatewayRuntimeMode::Standalone
+			},
+		},
+	})
+}
+
+async fn serve_ui_asset(
+	req: http::Request<axum::body::Body>,
+	assets: &'static Dir<'static>,
+) -> Result<Response, std::convert::Infallible> {
+	let req = if should_serve_ui_index(req.uri().path()) {
+		request_with_path(req, "/index.html")
+	} else {
+		req
+	};
+	ServeDir::new(assets)
+		.oneshot(req)
+		.await
+		.map(|response| response.map(axum::body::Body::new))
+}
+
+fn should_serve_ui_index(path: &str) -> bool {
+	let path = path.trim_start_matches('/');
+	path.is_empty() || (!path.starts_with("assets/") && !path.contains('.'))
+}
+
+fn request_with_path<B>(mut req: http::Request<B>, path: &str) -> http::Request<B> {
+	let mut parts = req.uri().clone().into_parts();
+	parts.path_and_query = Some(match req.uri().query() {
+		Some(query) => format!("{path}?{query}").parse().expect("valid UI path"),
+		None => path.parse().expect("valid UI path"),
+	});
+	*req.uri_mut() = Uri::from_parts(parts).expect("valid UI uri");
+	req
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -107,6 +196,7 @@ async fn write_config(
 	};
 	let yaml_content =
 		yamlviajson::to_string(&config_json).map_err(|e| ErrorResponse::Anyhow(e.into()))?;
+	let yaml_file_content = format!("{CONFIG_SCHEMA_HEADER}{yaml_content}");
 
 	if let Err(e) = crate::types::local::NormalizedLocalConfig::from(
 		&app.state,
@@ -120,7 +210,7 @@ async fn write_config(
 	}
 
 	// Write the YAML content to the file
-	fs_err::tokio::write(file_path, yaml_content)
+	fs_err::tokio::write(file_path, yaml_file_content)
 		.await
 		.map_err(|e| ErrorResponse::Anyhow(e.into()))?;
 
@@ -130,34 +220,45 @@ async fn write_config(
 	))
 }
 
-pub fn add_cors_layer() -> CorsLayer {
-	CorsLayer::new()
-		.allow_origin(
-			[
-				"http://0.0.0.0:3000",
-				"http://localhost:3000",
-				"http://127.0.0.1:3000",
-				"http://0.0.0.0:19000",
-				"http://127.0.0.1:19000",
-				"http://localhost:19000",
-			]
-			.map(|origin| origin.parse::<HeaderValue>().unwrap()),
-		)
-		.allow_headers([
-			CONTENT_TYPE,
-			AUTHORIZATION,
-			HeaderName::from_static("x-requested-with"),
-		])
-		.allow_methods([
-			Method::GET,
-			Method::POST,
-			Method::PUT,
-			Method::DELETE,
-			Method::OPTIONS,
-		])
-		.allow_credentials(true)
-		.expose_headers([CONTENT_TYPE, CONTENT_LENGTH])
-		.max_age(Duration::from_secs(3600))
+async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, ErrorResponse> {
+	let config_source = app.cfg()?;
+	let file_path = match &config_source {
+		ConfigSource::File(path) => path,
+		ConfigSource::Static(_) => {
+			return Err(ErrorResponse::String(
+				"Cannot refresh base costs for static config".to_string(),
+			));
+		},
+	};
+	let dir = file_path.parent().ok_or_else(|| {
+		ErrorResponse::String(format!(
+			"config file has no parent: {}",
+			file_path.display()
+		))
+	})?;
+	let base_costs_file = dir.join(BASE_COSTS_FILE);
+
+	let refreshed = crate::llm::cost::refresh::refresh_models_dev_base_catalog(
+		&base_costs_file,
+		app.model_catalog.as_ref(),
+	)
+	.await?;
+
+	let mut response =
+		serde_json::to_value(refreshed).map_err(|e| ErrorResponse::Anyhow(e.into()))?;
+	if let Value::Object(fields) = &mut response {
+		fields.insert(
+			"file".to_string(),
+			Value::String(BASE_COSTS_FILE.to_string()),
+		);
+	}
+	Ok(Json(response))
+}
+
+async fn cost_models(
+	State(app): State<App>,
+) -> Result<Json<crate::llm::cost::ModelCatalogModels>, ErrorResponse> {
+	Ok(Json(app.model_catalog.list_models()))
 }
 
 #[derive(serde::Deserialize)]
@@ -223,9 +324,93 @@ async fn handle_cel(Json(request): Json<CelRequest>) -> Response {
 	(StatusCode::OK, Json(resp)).into_response()
 }
 
-impl AdminFallback for UiHandler {
-	fn handle(&self, req: http::Request<Incoming>) -> AdminResponse {
-		let router = self.router.clone();
-		Box::pin(async { router.oneshot(req).await.unwrap() })
+async fn search_logs(
+	Json(request): Json<crate::telemetry::log_store::SearchRequest>,
+) -> Result<Json<crate::telemetry::log_store::SearchResponse>, ErrorResponse> {
+	crate::telemetry::log_store::search(request)
+		.await
+		.map(Json)
+		.map_err(ErrorResponse::Anyhow)
+}
+
+async fn get_log(
+	Json(request): Json<crate::telemetry::log_store::GetRequest>,
+) -> Result<Json<crate::telemetry::log_store::GetResponse>, ErrorResponse> {
+	crate::telemetry::log_store::get(request)
+		.await
+		.map(Json)
+		.map_err(ErrorResponse::Anyhow)
+}
+
+async fn analytics_summary(
+	Json(request): Json<crate::telemetry::log_store::AnalyticsSummaryRequest>,
+) -> Result<Json<crate::telemetry::log_store::AnalyticsSummaryResponse>, ErrorResponse> {
+	crate::telemetry::log_store::analytics_summary(request)
+		.await
+		.map(Json)
+		.map_err(ErrorResponse::Anyhow)
+}
+
+async fn tail_logs(
+	Json(mut request): Json<crate::telemetry::log_store::TailRequest>,
+) -> Result<Sse<ReceiverStream<Result<Event, std::convert::Infallible>>>, ErrorResponse> {
+	if !crate::telemetry::log_store::enabled() {
+		return Err(ErrorResponse::String(
+			"request log database is not configured".to_string(),
+		));
 	}
+	let mut cursor = request
+		.cursor
+		.clone()
+		.or_else(|| Some(crate::telemetry::log_store::encode_cursor(Utc::now(), "")));
+	request.limit = Some(request.limit.unwrap_or(100).clamp(1, 500));
+
+	let (tx, rx) = mpsc::channel(32);
+	tokio::spawn(async move {
+		let mut poll = tokio::time::interval(Duration::from_secs(1));
+		let mut heartbeat = tokio::time::interval(Duration::from_secs(15));
+		loop {
+			tokio::select! {
+				_ = poll.tick() => {
+					let mut batch_request = request.clone();
+					batch_request.cursor = cursor.clone();
+					match crate::telemetry::log_store::tail(batch_request).await {
+						Ok(response) => {
+							for log in response.logs {
+								let next = crate::telemetry::log_store::encode_cursor(log.completed_at, &log.id);
+								cursor = Some(next.clone());
+								let event = crate::telemetry::log_store::TailEvent {
+									entry: log,
+									cursor: next,
+								};
+								let Ok(data) = serde_json::to_string(&event) else {
+									continue;
+								};
+								if tx.send(Ok(Event::default().event("log").data(data))).await.is_err() {
+									return;
+								}
+							}
+							if let Some(next) = response.next_cursor {
+								cursor = Some(next);
+							}
+						},
+						Err(err) => {
+							let event = Event::default()
+								.event("error")
+								.data(serde_json::json!({ "message": err.to_string() }).to_string());
+							let _ = tx.send(Ok(event)).await;
+							return;
+						},
+					}
+				},
+				_ = heartbeat.tick() => {
+					if tx.send(Ok(Event::default().event("heartbeat").data("{}"))).await.is_err() {
+						return;
+					}
+				},
+			}
+		}
+	});
+
+	Ok(Sse::new(ReceiverStream::new(rx)))
 }

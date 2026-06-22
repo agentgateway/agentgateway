@@ -21,6 +21,7 @@ RUN choco install visualstudio2022buildtools -y --package-parameters '--add Micr
 # Build UI
 WORKDIR C:/app/ui
 COPY ui .
+COPY schema C:/schema
 RUN npm install
 RUN npm run build
 

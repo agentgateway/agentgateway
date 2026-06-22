@@ -239,6 +239,11 @@ async fn test_llm_simple_config() {
 }
 
 #[tokio::test]
+async fn test_llm_provider_reference_config() {
+	test_config_parsing("llm_provider_reference").await;
+}
+
+#[tokio::test]
 async fn test_llm_virtual_model_config() {
 	test_config_parsing("llm_virtual_model").await;
 }

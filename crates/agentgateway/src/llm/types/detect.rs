@@ -460,7 +460,7 @@ impl StreamResponse {
 	}
 }
 
-fn amend_from_stream_response(log: &mut AmendOnDrop, f: &StreamResponse) {
+pub fn amend_from_stream_response(log: &mut AmendOnDrop, f: &StreamResponse) {
 	let input_tokens = f.set_if(
 		log,
 		lookups::USAGE_INPUT_TOKENS,

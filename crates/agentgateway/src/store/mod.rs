@@ -13,10 +13,10 @@ mod policy;
 
 use std::sync::RwLock;
 
-pub use binds::PreviousState as BindPreviousState;
+pub use binds::{Dump as BindsDump, PreviousState as BindPreviousState};
 pub use discovery::{
-	LocalWorkload, PreviousState as DiscoveryPreviousState, Store as DiscoveryStore,
-	StoreUpdater as DiscoveryStoreUpdater, WorkloadStore,
+	Dump as DiscoveryDump, LocalWorkload, PreviousState as DiscoveryPreviousState,
+	Store as DiscoveryStore, StoreUpdater as DiscoveryStoreUpdater, WorkloadStore,
 };
 pub use policy::{
 	BackendPolicy, BackendPolicyTrait, HasExpressions, PolicyExpressions, RequestPolicy,
@@ -93,12 +93,13 @@ impl Stores {
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-struct StoresDump {
+pub struct StoresDump {
 	#[serde(flatten)]
-	discovery: discovery::Dump,
+	pub discovery: discovery::Dump,
 	#[serde(flatten)]
-	binds: binds::Dump,
+	pub binds: binds::Dump,
 }
 
 impl Serialize for Stores {

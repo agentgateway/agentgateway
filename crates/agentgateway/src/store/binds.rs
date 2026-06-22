@@ -192,6 +192,7 @@ impl FrontendPolices {
 			add: fields_add,
 			remove: _,
 			otlp: _,
+			database,
 			access_log_policy: _,
 		}) = &self.access_log
 		{
@@ -200,6 +201,11 @@ impl FrontendPolices {
 			}
 			for (_, v) in fields_add.iter() {
 				ctx.register_log_expression(v)
+			}
+			if let Some(database) = database {
+				for (_, v) in database.add.iter() {
+					ctx.register_log_expression(v)
+				}
 			}
 		}
 		if let Some(mf) = &self.metrics_fields {
@@ -482,6 +488,7 @@ pub struct LLMResponsePolicies {
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
 	pub request_traceparent: Option<HeaderValue>,
 	pub prompt_guard: Vec<ResponseGuard>,
+	pub streaming_prompt_guard_enabled: bool,
 }
 
 impl Default for Store {
@@ -1657,38 +1664,44 @@ pub struct StoreUpdater {
 	state: Arc<RwLock<Store>>,
 }
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RoutesDump {
-	http_mesh: HashMap<NamespacedHostname, RouteSet>,
-	tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
-	route_groups: HashMap<RouteGroupKey, RouteSet>,
+	pub http_mesh: HashMap<NamespacedHostname, RouteSet>,
+	pub tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
+	pub route_groups: HashMap<RouteGroupKey, RouteSet>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-struct DumpListener {
+pub struct DumpListener {
 	#[serde(flatten)]
-	listener: Listener,
+	pub listener: Listener,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	routes: Option<Arc<RouteSet>>,
+	pub routes: Option<Arc<RouteSet>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	tcp_routes: Option<Arc<TCPRouteSet>>,
+	pub tcp_routes: Option<Arc<TCPRouteSet>>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-struct DumpBind {
+pub struct DumpBind {
 	#[serde(flatten)]
-	bind: Arc<Bind>,
-	listeners: BTreeMap<ListenerKey, DumpListener>,
+	pub bind: Arc<Bind>,
+	pub listeners: BTreeMap<ListenerKey, DumpListener>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 pub struct Dump {
-	binds: Vec<DumpBind>,
-	routes: RoutesDump,
-	policies: Vec<Arc<TargetedPolicy>>,
-	backends: Vec<Arc<BackendWithPolicies>>,
+	pub binds: Vec<DumpBind>,
+	pub routes: RoutesDump,
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
+	pub policies: Vec<Arc<TargetedPolicy>>,
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
+	pub backends: Vec<Arc<BackendWithPolicies>>,
 }
 
 impl StoreUpdater {
@@ -2011,6 +2024,7 @@ mod tests {
 			add: Arc::new(OrderedStringMap::default()),
 			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),
 			otlp: None,
+			database: None,
 			access_log_policy: None,
 		})
 	}
@@ -2857,6 +2871,7 @@ mod tests {
 		}));
 		let prompt_guard_policy = BackendTrafficPolicy::AI(Arc::new(llm::Policy {
 			prompt_guard: Some(PromptGuard {
+				streaming: Default::default(),
 				request: vec![RequestGuard {
 					rejection: Default::default(),
 					kind: RequestGuardKind::Regex(RegexRules {

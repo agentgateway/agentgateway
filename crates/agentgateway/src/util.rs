@@ -1,5 +1,5 @@
 use std::io::{Error, ErrorKind};
-use std::path::{PathBuf, absolute};
+use std::path::{Component, Path, PathBuf, absolute};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail};
@@ -72,18 +72,15 @@ pub fn watch_files_with_options(
 	let mut watch_errors = Vec::new();
 	let mut unwatched_paths = Vec::new();
 	for p in &paths {
-		let parent = p
-			.parent()
-			.ok_or_else(|| anyhow!("failed to get the parent of watched file {}", p.display()))?;
 		let mut path_watched = false;
-		for target in [p.as_path(), parent] {
-			if watched_targets.iter().any(|p| p == target) {
+		for target in watch_targets_for_path(p)? {
+			if watched_targets.iter().any(|p| p == &target) {
 				path_watched = true;
 				continue;
 			}
-			match watcher.watch(target, RecursiveMode::NonRecursive) {
+			match watcher.watch(&target, RecursiveMode::NonRecursive) {
 				Ok(()) => {
-					watched_targets.push(target.to_path_buf());
+					watched_targets.push(target.clone());
 					path_watched = true;
 				},
 				Err(e) => {
@@ -134,6 +131,63 @@ pub fn watch_files_with_options(
 	Ok(WatchedFiles {
 		paths: watched_paths,
 		changes: change_rx,
+	})
+}
+
+fn watch_targets_for_path(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+	let mut targets = vec![path.to_path_buf()];
+	if requires_parent_watch(path)? {
+		let parent = path.parent().ok_or_else(|| {
+			anyhow!(
+				"failed to get the parent of watched file {}",
+				path.display()
+			)
+		})?;
+		targets.push(parent.to_path_buf());
+	}
+	Ok(targets)
+}
+
+fn requires_parent_watch(path: &Path) -> anyhow::Result<bool> {
+	let meta = match fs_err::symlink_metadata(path) {
+		Ok(meta) => meta,
+		Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
+		Err(e) => return Err(e.into()),
+	};
+	Ok(meta.file_type().is_symlink() && is_kubernetes_projected_volume_symlink(path))
+}
+
+fn is_kubernetes_projected_volume_symlink(path: &Path) -> bool {
+	let Some(parent) = path.parent() else {
+		return false;
+	};
+	let Ok(link) = fs_err::read_link(path) else {
+		return false;
+	};
+	if has_kubernetes_projection_component(&link) {
+		return true;
+	}
+	let target = if link.is_absolute() {
+		link
+	} else {
+		parent.join(link)
+	};
+	let Ok(target) = fs_err::canonicalize(target) else {
+		return false;
+	};
+	target
+		.strip_prefix(parent)
+		.is_ok_and(has_kubernetes_projection_component)
+}
+
+fn has_kubernetes_projection_component(path: &Path) -> bool {
+	path.components().any(|component| {
+		let Component::Normal(component) = component else {
+			return false;
+		};
+		component
+			.to_str()
+			.is_some_and(|name| name == "..data" || name.starts_with("..20"))
 	})
 }
 
@@ -214,6 +268,58 @@ mod tests {
 	fn notify_error_reason_omits_notify_paths() {
 		let err = notify::Error::path_not_found().add_path(PathBuf::from("/cfg/override.json"));
 		assert_eq!(notify_error_reason(&err), "No path was found.");
+	}
+
+	#[test]
+	fn regular_file_watches_only_the_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let file = dir.path().join("config.yaml");
+		fs_err::write(&file, "{}").unwrap();
+		assert_eq!(watch_targets_for_path(&file).unwrap(), vec![file]);
+	}
+
+	#[test]
+	fn missing_file_watches_parent_for_appearance() {
+		let dir = tempfile::tempdir().unwrap();
+		let file = dir.path().join("catalog.json");
+		assert_eq!(
+			watch_targets_for_path(&file).unwrap(),
+			vec![file.clone(), dir.path().to_path_buf()]
+		);
+	}
+
+	#[cfg(target_family = "unix")]
+	#[test]
+	fn kubernetes_projected_symlink_watches_file_and_parent() {
+		use std::os::unix::fs::symlink;
+
+		let dir = tempfile::tempdir().unwrap();
+		let version = dir.path().join("..2024_01_01_00_00_00.000000000");
+		fs_err::create_dir(&version).unwrap();
+		fs_err::write(version.join("config.yaml"), "{}").unwrap();
+		symlink("..2024_01_01_00_00_00.000000000", dir.path().join("..data")).unwrap();
+		let file = dir.path().join("config.yaml");
+		symlink("..data/config.yaml", &file).unwrap();
+
+		assert_eq!(
+			watch_targets_for_path(&file).unwrap(),
+			vec![file.clone(), dir.path().to_path_buf()]
+		);
+	}
+
+	#[cfg(target_family = "unix")]
+	#[test]
+	fn ordinary_symlink_watches_only_the_file() {
+		use std::os::unix::fs::symlink;
+
+		let dir = tempfile::tempdir().unwrap();
+		let real = dir.path().join("real");
+		fs_err::create_dir(&real).unwrap();
+		fs_err::write(real.join("config.yaml"), "{}").unwrap();
+		let file = dir.path().join("config.yaml");
+		symlink("real/config.yaml", &file).unwrap();
+
+		assert_eq!(watch_targets_for_path(&file).unwrap(), vec![file]);
 	}
 
 	#[test]
