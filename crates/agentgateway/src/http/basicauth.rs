@@ -23,6 +23,7 @@ pub enum Error {
 
 /// Validation mode for Basic Auth.
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "BasicAuthMode"))]
 #[derive(Copy, PartialEq, Eq, Default)]
 pub enum Mode {
 	/// Require a valid username and password.

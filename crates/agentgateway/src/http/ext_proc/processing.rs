@@ -12,6 +12,7 @@ use crate::http::ext_proc::proto::{HttpBody, HttpTrailers, ProcessingResponse};
 use crate::*;
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "ExtProcFailureMode"))]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum FailureMode {
 	/// Reject the request when the external processing service fails.

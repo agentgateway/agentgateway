@@ -901,7 +901,23 @@ fn convert_backend_ai_policy(
 			})
 			.collect::<Result<Vec<_>, ProtoError>>()?;
 
-		Ok(llm::policy::PromptGuard { request, response })
+		let streaming =
+			match proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::try_from(pg.streaming)
+				.map_err(|_| ProtoError::EnumParse("invalid prompt guard streaming mode".to_string()))?
+			{
+				proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::Enabled => {
+					llm::policy::PromptGuardStreamingMode::Enabled
+				},
+				proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::Disabled => {
+					llm::policy::PromptGuardStreamingMode::Disabled
+				},
+			};
+
+		Ok(llm::policy::PromptGuard {
+			streaming,
+			request,
+			response,
+		})
 	});
 
 	let mut policy = llm::Policy {
@@ -2829,6 +2845,7 @@ fn frontend_policy_from_proto(
 				add: Arc::new(add),
 				remove: Arc::new(FzHashSet::new(rm)),
 				otlp,
+				database: None,
 				access_log_policy: None,
 			};
 			logging_policy.init_access_log_policy();
@@ -4045,6 +4062,7 @@ mod tests {
 
 		// Bad backendRef on a request guard -> rejected.
 		let req_bad = spec(PromptGuard {
+			streaming: 0,
 			request: vec![RequestGuard {
 				rejection: None,
 				kind: Some(request_guard::Kind::BedrockGuardrails(bedrock(
@@ -4058,6 +4076,7 @@ mod tests {
 
 		// Bad backendRef on a response guard -> rejected (previously silently dropped).
 		let resp_bad = spec(PromptGuard {
+			streaming: 0,
 			request: Vec::new(),
 			response: vec![ResponseGuard {
 				rejection: None,
@@ -4071,6 +4090,7 @@ mod tests {
 
 		// A valid Backend backendRef on both guards -> accepted.
 		let ok = spec(PromptGuard {
+			streaming: 0,
 			request: vec![RequestGuard {
 				rejection: None,
 				kind: Some(request_guard::Kind::BedrockGuardrails(bedrock(

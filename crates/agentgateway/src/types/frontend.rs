@@ -42,6 +42,7 @@ pub enum HTTPHeaderCase {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "FrontendHTTP"))]
 pub struct HTTP {
 	/// Maximum request or response body size buffered by the frontend.
 	#[serde(default = "defaults::max_buffer_size")]
@@ -154,6 +155,7 @@ impl Default for TLS {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "FrontendTCP"))]
 pub struct TCP {
 	/// TCP keepalive settings for downstream connections.
 	pub keepalives: super::agent::KeepaliveConfig,
@@ -263,9 +265,23 @@ pub struct LoggingPolicy {
 	/// OTLP log export settings.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub otlp: Option<OtlpLoggingConfig>,
+	/// Database-specific access log settings.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub database: Option<DatabaseLoggingConfig>,
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub access_log_policy: Option<Arc<super::agent::AccessLogPolicy>>,
+}
+
+#[apply(schema!)]
+pub struct DatabaseLoggingConfig {
+	/// Database-only fields to add, computed from CEL expressions.
+	#[serde(default, skip_serializing_if = "OrderedStringMap::is_empty")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
 }
 
 impl LoggingPolicy {

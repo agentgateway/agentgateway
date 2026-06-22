@@ -37,6 +37,7 @@ pub mod proto {
 /// Both camelCase (`failOpen`, `failClosed`) and PascalCase (`FailOpen`,
 /// `FailClosed`) are accepted in configuration files
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "RemoteRateLimitFailureMode"))]
 #[derive(Default, Copy, PartialEq, Eq)]
 pub enum FailureMode {
 	/// Deny the request with a 500 status when the rate limit service is unavailable (default).

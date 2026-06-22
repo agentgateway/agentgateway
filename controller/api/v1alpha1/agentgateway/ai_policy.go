@@ -96,6 +96,15 @@ const (
 	REJECT Action = "Reject"
 )
 
+// Streaming prompt guard mode.
+// +k8s:enum
+type PromptGuardStreamingMode string
+
+const (
+	// Enable prompt guards for streaming responses and realtime websocket messages.
+	PromptGuardStreamingModeEnabled PromptGuardStreamingMode = "Enabled"
+)
+
 // Regular expression matching for prompt guards and data masking.
 type Regex struct {
 	// Regex patterns to match against the request or response.
@@ -289,8 +298,13 @@ type PromptguardResponse struct {
 //		    - CREDIT_CARD
 //		    action: MASK
 //
-// +kubebuilder:validation:AtLeastOneFieldSet
+// +kubebuilder:validation:AtLeastOneFieldSet:fields=request;response
 type AIPromptGuard struct {
+	// Apply prompt guards to streaming responses and realtime websocket messages.
+	// Defaults to disabled to preserve streaming throughput unless explicitly enabled.
+	// +optional
+	Streaming PromptGuardStreamingMode `json:"streaming,omitempty"`
+
 	// Prompt guards to apply to requests sent by the client.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=8

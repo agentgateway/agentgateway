@@ -746,6 +746,9 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		if translatedAIPolicy.PromptGuard == nil {
 			translatedAIPolicy.PromptGuard = &api.BackendPolicySpec_Ai_PromptGuard{}
 		}
+		if aiSpec.PromptGuard.Streaming == agentgateway.PromptGuardStreamingModeEnabled {
+			translatedAIPolicy.PromptGuard.Streaming = api.BackendPolicySpec_Ai_PromptGuard_ENABLED
+		}
 		if aiSpec.PromptGuard.Request != nil {
 			r, err := processRequestGuard(ctx, agwPolicy.Namespace, aiSpec.PromptGuard.Request)
 			if err != nil {

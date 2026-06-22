@@ -14,7 +14,7 @@ use crate::md5::APR1_ID;
 
 pub mod md5;
 
-static BCRYPT_ID: &str = "$2y$";
+static BCRYPT_IDS: [&str; 4] = ["$2a$", "$2b$", "$2x$", "$2y$"];
 static SHA1_ID: &str = "{SHA}";
 
 pub struct Htpasswd<'a>(HashMap<Cow<'a, str>, Hash<'a>>);
@@ -94,7 +94,7 @@ impl<'a> Hash<'a> {
 				salt: Cow::Borrowed(salt),
 				hash: Cow::Borrowed(digest),
 			}))
-		} else if hash.starts_with(BCRYPT_ID) {
+		} else if BCRYPT_IDS.iter().any(|id| hash.starts_with(id)) {
 			bcrypt::HashParts::from_str(hash)
 				.ok()
 				.map(|_| Hash::BCrypt(Cow::Borrowed(hash)))
@@ -152,6 +152,16 @@ crypt_test:bGVh02xkuGli2";
 	}
 
 	#[test]
+	fn bcrypt_verify_non_2y_prefixes() {
+		let htpasswd = Htpasswd::new(
+			"bcrypt_2a:$2a$04$UuTkLRZZ6QofpDOlMz32MuuxEHA43WOemOYHPz6.SjsVsyO1tDU96\n\
+			 bcrypt_2b:$2b$04$EGdrhbKUv8Oc9vGiXX0HQOxSg445d458Muh7DAHskb6QbtCvdxcie",
+		);
+		assert!(htpasswd.check("bcrypt_2a", "password"));
+		assert!(htpasswd.check("bcrypt_2b", "correctbatteryhorsestapler"));
+	}
+
+	#[test]
 	fn md5_verify_htpasswd() {
 		let htpasswd = Htpasswd::new(DATA);
 		assert!(htpasswd.check("user", "password"));
@@ -170,6 +180,17 @@ crypt_test:bGVh02xkuGli2";
 				"xxxxxxxx",
 			),
 			"$apr1$xxxxxxxx$dxHfLAsjHkDRmG83UXe8K0".to_string()
+		);
+	}
+
+	#[test]
+	fn md5_apr1_password_longer_than_digest() {
+		assert_eq!(
+			md5::format_hash(
+				md5::md5_apr1_encode("12345678901234567", "xxxxxxxx").as_str(),
+				"xxxxxxxx",
+			),
+			"$apr1$xxxxxxxx$e9cFJu9y.UyLugYQA0cNc1".to_string()
 		);
 	}
 

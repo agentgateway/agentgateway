@@ -723,10 +723,22 @@ mod response {
 	}
 
 	async fn test_streaming_response_for_provider(provider: &str, test: &str) {
+		use crate::proxy::httpproxy::PolicyClient;
+		use crate::test_helpers::proxymock::setup_proxy_test;
 		let (p, r) = build_provider_request(provider);
+		let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
-			p.process_streaming(r, LLMResponsePolicies::default(), None, log, false, None, i)
-				.await
+			p.process_streaming(
+				client,
+				r,
+				LLMResponsePolicies::default(),
+				None,
+				log,
+				false,
+				None,
+				i,
+			)
+			.await
 		};
 		test_streaming(provider, test, test_fn).await
 	}
@@ -1348,6 +1360,8 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 
 #[tokio::test]
 async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
 	let bedrock = AIProvider::Bedrock(bedrock::Provider {
 		model: Some(strng::new("openai.gpt-oss-120b-1:0")),
 		region: strng::new("us-east-1"),
@@ -1371,8 +1385,10 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		"request_id".parse().unwrap(),
 	);
 
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 	let translated = bedrock
 		.process_streaming(
+			client,
 			LLMRequest {
 				input_tokens: None,
 				input_format: InputFormat::Completions,

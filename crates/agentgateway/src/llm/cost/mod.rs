@@ -17,6 +17,7 @@ use super::{CacheTokenConvention, LLMInfo, LLMResponse};
 use crate::ModelCatalogSource;
 
 mod catalog;
+pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
 
@@ -82,6 +83,14 @@ impl ModelCatalog {
 		self.snapshot.load_full()
 	}
 
+	pub fn list_models(&self) -> ModelCatalogModels {
+		self.snapshot.load().list_models()
+	}
+
+	pub fn replace(&self, snapshot: CatalogSnapshot) {
+		self.snapshot.store(Arc::new(snapshot));
+	}
+
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
 		let provider = info.request.provider.as_str();
 		let snapshot = self.snapshot.load();
@@ -135,6 +144,26 @@ impl CatalogSnapshot {
 
 	fn empty() -> Self {
 		CatalogSnapshot { catalog: None }
+	}
+
+	fn list_models(&self) -> ModelCatalogModels {
+		let Some(catalog) = &self.catalog else {
+			return ModelCatalogModels {
+				loaded: false,
+				providers: Vec::new(),
+			};
+		};
+		ModelCatalogModels {
+			loaded: true,
+			providers: catalog
+				.providers
+				.iter()
+				.map(|(provider, data)| ModelCatalogProviderModels {
+					provider: provider.clone(),
+					models: data.models.keys().cloned().collect(),
+				})
+				.collect(),
+		}
 	}
 
 	fn project(
@@ -237,6 +266,20 @@ impl CatalogSnapshot {
 			cost_rates: Some(cost_rates),
 		}
 	}
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogModels {
+	pub loaded: bool,
+	pub providers: Vec<ModelCatalogProviderModels>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogProviderModels {
+	pub provider: String,
+	pub models: Vec<String>,
 }
 
 #[derive(Debug, Clone)]

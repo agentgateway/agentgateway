@@ -17,6 +17,7 @@ pub enum AzureResourceType {
 }
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "AzureProvider"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,

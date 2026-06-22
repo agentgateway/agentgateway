@@ -1274,10 +1274,18 @@ message BackendPolicySpec {
     }
 
     message PromptGuard {
+      enum Streaming {
+        DISABLED = 0;
+        ENABLED = 1;
+      }
+
       // Guards applied to client requests before they reach the LLM
       repeated RequestGuard request = 1;
       // Guards applied to LLM responses before they reach the client
       repeated ResponseGuard response = 2;
+      // Apply guardrails to streaming responses and realtime websocket messages.
+      // Defaults to disabled to preserve streaming throughput unless explicitly enabled.
+      Streaming streaming = 3;
     }
 
     PromptGuard prompt_guard = 1;

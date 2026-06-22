@@ -44,6 +44,8 @@ type LocalRemoteRateLimitPolicy =
 	LocalExplicitOrConditional<crate::http::remoteratelimit::RemoteRateLimit>;
 type LocalTransformationPolicy = LocalExplicitOrConditional<LocalTransformationConfig>;
 type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
+const DEFAULT_LLM_PORT: u16 = 4000;
+const DEFAULT_MCP_PORT: u16 = 3000;
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
@@ -181,6 +183,7 @@ fn merge_deprecated_frontend_policies(
 			add: log.fields.add.clone(),
 			remove: log.fields.remove.clone(),
 			otlp: None,
+			database: None,
 			access_log_policy: None,
 		});
 	}
@@ -434,6 +437,7 @@ pub struct LocalSimpleMcpConfig {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "LocalConditionalPolicy_{T}"))]
 struct LocalConditionalPolicy<T> {
 	/// condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.
 	#[serde(default)]
@@ -444,6 +448,7 @@ struct LocalConditionalPolicy<T> {
 }
 
 #[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(rename = "LocalConditionalPolicies_{T}"))]
 struct LocalConditionalPolicies<T> {
 	/// conditional policy entries. An entry without a condition must be the final fallback.
 	conditional: Vec<LocalConditionalPolicy<T>>,
@@ -451,7 +456,14 @@ struct LocalConditionalPolicies<T> {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[cfg_attr(feature = "schema", schemars(untagged, deny_unknown_fields))]
+#[cfg_attr(
+	feature = "schema",
+	schemars(
+		untagged,
+		deny_unknown_fields,
+		rename = "LocalExplicitOrConditional_{T}"
+	)
+)]
 enum LocalExplicitOrConditional<T> {
 	Conditional(LocalConditionalPolicies<T>),
 	Explicit(T),
@@ -2210,6 +2222,7 @@ async fn convert(
 	config: &crate::Config,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
+	validate_local_listener_ports(&i)?;
 	let LocalConfig {
 		config: _,
 		mut frontend_policies,
@@ -2378,6 +2391,43 @@ async fn convert(
 	Ok(normalized)
 }
 
+fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
+	let mut ports = HashMap::new();
+
+	let mut insert_local_listener_port = |port: u16, label: String| {
+		if let Some(existing) = ports.insert(port, label.clone()) {
+			bail!(
+				"port {port} is configured by both {existing} and {label}; binds, llm, and mcp must use unique ports"
+			);
+		}
+		Ok(())
+	};
+	for (idx, bind) in config.binds.iter().enumerate() {
+		insert_local_listener_port(bind.port, format!("binds[{idx}]"))?;
+	}
+	if let Some(llm) = &config.llm {
+		insert_local_listener_port(
+			llm.port.unwrap_or(DEFAULT_LLM_PORT),
+			if llm.port.is_some() {
+				"llm".to_string()
+			} else {
+				"llm (default)".to_string()
+			},
+		)?;
+	}
+	if let Some(mcp) = &config.mcp {
+		insert_local_listener_port(
+			mcp.port.unwrap_or(DEFAULT_MCP_PORT),
+			if mcp.port.is_some() {
+				"mcp".to_string()
+			} else {
+				"mcp (default)".to_string()
+			},
+		)?;
+	}
+	Ok(())
+}
+
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
 
 fn llm_model_match_specificity(model_name: &str) -> usize {
@@ -2403,6 +2453,9 @@ fn merge_prompt_guards(
 		(None, None) => None,
 		(Some(guardrails), None) | (None, Some(guardrails)) => Some(guardrails),
 		(Some(mut shared), Some(model)) => {
+			if model.streaming.is_enabled() {
+				shared.streaming = model.streaming;
+			}
 			shared.request.extend(model.request);
 			shared.response.extend(model.response);
 			Some(shared)
@@ -2686,7 +2739,6 @@ async fn convert_llm_config(
 	Vec<TargetedPolicy>,
 	Vec<BackendWithPolicies>,
 )> {
-	const DEFAULT_LLM_PORT: u16 = 4000;
 	let LocalLLMConfig {
 		port,
 		tls,
@@ -3255,7 +3307,6 @@ async fn convert_mcp_config(
 	Vec<TargetedPolicy>,
 	Vec<BackendWithPolicies>,
 )> {
-	const DEFAULT_MCP_PORT: u16 = 3000;
 	let LocalSimpleMcpConfig {
 		port,
 		backend,
