@@ -6,11 +6,13 @@ wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b960
 [workspace]
 resolver = "2"
 members = [
+    "crates/aauth",
     "crates/agentgateway",
     "crates/agentgateway-app",
     "crates/cel-fork/cel",
     "crates/cel-fork/cel-derive",
     "crates/celx",
+    "crates/http-message-sig",
     "crates/pool",
     "crates/core",
     "crates/hbone",
@@ -19,11 +21,13 @@ members = [
     "crates/xtask",
 ]
 default-members = [
+    "crates/aauth",
     "crates/agentgateway",
     "crates/agentgateway-app",
     "crates/cel-fork/cel",
     "crates/cel-fork/cel-derive",
     "crates/celx",
+    "crates/http-message-sig",
     "crates/pool",
     "crates/core",
     "crates/hbone",
@@ -39,6 +43,7 @@ license = "Apache-2.0"
 publish = false
 
 [workspace.dependencies]
+aauth = { path = "crates/aauth" }
 agent-core = { path = "crates/core" }
 agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
@@ -47,6 +52,7 @@ agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }
 cel = { path = "crates/cel-fork/cel" }
 cel-derive = { path = "crates/cel-fork/cel-derive" }
+http-message-sig = { path = "crates/http-message-sig" }
 protos = { path = "crates/protos" }
 atomic_float = { version = "1.1.0", features = ["serde"] }
 anyhow = "1.0"
