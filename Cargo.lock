@@ -63,7 +63,7 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "pin-project-lite",
- "prometheus-client 0.25.0",
+ "prometheus-client",
  "rustc_version",
  "serde",
  "serde_json",
@@ -131,7 +131,7 @@ dependencies = [
  "axum-core",
  "futures",
  "http 1.4.2",
- "prometheus-client 0.25.0",
+ "prometheus-client",
  "prost 0.14.4",
  "prost-wkt-types",
  "protos",
@@ -232,7 +232,7 @@ dependencies = [
  "ppp",
  "pprof",
  "pprof-alloc",
- "prometheus-client 0.25.0",
+ "prometheus-client",
  "prost 0.14.4",
  "prost-types",
  "prost-wkt-types",
@@ -4976,7 +4976,7 @@ dependencies = [
  "num",
  "once_cell",
  "paste",
- "prometheus-client 0.24.1",
+ "prometheus-client",
  "prost 0.13.5",
  "quick-xml",
  "regex",
@@ -5099,18 +5099,6 @@ name = "prometheus-client"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cca3d75b4566b9a29fe1ed623587fb058e826eb329a0be4b7c4da1ebb2d7a6ca"
-dependencies = [
- "dtoa",
- "itoa",
- "parking_lot",
- "prometheus-client-derive-encode",
-]
-
-[[package]]
-name = "prometheus-client"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba70bf887030e45213b4a95c9b08d5a450b157f87c1d63661ed0847a12fa2aad"
 dependencies = [
  "dtoa",
  "itoa",
