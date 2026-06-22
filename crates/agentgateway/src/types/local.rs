@@ -1853,6 +1853,9 @@ struct LocalGatewayPolicy {
 	/// Authenticate incoming requests with JWT bearer tokens.
 	#[serde(default)]
 	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
+	/// Authenticate incoming requests using AAuth (HTTP Message Signing).
+	#[serde(default)]
+	aauth: Option<crate::http::aauth::LocalAAuthConfig>,
 	/// Authorization rules for incoming HTTP requests.
 	#[serde(default)]
 	authorization: Option<Authorization>,
@@ -1885,6 +1888,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 		let LocalGatewayPolicy {
 			oidc,
 			jwt_auth,
+			aauth,
 			authorization,
 			ext_authz,
 			ext_proc,
@@ -1896,6 +1900,7 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 		FilterOrPolicy {
 			oidc,
 			jwt_auth,
+			aauth,
 			authorization,
 			ext_authz,
 			ext_proc,
@@ -2248,6 +2253,9 @@ pub struct FilterOrPolicy {
 	/// Authenticate incoming requests with API keys.
 	#[serde(default)]
 	api_key: Option<crate::http::apikey::LocalAPIKeys>,
+	/// Authenticate incoming requests using AAuth (HTTP Message Signing).
+	#[serde(default)]
+	aauth: Option<crate::http::aauth::LocalAAuthConfig>,
 	/// Authorize incoming requests by calling an external authorization service.
 	#[serde(default)]
 	ext_authz: Option<LocalExtAuthzPolicy>,
@@ -3820,6 +3828,7 @@ pub(crate) async fn split_policies(
 		local_rate_limit,
 		remote_rate_limit,
 		jwt_auth,
+		aauth,
 		oidc: oidc_config,
 		basic_auth,
 		api_key,
@@ -3932,6 +3941,9 @@ pub(crate) async fn split_policies(
 	}
 	if let Some(p) = api_key {
 		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(p.into())));
+	}
+	if let Some(p) = aauth {
+		route_policies.push(TrafficPolicy::AAuth(RequestPolicy::single(p.try_build())));
 	}
 	if let Some(p) = transformations {
 		route_policies.push(TrafficPolicy::Transformation(

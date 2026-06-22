@@ -317,6 +317,7 @@ pub struct RoutePolicies {
 	pub oidc: RequestPolicy<oidc::OidcPolicy>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub aauth: RequestPolicy<http::aauth::AAuth>,
 	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
@@ -349,6 +350,7 @@ pub struct GatewayPolicies {
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
+	pub aauth: RequestPolicy<http::aauth::AAuth>,
 	pub buffer: RequestPolicy<http::buffer::Buffer>,
 }
 
@@ -364,6 +366,7 @@ impl GatewayPolicies {
 			&self.transformation as &dyn PolicyExpressions,
 			&self.basic_auth as &dyn PolicyExpressions,
 			&self.api_key as &dyn PolicyExpressions,
+			&self.aauth as &dyn PolicyExpressions,
 		]
 		.into_iter()
 	}
@@ -385,6 +388,7 @@ impl RoutePolicies {
 			&self.oidc as &dyn PolicyExpressions,
 			&self.basic_auth as &dyn PolicyExpressions,
 			&self.api_key as &dyn PolicyExpressions,
+			&self.aauth as &dyn PolicyExpressions,
 			&self.ext_authz as &dyn PolicyExpressions,
 			&self.ext_proc as &dyn PolicyExpressions,
 			&self.transformation as &dyn PolicyExpressions,
@@ -828,6 +832,9 @@ impl Store {
 				TrafficPolicy::APIKey(p) => {
 					pol.api_key.merge_with_inheritance(p, lock_inheritance);
 				},
+				TrafficPolicy::AAuth(p) => {
+					pol.aauth.merge_with_inheritance(p, lock_inheritance);
+				},
 				TrafficPolicy::Transformation(p) => {
 					pol
 						.transformation
@@ -949,6 +956,9 @@ impl Store {
 				},
 				TrafficPolicy::APIKey(p) => {
 					pol.api_key.set_if_unset(p);
+				},
+				TrafficPolicy::AAuth(p) => {
+					pol.aauth.set_if_unset(p);
 				},
 				TrafficPolicy::Authorization(p) => {
 					authz.push(p.clone().0);

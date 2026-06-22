@@ -1215,6 +1215,20 @@ impl Drop for DropOnLog {
 
 			let trace_id = log.outgoing_span.as_ref().map(|id| id.trace_id());
 			let span_id = log.outgoing_span.as_ref().map(|id| id.span_id());
+			let aauth_scheme = log
+				.request_snapshot
+				.as_deref()
+				.and_then(|s| s.aauth.as_ref())
+				.and_then(|a| a.inner.get("scheme"))
+				.and_then(serde_json::Value::as_str)
+				.map(String::from);
+			let aauth_agent = log
+				.request_snapshot
+				.as_deref()
+				.and_then(|s| s.aauth.as_ref())
+				.and_then(|a| a.inner.get("agent"))
+				.and_then(serde_json::Value::as_str)
+				.map(String::from);
 			let fields = cel_exec.fields;
 			let reason = log.reason.and_then(|r| match r {
 				ProxyResponseReason::Upstream => None,
@@ -1293,6 +1307,8 @@ impl Drop for DropOnLog {
 				("trace.id", trace_id.display()),
 				("span.id", span_id.display()),
 				("jwt.sub", log.jwt_sub.display()),
+				("aauth.scheme", aauth_scheme.display()),
+				("aauth.agent", aauth_agent.display()),
 				("protocol", log.backend_protocol.as_ref().map(debug)),
 				("a2a.method", log.a2a_method.display()),
 				(
