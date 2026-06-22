@@ -316,7 +316,7 @@ impl Metrics {
 		let gen_ai_cost = Family::<GenAILabels, _>::default();
 		registry.register_with_unit(
 			"gen_ai_client_cost",
-			"USD cost of generative AI requests",
+			"Cumulative USD cost of generative AI requests",
 			Unit::Other("usd".to_string()),
 			gen_ai_cost.clone(),
 		);

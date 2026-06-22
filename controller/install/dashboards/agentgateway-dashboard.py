@@ -115,6 +115,10 @@ def rate(expr: str) -> str:
   return f"rate({expr}[$__rate_interval])"
 
 
+def increase(expr: str) -> str:
+  return f"increase({expr}[$__rate_interval])"
+
+
 def quantile(quantile_value: str, expr: str) -> str:
   return f"histogram_quantile({quantile_value}, {expr})"
 
@@ -137,6 +141,18 @@ def labels(metric_name: str, label_values: dict[str, str]) -> str:
 def filtered_sum(expr: str, by: list[str]) -> str:
   return prom_sum(
     rate(
+      labels(
+        expr,
+        {"namespace": "~$namespace", "gateway": "~$gateway"},
+      ),
+    ),
+    by=by,
+  )
+
+
+def filtered_increase_sum(expr: str, by: list[str]) -> str:
+  return prom_sum(
+    increase(
       labels(
         expr,
         {"namespace": "~$namespace", "gateway": "~$gateway"},
@@ -273,9 +289,9 @@ def build_dashboard() -> Dashboard:
       "{{gateway}}: {{gen_ai_request_model}} ({{gen_ai_token_type}})",
     )
   )
-  llm_cost = usd_timeseries("USD Cost").with_target(
+  llm_cost = usd_timeseries("USD Cost per Interval").with_target(
     query(
-      filtered_sum(
+      filtered_increase_sum(
         "agentgateway_gen_ai_client_cost_usd_total",
         by=["gen_ai_request_model", "gateway"],
       ),

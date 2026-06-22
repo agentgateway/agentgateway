@@ -460,12 +460,12 @@
           "repeatDirection": "h",
           "targets": [
             {
-              "expr": "sum by (gen_ai_request_model,gateway) (rate(agentgateway_gen_ai_client_cost_usd_total{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
+              "expr": "sum by (gen_ai_request_model,gateway) (increase(agentgateway_gen_ai_client_cost_usd_total{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
               "legendFormat": "{{gateway}}: {{gen_ai_request_model}}",
               "refId": ""
             }
           ],
-          "title": "USD Cost",
+          "title": "USD Cost per Interval",
           "transformations": [],
           "transparent": false,
           "type": "timeseries"
