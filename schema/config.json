@@ -4963,7 +4963,7 @@
           ]
         },
         "cache": {
-          "description": "Cache gRPC authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "description": "Cache authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
           "anyOf": [
             {
               "$ref": "#/$defs/CacheConfig"
@@ -5255,7 +5255,7 @@
           ]
         },
         "cache": {
-          "description": "Cache gRPC authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "description": "Cache authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
           "anyOf": [
             {
               "$ref": "#/$defs/CacheConfig"

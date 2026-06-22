@@ -2066,7 +2066,6 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 	}
 }
 
-// +kubebuilder:validation:XValidation:rule="!has(self.cache) || has(self.grpc)",message="cache requires grpc"
 type ExtAuth struct {
 	// External Authorization server to reach.
 	//
@@ -2097,7 +2096,7 @@ type ExtAuth struct {
 	// +optional
 	ForwardBody *ExtAuthBody `json:"forwardBody,omitempty"`
 
-	// Caches gRPC authorization results.
+	// Caches authorization results.
 	//
 	// WARNING: the safety of this feature depends on the cache key accurately
 	// capturing every request property that the authorization service uses to
