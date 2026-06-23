@@ -800,7 +800,7 @@ mod response {
 		LLMRequest {
 			input_tokens: None,
 			input_format,
-			native_format: input_format.provider_format(),
+			native_format: input_format.provider_format_preferences().first().copied(),
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "input-model".into(),
 			provider: Default::default(),
@@ -1015,6 +1015,55 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 	assert_eq!(forwarded_json["max_tokens"], json!(1024));
 	assert!(forwarded_json.get("max_completion_tokens").is_none());
 	assert_eq!(llm_request.params.max_tokens, Some(1024));
+}
+
+#[tokio::test]
+async fn count_tokens_resolves_model_alias_once_for_upstream_request() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.anthropic.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		model_aliases: std::collections::HashMap::from([
+			(strng::new("short-name"), strng::new("middle-name")),
+			(strng::new("middle-name"), strng::new("final-name")),
+		]),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages/count_tokens")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "short-name",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success(forwarded, llm_request) = provider
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None)
+		.await
+		.expect("count_tokens request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["model"], json!("middle-name"));
+	assert_eq!(llm_request.request_model, "middle-name");
 }
 
 #[test]
@@ -1886,12 +1935,153 @@ fn vertex_provider(model: &str) -> AIProvider {
 	})
 }
 
+fn bedrock_provider(model: &str) -> AIProvider {
+	AIProvider::Bedrock(bedrock::Provider {
+		model: Some(strng::new(model)),
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	})
+}
+
 fn custom_provider(format: custom::ProviderFormat) -> AIProvider {
 	AIProvider::Custom(custom::Provider {
 		model: None,
 		provider_override: None,
 		formats: vec![custom::ProviderFormatConfig { format, path: None }],
 	})
+}
+
+#[test]
+fn provider_capabilities_select_native_formats() {
+	use custom::ProviderFormat::{
+		AnthropicTokenCount, Completions, Embeddings, Messages, Realtime, Rerank, Responses,
+	};
+
+	let openai = AIProvider::OpenAI(openai::Provider { model: None });
+	assert_eq!(
+		openai.native_format_for(InputFormat::Messages, Some("gpt-4.1")),
+		Some(Completions)
+	);
+	assert_eq!(
+		openai.native_format_for(InputFormat::Responses, Some("gpt-4.1")),
+		Some(Responses)
+	);
+	assert_eq!(
+		openai.native_format_for(InputFormat::CountTokens, Some("gpt-4.1")),
+		None
+	);
+	assert_eq!(
+		openai.native_format_for(InputFormat::Realtime, Some("gpt-4o-realtime-preview")),
+		Some(Realtime)
+	);
+
+	let anthropic = AIProvider::Anthropic(anthropic::Provider { model: None });
+	assert_eq!(
+		anthropic.native_format_for(InputFormat::Completions, Some("claude-sonnet-4-5")),
+		Some(Messages)
+	);
+	assert_eq!(
+		anthropic.native_format_for(InputFormat::CountTokens, Some("claude-sonnet-4-5")),
+		Some(AnthropicTokenCount)
+	);
+	assert_eq!(
+		anthropic.native_format_for(InputFormat::Embeddings, Some("claude-sonnet-4-5")),
+		None
+	);
+
+	let azure_foundry = AIProvider::Azure(azure::Provider {
+		model: None,
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+		api_version: None,
+		project_name: Some(strng::new("project")),
+		cached_cred: Default::default(),
+	});
+	assert_eq!(
+		azure_foundry.native_format_for(InputFormat::Messages, Some("claude-sonnet-4-5")),
+		Some(Messages)
+	);
+	assert_eq!(
+		azure_foundry.native_format_for(InputFormat::CountTokens, Some("claude-sonnet-4-5")),
+		Some(AnthropicTokenCount)
+	);
+	assert_eq!(
+		azure_foundry.native_format_for(InputFormat::CountTokens, Some("gpt-4.1")),
+		None
+	);
+
+	let gemini = AIProvider::Gemini(gemini::Provider { model: None });
+	assert_eq!(
+		gemini.native_format_for(InputFormat::Responses, Some("gemini-2.5-pro")),
+		Some(Completions)
+	);
+	assert_eq!(
+		gemini.native_format_for(InputFormat::Embeddings, Some("text-embedding-004")),
+		Some(Embeddings)
+	);
+	assert_eq!(
+		gemini.native_format_for(InputFormat::Rerank, Some("semantic-ranker")),
+		None
+	);
+
+	let vertex_anthropic = vertex_provider("anthropic/claude-sonnet-4-5");
+	assert_eq!(
+		vertex_anthropic.native_format_for(InputFormat::Completions, None),
+		Some(Messages)
+	);
+	assert_eq!(
+		vertex_anthropic.native_format_for(InputFormat::CountTokens, None),
+		Some(AnthropicTokenCount)
+	);
+
+	let vertex_openai_compat = vertex_provider("gemini-2.0-flash");
+	assert_eq!(
+		vertex_openai_compat.native_format_for(InputFormat::Messages, None),
+		Some(Completions)
+	);
+	assert_eq!(
+		vertex_openai_compat.native_format_for(InputFormat::Responses, None),
+		None
+	);
+	assert_eq!(
+		vertex_openai_compat.native_format_for(InputFormat::Rerank, None),
+		Some(Rerank)
+	);
+
+	let bedrock_anthropic = bedrock_provider("anthropic.claude-3-5-sonnet-20241022-v2:0");
+	assert_eq!(
+		bedrock_anthropic.native_format_for(InputFormat::CountTokens, None),
+		Some(AnthropicTokenCount)
+	);
+	let bedrock_titan = bedrock_provider("amazon.titan-embed-text-v2:0");
+	assert_eq!(
+		bedrock_titan.native_format_for(InputFormat::CountTokens, None),
+		None
+	);
+}
+
+#[test]
+fn custom_provider_capabilities_use_shared_preferences() {
+	let messages_only = custom_provider(custom::ProviderFormat::Messages);
+	assert_eq!(
+		messages_only.native_format_for(InputFormat::Completions, Some("model")),
+		Some(custom::ProviderFormat::Messages)
+	);
+
+	let completions_only = custom_provider(custom::ProviderFormat::Completions);
+	assert_eq!(
+		completions_only.native_format_for(InputFormat::Responses, Some("model")),
+		Some(custom::ProviderFormat::Completions)
+	);
+
+	let rerank_only = custom_provider(custom::ProviderFormat::Rerank);
+	assert_eq!(
+		rerank_only.native_format_for(InputFormat::Messages, Some("model")),
+		None
+	);
 }
 
 #[test]

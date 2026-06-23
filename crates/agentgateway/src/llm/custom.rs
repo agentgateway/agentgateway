@@ -26,17 +26,8 @@ impl Provider {
 	}
 
 	pub fn native_format_for(&self, input_format: InputFormat) -> Option<ProviderFormat> {
-		let preferences: &[ProviderFormat] = match input_format {
-			InputFormat::Completions => &[ProviderFormat::Completions, ProviderFormat::Messages],
-			InputFormat::Messages => &[ProviderFormat::Messages, ProviderFormat::Completions],
-			InputFormat::Responses => &[ProviderFormat::Responses, ProviderFormat::Completions],
-			InputFormat::Embeddings => &[ProviderFormat::Embeddings],
-			InputFormat::CountTokens => &[ProviderFormat::AnthropicTokenCount],
-			InputFormat::Realtime => &[ProviderFormat::Realtime],
-			InputFormat::Rerank => &[ProviderFormat::Rerank],
-			InputFormat::Detect => return None,
-		};
-		preferences
+		input_format
+			.provider_format_preferences()
 			.iter()
 			.copied()
 			.find(|format| self.supports(*format))
