@@ -207,6 +207,281 @@ func TestUsesManagedSessionKeyResolvedParameters_GatewayEnvDisablesManagedSecret
 	assert.False(t, usesManagedSessionKeyResolvedParameters(resolved))
 }
 
+func TestResolvedParameters_ResolveWorkloadKind(t *testing.T) {
+	tests := []struct {
+		desc     string
+		resolved *resolvedParameters
+		want     agentgateway.AgentgatewayParametersWorkloadKind
+	}{
+		{
+			desc:     "default Deployment",
+			resolved: &resolvedParameters{},
+			want:     agentgateway.AgentgatewayParametersWorkloadDeployment,
+		},
+		{
+			desc: "GatewayClass DaemonSet",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+			},
+			want: agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+		},
+		{
+			desc: "Gateway DaemonSet",
+			resolved: &resolvedParameters{
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+			},
+			want: agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+		},
+		{
+			desc: "Gateway overrides Deployment to DaemonSet",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDeployment,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+			},
+			want: agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+		},
+		{
+			desc: "Gateway overrides DaemonSet to Deployment",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDeployment,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+			},
+			want: agentgateway.AgentgatewayParametersWorkloadDeployment,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			got, err := tt.resolved.resolveWorkloadKind()
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestResolvedParameters_ValidateWorkloadOverlays(t *testing.T) {
+	overlay := &agentgateway.KubernetesResourceOverlay{}
+	tests := []struct {
+		desc            string
+		resolved        *resolvedParameters
+		wantErrContains []string
+	}{
+		{
+			desc: "resolved Deployment accepts Deployment and HPA overlays",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					"",
+					agentgateway.AgentgatewayParametersOverlays{
+						Deployment:          overlay,
+						Service:             overlay,
+						PodDisruptionBudget: overlay,
+					},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDeployment,
+					agentgateway.AgentgatewayParametersOverlays{
+						HorizontalPodAutoscaler: overlay,
+						ServiceAccount:          overlay,
+					},
+				),
+			},
+		},
+		{
+			desc: "resolved DaemonSet accepts DaemonSet overlays",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{
+						DaemonSet: overlay,
+						Service:   overlay,
+					},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					"",
+					agentgateway.AgentgatewayParametersOverlays{
+						DaemonSet:           overlay,
+						PodDisruptionBudget: overlay,
+					},
+				),
+			},
+		},
+		{
+			desc: "resolved Deployment rejects DaemonSet overlay",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{DaemonSet: overlay},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDeployment,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+			},
+			wantErrContains: []string{"GatewayClass", "class-agwp", "daemonSet", "Deployment"},
+		},
+		{
+			desc: "resolved Deployment rejects Gateway DaemonSet overlay",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDeployment,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDeployment,
+					agentgateway.AgentgatewayParametersOverlays{DaemonSet: overlay},
+				),
+			},
+			wantErrContains: []string{"Gateway", "gateway-agwp", "daemonSet", "Deployment"},
+		},
+		{
+			desc: "resolved DaemonSet rejects Deployment overlay",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDeployment,
+					agentgateway.AgentgatewayParametersOverlays{Deployment: overlay},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+			},
+			wantErrContains: []string{"GatewayClass", "class-agwp", "deployment", "DaemonSet"},
+		},
+		{
+			desc: "resolved DaemonSet rejects Gateway Deployment overlay",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{Deployment: overlay},
+				),
+			},
+			wantErrContains: []string{"Gateway", "gateway-agwp", "deployment", "DaemonSet"},
+		},
+		{
+			desc: "resolved DaemonSet rejects GatewayClass HPA overlay",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDeployment,
+					agentgateway.AgentgatewayParametersOverlays{
+						HorizontalPodAutoscaler: overlay,
+					},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+			},
+			wantErrContains: []string{
+				"GatewayClass",
+				"class-agwp",
+				"horizontalPodAutoscaler",
+				"DaemonSet",
+			},
+		},
+		{
+			desc: "resolved DaemonSet rejects HPA overlay",
+			resolved: &resolvedParameters{
+				gatewayClassAGWP: agentgatewayParametersWithWorkloadKind(
+					"class-agwp",
+					"",
+					agentgateway.AgentgatewayParametersOverlays{},
+				),
+				gatewayAGWP: agentgatewayParametersWithWorkloadKind(
+					"gateway-agwp",
+					agentgateway.AgentgatewayParametersWorkloadDaemonSet,
+					agentgateway.AgentgatewayParametersOverlays{
+						HorizontalPodAutoscaler: overlay,
+					},
+				),
+			},
+			wantErrContains: []string{
+				"Gateway",
+				"gateway-agwp",
+				"horizontalPodAutoscaler",
+				"DaemonSet",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			err := tt.resolved.validateWorkloadOverlays()
+			if len(tt.wantErrContains) == 0 {
+				require.NoError(t, err)
+				return
+			}
+
+			require.Error(t, err)
+			for _, want := range tt.wantErrContains {
+				assert.Contains(t, err.Error(), want)
+			}
+		})
+	}
+}
+
+func agentgatewayParametersWithWorkloadKind(
+	name string,
+	kind agentgateway.AgentgatewayParametersWorkloadKind,
+	overlays agentgateway.AgentgatewayParametersOverlays,
+) *agentgateway.AgentgatewayParameters {
+	params := &agentgateway.AgentgatewayParameters{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "default",
+		},
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersOverlays: overlays,
+		},
+	}
+	if kind != "" {
+		params.Spec.Workload = &agentgateway.AgentgatewayParametersWorkload{Kind: kind}
+	}
+
+	return params
+}
+
 func TestAgentgatewayParametersApplier_ApplyOverlaysToObjects(t *testing.T) {
 	specPatch := []byte(`{
 		"replicas": 3
