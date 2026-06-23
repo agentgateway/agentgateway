@@ -120,6 +120,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		stores: stores.clone(),
 		metrics: metrics_handle.clone(),
 		model_catalog,
+		admin: Some(admin_server.service()),
 		upstream: client.clone(),
 		ca,
 

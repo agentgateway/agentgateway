@@ -6133,6 +6133,18 @@
           ]
         },
         {
+          "description": "Route to the in-process admin service instead of a network upstream.",
+          "type": "object",
+          "properties": {
+            "internal": {
+              "$ref": "#/$defs/InternalBackend"
+            }
+          },
+          "required": [
+            "internal"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "dynamic": {
@@ -6198,6 +6210,20 @@
           "required": [
             "invalid"
           ]
+        }
+      ]
+    },
+    "InternalBackend": {
+      "description": "Selects how an internal backend maps proxy requests to the admin API.",
+      "anyOf": [
+        {
+          "description": "Forward the request to the admin API using the request's current path and query.",
+          "type": "string",
+          "const": "forward"
+        },
+        {
+          "description": "Rewrite all requests to this admin API path, preserving the original query string.",
+          "type": "string"
         }
       ]
     },
@@ -8670,6 +8696,18 @@
           },
           "required": [
             "host"
+          ]
+        },
+        {
+          "description": "Route to the in-process admin service instead of a network upstream.",
+          "type": "object",
+          "properties": {
+            "internal": {
+              "$ref": "#/$defs/InternalBackend"
+            }
+          },
+          "required": [
+            "internal"
           ]
         },
         {

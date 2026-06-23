@@ -1148,6 +1148,9 @@ pub struct FullLocalBackend {
 pub enum FullLocalBackendSpec {
 	#[serde(rename = "host")]
 	Opaque(Target),
+	/// Route to the in-process admin service instead of a network upstream.
+	#[serde(rename = "internal")]
+	Internal(InternalBackend),
 	#[serde(rename = "mcp")]
 	MCP(LocalMcpBackend),
 	#[serde(rename = "ai")]
@@ -1160,6 +1163,7 @@ impl From<FullLocalBackendSpec> for LocalBackend {
 	fn from(spec: FullLocalBackendSpec) -> Self {
 		match spec {
 			FullLocalBackendSpec::Opaque(t) => LocalBackend::Opaque(t),
+			FullLocalBackendSpec::Internal(t) => LocalBackend::Internal(t),
 			FullLocalBackendSpec::MCP(m) => LocalBackend::MCP(m),
 			FullLocalBackendSpec::AI(a) => LocalBackend::AI(a),
 			FullLocalBackendSpec::Aws(a) => LocalBackend::Aws(a),
@@ -1186,6 +1190,17 @@ pub struct LocalAgentCoreBackend {
 	pub qualifier: Option<String>,
 }
 
+#[apply(schema!)]
+/// Selects how an internal backend maps proxy requests to the admin API.
+pub enum InternalBackend {
+	/// Forward the request to the admin API using the request's current path and query.
+	#[serde(rename = "forward")]
+	Forward,
+	/// Rewrite all requests to this admin API path, preserving the original query string.
+	#[serde(untagged)]
+	Path(Strng),
+}
+
 #[apply(schema_de!)]
 #[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalBackend {
@@ -1198,6 +1213,8 @@ pub enum LocalBackend {
 	// Rest are inlined
 	#[serde(rename = "host")]
 	Opaque(Target), // Hostname or IP
+	/// Route to the in-process admin service instead of a network upstream.
+	Internal(InternalBackend),
 	Dynamic {},
 	#[serde(rename = "mcp")]
 	MCP(LocalMcpBackend),
@@ -1355,6 +1372,7 @@ impl LocalBackend {
 			LocalBackend::Service { .. } => vec![], // These stay as references
 			LocalBackend::Backend(_) => vec![],     // These stay as references
 			LocalBackend::Opaque(tgt) => vec![Backend::Opaque(name, tgt.clone()).into()],
+			LocalBackend::Internal(tgt) => vec![Backend::Internal(name, tgt.clone()).into()],
 			LocalBackend::Dynamic { .. } => vec![Backend::Dynamic(name, ()).into()],
 			LocalBackend::MCP(tgt) => {
 				let mut targets = vec![];
@@ -2379,7 +2397,8 @@ async fn convert(
 			| Backend::MCP(n, _)
 			| Backend::AI(n, _)
 			| Backend::Aws(n, _)
-			| Backend::Dynamic(n, _) => n == &name,
+			| Backend::Dynamic(n, _)
+			| Backend::Internal(n, _) => n == &name,
 			Backend::Service(_, _) | Backend::Invalid => false,
 		}) {
 			primary_bw.inline_policies.extend_from_slice(&policies);

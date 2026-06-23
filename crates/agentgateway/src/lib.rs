@@ -687,6 +687,7 @@ pub struct ProxyInputs {
 	pub metrics: Arc<metrics::Metrics>,
 	pub model_catalog: Arc<llm::cost::ModelCatalog>,
 
+	pub admin: Option<management::admin::AdminService>,
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
 }
@@ -712,6 +713,7 @@ impl ProxyInputs {
 			upstream,
 			metrics,
 			model_catalog: Arc::new(model_catalog.unwrap_or_default()),
+			admin: None,
 			mcp_state,
 			ca,
 		}

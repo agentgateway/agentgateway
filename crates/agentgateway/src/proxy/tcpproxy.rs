@@ -931,6 +931,7 @@ mod tests {
 				Default::default(),
 			)),
 			model_catalog: ModelCatalog::empty(),
+			admin: None,
 			upstream: client,
 			ca: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
