@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
+	"golang.design/x/clipboard"
 	"istio.io/istio/pkg/kube"
 	"sigs.k8s.io/yaml"
 
@@ -40,6 +42,9 @@ var (
 	yamlKeyPattern = regexp.MustCompile(`^(\s*(?:-\s+)??)([^:\n]+):(.*)$`)
 	jsonKeyPattern = regexp.MustCompile(`^(\s*)"((?:\\.|[^"\\])*)":(.*)$`)
 	numberPattern  = regexp.MustCompile(`^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$`)
+
+	clipboardInitOnce sync.Once
+	clipboardInitErr  error
 )
 
 type traceEnvelope struct {
@@ -110,6 +115,7 @@ const (
 
 type traceModel struct {
 	app           *tview.Application
+	screen        tcell.Screen
 	table         *tview.Table
 	details       *tview.TextView
 	status        *tview.TextView
@@ -326,6 +332,10 @@ func runTUI(cmd *cobra.Command, target *traceTarget, body io.ReadCloser, request
 
 	app := tview.NewApplication()
 	model := newTraceModel(app, target)
+	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		model.screen = screen
+		return false
+	})
 
 	var (
 		runErr error
@@ -1358,7 +1368,7 @@ func (m *traceModel) renderStatus() {
 	if m.detailsActive {
 		activePane = "details"
 	}
-	legend := fmt.Sprintf("tab: switch pane (%s)   arrows: scroll selected pane   e/s/d: detail mode   q: quit", activePane)
+	legend := fmt.Sprintf("tab: switch pane (%s)   arrows: scroll selected pane   e/s/d: detail mode   c: copy details   q: quit", activePane)
 	legend = fmt.Sprintf("%s   f: format (%s)", legend, m.format)
 	m.status.SetText(m.statusMessage + "\n" + legend)
 }
@@ -1375,6 +1385,13 @@ func (m *traceModel) handleInput(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Rune() {
 	case 'q':
 		m.app.Stop()
+		return nil
+	case 'c':
+		if err := copyDetailsToClipboard(m.screen, m.details.GetText(true)); err != nil {
+			m.setStatus(fmt.Sprintf("clipboard unavailable: %v", err))
+			return nil
+		}
+		m.setStatus("copied details to clipboard")
 		return nil
 	case 's':
 		m.mode = detailSnapshot
@@ -1444,6 +1461,81 @@ func (m *traceModel) updateDetailsTitle(row *traceRow) {
 	default:
 		m.details.SetTitle(" Details" + suffix + " ")
 	}
+}
+
+func copyDetailsToClipboard(screen tcell.Screen, text string) error {
+	var nativeErr error
+	if !isSSHSession() {
+		if err := copyDetailsToNativeClipboard(text); err == nil {
+			return nil
+		} else {
+			nativeErr = err
+		}
+	}
+
+	if err := copyDetailsToTerminalClipboard(screen, text); err != nil {
+		if nativeErr != nil {
+			return fmt.Errorf("native clipboard: %v; terminal fallback: %w", nativeErr, err)
+		}
+		return err
+	}
+	return nil
+}
+
+func copyDetailsToNativeClipboard(text string) error {
+	clipboardInitOnce.Do(func() {
+		clipboardInitErr = clipboard.Init()
+	})
+	if clipboardInitErr != nil {
+		return clipboardInitErr
+	}
+	clipboard.Write(clipboard.FmtText, []byte(text))
+	return nil
+}
+
+func isSSHSession() bool {
+	return os.Getenv("SSH_TTY") != "" || os.Getenv("SSH_CONNECTION") != ""
+}
+
+func copyDetailsToTerminalClipboard(screen tcell.Screen, text string) error {
+	var terminalErr error
+	copied := false
+
+	if os.Getenv("TMUX") != "" {
+		cmd := exec.Command("tmux", "load-buffer", "-w", "-")
+		cmd.Stdin = strings.NewReader(text)
+		if err := cmd.Run(); err != nil {
+			terminalErr = errors.Join(terminalErr, fmt.Errorf("tmux clipboard: %w", err))
+		} else {
+			copied = true
+		}
+	}
+
+	if screen != nil {
+		screen.SetClipboard([]byte(text))
+		copied = true
+	}
+
+	tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	if err != nil {
+		if copied {
+			return nil
+		}
+		return errors.Join(terminalErr, err)
+	}
+	defer tty.Close()
+
+	sequence := "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(text)) + "\a"
+	if os.Getenv("TMUX") != "" {
+		sequence = "\x1bPtmux;\x1b" + sequence + "\x1b\\"
+	}
+	if _, err := tty.WriteString(sequence); err != nil {
+		if copied {
+			return nil
+		}
+		return errors.Join(terminalErr, err)
+	}
+	return nil
 }
 
 func (m *traceModel) renderDetails(tableRow int) {
