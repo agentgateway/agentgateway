@@ -2591,6 +2591,12 @@ type Tracing struct {
 	// `false`). If unspecified, client sampling is `100%` enabled.
 	// +optional
 	ClientSampling *CELExpression `json:"clientSampling,omitempty"`
+
+	// Expression that determines whether a sampled span is exported.
+	// This uses keep semantics: spans are exported only when the expression
+	// evaluates to `true`. If unspecified, all sampled spans are exported.
+	// +optional
+	Filter *CELExpression `json:"filter,omitempty"`
 }
 
 type ResourceAdd struct {

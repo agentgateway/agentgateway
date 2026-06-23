@@ -6408,6 +6408,14 @@ spec:
                         maxLength: 16384
                         minLength: 1
                         type: string
+                      filter:
+                        description: |-
+                          Expression that determines whether a sampled span is exported.
+                          This uses keep semantics: spans are exported only when the expression
+                          evaluates to `true`. If unspecified, all sampled spans are exported.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
                       path:
                         description: |-
                           OTLP path to use. This is only applicable when

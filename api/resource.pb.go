@@ -9262,7 +9262,9 @@ type FrontendPolicySpec_Tracing struct {
 	// OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
 	Path *string `protobuf:"bytes,6,opt,name=path,proto3,oneof" json:"path,omitempty"`
 	// protocol specifies the OTLP protocol variant to use. Default is HTTP
-	Protocol      FrontendPolicySpec_Tracing_Protocol `protobuf:"varint,7,opt,name=protocol,proto3,enum=agentgateway.dev.resource.FrontendPolicySpec_Tracing_Protocol" json:"protocol,omitempty"`
+	Protocol FrontendPolicySpec_Tracing_Protocol `protobuf:"varint,7,opt,name=protocol,proto3,enum=agentgateway.dev.resource.FrontendPolicySpec_Tracing_Protocol" json:"protocol,omitempty"`
+	// CEL expression to filter exported spans with keep semantics. If unset, all sampled spans are exported.
+	Filter        *string `protobuf:"bytes,9,opt,name=filter,proto3,oneof" json:"filter,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9351,6 +9353,13 @@ func (x *FrontendPolicySpec_Tracing) GetProtocol() FrontendPolicySpec_Tracing_Pr
 		return x.Protocol
 	}
 	return FrontendPolicySpec_Tracing_HTTP
+}
+
+func (x *FrontendPolicySpec_Tracing) GetFilter() string {
+	if x != nil && x.Filter != nil {
+		return *x.Filter
+	}
+	return ""
 }
 
 type FrontendPolicySpec_TracingAttribute struct {
@@ -14923,7 +14932,7 @@ const file_resource_proto_rawDesc = "" +
 	"\binterval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12\x1d\n" +
 	"\aretries\x18\x03 \x01(\rH\x00R\aretries\x88\x01\x01B\n" +
 	"\n" +
-	"\b_retries\"\xce#\n" +
+	"\b_retries\"\xf6#\n" +
 	"\x12FrontendPolicySpec\x12E\n" +
 	"\x03tcp\x18\x01 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TCPH\x00R\x03tcp\x12E\n" +
 	"\x03tls\x18\x02 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TLSH\x00R\x03tls\x12H\n" +
@@ -14996,7 +15005,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04HTTP\x10\x00\x12\b\n" +
 	"\x04GRPC\x10\x01B\a\n" +
 	"\x05_pathB\t\n" +
-	"\a_filter\x1a\xd9\x04\n" +
+	"\a_filter\x1a\x81\x05\n" +
 	"\aTracing\x12V\n" +
 	"\x10provider_backend\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x0fproviderBackend\x12^\n" +
 	"\n" +
@@ -15007,13 +15016,15 @@ const file_resource_proto_rawDesc = "" +
 	"\x0frandom_sampling\x18\x04 \x01(\tH\x00R\x0erandomSampling\x88\x01\x01\x12,\n" +
 	"\x0fclient_sampling\x18\x05 \x01(\tH\x01R\x0eclientSampling\x88\x01\x01\x12\x17\n" +
 	"\x04path\x18\x06 \x01(\tH\x02R\x04path\x88\x01\x01\x12Z\n" +
-	"\bprotocol\x18\a \x01(\x0e2>.agentgateway.dev.resource.FrontendPolicySpec.Tracing.ProtocolR\bprotocol\"\x1e\n" +
+	"\bprotocol\x18\a \x01(\x0e2>.agentgateway.dev.resource.FrontendPolicySpec.Tracing.ProtocolR\bprotocol\x12\x1b\n" +
+	"\x06filter\x18\t \x01(\tH\x03R\x06filter\x88\x01\x01\"\x1e\n" +
 	"\bProtocol\x12\b\n" +
 	"\x04HTTP\x10\x00\x12\b\n" +
 	"\x04GRPC\x10\x01B\x12\n" +
 	"\x10_random_samplingB\x12\n" +
 	"\x10_client_samplingB\a\n" +
-	"\x05_path\x1a<\n" +
+	"\x05_pathB\t\n" +
+	"\a_filter\x1a<\n" +
 	"\x10TracingAttribute\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x1a\x8a\x02\n" +

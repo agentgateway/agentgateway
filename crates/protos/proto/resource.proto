@@ -761,6 +761,9 @@ message FrontendPolicySpec {
     // protocol specifies the OTLP protocol variant to use. Default is HTTP
     Protocol protocol = 7;
 
+    // CEL expression to filter exported spans with keep semantics. If unset, all sampled spans are exported.
+    optional string filter = 9;
+
     enum Protocol {
       HTTP = 0;
       GRPC = 1;
