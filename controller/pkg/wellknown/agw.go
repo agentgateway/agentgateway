@@ -46,6 +46,8 @@ func GVKToGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) 
 		return DeploymentGVK.GroupVersion().WithResource("deployments"), nil
 	case DaemonSetGVK:
 		return DaemonSetGVK.GroupVersion().WithResource("daemonsets"), nil
+	case VerticalPodAutoscalerGVK:
+		return VerticalPodAutoscalerGVR, nil
 	case AgentgatewayParametersGVK:
 		return AgentgatewayParametersGVR, nil
 	case AgentgatewayPolicyGVK:

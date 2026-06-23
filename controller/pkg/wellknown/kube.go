@@ -22,4 +22,5 @@ var (
 	HorizontalPodAutoscalerGVK = autoscalingv2.SchemeGroupVersion.WithKind("HorizontalPodAutoscaler")
 	// VerticalPodAutoscaler is from the autoscaling.k8s.io API group (VPA custom resource)
 	VerticalPodAutoscalerGVK = schema.GroupVersionKind{Group: "autoscaling.k8s.io", Version: "v1", Kind: "VerticalPodAutoscaler"}
+	VerticalPodAutoscalerGVR = VerticalPodAutoscalerGVK.GroupVersion().WithResource("verticalpodautoscalers")
 )

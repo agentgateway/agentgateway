@@ -3,12 +3,14 @@ package fake
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient/clienttest"
 	"istio.io/istio/pkg/test"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,6 +27,8 @@ import (
 )
 
 var _ apiclient.Client = (*cli)(nil)
+
+var registerFakeIstioSchemeTypesOnce sync.Once
 
 type cli struct {
 	kube.Client
@@ -63,6 +67,8 @@ func (c *cli) Core() kube.Client {
 }
 
 func fakeIstioClient(objects ...client.Object) kube.Client {
+	registerFakeIstioSchemeTypes()
+
 	c := kube.NewFakeClient(testutils.ToRuntimeObjects(objects...)...)
 	// Also add to the Dynamic store
 	for _, obj := range objects {
@@ -80,6 +86,17 @@ func fakeIstioClient(objects ...client.Object) kube.Client {
 	}
 
 	return c
+}
+
+func registerFakeIstioSchemeTypes() {
+	registerFakeIstioSchemeTypesOnce.Do(func() {
+		// The dynamic fake needs list types registered before NewFakeClient so
+		// pruning tests can list unstructured VPA resources without panicking.
+		kube.FakeIstioScheme.AddKnownTypeWithName(
+			wellknown.VerticalPodAutoscalerGVK.GroupVersion().WithKind(wellknown.VerticalPodAutoscalerGVK.Kind+"List"),
+			&unstructured.UnstructuredList{},
+		)
+	})
 }
 
 func fakeKgwClient(objects ...client.Object) *fake.Clientset {

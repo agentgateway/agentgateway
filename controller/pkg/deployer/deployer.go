@@ -387,9 +387,9 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 
 		// Check each resource for pruning
 		for _, item := range list.Items {
-			// Workloads can share the Gateway label with user-managed objects. Require a
-			// controller owner reference before pruning them.
-			if isWorkloadGVK(gvk) && !hasControllerOwnerRef(owner, &item) {
+			// User-managed resources can share the Gateway label with generated objects.
+			// Require a controller owner reference before pruning any target kind.
+			if !hasControllerOwnerRef(owner, &item) {
 				continue
 			}
 
@@ -426,10 +426,6 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 	}
 
 	return nil
-}
-
-func isWorkloadGVK(gvk schema.GroupVersionKind) bool {
-	return gvk == wellknown.DeploymentGVK || gvk == wellknown.DaemonSetGVK
 }
 
 func hasControllerOwnerRef(owner client.Object, obj client.Object) bool {
