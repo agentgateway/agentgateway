@@ -11561,7 +11561,7 @@ spec:
                             ? has(self.port) : true'
                       cache:
                         description: |-
-                          Caches gRPC authorization results.
+                          Caches authorization results.
 
                           WARNING: the safety of this feature depends on the cache key accurately
                           capturing every request property that the authorization service uses to
@@ -11744,9 +11744,6 @@ spec:
                             type: object
                         type: object
                     type: object
-                    x-kubernetes-validations:
-                    - message: cache requires grpc
-                      rule: '!has(self.cache) || has(self.grpc)'
                   health:
                     description: Settings for passive and active health checking.
                     properties:

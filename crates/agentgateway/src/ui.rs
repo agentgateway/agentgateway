@@ -249,7 +249,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 	if let Value::Object(fields) = &mut response {
 		fields.insert(
 			"file".to_string(),
-			Value::String(BASE_COSTS_FILE.to_string()),
+			Value::String(base_costs_file.to_string_lossy().to_string()),
 		);
 	}
 	Ok(Json(response))

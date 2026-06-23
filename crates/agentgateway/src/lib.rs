@@ -576,6 +576,7 @@ pub struct ModelCatalogConfig {
 pub enum ModelCatalogSource {
 	File { file: PathBuf },
 	Inline { inline: String },
+	InlineCatalog { inline: llm::cost::Catalog },
 }
 
 #[apply(schema!)]

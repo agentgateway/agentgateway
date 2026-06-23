@@ -2612,6 +2612,94 @@ async fn gateway_ext_authz_response_headers_are_preserved() {
 }
 
 #[tokio::test]
+async fn gateway_http_ext_authz_caches_unauthorized_response() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	let authz = MockServer::start().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let calls_clone = calls.clone();
+	Mock::given(wiremock::matchers::any())
+		.respond_with(move |_req: &wiremock::Request| {
+			let call = calls_clone.fetch_add(1, Ordering::SeqCst) + 1;
+			ResponseTemplate::new(StatusCode::UNAUTHORIZED.as_u16())
+				.set_body_string(format!("authz-denied-{call}"))
+		})
+		.mount(&authz)
+		.await;
+
+	bind
+		.attach_gateway_policy(json!({
+			"extAuthz": {
+				"host": authz.address().to_string(),
+				"protocol": {"http": {}},
+				"cache": {
+					"key": ["request.path"],
+					"ttl": "60s",
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		b"authz-denied-1"
+	);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		b"authz-denied-1"
+	);
+	assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn gateway_http_ext_authz_does_not_cache_server_error_response() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	let authz = MockServer::start().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let calls_clone = calls.clone();
+	Mock::given(wiremock::matchers::any())
+		.respond_with(move |_req: &wiremock::Request| {
+			let call = calls_clone.fetch_add(1, Ordering::SeqCst) + 1;
+			ResponseTemplate::new(StatusCode::INTERNAL_SERVER_ERROR.as_u16())
+				.set_body_string(format!("authz-error-{call}"))
+		})
+		.mount(&authz)
+		.await;
+
+	bind
+		.attach_gateway_policy(json!({
+			"extAuthz": {
+				"host": authz.address().to_string(),
+				"protocol": {"http": {}},
+				"cache": {
+					"key": ["request.path"],
+					"ttl": "60s",
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		b"authz-error-1"
+	);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		b"authz-error-2"
+	);
+	assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
 async fn gateway_transformation_response_headers_are_applied() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind

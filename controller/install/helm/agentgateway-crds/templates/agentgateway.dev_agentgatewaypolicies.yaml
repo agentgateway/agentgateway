@@ -4493,7 +4493,7 @@ spec:
                             ? has(self.port) : true'
                       cache:
                         description: |-
-                          Caches gRPC authorization results.
+                          Caches authorization results.
 
                           WARNING: the safety of this feature depends on the cache key accurately
                           capturing every request property that the authorization service uses to
@@ -4676,9 +4676,6 @@ spec:
                             type: object
                         type: object
                     type: object
-                    x-kubernetes-validations:
-                    - message: cache requires grpc
-                      rule: '!has(self.cache) || has(self.grpc)'
                   health:
                     description: Settings for passive and active health checking.
                     properties:
@@ -7570,7 +7567,7 @@ spec:
                             ? has(self.port) : true'
                       cache:
                         description: |-
-                          Caches gRPC authorization results.
+                          Caches authorization results.
 
                           WARNING: the safety of this feature depends on the cache key accurately
                           capturing every request property that the authorization service uses to
@@ -7707,7 +7704,7 @@ spec:
                                       ''Service'') ? has(self.port) : true'
                                 cache:
                                   description: |-
-                                    Caches gRPC authorization results.
+                                    Caches authorization results.
 
                                     WARNING: the safety of this feature depends on the cache key accurately
                                     capturing every request property that the authorization service uses to
@@ -7901,8 +7898,6 @@ spec:
                                   must be set
                                 rule: '[has(self.grpc),has(self.http)].filter(x,x==true).size()
                                   == 1'
-                              - message: cache requires grpc
-                                rule: '!has(self.cache) || has(self.grpc)'
                           required:
                           - policy
                           type: object
@@ -8055,8 +8050,6 @@ spec:
                     - message: exactly one of the fields in [grpc http] must be set
                       rule: has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 1
-                    - message: cache requires grpc
-                      rule: '!has(self.cache) || has(self.grpc)'
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.backendRef),has(self.cache),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 0 : true'
