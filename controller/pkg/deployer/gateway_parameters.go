@@ -21,6 +21,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
+	"github.com/agentgateway/agentgateway/controller/pkg/deployer/strategicpatch"
 	"github.com/agentgateway/agentgateway/controller/pkg/helm"
 )
 
@@ -155,20 +156,12 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 			return nil, err
 		}
 
-		// Apply overlays in order: GatewayClass first, then Gateway.
-		if resolved.gatewayClassAGWP != nil {
-			applier := NewAgentgatewayParametersApplier(resolved.gatewayClassAGWP)
-			rendered, err = applier.ApplyOverlaysToObjects(rendered)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if resolved.gatewayAGWP != nil {
-			applier := NewAgentgatewayParametersApplier(resolved.gatewayAGWP)
-			rendered, err = applier.ApplyOverlaysToObjects(rendered)
-			if err != nil {
-				return nil, err
-			}
+		rendered, err = strategicpatch.NewLayeredOverlayApplier(
+			resolved.gatewayClassAGWP,
+			resolved.gatewayAGWP,
+		).ApplyOverlays(rendered)
+		if err != nil {
+			return nil, err
 		}
 		if usesManagedSessionKeyResolvedParameters(resolved) {
 			sessionKeySecret, err := gp.agwHelmValuesGenerator.buildSessionKeySecret(

@@ -108,21 +108,80 @@ type OverlayApplier struct {
 	overlays *ResourceOverlays
 }
 
+// LayeredOverlayApplier applies multiple overlay layers in precedence order.
+type LayeredOverlayApplier struct {
+	overlays []*ResourceOverlays
+}
+
 // NewOverlayApplier creates a new OverlayApplier from AgentgatewayParameters.
 func NewOverlayApplier(params *agentgateway.AgentgatewayParameters) *OverlayApplier {
 	return &OverlayApplier{overlays: FromAgentgatewayParameters(params)}
+}
+
+// NewLayeredOverlayApplier creates a new applier from ordered AgentgatewayParameters layers.
+func NewLayeredOverlayApplier(params ...*agentgateway.AgentgatewayParameters) *LayeredOverlayApplier {
+	overlays := make([]*ResourceOverlays, 0, len(params))
+	for _, p := range params {
+		if overlay := FromAgentgatewayParameters(p); overlay != nil {
+			overlays = append(overlays, overlay)
+		}
+	}
+	return &LayeredOverlayApplier{overlays: overlays}
 }
 
 // ApplyOverlays applies the overlays to the rendered objects.
 // It modifies the objects in place and may append new objects (PDB, HPA, VPA) to the slice.
 // The caller must use the returned slice as the objects list may grow.
 func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, error) {
-	if a.overlays == nil {
+	return applyOverlayLayers(objs, a.overlays)
+}
+
+// ApplyOverlays applies the overlays to rendered objects in layer order.
+func (a *LayeredOverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, error) {
+	if a == nil {
+		return objs, nil
+	}
+	return applyOverlayLayers(objs, a.overlays...)
+}
+
+// applyOverlayLayers applies non-nil overlay layers in order and appends generated support resources.
+func applyOverlayLayers(objs []client.Object, layers ...*ResourceOverlays) ([]client.Object, error) {
+	if len(layers) == 0 {
 		return objs, nil
 	}
 
-	workload := gatewayWorkloadFromObjects(objs)
+	filtered := make([]*ResourceOverlays, 0, len(layers))
+	for _, l := range layers {
+		if l != nil {
+			filtered = append(filtered, l)
+		}
+	}
+	if len(filtered) == 0 {
+		return objs, nil
+	}
 
+	var err error
+	for _, l := range filtered {
+		objs, err = applyPrimaryOverlays(objs, l)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	workload := gatewayWorkloadFromObjects(objs)
+	objs, err = appendSupportResources(objs, workload, filtered)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ensureUniqueObjects(objs); err != nil {
+		return nil, err
+	}
+
+	return objs, nil
+}
+
+func applyPrimaryOverlays(objs []client.Object, overlays *ResourceOverlays) ([]client.Object, error) {
 	for i, obj := range objs {
 		var overlay *agentgateway.KubernetesResourceOverlay
 		var gvk schema.GroupVersionKind
@@ -131,16 +190,16 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 		// on typed structs rendered from Helm charts
 		switch obj.(type) {
 		case *appsv1.Deployment:
-			overlay = a.overlays.Deployment
+			overlay = overlays.Deployment
 			gvk = wellknown.DeploymentGVK
 		case *appsv1.DaemonSet:
-			overlay = a.overlays.DaemonSet
+			overlay = overlays.DaemonSet
 			gvk = wellknown.DaemonSetGVK
 		case *corev1.Service:
-			overlay = a.overlays.Service
+			overlay = overlays.Service
 			gvk = wellknown.ServiceGVK
 		case *corev1.ServiceAccount:
-			overlay = a.overlays.ServiceAccount
+			overlay = overlays.ServiceAccount
 			gvk = wellknown.ServiceAccountGVK
 		default:
 			continue
@@ -157,40 +216,161 @@ func (a *OverlayApplier) ApplyOverlays(objs []client.Object) ([]client.Object, e
 		objs[i] = patched //nolint:gosec // Safe: modifying slice element at current index during iteration
 	}
 
-	// Create PDB if overlay is present
-	if a.overlays.PodDisruptionBudget != nil && workload != nil {
-		pdb, err := createPodDisruptionBudget(workload, a.overlays.PodDisruptionBudget)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create PodDisruptionBudget: %w", err)
+	return objs, nil
+}
+
+func appendSupportResources(
+	objs []client.Object,
+	workload *gatewayWorkload,
+	layers []*ResourceOverlays,
+) ([]client.Object, error) {
+	if workload == nil {
+		return objs, nil
+	}
+
+	if hasPodDisruptionBudgetOverlay(layers) {
+		pdb := client.Object(createPodDisruptionBudget(workload))
+		for _, layer := range layers {
+			if layer.PodDisruptionBudget == nil {
+				continue
+			}
+			patched, err := applyOverlay(
+				pdb,
+				layer.PodDisruptionBudget,
+				wellknown.PodDisruptionBudgetGVK,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to apply PodDisruptionBudget overlay: %w", err)
+			}
+			pdb = patched
 		}
 		objs = append(objs, pdb)
 	}
 
-	// Create HPA if overlay is present
-	if a.overlays.HorizontalPodAutoscaler != nil && workload != nil {
+	if hasHorizontalPodAutoscalerOverlay(layers) {
 		if workload.gvk != wellknown.DeploymentGVK {
 			return nil, fmt.Errorf(
 				"horizontalPodAutoscaler overlay is not supported for %s workload",
 				workload.gvk.Kind,
 			)
 		}
-		hpa, err := createHorizontalPodAutoscaler(workload, a.overlays.HorizontalPodAutoscaler)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create HorizontalPodAutoscaler: %w", err)
+		hpa := client.Object(createHorizontalPodAutoscaler(workload))
+		for _, layer := range layers {
+			if layer.HorizontalPodAutoscaler == nil {
+				continue
+			}
+			patched, err := applyOverlay(
+				hpa,
+				layer.HorizontalPodAutoscaler,
+				wellknown.HorizontalPodAutoscalerGVK,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to apply HorizontalPodAutoscaler overlay: %w", err)
+			}
+			hpa = patched
 		}
 		objs = append(objs, hpa)
 	}
 
-	// Create VPA if overlay is present (VPA targets Deployments only)
-	if a.overlays.VerticalPodAutoscaler != nil && workload != nil && workload.gvk == wellknown.DeploymentGVK {
-		vpa, err := createVerticalPodAutoscaler(workload, a.overlays.VerticalPodAutoscaler)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create VerticalPodAutoscaler: %w", err)
+	if hasVerticalPodAutoscalerOverlay(layers) && workload.gvk == wellknown.DeploymentGVK {
+		vpa := createVerticalPodAutoscaler(workload)
+		for _, layer := range layers {
+			if layer.VerticalPodAutoscaler == nil {
+				continue
+			}
+			patched, err := applyVerticalPodAutoscalerOverlay(vpa, layer.VerticalPodAutoscaler)
+			if err != nil {
+				return nil, fmt.Errorf("failed to apply VerticalPodAutoscaler overlay: %w", err)
+			}
+			vpa = patched
 		}
 		objs = append(objs, vpa)
 	}
 
 	return objs, nil
+}
+
+func hasPodDisruptionBudgetOverlay(layers []*ResourceOverlays) bool {
+	for _, layer := range layers {
+		if layer.PodDisruptionBudget != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func hasHorizontalPodAutoscalerOverlay(layers []*ResourceOverlays) bool {
+	for _, layer := range layers {
+		if layer.HorizontalPodAutoscaler != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func hasVerticalPodAutoscalerOverlay(layers []*ResourceOverlays) bool {
+	for _, layer := range layers {
+		if layer.VerticalPodAutoscaler != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func ensureUniqueObjects(objs []client.Object) error {
+	seen := make(map[corev1.ObjectReference]struct{}, len(objs))
+	for _, obj := range objs {
+		gvk := objectGVK(obj)
+		if gvk.Empty() {
+			continue
+		}
+		key := corev1.ObjectReference{
+			APIVersion: gvk.GroupVersion().String(),
+			Kind:       gvk.Kind,
+			Namespace:  obj.GetNamespace(),
+			Name:       obj.GetName(),
+		}
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf(
+				"duplicate desired object %s %s/%s",
+				gvk.String(),
+				key.Namespace,
+				key.Name,
+			)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func objectGVK(obj client.Object) schema.GroupVersionKind {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	if !gvk.Empty() {
+		return gvk
+	}
+
+	switch obj.(type) {
+	case *appsv1.Deployment:
+		return wellknown.DeploymentGVK
+	case *appsv1.DaemonSet:
+		return wellknown.DaemonSetGVK
+	case *corev1.Secret:
+		return wellknown.SecretGVK
+	case *corev1.ConfigMap:
+		return wellknown.ConfigMapGVK
+	case *corev1.Service:
+		return wellknown.ServiceGVK
+	case *corev1.ServiceAccount:
+		return wellknown.ServiceAccountGVK
+	case *policyv1.PodDisruptionBudget:
+		return wellknown.PodDisruptionBudgetGVK
+	case *autoscalingv2.HorizontalPodAutoscaler:
+		return wellknown.HorizontalPodAutoscalerGVK
+	case *unstructured.Unstructured:
+		return obj.GetObjectKind().GroupVersionKind()
+	default:
+		return schema.GroupVersionKind{}
+	}
 }
 
 // applyOverlay applies a KubernetesResourceOverlay to a single object.
@@ -313,8 +493,8 @@ func deserializeToObject(data []byte, gvk schema.GroupVersionKind) (client.Objec
 }
 
 // createPodDisruptionBudget creates a PodDisruptionBudget for the selected workload
-// with the overlay applied.
-func createPodDisruptionBudget(workload *gatewayWorkload, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
+// with a selector matching the workload.
+func createPodDisruptionBudget(workload *gatewayWorkload) *policyv1.PodDisruptionBudget {
 	// Create base PDB with selector matching the workload
 	pdb := &policyv1.PodDisruptionBudget{
 		TypeMeta: metav1.TypeMeta{
@@ -331,18 +511,11 @@ func createPodDisruptionBudget(workload *gatewayWorkload, overlay *agentgateway.
 		},
 	}
 
-	// Apply the overlay
-	patched, err := applyOverlay(pdb, overlay, wellknown.PodDisruptionBudgetGVK)
-	if err != nil {
-		return nil, err
-	}
-
-	return patched, nil
+	return pdb
 }
 
-// createHorizontalPodAutoscaler creates a HorizontalPodAutoscaler for the given Deployment
-// with the overlay applied.
-func createHorizontalPodAutoscaler(workload *gatewayWorkload, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
+// createHorizontalPodAutoscaler creates a HorizontalPodAutoscaler for the selected workload.
+func createHorizontalPodAutoscaler(workload *gatewayWorkload) *autoscalingv2.HorizontalPodAutoscaler {
 	// Create base HPA with scaleTargetRef pointing to the workload
 	hpa := &autoscalingv2.HorizontalPodAutoscaler{
 		TypeMeta: metav1.TypeMeta{
@@ -359,18 +532,11 @@ func createHorizontalPodAutoscaler(workload *gatewayWorkload, overlay *agentgate
 		},
 	}
 
-	// Apply the overlay
-	patched, err := applyOverlay(hpa, overlay, wellknown.HorizontalPodAutoscalerGVK)
-	if err != nil {
-		return nil, err
-	}
-
-	return patched, nil
+	return hpa
 }
 
-// createVerticalPodAutoscaler creates a VerticalPodAutoscaler for the selected workload
-// with the overlay applied.
-func createVerticalPodAutoscaler(workload *gatewayWorkload, overlay *agentgateway.KubernetesResourceOverlay) (client.Object, error) {
+// createVerticalPodAutoscaler creates a VerticalPodAutoscaler for the selected workload.
+func createVerticalPodAutoscaler(workload *gatewayWorkload) *unstructured.Unstructured {
 	// Create base VPA with targetRef pointing to the Deployment
 	// VPA is a CRD, so we use unstructured
 	targetRef := workload.targetRef()
@@ -393,6 +559,17 @@ func createVerticalPodAutoscaler(workload *gatewayWorkload, overlay *agentgatewa
 	}
 	vpa.SetGroupVersionKind(wellknown.VerticalPodAutoscalerGVK)
 	vpa.SetLabels(maps.Clone(workload.labels))
+
+	return vpa
+}
+
+func applyVerticalPodAutoscalerOverlay(
+	vpa *unstructured.Unstructured,
+	overlay *agentgateway.KubernetesResourceOverlay,
+) (*unstructured.Unstructured, error) {
+	if overlay == nil {
+		return vpa, nil
+	}
 
 	// Apply the overlay - for VPA we need to handle it specially since it's unstructured
 	if overlay.Metadata != nil {

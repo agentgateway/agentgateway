@@ -212,6 +212,7 @@ metadata:
     app.kubernetes.io/managed-by: agentgateway
     app.kubernetes.io/name: gw
     app.kubernetes.io/version: 1.0.0-ci1
+    daemonset-label: from-overlay
     gateway.networking.k8s.io/gateway-class-name: agentgateway
     gateway.networking.k8s.io/gateway-name: gw
     pdb-label: from-daemonset
