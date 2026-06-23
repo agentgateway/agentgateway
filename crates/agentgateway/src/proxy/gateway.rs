@@ -690,18 +690,20 @@ impl Gateway {
 					let Some(upgrade) = req.extensions_mut().remove::<hyper::upgrade::OnUpgrade>() else {
 						return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
 					};
-					// Snapshot the CONNECT request headers (lowercased name -> value) so they
-					// can be surfaced to CEL policies on the tunneled request via
-					// `source.connectHeaders`. HeaderMap keys are already lowercase.
-					let connect_headers: std::collections::HashMap<String, String> = req
-						.headers()
-						.iter()
-						.filter_map(|(k, v)| {
-							v.to_str()
-								.ok()
-								.map(|s| (k.as_str().to_owned(), s.to_owned()))
-						})
-						.collect();
+					// Snapshot the CONNECT request headers so they can be surfaced to CEL
+					// policies on the tunneled request via `source.connectHeaders`. Mark
+					// well-known sensitive headers so their values are redacted in debug logs
+					// (SourceContext derives Debug and is printed via DebugExtensions) and by
+					// the CEL `source.connectHeaders.redacted()` accessor.
+					let mut connect_headers = req.headers().clone();
+					for (name, value) in connect_headers.iter_mut() {
+						if matches!(
+							name.as_str(),
+							"authorization" | "proxy-authorization" | "cookie" | "set-cookie"
+						) {
+							value.set_sensitive(true);
+						}
+					}
 					let authority = match req.uri().authority() {
 						Some(authority) => authority.as_str(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
@@ -809,8 +811,10 @@ impl Gateway {
 		);
 		// Surface CONNECT tunnel headers (captured in `terminate_connect_tunnel`) on
 		// the source context so request policies can reference `source.connectHeaders`.
-		if let Some(ch) = stream.ext::<ConnectHeaders>() {
-			src.connect_headers = ch.0.clone();
+		// Move the map out of the stream extension (it has no other consumer) to avoid
+		// cloning the header map.
+		if let Some(ch) = stream.ext_mut().remove::<ConnectHeaders>() {
+			src.connect_headers = ch.0;
 		}
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&src)

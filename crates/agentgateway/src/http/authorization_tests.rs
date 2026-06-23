@@ -190,7 +190,7 @@ fn test_network_authorization_allows_source_cidr() {
 		raw_port: 15000,
 		tls: None,
 		unverified_workload: None,
-		connect_headers: std::collections::HashMap::new(),
+		connect_headers: http::HeaderMap::new(),
 	};
 
 	assert_matches!(network_authz.apply(&source), Ok(()));
@@ -212,7 +212,7 @@ fn test_network_authorization_deny_takes_precedence() {
 		raw_port: 15000,
 		tls: None,
 		unverified_workload: None,
-		connect_headers: std::collections::HashMap::new(),
+		connect_headers: http::HeaderMap::new(),
 	};
 
 	assert_matches!(network_authz.apply(&source), Err(_));

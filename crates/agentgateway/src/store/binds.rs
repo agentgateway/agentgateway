@@ -2571,7 +2571,7 @@ mod tests {
 					raw_port: 12345,
 					tls: None,
 					unverified_workload: None,
-					connect_headers: std::collections::HashMap::new(),
+					connect_headers: http::HeaderMap::new(),
 				})
 				.is_ok()
 		);
@@ -2584,7 +2584,7 @@ mod tests {
 					raw_port: 12345,
 					tls: None,
 					unverified_workload: None,
-					connect_headers: std::collections::HashMap::new(),
+					connect_headers: http::HeaderMap::new(),
 				})
 				.is_ok()
 		);
@@ -2597,7 +2597,7 @@ mod tests {
 					raw_port: 12345,
 					tls: None,
 					unverified_workload: None,
-					connect_headers: std::collections::HashMap::new(),
+					connect_headers: http::HeaderMap::new(),
 				})
 				.is_err()
 		);

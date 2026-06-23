@@ -114,6 +114,7 @@
 |`source.unverifiedWorkload.name`|string|The pod name of the source workload.|
 |`source.unverifiedWorkload.namespace`|string|The namespace of the source workload.|
 |`source.unverifiedWorkload.serviceAccount`|string|The service account of the source workload.|
+|`source.connectHeaders`|object|HTTP CONNECT request headers, when this stream originated from a CONNECT<br>tunnel. Empty otherwise. Exposed in CEL as `source.connectHeaders`, which<br>supports the same accessors as `request.headers` (indexing, `join()`,<br>`split()`, etc.).<br><br>CONNECT headers are client-supplied and unauthenticated at the transport<br>layer, so trust decisions should validate the values (e.g. signature or<br>issuer checks) rather than trusting header presence alone.|
 |`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||
