@@ -754,13 +754,28 @@ function linkedVirtualKey(value: string | null, keys: VirtualApiKey[]) {
   return null;
 }
 
-async function copyVirtualKey(
-  key: string,
-  setCopiedKey: (key: string | null) => void,
-) {
-  await navigator.clipboard.writeText(key);
-  setCopiedKey(key);
-  window.setTimeout(() => setCopiedKey(null), 1400);
+async function copyVirtualKey(key: string): Promise<boolean> {
+  if (navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(key);
+      return true;
+    } catch {
+      // fall through to execCommand fallback
+    }
+  }
+  // Fallback for non-secure contexts (HTTP, non-localhost)
+  try {
+    const el = document.createElement("textarea");
+    el.value = key;
+    el.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+    document.body.appendChild(el);
+    el.select();
+    const success = document.execCommand("copy");
+    document.body.removeChild(el);
+    return success;
+  } catch {
+    return false;
+  }
 }
 
 function VirtualKeyValue(props: { value: string }) {
@@ -786,11 +801,14 @@ function VirtualKeyValue(props: { value: string }) {
             className={copied ? "table-action copied" : "table-action"}
             type="button"
             aria-label="Copy key"
-            onClick={() =>
-              void copyVirtualKey(props.value, (next) => {
-                setCopied(Boolean(next));
-              })
-            }
+            onClick={() => {
+              void copyVirtualKey(props.value).then((success) => {
+                if (success) {
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1400);
+                }
+              });
+            }}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
             Copy

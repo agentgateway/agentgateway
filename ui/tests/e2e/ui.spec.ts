@@ -222,6 +222,21 @@ test("reveals a virtual API key explicitly", async ({ page }) => {
   await expect(page.getByText("agw_sk_testkey123456789")).toBeVisible();
 });
 
+test("copies a virtual API key to clipboard", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await mockGateway(page);
+  await page.goto("/llm/keys");
+
+  await page.getByRole("button", { name: "Copy key" }).click();
+  await expect(page.getByRole("button", { name: "Copy key" })).toHaveClass(
+    /copied/,
+  );
+  const clipboardText = await page.evaluate(() =>
+    navigator.clipboard.readText(),
+  );
+  expect(clipboardText).toBe("agw_sk_testkey123456789");
+});
+
 test("LLM playground sends selected virtual model name", async ({ page }) => {
   const gateway = await mockGateway(page);
   await page.goto("/llm/playground");
