@@ -1,0 +1,40 @@
+# The EPP needs three sets of permissions:
+#
+#   1. Read pods in its namespace — to scrape /metrics from each inference-sim pod
+#      and build the live endpoint health picture used for routing decisions.
+#
+#   2. Read InferencePools in its namespace — to discover which pods belong to the
+#      pool it is managing (via spec.selector) and to watch for pool config changes.
+#
+#   3. Read InferenceObjectives — EPP v1.4.0 watches InferenceObjective resources
+#      to apply priority-based routing policies (inference.networking.x-k8s.io/v1alpha2).
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: epp
+  namespace: inference-benchmark
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["inference.networking.k8s.io"]
+    resources: ["inferencepools"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["inference.networking.x-k8s.io"]
+    resources: ["inferenceobjectives"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: epp
+  namespace: inference-benchmark
+subjects:
+  - kind: ServiceAccount
+    name: epp
+    namespace: inference-benchmark
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: epp

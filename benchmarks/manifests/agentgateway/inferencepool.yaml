@@ -1,0 +1,26 @@
+# InferencePool groups the inference-sim pods and points to the EPP service.
+# The agentgateway controller translates this into an ext_proc routing policy:
+# every request that arrives at the Gateway is forwarded to the EPP (via gRPC
+# ext_proc) which picks the best pod, then agentgateway routes to that pod.
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: inference-pool
+  namespace: inference-benchmark
+spec:
+  # Selects the inference-sim pods as pool members.
+  selector:
+    matchLabels:
+      app: inference-sim
+  # Port on each pod that serves inference traffic.
+  targetPorts:
+    - number: 8000
+  # Points to the EPP Service. agentgateway opens a gRPC ext_proc stream to
+  # this service for every request that hits the Gateway.
+  endpointPickerRef:
+    name: epp
+    port:
+      number: 9002
+    # FailOpen: if the EPP is unreachable, fall back to random selection rather
+    # than dropping the request. Appropriate for a local PoC environment.
+    failureMode: FailOpen
