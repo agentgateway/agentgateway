@@ -1226,3 +1226,62 @@ fn test_apply_query_parameters_to_request_clears_query_when_empty() {
 
 	assert_eq!(req.uri().to_string(), "https://example.com/resource");
 }
+
+#[test]
+fn test_response_header_action_overwrite_replaces_existing() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com")
+		.header("x-role", "original")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let action = super::ResponseHeaderAction::Overwrite;
+	let k = HeaderName::from_static("x-role");
+	let h = HeaderValue::from_static("from-authz");
+
+	match action {
+		super::ResponseHeaderAction::Append => {
+			req.headers_mut().append(k, h);
+		},
+		super::ResponseHeaderAction::Overwrite => {
+			req.headers_mut().insert(k, h);
+		},
+	}
+
+	let values: Vec<_> = req.headers().get_all("x-role").iter().collect();
+	assert_eq!(values.len(), 1);
+	assert_eq!(values[0], "from-authz");
+}
+
+#[test]
+fn test_response_header_action_append_preserves_existing() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com")
+		.header("x-role", "original")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let action = super::ResponseHeaderAction::Append;
+	let k = HeaderName::from_static("x-role");
+	let h = HeaderValue::from_static("from-authz");
+
+	match action {
+		super::ResponseHeaderAction::Append => {
+			req.headers_mut().append(k, h);
+		},
+		super::ResponseHeaderAction::Overwrite => {
+			req.headers_mut().insert(k, h);
+		},
+	}
+
+	let values: Vec<_> = req.headers().get_all("x-role").iter().collect();
+	assert_eq!(values.len(), 2);
+	assert_eq!(values[0], "original");
+	assert_eq!(values[1], "from-authz");
+}
+
+#[test]
+fn test_response_header_action_default_is_overwrite() {
+	let action = super::ResponseHeaderAction::default();
+	assert!(matches!(action, super::ResponseHeaderAction::Overwrite));
+}

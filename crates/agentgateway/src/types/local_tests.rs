@@ -769,6 +769,30 @@ binds:
 }
 
 #[tokio::test]
+async fn test_local_ext_authz_http_include_response_headers_append_action() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          host: 127.0.0.1:9000
+          protocol:
+            http:
+              includeResponseHeaders:
+              - x-auth-request-user
+              includeResponseHeadersAction: append
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	normalize_test_yaml(input)
+		.await
+		.expect("http extAuthz includeResponseHeadersAction should accept append");
+}
+
+#[tokio::test]
 async fn test_local_backend_ext_authz_policy() {
 	let input = r#"
 binds:

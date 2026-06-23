@@ -118,6 +118,10 @@ pub enum Protocol {
 		#[serde_as(as = "Vec<crate::serdes::SerAsStr>")]
 		#[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
 		include_response_headers: Vec<HeaderName>,
+		/// How to apply response headers to the backend request.
+		/// "overwrite" (default) replaces existing headers; "append" adds additional values.
+		#[serde(default)]
+		include_response_headers_action: ResponseHeaderAction,
 		/// Headers to add to the authorization request using CEL expressions. Empty means all headers.
 		#[serde(default, skip_serializing_if = "HashMap::is_empty")]
 		add_request_headers: HashMap<HeaderOrPseudo, Arc<cel::Expression>>,
@@ -134,6 +138,17 @@ impl Default for Protocol {
 			metadata: None,
 		}
 	}
+}
+
+#[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "ExtAuthzResponseHeaderAction"))]
+#[derive(Default, Copy)]
+pub enum ResponseHeaderAction {
+	/// Replace existing header values with the authorization response values.
+	#[default]
+	Overwrite,
+	/// Append authorization response values to existing header values.
+	Append,
 }
 
 #[apply(schema!)]
@@ -714,6 +729,7 @@ impl ExtAuthz {
 		let Protocol::Http {
 			redirect,
 			include_response_headers,
+			include_response_headers_action,
 			add_request_headers,
 			path,
 			metadata,
@@ -827,8 +843,14 @@ impl ExtAuthz {
 		if resp.status().is_success() {
 			for k in include_response_headers {
 				if let Some(h) = resp.headers().get(k) {
-					// TODO: today we always insert. We should consider adding a mode to append.
-					req.headers_mut().insert(k.clone(), h.clone());
+					match include_response_headers_action {
+						ResponseHeaderAction::Append => {
+							req.headers_mut().append(k.clone(), h.clone());
+						},
+						ResponseHeaderAction::Overwrite => {
+							req.headers_mut().insert(k.clone(), h.clone());
+						},
+					}
 				}
 			}
 			if !metadata.is_empty() {

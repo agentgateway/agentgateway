@@ -2478,6 +2478,7 @@ fn external_auth_from_proto(
 				.iter()
 				.map(|k| HeaderName::try_from(k.as_str()))
 				.collect::<Result<_, _>>()?,
+			include_response_headers_action: Default::default(),
 			add_request_headers: h
 				.add_request_headers
 				.iter()
