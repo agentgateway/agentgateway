@@ -2159,12 +2159,12 @@ pub struct TracingConfig {
 	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<crate::StringBoolFloat>"))]
 	pub client_sampling: Option<Arc<cel::Expression>>,
-	/// Optional CEL filter with DROP semantics. When set and the expression evaluates to
-	/// `true` for a request, the corresponding trace span(s) are NOT exported. When unset,
-	/// no filtering is applied (all sampled spans are exported). Composes after sampling
-	/// (only sampled spans are evaluated). Note: unlike `accessLog.filter` (keep-semantics),
-	/// this is a *drop* filter. Missing/errored fields evaluate to `false`, so the safe
-	/// default is to keep (export) the span.
+	/// Optional CEL filter with KEEP semantics. When set, only requests for which the expression
+	/// evaluates to `true` have their trace span(s) exported; all other spans are dropped. When
+	/// unset, no filtering is applied (all sampled spans are exported). Composes after sampling
+	/// (only sampled spans are evaluated). This matches `accessLog.filter` (keep-semantics):
+	/// `true` keeps. Missing/errored fields evaluate to `false`, so on eval error the span is
+	/// dropped (fail closed).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub filter: Option<Arc<cel::Expression>>,
 	/// OTLP HTTP path used to export traces.
