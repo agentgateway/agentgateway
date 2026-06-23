@@ -8,7 +8,6 @@ Name|Version|License
 [ghodss/yaml](https://github.com/ghodss/yaml)|v1.0.1-0.20190212211648-25d852aebe32|MIT License
 [go-jose/v4](https://github.com/go-jose/go-jose)|v4.1.4|Apache License 2.0
 [go-logr/logr](https://github.com/go-logr/logr)|v1.4.3|Apache License 2.0
-[goccy/go-json](https://github.com/goccy/go-json)|v0.10.6|MIT License
 [jwt/v5](https://github.com/golang-jwt/jwt)|v5.3.1|MIT License
 [google/cel-go](https://github.com/google/cel-go)|v0.28.1|Apache License 2.0
 [google/go-cmp](https://github.com/google/go-cmp)|v0.7.0|BSD 3-clause "New" or "Revised" License
@@ -47,6 +46,7 @@ Name|Version|License
 [k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.36.1|Apache License 2.0
 [k8s.io/client-go](https://k8s.io/client-go)|v0.36.1|Apache License 2.0
 [klog/v2](https://k8s.io/klog/v2)|v2.140.0|Apache License 2.0
+[k8s.io/streaming](https://k8s.io/streaming)|v0.36.1|Apache License 2.0
 [k8s.io/utils](https://k8s.io/utils)|v0.0.0-20260507154919-ff6756f316d2|Apache License 2.0
 [sigs.k8s.io/controller-runtime](https://sigs.k8s.io/controller-runtime)|v0.24.1|Apache License 2.0
 [sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.21.0|Apache License 2.0

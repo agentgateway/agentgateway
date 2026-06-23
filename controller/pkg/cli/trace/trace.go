@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,12 +22,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/goccy/go-json"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
 	"golang.design/x/clipboard"
-	"istio.io/istio/pkg/kube"
 	"sigs.k8s.io/yaml"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
@@ -180,7 +179,7 @@ func run(cmd *cobra.Command, flags *traceFlags, resourceArg string, requestArgs 
 }
 
 type traceTarget struct {
-	KubeClient   kube.CLIClient
+	KubeClient   kubeutil.CLIClient
 	ResourceName string
 	PodName      string
 	PodNamespace string
@@ -208,7 +207,7 @@ func resolveTraceTarget(ctx context.Context, namespaceOverride, resourceArg stri
 		return nil, err
 	}
 
-	podName, podNamespace, err := kubeutil.ResolvePodForResource(kubeClient, resourceName, namespace)
+	podName, podNamespace, err := kubeutil.ResolvePodForResource(ctx, kubeClient, resourceName, namespace)
 	if err != nil {
 		return nil, err
 	}

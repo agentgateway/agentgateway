@@ -6,8 +6,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
+
+const proxyAdminPort = 15000
 
 type traceFlags struct {
 	namespace      string
@@ -21,7 +22,7 @@ type traceFlags struct {
 
 func Command() flag.Command {
 	flags := &traceFlags{
-		proxyAdminPort: wellknown.ProxyAdminPort,
+		proxyAdminPort: proxyAdminPort,
 	}
 
 	return flag.Command{
