@@ -389,7 +389,7 @@ func incompatibleWorkloadOverlayError(
 	finalKind agentgateway.AgentgatewayParametersWorkloadKind,
 ) error {
 	return fmt.Errorf(
-		"%s AgentgatewayParameters %s/%s has incompatible %s overlay for final workload kind %s",
+		"referenced %s AgentgatewayParameters %s/%s has incompatible %s overlay for final workload kind %s",
 		layer.source,
 		layer.params.GetNamespace(),
 		layer.params.GetName(),

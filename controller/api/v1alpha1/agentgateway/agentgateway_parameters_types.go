@@ -302,16 +302,16 @@ type AgentgatewayParametersOverlays struct {
 
 	// Creates a `PodDisruptionBudget` for the
 	// agentgateway proxy. If absent, no PDB is created. If present, a PDB is
-	// created with its selector automatically configured to target the
-	// agentgateway proxy `Deployment`. The `metadata` and `spec` fields from
-	// this overlay are applied to the generated PDB.
+	// created with its selector automatically configured to target the selected
+	// generated workload. The `metadata` and `spec` fields from this overlay are
+	// applied to the generated PDB.
 	// +optional
 	PodDisruptionBudget *KubernetesResourceOverlay `json:"podDisruptionBudget,omitempty"`
 
 	// Creates a `HorizontalPodAutoscaler`
-	// for the agentgateway proxy. If absent, no HPA is created. If present, an
-	// HPA is created with its `scaleTargetRef` automatically configured to
-	// target the agentgateway proxy `Deployment`. The `metadata` and `spec`
+	// for Deployment-backed agentgateway proxies. If absent, no HPA is created.
+	// If present, an HPA is created with its `scaleTargetRef` automatically
+	// configured to target the generated `Deployment`. The `metadata` and `spec`
 	// fields from this overlay are applied to the generated HPA.
 	// +optional
 	HorizontalPodAutoscaler *KubernetesResourceOverlay `json:"horizontalPodAutoscaler,omitempty"`
