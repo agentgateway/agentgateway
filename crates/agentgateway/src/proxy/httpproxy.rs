@@ -1169,6 +1169,9 @@ impl HTTPProxy {
 				sampler.client_sampling = Some(cs.clone());
 				log.cel.cel_context.register_expression(cs.as_ref());
 			}
+			if let Some(f) = &tp.config.filter {
+				log.cel.cel_context.register_log_expression(f.as_ref());
+			}
 			// Re-apply request so any newly required attributes are captured before sampling
 		}
 		log.cel.ctx().maybe_buffer_request_body(req).await;

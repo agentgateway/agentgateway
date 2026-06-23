@@ -232,6 +232,7 @@ fn merge_deprecated_frontend_policies(
 				policies,
 				attributes: Arc::unwrap_or_clone(fields.add),
 				resources: Default::default(), // Not supported in the old config
+				filter: None,                  // Not supported in the old config
 				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
 				random_sampling,
 				client_sampling,

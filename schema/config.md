@@ -7070,6 +7070,7 @@
 |`frontendPolicies.tracing.remove`|[]string|Attribute keys to remove from the emitted span attributes.<br><br>This is applied before `attributes` are evaluated/added, so it can be used to drop<br>default attributes or avoid duplication.|
 |`frontendPolicies.tracing.randomSampling`|string|Optional per-policy override for random sampling. If set, overrides global config for<br>requests that use this frontend policy.|
 |`frontendPolicies.tracing.clientSampling`|string|Optional per-policy override for client sampling. If set, overrides global config for<br>requests that use this frontend policy.|
+|`frontendPolicies.tracing.filter`|string|Optional CEL filter with DROP semantics. When set and the expression evaluates to<br>`true` for a request, the corresponding trace span(s) are NOT exported. When unset,<br>no filtering is applied (all sampled spans are exported). Composes after sampling<br>(only sampled spans are evaluated). Note: unlike `accessLog.filter` (keep-semantics),<br>this is a *drop* filter. Missing/errored fields evaluate to `false`, so the safe<br>default is to keep (export) the span.|
 |`frontendPolicies.tracing.path`|string|OTLP HTTP path used to export traces.|
 |`frontendPolicies.tracing.protocol`|enum|OTLP protocol used to export traces. Defaults to HTTP.<br>Possible values: `grpc`, `http`.|
 |`policies`|[]object|policies defines additional policies that can be attached to various other configurations.<br>This is an advanced feature; users should typically use the inline `policies` field under route/gateway.|

@@ -36,3 +36,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 cfg.yaml
+
+.augment/settings.local.json
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/

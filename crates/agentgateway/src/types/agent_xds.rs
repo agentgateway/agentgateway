@@ -2903,6 +2903,8 @@ fn tracing_config_from_proto(
 		remove: t.remove.clone(),
 		random_sampling,
 		client_sampling,
+		// Not supported inline from xDS
+		filter: None,
 		path,
 		protocol,
 	}

@@ -1474,6 +1474,7 @@ impl Drop for DropOnLog {
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
 				if log.outgoing_span.as_ref().is_some_and(|s| s.is_sampled())
+					&& trc::should_export_span(t.filter.as_deref(), &cel_exec.executor)
 					&& let Ok(mut spans) = log.trace_spans.lock()
 				{
 					for buffered_span in spans.drain(..) {
@@ -2097,6 +2098,7 @@ mod tests {
 				provider,
 				processor,
 				fields: Arc::new(LoggingFields::default()),
+				filter: None,
 			}),
 			exporter,
 		)
