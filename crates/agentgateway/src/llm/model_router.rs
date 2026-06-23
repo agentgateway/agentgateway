@@ -3,6 +3,7 @@ use std::sync::Arc;
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
+use futures_util::stream;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
@@ -100,6 +101,7 @@ struct RequestedModel {
 
 enum RequestedModelLocation {
 	Body(Value),
+	Multipart,
 	Path,
 }
 
@@ -286,6 +288,14 @@ fn model_not_found_response() -> Response {
 	)
 }
 
+fn request_body_too_large_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::PAYLOAD_TOO_LARGE,
+		"LLM request body exceeded the buffer limit",
+		"request_body_too_large",
+	)
+}
+
 fn llm_error_response(status: ::http::StatusCode, message: &str, code: &str) -> Response {
 	::http::Response::builder()
 		.status(status)
@@ -402,6 +412,13 @@ async fn requested_model(req: &mut Request) -> RouterResult<RequestedModel> {
 	}
 
 	let body = body_bytes(req).await?;
+	if let Some(boundary) = multipart_boundary(req) {
+		let model = multipart_model(&body, &boundary).await?;
+		return Ok(RequestedModel {
+			model,
+			location: RequestedModelLocation::Multipart,
+		});
+	}
 	let body: Value = serde_json::from_slice(&body).map_err(|err| {
 		tracing::debug!(%err, "failed to parse LLM request body");
 		Box::new(llm_error_response(
@@ -435,6 +452,8 @@ fn rewrite_request_model(
 	match location {
 		RequestedModelLocation::Body(body) => rewrite_body_model(req, body, target),
 		RequestedModelLocation::Path => rewrite_uri_model(req, target),
+		// TODO: Rewrite multipart model fields for virtual model routing.
+		RequestedModelLocation::Multipart => Ok(()),
 	}
 }
 
@@ -522,18 +541,70 @@ fn encode_model_path_segment(model: &str) -> String {
 	utf8_percent_encode(model, MODEL_SEGMENT).to_string()
 }
 
-async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
-	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-		return Ok(body.0.clone());
-	}
-	let body = http::inspect_body(req).await.map_err(|err| {
-		tracing::debug!(%err, "failed to read LLM request body");
+fn multipart_boundary(req: &Request) -> Option<String> {
+	req
+		.headers()
+		.get(::http::header::CONTENT_TYPE)
+		.and_then(|content_type| content_type.to_str().ok())
+		.and_then(|content_type| multer::parse_boundary(content_type).ok())
+}
+
+async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
+	let stream = stream::once(std::future::ready(Ok::<Bytes, multer::Error>(body.clone())));
+	let mut multipart = multer::Multipart::new(stream, boundary);
+	while let Some(field) = multipart.next_field().await.map_err(|err| {
+		tracing::debug!(%err, "failed to parse LLM multipart request body");
 		Box::new(llm_error_response(
 			::http::StatusCode::BAD_REQUEST,
-			"Failed to read LLM request body",
-			"request_body_read_failed",
+			"LLM multipart request body must be valid multipart/form-data",
+			"invalid_request_body",
 		))
-	})?;
+	})? {
+		if field.name() == Some("model") {
+			return field.text().await.map_err(|err| {
+				tracing::debug!(%err, "failed to parse LLM multipart model field");
+				Box::new(llm_error_response(
+					::http::StatusCode::BAD_REQUEST,
+					"LLM multipart request body has invalid string field 'model'",
+					"invalid_model",
+				))
+			});
+		}
+	}
+	Err(Box::new(llm_error_response(
+		::http::StatusCode::BAD_REQUEST,
+		"LLM multipart request body is missing string field 'model'",
+		"missing_model",
+	)))
+}
+
+async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
+	let limit = http::buffer_limit(req);
+	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
+		if body.0.len() < limit {
+			return Ok(body.0.clone());
+		}
+		if body.0.len() > limit {
+			return Err(Box::new(request_body_too_large_response()));
+		}
+	}
+	let inspect_limit = limit.saturating_add(1);
+	let mut body = http::inspect_body_with_limit(req.body_mut(), inspect_limit)
+		.await
+		.map_err(|err| {
+			tracing::debug!(%err, "failed to read LLM request body");
+			Box::new(llm_error_response(
+				::http::StatusCode::BAD_REQUEST,
+				"Failed to read LLM request body",
+				"request_body_read_failed",
+			))
+		})?;
+	if body.len() > limit {
+		return Err(Box::new(request_body_too_large_response()));
+	}
+	if body.len() == inspect_limit {
+		body.truncate(limit);
+	}
 	req.extensions_mut().insert(cel::BufferedBody(body.clone()));
 	Ok(body)
 }
@@ -541,6 +612,7 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::transport::BufferLimit;
 
 	#[test]
 	fn rewrite_path_model_rewrites_bedrock_converse_and_preserves_suffix() {
@@ -591,5 +663,30 @@ mod tests {
 			req.uri().to_string(),
 			"http://example.com/model/real%2Fmodel/converse?trace=true"
 		);
+	}
+
+	#[tokio::test]
+	async fn body_bytes_rejects_json_body_over_buffer_limit() {
+		let request_body = br#"{"model":"real-model","messages":[{"role":"user","content":"this part is over the limit"}]}"#;
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::from(request_body.as_slice()))
+			.unwrap();
+		req.extensions_mut().insert(BufferLimit(24));
+
+		let resp = *body_bytes(&mut req)
+			.await
+			.expect_err("over-limit body should fail");
+		assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
+		let error_body = http::read_body_with_limit(resp.into_body(), 1024)
+			.await
+			.expect("error body");
+		let error: Value = serde_json::from_slice(&error_body).expect("error JSON");
+		assert_eq!(error["error"]["code"], "request_body_too_large");
+
+		let restored = http::read_body_with_limit(req.into_body(), 1024)
+			.await
+			.expect("restored request body");
+		assert_eq!(restored, Bytes::from_static(request_body));
 	}
 }

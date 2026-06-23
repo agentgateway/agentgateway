@@ -606,12 +606,16 @@ impl Policy {
 		wildcard.unwrap_or(crate::llm::RouteType::Completions)
 	}
 
+	pub fn has_request_body_mutations(&self) -> bool {
+		self.defaults.is_some() || self.overrides.is_some() || self.transformations.is_some()
+	}
+
 	pub fn unmarshal_request<T: DeserializeOwned>(
 		&self,
 		bytes: &Bytes,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<T, AIError> {
-		if self.defaults.is_none() && self.overrides.is_none() && self.transformations.is_none() {
+		if !self.has_request_body_mutations() {
 			// Fast path: directly bytes to typed
 			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);
 		}

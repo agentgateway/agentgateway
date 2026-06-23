@@ -1319,6 +1319,138 @@ async fn llm_openai_tokenize() {
 	.await;
 }
 
+#[tokio::test]
+async fn llm_detect_mode_passthrough_without_rewrite() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = crate::types::local::LocalNamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::OpenAI(openai::Provider { model: None }),
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		policies: serde_json::from_value(json!({
+			"ai": {
+				"routes": {
+					"/v1/chat/completions": "detect"
+				}
+			}
+		}))
+		.unwrap(),
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let body = include_bytes!("../llm/tests/requests/completions/basic.json");
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions?trace=repro")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(body.to_vec()))
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		"/v1/chat/completions?trace=repro"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	let original_body: Value = serde_json::from_slice(body).expect("original request should be JSON");
+	assert_eq!(upstream_body, original_body);
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", "/v1/chat/completions?trace=repro"),
+	])
+	.await
+	.unwrap();
+	let want = json!({
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
+	});
+	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
+#[tokio::test]
+async fn llm_detect_mode_respects_model_rewrite() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = crate::types::local::LocalNamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::OpenAI(openai::Provider { model: None }),
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		policies: serde_json::from_value(json!({
+			"ai": {
+				"routes": {
+					"/v1/chat/completions": "detect"
+				},
+				"overrides": {
+					"model": "replaceme-overwrite"
+				}
+			}
+		}))
+		.unwrap(),
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let body = include_bytes!("../llm/tests/requests/completions/basic.json");
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions?trace=rewrite")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(body.to_vec()))
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		"/v1/chat/completions?trace=rewrite"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["model"], "replaceme-overwrite");
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", "/v1/chat/completions?trace=rewrite"),
+	])
+	.await
+	.unwrap();
+	let want = json!({
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme-overwrite",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
+	});
+	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
 async fn setup_local_llm_config(yaml: &str) -> TestBind {
 	let t = setup_proxy_test("{}").unwrap();
 	let normalized = crate::types::local::NormalizedLocalConfig::from(
@@ -1541,6 +1673,79 @@ llm:
 			.len(),
 		0
 	);
+}
+
+#[tokio::test]
+async fn llm_model_router_handles_multipart_audio_detect_request() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 4000
+  models:
+  - name: real-model
+    provider: openAI
+    params:
+      baseUrl: http://{}
+    passthrough: detect
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/4000"));
+	let body = concat!(
+		"--audio-boundary\r\n",
+		"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
+		"Content-Type: audio/wav\r\n",
+		"\r\n",
+		"fake-audio-bytes\r\n",
+		"--audio-boundary\r\n",
+		"Content-Disposition: form-data; name=\"model\"\r\n",
+		"\r\n",
+		"real-model\r\n",
+		"--audio-boundary--\r\n",
+	)
+	.as_bytes();
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/audio/transcriptions")
+		.header(
+			header::CONTENT_TYPE,
+			"multipart/form-data; boundary=audio-boundary",
+		)
+		.body(Body::from(body.to_vec()))
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/audio/transcriptions"
+	);
+	assert_eq!(requests[0].body, body);
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", "/v1/audio/transcriptions"),
+	])
+	.await
+	.unwrap();
+	let want = json!({
+		"gen_ai.provider.name": "openai",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
+	});
+	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
 }
 
 #[tokio::test]

@@ -1021,7 +1021,9 @@ impl AIProvider {
 		};
 
 		let req = if is_json {
-			if let Some(p) = policies {
+			if let Some(p) = policies
+				&& p.has_request_body_mutations()
+			{
 				p.unmarshal_request(&bytes, log)
 			} else {
 				serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)
@@ -1065,7 +1067,11 @@ impl AIProvider {
 			}
 		}
 
-		let request_model = req.model().as_deref().map(str::to_string);
+		let request_model = if req.supports_model() {
+			req.model().as_deref().map(str::to_string)
+		} else {
+			None
+		};
 		let native_format = if original_format == InputFormat::Detect {
 			None
 		} else {

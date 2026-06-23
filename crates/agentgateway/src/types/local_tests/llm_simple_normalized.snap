@@ -1,6 +1,5 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
-assertion_line: 207
 description: "Config normalization test for llm_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:

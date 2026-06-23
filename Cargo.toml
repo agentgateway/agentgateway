@@ -68,6 +68,7 @@ rustls-openssl = { version = "0.3", features = ["tls12"] }
 axum = { version = "0.8", features = ["macros"] }
 axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
+multer = "3.0.0"
 # Disable default features to avoid pulling in native-tls and requiring openssl
 # TODO: allow default features if we ever add an openssl feature
 azure_identity = { version = "1.0", default-features = false }
