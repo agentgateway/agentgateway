@@ -151,6 +151,9 @@ func (gp *GatewayParameters) PostProcessObjects(ctx context.Context, obj client.
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve AgentgatewayParameters for Gateway %s/%s: %w", gw.GetNamespace(), gw.GetName(), err)
 		}
+		if err := resolved.validateWorkloadOverlays(); err != nil {
+			return nil, err
+		}
 
 		// Apply overlays in order: GatewayClass first, then Gateway.
 		if resolved.gatewayClassAGWP != nil {
