@@ -646,6 +646,9 @@ pub mod to_responses {
 										(item_id, String::new(), String::new(), output_index)
 									});
 
+									if let Some(id) = &tc.id {
+										entry.0 = id.clone();
+									}
 									if let Some(function) = &tc.function {
 										if let Some(name) = &function.name {
 											entry.1 = name.clone();
@@ -764,6 +767,7 @@ pub mod to_responses {
 
 		let mut sorted_tools: Vec<_> = tool_calls.drain().collect();
 		sorted_tools.sort_by_key(|(_, (_, _, _, output_index))| *output_index);
+		let mut response_output = Vec::new();
 
 		for (_, (item_id, name, buffer, output_index)) in sorted_tools {
 			*sequence_number += 1;
@@ -780,20 +784,23 @@ pub mod to_responses {
 				),
 			));
 
+			let item = OutputItem::FunctionCall(FunctionToolCall {
+				arguments: buffer,
+				call_id: item_id.clone(),
+				namespace: None,
+				name,
+				id: Some(item_id),
+				status: Some(OutputStatus::Completed),
+			});
+			response_output.push(item.clone());
+
 			*sequence_number += 1;
 			events.push((
 				"event",
 				ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
 					sequence_number: *sequence_number,
 					output_index,
-					item: OutputItem::FunctionCall(FunctionToolCall {
-						arguments: buffer,
-						call_id: item_id.clone(),
-						namespace: None,
-						name,
-						id: Some(item_id),
-						status: Some(OutputStatus::Completed),
-					}),
+					item,
 				}),
 			));
 		}
@@ -919,10 +926,13 @@ pub mod to_responses {
 		};
 
 		if *sent_content_part {
+			response_output.insert(0, message_item);
+		}
+		if !response_output.is_empty() {
 			match &mut done_event {
-				ResponseStreamEvent::ResponseCompleted(e) => e.response.output = vec![message_item],
-				ResponseStreamEvent::ResponseIncomplete(e) => e.response.output = vec![message_item],
-				ResponseStreamEvent::ResponseFailed(e) => e.response.output = vec![message_item],
+				ResponseStreamEvent::ResponseCompleted(e) => e.response.output = response_output,
+				ResponseStreamEvent::ResponseIncomplete(e) => e.response.output = response_output,
+				ResponseStreamEvent::ResponseFailed(e) => e.response.output = response_output,
 				_ => {},
 			}
 		}

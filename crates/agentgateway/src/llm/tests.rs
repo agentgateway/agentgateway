@@ -298,6 +298,9 @@ mod requests {
 		("basic", &[BEDROCK, GEMINI]),
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
+		// Minimal Responses assistant output_text history currently fails before translation:
+		// https://github.com/64bit/async-openai/issues/565
+		("minimal-output", &[GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
 	];
 	pub const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
@@ -608,6 +611,7 @@ mod response {
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream", ALL_COMPLETIONS),
 		("stream_tool_empty_content", &[COMPLETIONS_TO_MESSAGES]),
+		("stream_tool_single_chunk", &[COMPLETIONS_TO_RESPONSES]),
 		("stream_terminal_text", &[COMPLETIONS_TO_RESPONSES]),
 	];
 

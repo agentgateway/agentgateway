@@ -1,0 +1,36 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/completions/stream_tool_single_chunk.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"gemini-2.5-flash-lite","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":1,"item":{"type":"function_call","arguments":"","call_id":"function-call-14340045308038776752","name":"exec_command","id":"function-call-14340045308038776752","status":"in_progress"}}
+
+event: event
+data: {"type":"response.function_call_arguments.delta","sequence_number":4,"item_id":"function-call-14340045308038776752","output_index":1,"delta":"{\"cmd\":\"echo \\\"Hello, World!\\\" \\u003e greeting.sh && chmod +x greeting.sh && ./greeting.sh\",\"workdir\":\"/tmp/tmp.0PpRrcOVsJ\"}"}
+
+event: event
+data: {"type":"response.function_call_arguments.done","name":"exec_command","sequence_number":5,"item_id":"function-call-14340045308038776752","output_index":1,"arguments":"{\"cmd\":\"echo \\\"Hello, World!\\\" \\u003e greeting.sh && chmod +x greeting.sh && ./greeting.sh\",\"workdir\":\"/tmp/tmp.0PpRrcOVsJ\"}"}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":6,"output_index":1,"item":{"type":"function_call","arguments":"{\"cmd\":\"echo \\\"Hello, World!\\\" \\u003e greeting.sh && chmod +x greeting.sh && ./greeting.sh\",\"workdir\":\"/tmp/tmp.0PpRrcOVsJ\"}","call_id":"function-call-14340045308038776752","name":"exec_command","id":"function-call-14340045308038776752","status":"completed"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":7,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":8,"response":{"created_at":123,"id":"","model":"gemini-2.5-flash-lite","object":"response","output":[{"type":"function_call","arguments":"{\"cmd\":\"echo \\\"Hello, World!\\\" \\u003e greeting.sh && chmod +x greeting.sh && ./greeting.sh\",\"workdir\":\"/tmp/tmp.0PpRrcOVsJ\"}","call_id":"function-call-14340045308038776752","name":"exec_command","id":"function-call-14340045308038776752","status":"completed"}],"status":"completed","usage":{"input_tokens":4821,"input_tokens_details":{"cached_tokens":0},"output_tokens":53,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":4874}}}
+
+
+
+{
+  "input_tokens": 4821,
+  "output_tokens": 53,
+  "total_tokens": 4874,
+  "provider_model": "gemini-2.5-flash-lite"
+}
