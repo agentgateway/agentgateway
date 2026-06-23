@@ -636,7 +636,32 @@ impl Gateway {
 				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
 			},
 			TunnelProtocol::Connect => {
-				let err = Self::terminate_connect_tunnel(inputs, raw_stream, policies, drain).await;
+				// Terminate the OUTER TLS (when the bind is TLS) BEFORE serving CONNECT,
+				// so the CONNECT request and its headers are encrypted on the wire.
+				// Without this, a `tunnelProtocol: Connect` bind would ignore its listener
+				// TLS config and serve CONNECT in plaintext on the raw socket. Any inner
+				// TLS is terminated separately when the tunnel re-enters the destination
+				// bind (maybe_terminate_tls in proxy_bind).
+				let stream = if matches!(bind_protocol, BindProtocol::tls) {
+					match Self::maybe_terminate_tls(
+						inputs.clone(),
+						raw_stream,
+						&policies,
+						bind_name.clone(),
+						true,
+					)
+					.await
+					{
+						Ok((_listener, tls_stream)) => tls_stream,
+						Err(e) => {
+							warn!(src.addr = %peer_addr, "connect tunnel TLS termination error: {e}");
+							return;
+						},
+					}
+				} else {
+					raw_stream
+				};
+				let err = Self::terminate_connect_tunnel(inputs, stream, policies, drain).await;
 				if let Err(e) = err {
 					warn!(src.addr = %peer_addr, "connect tunnel error: {e}");
 				}
