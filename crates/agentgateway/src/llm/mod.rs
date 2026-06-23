@@ -1609,6 +1609,7 @@ impl AIProvider {
 
 		// Decompress before the SSE parser, which expects plaintext chunks.
 		let (mut parts, body) = resp.into_parts();
+		let body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer);
 		let ce = parts.headers.typed_get::<ContentEncoding>();
 		let (body, decompressed_encoding) = http::compression::decompress_body(body, ce.as_ref())
 			.map_err(|e| map_compression_error(e, &parts.headers))?;
