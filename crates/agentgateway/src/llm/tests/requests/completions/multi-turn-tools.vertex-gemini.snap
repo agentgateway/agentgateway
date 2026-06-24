@@ -59,7 +59,6 @@ info:
         {
           "functionCall": {
             "name": "get_weather",
-            "id": "call_1",
             "args": {
               "location": "Columbus"
             }
@@ -73,7 +72,6 @@ info:
         {
           "functionResponse": {
             "name": "get_weather",
-            "id": "call_1",
             "response": {
               "content": "{\"temp\":15}"
             }
@@ -90,7 +88,6 @@ info:
         {
           "functionCall": {
             "name": "get_weather",
-            "id": "call_2",
             "args": {
               "location": "Berlin"
             }
@@ -104,7 +101,6 @@ info:
         {
           "functionResponse": {
             "name": "get_weather",
-            "id": "call_2",
             "response": {
               "content": "{\"temp\":9}"
             }

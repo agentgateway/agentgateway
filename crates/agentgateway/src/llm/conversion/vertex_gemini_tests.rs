@@ -154,6 +154,230 @@ fn tool_choice_mapping() {
 	);
 }
 
+#[test]
+fn vertex_omits_tool_call_id_on_function_parts() {
+	// Vertex generateContent rejects `id` on functionCall/functionResponse (unlike AI Studio):
+	// "Invalid JSON payload received. Unknown name \"id\" ... Cannot find field". Encodes the
+	// rule so a future blind snapshot accept can't silently reintroduce it.
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-pro",
+		"messages": [
+			{ "role": "user", "content": "Weather in Berlin?" },
+			{ "role": "assistant", "content": null, "tool_calls": [
+				{ "id": "call_1", "type": "function",
+					"function": { "name": "get_weather", "arguments": "{\"location\":\"Berlin\"}" } }
+			]},
+			{ "role": "tool", "tool_call_id": "call_1", "name": "get_weather",
+				"content": "{\"temp\":9}" }
+		],
+		"tools": [{ "type": "function", "function": {
+			"name": "get_weather", "description": "Get the current weather in a location",
+			"parameters": { "type": "object", "properties": { "location": { "type": "string" } } }
+		}}]
+	}));
+
+	let fc = &g["contents"][1]["parts"][0]["functionCall"];
+	assert_eq!(fc["name"], "get_weather");
+	assert!(
+		fc.get("id").is_none(),
+		"functionCall must not carry `id`: Vertex rejects it"
+	);
+
+	let fr = &g["contents"][2]["parts"][0]["functionResponse"];
+	assert_eq!(fr["name"], "get_weather");
+	assert!(
+		fr.get("id").is_none(),
+		"functionResponse must not carry `id`: Vertex rejects it"
+	);
+}
+
+#[test]
+fn thought_signature_round_trips_through_tool_call_id() {
+	// Gemini 3 thinking models attach a thoughtSignature to functionCall parts and HARD-400 on
+	// the next turn if it isn't echoed back ("Function call is missing a thought_signature in
+	// functionCall parts"). A non-standard field on the OpenAI tool_call won't survive, since
+	// clients drop unknown fields, so the signature is encoded into `tool_call_id` (which clients
+	// reliably echo) and recovered before the outbound Vertex request. Mirrors litellm.
+	//
+	// A realistically long, base64-shaped signature guards against id truncation in the channel.
+	let sig = "CqUBAbc123def456GHI789jklMNOpqrSTUvwxYZ0123456789+/aBcDeFgHiJkLmNoPqRsTuVwXyZ==";
+
+	// Decode: the signature must ride inside the client-facing tool_call_id, not a side field a
+	// client would strip on the way back.
+	let decoded = resp(json!({
+		"responseId": "resp-1",
+		"candidates": [{ "content": { "role": "model", "parts": [
+			{ "functionCall": { "name": "get_weather", "args": { "city": "Berlin" } },
+				"thoughtSignature": sig }
+		]}, "finishReason": "STOP" }]
+	}));
+	let echoed_id = decoded["choices"][0]["message"]["tool_calls"][0]["id"]
+		.as_str()
+		.expect("tool call id")
+		.to_string();
+	assert!(
+		echoed_id.contains(sig),
+		"thoughtSignature must be encoded into tool_call_id (client-durable channel), got {echoed_id:?}"
+	);
+
+	// Encode: a client echoes only standard OpenAI fields (id/type/function). The signature must
+	// be recovered from the id onto the Vertex functionCall part, and the raw id must not leak.
+	let g = to_gemini(json!({
+		"model": "gemini-3-pro",
+		"messages": [
+			{ "role": "user", "content": "weather in Berlin?" },
+			{ "role": "assistant", "content": null, "tool_calls": [
+				{ "id": echoed_id, "type": "function",
+					"function": { "name": "get_weather", "arguments": "{\"city\":\"Berlin\"}" } }
+			]},
+		]
+	}));
+
+	let fc_part = &g["contents"][1]["parts"][0];
+	assert_eq!(fc_part["functionCall"]["name"], "get_weather");
+	assert_eq!(
+		fc_part["thoughtSignature"], sig,
+		"thoughtSignature must be recovered from tool_call_id into the re-encoded request"
+	);
+	assert!(
+		fc_part["functionCall"].get("id").is_none(),
+		"raw tool_call_id (with embedded signature) must not leak to the Vertex functionCall"
+	);
+}
+
+#[test]
+fn thought_signature_parallel_first_only_round_trips() {
+	// Gemini 3 attaches a thoughtSignature to (often only) the first of several parallel calls
+	// (js-genai #1275). Contract is faithful passthrough: we re-send exactly what we received, a
+	// signature for call 0 and NONE for call 1 - we never synthesize a missing one. Same function
+	// name twice also pins order, which is load-bearing once `id` is stripped (Vertex correlates
+	// functionResponse to functionCall positionally).
+	let sig = "CqUBAbc123def456GHI789jklMNOpqrSTUvwxYZ0123456789+/aBcDeFgHiJkLmNoPqRsTuVwXyZ==";
+
+	let decoded = resp(json!({
+		"responseId": "resp-1",
+		"candidates": [{ "content": { "role": "model", "parts": [
+			{ "functionCall": { "name": "get_weather", "args": { "city": "Columbus" } },
+				"thoughtSignature": sig },
+			{ "functionCall": { "name": "get_weather", "args": { "city": "Berlin" } } }
+		]}, "finishReason": "STOP" }]
+	}));
+	let calls = decoded["choices"][0]["message"]["tool_calls"]
+		.as_array()
+		.expect("tool_calls");
+	assert_eq!(calls.len(), 2);
+	let id0 = calls[0]["id"].as_str().expect("id0").to_string();
+	let id1 = calls[1]["id"].as_str().expect("id1").to_string();
+	assert!(id0.contains(sig), "first call id must embed its signature");
+	assert!(
+		!id1.contains(sig),
+		"second call received no signature; its id must stay plain (no synthesis)"
+	);
+
+	// Client echoes only standard fields + the tool results, in order.
+	let g = to_gemini(json!({
+		"model": "gemini-3-pro",
+		"messages": [
+			{ "role": "user", "content": "weather in Columbus and Berlin?" },
+			{ "role": "assistant", "content": null, "tool_calls": [
+				{ "id": id0, "type": "function",
+					"function": { "name": "get_weather", "arguments": "{\"city\":\"Columbus\"}" } },
+				{ "id": id1, "type": "function",
+					"function": { "name": "get_weather", "arguments": "{\"city\":\"Berlin\"}" } }
+			]},
+			{ "role": "tool", "tool_call_id": id0, "name": "get_weather", "content": "{\"temp\":15}" },
+			{ "role": "tool", "tool_call_id": id1, "name": "get_weather", "content": "{\"temp\":9}" }
+		]
+	}));
+
+	let model_parts = g["contents"][1]["parts"].as_array().expect("model parts");
+	assert_eq!(model_parts.len(), 2);
+	// Order preserved (Columbus before Berlin), signature only on the call that had one.
+	assert_eq!(model_parts[0]["functionCall"]["args"]["city"], "Columbus");
+	assert_eq!(
+		model_parts[0]["thoughtSignature"], sig,
+		"first call must carry its recovered signature"
+	);
+	assert!(model_parts[0]["functionCall"].get("id").is_none());
+	assert_eq!(model_parts[1]["functionCall"]["args"]["city"], "Berlin");
+	assert!(
+		model_parts[1].get("thoughtSignature").is_none(),
+		"second call had no signature; must not synthesize or emit an empty one"
+	);
+	assert!(model_parts[1]["functionCall"].get("id").is_none());
+
+	// functionResponse order must mirror the calls (positional correlation, no id).
+	let responses: Vec<&Value> = g["contents"][2]["parts"]
+		.as_array()
+		.expect("response parts")
+		.iter()
+		.filter_map(|p| p.get("functionResponse"))
+		.collect();
+	assert_eq!(responses.len(), 2);
+	assert_eq!(responses[0]["response"]["content"], "{\"temp\":15}");
+	assert_eq!(responses[1]["response"]["content"], "{\"temp\":9}");
+	assert!(responses[0].get("id").is_none());
+}
+
+#[test]
+fn out_of_order_tool_results_reorder_to_call_order() {
+	// Vertex rejects `id` and correlates functionResponse to functionCall positionally, so for
+	// parallel calls to the SAME function name the tool results must be re-ordered to match the
+	// assistant's tool_calls order. An OpenAI client may return `tool` messages in any order (the
+	// linkage is tool_call_id); without reordering, Columbus's result would feed the Berlin call.
+	let g = to_gemini(json!({
+		"model": "gemini-2.5-pro",
+		"messages": [
+			{ "role": "user", "content": "weather in Columbus and Berlin?" },
+			{ "role": "assistant", "content": null, "tool_calls": [
+				{ "id": "call_a", "type": "function",
+					"function": { "name": "get_weather", "arguments": "{\"city\":\"Columbus\"}" } },
+				{ "id": "call_b", "type": "function",
+					"function": { "name": "get_weather", "arguments": "{\"city\":\"Berlin\"}" } }
+			]},
+			// Returned in REVERSE of the call order (allowed by the OpenAI spec).
+			{ "role": "tool", "tool_call_id": "call_b", "name": "get_weather", "content": "{\"temp\":9}" },
+			{ "role": "tool", "tool_call_id": "call_a", "name": "get_weather", "content": "{\"temp\":15}" }
+		]
+	}));
+
+	// Calls retain tool_calls order.
+	let calls = g["contents"][1]["parts"].as_array().expect("model parts");
+	assert_eq!(calls[0]["functionCall"]["args"]["city"], "Columbus");
+	assert_eq!(calls[1]["functionCall"]["args"]["city"], "Berlin");
+
+	// Responses must be reordered to match: call_a (Columbus, temp 15) first, call_b (Berlin) second.
+	let responses: Vec<&Value> = g["contents"][2]["parts"]
+		.as_array()
+		.expect("response parts")
+		.iter()
+		.filter_map(|p| p.get("functionResponse"))
+		.collect();
+	assert_eq!(responses.len(), 2);
+	assert_eq!(
+		responses[0]["response"]["content"], "{\"temp\":15}",
+		"call_a (Columbus) result must come first to match the call order"
+	);
+	assert_eq!(responses[1]["response"]["content"], "{\"temp\":9}");
+	assert!(responses[0].get("id").is_none());
+}
+
+#[test]
+#[ignore = "follow-up: text/thinking-part thoughtSignature must ride reasoning_signature, not the \
+            tool_call_id (no tool call to carry it); cf. litellm #25322"]
+fn text_part_thought_signature_round_trips() {
+	// A thinking turn with no tool call still carries a signature that must round-trip; the typed
+	// slot is ResponseMessage.reasoning_signature (currently hardcoded None). Out of scope here.
+	let sig = "TEXT_PART_THOUGHT_SIGNATURE_xyz789==";
+	let decoded = resp(json!({
+		"candidates": [{ "content": { "role": "model", "parts": [
+			{ "text": "reasoning", "thought": true, "thoughtSignature": sig },
+			{ "text": "the answer" }
+		]}, "finishReason": "STOP" }]
+	}));
+	assert_eq!(decoded["choices"][0]["message"]["reasoning_signature"], sig);
+}
+
 // ---------- Request: generationConfig / structured outputs / thinking ----------
 
 #[test]
@@ -987,6 +1211,28 @@ fn streaming_preserves_native_tool_call_id() {
 	)
 	.unwrap();
 	assert_eq!(c["choices"][0]["delta"]["tool_calls"][0]["id"], "fc_native");
+}
+
+#[test]
+#[ignore = "follow-up: streaming must embed thoughtSignature into the streamed tool_call id the \
+            same way the non-streaming path does; cf. litellm #16895"]
+fn streaming_tool_call_id_embeds_thought_signature() {
+	let sig = "STREAM_THOUGHT_SIGNATURE_abc123==";
+	let mut s = to_completions::StreamState::new();
+	let c = stream_chunk(
+		&mut s,
+		json!({ "candidates": [{ "content": { "role": "model", "parts": [
+			{ "functionCall": { "name": "get_weather", "args": {} }, "thoughtSignature": sig }
+		]}}]}),
+	)
+	.unwrap();
+	let id = c["choices"][0]["delta"]["tool_calls"][0]["id"]
+		.as_str()
+		.expect("streamed tool call id");
+	assert!(
+		id.contains(sig),
+		"streamed tool_call id must embed the thoughtSignature, got {id:?}"
+	);
 }
 
 #[test]

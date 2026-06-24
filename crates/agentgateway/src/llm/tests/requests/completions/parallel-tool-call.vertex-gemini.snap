@@ -42,7 +42,6 @@ info:
         {
           "functionCall": {
             "name": "get_weather",
-            "id": "call_1",
             "args": {
               "location": "Columbus, OH"
             }
@@ -51,7 +50,6 @@ info:
         {
           "functionCall": {
             "name": "get_weather",
-            "id": "call_2",
             "args": {
               "location": "New York, NY"
             }
@@ -65,7 +63,6 @@ info:
         {
           "functionResponse": {
             "name": "get_weather",
-            "id": "call_1",
             "response": {
               "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
             }
@@ -77,7 +74,6 @@ info:
         {
           "functionResponse": {
             "name": "get_weather",
-            "id": "call_2",
             "response": {
               "content": "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
             }

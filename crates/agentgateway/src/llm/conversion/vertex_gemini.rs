@@ -9,6 +9,28 @@ use crate::llm::{AIError, logged_response_parsing, types};
 #[path = "vertex_gemini_tests.rs"]
 mod tests;
 
+/// Vertex rejects an `id` on functionCall/functionResponse parts and Gemini 3 hard-400s if a functionCall's signature is
+/// not echoed back, but OpenAI clients drop unknown fields while reliably echoing `tool_call_id`.
+/// So the signature rides inside the id as `<base-id>__thought__<signature>`, recovered before the
+/// outbound Vertex request. Split on the first separator: the synthesized base id never contains it.
+const THOUGHT_SIGNATURE_SEPARATOR: &str = "__thought__";
+
+fn split_tool_call_id(raw: &str) -> (&str, Option<&str>) {
+	match raw.split_once(THOUGHT_SIGNATURE_SEPARATOR) {
+		Some((base, sig)) if !sig.is_empty() => (base, Some(sig)),
+		_ => (raw, None),
+	}
+}
+
+/// Embed an optional thoughtSignature into a tool_call id for the client to echo back. A call with
+/// no signature keeps a plain id (no trailing separator), matching faithful passthrough.
+fn join_tool_call_id(base: String, signature: Option<&str>) -> String {
+	match signature {
+		Some(sig) if !sig.is_empty() => format!("{base}{THOUGHT_SIGNATURE_SEPARATOR}{sig}"),
+		_ => base,
+	}
+}
+
 pub mod from_completions {
 	use serde::Deserialize;
 	use serde_json::{Value, json};
@@ -158,7 +180,9 @@ pub mod from_completions {
 	) -> Result<(Vec<String>, Vec<vg::Content>), AIError> {
 		use types::completions::Content;
 
-		let mut id_to_name: std::collections::HashMap<String, String> = Default::default();
+		// base tool_call id -> (function name, position in the assistant's tool_calls). The index
+		// lets the post-loop pass restore call order on the functionResponse parts.
+		let mut call_meta: std::collections::HashMap<String, (String, usize)> = Default::default();
 		let mut system_text: Vec<String> = Vec::new();
 		let mut contents: Vec<vg::Content> = Vec::new();
 		for m in messages {
@@ -169,14 +193,17 @@ pub mod from_completions {
 				"user" => push_content(&mut contents, "user", user_parts(&m.content)?),
 				"assistant" => {
 					if let Some(calls) = &m.tool_calls {
-						for c in calls {
+						for (idx, c) in calls.iter().enumerate() {
 							if let (Some(id), Some(name)) = (
 								c.get("id").and_then(Value::as_str),
 								c.get("function")
 									.and_then(|f| f.get("name"))
 									.and_then(Value::as_str),
 							) {
-								id_to_name.insert(id.to_string(), name.to_string());
+								call_meta.insert(
+									split_tool_call_id(id).0.to_string(),
+									(name.to_string(), idx),
+								);
 							}
 						}
 					}
@@ -193,21 +220,26 @@ pub mod from_completions {
 					push_content(&mut contents, "model", parts);
 				},
 				"tool" | "function" => {
-					let name = m
+					let base_id = m
 						.tool_call_id
-						.as_ref()
-						.and_then(|id| id_to_name.get(id))
-						.cloned()
+						.as_deref()
+						.map(|id| split_tool_call_id(id).0.to_string());
+					let name = base_id
+						.as_deref()
+						.and_then(|id| call_meta.get(id))
+						.map(|(name, _)| name.clone())
 						.or_else(|| m.name.clone())
 						.unwrap_or_default();
 
 					let response = content_text(&m.content)
 						.map(|t| json!({ "content": t }))
 						.unwrap_or_else(|| json!({}));
+					// Carry the base id as a transient correlation key, the post-loop pass orders the
+					// responses to match the call order, then strips it.
 					let part = vg::Part::FunctionResponse(vg::FunctionResponsePart {
 						function_response: vg::FunctionResponse {
 							name,
-							id: m.tool_call_id.clone(),
+							id: base_id,
 							response,
 							rest: Value::Null,
 						},
@@ -216,6 +248,45 @@ pub mod from_completions {
 					push_content(&mut contents, "user", vec![part]);
 				},
 				_ => {},
+			}
+		}
+
+		// Vertex rejects `id` and correlates functionResponse to functionCall positionally, so each
+		// response group must follow the assistant's tool_calls order even when a client returns the
+		// `tool` messages out of order. Reorder only the functionResponse parts (leaving any filler
+		// text in place), then drop the now-unused correlation id.
+		for content in &mut contents {
+			let mut ordered: Vec<vg::Part> = content
+				.parts
+				.iter()
+				.filter(|p| matches!(p, vg::Part::FunctionResponse(_)))
+				.cloned()
+				.collect();
+			if ordered.is_empty() {
+				continue;
+			}
+			ordered.sort_by_key(|p| match p {
+				vg::Part::FunctionResponse(fr) => fr
+					.function_response
+					.id
+					.as_deref()
+					.and_then(|id| call_meta.get(id))
+					.map(|(_, idx)| *idx)
+					.unwrap_or(usize::MAX),
+				_ => usize::MAX,
+			});
+			for p in &mut ordered {
+				if let vg::Part::FunctionResponse(fr) = p {
+					fr.function_response.id = None;
+				}
+			}
+			let mut ordered = ordered.into_iter();
+			for p in &mut content.parts {
+				if matches!(p, vg::Part::FunctionResponse(_)) {
+					*p = ordered
+						.next()
+						.expect("one reordered response per functionResponse slot");
+				}
 			}
 		}
 		Ok((system_text, contents))
@@ -330,16 +401,21 @@ pub mod from_completions {
 			.and_then(Value::as_str)
 			.and_then(|s| serde_json::from_str::<Value>(s).ok())
 			.unwrap_or_else(|| json!({}));
-		let id = call.get("id").and_then(Value::as_str).map(str::to_string);
+		// Vertex rejects `id` on functionCall parts; recover any embedded thoughtSignature and drop the id
+		let thought_signature = call
+			.get("id")
+			.and_then(Value::as_str)
+			.and_then(|raw| split_tool_call_id(raw).1)
+			.map(str::to_string);
 		vg::Part::FunctionCall(vg::FunctionCallPart {
 			function_call: vg::FunctionCall {
 				name,
-				id,
+				id: None,
 				args,
 				rest: Value::Null,
 			},
 			thought: None,
-			thought_signature: None,
+			thought_signature,
 			rest: Value::Null,
 		})
 	}
@@ -871,6 +947,7 @@ pub mod to_completions {
 		id: Option<&'a str>,
 		name: &'a str,
 		args: &'a Value,
+		thought_signature: Option<&'a str>,
 	}
 
 	fn decode_parts<'a>(content: Option<&'a vg::Content>) -> DecodedParts<'a> {
@@ -886,6 +963,7 @@ pub mod to_completions {
 					id: fc.function_call.id.as_deref(),
 					name: &fc.function_call.name,
 					args: &fc.function_call.args,
+					thought_signature: fc.thought_signature.as_deref(),
 				}),
 				_ => {},
 			}
@@ -983,7 +1061,12 @@ pub mod to_completions {
 			.enumerate()
 			.map(|(idx, call)| {
 				completions::MessageToolCalls::Function(completions::MessageToolCall {
-					id: tool_call_id(call.id, &seed, idx as u32),
+					// Embed any thoughtSignature into the id so the client echoes it back (Gemini 3
+					// requires it on the next turn) recovered before the outbound Vertex request.
+					id: join_tool_call_id(
+						tool_call_id(call.id, &seed, idx as u32),
+						call.thought_signature,
+					),
 					function: completions::FunctionCall {
 						name: call.name.to_string(),
 						arguments: encode_args(call.args),

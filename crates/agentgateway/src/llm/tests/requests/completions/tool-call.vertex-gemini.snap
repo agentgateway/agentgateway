@@ -35,7 +35,6 @@ info:
         {
           "functionCall": {
             "name": "get_weather",
-            "id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
             "args": {
               "format": "celsius",
               "location": "Columbus, OH"
@@ -50,7 +49,6 @@ info:
         {
           "functionResponse": {
             "name": "get_weather",
-            "id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
             "response": {
               "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
             }
