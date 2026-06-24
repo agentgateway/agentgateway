@@ -536,16 +536,6 @@ message DirectResponse {
   repeated ExpressionHeader headers = 4;
 }
 
-message BufferBody {
-  optional uint32 max_bytes = 1;
-}
-
-message Buffer {
-  optional BufferBody request = 1;
-  optional BufferBody response = 2;
-}
-
-
 message ExpressionHeader {
   string name = 1;
   string expression = 2;
@@ -1103,6 +1093,22 @@ message TrafficPolicySpec {
   }
 
   PolicyPhase phase = 1;
+
+  message Buffer {
+    enum OverflowAction {
+      RETURN_ERROR = 0;
+      CONTINUE_STREAMING = 1;
+    }
+
+    message BufferBody {
+      optional uint32 max_bytes = 1;
+      OverflowAction on_overflow = 2;
+    }
+
+    optional BufferBody request = 1;
+    optional BufferBody response = 2;
+  }
+
   oneof kind {
     Timeout timeout = 2;
     Retry retry = 3;

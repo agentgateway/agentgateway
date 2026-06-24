@@ -2403,9 +2403,17 @@ fn traffic_policy_from_proto(
 			})
 		},
 		Some(tps::Kind::Buffer(buffer)) => {
-			let to_body = |b: Option<proto::agent::BufferBody>| {
+			use proto::agent::traffic_policy_spec::buffer;
+
+			let to_body = |b: Option<proto::agent::traffic_policy_spec::buffer::BufferBody>| {
 				b.map(|bb| BufferBody {
 					max_bytes: bb.max_bytes.map(|v| v as usize),
+					on_overflow: match buffer::OverflowAction::try_from(bb.on_overflow) {
+						Ok(buffer::OverflowAction::ContinueStreaming) => {
+							http::buffer::OverflowAction::ContinueStreaming
+						},
+						_ => http::buffer::OverflowAction::ReturnError,
+					},
 				})
 			};
 			TrafficPolicy::Buffer(RequestPolicy::single(http::buffer::Buffer {
