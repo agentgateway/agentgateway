@@ -3,7 +3,6 @@ package syncer
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"sync/atomic"
 
 	securityclient "istio.io/client-go/pkg/apis/security/v1"
@@ -13,9 +12,8 @@ import (
 	"istio.io/istio/pkg/config/mesh"
 	"istio.io/istio/pkg/config/protocol"
 	"istio.io/istio/pkg/kube/krt"
-	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/slices"
-	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/workloadapi"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -424,40 +422,13 @@ func (s *Syncer) buildAgwResources(
 		return &gw
 	}, krtopts.ToOptions("translator/FilteredGateways")...)
 
-	// Build ports and binds
-	ports := krtpkg.UnnamedIndex(filteredGateways, func(l *translator.GatewayListener) []string {
-		return []string{fmt.Sprint(l.ParentInfo.Port)}
-	}).AsCollection(krtopts.ToOptions("translator/PortBindings")...)
+	// Build binds
+	gatewayParents := krtpkg.UnnamedIndex(filteredGateways, func(l *translator.GatewayListener) []string {
+		return []string{l.ParentInfo.ParentGateway.String()}
+	}).AsCollection(krtopts.ToOptions("translator/GatewayParents")...)
 
-	baseBinds := krt.NewManyCollection(ports, func(ctx krt.HandlerContext, object krt.IndexObject[string, *translator.GatewayListener]) []agwir.AgwResource {
-		port, _ := strconv.Atoi(object.Key)
-		uniq := sets.New[types.NamespacedName]()
-		protocol := api.Bind_Protocol(0)
-		var tunnelProtocol = api.Bind_DIRECT
-		for _, gw := range object.Objects {
-			uniq.Insert(types.NamespacedName{
-				Namespace: gw.ParentGateway.Namespace,
-				Name:      gw.ParentGateway.Name,
-			})
-			// TODO: better handle conflicts of protocols. For now, we arbitrarily treat TLS > plain
-			if gw.Conflict == "" {
-				protocol = max(protocol, s.getBindProtocol(gw))
-				if tp := s.getTunnelProtocol(gw); tp != api.Bind_DIRECT {
-					tunnelProtocol = tp
-				}
-			}
-		}
-		return slices.Map(uniq.UnsortedList(), func(e types.NamespacedName) agwir.AgwResource {
-			bind := translator.AgwBind{
-				Bind: &api.Bind{
-					Key:            object.Key + "/" + e.String(),
-					Port:           uint32(port), //nolint:gosec // G115: port is always in valid port range
-					Protocol:       protocol,
-					TunnelProtocol: tunnelProtocol,
-				},
-			}
-			return translator.ToResourceForGateway(e, bind)
-		})
+	baseBinds := krt.NewManyCollection(gatewayParents, func(ctx krt.HandlerContext, object krt.IndexObject[string, *translator.GatewayListener]) []agwir.AgwResource {
+		return s.buildBindsFromGateway(object.Objects)
 	}, krtopts.ToOptions("translator/Binds")...)
 	bindCollections := []krt.Collection[agwir.AgwResource]{baseBinds}
 	if s.agwPlugins.AddResourceExtension != nil && s.agwPlugins.AddResourceExtension.Binds != nil {
@@ -490,15 +461,16 @@ func (s *Syncer) buildAgwResources(
 	}
 
 	routeInputs := translator.RouteContextInputs{
-		Grants:         refGrants,
-		RouteParents:   routeParents,
-		ControllerName: s.controllerName,
-		Services:       s.agwCollections.Services,
-		Namespaces:     s.agwCollections.Namespaces,
-		ServiceEntries: s.agwCollections.ServiceEntries,
-		InferencePools: s.agwCollections.InferencePools,
-		Backends:       s.agwCollections.Backends,
-		References:     referenceTypes,
+		Grants:              refGrants,
+		RouteParents:        routeParents,
+		ControllerName:      s.controllerName,
+		Services:            s.agwCollections.Services,
+		Namespaces:          s.agwCollections.Namespaces,
+		ServiceEntries:      s.agwCollections.ServiceEntries,
+		InferencePools:      s.agwCollections.InferencePools,
+		Backends:            s.agwCollections.Backends,
+		References:          referenceTypes,
+		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 	}
 
 	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
@@ -552,7 +524,7 @@ func (s *Syncer) buildAgwResources(
 	// Phase 1: Collect policy references (e.g. ext_proc backendRefs) BEFORE building
 	// policies. This ensures BackendTLSPolicy can look up gateways for backends that
 	// are only reachable via PolicyAttachments (like ext_proc processor Services).
-	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, krtopts)
+	policyReferences := CollectPolicyReferences(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	backendPolicyReferences := AgwBackendReferencesCollection(s.agwPlugins, krtopts)
 	joinedPolicyReferences := krt.JoinCollection([]krt.Collection[*plugins.PolicyAttachment]{policyReferences, backendPolicyReferences}, krtopts.ToOptions("references/PolicyAndBackendReferences")...)
 	policyReferencesIndex := krt.NewIndex(joinedPolicyReferences, "policyReferences", func(o *plugins.PolicyAttachment) []utils.TypedNamespacedName {
@@ -563,7 +535,7 @@ func (s *Syncer) buildAgwResources(
 	referenceIndex = referenceIndex.WithListenerSetAttachments(listenerSetAttachmentsIdx)
 
 	// Phase 2: Build policies with the fully-populated reference index.
-	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, krtopts)
+	agwPolicies, policyStatuses := BuildPolicies(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	for _, col := range policyStatuses {
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
 	}
@@ -577,6 +549,54 @@ func (s *Syncer) buildAgwResources(
 	allAgwResources := krt.JoinCollection([]krt.Collection[agwir.AgwResource]{binds, listeners, agwRoutes, agwPolicies, agwBackends}, krtopts.ToOptions("resources/AllResources")...)
 
 	return allAgwResources, routeAttachments, referenceIndex
+}
+
+// buildBindsFromGateway creates a bind resources from a list of gateway listeners belonging to the same parent gateway
+func (s *Syncer) buildBindsFromGateway(listeners []*translator.GatewayListener) []agwir.AgwResource {
+	if len(listeners) == 0 {
+		return nil
+	}
+	parentGateway := listeners[0].ParentGateway
+
+	type bindInfo struct {
+		protocol       api.Bind_Protocol
+		tunnelProtocol api.Bind_TunnelProtocol
+	}
+	byPort := map[uint32]*bindInfo{}
+	for _, listener := range listeners {
+		port := uint32(listener.ParentInfo.Port) //nolint:gosec // G115: port is always in valid port range
+		bi, ok := byPort[port]
+		if !ok {
+			// Initialize bindInfo with default zero values of protocol and tunnelProtocol enums
+			bi = &bindInfo{}
+			byPort[port] = bi
+		}
+		// If a single gateway has GatewayListeners with the same port, the "winner" is the one without a conflict
+		// There may be multiple valid GatewayListeners with the same port, as long as the hostnames are
+		// non-overlapping. This case doesn't need to be handled here since the generated bind is independent of
+		// hostname
+		if listener.Conflict == "" {
+			bi.protocol = s.getBindProtocol(listener)
+			if tp := s.getTunnelProtocol(listener); tp != api.Bind_DIRECT {
+				bi.tunnelProtocol = tp
+			}
+		}
+	}
+
+	binds := make([]agwir.AgwResource, 0, len(byPort))
+	for _, port := range slices.Sort(maps.Keys(byPort)) { // sorted for deterministic output
+		bi := byPort[port]
+		bind := translator.AgwBind{
+			Bind: &api.Bind{
+				Key:            fmt.Sprint(port) + "/" + parentGateway.String(),
+				Port:           port,
+				Protocol:       bi.protocol,
+				TunnelProtocol: bi.tunnelProtocol,
+			},
+		}
+		binds = append(binds, translator.ToResourceForGateway(parentGateway, bind))
+	}
+	return binds
 }
 
 // buildListenerFromGateway creates a listener resource from a gateway
@@ -620,6 +640,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 		}
 		if obj.TLSInfo.IstioWorkloadCert {
 			tlsConfig.CertificateSource = api.TLSConfig_ISTIO_WORKLOAD
+		} else if obj.TLSInfo.DynamicCA {
+			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
 		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
@@ -699,7 +721,7 @@ func (s *Syncer) getTunnelProtocol(obj *translator.GatewayListener) api.Bind_Tun
 // using the istio ambient builder. It can be passed via WithBuildAddressCollections to the syncer.
 func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtutil.KrtOptions) (krt.Collection[Address], func() bool) {
 	opts := krtopts.WithPrefix("addresses").ToIstio()
-	clusterId := cluster.ID(cols.ClusterID)
+	clusterId := cluster.ID(cols.IstioClusterId)
 	Networks := ambient.BuildNetworkCollections(cols.Namespaces, cols.Gateways, ambient.Options{
 		SystemNamespace: cols.IstioNamespace,
 		ClusterID:       clusterId,
@@ -714,16 +736,11 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		},
 	}
 
-	meshConfigMapName := GetMeshConfigMapName(cols.IstioRevision)
-	meshConfig := krt.NewSingleton(func(ctx krt.HandlerContext) *ambient.MeshConfig {
-		cm := krt.FetchOne(ctx, cols.ConfigMaps, krt.FilterObjectName(types.NamespacedName{Namespace: cols.IstioNamespace, Name: meshConfigMapName}))
-		if flattened := ptr.Flatten(cm); flattened != nil {
-			if mc := ParseMeshConfigFromConfigMap(flattened); mc != nil {
-				return &ambient.MeshConfig{MeshConfig: mc}
-			}
-		}
-		return &ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
-	}, krtopts.ToOptions("addresses/IstioMeshConfig")...)
+	meshConfig := cols.MeshConfig
+	if meshConfig == nil {
+		defaultConfig := ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
+		meshConfig = krt.NewStatic(&defaultConfig, true, krtopts.ToOptions("addresses/DefaultMeshConfig")...)
+	}
 
 	waypoints := builder.WaypointsCollection(clusterId, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
 	services := builder.ServicesCollection(

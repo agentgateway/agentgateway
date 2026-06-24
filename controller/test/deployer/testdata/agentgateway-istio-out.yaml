@@ -140,6 +140,10 @@ spec:
           value: https://foo:443
         - name: TRUST_DOMAIN
           value: not.cluster.local
+        - name: CLUSTER_ID
+          value: cluster-1
+        - name: NETWORK
+          value: network-1
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:
@@ -181,8 +185,10 @@ spec:
           readOnly: true
         - mountPath: /var/run/secrets/istio
           name: istiod-ca-cert
+          readOnly: true
         - mountPath: /var/run/secrets/tokens
           name: istio-token
+          readOnly: true
       securityContext:
         sysctls:
         - name: net.ipv4.ip_unprivileged_port_start

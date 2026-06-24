@@ -57,6 +57,13 @@ where
 	});
 }
 
+pub fn with_trace<R>(debug_tracer: Option<DebugTracer>, f: impl FnOnce() -> R) -> R {
+	match debug_tracer {
+		Some(debug_tracer) => ACTIVE.sync_scope(Some(debug_tracer), f),
+		None => f(),
+	}
+}
+
 pub fn timed_start() -> Option<Instant> {
 	is_active().then(Instant::now)
 }
@@ -88,6 +95,17 @@ pub fn policy_response_details(pr: &crate::http::PolicyResponse) -> String {
 }
 
 macro_rules! pol_event {
+	($kind:expr, $severity:expr, details = $details:expr $(,)?) => {{
+		let __details: $crate::proxy::dtrace::PolicyEventDetails = ($details).into();
+		tracing::debug!(
+			policy_kind = $kind,
+			details = ?__details,
+			"policy event"
+		);
+		$crate::proxy::dtrace::trace(|trace| {
+			trace.policy_event($severity, $kind, __details)
+		});
+	}};
 	($severity:expr, $($arg:tt)+) => {{
 		tracing::debug!($($arg)+);
 		$crate::proxy::dtrace::trace(|trace| {
@@ -261,6 +279,31 @@ pub enum PolicyResult {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum PolicyEventDetails {
+	Text(String),
+	Structured(Value),
+}
+
+impl From<String> for PolicyEventDetails {
+	fn from(value: String) -> Self {
+		Self::Text(value)
+	}
+}
+
+impl From<&str> for PolicyEventDetails {
+	fn from(value: &str) -> Self {
+		Self::Text(value.to_string())
+	}
+}
+
+impl From<Value> for PolicyEventDetails {
+	fn from(value: Value) -> Self {
+		Self::Structured(value)
+	}
+}
+
+#[derive(Debug, Serialize)]
 #[allow(non_snake_case)]
 #[serde(
 	tag = "type",
@@ -292,6 +335,7 @@ pub enum MessageType {
 		evaluatedRoutes: Vec<RouteKey>,
 	},
 	PolicySelection {
+		phase: String,
 		effectivePolicy: Value,
 	},
 	// The final result of a policy evaluation.
@@ -302,7 +346,7 @@ pub enum MessageType {
 	// An event along the way of a policy
 	PolicyEvent {
 		kind: String,
-		details: String,
+		details: PolicyEventDetails,
 	},
 	AuthorizationResult {
 		rules: Vec<AuthorizationRuleResult>,
@@ -314,6 +358,23 @@ pub enum MessageType {
 	BackendCallResult {
 		status: Option<u16>,
 		error: Option<String>,
+	},
+	LlmRouteResolved {
+		provider: String,
+		routeType: String,
+	},
+	LlmRequestDetected {
+		provider: String,
+		inputFormat: String,
+		nativeFormat: Option<String>,
+		requestModel: String,
+		streaming: bool,
+	},
+	LlmStreamingTranslation {
+		provider: String,
+		inputFormat: String,
+		nativeFormat: Option<String>,
+		streamFormat: String,
 	},
 	RequestFinished,
 }
@@ -331,6 +392,9 @@ impl MessageType {
 			}
 			| MessageType::PolicySelection { .. }
 			| MessageType::BackendCallStart { .. }
+			| MessageType::LlmRouteResolved { .. }
+			| MessageType::LlmRequestDetected { .. }
+			| MessageType::LlmStreamingTranslation { .. }
 			| MessageType::Policy { .. }
 			| MessageType::PolicyEvent { .. }
 			| MessageType::RequestFinished => Severity::Info,
@@ -600,8 +664,9 @@ impl DebugTracer {
 			requestState: data,
 		})
 	}
-	pub fn selected_policies(&self, effective_policy: Value) {
+	pub fn selected_policies(&self, phase: &str, effective_policy: Value) {
 		self.send(MessageType::PolicySelection {
+			phase: phase.to_string(),
 			effectivePolicy: effective_policy,
 		})
 	}
@@ -632,12 +697,17 @@ impl DebugTracer {
 			},
 		)
 	}
-	pub fn policy_event(&self, severity: Severity, kind: &str, details: String) {
+	pub fn policy_event(
+		&self,
+		severity: Severity,
+		kind: &str,
+		details: impl Into<PolicyEventDetails>,
+	) {
 		self.send_explicit(
 			severity,
 			MessageType::PolicyEvent {
 				kind: kind.to_string(),
-				details,
+				details: details.into(),
 			},
 		)
 	}
@@ -668,6 +738,42 @@ impl DebugTracer {
 	) {
 		self.send_with_timings(start, end, MessageType::BackendCallResult { status, error })
 	}
+	pub fn llm_route_resolved(&self, provider: String, route_type: String) {
+		self.send(MessageType::LlmRouteResolved {
+			provider,
+			routeType: route_type,
+		})
+	}
+	pub fn llm_request_detected(
+		&self,
+		provider: String,
+		input_format: String,
+		native_format: Option<String>,
+		request_model: String,
+		streaming: bool,
+	) {
+		self.send(MessageType::LlmRequestDetected {
+			provider,
+			inputFormat: input_format,
+			nativeFormat: native_format,
+			requestModel: request_model,
+			streaming,
+		})
+	}
+	pub fn llm_streaming_translation(
+		&self,
+		provider: String,
+		input_format: String,
+		native_format: Option<String>,
+		stream_format: String,
+	) {
+		self.send(MessageType::LlmStreamingTranslation {
+			provider,
+			inputFormat: input_format,
+			nativeFormat: native_format,
+			streamFormat: stream_format,
+		})
+	}
 }
 
 impl Drop for ScopeGuard {
@@ -680,7 +786,102 @@ impl Drop for ScopeGuard {
 		};
 		let mut scope_state = scope_state.lock().expect("scope mutex poisoned");
 		if let Some(idx) = scope_state.stack.iter().position(|frame| frame.id == id) {
-			scope_state.stack.truncate(idx);
+			scope_state.stack.remove(idx);
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::cel::{Executor, Expression};
+	use crate::http::Body;
+
+	#[test]
+	fn scope_guard_drop_only_removes_its_own_frame() {
+		let (tx, _rx) = tokio::sync::mpsc::channel(1);
+		let tracer = DebugTracer {
+			sender: tx,
+			start: Instant::now(),
+			scope_state: Arc::new(Mutex::new(ScopeState {
+				next_id: 0,
+				stack: Vec::new(),
+			})),
+		};
+
+		let first = tracer.start_scope("first");
+		let second = tracer.start_scope("second");
+
+		drop(first);
+		assert_eq!(tracer.current_scope(), vec!["second"]);
+
+		drop(second);
+		assert!(tracer.current_scope().is_empty());
+	}
+
+	#[tokio::test]
+	async fn cel_eval_emits_events_while_debug_trace_is_active() {
+		let mut trace_rx = track_expression(None);
+		let req = http::Request::builder()
+			.uri("http://example.com/test")
+			.body(Body::empty())
+			.expect("request should build");
+		let expr = Expression::new_strict("request.path").expect("expression should compile");
+
+		DebugTracer::maybe_scope(req, |req| async move {
+			let executor = Executor::new_request(&req);
+			let value = executor.eval(&expr).expect("expression should evaluate");
+			assert_eq!(value.as_str().unwrap(), "/test");
+		})
+		.await;
+
+		tokio::time::timeout(Duration::from_secs(1), async {
+			while let Some(msg) = trace_rx.recv().await {
+				if let MessageType::Cel { expr, result, .. } = msg.message {
+					assert_eq!(expr, "request.path");
+					assert_eq!(result, serde_json::json!("/test"));
+					return;
+				}
+			}
+			panic!("trace receiver closed before CEL trace event was emitted");
+		})
+		.await
+		.expect("trace event should be emitted");
+	}
+
+	#[tokio::test]
+	async fn cel_eval_emits_events_with_captured_debug_tracer() {
+		let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+		let tracer = DebugTracer {
+			sender: tx,
+			start: Instant::now(),
+			scope_state: Arc::new(Mutex::new(ScopeState {
+				next_id: 0,
+				stack: Vec::new(),
+			})),
+		};
+		let req = http::Request::builder()
+			.uri("http://example.com/deferred")
+			.body(Body::empty())
+			.expect("request should build");
+		let expr = Expression::new_strict("request.path").expect("expression should compile");
+
+		with_trace(Some(tracer), || {
+			let executor = Executor::new_request(&req);
+			let value = executor.eval(&expr).expect("expression should evaluate");
+			assert_eq!(value.as_str().unwrap(), "/deferred");
+		});
+
+		let msg = tokio::time::timeout(Duration::from_secs(1), rx.recv())
+			.await
+			.expect("trace event should be emitted")
+			.expect("trace receiver should still be open");
+		match msg.message {
+			MessageType::Cel { expr, result, .. } => {
+				assert_eq!(expr, "request.path");
+				assert_eq!(result, serde_json::json!("/deferred"));
+			},
+			other => panic!("expected CEL trace event, got {other:?}"),
 		}
 	}
 }

@@ -7,10 +7,18 @@ use crate::*;
 
 const ANTHROPIC_VERSION: &str = "vertex-2023-10-16";
 
+/// Host for the Discovery Engine ranking endpoint used by rerank. Distinct from the `aiplatform`
+/// host used for chat/embeddings; defined once so the request authority/Host header and the actual
+/// TCP/TLS connection target stay in sync.
+pub const DISCOVERY_ENGINE_HOST: Strng = strng::literal!("discoveryengine.googleapis.com");
+
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "VertexProvider"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	/// Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`
+	/// use restricted multi-region endpoints. Other values are treated as regional locations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub region: Option<Strng>,
 	pub project_id: Strng,
@@ -55,7 +63,7 @@ impl Provider {
 		apply: impl FnOnce(&mut Map<String, Value>),
 	) -> Result<Vec<u8>, AIError> {
 		let mut body: Map<String, Value> =
-			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
+			serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
 		body.insert(
 			"anthropic_version".to_string(),
 			Value::String(ANTHROPIC_VERSION.to_string()),
@@ -80,6 +88,13 @@ impl Provider {
 			(RouteType::AnthropicTokenCount, _) => {
 				strng::format!(
 					"/v1/projects/{}/locations/{}/publishers/anthropic/models/count-tokens:rawPredict",
+					self.project_id,
+					location
+				)
+			},
+			(RouteType::Rerank, _) => {
+				strng::format!(
+					"/v1/projects/{}/locations/{}/rankingConfigs/default_ranking_config:rank",
 					self.project_id,
 					location
 				)
@@ -116,10 +131,18 @@ impl Provider {
 		}
 	}
 
-	pub fn get_host(&self, _request_model: Option<&str>) -> Strng {
+	pub fn get_host(&self, route_type: RouteType) -> Strng {
+		// Rerank is served by the Discovery Engine ranking endpoint, not the aiplatform host. Deciding
+		// it here keeps the request authority (Host header) and the TCP/TLS connection target in sync.
+		if route_type == RouteType::Rerank {
+			return DISCOVERY_ENGINE_HOST;
+		}
 		match &self.region {
 			None => strng::literal!("aiplatform.googleapis.com"),
 			Some(region) if region == "global" => strng::literal!("aiplatform.googleapis.com"),
+			Some(region) if region == "us" || region == "eu" => {
+				strng::format!("aiplatform.{region}.rep.googleapis.com")
+			},
 			Some(region) => strng::format!("{region}-aiplatform.googleapis.com"),
 		}
 	}
@@ -155,7 +178,9 @@ impl Provider {
 }
 
 fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
-	body.remove("output_config");
+	// output_format is the deprecated predecessor of output_config.format; strip it.
+	// output_config is intentionally preserved: Vertex supports it for structured outputs
+	// (format.json_schema) and for adaptive thinking depth control (effort).
 	body.remove("output_format");
 	// Vertex supports cache_control but not the "scope" child from the prompt-caching-scope beta.
 	for value in body.values_mut() {
@@ -232,6 +257,7 @@ mod tests {
 	#[rstest::rstest]
 	#[case::no_region(None, "aiplatform.googleapis.com")]
 	#[case::global_region(Some("global"), "aiplatform.googleapis.com")]
+	#[case::multi_region(Some("us"), "aiplatform.us.rep.googleapis.com")]
 	#[case::regional(Some("us-central1"), "us-central1-aiplatform.googleapis.com")]
 	fn test_get_host(#[case] region: Option<&str>, #[case] expected: &str) {
 		let p = Provider {
@@ -239,20 +265,30 @@ mod tests {
 			model: None,
 			region: region.map(strng::new),
 		};
-		assert_eq!(p.get_host(None).as_str(), expected);
+		assert_eq!(p.get_host(RouteType::Completions).as_str(), expected);
 	}
 
 	#[test]
-	fn test_remove_top_level_output_fields() {
+	fn test_output_format_removed_output_config_preserved() {
 		let mut body: Map<String, Value> = serde_json::from_value(serde_json::json!({
 			"model": "claude-sonnet-4-5-20251001",
-			"output_config": {"format": "json"},
+			"output_config": {
+				"format": {
+					"type": "json_schema",
+					"schema": {
+						"type": "object",
+						"properties": {"answer": {"type": "integer"}},
+						"required": ["answer"],
+						"additionalProperties": false
+					}
+				}
+			},
 			"output_format": "markdown",
 			"messages": [{"role": "user", "content": "hello"}]
 		}))
 		.unwrap();
 		remove_unsupported_vertex_fields(&mut body);
-		assert!(!body.contains_key("output_config"));
+		assert!(body.contains_key("output_config"));
 		assert!(!body.contains_key("output_format"));
 		assert!(body.contains_key("model"));
 		assert!(body.contains_key("messages"));
@@ -377,8 +413,8 @@ mod tests {
 		.unwrap();
 		remove_unsupported_vertex_fields(&mut body);
 
-		// Top-level fields removed
-		assert!(!body.contains_key("output_config"));
+		// output_format removed; output_config preserved for structured outputs.
+		assert!(body.contains_key("output_config"));
 		assert!(!body.contains_key("output_format"));
 		// Preserved fields
 		assert_eq!(body["max_tokens"], 1024);

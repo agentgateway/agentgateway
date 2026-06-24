@@ -1,4 +1,5 @@
 pub(crate) mod auth;
+pub(crate) mod guardrails;
 mod handler;
 mod mergestream;
 mod rbac;
@@ -28,6 +29,7 @@ use crate::proxy::ProxyError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "McpBackendFailureMode"))]
 #[serde(rename_all = "camelCase")]
 pub enum FailureMode {
 	/// Fail the entire session if any target fails to initialize or any
@@ -79,6 +81,8 @@ pub enum Error {
 	// Intentionally do NOT say its not authorized; we hide the existence of the tool
 	#[error("Unknown {1}: {2}")]
 	Authorization(RequestId, String, String),
+	#[error("mcpGuardrails rejected: {}", .1.message)]
+	McpGuardrails(RequestId, rmcp::ErrorData),
 	#[error("failed to process session_id query parameter")]
 	InvalidSessionIdQuery,
 	#[error("failed to establish get stream: {0}")]

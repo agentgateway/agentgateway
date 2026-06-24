@@ -781,6 +781,7 @@ fn service_route() -> Route {
 	Route {
 		key: "r".into(),
 		service_key: None,
+		service_port: 0,
 		name: RouteName {
 			name: "r".into(),
 			namespace: SVC_NAMESPACE.into(),
@@ -794,6 +795,7 @@ fn service_route() -> Route {
 			method: None,
 			query: vec![],
 		}],
+		llm_router: None,
 		inline_policies: Default::default(),
 		backends: vec![RouteBackendReference {
 			weight: 1,

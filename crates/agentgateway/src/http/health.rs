@@ -92,10 +92,17 @@ impl Policy {
 		let health = !unhealthy;
 		let ev = self.eviction.as_ref();
 		let eviction_duration = if unhealthy {
-			let base_duration = self
-				.eviction_duration()
-				.or(fallback_duration)
-				.or(Some(Duration::from_secs(DEFAULT_EVICTION_SECS)));
+			let base_duration =
+				self
+					.eviction_duration()
+					.or(fallback_duration)
+					.or(if self.eviction.is_some() {
+						// If we have eviction, but no duration set, use the default
+						Some(Duration::from_secs(DEFAULT_EVICTION_SECS))
+					} else {
+						// Else there is no eviction
+						None
+					});
 			let health_threshold = ev.and_then(|e| e.health_threshold);
 			let consecutive_failures = ev.and_then(|e| e.consecutive_failures);
 			// +1 because the current failure hasn't been recorded yet.
@@ -129,6 +136,7 @@ impl Policy {
 #[derive(Default)]
 #[apply(schema_de!)]
 pub struct LocalEviction {
+	/// How long to evict an unhealthy backend.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
@@ -137,12 +145,15 @@ pub struct LocalEviction {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub duration: Option<Duration>,
 
+	/// Health score to restore when the backend returns from eviction.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub restore_health: Option<f64>,
 
+	/// Consecutive unhealthy responses required before eviction.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub consecutive_failures: Option<i32>,
 
+	/// Health score threshold below which an unhealthy response can evict the backend.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub health_threshold: Option<f64>,
 }
@@ -152,10 +163,11 @@ pub struct LocalEviction {
 #[derive(Default)]
 #[apply(schema_de!)]
 pub struct LocalHealthPolicy {
-	/// CEL expression; `true` means unhealthy (evict). E.g. `response.code >= 500`.
-	/// When unset, any 5xx or connection failure is treated as unhealthy.
+	/// CEL expression where `true` marks the backend response as unhealthy.
+	/// When unset, any 5xx response or connection failure is treated as unhealthy.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub unhealthy_expression: Option<String>,
+	/// Settings for temporarily removing unhealthy backends.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub eviction: Option<LocalEviction>,
 }
@@ -264,7 +276,7 @@ mod tests {
 	fn unhealthy_default_eviction_duration() {
 		let policy = Policy::default();
 		let (_, eviction, _) = policy.eviction_decision(1.0, 0, 0, true, None);
-		assert_eq!(eviction, Some(Duration::from_secs(DEFAULT_EVICTION_SECS)));
+		assert_eq!(eviction, None);
 	}
 
 	// --- health_threshold only ---

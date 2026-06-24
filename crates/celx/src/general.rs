@@ -7,7 +7,6 @@ use base64::alphabet;
 use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
 use cel::ExecutionError;
 use cel::context::{SingleVarResolver, VariableResolver};
-use cel::objects::KeyRef;
 use md5::Md5;
 use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str, percent_encode};
 use rand::random_range;
@@ -234,29 +233,11 @@ fn with<'a, 'rf, 'b>(
 	Ok(v)
 }
 pub fn variables<'a, 'rf>(ftx: &mut FunctionContext<'a, 'rf>) -> ResolveResult<'a> {
-	// Not ideal; we should find a way to dynamically expose
-	let keys = [
-		"request",
-		"response",
-		"jwt",
-		"apiKey",
-		"basicAuth",
-		"llm",
-		"llmRequest",
-		"source",
-		"mcp",
-		"backend",
-		"extauthz",
-		"extproc",
-		"env",
-	];
-	let mut res = vector_map::VecMap::with_capacity(keys.len());
-	for k in keys {
-		if let Some(v) = ftx.variables.resolve(k) {
-			res.insert(KeyRef::String((*k).into()), v);
-		}
+	if let Some(variables) = ftx.variables.variables() {
+		return Ok(variables);
 	}
-	Value::Map(MapValue::Borrow(res)).into()
+
+	Value::Map(MapValue::Borrow(vector_map::VecMap::new())).into()
 }
 
 fn map_values<'a, 'rf, 'b>(

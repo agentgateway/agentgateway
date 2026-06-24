@@ -336,6 +336,8 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Responses,
+			native_format: Some(crate::llm::custom::ProviderFormat::Responses),
+			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: self.stream.unwrap_or_default(),

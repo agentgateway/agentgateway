@@ -11,13 +11,13 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const (
-	defaultProxyAdminPort = 15000
-	shortOutput           = "short"
-	jsonOutput            = "json"
-	yamlOutput            = "yaml"
+	shortOutput = "short"
+	jsonOutput  = "json"
+	yamlOutput  = "yaml"
 )
 
 type commonFlags struct {
@@ -37,15 +37,15 @@ type configDumpSource struct {
 
 func Command() flag.Command {
 	common := &commonFlags{
-		proxyAdminPort: defaultProxyAdminPort,
+		proxyAdminPort: wellknown.ProxyAdminPort,
 		outputFormat:   shortOutput,
 	}
 
 	return flag.Command{
 		Use:     "config",
 		Aliases: []string{"c", "cfg"},
-		Short:   "Retrieve Agentgateway configuration for a resource",
-		Long:    "Retrieve Agentgateway configuration for a resource.",
+		Short:   "Retrieve agentgateway configuration for a resource",
+		Long:    "Retrieve agentgateway configuration for a resource, such as the agentgateway controller or proxy.",
 		AddPersistentFlags: func(cmd *cobra.Command) {
 			common.attach(cmd)
 		},
@@ -59,7 +59,7 @@ func Command() flag.Command {
 func (c *commonFlags) attach(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(&c.namespace, "namespace", "n", "", "Namespace to use when resolving resources")
 	cmd.PersistentFlags().StringVarP(&c.configDumpFile, "file", "f", "", "Agentgateway config dump JSON file")
-	cmd.PersistentFlags().IntVar(&c.proxyAdminPort, "proxy-admin-port", c.proxyAdminPort, "Envoy admin port")
+	cmd.PersistentFlags().IntVar(&c.proxyAdminPort, "proxy-admin-port", c.proxyAdminPort, "Agentgateway admin port")
 	cmd.PersistentFlags().StringVarP(&c.outputFormat, "output", "o", c.outputFormat, "Output format: one of short|json|yaml")
 }
 

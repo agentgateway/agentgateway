@@ -39,6 +39,8 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::CountTokens,
+			native_format: Some(crate::llm::custom::ProviderFormat::AnthropicTokenCount),
+			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: false,

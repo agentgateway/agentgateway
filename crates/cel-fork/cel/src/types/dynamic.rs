@@ -144,6 +144,16 @@ impl DynamicType for Value<'_> {
 	}
 }
 
+impl DynamicType for chrono::Duration {
+	fn auto_materialize(&self) -> bool {
+		true
+	}
+
+	fn materialize(&self) -> Value<'_> {
+		Value::Duration(*self)
+	}
+}
+
 // Primitive type implementations
 
 // &str - auto-materializes to String value

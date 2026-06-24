@@ -1,0 +1,224 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for llm_virtual_model: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/4000
+    address: "[::]:4000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      llm:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: llm
+        listenerName: llm
+        protocol: HTTP
+listener_routes:
+  - - llm
+    - - key: "llm:request"
+        llmRouter:
+          models:
+            - name: openai/gpt-5-mini
+              visibility: internal
+              headerMatches: []
+              backendKey: "llm:model:openai/gpt-5-mini:0"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+            - name: anthropic/*
+              visibility: internal
+              headerMatches: []
+              backendKey: "llm:model:anthropic/*:1"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+            - name: "*"
+              visibility: internal
+              headerMatches: []
+              backendKey: "llm:model:*:2"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+          virtualModels:
+            - name: fast
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              routing:
+                weighted:
+                  - model: anthropic/haiku
+                    weight: 60
+                  - model: openai/gpt-5-mini
+                    weight: 30
+                  - model: fallback-small
+                    weight: 10
+          created: 0
+        matches:
+          - path:
+              pathPrefix: /
+        name: "llm:request"
+        namespace: internal
+listener_tcp_routes:
+  - - llm
+    - []
+policies: []
+backends:
+  - backend:
+      ai:
+        name: "llm:model:openai/gpt-5-mini:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                openai/gpt-5-mini:
+                  endpoint:
+                    name: openai/gpt-5-mini
+                    provider:
+                      openAI:
+                        model: gpt-5-mini
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - ai: {}
+  - backend:
+      ai:
+        name: "llm:model:anthropic/*:1"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                anthropic/*:
+                  endpoint:
+                    name: anthropic/*
+                    provider:
+                      anthropic: {}
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - ai:
+          transformations:
+            model: "llmRequest.model.stripPrefix(\"anthropic/\")"
+  - backend:
+      ai:
+        name: "llm:model:*:2"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                "*":
+                  endpoint:
+                    name: "*"
+                    provider:
+                      openAI: {}
+                    hostOverride: ~
+                    pathOverride: ~
+                    pathPrefix: ~
+                    tokenize: false
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - ai: {}
+route_groups: []
+workloads: []
+services: []

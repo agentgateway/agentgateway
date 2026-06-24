@@ -48,14 +48,13 @@ for VERSION in "${VERSIONS[@]}"; do
 done
 
 # Generate objects and RBAC with stock controller-gen.
-(cd "${REPO_ROOT}" && controller-gen object paths="${APIS_PKG}/api/${VERSION}/agentgateway" paths="${APIS_PKG}/api/${VERSION}/shared")
+(cd "${REPO_ROOT}" && controller-gen object paths="${APIS_PKG}/api/${VERSION}/agentgateway")
 
 # Generate CRDs with custom kubebuilder validation markers.
 (cd "${REPO_ROOT}" && go run ./controller/hack/crdgen \
     --max-desc-len 50000 \
     --output-dir "${ROOT_DIR}/${AGENTGATEWAY_CRD_DIR}" \
-    --path "${APIS_PKG}/api/${VERSION}/agentgateway" \
-    --path "${APIS_PKG}/api/${VERSION}/shared")
+    --path "${APIS_PKG}/api/${VERSION}/agentgateway")
 
 # throw away
 new_report="$(mktemp -t "$(basename "$0").api_violations.XXXXXX")"

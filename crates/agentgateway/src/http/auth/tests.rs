@@ -7,6 +7,26 @@ use crate::llm::bedrock::AwsRegion;
 use crate::test_helpers::proxymock::setup_proxy_test;
 
 #[test]
+fn test_aws_auth_deserializes_assume_role() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/backend"
+		}
+	}))
+	.expect("implicit AWS assume role auth should deserialize");
+	assert!(
+		matches!(
+			implicit,
+			AwsAuth::Implicit {
+				assume_role: Some(_),
+				..
+			}
+		),
+		"expected implicit AWS auth with assume role"
+	);
+}
+
+#[test]
 fn test_authorization_location_expression_extracts_from_cel() {
 	let req = ::http::Request::builder()
 		.uri("http://example.com/")
@@ -356,7 +376,12 @@ async fn test_aws_sign_request_implicit_with_extension() {
 		region: "ap-southeast-1".to_string(),
 	});
 
-	let aws_auth = AwsAuth::Implicit { service_name: None };
+	let aws_auth = AwsAuth::Implicit {
+		service_name: None,
+		assume_role: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	};
 
 	// Should use region from request extensions
 	let result = aws::sign_request(&mut req, &aws_auth).await;

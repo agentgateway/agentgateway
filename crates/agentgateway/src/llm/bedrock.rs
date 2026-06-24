@@ -1,6 +1,7 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
 
+use crate::http::auth::aws::{AwsAssumeRoleCache, AwsCredentialsCache};
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -11,6 +12,7 @@ pub struct AwsRegion {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "BedrockProvider"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>, // Optional: model override for Bedrock API path
@@ -19,6 +21,14 @@ pub struct Provider {
 	pub guardrail_identifier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub guardrail_version: Option<Strng>,
+	/// Per-provider AWS source credential cache, shared across requests via Arc.
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub source_credentials_cache: AwsCredentialsCache,
+	/// Per-provider AWS AssumeRole credential cache, shared across requests via Arc.
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	pub assume_role_cache: AwsAssumeRoleCache,
 }
 
 impl super::Provider for Provider {
@@ -49,12 +59,19 @@ impl Provider {
 		match route_type {
 			super::RouteType::AnthropicTokenCount => strng::format!("/model/{model}/count-tokens"),
 			super::RouteType::Embeddings => strng::format!("/model/{model}/invoke"),
+			// Rerank uses the agent-runtime Rerank action (model goes in the body as an ARN).
+			super::RouteType::Rerank => strng::literal!("/rerank"),
 			_ if streaming => strng::format!("/model/{model}/converse-stream"),
 			_ => strng::format!("/model/{model}/converse"),
 		}
 	}
 
-	pub fn get_host(&self) -> Strng {
-		strng::format!("bedrock-runtime.{}.amazonaws.com", self.region)
+	pub fn get_host(&self, route_type: super::RouteType) -> Strng {
+		match route_type {
+			super::RouteType::Rerank => {
+				strng::format!("bedrock-agent-runtime.{}.amazonaws.com", self.region)
+			},
+			_ => strng::format!("bedrock-runtime.{}.amazonaws.com", self.region),
+		}
 	}
 }

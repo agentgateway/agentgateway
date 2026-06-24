@@ -26,7 +26,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
-use crate::llm::AIProvider;
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider, cost};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
@@ -40,6 +40,7 @@ use crate::types::agent::{
 	RouteMatch, RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
 	TCPRouteBackendReference, Target, TargetedPolicy,
 };
+use crate::types::loadbalancer::EndpointSet;
 use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
 use crate::{ProxyInputs, client, mcp};
@@ -177,6 +178,48 @@ pub fn llm_named_provider(
 	}
 }
 
+pub fn custom_llm_backend(
+	name: &str,
+	provider_backend: SimpleBackendReference,
+	supported_formats: Vec<crate::llm::custom::ProviderFormat>,
+) -> BackendWithPolicies {
+	custom_llm_backend_with_formats(
+		name,
+		provider_backend,
+		supported_formats
+			.into_iter()
+			.map(|format| crate::llm::custom::ProviderFormatConfig { format, path: None })
+			.collect(),
+	)
+}
+
+pub fn custom_llm_backend_with_formats(
+	name: &str,
+	provider_backend: SimpleBackendReference,
+	formats: Vec<crate::llm::custom::ProviderFormatConfig>,
+) -> BackendWithPolicies {
+	let provider = NamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::Custom(crate::llm::custom::Provider {
+			model: None,
+			provider_override: None,
+			formats,
+		}),
+		provider_backend: Some(provider_backend),
+		host_override: None,
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		inline_policies: vec![],
+	};
+	let providers = EndpointSet::new(vec![vec![(provider.name.clone(), provider)]]);
+	Backend::AI(
+		ResourceName::new(name.into(), "".into()),
+		AIBackend { providers },
+	)
+	.into()
+}
+
 pub fn basic_route(target: SocketAddr) -> Route {
 	basic_named_route(strng::format!("/{}", target.to_string()))
 }
@@ -185,6 +228,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 	Route {
 		key: "route".into(),
 		service_key: None,
+		service_port: 0,
 		name: RouteName {
 			name: "route".into(),
 			namespace: Default::default(),
@@ -198,6 +242,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 			method: None,
 			query: vec![],
 		}],
+		llm_router: None,
 		inline_policies: Default::default(),
 		backends: vec![RouteBackendReference {
 			weight: 1,
@@ -211,6 +256,7 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 	TCPRoute {
 		key: "route".into(),
 		service_key: None,
+		service_port: 0,
 		name: RouteName {
 			name: "route".into(),
 			namespace: Default::default(),
@@ -312,6 +358,10 @@ pub async fn simple_mock() -> MockServer {
 }
 
 // Spawn a mock TLS server. It will always respond on h2,http/1.1 ALPN
+// Note: wiremock generates test certs via rcgen (which uses aws_lc_rs internally).
+// The OpenSSL KeyProvider cannot parse the DER keys that aws_lc_rs produces,
+// so this function is only available with the tls-aws-lc feature.
+#[cfg(feature = "tls-aws-lc")]
 pub async fn tls_mock() -> (MockServer, MockTlsCertificates) {
 	let _ = rustls::crypto::CryptoProvider::install_default(Arc::unwrap_or_clone(tls::provider()));
 	let certs = wiremock::tls_certs::MockTlsCertificates::random();
@@ -436,9 +486,29 @@ impl TestBind {
 
 	/// Insert a service + workload via sync_local so endpoint linking is exercised.
 	pub fn with_waypoint_service(self, backend_addr: SocketAddr) -> Self {
+		self.with_waypoint_service_with_ports(&[(80, backend_addr)])
+	}
+
+	/// Insert a service-keyed route.
+	pub fn with_service_route(self, r: Route) -> Self {
+		let sk = r
+			.service_key
+			.clone()
+			.expect("service route must have a service_key");
+		self.pi.stores.binds.write().insert_service_route(r, sk);
+		self
+	}
+
+	pub fn with_waypoint_service_with_ports(self, ports: &[(u16, SocketAddr)]) -> Self {
 		use crate::store::LocalWorkload;
 		use crate::types::discovery::gatewayaddress::Destination;
 		use crate::types::discovery::{GatewayAddress, NetworkAddress, Service, Workload};
+		let port_map: std::collections::HashMap<u16, u16> =
+			ports.iter().map(|(sp, a)| (*sp, a.port())).collect();
+		let workload_ip = ports
+			.first()
+			.map(|(_, a)| a.ip())
+			.unwrap_or_else(|| "127.0.0.1".parse().unwrap());
 		let svc = Service {
 			name: strng::literal!("my-svc"),
 			namespace: strng::literal!("default"),
@@ -447,7 +517,7 @@ impl TestBind {
 				network: strng::EMPTY,
 				address: "127.0.0.1".parse().unwrap(),
 			}],
-			ports: std::collections::HashMap::from([(80, backend_addr.port())]),
+			ports: port_map.clone(),
 			waypoint: Some(GatewayAddress {
 				destination: Destination::Hostname(crate::types::discovery::NamespacedHostname {
 					namespace: strng::literal!("default"),
@@ -462,12 +532,12 @@ impl TestBind {
 				uid: strng::literal!("test-wl-uid"),
 				name: strng::literal!("test-wl"),
 				namespace: strng::literal!("default"),
-				workload_ips: vec![backend_addr.ip()],
+				workload_ips: vec![workload_ip],
 				..Default::default()
 			},
 			services: std::collections::HashMap::from([(
 				"default/my-svc.default.svc.cluster.local".to_string(),
-				std::collections::HashMap::from([(80, backend_addr.port())]),
+				port_map,
 			)]),
 		};
 		self
@@ -609,6 +679,21 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendTrafficPolicy>,
 	) -> Self {
+		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, policies, vec![])
+	}
+
+	// Like `with_mcp_backend_policies`, but also attaches `target_policies` to the
+	// opaque backend behind the MCP target. Those flow into the target's resolved
+	// backend policies and run on the upstream leg (e.g. a transformation reading
+	// mcpGuardrails metadata).
+	pub fn with_mcp_backend_and_target_policies(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+		policies: Vec<BackendTrafficPolicy>,
+		target_policies: Vec<BackendTrafficPolicy>,
+	) -> Self {
 		let opb = Backend::Opaque(
 			ResourceName::new(strng::format!("basic-{}", b), "".into()),
 			Target::Address(b),
@@ -639,7 +724,13 @@ impl TestBind {
 		);
 		{
 			let mut bw = self.pi.stores.binds.write();
-			bw.insert_backend(opb.name(), opb.into());
+			bw.insert_backend(
+				opb.name(),
+				BackendWithPolicies {
+					backend: opb,
+					inline_policies: target_policies,
+				},
+			);
 			bw.insert_backend(
 				b.name(),
 				BackendWithPolicies {
@@ -656,6 +747,16 @@ impl TestBind {
 		name: &str,
 		servers: Vec<(&str, SocketAddr, bool)>,
 		stateful: bool,
+	) -> Self {
+		self.with_multiplex_mcp_backend_policies(name, servers, stateful, vec![])
+	}
+
+	pub fn with_multiplex_mcp_backend_policies(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		policies: Vec<BackendTrafficPolicy>,
 	) -> Self {
 		let b = Backend::MCP(
 			ResourceName::new(name.into(), "".into()),
@@ -695,7 +796,13 @@ impl TestBind {
 					Backend::Opaque(name, Target::Address(b)).into(),
 				)
 			}
-			bw.insert_backend(b.name(), b.into());
+			bw.insert_backend(
+				b.name(),
+				BackendWithPolicies {
+					backend: b,
+					inline_policies: policies,
+				},
+			);
 		}
 		self
 	}
@@ -777,6 +884,7 @@ impl TestBind {
 					rule_name: None,
 					kind: None,
 				}),
+				inheritance: Default::default(),
 				policy: (v, PolicyPhase::Route).into(),
 			});
 		}
@@ -804,6 +912,7 @@ impl TestBind {
 					listener_name: None,
 					port: None,
 				}),
+				inheritance: Default::default(),
 				policy: (v, PolicyPhase::Gateway).into(),
 			});
 		}
@@ -830,6 +939,7 @@ impl TestBind {
 					namespace: strng::literal!("default"),
 					port: None,
 				}),
+				inheritance: Default::default(),
 				policy: (v, PolicyPhase::Route).into(),
 			});
 		}
@@ -869,6 +979,7 @@ impl TestBind {
 					namespace: Default::default(),
 					section: None,
 				}),
+				inheritance: Default::default(),
 				policy: v.into(),
 			});
 		}
@@ -934,13 +1045,30 @@ impl TestBind {
 		Self::memory_client(self.serve_waypoint(bind_name, false))
 	}
 
+	pub fn serve_waypoint_http_port(
+		&self,
+		bind_name: BindKey,
+		dst_port: u16,
+	) -> Client<MemoryConnector, Body> {
+		Self::memory_client(self.serve_waypoint_with_dst(bind_name, true, dst_port))
+	}
+
 	fn serve_waypoint(&self, bind_name: BindKey, is_http: bool) -> DuplexStream {
+		self.serve_waypoint_with_dst(bind_name, is_http, 80)
+	}
+
+	fn serve_waypoint_with_dst(
+		&self,
+		bind_name: BindKey,
+		is_http: bool,
+		dst_port: u16,
+	) -> DuplexStream {
 		let (client, server) = tokio::io::duplex(8192);
 		let server = Socket::from_memory(
 			server,
 			TCPConnectionInfo {
 				peer_addr: "127.0.0.1:12345".parse().unwrap(),
-				local_addr: "127.0.0.1:80".parse().unwrap(),
+				local_addr: SocketAddr::new("127.0.0.1".parse().unwrap(), dst_port),
 				start: Instant::now(),
 				raw_peer_addr: None,
 			},
@@ -1069,6 +1197,7 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
 		)),
+		model_catalog: cost::ModelCatalog::empty(),
 		upstream: client.clone(),
 		ca: None,
 

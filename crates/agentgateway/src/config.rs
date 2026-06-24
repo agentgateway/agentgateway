@@ -10,13 +10,16 @@ use agent_core::prelude::*;
 use secrecy::ExposeSecret;
 
 use crate::control::caclient;
-use crate::telemetry::log::{LoggingFields, MetricFields};
+use crate::telemetry::log::{LoggingFields, MetricFields, OrderedStringMap};
 use crate::telemetry::trc;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::{
-	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingLevel, StringOrInt,
-	ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
+	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingFields,
+	RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
 };
+
+const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
+const DEFAULT_UI_GROUP_ATTRIBUTE: &str = r#"coalesce(apiKey.group, jwt.groups[0], null)"#;
 
 #[derive(Default)]
 struct TracingEnvOverrides {
@@ -135,7 +138,6 @@ pub fn parse_config(
 			local_config,
 		}
 	};
-
 	let self_addr = if !xds.namespace.is_empty() && !xds.gateway.is_empty() {
 		Some(WaypointIdentity {
 			gateway: xds.gateway.clone(),
@@ -329,6 +331,22 @@ pub fn parse_config(
 	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
 		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
 		.transpose()?;
+	let dynamic_ca_cert_cache = parse_dynamic_ca_cert_cache_config()?;
+
+	let model_catalog_sources = parse::<String>("MODEL_CATALOG_PATHS")?
+		.map(|s| {
+			s.split(',')
+				.map(|p| PathBuf::from(p.trim()))
+				.filter(|p| !p.as_os_str().is_empty())
+				.map(|file| crate::ModelCatalogSource::File { file })
+				.collect::<Vec<_>>()
+		})
+		.or(raw.model_catalog)
+		.unwrap_or_default();
+	let database = raw
+		.database
+		.clone()
+		.or_else(|| raw.logging.as_ref().and_then(|l| l.database.clone()));
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -462,23 +480,13 @@ pub fn parse_config(
 				.as_ref()
 				.and_then(|l| l.format.clone())
 				.unwrap_or_default(),
-			fields: raw
-				.logging
-				.and_then(|f| f.fields)
-				.map(|fields| {
-					Ok::<_, anyhow::Error>(LoggingFields {
-						remove: Arc::new(fields.remove.into_iter().collect()),
-						add: Arc::new(
-							fields
-								.add
-								.iter()
-								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-								.collect::<Result<_, _>>()?,
-						),
-					})
-				})
-				.transpose()?
-				.unwrap_or_default(),
+			database: database.clone(),
+			fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))?,
+			database_fields: if database.is_some() {
+				database_logging_fields(raw.standard_attributes.as_ref())?
+			} else {
+				Default::default()
+			},
 		},
 		dns: client::Config {
 			resolver_cfg,
@@ -499,6 +507,11 @@ pub fn parse_config(
 				.and_then(|m| m.session_ttl)
 				.unwrap_or(crate::mcp::DEFAULT_SESSION_IDLE_TTL),
 		},
+		dynamic_ca_cert_cache,
+		model_catalog: crate::ModelCatalogConfig {
+			sources: model_catalog_sources,
+		},
+		database,
 		session_encoder,
 		oidc_cookie_encoder,
 		hbone: Arc::new(agent_hbone::Config {
@@ -532,6 +545,51 @@ pub fn parse_config(
 	})
 }
 
+fn logging_fields(fields: Option<RawLoggingFields>) -> anyhow::Result<LoggingFields> {
+	let fields = fields.unwrap_or(RawLoggingFields {
+		remove: Vec::new(),
+		add: Default::default(),
+	});
+	Ok(LoggingFields {
+		remove: Arc::new(fields.remove.into_iter().collect()),
+		add: Arc::new(
+			fields
+				.add
+				.iter()
+				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.collect::<Result<_, _>>()?,
+		),
+	})
+}
+
+fn database_logging_fields(
+	standard_attributes: Option<&crate::RawStandardAttributes>,
+) -> anyhow::Result<LoggingFields> {
+	let add = [
+		(
+			"agentgateway.user".to_string(),
+			standard_attributes
+				.and_then(|attributes| attributes.user.clone())
+				.unwrap_or_else(|| DEFAULT_UI_USER_ATTRIBUTE.to_string()),
+		),
+		(
+			"agentgateway.group".to_string(),
+			standard_attributes
+				.and_then(|attributes| attributes.group.clone())
+				.unwrap_or_else(|| DEFAULT_UI_GROUP_ATTRIBUTE.to_string()),
+		),
+	];
+
+	Ok(LoggingFields {
+		remove: Arc::default(),
+		add: Arc::new(
+			add
+				.iter()
+				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.collect::<Result<OrderedStringMap<_>, _>>()?,
+		),
+	})
+}
 fn parse<T: FromStr>(env: &str) -> anyhow::Result<Option<T>>
 where
 	<T as FromStr>::Err: ToString,
@@ -560,6 +618,16 @@ fn parse_duration(env: &str) -> anyhow::Result<Option<Duration>> {
 			durfmt::parse(&ds).map_err(|e| anyhow::anyhow!("invalid env var {}={} ({})", env, ds, e))
 		})
 		.transpose()
+}
+
+fn parse_dynamic_ca_cert_cache_config() -> anyhow::Result<crate::DynamicCaCertCacheConfig> {
+	let defaults = crate::DynamicCaCertCacheConfig::default();
+	let ttl = parse_duration("DYNAMIC_CA_CERT_CACHE_TTL")?.unwrap_or(defaults.ttl);
+	let capacity = parse::<usize>("DYNAMIC_CA_CERT_CACHE_CAPACITY")?.unwrap_or(defaults.capacity);
+	if capacity == 0 {
+		anyhow::bail!("invalid env var DYNAMIC_CA_CERT_CACHE_CAPACITY=0 (must be greater than 0)");
+	}
+	Ok(crate::DynamicCaCertCacheConfig { ttl, capacity })
 }
 
 pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
@@ -1094,6 +1162,43 @@ config:
 			err
 				.to_string()
 				.contains("config.tracing requires otlpEndpoint"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_uses_defaults_without_env() {
+		let _env_lock = lock_env();
+		let defaults = crate::DynamicCaCertCacheConfig::default();
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.dynamic_ca_cert_cache, defaults);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_uses_config_env_overrides() {
+		let _env_lock = lock_env();
+		let _ttl = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_TTL", "2m");
+		let _capacity = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_CAPACITY", "17");
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.dynamic_ca_cert_cache.ttl, Duration::from_secs(120));
+		assert_eq!(config.dynamic_ca_cert_cache.capacity, 17);
+	}
+
+	#[test]
+	fn dynamic_ca_cert_cache_rejects_zero_capacity() {
+		let _env_lock = lock_env();
+		let _capacity = TempEnvVar::set("DYNAMIC_CA_CERT_CACHE_CAPACITY", "0");
+
+		let err = parse_config("{}".to_string(), None).expect_err("zero capacity should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("invalid env var DYNAMIC_CA_CERT_CACHE_CAPACITY=0 (must be greater than 0)"),
 			"unexpected error: {err}"
 		);
 	}

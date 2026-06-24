@@ -2,7 +2,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use ::http::{HeaderMap, HeaderName, HeaderValue};
+use ::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
+use bytes::Bytes;
 
 use crate::http::HeaderOrPseudo;
 use crate::http::ext_authz::proto::{
@@ -297,14 +298,16 @@ fn test_ext_authz_cache_lookup_misses_expired_entry() {
 fn test_cached_grpc_response(
 	expires_in: Duration,
 	original_ttl: Duration,
-) -> super::CachedGrpcResponse {
-	super::CachedGrpcResponse {
+) -> super::CachedExtAuthzResponse {
+	super::CachedExtAuthzResponse {
 		expires_at: Instant::now() + expires_in,
 		original_ttl,
 		refreshing: Arc::new(AtomicBool::new(false)),
-		response: super::CachedGrpcPolicyResponse::DenyWithoutResponse {
-			dynamic_metadata: None,
-		},
+		response: super::CachedPolicyResponse::Grpc(
+			super::CachedGrpcPolicyResponse::DenyWithoutResponse {
+				dynamic_metadata: None,
+			},
+		),
 	}
 }
 
@@ -490,6 +493,69 @@ fn test_cached_grpc_allow_replays_request_and_response_mutations() {
 }
 
 #[test]
+fn test_cached_http_allow_replays_request_headers_and_metadata() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+	let cached = super::CachedHttpPolicyResponse::Allow {
+		headers: HeaderMap::from_iter([(
+			HeaderName::from_static("x-authz-user"),
+			HeaderValue::from_static("alice"),
+		)]),
+		dynamic_metadata: Some(serde_json::Map::from_iter([(
+			"subject".to_string(),
+			serde_json::Value::String("alice".to_string()),
+		)])),
+	};
+
+	let response = cached.apply(&mut req).unwrap();
+
+	assert!(response.direct_response.is_none());
+	assert!(response.response_headers.is_none());
+	assert_eq!(req.headers().get("x-authz-user").unwrap(), "alice");
+	assert_eq!(
+		req
+			.extensions()
+			.get::<ExtAuthzDynamicMetadata>()
+			.unwrap()
+			.0
+			.get("subject")
+			.unwrap(),
+		"alice"
+	);
+}
+
+#[tokio::test]
+async fn test_cached_http_direct_response_replays_status_headers_and_body() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+	let cached = super::CachedHttpPolicyResponse::DirectResponse {
+		status: StatusCode::UNAUTHORIZED,
+		headers: HeaderMap::from_iter([(
+			HeaderName::from_static("www-authenticate"),
+			HeaderValue::from_static("Bearer"),
+		)]),
+		body: Bytes::from_static(b"nope"),
+	};
+
+	let response = cached.apply(&mut req).unwrap();
+
+	let mut direct_response = response.direct_response.unwrap();
+	assert_eq!(direct_response.status(), StatusCode::UNAUTHORIZED);
+	assert_eq!(
+		direct_response.headers().get("www-authenticate").unwrap(),
+		"Bearer"
+	);
+	let body = crate::http::inspect_response_body(&mut direct_response)
+		.await
+		.unwrap();
+	assert_eq!(body, Bytes::from_static(b"nope"));
+}
+
+#[test]
 fn test_body_truncation() {
 	let body_opts = BodyOptions {
 		max_request_bytes: 10,
@@ -662,6 +728,28 @@ fn test_pseudo_header_value_extraction() {
 
 	let status_value = crate::http::get_pseudo_header_value(&HeaderOrPseudo::Status, &req);
 	assert_eq!(status_value, None);
+}
+
+#[test]
+fn grpc_ext_authz_scheme_uses_forwarded_proto_when_uri_has_no_scheme() {
+	let req = ::http::Request::builder()
+		.uri("/api/test")
+		.header("x-forwarded-proto", "https")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(ExtAuthz::request_scheme(&req), "https");
+}
+
+#[test]
+fn grpc_ext_authz_scheme_prefers_uri_scheme_over_forwarded_proto() {
+	let req = ::http::Request::builder()
+		.uri("http://example.com/api/test")
+		.header("x-forwarded-proto", "https")
+		.body(http::Body::empty())
+		.unwrap();
+
+	assert_eq!(ExtAuthz::request_scheme(&req), "http");
 }
 
 #[test]

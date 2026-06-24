@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -24,6 +25,7 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
+	"golang.design/x/clipboard"
 	"istio.io/istio/pkg/kube"
 	"sigs.k8s.io/yaml"
 
@@ -40,6 +42,9 @@ var (
 	yamlKeyPattern = regexp.MustCompile(`^(\s*(?:-\s+)??)([^:\n]+):(.*)$`)
 	jsonKeyPattern = regexp.MustCompile(`^(\s*)"((?:\\.|[^"\\])*)":(.*)$`)
 	numberPattern  = regexp.MustCompile(`^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$`)
+
+	clipboardInitOnce sync.Once
+	clipboardInitErr  error
 )
 
 type traceEnvelope struct {
@@ -69,7 +74,14 @@ type traceEvent struct {
 	Protocol        *string           `json:"protocol,omitempty"`
 	Status          *uint16           `json:"status,omitempty"`
 	Error           *string           `json:"error,omitempty"`
-	Details         string            `json:"details,omitempty"`
+	Details         json.RawMessage   `json:"details,omitempty"`
+	Provider        string            `json:"provider,omitempty"`
+	RouteType       string            `json:"routeType,omitempty"`
+	InputFormat     string            `json:"inputFormat,omitempty"`
+	NativeFormat    *string           `json:"nativeFormat,omitempty"`
+	RequestModel    string            `json:"requestModel,omitempty"`
+	Streaming       *bool             `json:"streaming,omitempty"`
+	StreamFormat    string            `json:"streamFormat,omitempty"`
 }
 
 type traceAuthzRule struct {
@@ -103,6 +115,7 @@ const (
 
 type traceModel struct {
 	app           *tview.Application
+	screen        tcell.Screen
 	table         *tview.Table
 	details       *tview.TextView
 	status        *tview.TextView
@@ -319,6 +332,10 @@ func runTUI(cmd *cobra.Command, target *traceTarget, body io.ReadCloser, request
 
 	app := tview.NewApplication()
 	model := newTraceModel(app, target)
+	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		model.screen = screen
+		return false
+	})
 
 	var (
 		runErr error
@@ -636,6 +653,12 @@ func displayEventType(eventType string) string {
 		return "Request Done"
 	case "bodySnapshot":
 		return "Body Snapshot"
+	case "llmRouteResolved":
+		return "LLM Route"
+	case "llmRequestDetected":
+		return "LLM Request"
+	case "llmStreamingTranslation":
+		return "LLM Stream"
 	default:
 		return eventType
 	}
@@ -656,11 +679,11 @@ func summarizeEvent(event traceEvent) string {
 	case "routeSelection":
 		return summarizeRouteSelection(event.SelectedRoute, len(event.EvaluatedRoutes))
 	case "policySelection":
-		return summarizePolicySelection(event.EffectivePolicy)
+		return summarizePolicySelection(event.Phase, event.EffectivePolicy)
 	case "policy":
 		return summarizePolicy(event.Kind, event.Result)
 	case "policyEvent":
-		return truncate(fmt.Sprintf("%s: %s", event.Kind, event.Details), 120)
+		return truncate(fmt.Sprintf("%s: %s", event.Kind, eventDetailsText(event.Details)), 120)
 	case "authorizationResult":
 		return summarizeAuthorizationResult(event.Result, event.Rules)
 	case "backendCallStart":
@@ -686,6 +709,45 @@ func summarizeEvent(event traceEvent) string {
 		return "request finished"
 	case "bodySnapshot":
 		return fmt.Sprintf("%s body snapshot", event.Stage)
+	case "llmRouteResolved":
+		return strings.TrimSpace(fmt.Sprintf(
+			"%s %s",
+			event.Provider,
+			event.RouteType,
+		))
+	case "llmRequestDetected":
+		parts := []string{}
+		if event.Provider != "" {
+			parts = append(parts, event.Provider)
+		}
+		if event.InputFormat != "" {
+			parts = append(parts, "input="+event.InputFormat)
+		}
+		if event.NativeFormat != nil && *event.NativeFormat != "" {
+			parts = append(parts, "native="+*event.NativeFormat)
+		}
+		if event.RequestModel != "" {
+			parts = append(parts, "model="+event.RequestModel)
+		}
+		if event.Streaming != nil && *event.Streaming {
+			parts = append(parts, "streaming")
+		}
+		return truncate(strings.Join(parts, " "), 120)
+	case "llmStreamingTranslation":
+		parts := []string{}
+		if event.Provider != "" {
+			parts = append(parts, event.Provider)
+		}
+		if event.InputFormat != "" {
+			parts = append(parts, "input="+event.InputFormat)
+		}
+		if event.NativeFormat != nil && *event.NativeFormat != "" {
+			parts = append(parts, "native="+*event.NativeFormat)
+		}
+		if event.StreamFormat != "" {
+			parts = append(parts, "stream="+event.StreamFormat)
+		}
+		return truncate(strings.Join(parts, " "), 120)
 	default:
 		return truncate(compactJSON(event), 120)
 	}
@@ -697,6 +759,17 @@ func summarizeEnvelope(envelope traceEnvelope) string {
 		return summary
 	}
 	return truncate(strings.Join(envelope.Scope, " > ")+": "+summary, 120)
+}
+
+func eventDetailsText(details json.RawMessage) string {
+	if len(details) == 0 {
+		return ""
+	}
+	var text string
+	if json.Unmarshal(details, &text) == nil {
+		return text
+	}
+	return compactJSON(details)
 }
 
 func summarizeCEL(expr string, result json.RawMessage) string {
@@ -745,7 +818,11 @@ func summarizePolicy(kind string, result json.RawMessage) string {
 	return truncate(fmt.Sprintf("%s %s", kind, compactJSON(result)), 120)
 }
 
-func summarizePolicySelection(raw json.RawMessage) string {
+func summarizePolicySelection(phase string, raw json.RawMessage) string {
+	prefix := "effective policies"
+	if phase != "" {
+		prefix = fmt.Sprintf("%s effective policies", displayPolicySelectionPhase(phase))
+	}
 	var payload map[string]json.RawMessage
 	if len(raw) > 0 && json.Unmarshal(raw, &payload) == nil {
 		keys := make([]string, 0, len(payload))
@@ -754,11 +831,22 @@ func summarizePolicySelection(raw json.RawMessage) string {
 		}
 		sort.Strings(keys)
 		if len(keys) == 0 {
-			return "effective policies: none"
+			return prefix + ": none"
 		}
-		return truncate("effective policies: "+strings.Join(keys, ", "), 120)
+		return truncate(prefix+": "+strings.Join(keys, ", "), 120)
 	}
-	return truncate("effective="+compactJSON(raw), 120)
+	return truncate(prefix+"="+compactJSON(raw), 120)
+}
+
+func displayPolicySelectionPhase(phase string) string {
+	switch phase {
+	case "subBackend":
+		return "sub-backend"
+	case "inlineBackend":
+		return "inline backend"
+	default:
+		return phase
+	}
 }
 
 func summarizeAuthorizationResult(result json.RawMessage, rules []traceAuthzRule) string {
@@ -1250,8 +1338,6 @@ func (m *traceModel) addRow(row traceRow) {
 	textColor := traceSeverityColor(row.Envelope.Severity)
 	for col, text := range []string{
 		fmt.Sprintf("%d", rowIndex+1),
-		//formatMicros(row.Envelope.EventEnd),
-		//formatDuration(row.Envelope.EventStart, row.Envelope.EventEnd),
 		displayEventType(row.Envelope.Message.Type),
 		row.Summary,
 	} {
@@ -1282,7 +1368,7 @@ func (m *traceModel) renderStatus() {
 	if m.detailsActive {
 		activePane = "details"
 	}
-	legend := fmt.Sprintf("tab: switch pane (%s)   arrows: scroll selected pane   e/s/d: detail mode   q: quit", activePane)
+	legend := fmt.Sprintf("tab: switch pane (%s)   arrows: scroll selected pane   e/s/d: detail mode   c: copy details   q: quit", activePane)
 	legend = fmt.Sprintf("%s   f: format (%s)", legend, m.format)
 	m.status.SetText(m.statusMessage + "\n" + legend)
 }
@@ -1299,6 +1385,13 @@ func (m *traceModel) handleInput(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Rune() {
 	case 'q':
 		m.app.Stop()
+		return nil
+	case 'c':
+		if err := copyDetailsToClipboard(m.screen, m.details.GetText(true)); err != nil {
+			m.setStatus(fmt.Sprintf("clipboard unavailable: %v", err))
+			return nil
+		}
+		m.setStatus("copied details to clipboard")
 		return nil
 	case 's':
 		m.mode = detailSnapshot
@@ -1368,6 +1461,81 @@ func (m *traceModel) updateDetailsTitle(row *traceRow) {
 	default:
 		m.details.SetTitle(" Details" + suffix + " ")
 	}
+}
+
+func copyDetailsToClipboard(screen tcell.Screen, text string) error {
+	var nativeErr error
+	if !isSSHSession() {
+		if err := copyDetailsToNativeClipboard(text); err == nil {
+			return nil
+		} else {
+			nativeErr = err
+		}
+	}
+
+	if err := copyDetailsToTerminalClipboard(screen, text); err != nil {
+		if nativeErr != nil {
+			return fmt.Errorf("native clipboard: %v; terminal fallback: %w", nativeErr, err)
+		}
+		return err
+	}
+	return nil
+}
+
+func copyDetailsToNativeClipboard(text string) error {
+	clipboardInitOnce.Do(func() {
+		clipboardInitErr = clipboard.Init()
+	})
+	if clipboardInitErr != nil {
+		return clipboardInitErr
+	}
+	clipboard.Write(clipboard.FmtText, []byte(text))
+	return nil
+}
+
+func isSSHSession() bool {
+	return os.Getenv("SSH_TTY") != "" || os.Getenv("SSH_CONNECTION") != ""
+}
+
+func copyDetailsToTerminalClipboard(screen tcell.Screen, text string) error {
+	var terminalErr error
+	copied := false
+
+	if os.Getenv("TMUX") != "" {
+		cmd := exec.Command("tmux", "load-buffer", "-w", "-")
+		cmd.Stdin = strings.NewReader(text)
+		if err := cmd.Run(); err != nil {
+			terminalErr = errors.Join(terminalErr, fmt.Errorf("tmux clipboard: %w", err))
+		} else {
+			copied = true
+		}
+	}
+
+	if screen != nil {
+		screen.SetClipboard([]byte(text))
+		copied = true
+	}
+
+	tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	if err != nil {
+		if copied {
+			return nil
+		}
+		return errors.Join(terminalErr, err)
+	}
+	defer tty.Close()
+
+	sequence := "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(text)) + "\a"
+	if os.Getenv("TMUX") != "" {
+		sequence = "\x1bPtmux;\x1b" + sequence + "\x1b\\"
+	}
+	if _, err := tty.WriteString(sequence); err != nil {
+		if copied {
+			return nil
+		}
+		return errors.Join(terminalErr, err)
+	}
+	return nil
 }
 
 func (m *traceModel) renderDetails(tableRow int) {

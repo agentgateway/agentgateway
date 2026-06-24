@@ -182,6 +182,26 @@ spec:
             - name: ADDITIONAL_TRUST_DOMAINS
               value: {{ $gateway.istio.additionalTrustDomains | join "," | quote }}
             {{- end }}
+            {{- if and (not (hasKey $userEnvNames "CLUSTER_ID")) (hasKey $gateway "istio") $gateway.istio.clusterId }}
+            - name: CLUSTER_ID
+              value: {{ $gateway.istio.clusterId | quote }}
+            {{- end }}
+            {{- if and (not (hasKey $userEnvNames "NETWORK")) (hasKey $gateway "istio") $gateway.istio.network }}
+            - name: NETWORK
+              value: {{ $gateway.istio.network | quote }}
+            {{- end }}
+          {{- $catalogPaths := list }}
+          {{- range ($gateway.modelCatalog).sources }}
+          {{- if .configMap }}
+          {{- $catalogPaths = append $catalogPaths (printf "/config/model-catalog/%s.json" .configMap.name) }}
+          {{- end }}
+          {{- end }}
+          {{- if $catalogPaths }}
+            {{- if not (hasKey $userEnvNames "MODEL_CATALOG_PATHS") }}
+            - name: MODEL_CATALOG_PATHS
+              value: {{ $catalogPaths | join "," | quote }}
+            {{- end }}
+          {{- end }}
           {{- /* User-specified env vars */}}
           {{- with $gateway.env }}
             {{- toYaml . | nindent 12 }}
@@ -203,8 +223,18 @@ spec:
             {{- if hasKey $gateway "istio" }}
             - mountPath: /var/run/secrets/istio
               name: istiod-ca-cert
+              readOnly: true
             - mountPath: /var/run/secrets/tokens
               name: istio-token
+              readOnly: true
+            {{- end }}
+            {{- range ($gateway.modelCatalog).sources }}
+            {{- if .configMap }}
+            - name: model-catalog-{{ .configMap.name }}
+              mountPath: /config/model-catalog/{{ .configMap.name }}.json
+              subPath: {{ .configMap.key | default "catalog.json" }}
+              readOnly: true
+            {{- end }}
             {{- end }}
       volumes:
         - name: config-volume
@@ -238,5 +268,15 @@ spec:
                   audience: istio-ca
                   expirationSeconds: 43200
                   path: istio-token
+        {{- end }}
+        {{- range ($gateway.modelCatalog).sources }}
+        {{- if .configMap }}
+        - name: model-catalog-{{ .configMap.name }}
+          configMap:
+            name: {{ .configMap.name }}
+            items:
+            - key: {{ .configMap.key | default "catalog.json" }}
+              path: {{ .configMap.name }}.json
+        {{- end }}
         {{- end }}
       terminationGracePeriodSeconds: {{($gateway.shutdown).max|default 60|int}}

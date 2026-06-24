@@ -1,0 +1,20 @@
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"toolu_empty_content","type":"function","function":{"name":"Bash"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"content":""},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"com"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"content":""},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"mand\":\"pwd\"}"}}]},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"content":""},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"usage":null}
+
+data: {"id":"chatcmpl-tool-empty-content","object":"chat.completion.chunk","created":1772656915,"model":"claude-opus-4-8","service_tier":"default","system_fingerprint":null,"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":8,"total_tokens":20}}
+
+data: [DONE]
+

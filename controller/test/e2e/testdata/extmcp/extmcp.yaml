@@ -1,0 +1,71 @@
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: extmcp-backend
+  namespace: agentgateway-base
+spec:
+  mcp:
+    targets:
+    - name: extmcp-target
+      static:
+        host: mcp-website-fetcher.default.svc.cluster.local
+        port: 80
+        protocol: SSE
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: extmcp-route
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+    namespace: agentgateway-base
+  hostnames:
+    - "extmcp.example.com"
+  rules:
+    - backendRefs:
+      - name: extmcp-backend
+        group: agentgateway.dev
+        kind: AgentgatewayBackend
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: extmcp-policy
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: extmcp-backend
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            backendRef:
+              name: ext-mcp
+              port: 4445
+            failureMode: FailClosed
+          methods:
+            tools/call: Request
+            tools/list: Response
+---
+# Bound the gRPC call to the ext-mcp policy server. Without a timeout the call has
+# no deadline, so a slow/cold policy backend hangs the request instead of letting
+# failureMode (FailClosed) engage.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: ext-mcp-timeout
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: ext-mcp
+  backend:
+    http:
+      requestTimeout: 5s

@@ -9,6 +9,21 @@ cluster_name = 'kind'
 install_namespace = k8s_namespace()
 image_registry = 'localhost:5000'
 
+# Detect host architecture for cross-compilation
+host_os = str(local('uname -s', quiet=True)).strip()
+host_arch = str(local('uname -m', quiet=True)).strip()
+if host_arch in ['arm64', 'aarch64']:
+    rust_target = 'aarch64-unknown-linux-gnu'
+else:
+    rust_target = 'x86_64-unknown-linux-gnu'
+
+cross_env = ''
+if host_os == 'Darwin' and host_arch in ['arm64', 'aarch64']:
+  cross_env = 'CROSS_CONTAINER_OPTS="${CROSS_CONTAINER_OPTS:+$CROSS_CONTAINER_OPTS }--platform linux/amd64" '
+
+if str(local('command -v cross >/dev/null 2>&1; echo $?', quiet=True)).strip() != '0':
+    fail('cross is required for Tilt dataplane builds. Install it with: cargo install cross')
+
 # Ensure Kind cluster exists
 allow_k8s_contexts('kind-' + cluster_name)
 
@@ -57,9 +72,13 @@ docker_build_with_restart(
     image_registry + '/agentgateway-controller',
     context='./tools/tilt/',
     entrypoint='/usr/local/bin/agentgateway-controller',
+    # Run as non-root while ensuring Tilt can do in-place updates of the Go binary
     dockerfile_contents="""
 FROM ubuntu:24.04
-COPY agentgateway-controller /usr/local/bin/agentgateway-controller
+RUN useradd -r -U -u 65532 -s /usr/sbin/nologin agentgateway
+RUN chown agentgateway:agentgateway /usr/local/bin
+COPY --chown=agentgateway:agentgateway agentgateway-controller /usr/local/bin/agentgateway-controller
+USER 65532
 ENTRYPOINT /usr/local/bin/agentgateway-controller
     """,
     # Live update: sync Go binaries
@@ -103,9 +122,13 @@ k8s_resource('agentgateway',
 # Data Plane (Rust-based proxy)
 # =============================================================================
 
+# Use cross to consistently build a Linux binary (which can run on Kind)
+# regardless of whether the local machine is Linux or macOS
 local_resource(
   'rust-compile-dataplane',
-  'cargo build && if [ -f "./tools/tilt/agentgateway" ]; then rm "./tools/tilt/agentgateway"; fi && mv ./target/debug/agentgateway ./tools/tilt/agentgateway',
+  cross_env + 'cross build --target ' + rust_target +
+    ' && if [ -f "./tools/tilt/agentgateway" ]; then rm "./tools/tilt/agentgateway"; fi' +
+    ' && mv ./target/' + rust_target + '/debug/agentgateway ./tools/tilt/agentgateway',
   deps=['./crates',
         './Cargo.toml',
         './Cargo.lock',

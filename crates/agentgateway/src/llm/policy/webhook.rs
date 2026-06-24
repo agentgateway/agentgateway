@@ -3,6 +3,7 @@ use ::http::{HeaderMap, HeaderValue, header};
 use serde::{Deserialize, Serialize};
 
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
 
@@ -177,7 +178,12 @@ pub async fn send_request(
 	messages: Vec<Message>,
 ) -> anyhow::Result<GuardrailsPromptResponse> {
 	let whr = build_request_for_request(http_headers, messages)?;
-	let res = Box::pin(client.call_reference(whr, target)).await?;
+	let res = Box::pin(
+		client
+			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
+			.call_reference(whr, target),
+	)
+	.await?;
 	let parsed = json::from_response_body(res).await?;
 	Ok(parsed)
 }
@@ -189,7 +195,10 @@ pub async fn send_response(
 	choices: Vec<ResponseChoice>,
 ) -> anyhow::Result<GuardrailsResponseResponse> {
 	let whr = build_request_for_response(http_headers, choices)?;
-	let res = client.call_reference(whr, target).await?;
+	let res = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
+		.call_reference(whr, target)
+		.await?;
 	let parsed = json::from_response_body(res).await?;
 	Ok(parsed)
 }

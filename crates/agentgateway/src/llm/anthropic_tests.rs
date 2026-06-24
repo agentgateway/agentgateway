@@ -1,6 +1,6 @@
 use super::OAUTH_TOKEN_PREFIX;
 use crate::http::auth::AppliedBackendAuthLocation;
-use crate::llm::AIProvider;
+use crate::llm::{AIProvider, RouteType};
 
 // ── set_required_fields integration tests ───────────────────────────────────
 
@@ -36,7 +36,9 @@ fn set_required_fields_oauth_token() {
 	let provider = AIProvider::Anthropic(super::Provider { model: None });
 	let mut req = make_bearer_request(&format!("{OAUTH_TOKEN_PREFIX}01234567890abcdef"));
 
-	provider.set_required_fields(&mut req).unwrap();
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None)
+		.unwrap();
 
 	// Authorization header must still be present (OAuth keeps Bearer).
 	assert!(req.headers().contains_key(::http::header::AUTHORIZATION));
@@ -54,7 +56,9 @@ fn set_required_fields_oauth_token_strips_api_key() {
 		"some-stale-key",
 	);
 
-	provider.set_required_fields(&mut req).unwrap();
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None)
+		.unwrap();
 
 	// Authorization header must still be present.
 	assert!(req.headers().contains_key(::http::header::AUTHORIZATION));
@@ -67,7 +71,9 @@ fn set_required_fields_api_key_token() {
 	let provider = AIProvider::Anthropic(super::Provider { model: None });
 	let mut req = make_bearer_request("sk-ant-api01234567890abcdef");
 
-	provider.set_required_fields(&mut req).unwrap();
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None)
+		.unwrap();
 
 	// Authorization header must be removed.
 	assert!(!req.headers().contains_key(::http::header::AUTHORIZATION));
@@ -86,7 +92,9 @@ fn set_required_fields_explicit_authorization_preserved() {
 	let provider = AIProvider::Anthropic(super::Provider { model: None });
 	let mut req = make_bearer_request_with_explicit_auth("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9");
 
-	provider.set_required_fields(&mut req).unwrap();
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None)
+		.unwrap();
 
 	// Authorization header must be preserved.
 	assert!(
@@ -124,7 +132,9 @@ fn set_required_fields_default_auth_still_rewrites() {
 		.extensions_mut()
 		.insert(AppliedBackendAuthLocation { explicit: false });
 
-	provider.set_required_fields(&mut req).unwrap();
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None)
+		.unwrap();
 
 	// Authorization header must be removed (default behavior).
 	assert!(
@@ -148,7 +158,9 @@ fn set_required_fields_explicit_non_authorization_location_preserved() {
 		.extensions_mut()
 		.insert(AppliedBackendAuthLocation { explicit: true });
 
-	provider.set_required_fields(&mut req).unwrap();
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None)
+		.unwrap();
 
 	// Explicit auth location means no rewrite — Authorization is kept.
 	assert!(req.headers().contains_key(::http::header::AUTHORIZATION));

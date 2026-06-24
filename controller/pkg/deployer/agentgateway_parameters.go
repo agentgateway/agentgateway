@@ -57,6 +57,46 @@ func setIfNonZero[T comparable](dst *T, src T) {
 	}
 }
 
+// istioEnabledForGateway decides whether Istio integration is on for this gateway after AGWP params
+// have been applied. Explicit spec.istio.enabled wins; otherwise the presence of spec.istio (even an
+// empty `istio: {}`) is treated as opt-in; otherwise it follows the control-plane default.
+func istioEnabledForGateway(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwCollections) bool {
+	if gtw.Istio != nil {
+		if gtw.Istio.Enabled != nil {
+			return *gtw.Istio.Enabled
+		}
+		return true
+	}
+	return cols.IstioAutoEnabled
+}
+
+// ResolveIstioIntegration finalizes the gateway's Istio block. It runs after AGWP params are applied
+// so per-gateway spec.istio values take precedence. When integration is enabled it seeds any unset
+// control-plane mesh values (cluster ID, network, CA address) and infers the trust domain from mesh
+// config; when disabled it clears the block so the deployment renders without Istio.
+func ResolveIstioIntegration(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwCollections) {
+	if gtw == nil || cols == nil {
+		return
+	}
+	if !istioEnabledForGateway(gtw, cols) {
+		gtw.Istio = nil
+		return
+	}
+	if gtw.Istio == nil {
+		gtw.Istio = &agentgateway.IstioSpec{}
+	}
+	setIfNonZero(&gtw.Istio.ClusterId, cols.IstioClusterId)
+	setIfNonZero(&gtw.Istio.Network, cols.IstioNetwork)
+	setIfNonZero(&gtw.Istio.CaAddress, cols.IstioCaAddress)
+
+	// Inherit the mesh trust domain only when the params didn't set one.
+	if gtw.Istio.TrustDomain == "" && cols.MeshConfig != nil {
+		if mc := cols.MeshConfig.Get(); mc != nil && mc.MeshConfig != nil {
+			gtw.Istio.TrustDomain = mc.MeshConfig.GetTrustDomain()
+		}
+	}
+}
+
 // ApplyToHelmValues applies the AgentgatewayParameters configs to the helm
 // values.  This is called before rendering the helm chart. (We render a helm
 // chart, but we do not use helm beyond that point.)
@@ -93,8 +133,11 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *HelmConfig) {
 		if res.Istio == nil {
 			res.Istio = &agentgateway.IstioSpec{}
 		}
+		setIfNonNil(&res.Istio.Enabled, configs.Istio.Enabled)
 		setIfNonZero(&res.Istio.CaAddress, configs.Istio.CaAddress)
 		setIfNonZero(&res.Istio.TrustDomain, configs.Istio.TrustDomain)
+		setIfNonZero(&res.Istio.ClusterId, configs.Istio.ClusterId)
+		setIfNonZero(&res.Istio.Network, configs.Istio.Network)
 		if len(configs.Istio.AdditionalTrustDomains) > 0 {
 			res.Istio.AdditionalTrustDomains = configs.Istio.AdditionalTrustDomains
 		}
@@ -221,6 +264,16 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 		applier := NewAgentgatewayParametersApplier(resolved.gatewayAGWP)
 		applier.ApplyToHelmValues(vals)
 	}
+	// ModelCatalog ConfigMap sources are deployment-relative: they resolve from the
+	// Gateway's namespace, not the AgentgatewayParameters' namespace. Apply only from
+	// the Gateway-level AGWP so the reference is always unambiguous.
+	if resolved.gatewayAGWP != nil && resolved.gatewayAGWP.Spec.ModelCatalog != nil {
+		vals.Agentgateway.ModelCatalog = resolved.gatewayAGWP.Spec.ModelCatalog.DeepCopy()
+	}
+
+	// Resolve Istio enablement and defaults after gw params so spec.istio takes precedence.
+	ResolveIstioIntegration(vals.Agentgateway, g.inputs.AgwCollections)
+
 	applyManagedSessionKeyDefaults(vals.Agentgateway, gw.Name)
 
 	if g.inputs.ControlPlane.XdsTLS {
@@ -334,7 +387,11 @@ func applyManagedSessionKeyDefaults(gtw *AgentgatewayHelmGateway, gatewayName st
 }
 
 func (g *agentgatewayParametersHelmValuesGenerator) GetCacheSyncHandlers() []cache.InformerSynced {
-	return []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced, g.secretClient.HasSynced}
+	handlers := []cache.InformerSynced{g.agwParamClient.HasSynced, g.gwClassClient.HasSynced, g.secretClient.HasSynced}
+	if g.inputs != nil && g.inputs.AgwCollections != nil && g.inputs.AgwCollections.MeshConfig != nil {
+		handlers = append(handlers, g.inputs.AgwCollections.MeshConfig.AsCollection().HasSynced)
+	}
+	return handlers
 }
 
 // GetResolvedParametersForGateway returns both the GatewayClass-level and Gateway-level

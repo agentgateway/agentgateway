@@ -16,15 +16,32 @@
 |`request.endTime`|string|The time the request completed|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
+|`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
 |`response.headers`|object|The headers of the response.|
 |`response.body`|string|The body of the response. Warning: accessing the body will cause the body to be buffered.|
+|`proxy`|object|`proxy` contains proxy timing information for the request.|
+|`proxy.bind`|string|The bind that accepted the request.|
+|`proxy.gateway`|object|The selected Gateway.|
+|`proxy.gateway.namespace`|string|The namespace of the selected Gateway.|
+|`proxy.gateway.name`|string|The name of the selected Gateway.|
+|`proxy.listener`|object|The selected listener.|
+|`proxy.listener.name`|string|The name of the selected listener.|
+|`proxy.route`|object|The selected route.|
+|`proxy.route.namespace`|string|The namespace of the selected route.|
+|`proxy.route.name`|string|The name of the selected route.|
+|`proxy.route.kind`|string|The kind of the selected route.|
+|`proxy.route.rule`|string|The selected route rule name, when available.|
+|`proxy.requestProcessingDuration`|string|Time spent processing the request before sending the primary outbound call.|
+|`proxy.upstreamDuration`|string|Time spent waiting for the primary outbound call.|
+|`proxy.responseProcessingDuration`|string|Time spent processing the primary outbound response before sending the downstream response.|
 |`env`|object|`env` contains selected process environment attributes exposed to CEL.<br>This does NOT expose raw environment variables, but rather a subset of well-known variables.|
 |`env.podName`|string|The name of the pod (when running on Kubernetes)|
 |`env.namespace`|string|The namespace of the pod (when running on Kubernetes)|
 |`env.gateway`|string|The Gateway we are running as (when running on Kubernetes)|
 |`jwt`|object|`jwt` contains the claims from a verified JWT token. This is only present if the JWT policy is enabled.|
+|`jwt.rawToken`|string|The raw bearer token. Redacted by default; use `jwt.rawToken.unredacted()` to access the actual value.|
 |`apiKey`|object|`apiKey` contains the claims from a verified API Key. This is only present if the API Key policy is enabled.|
-|`apiKey.key`|string||
+|`apiKey.key`|string|The API key value. Redacted by default; use `apiKey.key.unredacted()` to access the actual value.|
 |`basicAuth`|object|`basicAuth` contains the claims from a verified basic authentication Key. This is only present if the Basic authentication policy is enabled.|
 |`basicAuth.username`|string||
 |`llm`|object|`llm` contains attributes about an LLM request or response. This is only present when using an `ai` backend.|
@@ -45,6 +62,8 @@
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
 |`llm.totalTokens`|integer|The total number of tokens for the request.|
 |`llm.serviceTier`|string|The service tier the provider served the request under.|
+|`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
+|`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
 |`llm.prompt`|[]object|The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.|
 |`llm.prompt[].role`|string||
@@ -59,6 +78,23 @@
 |`llm.params.max_tokens`|integer||
 |`llm.params.encoding_format`|string||
 |`llm.params.dimensions`|integer||
+|`llm.cost`|object|The realized USD cost of the request from the model cost catalog.<br>Unset when the model could not be priced.|
+|`llm.cost.total`|number||
+|`llm.cost.input`|number||
+|`llm.cost.output`|number||
+|`llm.cost.cacheRead`|number||
+|`llm.cost.cacheWrite`|number||
+|`llm.cost.reasoning`|number||
+|`llm.cost.inputAudio`|number||
+|`llm.cost.outputAudio`|number||
+|`llm.costRates`|object|Effective model catalog rates in USD per 1M tokens after tier selection.<br>Unset when the model could not be priced.|
+|`llm.costRates.input`|number||
+|`llm.costRates.output`|number||
+|`llm.costRates.cacheRead`|number||
+|`llm.costRates.cacheWrite`|number||
+|`llm.costRates.reasoning`|number||
+|`llm.costRates.inputAudio`|number||
+|`llm.costRates.outputAudio`|number||
 |`llmRequest`|any|`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;<br>policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.|
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
@@ -73,10 +109,12 @@
 |`source.issuer`|string|The issuer from the downstream certificate, if available.|
 |`source.subject`|string|The subject from the downstream certificate, if available.|
 |`source.subjectCn`|string|The CN of the subject from the downstream certificate, if available.|
+|`source.certificate`|string|PEM of the downstream client certificate. Present only when the client presented a certificate during the TLS handshake.|
 |`source.unverifiedWorkload`|object|The workload context of the downstream connection, resolved from the<br>workload discovery store by source IP. Available when the source pod is<br>known to the controller's workload discovery store.<br><br>Fields are nested under `unverified` to signal that they are derived<br>from the source IP (not cryptographically authenticated). Policy<br>authors should prefer `source.identity.*` for trust-sensitive checks.|
 |`source.unverifiedWorkload.name`|string|The pod name of the source workload.|
 |`source.unverifiedWorkload.namespace`|string|The namespace of the source workload.|
 |`source.unverifiedWorkload.serviceAccount`|string|The service account of the source workload.|
+|`source.connectHeaders`|object|HTTP CONNECT request headers, when this stream originated from a CONNECT<br>tunnel. Empty otherwise. Exposed in CEL as `source.connectHeaders`, which<br>supports the same accessors as `request.headers` (indexing, `join()`,<br>`split()`, etc.).<br><br>CONNECT headers are client-supplied and unauthenticated at the transport<br>layer, so trust decisions should validate the values (e.g. signature or<br>issuer checks) rather than trusting header presence alone.|
 |`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||
@@ -98,4 +136,5 @@
 |`backend.protocol`|enum|The protocol of backend.<br>Possible values: `http`, `tcp`, `a2a`, `mcp`, `llm`.|
 |`extauthz`|object|`extauthz` contains dynamic metadata from ext_authz filters|
 |`extproc`|object|`extproc` contains dynamic metadata from ext_proc filters|
+|`mcpGuardrails`|object|`mcpGuardrails` contains dynamic metadata returned by mcpGuardrails policy processors.|
 |`metadata`|object|`metadata` contains values set by transformation metadata expressions.|

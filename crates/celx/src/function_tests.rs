@@ -66,6 +66,14 @@ fn with() {
 }
 
 #[test]
+fn variables_includes_resolver_variables() {
+	assert(
+		json!({"vars": {"foo": "hello", "bar": "world"}}),
+		"variables()",
+	);
+}
+
+#[test]
 fn json() {
 	let expr = r#"json('{"hi":1}').hi"#;
 	assert(json!(1), expr);

@@ -48,13 +48,14 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
 		)),
+		model_catalog: crate::llm::cost::ModelCatalog::empty(),
 		upstream: client.clone(),
 		ca: None,
 
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
 	});
 
-	let client = PolicyClient { inputs: pi.clone() };
+	let client = PolicyClient::new(pi.clone());
 	let test_tool_get = Tool::new(
 		Cow::Borrowed("get_user"),
 		Cow::Borrowed("Get user details"),

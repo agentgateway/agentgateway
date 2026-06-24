@@ -89,6 +89,7 @@ spec:
                 kind: Service
                 group: ""
                 port: 80
+              failureMode: FailOpen
       promptCaching:
         cacheSystem: true
         cacheMessages: true
@@ -158,6 +159,7 @@ output:
                   service:
                     hostname: webhook.default.svc.cluster.local
                     namespace: default
+                failureMode: FAIL_OPEN
           prompts:
             append:
             - content: hello!

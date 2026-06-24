@@ -1,0 +1,71 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: connect-policy
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  frontend:
+    connect:
+      mode: Route
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      frontend:
+        connect:
+          mode: ROUTE
+      key: frontend/default/connect-policy:frontend-connect:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: connect-policy
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: connect-policy
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

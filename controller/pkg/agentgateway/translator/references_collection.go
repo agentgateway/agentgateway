@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
+	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -139,7 +140,11 @@ func (refs ReferenceGrants) BackendAllowed(
 	backendNamespace gwv1b1.Namespace,
 	routeNamespace string,
 	refKind schema.GroupKind,
+	mode apisettings.BackendRefGrantMode,
 ) bool {
+	if !mode.RequireRouteBackendGrant() {
+		return true
+	}
 	if refKind == wellknown.HTTPRouteGVK.GroupKind() {
 		// ReferenceGrant not required for route delegation
 		return true

@@ -5,6 +5,17 @@ frontendPolicies:
 
 llm:
   policies:
+    guardrails:
+      request:
+      - regex:
+          action: reject
+          rules:
+          - builtin: email
+        rejection:
+          status: 400
+    cors:
+      allowOrigins:
+        - http://localhost:15000
     localRateLimit:
     - type: tokens
       fillInterval: 1s
@@ -37,7 +48,22 @@ llm:
       - name: "X-Org"
         value:
           exact: "engineering"
-  - name: gemini-0.5-pro
+    promptCaching:
+      cacheSystem: true
+      cacheMessages: true
+      minTokens: 1
+    guardrails:
+      request:
+      - regex:
+          action: reject
+          rules:
+          - builtin: creditCard
+      response:
+      - regex:
+          action: mask
+          rules:
+          - builtin: phoneNumber
+  - name: '*'
     provider: vertex
     params:
       model: claude-haiku-4-5-20251001
@@ -52,4 +78,8 @@ llm:
       azureResourceType: openAI
       azureApiVersion: v1
   - name: gpt-3.5-turbo
-    provider: openAI
+    provider: openai
+  - name: llama-3.1-8b-instant
+    provider: groq
+  - name: fireworks-llama
+    provider: fireworks

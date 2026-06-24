@@ -121,6 +121,19 @@ spec:
       keepalive:
         interval: 100ms
 ---
+_err: 'at least one of the fields in [request response] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: empty-buffer
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    buffer: {}
+---
 _err: 'http.maxBufferSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -242,6 +255,23 @@ spec:
     extAuth:
       forwardBody:
         maxSize: 1024
+---
+_err: 'forwardBody cannot be used with http.body'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-http-body-with-forward-body
+spec:
+  traffic:
+    extAuth:
+      backendRef:
+        name: auth-server
+        kind: Service
+        port: 123
+      forwardBody:
+        maxSize: 1024
+      http:
+        body: '{"path": request.path}'
 ---
 _err: 'exactly one of the fields in [requests tokens] must be set'
 apiVersion: agentgateway.dev/v1alpha1
@@ -696,6 +726,55 @@ spec:
     hostRewrite:
       mode: Custom
 ---
+_err: 'strategy.inheritance may only be set on traffic policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: inheritance-with-frontend
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  strategy:
+    inheritance: Override
+  frontend:
+    tcp:
+      keepalive: {}
+---
+_err: 'strategy.inheritance may only be set on traffic policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: inheritance-with-backend
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  strategy:
+    inheritance: Override
+  backend:
+    tls: {}
+---
+_err: 'strategy.inheritance may only be set on traffic policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: inheritance-with-traffic-and-backend
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  strategy:
+    inheritance: Override
+  traffic:
+    timeouts:
+      request: 30s
+  backend:
+    tls: {}
+---
 _err: ' exactly one of the fields in [targetRefs targetSelectors] must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -770,6 +849,46 @@ spec:
         - field: a
           value: b
 ---
+_err: 'backend.mcp may not be used with a Service target'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-guardrails-on-service
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: f1
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            backendRef:
+              name: guardrails-srv
+              port: 4317
+          methods:
+            tools/call: Full
+---
+_err: 'backendRef: Required'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-guardrails-no-backend-ref
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            failureMode: FailClosed
+          methods:
+            tools/call: Full
+---
 _err: 'traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -821,7 +940,7 @@ spec:
           - name: X-Gateway
             value: '"true"'
 ---
-_err: "phase PreRouting only supports extAuth, transformation, "
+_err: "phase PreRouting only supports extAuth, authorization, transformation, "
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -851,3 +970,101 @@ spec:
   frontend:
     proxyProtocol:
       version: V3
+---
+_err: 'custom credential refs must set both group and kind'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: credential-ref-kind-without-group
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+        kind: FileCredential
+---
+_err: 'spec.backend.auth.secretRef.name: Required value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: credential-ref-missing-name
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        group: example.agentgateway.dev
+        kind: FileCredential
+---
+_err: 'spec.backend.auth.secretRef.name: Invalid value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: credential-ref-empty-name
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: ""
+        group: example.agentgateway.dev
+        kind: FileCredential
+---
+_err: 'custom credential refs must set both group and kind'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: credential-ref-core-configmap
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+        kind: ConfigMap
+---
+_err: 'custom credential refs must set both group and kind'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: credential-ref-group-without-kind
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+        group: agentgateway.dev
+---
+_err: 'custom credential refs must set both group and kind'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: credential-ref-group-empty-kind
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      secretRef:
+        name: api-key-secret
+        group: agentgateway.dev
+        kind: ""

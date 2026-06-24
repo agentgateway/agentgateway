@@ -1,0 +1,29 @@
+llm:
+  models:
+  - name: foo/*
+    provider: openAI
+    params:
+      apiKey: sk-openai
+    transformation:
+      model: llmRequest.model.stripPrefix("foo/")
+  - name: openai/gpt-5-mini
+    provider: openAI
+    params:
+      apiKey: sk-openai
+  virtualModels:
+  - name: smart
+    routing:
+      conditional:
+        targets:
+        - when: json(request.body).route == "code"
+          model: foo/bar
+        - when: json(request.body).route == "fast"
+          model: openai/gpt-5-mini
+        - model: foo/baz
+  - name: simple
+    routing:
+      conditional:
+        targets:
+        - when: json(request.body).route == "legacy"
+          model: openai/gpt-5-mini
+        - model: foo/qux

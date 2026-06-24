@@ -37,10 +37,12 @@ fn setup_listener(routes: &[(&str, Vec<&str>, Vec<RouteMatch>)]) -> (Arc<Listene
 	let mk_route = |name: &str, hostnames: Vec<&str>, matches: Vec<RouteMatch>| Route {
 		key: name.into(),
 		service_key: None,
+		service_port: 0,
 		hostnames: hostnames.into_iter().map(|s| s.into()).collect(),
 		matches,
 		name: Default::default(),
 		backends: vec![],
+		llm_router: None,
 		inline_policies: vec![],
 	};
 
@@ -197,6 +199,26 @@ fn test_path_matching() {
 		TestCase {
 			name: "prefix path match with subpath",
 			path: "/api/v1/users/123",
+			expected_route: Some("prefix-path"),
+		},
+		TestCase {
+			name: "prefix path exact segment match without trailing slash",
+			path: "/api",
+			expected_route: Some("prefix-path"),
+		},
+		TestCase {
+			name: "prefix path does not match partial segment",
+			path: "/apiary",
+			expected_route: Some("root-prefix"),
+		},
+		TestCase {
+			name: "prefix path does not match encoded slash as segment boundary",
+			path: "/api%2Fv1",
+			expected_route: Some("root-prefix"),
+		},
+		TestCase {
+			name: "prefix path matches raw double slash segment",
+			path: "/api//v1",
 			expected_route: Some("prefix-path"),
 		},
 		// Test regex path matching
@@ -1149,12 +1171,35 @@ fn service_route(key: &str, service_key: NamespacedHostname, matches: Vec<RouteM
 	Route {
 		key: strng::new(key),
 		service_key: Some(service_key),
+		service_port: 0,
 		name: Default::default(),
 		hostnames: vec![], // GAMMA: hostname matching skipped for service routes
 		matches,
 		backends: vec![],
+		llm_router: None,
 		inline_policies: vec![],
 	}
+}
+
+fn service_route_port(
+	key: &str,
+	service_key: NamespacedHostname,
+	service_port: u16,
+	matches: Vec<RouteMatch>,
+) -> Route {
+	Route {
+		service_port,
+		..service_route(key, service_key, matches)
+	}
+}
+
+fn prefix_match(prefix: &str) -> Vec<RouteMatch> {
+	vec![RouteMatch {
+		path: PathMatch::PathPrefix(strng::new(prefix)),
+		headers: vec![],
+		method: None,
+		query: vec![],
+	}]
 }
 
 fn svc_nh() -> NamespacedHostname {
@@ -1230,6 +1275,32 @@ async fn test_service_route_path_match() {
 	attach_waypoint_service(&mut req, &stores, &svc_nh());
 	let result = super::select_best_route(stores.clone(), dst, &listener, &req);
 	assert_eq!(result.unwrap().0.key.as_str(), "health-route");
+}
+
+#[tokio::test]
+async fn test_service_route_port_no_wildcard_rejects() {
+	let stores = stores_with_service_routes(
+		waypoint_svc(),
+		vec![service_route_port(
+			"port-80-route",
+			svc_nh(),
+			80,
+			prefix_match("/"),
+		)],
+	);
+	let listener = hbone_listener();
+	let mut req = request(
+		"http://my-app.default.svc.cluster.local/",
+		http::Method::GET,
+		&[],
+	);
+	attach_waypoint_service(&mut req, &stores, &svc_nh());
+	let dst = SocketAddr::new("10.0.0.100".parse().unwrap(), 443);
+	let result = super::select_best_route(stores, dst, &listener, &req);
+	assert!(
+		result.is_none(),
+		"service routes exist but none match port 443 -> reject"
+	);
 }
 
 #[tokio::test]
@@ -1403,10 +1474,12 @@ fn bench(b: Bencher, (host, route): (u64, u64)) {
 	for route in routes.into_iter().map(|(name, host, matches)| Route {
 		key: name.into(),
 		service_key: None,
+		service_port: 0,
 		name: Default::default(),
 		hostnames: host.into_iter().map(|s| s.into()).collect(),
 		matches,
 		backends: vec![],
+		llm_router: None,
 		inline_policies: vec![],
 	}) {
 		stores

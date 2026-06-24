@@ -20,7 +20,6 @@ import (
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/protomarshal"
-	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,13 +28,13 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
-	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/shared"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -57,6 +56,7 @@ const (
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
 	directResponseSuffix           = ":direct-response"
+	bufferSuffix                   = ":buffer"
 )
 
 var logger = logging.New("agentgateway/plugins")
@@ -90,7 +90,7 @@ func ConvertStatusCollection[T controllers.Object, S any](
 }
 
 // NewAgentPlugin creates a new AgentgatewayPolicy plugin
-func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup) AgwPlugin {
+func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLookup jwks.Lookup, credentialResolver kubeutils.CredentialResolver) AgwPlugin {
 	return AgwPlugin{
 		ContributesPolicies: map[schema.GroupKind]PolicyPlugin{
 			wellknown.AgentgatewayPolicyGVK.GroupKind(): {
@@ -99,13 +99,13 @@ func NewAgentPlugin(agw *AgwCollections, resolver remotehttp.Resolver, jwksLooku
 						*gwv1.PolicyStatus,
 						[]AgwPolicy,
 					) {
-						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, resolver, jwksLookup)
+						return TranslateAgentgatewayPolicy(krtctx, policyCR, agw, input.References, input.Grants, resolver, jwksLookup, credentialResolver)
 					}, agw.KrtOpts.ToOptions("policies/Agentgateway")...)
 					return ConvertStatusCollection(policyStatusCol, agw.KrtOpts.ToOptions, "policies/Agentgateway"), policyCol
 				},
 				BuildReferences: func(input PolicyPluginInput) krt.Collection[*PolicyAttachment] {
 					return krt.NewManyCollection(agw.AgentgatewayPolicies, func(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy) []*PolicyAttachment {
-						return BackendReferencesFromPolicy(ctx, policy, input.References)
+						return BackendReferencesFromPolicy(ctx, policy, input.References, agw, input.Grants)
 					}, agw.KrtOpts.ToOptions("references/AgentgatewayPolicyAttachments")...)
 				},
 			},
@@ -117,8 +117,33 @@ type PolicyCtx struct {
 	Krt         krt.HandlerContext
 	Collections *AgwCollections
 	References  ReferenceIndex
+	Grants      ReferenceGrantChecker
+	SourceGVK   schema.GroupVersionKind
 	Resolver    remotehttp.Resolver
 	JWKSLookup  jwks.Lookup
+
+	// CredentialResolver resolves credential refs: the built-in Secret resolver
+	// in OSS, or an injected resolver (which may itself be a chain). Access it
+	// through ResolveCredentialRef, which is nil-safe.
+	CredentialResolver kubeutils.CredentialResolver
+}
+
+// PolicySourceGVK returns the Kubernetes kind that should be used as the
+// ReferenceGrant "from" kind for backend refs emitted while translating this
+// policy.
+func (ctx PolicyCtx) PolicySourceGVK() schema.GroupVersionKind {
+	if ctx.SourceGVK == (schema.GroupVersionKind{}) {
+		return wellknown.AgentgatewayPolicyGVK
+	}
+	return ctx.SourceGVK
+}
+
+// ResolveCredentialRef applies the context's credential resolver.
+func (ctx PolicyCtx) ResolveCredentialRef(ref agentgateway.LocalSecretObjectRef, namespace string) (map[string][]byte, error) {
+	if ctx.CredentialResolver == nil {
+		return nil, errors.New("secret credential resolver is not configured")
+	}
+	return ctx.CredentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
 }
 
 type ResolvedTarget struct {
@@ -134,13 +159,24 @@ func TranslateAgentgatewayPolicy(
 	policy *agentgateway.AgentgatewayPolicy,
 	agw *AgwCollections,
 	references ReferenceIndex,
+	grants ReferenceGrantChecker,
 	resolver remotehttp.Resolver,
 	jwksLookup jwks.Lookup,
+	credentialResolver kubeutils.CredentialResolver,
 ) (*gwv1.PolicyStatus, []AgwPolicy) {
 	var agwPolicies []AgwPolicy
 	existingStatus := policy.Status.DeepCopy()
 
-	pctx := PolicyCtx{Krt: ctx, Collections: agw, References: references, Resolver: resolver, JWKSLookup: jwksLookup}
+	pctx := PolicyCtx{
+		Krt:                ctx,
+		Collections:        agw,
+		References:         references,
+		Grants:             grants,
+		SourceGVK:          wellknown.AgentgatewayPolicyGVK,
+		Resolver:           resolver,
+		JWKSLookup:         jwksLookup,
+		CredentialResolver: credentialResolver,
+	}
 	var ancestors []gwv1.PolicyAncestorStatus
 	var attachmentErrors []string
 	// TODO: add selectors
@@ -261,35 +297,35 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 	if err != nil {
 		// If we produced some policies alongside errors, treat as partial validity
 		if hasTranslatedPolicies {
-			conds[string(shared.PolicyConditionAccepted)] = &Condition{
+			conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
 				Status:  metav1.ConditionTrue,
-				Reason:  string(shared.PolicyReasonPartiallyValid),
+				Reason:  string(agentgateway.PolicyReasonPartiallyValid),
 				Message: err.Error(),
 			}
 		} else {
 			// No policies produced and error present -> invalid
-			conds[string(shared.PolicyConditionAccepted)] = &Condition{
+			conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
 				Status:  metav1.ConditionFalse,
-				Reason:  string(shared.PolicyReasonInvalid),
+				Reason:  string(agentgateway.PolicyReasonInvalid),
 				Message: err.Error(),
 			}
-			conds[string(shared.PolicyConditionAttached)] = &Condition{
+			conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
 				Status:  metav1.ConditionFalse,
-				Reason:  string(shared.PolicyReasonPending),
+				Reason:  string(agentgateway.PolicyReasonPending),
 				Message: "Policy is not attached due to invalid status",
 			}
 		}
 	} else {
 		// Check for partial validity
 		// Build success conditions per ancestor
-		conds[string(shared.PolicyConditionAccepted)] = &Condition{
+		conds[string(agentgateway.PolicyConditionAccepted)] = &Condition{
 			Status:  metav1.ConditionTrue,
-			Reason:  string(shared.PolicyReasonValid),
+			Reason:  string(agentgateway.PolicyReasonValid),
 			Message: reporter.PolicyAcceptedMsg,
 		}
-		conds[string(shared.PolicyConditionAttached)] = &Condition{
+		conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
 			Status:  metav1.ConditionTrue,
-			Reason:  string(shared.PolicyReasonAttached),
+			Reason:  string(agentgateway.PolicyReasonAttached),
 			Message: reporter.PolicyAttachedMsg,
 		}
 	}
@@ -298,9 +334,9 @@ func PolicyConditionMap(err error, hasTranslatedPolicies bool) map[string]*Condi
 
 func attachmentErrorConditionMap(baseConds map[string]*Condition, attachmentErrors []string) map[string]*Condition {
 	conds := maps.Clone(baseConds)
-	conds[string(shared.PolicyConditionAttached)] = &Condition{
+	conds[string(agentgateway.PolicyConditionAttached)] = &Condition{
 		Status:  metav1.ConditionFalse,
-		Reason:  string(shared.PolicyReasonPending),
+		Reason:  string(agentgateway.PolicyReasonPending),
 		Message: strings.Join(attachmentErrors, "\n"),
 	}
 	return conds
@@ -393,6 +429,7 @@ func translateTrafficPolicyToAgw(
 	// Generate a base policy name from the TrafficPolicy reference
 	basePolicyName := getTrafficPolicyName(policy.Namespace, policy.Name)
 	policyName := config.NamespacedName(policy)
+	inheritance := translatePolicyInheritance(policy.Spec.Strategy)
 
 	appendPolicy := func(kind string) func(*api.Policy, error) {
 		return func(p *api.Policy, err error) {
@@ -402,6 +439,7 @@ func translateTrafficPolicyToAgw(
 				errs = append(errs, err)
 			}
 			if p != nil {
+				p.Inheritance = inheritance
 				agwPolicies = append(agwPolicies, p)
 			}
 		}
@@ -413,6 +451,11 @@ func translateTrafficPolicyToAgw(
 				name := fmt.Sprintf("%s %s", kind, policyName)
 				logger.Error("error processing policy", "policy", name, "error", err)
 				errs = append(errs, err)
+			}
+			for _, p := range policies {
+				if p != nil {
+					p.Inheritance = inheritance
+				}
 			}
 			agwPolicies = append(agwPolicies, policies...)
 		}
@@ -446,7 +489,7 @@ func translateTrafficPolicyToAgw(
 
 	// Convert Authorization policy if present
 	if traffic.Authorization != nil {
-		appendPolicy("authorization")(processAuthorizationPolicy(traffic.Authorization, basePolicyName, policyName))
+		appendPolicy("authorization")(processAuthorizationPolicy(traffic.Authorization, traffic.Phase, basePolicyName, policyName))
 	}
 
 	// Process RateLimit policies if present
@@ -473,7 +516,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.Cors != nil {
-		appendPolicy("cors")(processCorsPolicy(traffic.Cors, basePolicyName, policyName), nil)
+		appendPolicy("cors")(processCorsPolicy(traffic.Cors, traffic.Phase, basePolicyName, policyName), nil)
 	}
 
 	if traffic.HeaderModifiers != nil {
@@ -504,6 +547,10 @@ func translateTrafficPolicyToAgw(
 		))
 	}
 
+	if traffic.Buffer != nil {
+		appendPolicy("buffer")(processBufferPolicy(traffic.Buffer, basePolicyName, policyName))
+	}
+
 	if traffic.JWTAuthentication != nil {
 		appendPolicy("jwtAuthentication")(processJWTAuthenticationPolicy(ctx, traffic.JWTAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
@@ -516,6 +563,54 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("basicAuthentication")(processBasicAuthenticationPolicy(ctx, traffic.BasicAuthentication, traffic.Phase, basePolicyName, policyName))
 	}
 	return agwPolicies, errors.Join(errs...)
+}
+
+func translateBufferBody(b *agentgateway.BufferBody) *api.BufferBody {
+	if b != nil {
+		if v := b.MaxBytes; v != nil {
+			return &api.BufferBody{
+				MaxBytes: quantityUint32(v),
+			}
+		}
+		return &api.BufferBody{}
+	}
+
+	return nil
+}
+
+func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
+	var errs []error
+	translatedBuffer := &api.Buffer{}
+	translatedBuffer.Request = translateBufferBody(buffer.Request)
+	translatedBuffer.Response = translateBufferBody(buffer.Response)
+
+	bufferPolicy := &api.Policy{
+		Key:  basePolicyName + bufferSuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policyName),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Buffer{
+					Buffer: translatedBuffer,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated Buffer policy",
+		"policy", basePolicyName,
+		"agentgateway_policy", bufferPolicy.Name)
+
+	return bufferPolicy, errors.Join(errs...)
+}
+
+func translatePolicyInheritance(strategy *agentgateway.PolicyStrategy) api.Policy_Inheritance {
+	if strategy == nil || strategy.Inheritance == nil {
+		return api.Policy_DEFAULT
+	}
+	if *strategy.Inheritance == agentgateway.PolicyInheritanceOverride {
+		return api.Policy_OVERRIDE
+	}
+	return api.Policy_DEFAULT
 }
 
 func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
@@ -546,6 +641,14 @@ func processRetriesPolicy(retry *agentgateway.Retry, basePolicyName string, poli
 			// Agentgateway stores this as a u8 so has a max of 255
 			translatedRetry.Attempts = int32(min(*retry.Attempts, 255)) //nolint:gosec // G115: max 255 so cannot fail
 		}
+	}
+
+	if retry.Precondition != nil {
+		translatedRetry.Precondition = string(*retry.Precondition)
+	}
+
+	if retry.Condition != nil {
+		translatedRetry.Condition = string(*retry.Condition)
 	}
 
 	retryPolicy := &api.Policy{
@@ -702,11 +805,11 @@ func processBasicAuthenticationPolicy(
 	}
 
 	if s := ba.SecretRef; s != nil {
-		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+s.Name)))
-		if scrt == nil {
-			errs = append(errs, fmt.Errorf("basic authentication secret %v not found", s.Name))
+		data, err := ctx.ResolveCredentialRef(*s, policy.Namespace)
+		if err != nil {
+			errs = append(errs, err)
 		} else {
-			d, ok := scrt.Data[".htaccess"]
+			d, ok := data[".htaccess"]
 			if !ok {
 				errs = append(errs, fmt.Errorf("basic authentication secret %v found, but doesn't contain '.htaccess' key", s.Name))
 			}
@@ -758,27 +861,36 @@ func processAPIKeyAuthenticationPolicy(
 		p.Mode = api.TrafficPolicySpec_APIKey_PERMISSIVE
 	}
 
-	var secrets []*corev1.Secret
+	type apiKeyData struct {
+		name string
+		data map[string][]byte
+	}
+	var dataSets []apiKeyData
 	var errs []error
 	if err := validateExtractionAuthorizationLocation(ak.Location, "apiKeyAuthentication location"); err != nil {
 		errs = append(errs, err)
 	}
 	if s := ak.SecretRef; s != nil {
-		scrt := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.Secrets, krt.FilterKey(policy.Namespace+"/"+s.Name)))
-		if scrt == nil {
-			errs = append(errs, fmt.Errorf("API Key secret %v not found", s.Name))
+		data, err := ctx.ResolveCredentialRef(*s, policy.Namespace)
+		if err != nil {
+			errs = append(errs, err)
 		} else {
-			secrets = []*corev1.Secret{scrt}
+			dataSets = []apiKeyData{{name: string(s.Name), data: data}}
 		}
 	}
 	if s := ak.SecretSelector; s != nil {
-		secrets = krt.Fetch(ctx.Krt, ctx.Collections.Secrets, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.SecretsByNamespace, policy.Namespace))
+		dataSets = nil
+		// Preserve existing precedence: secretSelector replaces secretRef, and
+		// remains Secret-only. CredentialRef resolution is handled by secretRef.
+		for _, secret := range krt.Fetch(ctx.Krt, ctx.Collections.Secrets, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.SecretsByNamespace, policy.Namespace)) {
+			dataSets = append(dataSets, apiKeyData{name: secret.Name, data: secret.Data})
+		}
 	}
-	for _, s := range secrets {
-		for k, v := range s.Data {
+	for _, s := range dataSets {
+		for k, v := range s.data {
 			trimmed := bytes.TrimSpace(v)
 			if len(trimmed) == 0 {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: empty value", s.Name, k))
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: empty value", s.name, k))
 				continue
 			}
 			var ke APIKeyEntry
@@ -789,13 +901,13 @@ func processAPIKeyAuthenticationPolicy(
 					Metadata: nil,
 				}
 			} else if err := json.Unmarshal(trimmed, &ke); err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.Name, k, err))
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
 				continue
 			}
 
 			pbs, err := toStruct(ke.Metadata)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.Name, k, err))
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
 				continue
 			}
 			p.ApiKeys = append(p.ApiKeys, &api.TrafficPolicySpec_APIKey_User{
@@ -872,7 +984,7 @@ func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicy
 	return p
 }
 
-func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePolicyName string, policy types.NamespacedName) []*api.Policy {
+func processHeaderModifierPolicy(headerModifier *agentgateway.HeaderModifiers, basePolicyName string, policy types.NamespacedName) []*api.Policy {
 	var policies []*api.Policy
 
 	var headerModifierPolicyRequest, headerModifierPolicyResponse *api.Policy
@@ -919,12 +1031,13 @@ func processHeaderModifierPolicy(headerModifier *shared.HeaderModifiers, basePol
 	return policies
 }
 
-func processCorsPolicy(cors *agentgateway.CORS, basePolicyName string, policy types.NamespacedName) *api.Policy {
+func processCorsPolicy(cors *agentgateway.CORS, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	corsPolicy := &api.Policy{
 		Key:  basePolicyName + corsPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
+				Phase: phase(policyPhase),
 				Kind: &api.TrafficPolicySpec_Cors{Cors: &api.CORS{
 					AllowCredentials: ptr.OrEmpty(cors.AllowCredentials),
 					AllowHeaders:     slices.Map(cors.AllowHeaders, func(h gwv1.HTTPHeaderName) string { return string(h) }),
@@ -1054,7 +1167,7 @@ func buildExtAuthSpec(
 		errs = append(errs, fmt.Errorf("failed to build extAuth: backendRef is required"))
 	} else {
 		var err error
-		be, err = buildBackendRef(ctx, *extAuth.BackendRef, policy.Namespace)
+		be, err = BuildBackendRef(ctx, *extAuth.BackendRef, policy.Namespace)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to build extAuth: %v", err))
 		}
@@ -1065,7 +1178,7 @@ func buildExtAuthSpec(
 		FailureMode: extAuthFailureMode(extAuth.FailureMode),
 	}
 	if g := extAuth.GRPC; g != nil {
-		metadata := castCELMap(g.RequestMetadata, func(key string, expr shared.CELExpression) {
+		metadata := castCELMap(g.RequestMetadata, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth grpc requestMetadata %q is not a valid CEL expression: %s", key, expr))
 		})
 		p := &api.TrafficPolicySpec_ExternalAuth_GRPCProtocol{
@@ -1076,21 +1189,25 @@ func buildExtAuthSpec(
 			Grpc: p,
 		}
 	} else if h := extAuth.HTTP; h != nil {
-		path := castCELPtr(h.Path, func(expr shared.CELExpression) {
+		path := castCELPtr(h.Path, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http path is not a valid CEL expression: %s", expr))
 		})
-		redirect := castCELPtr(h.Redirect, func(expr shared.CELExpression) {
+		redirect := castCELPtr(h.Redirect, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http redirect is not a valid CEL expression: %s", expr))
 		})
-		addRequestHeaders := castCELMap(h.AddRequestHeaders, func(key string, expr shared.CELExpression) {
+		body := castCELPtr(h.Body, func(expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("extAuth http body is not a valid CEL expression: %s", expr))
+		})
+		addRequestHeaders := castCELMap(h.AddRequestHeaders, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http addRequestHeaders %q is not a valid CEL expression: %s", key, expr))
 		})
-		metadata := castCELMap(h.ResponseMetadata, func(key string, expr shared.CELExpression) {
+		metadata := castCELMap(h.ResponseMetadata, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http responseMetadata %q is not a valid CEL expression: %s", key, expr))
 		})
 		p := &api.TrafficPolicySpec_ExternalAuth_HTTPProtocol{
 			Path:                   path,
 			Redirect:               redirect,
+			Body:                   body,
 			IncludeResponseHeaders: h.AllowedResponseHeaders,
 			AddRequestHeaders:      addRequestHeaders,
 			Metadata:               metadata,
@@ -1114,10 +1231,10 @@ func buildExtAuthSpec(
 		}
 	}
 	if cache := extAuth.Cache; cache != nil {
-		key := castCELSlice(cache.Key, func(expr shared.CELExpression) {
+		key := castCELSlice(cache.Key, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache key is not a valid CEL expression: %s", expr))
 		})
-		ttl := castExtAuthCacheTTL(cache.TTL, func(expr shared.CELExpression) {
+		ttl := castExtAuthCacheTTL(cache.TTL, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache ttl is not a valid CEL expression: %s", expr))
 		})
 		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
@@ -1142,7 +1259,7 @@ func processExtProcTraffic(
 		backendErr = fmt.Errorf("failed to build extProc: backendRef is required")
 	} else {
 		var err error
-		be, err = buildBackendRef(ctx, *extProc.BackendRef, policy.Namespace)
+		be, err = BuildBackendRef(ctx, *extProc.BackendRef, policy.Namespace)
 		if err != nil {
 			backendErr = fmt.Errorf("failed to build extProc: %v", err)
 		}
@@ -1242,7 +1359,7 @@ func cast[T ~string](items []T) []string {
 	})
 }
 
-func castCELSlice(items []shared.CELExpression, invalid func(shared.CELExpression)) []string {
+func castCELSlice(items []agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) []string {
 	if items == nil {
 		return nil
 	}
@@ -1256,7 +1373,7 @@ func castCELSlice(items []shared.CELExpression, invalid func(shared.CELExpressio
 	return res
 }
 
-func castCELMap(items map[string]shared.CELExpression, invalid func(string, shared.CELExpression)) map[string]string {
+func castCELMap(items map[string]agentgateway.CELExpression, invalid func(string, agentgateway.CELExpression)) map[string]string {
 	if items == nil {
 		return nil
 	}
@@ -1270,7 +1387,7 @@ func castCELMap(items map[string]shared.CELExpression, invalid func(string, shar
 	return res
 }
 
-func castCELPtr(item *shared.CELExpression, invalid func(shared.CELExpression)) *string {
+func castCELPtr(item *agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) *string {
 	if item == nil {
 		return nil
 	}
@@ -1281,14 +1398,14 @@ func castCELPtr(item *shared.CELExpression, invalid func(shared.CELExpression)) 
 	return res
 }
 
-func castCEL(item shared.CELExpression, invalid func(shared.CELExpression)) string {
+func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
 	if !isCEL(item) {
 		invalid(item)
 	}
 	return string(item)
 }
 
-func castExtAuthCacheTTL(item shared.CELExpression, invalid func(shared.CELExpression)) string {
+func castExtAuthCacheTTL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
 	raw := string(item)
 	if _, err := time.ParseDuration(raw); err == nil {
 		return "duration(" + strconv.Quote(raw) + ")"
@@ -1298,18 +1415,19 @@ func castExtAuthCacheTTL(item shared.CELExpression, invalid func(shared.CELExpre
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
 func processAuthorizationPolicy(
-	auth *shared.Authorization,
+	auth *agentgateway.Authorization,
+	policyPhase *agentgateway.PolicyPhase,
 	basePolicyName string,
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
 	var errs []error
 	var allowPolicies, denyPolicies, requirePolicies []string
-	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr shared.CELExpression) {
+	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr agentgateway.CELExpression) {
 		errs = append(errs, fmt.Errorf("authorization matchExpression is not a valid CEL expression: %s", expr))
 	})
-	if auth.Action == shared.AuthorizationPolicyActionDeny {
+	if auth.Action == agentgateway.AuthorizationPolicyActionDeny {
 		denyPolicies = append(denyPolicies, policies...)
-	} else if auth.Action == shared.AuthorizationPolicyActionRequire {
+	} else if auth.Action == agentgateway.AuthorizationPolicyActionRequire {
 		requirePolicies = append(requirePolicies, policies...)
 	} else {
 		allowPolicies = append(allowPolicies, policies...)
@@ -1320,6 +1438,7 @@ func processAuthorizationPolicy(
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
+				Phase: phase(policyPhase),
 				Kind: &api.TrafficPolicySpec_Authorization{
 					Authorization: &api.TrafficPolicySpec_RBAC{
 						Allow:   allowPolicies,
@@ -1476,7 +1595,7 @@ func processLocalRateLimitPolicy(limits []agentgateway.LocalRateLimit, policyPha
 
 func processGlobalRateLimitTraffic(ctx PolicyCtx, grl *agentgateway.GlobalRateLimit, policy types.NamespacedName) (*api.Policy_Traffic, error) {
 	var errs []error
-	be, err := buildBackendRef(ctx, grl.BackendRef, policy.Namespace)
+	be, err := BuildBackendRef(ctx, grl.BackendRef, policy.Namespace)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to build global rate limit: %v", err))
 	}
@@ -1570,14 +1689,44 @@ func remoteRateLimitFailureMode(mode agentgateway.FailureMode) api.TrafficPolicy
 	return api.TrafficPolicySpec_RemoteRateLimit_FAIL_CLOSED
 }
 
-func buildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string) (*api.BackendReference, error) {
+// BuildBackendRef constructs an agentgateway backend reference from a Gateway
+// API backendRef and enforces any configured cross-namespace ReferenceGrant
+// requirements for the policy source in ctx.
+func BuildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string) (*api.BackendReference, error) {
 	kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
 	group := ptr.OrDefault(ref.Group, "")
 	gk := schema.GroupKind{
 		Group: string(group),
 		Kind:  string(kind),
 	}
+	if err := checkBackendRefGrant(ctx, ref, defaultNS, gk); err != nil {
+		return nil, err
+	}
 	return ctx.References.PolicyBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
+}
+
+func checkBackendRefGrant(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS string, gk schema.GroupKind) error {
+	if ref.Namespace != nil &&
+		string(*ref.Namespace) != defaultNS &&
+		ctx.Collections.Settings.BackendRefGrantMode.RequirePolicyBackendGrant() {
+		sourceGVK := ctx.PolicySourceGVK()
+		if !ctx.Grants.BackendAllowed(
+			ctx.Krt,
+			sourceGVK,
+			ref.Name,
+			*ref.Namespace,
+			defaultNS,
+			gk,
+			ctx.Collections.Settings.BackendRefGrantMode,
+		) {
+			article := "a"
+			if sourceGVK.Kind != "" && strings.ContainsAny(strings.ToLower(sourceGVK.Kind[:1]), "aeiou") {
+				article = "an"
+			}
+			return fmt.Errorf("backendRef %v/%v not accessible to %s %s in namespace %q (missing a ReferenceGrant?)", *ref.Namespace, ref.Name, article, sourceGVK.Kind, defaultNS)
+		}
+	}
+	return nil
 }
 
 func toJSONValue(j apiextensionsv1.JSON) (string, error) {
@@ -1721,7 +1870,7 @@ func convertTransformSpec(spec *agentgateway.Transform) (*api.TrafficPolicySpec_
 }
 
 // Checks if the expression is a valid CEL expression
-func isCEL(expr shared.CELExpression) bool {
+func isCEL(expr agentgateway.CELExpression) bool {
 	_, iss := celEnv.Parse(string(expr))
 	return iss.Err() == nil
 }
@@ -1798,11 +1947,34 @@ func DefaultString[T ~string](s *T, def string) string {
 
 // BackendReferencesFromPolicy only emits attachments for existing, unsectioned targets
 // to prevent phantom chains and section-scoped over-attachment.
-func BackendReferencesFromPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, references ReferenceIndex) []*PolicyAttachment {
+func BackendReferencesFromPolicy(
+	ctx krt.HandlerContext,
+	policy *agentgateway.AgentgatewayPolicy,
+	references ReferenceIndex,
+	agw *AgwCollections,
+	grants ReferenceGrantChecker,
+) []*PolicyAttachment {
+	return BackendReferencesFromPolicyForSource(ctx, policy, references, agw, grants, wellknown.AgentgatewayPolicyGVK)
+}
+
+// BackendReferencesFromPolicyForSource emits policy backend attachments using
+// sourceGVK as the policy kind for ReferenceGrant checks and attachment source
+// metadata.
+func BackendReferencesFromPolicyForSource(
+	ctx krt.HandlerContext,
+	policy *agentgateway.AgentgatewayPolicy,
+	references ReferenceIndex,
+	agw *AgwCollections,
+	grants ReferenceGrantChecker,
+	sourceGVK schema.GroupVersionKind,
+) []*PolicyAttachment {
+	if sourceGVK == (schema.GroupVersionKind{}) {
+		sourceGVK = wellknown.AgentgatewayPolicyGVK
+	}
 	s := policy.Spec
 	self := utils.TypedNamespacedName{
 		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
-		Kind:           wellknown.AgentgatewayPolicyGVK.Kind,
+		Kind:           sourceGVK.Kind,
 	}
 
 	seenTargets := make(map[utils.TypedNamespacedName]struct{})
@@ -1840,7 +2012,7 @@ func BackendReferencesFromPolicy(ctx krt.HandlerContext, policy *agentgateway.Ag
 		return nil
 	}
 
-	backends := referencedBackendsFromPolicy(policy)
+	backends := referencedBackendsFromPolicy(ctx, policy, agw, grants, sourceGVK)
 	if len(backends) == 0 {
 		return nil
 	}
@@ -1881,13 +2053,27 @@ func PolicyOrConditionalSeq[T any, P interface {
 	}
 }
 
-func referencedBackendsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []utils.TypedNamespacedName {
+func referencedBackendsFromPolicy(ctx krt.HandlerContext, policy *agentgateway.AgentgatewayPolicy, agw *AgwCollections, grants ReferenceGrantChecker, sourceGVK schema.GroupVersionKind) []utils.TypedNamespacedName {
 	var backends []utils.TypedNamespacedName
-	app := func(ref gwv1.BackendObjectReference) {
+	for _, ref := range referencedBackendRefsFromPolicy(policy) {
+		kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
+		group := ptr.OrDefault(ref.Group, "")
+		gk := schema.GroupKind{Group: string(group), Kind: string(kind)}
+		if err := checkBackendRefGrant(PolicyCtx{Krt: ctx, Collections: agw, Grants: grants, SourceGVK: sourceGVK}, ref, policy.Namespace, gk); err != nil {
+			continue
+		}
 		backends = append(backends, utils.TypedNamespacedName{
 			NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
 			Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
 		})
+	}
+	return backends
+}
+
+func referencedBackendRefsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []gwv1.BackendObjectReference {
+	var backends []gwv1.BackendObjectReference
+	app := func(ref gwv1.BackendObjectReference) {
+		backends = append(backends, ref)
 	}
 
 	s := policy.Spec

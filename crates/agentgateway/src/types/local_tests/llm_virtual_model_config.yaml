@@ -1,0 +1,31 @@
+llm:
+  models:
+  - name: anthropic/*
+    visibility: internal
+    provider: anthropic
+    params:
+      apiKey: sk-anthropic
+    transformation:
+      model: llmRequest.model.stripPrefix("anthropic/")
+  - name: openai/gpt-5-mini
+    visibility: internal
+    provider: openAI
+    params:
+      model: gpt-5-mini
+      apiKey: sk-openai
+  - name: "*"
+    visibility: internal
+    provider: openAI
+    params:
+      apiKey: sk-openai
+  virtualModels:
+  - name: fast
+    routing:
+      weighted:
+        targets:
+        - model: anthropic/haiku
+          weight: 60
+        - model: openai/gpt-5-mini
+          weight: 30
+        - model: fallback-small
+          weight: 10

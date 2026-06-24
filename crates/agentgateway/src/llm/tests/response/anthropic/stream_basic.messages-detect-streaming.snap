@@ -42,5 +42,6 @@ data: {"type":"message_stop"            }
   "output_tokens": 21,
   "total_tokens": 36,
   "cache_creation_input_tokens": 0,
-  "cached_input_tokens": 0
+  "cached_input_tokens": 0,
+  "provider_model": "claude-haiku-4-5-20251001"
 }

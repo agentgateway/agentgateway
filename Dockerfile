@@ -6,12 +6,13 @@ FROM docker.io/library/node:23.11.0-bookworm AS node
 WORKDIR /app
 
 COPY ui .
+COPY schema /schema
 
 RUN --mount=type=cache,target=/app/npm/cache npm install
 
 RUN --mount=type=cache,target=/app/npm/cache npm run build
 
-FROM docker.io/library/rust:1.95.0-trixie AS musl-builder
+FROM docker.io/library/rust:1.96.0-trixie AS musl-builder
 
 ARG TARGETARCH
 
@@ -33,7 +34,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.95.0-trixie AS base-builder
+FROM docker.io/library/rust:1.96.0-trixie AS base-builder
 
 ARG TARGETARCH
 
@@ -73,6 +74,11 @@ RUN --mount=type=cache,target=/app/target \
     <<EOF
 export VERSION="${VERSION}"
 export GIT_REVISION="${GIT_REVISION}"
+# Build jemalloc for 64KB pages on arm64 so the image runs on hosts with any page
+# size <= 64KB (4KB/16KB/64KB).
+if [ "${TARGETARCH}" = "arm64" ]; then
+  export JEMALLOC_SYS_WITH_LG_PAGE=16
+fi
 if [ "${CARGO_NO_DEFAULT_FEATURES}" = "true" ]; then
   cargo build --no-default-features --features "${CARGO_FEATURES}" --target "$(cat /build/target)" --profile ${PROFILE} || exit 1
 else
@@ -90,6 +96,8 @@ EOF
 FROM cgr.dev/chainguard/glibc-dynamic AS runner
 
 ARG TARGETARCH
+
+ENV AGENTGATEWAY_ENV=container
 
 WORKDIR /
 

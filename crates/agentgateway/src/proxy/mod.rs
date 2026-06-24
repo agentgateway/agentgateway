@@ -53,6 +53,7 @@ impl ProxyResponse {
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
 			| ProxyError::InvalidRequest
+			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
 			| ProxyError::RouteCycleDetected
@@ -209,6 +210,8 @@ pub enum ProxyError {
 	RateLimitFailed,
 	#[error("invalid request")]
 	InvalidRequest,
+	#[error("method not allowed")]
+	MethodNotAllowed,
 	#[error("request upgrade failed, backend tried {1:?} but {0:?} was requested")]
 	UpgradeFailed(Option<HeaderValue>, Option<HeaderValue>),
 	#[error("mcp: {0}")]
@@ -220,7 +223,7 @@ impl ProxyError {
 	pub fn is_retryable(&self) -> bool {
 		match self {
 			ProxyError::UpstreamCallFailed(_) => true,
-			ProxyError::RequestTimeout => true,
+			ProxyError::UpstreamCallTimeout => true,
 			ProxyError::DnsResolution => true,
 			_ => false,
 		}
@@ -247,6 +250,7 @@ impl ProxyError {
 			// Should it be 4xx?
 			ProxyError::FilterError(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::InvalidRequest => StatusCode::BAD_REQUEST,
+			ProxyError::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
 
 			ProxyError::JwtAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::OidcFailure(ref error) => match error {
@@ -313,6 +317,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::BAD_REQUEST,
 		};
 		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
 		let mut rb = ::http::Response::builder().status(code);
@@ -402,6 +407,18 @@ impl ProxyError {
 					message: e.to_string().into(),
 					data: None,
 				},
+			})
+			.unwrap_or_default();
+			return rb
+				.header("content-type", "application/json")
+				.body(http::Body::from(msg))
+				.unwrap();
+		}
+		if let ProxyError::MCP(mcp::Error::McpGuardrails(req_id, rej)) = self {
+			let msg = serde_json::to_string(&JsonRpcError {
+				jsonrpc: Default::default(),
+				id: req_id.clone(),
+				error: rej.clone(),
 			})
 			.unwrap_or_default();
 			return rb

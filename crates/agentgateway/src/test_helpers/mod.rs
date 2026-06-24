@@ -1,4 +1,5 @@
 pub mod extauthmock;
+pub mod extmcpmock;
 pub mod extprocmock;
 mod hyper_tower;
 pub mod oteltracemock;
@@ -108,7 +109,7 @@ mod tests {
 	use protos::envoy::service::auth::v3::{CheckRequest, CheckResponse};
 	use tonic::Status;
 
-	use super::{extauthmock, extprocmock, oteltracemock, ratelimitmock};
+	use super::{extauthmock, extmcpmock, extprocmock, oteltracemock, ratelimitmock};
 	use crate::test_helpers::extauthmock::allow_response;
 	use crate::test_helpers::oteltracemock::ok_response;
 
@@ -116,6 +117,11 @@ mod tests {
 
 	#[async_trait::async_trait]
 	impl extprocmock::Handler for DevExtProcHandler {}
+
+	struct DevExtMcpHandler;
+
+	#[async_trait::async_trait]
+	impl extmcpmock::Handler for DevExtMcpHandler {}
 
 	struct DevRateLimitHandler;
 
@@ -165,12 +171,17 @@ mod tests {
 			.await;
 		tracing::info!("ext_auth mock started on {}", ext_auth.address);
 
+		let ext_mcp = extmcpmock::ExtMcpMock::new(|| DevExtMcpHandler)
+			.spawn_on(([127, 0, 0, 1], 9999).into())
+			.await;
+		tracing::info!("ext_mcp mock started on {}", ext_mcp.address);
+
 		let otel_trace = oteltracemock::OtelTraceMock::new(|| DevOtelTraceHandler)
 			.spawn_on(([127, 0, 0, 1], 9998).into())
 			.await;
 		tracing::info!("otel trace mock started on {}", otel_trace.address);
 
-		let _instances = (ext_proc, rate_limit, ext_auth, otel_trace);
+		let _instances = (ext_proc, rate_limit, ext_auth, ext_mcp, otel_trace);
 		std::future::pending::<()>().await;
 	}
 }

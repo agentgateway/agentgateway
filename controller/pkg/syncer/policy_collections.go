@@ -17,11 +17,11 @@ type PolicyStatusCollections = map[schema.GroupKind]krt.StatusCollection[control
 // building policies. This allows the reference index to be fully populated
 // (including PolicyAttachments from e.g. ext_proc backendRefs) before policies
 // like BackendTLSPolicy run and need to look up gateways for backends.
-func CollectPolicyReferences(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, krtopts krtutil.KrtOptions) krt.Collection[*plugins.PolicyAttachment] {
+func CollectPolicyReferences(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, grants plugins.ReferenceGrantChecker, krtopts krtutil.KrtOptions) krt.Collection[*plugins.PolicyAttachment] {
 	var allReferences []krt.Collection[*plugins.PolicyAttachment]
 	for _, plugin := range agwPlugins.ContributesPolicies {
 		if plugin.BuildReferences != nil {
-			refs := plugin.BuildReferences(plugins.PolicyPluginInput{References: references})
+			refs := plugin.BuildReferences(plugins.PolicyPluginInput{References: references, Grants: grants})
 			if refs != nil {
 				allReferences = append(allReferences, refs)
 			}
@@ -31,11 +31,11 @@ func CollectPolicyReferences(agwPlugins plugins.AgwPlugin, references plugins.Re
 }
 
 // BuildPolicies builds all policies using the provided (fully-populated) reference index.
-func BuildPolicies(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, krtopts krtutil.KrtOptions) (krt.Collection[ir.AgwResource], PolicyStatusCollections) {
+func BuildPolicies(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, grants plugins.ReferenceGrantChecker, krtopts krtutil.KrtOptions) (krt.Collection[ir.AgwResource], PolicyStatusCollections) {
 	var allPolicies []krt.Collection[plugins.AgwPolicy]
 	policyStatusMap := PolicyStatusCollections{}
 	for gvk, plugin := range agwPlugins.ContributesPolicies {
-		status, col := plugin.Build(plugins.PolicyPluginInput{References: references})
+		status, col := plugin.Build(plugins.PolicyPluginInput{References: references, Grants: grants})
 		allPolicies = append(allPolicies, col)
 		if status != nil {
 			policyStatusMap[gvk] = status

@@ -1,4 +1,5 @@
 use std::convert::Infallible;
+use std::sync::Mutex;
 
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -22,6 +23,7 @@ use crate::http::{HeaderName, PolicyResponse, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::{http, *};
 
@@ -109,14 +111,17 @@ pub enum InferenceRoutingDestinationMode {
 
 #[apply(schema_ser_schema!)]
 pub struct InferenceRouting {
+	/// Endpoint picker backend that selects the destination endpoint.
 	#[serde(rename = "endpointPicker")]
 	pub target: Arc<SimpleBackendReference>,
+	/// How to use the destination returned by the endpoint picker.
 	#[serde(
 		default,
 		rename = "destinationMode",
 		skip_serializing_if = "crate::serdes::is_default"
 	)]
 	pub destination_mode: InferenceRoutingDestinationMode,
+	/// Behavior when endpoint picking fails.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	pub failure_mode: FailureMode,
@@ -125,7 +130,9 @@ pub struct InferenceRouting {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct InferenceRoutingConfig {
+	/// Endpoint picker backend that selects the destination endpoint.
 	endpoint_picker: Arc<SimpleBackendReference>,
+	/// How to use the destination returned by the endpoint picker.
 	#[serde(default)]
 	destination_mode: InferenceRoutingDestinationMode,
 }
@@ -231,10 +238,10 @@ impl InferencePoolRouter {
 
 #[apply(schema!)]
 pub struct ExtProc {
-	/// Reference to the external processing service backend
+	/// Backend that receives external processing calls.
 	#[serde(flatten)]
 	pub target: Arc<SimpleBackendReference>,
-	/// Policies to connect to the backend
+	/// Backend policies used when connecting to the external processing service.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
 	#[cfg_attr(
@@ -242,7 +249,7 @@ pub struct ExtProc {
 		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
 	)]
 	pub policies: Vec<BackendTrafficPolicy>,
-	/// Behavior when the ext_proc service is unavailable or returns an error
+	/// Behavior when the external processing service is unavailable or returns an error.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
 
@@ -257,6 +264,7 @@ pub struct ExtProc {
 	/// Maps to the response `attributes` field in ProcessingRequest, and allows dynamic CEL expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub response_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// Controls which request and response parts are sent to the external processing service.
 	#[serde(default)]
 	pub processing_options: ProcessingOptions,
 }
@@ -349,6 +357,16 @@ impl ExtProcRequest {
 		);
 		Ok(pr)
 	}
+
+	pub fn take_body_immediate_response(&self) -> Option<http::Response> {
+		self
+			.ext_proc
+			.as_ref()?
+			.request_body_immediate_response
+			.lock()
+			.unwrap()
+			.take()
+	}
 }
 
 // Very experimental support for ext_proc
@@ -356,6 +374,7 @@ impl ExtProcRequest {
 struct ExtProcInstance {
 	failure_mode: FailureMode,
 	skipped: bool,
+	request_body_immediate_response: Arc<Mutex<Option<http::Response>>>,
 	protocol_config_sent: bool,
 	mode_state: ModeStateMachine,
 	tx_req: Sender<ProcessingRequest>,
@@ -381,7 +400,7 @@ impl ExtProcInstance {
 		trace!("connecting to {:?}", target);
 		let chan = GrpcReferenceChannel {
 			target,
-			client,
+			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtProc),
 			policies: Arc::new(policies),
 		};
 		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);
@@ -432,6 +451,7 @@ impl ExtProcInstance {
 		});
 		Self {
 			skipped: Default::default(),
+			request_body_immediate_response: Arc::new(Mutex::new(None)),
 			failure_mode,
 			protocol_config_sent: false,
 			mode_state: processing_options.into(),
@@ -1091,6 +1111,7 @@ impl ExtProcInstance {
 				if !step.eos && request_fsm.body_path != BodyPath::BufferedPartial {
 					request_fsm.enter_streaming_continuation();
 					trace!("spawn body!");
+					let immediate_response = self.request_body_immediate_response.clone();
 					// Move remaining body response handling to an async task so we can return
 					// the request to the caller while body chunks continue to flow.
 					tokio::task::spawn(async move {
@@ -1099,6 +1120,11 @@ impl ExtProcInstance {
 								trace!("done receiving request");
 								return;
 							};
+							if let Some(resp) = to_immediate_response(&presp) {
+								trace!("got immediate response during request body streaming");
+								*immediate_response.lock().unwrap() = resp.direct_response;
+								return;
+							}
 							let response = handle_response_for_request_mutation(
 								request_fsm.expect_body_response,
 								send_request_headers,

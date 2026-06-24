@@ -5,6 +5,7 @@ fn main() -> Result<(), anyhow::Error> {
 		"proto/xds.proto",
 		"proto/citadel.proto",
 		"proto/ext_authz.proto",
+		"proto/ext_mcp.proto",
 		"proto/ext_proc.proto",
 		"proto/rls.proto",
 		"proto/workload.proto",
@@ -27,6 +28,11 @@ fn main() -> Result<(), anyhow::Error> {
 			".envoy.service.ext_proc.v3.HttpBody.body",
 			".envoy.service.ext_proc.v3.BodyMutation.body",
 			".envoy.service.ext_proc.v3.StreamedBodyResponse.body",
+			".agentgateway.dev.ext_mcp.McpRequest.mcp_request",
+			".agentgateway.dev.ext_mcp.McpResponse.mcp_response",
+			".agentgateway.dev.ext_mcp.McpRequestResult.mutated",
+			".agentgateway.dev.ext_mcp.McpResponseResult.mutated",
+			".agentgateway.dev.ext_mcp.AuthorizationError.mcp_error",
 		]);
 		c.extern_path(".google.protobuf.Value", "::prost_wkt_types::Value");
 		c.extern_path(".google.protobuf.Struct", "::prost_wkt_types::Struct");

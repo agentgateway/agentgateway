@@ -2,9 +2,7 @@ use crate::telemetry::log::MetricsConfig;
 
 pub fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
 	let proxy = super::proxymock::setup_proxy_test("{}").expect("proxy test harness");
-	crate::proxy::httpproxy::PolicyClient {
-		inputs: proxy.inputs(),
-	}
+	crate::proxy::httpproxy::PolicyClient::new(proxy.inputs())
 }
 
 pub async fn test_policy<P>(
@@ -26,6 +24,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	use frozen_collections::FzHashSet;
 	use prometheus_client::registry::Registry;
 
+	use crate::llm::cost::ModelCatalog;
 	use crate::telemetry::log;
 	use crate::telemetry::log::{LoggingFields, RequestLog};
 	use crate::telemetry::metrics::Metrics;
@@ -34,12 +33,15 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	let log_cfg = log::Config {
 		filter: None,
 		fields: LoggingFields::default(),
+		database_fields: LoggingFields::default(),
 		level: "info".to_string(),
 		format: crate::LoggingFormat::Text,
+		database: None,
 	};
 	let cel = log::CelLogging::new(log_cfg, MetricsConfig::default());
 	let mut prom = Registry::default();
 	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
+	let model_catalog = ModelCatalog::empty();
 	let start = agent_core::Timestamp::now();
 	let tcp_info = TCPConnectionInfo {
 		peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),
@@ -47,5 +49,5 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 		start: start.as_instant(),
 		raw_peer_addr: None,
 	};
-	RequestLog::new(cel, metrics, start, tcp_info)
+	RequestLog::new(cel, metrics, model_catalog, start, tcp_info)
 }

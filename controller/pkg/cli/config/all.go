@@ -19,7 +19,11 @@ func allCommand(common *commonFlags) flag.Command {
 			if err != nil {
 				return err
 			}
-			printData(cmd.OutOrStdout(), common.outputFormat, source.ConfigDump)
+			format := common.outputFormat
+			if format == shortOutput {
+				format = jsonOutput
+			}
+			printData(cmd.OutOrStdout(), format, source.ConfigDump)
 
 			return err
 		},
