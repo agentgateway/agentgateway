@@ -788,10 +788,25 @@ impl SessionManager {
 			.get_or_init(|| tokio::spawn(run_idle_reaper(self.sessions.clone())).abort_handle());
 	}
 
+	fn reconcile_targets(session: &mut Session, builder: &RelayInputs) {
+		if !session
+			.relay
+			.upstreams
+			.should_reconcile(&builder.backend.targets)
+		{
+			return;
+		}
+		match session.relay.fork_with_inputs(builder) {
+			Ok(r) => session.relay = Arc::new(r),
+			Err(e) => warn!("failed to fork relay after target roster change: {e}"),
+		}
+	}
+
 	pub fn get_session(&self, id: &str, builder: RelayInputs) -> Option<Session> {
 		let mut sessions = self.sessions.write().ok()?;
 		let entry = sessions.get_mut(id)?;
 		entry.last_access = Instant::now();
+		Self::reconcile_targets(&mut entry.session, &builder);
 		Some(entry.session.clone().with_inputs(builder))
 	}
 
@@ -802,6 +817,7 @@ impl SessionManager {
 	) -> Result<Option<Session>, mcp::Error> {
 		if let Some(s) = self.sessions.write().expect("poisoned").get_mut(id) {
 			s.last_access = Instant::now();
+			Self::reconcile_targets(&mut s.session, &builder);
 			return Ok(Some(s.session.clone().with_inputs(builder)));
 		}
 		let idle_ttl = builder.backend.session_idle_ttl;
