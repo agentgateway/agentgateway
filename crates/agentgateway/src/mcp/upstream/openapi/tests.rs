@@ -95,6 +95,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		method: "GET".to_string(),
 		path: "/users/{user_id}".to_string(),
 		allowed_headers: HashSet::from(["X-Request-ID".to_string()]),
+		content_type: None,
 	};
 
 	let test_tool_post = Tool::new(
@@ -136,6 +137,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		method: "POST".to_string(),
 		path: "/users".to_string(),
 		allowed_headers: HashSet::from(["X-API-Key".to_string()]),
+		content_type: None,
 	};
 
 	let backend = SimpleBackend::Opaque(
@@ -1560,4 +1562,275 @@ async fn test_openapi_from_url() {
 			panic!("Expected OpenAPI target spec, got {:?}", target.spec);
 		}
 	}
+}
+
+#[test]
+fn test_parse_openapi_schema_octet_stream_body() {
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "Binary Upload", "version": "1.0.0"},
+		"paths": {
+			"/upload": {
+				"post": {
+					"operationId": "uploadFile",
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/octet-stream": {
+								"schema": {"type": "string", "format": "binary"}
+							}
+						}
+					},
+					"responses": {
+						"200": {"description": "ok"}
+					}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+
+	let (tool, upstream) = tools
+		.iter()
+		.find(|(tool, _)| tool.name == "uploadFile")
+		.expect("tool should exist");
+
+	assert_eq!(
+		upstream.content_type.as_deref(),
+		Some("application/octet-stream")
+	);
+
+	let schema = &*tool.input_schema;
+	let properties = schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object)
+		.expect("root schema should include properties");
+	assert!(
+		properties.contains_key("body"),
+		"body property should exist"
+	);
+
+	let body_schema = properties
+		.get("body")
+		.and_then(serde_json::Value::as_object)
+		.expect("body should be an object");
+	assert_eq!(body_schema.get("type"), Some(&json!("string")));
+	assert_eq!(body_schema.get("format"), Some(&json!("byte")));
+
+	let required = schema
+		.get("required")
+		.and_then(serde_json::Value::as_array)
+		.expect("root schema should include required array");
+	assert!(
+		required.iter().any(|v| v == "body"),
+		"body should be required"
+	);
+}
+
+#[test]
+fn test_parse_openapi_schema_json_preferred_over_octet_stream() {
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "Multi Content", "version": "1.0.0"},
+		"paths": {
+			"/data": {
+				"post": {
+					"operationId": "postData",
+					"requestBody": {
+						"required": true,
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"name": {"type": "string"}
+									}
+								}
+							},
+							"application/octet-stream": {
+								"schema": {"type": "string", "format": "binary"}
+							}
+						}
+					},
+					"responses": {
+						"200": {"description": "ok"}
+					}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+
+	let (_tool, upstream) = tools
+		.iter()
+		.find(|(tool, _)| tool.name == "postData")
+		.expect("tool should exist");
+
+	assert_eq!(
+		upstream.content_type, None,
+		"JSON path should be taken, no special content_type"
+	);
+}
+
+#[test]
+fn test_parse_openapi_schema_unsupported_content_type_no_body_param() {
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "XML Only", "version": "1.0.0"},
+		"paths": {
+			"/xml": {
+				"post": {
+					"operationId": "postXml",
+					"requestBody": {
+						"required": true,
+						"content": {
+							"text/xml": {
+								"schema": {"type": "string"}
+							}
+						}
+					},
+					"responses": {
+						"200": {"description": "ok"}
+					}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+
+	let (tool, _upstream) = tools
+		.iter()
+		.find(|(tool, _)| tool.name == "postXml")
+		.expect("tool should exist");
+
+	let schema = &*tool.input_schema;
+	let properties = schema
+		.get("properties")
+		.and_then(serde_json::Value::as_object);
+	let has_body = properties.is_some_and(|p| p.contains_key("body"));
+	assert!(
+		!has_body,
+		"unsupported content type should not produce a body parameter"
+	);
+}
+
+struct BinaryBodyMatcher {
+	expected_bytes: Vec<u8>,
+}
+
+impl Match for BinaryBodyMatcher {
+	fn matches(&self, request: &Request) -> bool {
+		request.body == self.expected_bytes
+	}
+}
+
+#[tokio::test]
+async fn test_call_tool_with_binary_body() {
+	let server = MockServer::start().await;
+	let host = server.uri();
+	let parsed = reqwest::Url::parse(&host).unwrap();
+	let config = crate::config::parse_config("{}".to_string(), None).unwrap();
+	let encoder = config.session_encoder.clone();
+	let stores = Stores::with_ipv6_enabled(config.ipv6_enabled);
+	let client = Client::new(
+		&client::Config {
+			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+		},
+		None,
+		BackendConfig::default(),
+		None,
+	);
+	let pi = Arc::new(ProxyInputs {
+		cfg: Arc::new(config),
+		stores: stores.clone(),
+		metrics: Arc::new(crate::metrics::Metrics::new(
+			agent_core::metrics::sub_registry(&mut prometheus_client::registry::Registry::default()),
+			Default::default(),
+		)),
+		model_catalog: crate::llm::cost::ModelCatalog::empty(),
+		admin: None,
+		upstream: client.clone(),
+		ca: None,
+		mcp_state: mcp::router::App::new(stores.clone(), encoder),
+	});
+
+	let client = PolicyClient::new(pi.clone());
+
+	let test_tool_upload = Tool::new(
+		Cow::Borrowed("upload_file"),
+		Cow::Borrowed("Upload a binary file"),
+		Arc::new(
+			json!({
+				"type": "object",
+				"properties": {
+					"body": {
+						"type": "string",
+						"format": "byte",
+						"description": "Base64-encoded binary content"
+					}
+				},
+				"required": ["body"]
+			})
+			.as_object()
+			.unwrap()
+			.clone(),
+		),
+	);
+	let upstream_call_upload = UpstreamOpenAPICall {
+		method: "POST".to_string(),
+		path: "/upload".to_string(),
+		allowed_headers: HashSet::new(),
+		content_type: Some("application/octet-stream".to_string()),
+	};
+
+	let backend = SimpleBackend::Opaque(
+		ResourceName::new(strng::literal!("dummy"), "".into()),
+		Target::Hostname(
+			parsed.host().unwrap().to_string().into(),
+			parsed.port().unwrap_or(8080),
+		),
+	);
+	let upstream_client = super::super::McpHttpClient::new(
+		client,
+		backend,
+		BackendPolicies::default(),
+		false,
+		"test-target".to_string(),
+	);
+	let handler = Handler::new(
+		upstream_client,
+		vec![(test_tool_upload, upstream_call_upload)],
+		"".to_string(),
+	);
+
+	let binary_data: Vec<u8> = vec![0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD];
+	use base64::Engine;
+	let encoded = base64::engine::general_purpose::STANDARD.encode(&binary_data);
+	let expected_response = json!({ "status": "uploaded" });
+
+	Mock::given(method("POST"))
+		.and(path("/upload"))
+		.and(header("content-type", "application/octet-stream"))
+		.and(BinaryBodyMatcher {
+			expected_bytes: binary_data,
+		})
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.mount(&server)
+		.await;
+
+	let args = json!({ "body": encoded });
+	let result = handler
+		.call_tool(
+			"upload_file",
+			Some(args.as_object().unwrap().clone()),
+			&IncomingRequestContext::empty(),
+		)
+		.await;
+
+	assert!(result.is_ok(), "Expected success, got: {:?}", result.err());
+	assert_eq!(result.unwrap(), expected_response);
 }
