@@ -1272,11 +1272,24 @@ type APIKeyAuthentication struct {
 	Location *AuthorizationExtractionLocation `json:"location,omitempty"`
 }
 
+const (
+	// Return error if request/response body is larger than maxBytes
+	ReturnError OverflowAction = "ReturnError"
+	// Continue streaming request and body even if body is larger than maxBytes
+	ContinueStreaming OverflowAction = "ContinueStreaming"
+)
+
+// +k8s:enum
+type OverflowAction string
 type BufferBody struct {
 	// Maximum number of bytes to buffer from the request or response body.
 	// +optional
 	// If unset, defaults to the global proxy setting, which defaults to 2Mi.
 	MaxBytes *ByteSize `json:"maxBytes,omitempty"`
+	// Action to perform when request/response body overflows the buffer
+	// +optional
+	// If unset, defaults to Error, returns error 413 if request body is too large and 502 if response body is too large
+	OnOverflow OverflowAction `json:"onOverflow,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
