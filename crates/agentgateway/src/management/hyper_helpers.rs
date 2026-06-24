@@ -22,7 +22,7 @@ use tokio::net::UnixListener;
 use tracing::info;
 
 use crate::http::{Body, Response};
-use crate::transport::stream::{Socket, TCPConnectionInfo};
+use crate::transport::stream::Socket;
 use crate::types::frontend;
 
 pub fn http1_server() -> http1::Builder {
@@ -211,20 +211,14 @@ impl<S> Server<S> {
 					let f = f.clone();
 					let state = state.clone();
 					tokio::spawn(async move {
-						let tcp_info = socket.ext::<TCPConnectionInfo>().cloned();
 						let serve = http1_server()
 							.half_close(true)
 							.header_read_timeout(Duration::from_secs(2))
 							.max_buf_size(8 * 1024)
 							.serve_connection(
 								hyper_util::rt::TokioIo::new(socket),
-								hyper::service::service_fn(move |mut req| {
+								hyper::service::service_fn(move |req| {
 									let state = state.clone();
-									// Expose the connection's peer info so handlers can enforce
-									// IP-based access restrictions.
-									if let Some(info) = tcp_info.clone() {
-										req.extensions_mut().insert(info);
-									}
 
 									// Failures would abort the whole connection; we just want to return an HTTP error
 									f(state, req).or_else(|err| async move {

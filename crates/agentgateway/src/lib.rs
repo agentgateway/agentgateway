@@ -179,9 +179,6 @@ pub struct RawConfig {
 
 	/// Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	admin_addr: Option<String>,
-	/// Source IPs allowed to access the admin server.
-	/// Defaults to loopback addresses (127.0.0.1 and ::1) only.
-	admin_allowed_ips: Option<Vec<IpAddr>>,
 	/// Standard request log attributes populated for database-backed local runtime features.
 	standard_attributes: Option<RawStandardAttributes>,
 	/// Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
@@ -312,14 +309,6 @@ mod defaults {
 	pub fn http1_idle_timeout() -> Duration {
 		// Default to 10 minutes
 		Duration::from_secs(60 * 10)
-	}
-
-	pub fn admin_allowed_ips() -> Vec<std::net::IpAddr> {
-		use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-		vec![
-			IpAddr::V4(Ipv4Addr::LOCALHOST),
-			IpAddr::V6(Ipv6Addr::LOCALHOST),
-		]
 	}
 }
 
@@ -554,8 +543,6 @@ pub struct Config {
 	/// Specify the number of worker threads the Tokio Runtime will use.
 	pub num_worker_threads: usize,
 	pub admin_addr: Address,
-	/// Source IPs allowed to access the admin server. Defaults to loopback addresses only.
-	pub admin_allowed_ips: Vec<IpAddr>,
 	pub stats_addr: Address,
 	pub readiness_addr: Address,
 	// For waypoint identification

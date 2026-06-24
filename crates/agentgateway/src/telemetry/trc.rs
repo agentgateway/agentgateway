@@ -145,8 +145,7 @@ pub enum Protocol {
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct DeprecatedConfig {
 	pub endpoint: Option<String>,
-	// OTLP headers commonly carry credentials (e.g. `authorization`), so never serialize them
-	#[serde(serialize_with = "crate::serdes::ser_redact")]
+	#[serde(serialize_with = "crate::serdes::ser_sensitive_header_map")]
 	pub headers: HashMap<String, String>,
 	pub protocol: Protocol,
 	pub fields: LoggingFields,
