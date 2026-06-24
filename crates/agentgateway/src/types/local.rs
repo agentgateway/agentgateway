@@ -2489,6 +2489,7 @@ async fn convert(
 			Backend::Opaque(n, _)
 			| Backend::MCP(n, _)
 			| Backend::AI(n, _)
+			| Backend::LLMRouter(n, _)
 			| Backend::Aws(n, _)
 			| Backend::Dynamic(n, _)
 			| Backend::Internal(n, _) => n == &name,
@@ -3287,13 +3288,6 @@ async fn convert_llm_config(
 			authorization: model_config.authorization.clone(),
 		});
 
-		let mut model_route_inline_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
-			routes: llm_routes.into_iter().collect(),
-			..Default::default()
-		}))];
-		if let Some(p) = model_config.authorization.clone() {
-			model_route_inline_policies.push(TrafficPolicy::Authorization(p));
-		}
 		router_models.push(llm::model_router::ModelRoute {
 			name: model_config.name.clone(),
 			visibility: model_config.visibility,
@@ -3303,7 +3297,13 @@ async fn convert_llm_config(
 				.map(|m| m.headers.clone())
 				.collect(),
 			backend_key,
-			route_policies: model_route_inline_policies,
+			policies: llm::model_router::ModelRoutePolicies {
+				llm: Arc::new(crate::llm::Policy {
+					routes: llm_routes.into_iter().collect(),
+					..Default::default()
+				}),
+				authorization: model_config.authorization.clone(),
+			},
 			backend_policies: vec![],
 		});
 	}
@@ -3311,10 +3311,10 @@ async fn convert_llm_config(
 	let virtual_models = llm_registry.into_virtual_models();
 	let mut router_virtual_models = Vec::new();
 	for (idx, virtual_model) in virtual_models.into_iter().enumerate() {
-		let route_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
+		let llm_policy = Arc::new(crate::llm::Policy {
 			routes: llm_route_types(None).into_iter().collect(),
 			..Default::default()
-		}))];
+		});
 		let routing = match virtual_model.routing_strategy()? {
 			LocalLLMVirtualRoutingStrategy::Conditional(conditional) => {
 				for target in &conditional.targets {
@@ -3383,10 +3383,23 @@ async fn convert_llm_config(
 		};
 		router_virtual_models.push(llm::model_router::VirtualModelRoute {
 			name: virtual_model.name,
-			route_policies,
+			llm_policy,
 			routing,
 		});
 	}
+
+	let router_backend_key = strng::new("llm:router");
+	all_backends.push(BackendWithPolicies {
+		backend: Backend::LLMRouter(
+			local_name(router_backend_key.clone()),
+			Arc::new(llm::model_router::ModelRouter::new(
+				router_models,
+				router_virtual_models,
+				startup_timestamp,
+			)),
+		),
+		inline_policies: vec![],
+	});
 
 	routes.push(Route {
 		key: strng::new("llm:request"),
@@ -3405,12 +3418,12 @@ async fn convert_llm_config(
 			headers: vec![],
 			query: vec![],
 		}],
-		backends: vec![],
-		llm_router: Some(Arc::new(llm::model_router::ModelRouter::new(
-			router_models,
-			router_virtual_models,
-			startup_timestamp,
-		))),
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			target: BackendReference::Backend(strng::format!("/{router_backend_key}")).into(),
+			inline_policies: vec![],
+		}],
+		llm_router: None,
 		inline_policies: vec![],
 	});
 
