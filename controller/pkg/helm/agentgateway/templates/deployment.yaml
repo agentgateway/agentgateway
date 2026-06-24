@@ -193,7 +193,7 @@ spec:
           {{- $catalogPaths := list }}
           {{- range ($gateway.modelCatalog).sources }}
           {{- if .configMap }}
-          {{- $catalogPaths = append $catalogPaths (printf "/config/model-catalog/%s.json" .configMap.name) }}
+          {{- $catalogPaths = append $catalogPaths (printf "/etc/agentgateway/model-catalog/%s.json" .configMap.name) }}
           {{- end }}
           {{- end }}
           {{- if $catalogPaths }}
@@ -231,8 +231,8 @@ spec:
             {{- range ($gateway.modelCatalog).sources }}
             {{- if .configMap }}
             - name: model-catalog-{{ .configMap.name }}
-              mountPath: /config/model-catalog/{{ .configMap.name }}.json
-              subPath: {{ .configMap.key | default "catalog.json" }}
+              mountPath: /etc/agentgateway/model-catalog/{{ .configMap.name }}.json
+              subPath: {{ .configMap.name }}.json
               readOnly: true
             {{- end }}
             {{- end }}
