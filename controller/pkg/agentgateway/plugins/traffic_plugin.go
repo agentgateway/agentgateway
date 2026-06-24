@@ -2128,6 +2128,13 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 	if s.MCP != nil && s.MCP.Authentication != nil {
 		app(s.MCP.Authentication.JWKS.BackendRef)
 	}
+	if s.MCP != nil && s.MCP.Guardrails != nil {
+		for _, p := range s.MCP.Guardrails.Processors {
+			if p.Remote != nil {
+				app(p.Remote.BackendRef)
+			}
+		}
+	}
 	if s.AI != nil && s.AI.PromptGuard != nil {
 		for _, p := range s.AI.PromptGuard.Request {
 			if p.Webhook != nil {
