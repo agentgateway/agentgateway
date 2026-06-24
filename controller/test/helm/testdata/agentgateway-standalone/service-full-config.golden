@@ -227,13 +227,6 @@ spec:
         app.kubernetes.io/component: standalone
     spec:
       serviceAccountName: agentgateway-standalone
-      securityContext:
-        fsGroup: 10101
-        fsGroupChangePolicy: OnRootMismatch
-        runAsGroup: 10101
-        sysctls:
-        - name: net.ipv4.ip_unprivileged_port_start
-          value: "0"
       initContainers:
       - name: config-bootstrap
         image: "docker.io/library/busybox:1.36"

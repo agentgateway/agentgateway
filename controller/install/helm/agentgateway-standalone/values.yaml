@@ -26,13 +26,7 @@ serviceAccount:
   name: ""
 
 podAnnotations: {}
-podSecurityContext:
-  runAsGroup: 10101
-  fsGroup: 10101
-  fsGroupChangePolicy: OnRootMismatch
-  sysctls:
-  - name: net.ipv4.ip_unprivileged_port_start
-    value: "0"
+podSecurityContext: {}
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
