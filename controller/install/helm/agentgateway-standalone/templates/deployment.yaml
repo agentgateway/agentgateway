@@ -71,8 +71,6 @@ spec:
           containerPort: {{ .Values.admin.service.port }}
           protocol: TCP
         env:
-        - name: AGENTGATEWAY_ENV
-          value: container
         - name: RUST_BACKTRACE
           value: "1"
         {{- with .Values.extraEnv }}

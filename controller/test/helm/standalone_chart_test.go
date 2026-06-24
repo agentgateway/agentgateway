@@ -111,11 +111,11 @@ gateway:
     trafficDistribution: PreferClose
     ports:
     - name: public-http
-      port: 80
+      port: 8080
       targetPort: 8080
       protocol: TCP
     - name: public-https
-      port: 443
+      port: 8443
       targetPort: 8443
       protocol: TCP
   extraServices:
@@ -217,17 +217,17 @@ func TestStandaloneChartDefaultRender(t *testing.T) {
 	require.Contains(t, out, "name: agentgateway-standalone-admin")
 	require.Contains(t, out, "name: agentgateway-standalone-gateway")
 	require.Contains(t, out, "name: \"http\"")
-	require.Contains(t, out, "port: 80")
 	require.Contains(t, out, "targetPort: 8080")
 	require.Contains(t, out, "name: \"https\"")
-	require.Contains(t, out, "port: 443")
 	require.Contains(t, out, "targetPort: 8443")
-	require.NotContains(t, out, "name: \"listener-3000\"")
-	require.NotContains(t, out, "port: 3000")
-	require.NotContains(t, out, "name: \"listener-4000\"")
-	require.NotContains(t, out, "port: 4000")
+	require.Contains(t, out, "name: \"mcp\"")
+	require.Contains(t, out, "port: 3000")
+	require.Contains(t, out, "targetPort: 3000")
+	require.Contains(t, out, "name: \"llm\"")
+	require.Contains(t, out, "port: 4000")
+	require.Contains(t, out, "targetPort: 4000")
 	require.Contains(t, out, "net.ipv4.ip_unprivileged_port_start")
-	require.Contains(t, out, "runAsUser: 10101")
+	require.NotContains(t, out, "runAsUser: 10101")
 	require.Contains(t, out, "runAsGroup: 10101")
 	require.Contains(t, out, "fsGroup: 10101")
 	require.Contains(t, out, "fsGroupChangePolicy: OnRootMismatch")
@@ -238,6 +238,7 @@ func TestStandaloneChartDefaultRender(t *testing.T) {
 	require.Contains(t, out, "mv \"$tmp\" /config/config.yaml")
 	require.Contains(t, out, "allowPrivilegeEscalation: false")
 	require.Contains(t, out, "readOnlyRootFilesystem: true")
+	require.NotContains(t, out, "name: AGENTGATEWAY_ENV")
 	require.NotContains(t, out, `"helm.sh/hook": test`)
 	require.NotContains(t, out, "curlimages/curl")
 }

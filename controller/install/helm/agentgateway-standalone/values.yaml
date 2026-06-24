@@ -27,7 +27,6 @@ serviceAccount:
 
 podAnnotations: {}
 podSecurityContext:
-  runAsUser: 10101
   runAsGroup: 10101
   fsGroup: 10101
   fsGroupChangePolicy: OnRootMismatch
@@ -101,12 +100,20 @@ gateway:
     trafficDistribution: ""
     ports:
     - name: http
-      port: 80
+      port: 8080
       targetPort: 8080
       protocol: TCP
     - name: https
-      port: 443
+      port: 8443
       targetPort: 8443
+      protocol: TCP
+    - name: mcp
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+    - name: llm
+      port: 4000
+      targetPort: 4000
       protocol: TCP
   extraServices: []
 
