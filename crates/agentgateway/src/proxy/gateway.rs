@@ -652,7 +652,23 @@ impl Gateway {
 					)
 					.await
 					{
-						Ok((_listener, tls_stream)) => tls_stream,
+						Ok((listener, tls_stream)) => {
+							// A TLS-passthrough listener (`ListenerProtocol::TLS(None)`) does not
+							// terminate TLS, so `tls_stream` is still encrypted. Serving CONNECT
+							// would parse HTTP from ciphertext and fail opaquely. CONNECT requires
+							// plaintext to read the request, so passthrough is incompatible; reject
+							// with an actionable error instead.
+							if matches!(listener.protocol, ListenerProtocol::TLS(None)) {
+								warn!(
+									src.addr = %peer_addr,
+									"cannot serve CONNECT tunnel: listener {} is TLS passthrough (no termination); \
+									 configure TLS termination on this listener to use tunnelProtocol: Connect",
+									listener.name.listener_name,
+								);
+								return;
+							}
+							tls_stream
+						},
 						Err(e) => {
 							warn!(src.addr = %peer_addr, "connect tunnel TLS termination error: {e}");
 							return;
