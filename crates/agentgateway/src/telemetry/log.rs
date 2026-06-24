@@ -353,6 +353,8 @@ pub struct CelLogging {
 	pub cel_context: cel::ContextBuilder,
 	pub filter: Option<Arc<cel::Expression>>,
 	pub fields: LoggingFields,
+	pub otlp_filter: Option<Arc<cel::Expression>>,
+	pub otlp_fields: LoggingFields,
 	pub database_fields: LoggingFields,
 	pub metric_fields: MetricFields,
 }
@@ -361,13 +363,23 @@ pub struct CelLoggingExecutor<'a> {
 	pub executor: cel::Executor<'a>,
 	pub filter: &'a Option<Arc<cel::Expression>>,
 	pub fields: &'a LoggingFields,
+	pub otlp_filter: &'a Option<Arc<cel::Expression>>,
+	pub otlp_fields: &'a LoggingFields,
 	pub database_fields: &'a LoggingFields,
 	pub metric_fields: &'a MetricFields,
 }
 
 impl<'a> CelLoggingExecutor<'a> {
 	fn eval_filter(&self) -> bool {
-		match self.filter.as_deref() {
+		self.eval_filter_with(self.filter)
+	}
+
+	fn eval_otlp_filter(&self) -> bool {
+		self.eval_filter_with(self.otlp_filter)
+	}
+
+	fn eval_filter_with(&self, filter: &Option<Arc<cel::Expression>>) -> bool {
+		match filter.as_deref() {
 			Some(f) => self.executor.eval_bool(f),
 			None => true,
 		}
@@ -472,6 +484,10 @@ impl<'a> CelLoggingExecutor<'a> {
 		self.eval(&self.fields.add)
 	}
 
+	fn eval_otlp_additions(&self) -> Vec<(Cow<str>, Option<Value>)> {
+		self.eval(&self.otlp_fields.add)
+	}
+
 	fn eval_database_additions(&self) -> Vec<(Cow<str>, Option<Value>)> {
 		self.eval(&self.database_fields.add)
 	}
@@ -500,6 +516,8 @@ impl CelLogging {
 			cel_context,
 			filter: cfg.filter,
 			fields: cfg.fields,
+			otlp_filter: None,
+			otlp_fields: LoggingFields::default(),
 			database_fields: cfg.database_fields,
 			metric_fields: metrics.metric_fields,
 		}
@@ -520,6 +538,8 @@ impl CelLogging {
 			cel_context: _,
 			filter,
 			fields,
+			otlp_filter,
+			otlp_fields,
 			database_fields,
 			metric_fields,
 		} = self;
@@ -541,6 +561,8 @@ impl CelLogging {
 			executor,
 			filter,
 			fields,
+			otlp_filter,
+			otlp_fields,
 			database_fields,
 			metric_fields,
 		}
@@ -1185,9 +1207,10 @@ impl Drop for DropOnLog {
 			}
 
 			let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
+			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
 			let log_store_enabled = log_store::enabled() && llm_response.is_some();
-			if !maybe_enable_log && !enable_trace && !log_store_enabled {
+			if !maybe_enable_log && !enable_trace && !log_store_enabled && !otlp_log_enabled {
 				return;
 			}
 
@@ -1482,6 +1505,24 @@ impl Drop for DropOnLog {
 					}
 				}
 			};
+			if let Some(otel) = &log.otel_logger
+				&& cel_exec.eval_otlp_filter()
+			{
+				let mut otlp_kv = kv.clone();
+				otlp_kv.reserve(cel_exec.otlp_fields.add.len());
+				for (k, v) in &mut otlp_kv {
+					if cel_exec.otlp_fields.has(k) {
+						*v = None;
+					}
+				}
+				let otlp_raws = cel_exec.eval_otlp_additions();
+				for (k, v) in &otlp_raws {
+					let eval = v.as_ref().map(json_value_to_value_bag);
+					otlp_kv.push((k, eval));
+				}
+				otel.emit("info", "request", &otlp_kv);
+			}
+
 			if maybe_enable_log || log_store_enabled {
 				let passes_log_filter = cel_exec.eval_filter();
 				if !passes_log_filter {
@@ -1506,10 +1547,6 @@ impl Drop for DropOnLog {
 
 				if maybe_enable_log {
 					agent_core::telemetry::log("info", "request", &kv);
-
-					if let Some(otel) = &log.otel_logger {
-						otel.emit("info", "request", &kv);
-					}
 				}
 
 				if log_store_enabled {
@@ -2109,6 +2146,8 @@ mod tests {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
 			fields: LoggingFields::default(),
+			otlp_filter: None,
+			otlp_fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
 			database_fields: LoggingFields::default(),
 		};

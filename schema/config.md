@@ -7463,6 +7463,10 @@
 |`frontendPolicies.accessLog.otlp.service.port`|integer||
 |`frontendPolicies.accessLog.otlp.host`|string|Hostname or IP address|
 |`frontendPolicies.accessLog.otlp.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.accessLog.otlp.filter`|string|CEL expression that decides whether a request is exported over OTLP.|
+|`frontendPolicies.accessLog.otlp.fields`|object|OTLP-specific access log fields. If unset, the parent access log fields are used.|
+|`frontendPolicies.accessLog.otlp.fields.remove`|[]string|Access log field names to remove.|
+|`frontendPolicies.accessLog.otlp.fields.add`|object|Access log fields to add, computed from CEL expressions.|
 |`frontendPolicies.accessLog.otlp.policies`|object|Backend policies used when exporting OTLP logs.|
 |`frontendPolicies.accessLog.otlp.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`frontendPolicies.accessLog.otlp.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7593,6 +7597,10 @@
 |`frontendPolicies.logging.otlp.service.port`|integer||
 |`frontendPolicies.logging.otlp.host`|string|Hostname or IP address|
 |`frontendPolicies.logging.otlp.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.logging.otlp.filter`|string|CEL expression that decides whether a request is exported over OTLP.|
+|`frontendPolicies.logging.otlp.fields`|object|OTLP-specific access log fields. If unset, the parent access log fields are used.|
+|`frontendPolicies.logging.otlp.fields.remove`|[]string|Access log field names to remove.|
+|`frontendPolicies.logging.otlp.fields.add`|object|Access log fields to add, computed from CEL expressions.|
 |`frontendPolicies.logging.otlp.policies`|object|Backend policies used when exporting OTLP logs.|
 |`frontendPolicies.logging.otlp.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`frontendPolicies.logging.otlp.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|

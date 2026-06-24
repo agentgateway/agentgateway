@@ -3405,6 +3405,16 @@ func (in *OpenAIModeration) DeepCopy() *OpenAIModeration {
 func (in *OtlpAccessLog) DeepCopyInto(out *OtlpAccessLog) {
 	*out = *in
 	in.BackendRef.DeepCopyInto(&out.BackendRef)
+	if in.Filter != nil {
+		in, out := &in.Filter, &out.Filter
+		*out = new(CELExpression)
+		**out = **in
+	}
+	if in.Attributes != nil {
+		in, out := &in.Attributes, &out.Attributes
+		*out = new(LogTracingAttributes)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Path != nil {
 		in, out := &in.Path, &out.Path
 		*out = new(LongString)

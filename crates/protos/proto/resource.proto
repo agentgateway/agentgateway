@@ -723,6 +723,10 @@ message FrontendPolicySpec {
       Protocol protocol = 3;
       // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/logs.
       optional string path = 4;
+      // CEL expression to filter OTLP logs. If unset, inherits Logging.filter.
+      optional string filter = 5;
+      // Fields applied to OTLP logs. If unset, inherits Logging.fields.
+      Fields fields = 6;
 
       enum Protocol {
         HTTP = 0;

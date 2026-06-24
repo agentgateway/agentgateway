@@ -192,7 +192,7 @@ impl FrontendPolices {
 			filter,
 			add: fields_add,
 			remove: _,
-			otlp: _,
+			otlp,
 			database,
 			access_log_policy: _,
 		}) = &self.access_log
@@ -206,6 +206,16 @@ impl FrontendPolices {
 			if let Some(database) = database {
 				for (_, v) in database.add.iter() {
 					ctx.register_log_expression(v)
+				}
+			}
+			if let Some(otlp) = otlp {
+				if let Some(f) = &otlp.filter {
+					ctx.register_log_expression(f)
+				}
+				if let Some(fields) = &otlp.fields {
+					for (_, v) in fields.add.iter() {
+						ctx.register_log_expression(v)
+					}
 				}
 			}
 		}

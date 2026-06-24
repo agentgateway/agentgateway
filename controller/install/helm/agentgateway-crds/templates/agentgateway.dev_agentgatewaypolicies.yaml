@@ -5783,6 +5783,51 @@ spec:
                           OTLP access log export to an
                           OpenTelemetry-compatible backend.
                         properties:
+                          attributes:
+                            description: |-
+                              Customizations to the key-value pairs exported over OTLP.
+                              If unset, the parent access log attributes are used.
+                            properties:
+                              add:
+                                description: |-
+                                  Additional key-value pairs to add to each entry.
+                                  The value is a CEL expression. If the CEL expression fails to evaluate,
+                                  the pair will be excluded.
+                                items:
+                                  properties:
+                                    expression:
+                                      description: A Common Expression Language (CEL)
+                                        expression.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                    name:
+                                      maxLength: 256
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - expression
+                                  - name
+                                  type: object
+                                minItems: 1
+                                type: array
+                              remove:
+                                description: |-
+                                  Default fields to remove. For example,
+                                  `http.method`.
+                                items:
+                                  maxLength: 64
+                                  minLength: 1
+                                  type: string
+                                maxItems: 32
+                                minItems: 1
+                                type: array
+                            type: object
+                            x-kubernetes-validations:
+                            - message: at least one of the fields in [add remove]
+                                must be set
+                              rule: '[has(self.add),has(self.remove)].filter(x,x==true).size()
+                                >= 1'
                           backendRef:
                             description: |-
                               OTLP server to send access logs to.
@@ -5855,6 +5900,14 @@ spec:
                             - message: Must have port for Service reference
                               rule: '(size(self.group) == 0 && self.kind == ''Service'')
                                 ? has(self.port) : true'
+                          filter:
+                            description: |-
+                              CEL expression used to filter OTLP logs. A log
+                              will only be exported if the expression evaluates to `true`.
+                              If unset, the parent access log filter is used.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           path:
                             description: |-
                               OTLP/HTTP path to use. This is only applicable

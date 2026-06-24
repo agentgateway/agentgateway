@@ -8319,6 +8319,28 @@
     "OtlpLoggingConfig": {
       "type": "object",
       "properties": {
+        "filter": {
+          "description": "CEL expression that decides whether a request is exported over OTLP.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "description": "OTLP-specific access log fields. If unset, the parent access log fields are used.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccessLogFields"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "policies": {
           "description": "Backend policies used when exporting OTLP logs.",
           "anyOf": [
@@ -8396,6 +8418,27 @@
           ]
         }
       ]
+    },
+    "AccessLogFields": {
+      "type": "object",
+      "properties": {
+        "remove": {
+          "description": "Access log field names to remove.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "add": {
+          "description": "Access log fields to add, computed from CEL expressions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "TracingProtocol": {
       "type": "string",

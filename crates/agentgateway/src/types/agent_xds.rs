@@ -2812,8 +2812,34 @@ fn frontend_policy_from_proto(
 						_ => types::agent::TracingProtocol::Http,
 					};
 					let path = oal.path.clone().unwrap_or_else(|| "/v1/logs".to_string());
+					let fields = oal
+						.fields
+						.as_ref()
+						.map(|f| {
+							let add = f
+								.add
+								.iter()
+								.map(|f| {
+									let expr = permissive_cel_expression_arc(
+										diagnostics,
+										format!("frontend.logging.otlp.fields.add.{}", f.name),
+										&f.expression,
+									);
+									Ok::<_, ProtoError>((f.name.clone(), expr))
+								})
+								.collect::<Result<Vec<_>, _>>()?;
+							Ok::<_, ProtoError>(frontend::AccessLogFields {
+								add: Arc::new(OrderedStringMap::from_iter(add)),
+								remove: Arc::new(FzHashSet::new(f.remove.clone())),
+							})
+						})
+						.transpose()?;
 					Ok(frontend::OtlpLoggingConfig {
 						provider_backend,
+						filter: oal.filter.as_ref().map(|expr| {
+							permissive_cel_expression_arc(diagnostics, "frontend.logging.otlp.filter", expr)
+						}),
+						fields,
 						policies,
 						protocol,
 						path,

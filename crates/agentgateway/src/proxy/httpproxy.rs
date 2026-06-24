@@ -120,6 +120,17 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	if !lp.remove.is_empty() {
 		log.cel.fields.remove = lp.remove.clone();
 	}
+	if let Some(otlp) = &lp.otlp {
+		log.cel.otlp_filter = otlp.filter.clone().or_else(|| log.cel.filter.clone());
+		log.cel.otlp_fields = if let Some(fields) = &otlp.fields {
+			log::LoggingFields {
+				add: fields.add.clone(),
+				remove: fields.remove.clone(),
+			}
+		} else {
+			log.cel.fields.clone()
+		};
+	}
 	if let Some(database) = &lp.database
 		&& !database.add.is_empty()
 	{

@@ -2523,6 +2523,17 @@ type OtlpAccessLog struct {
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
+	// CEL expression used to filter OTLP logs. A log
+	// will only be exported if the expression evaluates to `true`.
+	// If unset, the parent access log filter is used.
+	// +optional
+	Filter *CELExpression `json:"filter,omitempty"`
+
+	// Customizations to the key-value pairs exported over OTLP.
+	// If unset, the parent access log attributes are used.
+	// +optional
+	Attributes *LogTracingAttributes `json:"attributes,omitempty"`
+
 	// OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
 	// +optional
