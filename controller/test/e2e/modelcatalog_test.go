@@ -61,7 +61,7 @@ func TestModelCatalogCost(tt *testing.T) {
 				return err
 			}
 			maxCost := -1.0
-			for _, line := range strings.Split(logs, "\n") {
+			for line := range strings.SplitSeq(logs, "\n") {
 				if m := costTotalRe.FindStringSubmatch(line); m != nil {
 					if cost, err := strconv.ParseFloat(m[1], 64); err == nil && cost > maxCost {
 						maxCost = cost
@@ -100,7 +100,7 @@ func TestModelCatalogCost(tt *testing.T) {
 				return err
 			}
 			maxCost := -1.0
-			for _, line := range strings.Split(logs, "\n") {
+			for line := range strings.SplitSeq(logs, "\n") {
 				if m := costTotalRe.FindStringSubmatch(line); m != nil {
 					if cost, err := strconv.ParseFloat(m[1], 64); err == nil && cost > maxCost {
 						maxCost = cost
