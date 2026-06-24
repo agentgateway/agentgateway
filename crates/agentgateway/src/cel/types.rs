@@ -1307,9 +1307,6 @@ pub struct LLMContext {
 	#[serde(skip)]
 	#[dynamic(skip)]
 	pub cost_status: Option<llm::cost::CostLookupStatus>,
-	#[serde(skip)]
-	#[dynamic(skip)]
-	pub output_messages: Option<Vec<llm::OutputMessage>>,
 }
 
 impl LLMContext {
@@ -1341,7 +1338,6 @@ impl LLMContext {
 				.output_messages
 				.as_ref()
 				.map(|msgs| msgs.iter().flat_map(|m| m.tool_calls()).collect()),
-			output_messages: resp.output_messages.clone(),
 			..LLMContext::from(value.request)
 		};
 
@@ -1424,7 +1420,6 @@ impl From<llm::LLMRequest> for LLMContext {
 			cost: None,
 			cost_rates: None,
 			cost_status: None,
-			output_messages: None,
 		}
 	}
 }
@@ -2089,7 +2084,6 @@ pub fn full_example_executor() -> ExecutorSerde {
 			prompt: None,
 			completion: Some(vec!["Hello".to_string()]),
 			tool_calls: None,
-			output_messages: None,
 			params: llm::LLMRequestParams {
 				temperature: Some(0.7),
 				top_p: Some(1.0),

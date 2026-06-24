@@ -388,7 +388,7 @@ impl<'de> Deserialize<'de> for Response {
 }
 
 impl ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> LLMResponse {
+	fn to_llm_response(&self, _log_content: crate::llm::LogContentFields) -> LLMResponse {
 		let input_tokens = self.lookup(lookups::USAGE_INPUT_TOKENS, |v| v.as_u64());
 		let output_tokens = self.lookup(lookups::USAGE_OUTPUT_TOKENS, |v| v.as_u64());
 		let total_tokens = self.lookup(lookups::USAGE_TOTAL_TOKENS, |v| v.as_u64());

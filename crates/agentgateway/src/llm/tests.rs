@@ -144,7 +144,7 @@ fn test_response(
 
 	let resp = xlate(Bytes::copy_from_slice(provider_str))
 		.expect("Failed to translate provider response to expected format");
-	let llm_response = resp.to_llm_response(false);
+	let llm_response = resp.to_llm_response(llm::LogContentFields::default());
 	let raw = resp.serialize().expect("Failed to serialize response");
 	let resp_val = serde_json::from_slice::<Value>(&raw)
 		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
@@ -610,7 +610,7 @@ mod response {
 		("stream", ALL_COMPLETIONS),
 		("stream_tool_empty_content", &[COMPLETIONS_TO_MESSAGES]),
 	];
-	// Streaming fixtures replayed with include_completion_in_log=true so the
+	// Streaming fixtures replayed with log_content.tool_calls=true so the
 	// streaming tool-call aggregator populates LLMResponse.output_messages. Kept
 	// separate from COMPLETIONS_STREAM_RESPONSES so existing flag-disabled
 	// snapshots remain unchanged.
@@ -751,7 +751,7 @@ mod response {
 				LLMResponsePolicies::default(),
 				None,
 				log,
-				false,
+				llm::LogContentFields::default(),
 				None,
 				i,
 			)
@@ -765,6 +765,10 @@ mod response {
 		use crate::test_helpers::proxymock::setup_proxy_test;
 		let (p, r) = build_provider_request(provider);
 		let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+		let log_content = llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		};
 		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
 			p.process_streaming(
 				client,
@@ -772,7 +776,7 @@ mod response {
 				LLMResponsePolicies::default(),
 				None,
 				log,
-				true,
+				log_content,
 				None,
 				i,
 			)
@@ -1368,7 +1372,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			LLMResponsePolicies::default(),
 			None,
 			AsyncLog::default(),
-			false,
+			llm::LogContentFields::default(),
 			None,
 			resp,
 		)
@@ -1441,7 +1445,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			LLMResponsePolicies::default(),
 			None,
 			AsyncLog::default(),
-			false,
+			llm::LogContentFields::default(),
 			None,
 			resp,
 		)
@@ -1712,7 +1716,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 		logger,
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
-		true,
+		llm::LogContentFields { completion: true, tool_calls: true },
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1758,7 +1762,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		logger,
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
-		false,
+		llm::LogContentFields::default(),
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1766,7 +1770,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
 	);
 }
 
@@ -1794,7 +1798,7 @@ async fn messages_passthrough_stream_captures_completion() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, true);
+	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, llm::LogContentFields { completion: true, tool_calls: true });
 	// Consume the body to drive the stream to completion
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1834,14 +1838,14 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, false);
+	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, llm::LogContentFields::default());
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
 	);
 }
 
@@ -1869,7 +1873,7 @@ async fn responses_passthrough_stream_captures_completion() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, true);
+	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, llm::LogContentFields { completion: true, tool_calls: true });
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
@@ -1905,14 +1909,14 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, false);
+	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, llm::LogContentFields::default());
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
 	);
 }
 

@@ -444,8 +444,8 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 impl ResponseType for Response {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
-		let output_messages = if include_completion_in_log {
+	fn to_llm_response(&self, log_content: crate::llm::LogContentFields) -> LLMResponse {
+		let output_messages = if log_content.tool_calls {
 			extract_output_messages(self)
 		} else {
 			None
@@ -481,7 +481,7 @@ impl ResponseType for Response {
 			cache_creation_input_tokens: None,
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
-			completion: if include_completion_in_log {
+			completion: if log_content.completion {
 				Some(
 					self
 						.output
@@ -659,7 +659,7 @@ mod tests {
 			status: Some(OutputStatus::Completed),
 		})]);
 
-		let llm_response = response.to_llm_response(true);
+		let llm_response = response.to_llm_response(crate::llm::LogContentFields { completion: true, tool_calls: true });
 		let messages = llm_response
 			.output_messages
 			.expect("output_messages should be present");
@@ -685,7 +685,7 @@ mod tests {
 			status: Some(OutputStatus::Completed),
 		})]);
 
-		let llm_response = response.to_llm_response(false);
+		let llm_response = response.to_llm_response(crate::llm::LogContentFields::default());
 
 		assert!(llm_response.output_messages.is_none());
 	}

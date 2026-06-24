@@ -960,9 +960,12 @@ impl Drop for DropOnLog {
 			let duration = end_time.duration_since(&log.start);
 			let enable_trace = log.tracer.is_some();
 
-			let mut llm_response: Option<LLMContext> = log
-				.llm_response
-				.take()
+			let llm_info_raw = log.llm_response.take();
+			let output_messages = llm_info_raw
+				.as_ref()
+				.and_then(|info| info.response.output_messages.as_ref())
+				.and_then(|msgs| serde_json::to_value(msgs).ok());
+			let mut llm_response: Option<LLMContext> = llm_info_raw
 				.map(|llm_info| LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref())));
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
@@ -1092,10 +1095,7 @@ impl Drop for DropOnLog {
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
 			let cost = llm_response.as_ref().and_then(|l| l.cost.as_ref());
 			let usage_cost_total = cost.map(|b| b.total().to_string());
-			let output_messages_json = llm_response
-				.as_ref()
-				.and_then(|l| l.output_messages.as_ref())
-				.and_then(|msgs| serde_json::to_string(msgs).ok());
+			let output_messages_value = &output_messages;
 			let trace_cost_fields = if enable_trace {
 				cost.map(|b| {
 					[
@@ -1286,7 +1286,7 @@ impl Drop for DropOnLog {
 				),
 				(
 					"gen_ai.output.messages",
-					output_messages_json.as_deref().map(Into::into),
+					output_messages_value.as_ref().map(json_value_to_value_bag),
 				),
 				(
 					"gen_ai.request.temperature",

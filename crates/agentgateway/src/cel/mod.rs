@@ -103,6 +103,7 @@ flagset::flags! {
 		Llm,
 		LlmPrompt,
 		LlmCompletion,
+		LlmToolCalls,
 
 		Backend,
 
@@ -272,6 +273,9 @@ impl ContextBuilder {
 	pub fn needs_llm_completion(&self) -> bool {
 		self.any_has(Attributes::LlmCompletion)
 	}
+	pub fn needs_llm_tool_calls(&self) -> bool {
+		self.any_has(Attributes::LlmToolCalls)
+	}
 }
 
 impl Expression {
@@ -341,6 +345,9 @@ impl Expression {
 				},
 				["llm", "completion", ..] => {
 					attributes |= Attributes::Llm | Attributes::LlmCompletion;
+				},
+				["llm", "toolCalls", ..] => {
+					attributes |= Attributes::Llm | Attributes::LlmToolCalls;
 				},
 				["llm", ..] => {
 					attributes |= Attributes::Llm;

@@ -19,7 +19,7 @@ use crate::serdes::schema;
 /// ResponseType is an abstraction over provider/endpoint specific response formats that enables
 /// uniform policy enforcement and observability
 pub trait ResponseType: Send + Sync {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse;
+	fn to_llm_response(&self, log_content: crate::llm::LogContentFields) -> LLMResponse;
 	fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice>;
 	fn set_webhook_choices(
 		&mut self,

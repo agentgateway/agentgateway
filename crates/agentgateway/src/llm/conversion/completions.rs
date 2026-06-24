@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use agent_core::strng;
 use bytes::Bytes;
+use itertools::Itertools;
 use tracing::debug;
 
 use crate::http::Response;
@@ -243,7 +244,7 @@ pub mod from_messages {
 		b: crate::http::Body,
 		buffer_limit: usize,
 		log: AmendOnDrop,
-		include_completion_in_log: bool,
+		log_content: crate::llm::LogContentFields,
 	) -> crate::http::Body {
 		#[derive(Debug)]
 		struct PendingToolCall {
@@ -387,7 +388,7 @@ pub mod from_messages {
 			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
 			log: &AmendOnDrop,
 			force: bool,
-			include_completion_in_log: bool,
+			log_tool_calls: bool,
 		) {
 			if state.sent_message_stop {
 				return;
@@ -440,7 +441,7 @@ pub mod from_messages {
 				});
 			}
 
-			if include_completion_in_log
+			if log_tool_calls
 				&& let Some(tool_parts) = super::finalize_streaming_tool_calls(
 					state
 						.pending_tool_calls
@@ -468,7 +469,7 @@ pub mod from_messages {
 						&mut events,
 						&log,
 						true,
-						include_completion_in_log,
+						log_content.tool_calls,
 					);
 					return events;
 				},
@@ -603,7 +604,7 @@ pub mod from_messages {
 							&mut events,
 							&log,
 							false,
-							include_completion_in_log,
+							log_content.tool_calls,
 						);
 					}
 				},
@@ -995,10 +996,9 @@ pub mod from_messages {
 fn finalize_streaming_tool_calls(
 	entries: impl IntoIterator<Item = (u32, Option<String>, Option<String>, String)>,
 ) -> Option<Vec<llm::OutputMessagePart>> {
-	let mut entries: Vec<_> = entries.into_iter().collect();
-	entries.sort_by_key(|(idx, ..)| *idx);
 	let parts: Vec<llm::OutputMessagePart> = entries
 		.into_iter()
+		.sorted_by_key(|(idx, ..)| *idx)
 		.map(|(idx, id, name, arguments)| {
 			let arguments = serde_json::from_str(&arguments)
 				.unwrap_or(serde_json::Value::Object(Default::default()));
@@ -1038,7 +1038,7 @@ pub(crate) fn build_output_messages(
 
 pub fn passthrough_stream(
 	mut log: AmendOnDrop,
-	include_completion_in_log: bool,
+	log_content: crate::llm::LogContentFields,
 	resp: Response,
 ) -> Response {
 	#[derive(Default)]
@@ -1058,9 +1058,9 @@ pub fn passthrough_stream(
 		)
 	}
 
-	let mut completion = include_completion_in_log.then(String::new);
+	let mut completion = log_content.completion.then(String::new);
 	let mut pending_tool_calls: Option<std::collections::HashMap<u32, PendingPassthroughToolCall>> =
-		include_completion_in_log.then(std::collections::HashMap::new);
+		log_content.tool_calls.then(std::collections::HashMap::new);
 	let buffer_limit = crate::http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		let mut seen_provider = false;

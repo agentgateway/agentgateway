@@ -304,6 +304,12 @@ impl LLMInfo {
 	}
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogContentFields {
+	pub completion: bool,
+	pub tool_calls: bool,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct LLMResponse {
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -1168,7 +1174,7 @@ impl AIProvider {
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
+		log_content: LogContentFields,
 		model_catalog: Option<&Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
@@ -1183,7 +1189,7 @@ impl AIProvider {
 					rate_limit,
 					req_snapshot,
 					log,
-					include_completion_in_log,
+					log_content,
 					model_catalog.cloned(),
 					resp,
 				)
@@ -1317,7 +1323,7 @@ impl AIProvider {
 				return Ok(dr);
 			}
 
-			let llm_resp = resp.to_llm_response(include_completion_in_log);
+			let llm_resp = resp.to_llm_response(log_content);
 			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
 			(llm_resp, Bytes::copy_from_slice(&body))
 		};
@@ -1386,21 +1392,21 @@ impl AIProvider {
 					headers,
 					&req.request_model,
 				)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Vertex(p) if !p.is_anthropic_model(Some(&req.request_model)) => {
 				let translated =
 					conversion::vertex::from_embeddings::translate_response(&bytes, &req.request_model)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			_ => {
 				let resp: types::embeddings::Response =
 					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
-				Ok((resp.to_llm_response(false), bytes))
+				Ok((resp.to_llm_response(LogContentFields::default()), bytes))
 			},
 		}
 	}
@@ -1409,20 +1415,20 @@ impl AIProvider {
 		match self {
 			AIProvider::Bedrock(_) => {
 				let translated = conversion::bedrock::from_rerank::translate_response(&bytes)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Vertex(_) => {
 				let translated = conversion::vertex::from_rerank::translate_response(&bytes)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			_ => {
 				let resp =
 					types::rerank::parse_response_lenient(&bytes).map_err(logged_response_parsing(&bytes))?;
-				Ok((resp.to_llm_response(false), bytes))
+				Ok((resp.to_llm_response(LogContentFields::default()), bytes))
 			},
 		}
 	}
@@ -1590,7 +1596,7 @@ impl AIProvider {
 		response_policies: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
+		log_content: LogContentFields,
 		model_catalog: Option<Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
@@ -1672,13 +1678,13 @@ impl AIProvider {
 				AIProvider::Custom(_),
 				InputFormat::Completions,
 				Some(custom::ProviderFormat::Completions),
-			) => conversion::completions::passthrough_stream(logger, include_completion_in_log, resp),
+			) => conversion::completions::passthrough_stream(logger, log_content, resp),
 			(AIProvider::Custom(_), InputFormat::Completions, Some(custom::ProviderFormat::Messages)) => {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Messages)) => {
 				resp.map(|b| {
-					conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+					conversion::messages::passthrough_stream(b, buffer, logger, log_content)
 				})
 			},
 			(AIProvider::Custom(_), InputFormat::Messages, Some(custom::ProviderFormat::Completions)) => {
@@ -1687,13 +1693,13 @@ impl AIProvider {
 						b,
 						buffer,
 						logger,
-						include_completion_in_log,
+						log_content,
 					)
 				})
 			},
 			(AIProvider::Custom(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
 				resp.map(|b| {
-					conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
+					conversion::responses::passthrough_stream(b, buffer, logger, log_content)
 				})
 			},
 			(
@@ -1711,13 +1717,13 @@ impl AIProvider {
 				| AIProvider::Azure(_),
 				InputFormat::Completions,
 				_,
-			) => conversion::completions::passthrough_stream(logger, include_completion_in_log, resp),
+			) => conversion::completions::passthrough_stream(logger, log_content, resp),
 			// Vertex completions: passthrough for OpenAI-compatible models, translate for Anthropic models
 			(AIProvider::Vertex(_), InputFormat::Completions, _) if is_vertex_anthropic => {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
 			},
 			(AIProvider::Vertex(_), InputFormat::Completions, _) => {
-				conversion::completions::passthrough_stream(logger, include_completion_in_log, resp)
+				conversion::completions::passthrough_stream(logger, log_content, resp)
 			},
 			(AIProvider::Bedrock(_), InputFormat::Detect, _) => {
 				types::detect::passthrough_aws_stream(logger, resp)
@@ -1732,26 +1738,26 @@ impl AIProvider {
 				InputFormat::Responses,
 				_,
 			) => resp.map(|b| {
-				conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				conversion::responses::passthrough_stream(b, buffer, logger, log_content)
 			}),
 			(AIProvider::Gemini(_), InputFormat::Responses, _) => {
 				resp.map(|b| conversion::openai_compat::to_responses::translate_stream(b, buffer, logger))
 			},
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
 			(AIProvider::Vertex(_), InputFormat::Messages, _) if is_vertex_anthropic => resp.map(|b| {
-				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				conversion::messages::passthrough_stream(b, buffer, logger, log_content)
 			}),
 			(AIProvider::Vertex(_), InputFormat::Messages, _) => resp.map(|b| {
 				conversion::completions::from_messages::translate_stream(
 					b,
 					buffer,
 					logger,
-					include_completion_in_log,
+					log_content,
 				)
 			}),
 			// Anthropic messages: passthrough
 			(AIProvider::Anthropic(_), InputFormat::Messages, _) => resp.map(|b| {
-				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+				conversion::messages::passthrough_stream(b, buffer, logger, log_content)
 			}),
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
@@ -1766,7 +1772,7 @@ impl AIProvider {
 					b,
 					buffer,
 					logger,
-					include_completion_in_log,
+					log_content,
 				)
 			}),
 			// Supported paths with conversion...
@@ -1788,7 +1794,7 @@ impl AIProvider {
 						logger,
 						&model,
 						&msg,
-						include_completion_in_log,
+						log_content,
 					)
 				})
 			},

@@ -1483,13 +1483,13 @@ pub mod from_messages {
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
-		include_completion_in_log: bool,
+		log_content: crate::llm::LogContentFields,
 	) -> Body {
 		let mut saw_token = false;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
-		let mut completion = include_completion_in_log.then(String::new);
+		let mut completion = log_content.completion.then(String::new);
 		let model = model.to_string();
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {

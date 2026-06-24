@@ -751,10 +751,10 @@ pub fn passthrough_stream(
 	b: Body,
 	buffer_limit: usize,
 	log: AmendOnDrop,
-	include_completion_in_log: bool,
+	log_content: crate::llm::LogContentFields,
 ) -> Body {
 	let mut saw_token = false;
-	let mut completion = include_completion_in_log.then(String::new);
+	let mut completion = log_content.completion.then(String::new);
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
 	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
 		// ignore errors... what else can we do?

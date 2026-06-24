@@ -146,7 +146,7 @@ impl RequestType for Request {
 }
 
 impl crate::llm::types::ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::llm::LLMResponse {
+	fn to_llm_response(&self, _log_content: crate::llm::LogContentFields) -> crate::llm::LLMResponse {
 		// Cohere reports counts in `meta.tokens`; fall back to `billed_units.total_tokens`
 		// (e.g. Voyage's usage normalized into meta).
 		let input_tokens = self.meta.as_ref().and_then(|m| {
@@ -259,7 +259,7 @@ mod tests {
 		use crate::llm::types::ResponseType;
 		let raw = r#"{"results":[{"index":0,"relevance_score":0.9}],"meta":{"billed_units":{"search_units":1},"tokens":{"input_tokens":214.0,"output_tokens":2.0}}}"#;
 		let resp: Response = serde_json::from_str(raw).unwrap();
-		assert_eq!(resp.to_llm_response(false).input_tokens, Some(214));
+		assert_eq!(resp.to_llm_response(crate::llm::LogContentFields::default()).input_tokens, Some(214));
 		// Round-trip keeps the meta shape.
 		let back = serde_json::to_string(&resp).unwrap();
 		assert!(back.contains("\"input_tokens\":214"));

@@ -408,8 +408,8 @@ fn extract_output_message(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 impl ResponseType for Response {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
-		let output_messages = if include_completion_in_log {
+	fn to_llm_response(&self, log_content: crate::llm::LogContentFields) -> LLMResponse {
+		let output_messages = if log_content.tool_calls {
 			extract_output_message(self)
 		} else {
 			None
@@ -431,7 +431,7 @@ impl ResponseType for Response {
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
 			cached_input_tokens: self.usage.cache_read_input_tokens,
 			service_tier: self.usage.service_tier.as_deref().map(Into::into),
-			completion: if include_completion_in_log {
+			completion: if log_content.completion {
 				Some(
 					self
 						.content
@@ -1109,8 +1109,8 @@ pub mod typed {
 	}
 
 	impl super::ResponseType for MessagesResponse {
-		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
-			let output_messages = if include_completion_in_log {
+		fn to_llm_response(&self, log_content: crate::llm::LogContentFields) -> crate::llm::LLMResponse {
+			let output_messages = if log_content.tool_calls {
 				extract_output_message_from_typed(self)
 			} else {
 				None
@@ -1132,7 +1132,7 @@ pub mod typed {
 				service_tier: self.usage.service_tier.as_deref().map(Into::into),
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
-				completion: if include_completion_in_log {
+				completion: if log_content.completion {
 					Some(
 						self
 							.content
@@ -1238,7 +1238,7 @@ mod tests {
 	#[test]
 	fn test_typed_response_output_messages_populated_when_flag_true() {
 		let response = make_typed_response_with_tool_use();
-		let llm_response = response.to_llm_response(true);
+		let llm_response = response.to_llm_response(crate::llm::LogContentFields { completion: true, tool_calls: true });
 
 		let messages = llm_response
 			.output_messages
@@ -1290,7 +1290,7 @@ mod tests {
 			output_audio_tokens: None,
 		};
 
-		let llm_response = response.to_llm_response(true);
+		let llm_response = response.to_llm_response(crate::llm::LogContentFields { completion: true, tool_calls: true });
 		let messages = llm_response
 			.output_messages
 			.expect("output_messages should be present for text-only response");
@@ -1335,7 +1335,7 @@ mod tests {
 			rest: Default::default(),
 		};
 
-		let llm_response = response.to_llm_response(true);
+		let llm_response = response.to_llm_response(crate::llm::LogContentFields { completion: true, tool_calls: true });
 
 		let messages = llm_response
 			.output_messages
