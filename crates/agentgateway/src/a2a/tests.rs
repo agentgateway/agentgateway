@@ -355,14 +355,20 @@ async fn test_apply_to_response_errors_when_neither_url_field_present() {
 
 	let result = apply_to_response(
 		Some(&A2aPolicy {}),
-		RequestType::AgentCard("https://example.com/.well-known/agent-card.json".parse().unwrap()),
+		RequestType::AgentCard(
+			"https://example.com/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+		),
 		&mut resp,
 	)
 	.await;
 
 	assert!(result.is_err());
-	assert!(result
-		.unwrap_err()
-		.to_string()
-		.contains("agent card missing URL"));
+	assert!(
+		result
+			.unwrap_err()
+			.to_string()
+			.contains("agent card missing URL")
+	);
 }
