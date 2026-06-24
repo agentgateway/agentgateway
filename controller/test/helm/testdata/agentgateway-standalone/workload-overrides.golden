@@ -12,7 +12,6 @@ metadata:
     app.kubernetes.io/component: standalone
     app.kubernetes.io/version: "0.0.0-dev"
     app.kubernetes.io/managed-by: Helm
-
 ---
 # Source: agentgateway-standalone/templates/configmap.yaml
 apiVersion: v1
@@ -39,7 +38,6 @@ data:
       listeners: []
     - port: 8443
       listeners: []
-
 ---
 # Source: agentgateway-standalone/templates/pvc.yaml
 apiVersion: v1
@@ -60,7 +58,6 @@ spec:
   resources:
     requests:
       storage: "1Gi"
-
 ---
 # Source: agentgateway-standalone/templates/service-admin.yaml
 apiVersion: v1
@@ -86,7 +83,6 @@ spec:
     app.kubernetes.io/name: agentgateway-standalone
     app.kubernetes.io/instance: test-release
     app.kubernetes.io/component: standalone
-
 ---
 # Source: agentgateway-standalone/templates/service-gateway.yaml
 apiVersion: v1
@@ -124,7 +120,6 @@ spec:
     app.kubernetes.io/name: agentgateway-standalone
     app.kubernetes.io/instance: test-release
     app.kubernetes.io/component: standalone
-
 ---
 # Source: agentgateway-standalone/templates/deployment.yaml
 apiVersion: apps/v1

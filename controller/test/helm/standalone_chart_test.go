@@ -37,7 +37,11 @@ func renderStandaloneChart(t *testing.T, valuesYAML string) (string, string, err
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err = cmd.Run()
-	return stdout.String(), stderr.String(), err
+	return normalizeStandaloneHelmOutput(stdout.String()), stderr.String(), err
+}
+
+func normalizeStandaloneHelmOutput(out string) string {
+	return strings.ReplaceAll(out, "\n\n---\n# Source: agentgateway-standalone/", "\n---\n# Source: agentgateway-standalone/")
 }
 
 func TestStandaloneChartGoldenTemplate(t *testing.T) {
