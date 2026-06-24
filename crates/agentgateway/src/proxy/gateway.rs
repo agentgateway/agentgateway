@@ -462,17 +462,7 @@ impl Gateway {
 						},
 					},
 					Err(e) => {
-						event!(
-							target: "downstream connection",
-							parent: None,
-							tracing::Level::WARN,
-
-							src.addr = %peer_addr,
-							protocol = ?bind_protocol,
-							error = ?e.to_string(),
-
-							"failed to terminate TLS",
-						);
+						log_tls_termination_error(peer_addr, &bind_protocol, &e);
 					},
 				}
 			},
@@ -538,15 +528,7 @@ impl Gateway {
 									},
 								},
 								Err(e) => {
-									event!(
-										target: "downstream connection",
-										parent: None,
-										tracing::Level::WARN,
-										src.addr = %peer_addr,
-										protocol = ?bind_protocol,
-										error = ?e.to_string(),
-										"failed to terminate TLS (auto-detected)",
-									);
+									log_tls_termination_error(peer_addr, &bind_protocol, &e);
 								},
 							}
 						} else {
@@ -1617,6 +1599,47 @@ fn should_ignore_downstream_connection_error(err: &(dyn StdError + 'static)) -> 
 		return true;
 	}
 
+	false
+}
+
+fn log_tls_termination_error(
+	peer_addr: SocketAddr,
+	bind_protocol: &BindProtocol,
+	e: &anyhow::Error,
+) {
+	if is_tls_unexpected_eof(e.as_ref()) {
+		event!(
+			target: "downstream connection",
+			parent: None,
+			tracing::Level::DEBUG,
+			src.addr = %peer_addr,
+			protocol = ?bind_protocol,
+			error = ?e.to_string(),
+			"failed to terminate TLS",
+		);
+	} else {
+		event!(
+			target: "downstream connection",
+			parent: None,
+			tracing::Level::WARN,
+			src.addr = %peer_addr,
+			protocol = ?bind_protocol,
+			error = ?e.to_string(),
+			"failed to terminate TLS",
+		);
+	}
+}
+
+fn is_tls_unexpected_eof(err: &(dyn StdError + 'static)) -> bool {
+	let mut err = Some(err);
+	while let Some(e) = err {
+		if let Some(io_err) = e.downcast_ref::<std::io::Error>()
+			&& io_err.kind() == std::io::ErrorKind::UnexpectedEof
+		{
+			return true;
+		}
+		err = e.source();
+	}
 	false
 }
 
