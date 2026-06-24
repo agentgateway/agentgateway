@@ -45,6 +45,7 @@ fn enabled_request(max_bytes: usize) -> Buffer {
 	Buffer {
 		request: Some(BufferBody {
 			max_bytes: Some(max_bytes),
+			..Default::default()
 		}),
 		response: None,
 	}
@@ -55,6 +56,27 @@ fn enabled_response(max_bytes: usize) -> Buffer {
 		request: None,
 		response: Some(BufferBody {
 			max_bytes: Some(max_bytes),
+			..Default::default()
+		}),
+	}
+}
+
+fn continue_streaming_request(max_bytes: usize) -> Buffer {
+	Buffer {
+		request: Some(BufferBody {
+			max_bytes: Some(max_bytes),
+			on_overflow: OverflowAction::ContinueStreaming,
+		}),
+		response: None,
+	}
+}
+
+fn continue_streaming_response(max_bytes: usize) -> Buffer {
+	Buffer {
+		request: None,
+		response: Some(BufferBody {
+			max_bytes: Some(max_bytes),
+			on_overflow: OverflowAction::ContinueStreaming,
 		}),
 	}
 }
@@ -106,8 +128,14 @@ fn deserialize_rejects_unknown_fields() {
 #[test]
 fn serialize_emits_camel_case() {
 	let buffer = Buffer {
-		request: Some(BufferBody { max_bytes: Some(7) }),
-		response: Some(BufferBody { max_bytes: Some(9) }),
+		request: Some(BufferBody {
+			max_bytes: Some(7),
+			..Default::default()
+		}),
+		response: Some(BufferBody {
+			max_bytes: Some(9),
+			..Default::default()
+		}),
 	};
 	let json = serde_json::to_string(&buffer).expect("serializable");
 	assert!(json.contains("\"maxBytes\":7"), "got: {json}");
@@ -119,9 +147,11 @@ fn roundtrip_preserves_values() {
 	let original = Buffer {
 		request: Some(BufferBody {
 			max_bytes: Some(100),
+			..Default::default()
 		}),
 		response: Some(BufferBody {
 			max_bytes: Some(200),
+			..Default::default()
 		}),
 	};
 	let json = serde_json::to_string(&original).expect("serializable");
@@ -240,6 +270,76 @@ async fn apply_to_request_fails_when_body_exceeds_limit() {
 }
 
 #[tokio::test]
+async fn apply_to_request_continues_streaming_when_body_exceeds_limit() {
+	let policy = continue_streaming_request(4);
+	let mut req = request_with_body(streaming_body(&[b"hello", b" ", b"world"]));
+
+	policy
+		.apply_to_request(&mut req)
+		.await
+		.expect("continue-streaming must not error on overflow");
+
+	// The body streams through in full even though it exceeds the buffer limit.
+	assert_eq!(
+		read_request_body_bytes(&mut req).await,
+		Bytes::from_static(b"hello world")
+	);
+}
+
+#[tokio::test]
+async fn apply_to_request_streams_full_body_when_within_limit_under_continue_streaming() {
+	let policy = continue_streaming_request(64);
+	let mut req = request_with_body(streaming_body(&[b"hello", b" ", b"world"]));
+
+	policy
+		.apply_to_request(&mut req)
+		.await
+		.expect("within-limit body streams through");
+
+	assert_eq!(
+		read_request_body_bytes(&mut req).await,
+		Bytes::from_static(b"hello world")
+	);
+}
+
+#[tokio::test]
+async fn apply_to_request_continue_streaming_handles_empty_body() {
+	let policy = continue_streaming_request(64);
+	let mut req = request_with_body(crate::http::Body::empty());
+
+	policy
+		.apply_to_request(&mut req)
+		.await
+		.expect("empty body streams through");
+
+	assert_eq!(read_request_body_bytes(&mut req).await, Bytes::new());
+}
+
+#[tokio::test]
+async fn apply_to_request_continue_streaming_preserves_trailers() {
+	let mut trailers = ::http::HeaderMap::new();
+	trailers.insert("x-test", "value".parse().unwrap());
+	let frames = vec![
+		Ok::<_, Infallible>(Frame::data(Bytes::from_static(b"hello world"))),
+		Ok::<_, Infallible>(Frame::trailers(trailers.clone())),
+	];
+	let body = crate::http::Body::new(http_body_util::StreamBody::new(tokio_stream::iter(frames)));
+
+	// limit=4 forces the streaming path; trailers must survive once the body overflows.
+	let policy = continue_streaming_request(4);
+	let mut req = request_with_body(body);
+	policy
+		.apply_to_request(&mut req)
+		.await
+		.expect("continue-streaming must not error");
+
+	let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
+	let collected = body.collect().await.expect("collect succeeds");
+	assert_eq!(collected.trailers(), Some(&trailers));
+	assert_eq!(collected.to_bytes(), Bytes::from_static(b"hello world"));
+}
+
+#[tokio::test]
 async fn apply_to_request_uses_explicit_max_bytes_over_extension_limit() {
 	let policy = enabled_request(64);
 	let mut req = request_with_body(crate::http::Body::from("payload"));
@@ -259,7 +359,10 @@ async fn apply_to_request_uses_explicit_max_bytes_over_extension_limit() {
 #[tokio::test]
 async fn apply_to_request_falls_back_to_extension_limit_when_max_bytes_missing() {
 	let policy = Buffer {
-		request: Some(BufferBody { max_bytes: None }),
+		request: Some(BufferBody {
+			max_bytes: None,
+			..Default::default()
+		}),
 		response: None,
 	};
 	let mut req = request_with_body(crate::http::Body::from("payload"));
@@ -285,6 +388,7 @@ async fn apply_to_request_ignores_response_max_bytes() {
 		request: None,
 		response: Some(BufferBody {
 			max_bytes: Some(1024),
+			..Default::default()
 		}),
 	};
 	let mut req = request_with_body(streaming_body(&[b"hello"]));
@@ -385,6 +489,39 @@ async fn apply_to_response_fails_when_body_exceeds_limit() {
 }
 
 #[tokio::test]
+async fn apply_to_response_continues_streaming_when_body_exceeds_limit() {
+	let policy = continue_streaming_response(4);
+	let mut resp = response_with_body(streaming_body(&[b"hello", b" ", b"world"]));
+
+	policy
+		.apply_to_response(&mut resp)
+		.await
+		.expect("continue-streaming must not error on overflow");
+
+	// The body streams through in full even though it exceeds the buffer limit.
+	assert_eq!(
+		read_response_body_bytes(&mut resp).await,
+		Bytes::from_static(b"hello world")
+	);
+}
+
+#[tokio::test]
+async fn apply_to_response_streams_full_body_when_within_limit_under_continue_streaming() {
+	let policy = continue_streaming_response(64);
+	let mut resp = response_with_body(streaming_body(&[b"hello", b" ", b"world"]));
+
+	policy
+		.apply_to_response(&mut resp)
+		.await
+		.expect("within-limit body streams through");
+
+	assert_eq!(
+		read_response_body_bytes(&mut resp).await,
+		Bytes::from_static(b"hello world")
+	);
+}
+
+#[tokio::test]
 async fn apply_to_response_uses_explicit_max_bytes_over_extension_limit() {
 	let policy = enabled_response(64);
 	let mut resp = response_with_body(crate::http::Body::from("payload"));
@@ -405,7 +542,10 @@ async fn apply_to_response_uses_explicit_max_bytes_over_extension_limit() {
 async fn apply_to_response_falls_back_to_extension_limit_when_max_bytes_missing() {
 	let policy = Buffer {
 		request: None,
-		response: Some(BufferBody { max_bytes: None }),
+		response: Some(BufferBody {
+			max_bytes: None,
+			..Default::default()
+		}),
 	};
 	let mut resp = response_with_body(crate::http::Body::from("payload"));
 	resp.extensions_mut().insert(BufferLimit(4));
@@ -428,6 +568,7 @@ async fn apply_to_response_ignores_request_max_bytes() {
 	let policy = Buffer {
 		request: Some(BufferBody {
 			max_bytes: Some(1024),
+			..Default::default()
 		}),
 		response: None,
 	};
