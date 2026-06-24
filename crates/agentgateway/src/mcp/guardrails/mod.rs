@@ -56,7 +56,6 @@ pub struct McpGuardrails {
 	/// Ordered list of policy processors applied to matched methods; the first
 	/// to reject a request short-circuits the chain. Processors may run on the
 	/// request or response side, or both; see `Processor.methods`.
-	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
 	pub processors: Vec<Processor>,
 }
 

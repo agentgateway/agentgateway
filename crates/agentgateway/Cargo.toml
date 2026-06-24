@@ -112,6 +112,7 @@ rmcp = { version = "1.5", features = [
     "base64",
     "transport-child-process",
 ] }
+rust_decimal.workspace = true
 rustls-native-certs.workspace = true
 rustls-pki-types.workspace = true
 rustls.workspace = true
@@ -130,6 +131,7 @@ stacker.workspace = true
 shellexpand.workspace = true
 socket2.workspace = true
 sse-stream.workspace = true
+sqlx.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
 mimalloc = { workspace = true, optional = true }

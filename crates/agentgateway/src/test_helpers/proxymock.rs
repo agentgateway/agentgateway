@@ -26,7 +26,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
-use crate::llm::{AIBackend, AIProvider, NamedAIProvider};
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider, cost};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
@@ -202,6 +202,7 @@ pub fn custom_llm_backend_with_formats(
 		name: "default".into(),
 		provider: AIProvider::Custom(crate::llm::custom::Provider {
 			model: None,
+			provider_override: None,
 			formats,
 		}),
 		provider_backend: Some(provider_backend),
@@ -241,6 +242,7 @@ pub fn basic_named_route(target: Strng) -> Route {
 			method: None,
 			query: vec![],
 		}],
+		llm_router: None,
 		inline_policies: Default::default(),
 		backends: vec![RouteBackendReference {
 			weight: 1,
@@ -1195,6 +1197,7 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
 		)),
+		model_catalog: cost::ModelCatalog::empty(),
 		upstream: client.clone(),
 		ca: None,
 

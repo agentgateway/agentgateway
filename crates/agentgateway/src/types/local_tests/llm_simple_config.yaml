@@ -5,6 +5,14 @@ frontendPolicies:
 
 llm:
   policies:
+    guardrails:
+      request:
+      - regex:
+          action: reject
+          rules:
+          - builtin: email
+        rejection:
+          status: 400
     cors:
       allowOrigins:
         - http://localhost:15000
@@ -44,6 +52,17 @@ llm:
       cacheSystem: true
       cacheMessages: true
       minTokens: 1
+    guardrails:
+      request:
+      - regex:
+          action: reject
+          rules:
+          - builtin: creditCard
+      response:
+      - regex:
+          action: mask
+          rules:
+          - builtin: phoneNumber
   - name: '*'
     provider: vertex
     params:
@@ -59,4 +78,8 @@ llm:
       azureResourceType: openAI
       azureApiVersion: v1
   - name: gpt-3.5-turbo
-    provider: openAI
+    provider: openai
+  - name: llama-3.1-8b-instant
+    provider: groq
+  - name: fireworks-llama
+    provider: fireworks

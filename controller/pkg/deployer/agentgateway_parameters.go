@@ -264,6 +264,12 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 		applier := NewAgentgatewayParametersApplier(resolved.gatewayAGWP)
 		applier.ApplyToHelmValues(vals)
 	}
+	// ModelCatalog ConfigMap sources are deployment-relative: they resolve from the
+	// Gateway's namespace, not the AgentgatewayParameters' namespace. Apply only from
+	// the Gateway-level AGWP so the reference is always unambiguous.
+	if resolved.gatewayAGWP != nil && resolved.gatewayAGWP.Spec.ModelCatalog != nil {
+		vals.Agentgateway.ModelCatalog = resolved.gatewayAGWP.Spec.ModelCatalog.DeepCopy()
+	}
 
 	// Resolve Istio enablement and defaults after gw params so spec.istio takes precedence.
 	ResolveIstioIntegration(vals.Agentgateway, g.inputs.AgwCollections)

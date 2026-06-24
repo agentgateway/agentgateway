@@ -29,7 +29,9 @@ use crate::http::{
 	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
 	merge_in_headers, retry,
 };
-use crate::llm::{InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType};
+use crate::llm::{
+	InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
+};
 use crate::proxy::tcpproxy::TCPProxy;
 use crate::proxy::{
 	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, dtrace, resolve_simple_backend,
@@ -109,14 +111,16 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	if lp.filter.is_some() {
 		log.cel.filter = lp.filter.clone();
 	}
-	if lp.add.is_empty() && lp.remove.is_empty() {
-		return;
-	}
 	if !lp.add.is_empty() {
 		log.cel.fields.add = lp.add.clone();
 	}
 	if !lp.remove.is_empty() {
 		log.cel.fields.remove = lp.remove.clone();
+	}
+	if let Some(database) = &lp.database
+		&& !database.add.is_empty()
+	{
+		log.cel.database_fields.add = database.add.clone();
 	}
 }
 
@@ -443,16 +447,16 @@ async fn apply_llm_request_policies(
 		(http::PolicyResponse::default(), None)
 	};
 	rl_resp.apply(response_headers)?;
+	let prompt_guard = policies
+		.llm
+		.as_deref()
+		.and_then(|llm| llm.prompt_guard.as_ref());
 	Ok(store::LLMResponsePolicies {
 		local_rate_limit,
 		remote_rate_limit: response,
 		request_traceparent: req.headers().get(TRACEPARENT).cloned(),
-		prompt_guard: policies
-			.llm
-			.as_deref()
-			.and_then(|llm| llm.prompt_guard.as_ref())
-			.map(|g| g.response.clone())
-			.unwrap_or_default(),
+		prompt_guard: prompt_guard.map(|g| g.response.clone()).unwrap_or_default(),
+		streaming_prompt_guard_enabled: prompt_guard.is_some_and(|g| g.streaming.is_enabled()),
 	})
 }
 
@@ -546,6 +550,7 @@ impl HTTPProxy {
 				self.inputs.cfg.metrics.clone(),
 			),
 			self.inputs.metrics.clone(),
+			self.inputs.model_catalog.clone(),
 			start,
 			tcp.clone(),
 		);
@@ -616,7 +621,8 @@ impl HTTPProxy {
 			let Some(req_upgrade) = resp.extensions_mut().remove::<RequestUpgrade>() else {
 				return ProxyError::UpgradeFailed(None, None).into_response_with_grpc(is_grpc_request);
 			};
-			handle_upgrade(req_upgrade, resp, log)
+			let realtime_guard_context = resp.extensions_mut().remove::<RealtimeGuardContext>();
+			handle_upgrade(req_upgrade, resp, log, realtime_guard_context)
 				.await
 				.unwrap_or_else(|e| e.into_response_with_grpc(is_grpc_request))
 		} else {
@@ -791,6 +797,42 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
+		let selected_llm_backend = if let Some(router) = &selected_route.llm_router {
+			match router.resolve(&mut req).await {
+				model_router::ResolveResult::DirectResponse(resp) => {
+					return Err(ProxyResponse::DirectResponse(Box::new(resp))).snapshot_on_err(log, &mut req);
+				},
+				model_router::ResolveResult::Backend(backend) => Some(backend),
+			}
+		} else {
+			None
+		};
+
+		let mut route_inline_policy_storage;
+		let route_inlines = if let Some(selected_llm_backend) = &selected_llm_backend {
+			// LLM routing may add route policies to the final selected route. Clone the
+			// inline policy lists so we can append those policies without mutating config.
+			route_inline_policy_storage = selected_route_chain
+				.routes
+				.iter()
+				.map(|route| route.inline_policies.clone())
+				.collect::<Vec<_>>();
+			if let Some(inline_policies) = route_inline_policy_storage.last_mut() {
+				inline_policies.extend(selected_llm_backend.route_policies.clone());
+			}
+			route_inline_policy_storage
+				.iter()
+				.map(Vec::as_slice)
+				.collect::<Vec<_>>()
+		} else {
+			// Most requests do not use LLM routing, so borrow the existing inline policy
+			// lists directly and avoid cloning policy config.
+			selected_route_chain
+				.routes
+				.iter()
+				.map(|route| route.inline_policies.as_slice())
+				.collect()
+		};
 		let route_path = RoutePath {
 			listener: &selected_listener.name,
 			service: selected_route_chain
@@ -802,17 +844,9 @@ impl HTTPProxy {
 				.iter()
 				.map(|route| &route.name)
 				.collect(),
+			route_inlines,
 		};
-		let route_inline_policies = selected_route_chain
-			.routes
-			.iter()
-			.map(|route| route.inline_policies.as_slice())
-			.collect::<Vec<_>>();
-
-		let route_policies = inputs
-			.stores
-			.read_binds()
-			.route_policies(&route_path, &route_inline_policies);
+		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		let mut route_retry = route_policies.retry.select("retry", &req);
@@ -848,8 +882,9 @@ impl HTTPProxy {
 		.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "route policies", &req);
 
-		let selected_backend_ref = selected_route_chain
-			.backend
+		let selected_backend_ref = selected_llm_backend
+			.map(|selected| selected.backend)
+			.or(selected_route_chain.backend)
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
 		let selected_backend =
@@ -1134,6 +1169,9 @@ impl HTTPProxy {
 				sampler.client_sampling = Some(cs.clone());
 				log.cel.cel_context.register_expression(cs.as_ref());
 			}
+			if let Some(f) = &tp.config.filter {
+				log.cel.cel_context.register_log_expression(f.as_ref());
+			}
 			// Re-apply request so any newly required attributes are captured before sampling
 		}
 		log.cel.ctx().maybe_buffer_request_body(req).await;
@@ -1256,6 +1294,7 @@ impl HTTPProxy {
 				.extensions_mut()
 				.insert(BackendRequestTimeout(backend_timeout));
 		}
+		let upgrade_req_headers = req.headers().clone();
 		let mut req_opt = Some(req);
 		let timeout = response_policies
 			.timeout
@@ -1306,6 +1345,19 @@ impl HTTPProxy {
 					.maybe_snapshot_on_err(log, &mut req_opt)?;
 			};
 			resp.extensions_mut().insert(upgrade);
+			// Store prompt guard + policy client for the WebSocket upgrade path.
+			if let Some(prompt_guard) = route_policies
+				.llm
+				.as_deref()
+				.and_then(|p| p.prompt_guard.clone())
+				.filter(|g| g.streaming.is_enabled())
+			{
+				resp.extensions_mut().insert(RealtimeGuardContext {
+					prompt_guard,
+					policy_client: self.policy_client(),
+					req_headers: upgrade_req_headers,
+				});
+			}
 		}
 
 		// gRPC status can be in the initial headers or a trailer, add if they are here
@@ -1336,6 +1388,7 @@ async fn handle_upgrade(
 	req_upgrade_type: RequestUpgrade,
 	mut resp: Response,
 	log: DropOnLog,
+	realtime_guard_context: Option<RealtimeGuardContext>,
 ) -> Result<Response, ProxyError> {
 	let RequestUpgrade {
 		upgrade_type,
@@ -1374,6 +1427,18 @@ async fn handle_upgrade(
 			let llm = log.llm_response.clone();
 			let llm_info = LLMInfo::new(llm_req.clone(), LLMResponse::default());
 			llm.store(Some(llm_info));
+			if let Some(guard_context) = realtime_guard_context {
+				parse::websocket::guarded_realtime_proxy(
+					TokioIo::new(req),
+					server,
+					guard_context.prompt_guard,
+					guard_context.policy_client,
+					llm,
+					guard_context.req_headers,
+				)
+				.await;
+				return;
+			}
 			let mut server = parse::websocket::parser(server, llm).await;
 			let _ = agent_core::copy::copy_bidirectional(
 				&mut TokioIo::new(req),
@@ -2263,6 +2328,7 @@ async fn make_backend_call(
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
 								native_format: Some(llm::custom::ProviderFormat::Realtime),
+								cache_convention: llm::CacheTokenConvention::pending(),
 								request_model,
 								streaming: true,
 								provider: llm.provider.provider(),
@@ -2283,6 +2349,9 @@ async fn make_backend_call(
 				None,
 			)
 		};
+	if let Some(llm) = &backend_call.backend_policies.llm_provider {
+		llm.provider.strip_browser_cors_headers(&mut req);
+	}
 	apply_auto_hostname(&mut req, &backend_call.target)?;
 	// Some auth types (AWS) need to be applied after all request processing
 	auth::apply_late_backend_auth(
@@ -2379,6 +2448,7 @@ async fn make_backend_call(
 				log.as_ref().expect("must be set").request_snapshot.clone(),
 				llm_response_log.expect("must be set"),
 				include_completion_in_log,
+				Some(&inputs.model_catalog),
 				resp,
 			)
 			.await
@@ -2818,7 +2888,9 @@ fn finalize_attempt_for_retry(
 	let end_time = agent_core::Timestamp::now();
 	// This is an intermediate retry snapshot, so a best-effort clone is fine here.
 	let mut llm_response: Option<crate::cel::LLMContext> =
-		log.llm_response.load_clone().map(Into::into);
+		log.llm_response.load_clone().map(|llm_info| {
+			crate::cel::LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref()))
+		});
 	if let Some(llm_response) = llm_response.as_mut() {
 		llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 	}
@@ -2860,21 +2932,27 @@ fn should_retry(
 mod tests {
 	use std::collections::{HashMap, HashSet};
 	use std::net::SocketAddr;
+	use std::sync::Arc;
 
 	use ::http::Method;
 	use serde_json::json;
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		apply_auto_hostname, hop_by_hop_headers, resolved_workload_target_hostname,
-		select_service_target_port,
+		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
+		resolved_workload_target_hostname, select_service_target_port,
 	};
-	use crate::http;
 	use crate::http::filters::AutoHostname;
+	use crate::llm::policy::{
+		PromptGuard, PromptGuardStreamingMode, RegexRule, RegexRules, RequestRejection, ResponseGuard,
+		ResponseGuardKind,
+	};
+	use crate::store::LLMRequestPolicies;
 	use crate::test_helpers::proxymock;
 	use crate::types::agent::{Backend, ResourceName, Target};
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use crate::types::local::LocalAIBackend;
+	use crate::{http, llm};
 
 	fn retry_policy(codes: &[u16], condition: Option<&str>) -> crate::http::retry::Policy {
 		crate::http::retry::Policy {
@@ -2888,6 +2966,81 @@ mod tests {
 			condition: condition
 				.map(|e| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap())),
 		}
+	}
+
+	fn response_regex_guard() -> ResponseGuard {
+		ResponseGuard {
+			rejection: RequestRejection::default(),
+			kind: ResponseGuardKind::Regex(RegexRules {
+				action: Default::default(),
+				rules: vec![RegexRule::Regex {
+					pattern: regex::Regex::new("secret").unwrap(),
+				}],
+			}),
+		}
+	}
+
+	fn llm_request() -> llm::LLMRequest {
+		llm::LLMRequest {
+			input_tokens: None,
+			input_format: llm::InputFormat::Completions,
+			native_format: Some(llm::custom::ProviderFormat::Completions),
+			cache_convention: llm::CacheTokenConvention::pending(),
+			request_model: "test-model".into(),
+			provider: "test-provider".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+		}
+	}
+
+	async fn response_prompt_guards_for_streaming_mode(
+		streaming: PromptGuardStreamingMode,
+	) -> crate::store::LLMResponsePolicies {
+		let policy = llm::Policy {
+			prompt_guard: Some(PromptGuard {
+				streaming,
+				request: vec![],
+				response: vec![response_regex_guard()],
+			}),
+			..Default::default()
+		};
+		let policies = LLMRequestPolicies {
+			llm: Some(Arc::new(policy)),
+			..Default::default()
+		};
+		let mut req = ::http::Request::builder()
+			.body(http::Body::empty())
+			.unwrap();
+		let mut response_headers = ::http::HeaderMap::new();
+
+		apply_llm_request_policies(
+			&policies,
+			crate::test_helpers::policy_client(),
+			&mut req,
+			&llm_request(),
+			&mut response_headers,
+		)
+		.await
+		.expect("LLM request policies should apply")
+	}
+
+	#[tokio::test]
+	async fn apply_llm_request_policies_skips_streaming_guardrails_when_disabled() {
+		let policies =
+			response_prompt_guards_for_streaming_mode(PromptGuardStreamingMode::Disabled).await;
+
+		assert_eq!(policies.prompt_guard.len(), 1);
+		assert!(!policies.streaming_prompt_guard_enabled);
+	}
+
+	#[tokio::test]
+	async fn apply_llm_request_policies_includes_streaming_guardrails_when_enabled() {
+		let policies =
+			response_prompt_guards_for_streaming_mode(PromptGuardStreamingMode::Enabled).await;
+
+		assert_eq!(policies.prompt_guard.len(), 1);
+		assert!(policies.streaming_prompt_guard_enabled);
 	}
 
 	#[test]
@@ -3305,6 +3458,13 @@ struct RequestUpgrade {
 struct ConnectTunnel {
 	upgrade: OnUpgrade,
 	upstream: Arc<Mutex<Option<Socket>>>,
+}
+
+#[derive(Clone)]
+struct RealtimeGuardContext {
+	prompt_guard: crate::llm::policy::PromptGuard,
+	policy_client: PolicyClient,
+	req_headers: ::http::HeaderMap,
 }
 
 fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
@@ -3760,6 +3920,7 @@ mod route_chain_tests {
 				target,
 				inline_policies: Vec::new(),
 			}],
+			llm_router: None,
 			inline_policies: Vec::new(),
 		}
 	}
@@ -3783,6 +3944,7 @@ mod route_chain_tests {
 				query: Vec::new(),
 			}],
 			backends: Vec::new(),
+			llm_router: None,
 			inline_policies: Vec::new(),
 		}
 	}

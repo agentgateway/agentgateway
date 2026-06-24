@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
-use ::http::{HeaderMap, HeaderValue, header};
+use ::http::{HeaderMap, HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use axum_extra::headers::authorization::Bearer;
@@ -31,13 +31,16 @@ pub mod bedrock;
 pub mod copilot;
 pub mod custom;
 pub mod gemini;
+pub mod model_router;
 pub mod openai;
 pub mod vertex;
 
 mod conversion;
+pub mod cost;
 pub mod policy;
 mod types;
 
+use policy::streaming_guardrails::GuardedSseBody;
 pub use types::SimpleChatCompletionMessage;
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
@@ -166,11 +169,52 @@ pub struct LLMRequest {
 	pub input_tokens: Option<u64>,
 	pub input_format: InputFormat,
 	pub native_format: Option<custom::ProviderFormat>,
+	pub cache_convention: CacheTokenConvention,
 	pub request_model: Strng,
 	pub provider: Strng,
 	pub streaming: bool,
 	pub params: LLMRequestParams,
 	pub prompt: Option<Arc<Vec<SimpleChatCompletionMessage>>>,
+}
+
+/// Whether an upstream's reported `input_tokens` already includes cached tokens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CacheTokenConvention {
+	/// OpenAI-style: cached tokens are a subset of `input_tokens`
+	#[default]
+	InputIncludesCache,
+	/// Anthropic-style: `input_tokens` is already fresh
+	InputExcludesCache,
+}
+
+impl CacheTokenConvention {
+	/// Placeholder used while request conversion lacks provider/native-format
+	/// context. `process_request` replaces this with the classified convention.
+	pub(crate) fn pending() -> Self {
+		Self::InputIncludesCache
+	}
+}
+
+/// Classify how the upstream reports cached tokens, from the source wire format the
+/// gateway is about to parse — not the provider name, which can carry another
+/// provider's native semantics (e.g. Vertex serving Anthropic models).
+fn cache_convention_for(
+	provider: &AIProvider,
+	native_format: Option<custom::ProviderFormat>,
+	request_model: &str,
+) -> CacheTokenConvention {
+	use CacheTokenConvention::*;
+	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
+	match provider {
+		AIProvider::Anthropic(_) | AIProvider::Bedrock(_) => InputExcludesCache,
+		AIProvider::Vertex(p) if p.is_anthropic_model(Some(request_model)) => InputExcludesCache,
+		AIProvider::Custom(_) => match native_format {
+			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
+			// TODO(mk): Detect/passthrough mode has native_format = None. Need to confirm if there is an issue with classification
+			_ => InputIncludesCache,
+		},
+		_ => InputIncludesCache, // openai, azure, copilot, gemini, vertex non-anthropic
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -199,16 +243,17 @@ impl InputFormat {
 		}
 	}
 
-	fn provider_format(&self) -> Option<custom::ProviderFormat> {
+	fn provider_format_preferences(&self) -> &'static [custom::ProviderFormat] {
+		use custom::ProviderFormat::*;
 		match self {
-			InputFormat::Completions => Some(custom::ProviderFormat::Completions),
-			InputFormat::Messages => Some(custom::ProviderFormat::Messages),
-			InputFormat::Responses => Some(custom::ProviderFormat::Responses),
-			InputFormat::Embeddings => Some(custom::ProviderFormat::Embeddings),
-			InputFormat::Realtime => Some(custom::ProviderFormat::Realtime),
-			InputFormat::CountTokens => Some(custom::ProviderFormat::AnthropicTokenCount),
-			InputFormat::Detect => None,
-			InputFormat::Rerank => Some(custom::ProviderFormat::Rerank),
+			InputFormat::Completions => &[Completions, Messages],
+			InputFormat::Messages => &[Messages, Completions],
+			InputFormat::Responses => &[Responses, Completions],
+			InputFormat::Embeddings => &[Embeddings],
+			InputFormat::Realtime => &[Realtime],
+			InputFormat::CountTokens => &[AnthropicTokenCount],
+			InputFormat::Detect => &[],
+			InputFormat::Rerank => &[Rerank],
 		}
 	}
 }
@@ -319,7 +364,10 @@ impl AIProvider {
 			AIProvider::Bedrock(_p) => bedrock::Provider::NAME,
 			AIProvider::Azure(_p) => azure::Provider::NAME,
 			AIProvider::Copilot(_p) => copilot::Provider::NAME,
-			AIProvider::Custom(_p) => custom::Provider::NAME,
+			AIProvider::Custom(p) => p
+				.provider_override
+				.clone()
+				.unwrap_or(custom::Provider::NAME),
 		}
 	}
 	pub fn override_model(&self) -> Option<Strng> {
@@ -334,6 +382,70 @@ impl AIProvider {
 			AIProvider::Custom(p) => p.model.clone(),
 		}
 	}
+
+	pub fn supported_formats(&self, request_model: Option<&str>) -> Vec<custom::ProviderFormat> {
+		use custom::ProviderFormat::*;
+		match self {
+			AIProvider::OpenAI(_) => vec![Completions, Responses, Embeddings, Realtime, Rerank],
+			AIProvider::Copilot(_) => vec![Completions, Responses, Rerank],
+			AIProvider::Azure(p) => {
+				let mut formats = vec![Completions, Responses, Embeddings, Rerank];
+				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+					&& p.is_anthropic_model(request_model)
+				{
+					formats.extend([Messages, AnthropicTokenCount]);
+				}
+				formats
+			},
+			AIProvider::Gemini(_) => vec![Completions, Embeddings],
+			AIProvider::Anthropic(_) => vec![Messages, AnthropicTokenCount],
+			AIProvider::Bedrock(p) => {
+				let mut formats = vec![Completions, Messages, Responses, Embeddings, Rerank];
+				if p.is_anthropic_model(request_model) {
+					formats.push(AnthropicTokenCount);
+				}
+				formats
+			},
+			AIProvider::Vertex(p) => {
+				let mut formats = if p.is_anthropic_model(request_model) {
+					vec![Messages, AnthropicTokenCount]
+				} else {
+					vec![Completions]
+				};
+				formats.extend([Embeddings, Rerank]);
+				formats
+			},
+			AIProvider::Custom(p) => p.formats.iter().map(|f| f.format).collect(),
+		}
+	}
+
+	pub fn supports_format(
+		&self,
+		format: custom::ProviderFormat,
+		request_model: Option<&str>,
+	) -> bool {
+		self.supported_formats(request_model).contains(&format)
+	}
+
+	pub fn native_format_for(
+		&self,
+		input_format: InputFormat,
+		request_model: Option<&str>,
+	) -> Option<custom::ProviderFormat> {
+		// Vertex currently supports Responses only in the streaming response mapper; the
+		// request path does not translate Responses bodies to its OpenAI-compatible chat endpoint.
+		if matches!(self, AIProvider::Vertex(_)) && input_format == InputFormat::Responses {
+			return None;
+		}
+
+		let supported = self.supported_formats(request_model);
+		input_format
+			.provider_format_preferences()
+			.iter()
+			.copied()
+			.find(|format| supported.contains(format))
+	}
+
 	/// Default backend policies (TLS + auth) for connecting to the provider. Split from
 	/// [`Self::default_connector_target`] so callers can compute effective policies, resolve the LLM
 	/// route from them, and only then pick the connection target. Returns `None` for custom providers,
@@ -410,7 +522,7 @@ impl AIProvider {
 		if !has_host_override {
 			self.set_default_authority(req, route_type)?;
 		}
-		self.set_required_fields(req)?;
+		self.set_required_fields(req, route_type, llm_request)?;
 		Ok(())
 	}
 
@@ -606,7 +718,12 @@ impl AIProvider {
 		})
 	}
 
-	pub fn set_required_fields(&self, req: &mut Request) -> anyhow::Result<()> {
+	pub fn set_required_fields(
+		&self,
+		req: &mut Request,
+		route_type: RouteType,
+		llm_request: Option<&LLMRequest>,
+	) -> anyhow::Result<()> {
 		match self {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {
@@ -638,7 +755,49 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::Azure(p) => {
+				// Foundry's Anthropic-native endpoint requires the anthropic-version header,
+				// but only for Claude models — GPT models use the OpenAI-compatible path.
+				let model = llm_request.map(|r| r.request_model.as_str()).unwrap_or("");
+				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+					&& p.is_anthropic_model(Some(model))
+					&& matches!(
+						route_type,
+						RouteType::Messages | RouteType::AnthropicTokenCount
+					) {
+					http::modify_req(req, |req| {
+						req
+							.headers
+							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+						Ok(())
+					})
+				} else {
+					Ok(())
+				}
+			},
 			_ => Ok(()),
+		}
+	}
+
+	// Anthropic does not like CORS requests, but we are not really directly CORS since we are proxying requests.
+	// Securing the requests and management of CORS is handled by the proxy so we just directly send.
+	pub fn strip_browser_cors_headers(&self, req: &mut Request) {
+		if !matches!(self, AIProvider::Anthropic(_)) {
+			return;
+		}
+
+		let headers = req.headers_mut();
+		headers.remove("origin");
+		headers.remove("access-control-request-method");
+		headers.remove("access-control-request-headers");
+
+		let sec_fetch_headers: Vec<HeaderName> = headers
+			.keys()
+			.filter(|name| name.as_str().starts_with("sec-fetch-"))
+			.cloned()
+			.collect();
+		for name in sec_fetch_headers {
+			headers.remove(name);
 		}
 	}
 
@@ -799,20 +958,21 @@ impl AIProvider {
 			.read_body_and_default_model::<types::count_tokens::Request>(policies, req, log)
 			.await?;
 
+		let request_model = req.model.as_deref();
+		let effective_model = request_model
+			.and_then(|model| policies.and_then(|p| p.resolve_model_alias(model)))
+			.map(|model| model.as_str())
+			.or(request_model);
+
 		// Some Anthropic-compatible clients (e.g. Claude Code) always call
 		// `/v1/messages/count_tokens`. For providers/models without a native
 		// count-tokens endpoint, we must still answer this route, so we fall
 		// back to local token estimation using the normalized messages payload.
-		let use_local = match self {
-			AIProvider::Anthropic(_) => false,
-			AIProvider::Bedrock(p) => !p.is_anthropic_model(req.model.as_deref()),
-			AIProvider::Vertex(p) => !p.is_anthropic_model(req.model.as_deref()),
-			AIProvider::Custom(p) => !p.supports(custom::ProviderFormat::AnthropicTokenCount),
-			_ => true,
-		};
+		let use_local =
+			!self.supports_format(custom::ProviderFormat::AnthropicTokenCount, effective_model);
 		if use_local {
 			let messages = req.get_messages();
-			let model = req.model.as_deref().unwrap_or_default();
+			let model = effective_model.unwrap_or_default();
 			let count = num_tokens_from_messages(model, &messages)?;
 			let body = serde_json::to_vec(&types::count_tokens::Response {
 				input_tokens: count,
@@ -895,90 +1055,6 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		let native_format = match self {
-			AIProvider::Custom(_) if original_format == InputFormat::Detect => None,
-			AIProvider::Custom(p) => p
-				.native_format_for(original_format)
-				.ok_or_else(|| {
-					AIError::UnsupportedConversion(strng::format!(
-						"from {original_format:?} to provider {}",
-						self.provider()
-					))
-				})?
-				.into(),
-			_ => original_format.provider_format(),
-		};
-		match (self, original_format) {
-			(_, InputFormat::Detect) => {
-				// All providers support detect; this is a passthrough!
-			},
-			(AIProvider::Custom(_), _) => {},
-			(_, InputFormat::Completions) => {
-				// All providers support completions input
-			},
-			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Copilot(_)
-				| AIProvider::Azure(_)
-				| AIProvider::Bedrock(_)
-				| AIProvider::Gemini(_),
-				InputFormat::Responses,
-			) => {
-				// OpenAI supports responses input (Bedrock & Gemini support responses input via translation)
-			},
-			(
-				AIProvider::Anthropic(_)
-				| AIProvider::Bedrock(_)
-				| AIProvider::Vertex(_)
-				| AIProvider::OpenAI(_)
-				| AIProvider::Copilot(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::Azure(_),
-				InputFormat::Messages,
-			) => {
-				// Anthropic supports messages input (Bedrock & Vertex support assuming serving Anthropic models)
-				// OpenAI/Gemini/Azure support messages via translation to chat completions
-			},
-			(
-				AIProvider::Anthropic(_) | AIProvider::Bedrock(_) | AIProvider::Vertex(_),
-				InputFormat::CountTokens,
-			) => {
-				// Anthropic supports count_tokens natively (Bedrock & Vertex assumes its serving Anthropic models)
-			},
-			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::Azure(_)
-				| AIProvider::Bedrock(_)
-				| AIProvider::Vertex(_),
-				InputFormat::Embeddings,
-			) => {
-				// OpenAI compatible, Gemini, Bedrock, or Vertex
-			},
-			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Copilot(_)
-				| AIProvider::Azure(_)
-				| AIProvider::Bedrock(_)
-				| AIProvider::Vertex(_),
-				InputFormat::Rerank,
-			) => {
-				// OpenAI-compatible providers (OpenAI/Copilot/Azure-Foundry) pass the
-				// Cohere-shaped request through unchanged; Bedrock & Vertex translate.
-				// Custom is already covered above. These OpenAI-compatible surfaces only
-				// actually serve rerank when pointed (e.g. via hostOverride or Azure Foundry)
-				// at a Cohere-compatible backend; otherwise the upstream returns its own 404.
-				// Anthropic and Gemini have no rerank endpoint and fall through to the
-				// unsupported arm below.
-			},
-			(p, m) => {
-				// Unsupported provider/format combination.
-				return Err(AIError::UnsupportedConversion(strng::format!(
-					"from {m:?} to provider {}",
-					p.provider()
-				)));
-			},
-		}
 		if let Some(p) = policies {
 			// Apply model alias resolution
 			if req.supports_model()
@@ -987,6 +1063,24 @@ impl AIProvider {
 			{
 				*model = aliased.to_string();
 			}
+		}
+
+		let request_model = req.model().as_deref().map(str::to_string);
+		let native_format = if original_format == InputFormat::Detect {
+			None
+		} else {
+			self
+				.native_format_for(original_format, request_model.as_deref())
+				.ok_or_else(|| {
+					AIError::UnsupportedConversion(strng::format!(
+						"from {original_format:?} to provider {}",
+						self.provider()
+					))
+				})?
+				.into()
+		};
+
+		if let Some(p) = policies {
 			p.apply_prompt_enrichment(&mut req);
 
 			if original_format.supports_prompt_guard() {
@@ -1009,6 +1103,7 @@ impl AIProvider {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
 		llm_info.native_format = native_format;
+		llm_info.cache_convention = cache_convention_for(self, native_format, &llm_info.request_model);
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
 			&& original_format.supports_prompt_guard()
@@ -1026,6 +1121,14 @@ impl AIProvider {
 				AIProvider::Vertex(provider) => {
 					let body = req.to_anthropic()?;
 					provider.prepare_anthropic_count_tokens_body(body)?
+				},
+				AIProvider::Azure(p)
+					if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+						&& p.is_anthropic_model(Some(request_model)) =>
+				{
+					// Foundry's Anthropic-native count_tokens endpoint accepts the Anthropic wire format
+					// as-is (the model stays in the body, unlike Vertex which strips it).
+					req.to_anthropic()?
 				},
 				_ => {
 					return Err(AIError::UnsupportedConversion(strng::literal!(
@@ -1058,7 +1161,21 @@ impl AIProvider {
 						)));
 					},
 				},
-				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_) => req.to_openai()?,
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) => req.to_openai()?,
+				AIProvider::Azure(p) => {
+					if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+						&& p.is_anthropic_model(Some(request_model))
+					{
+						// Foundry's Anthropic-native endpoint requires the Anthropic wire format,
+						// but only for Claude models; GPT models use the OpenAI completions format.
+						match original_format {
+							InputFormat::Messages | InputFormat::CountTokens => req.to_anthropic()?,
+							_ => req.to_openai()?,
+						}
+					} else {
+						req.to_openai()?
+					}
+				},
 				AIProvider::Vertex(p) => {
 					if p.is_anthropic_model(Some(request_model)) {
 						let body = req.to_anthropic()?;
@@ -1101,6 +1218,7 @@ impl AIProvider {
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
+		model_catalog: Option<&Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
 		// Non-success responses are plain JSON, not event-stream data.
@@ -1109,15 +1227,18 @@ impl AIProvider {
 		if req.streaming && resp.status().is_success() {
 			return self
 				.process_streaming(
+					client,
 					req,
 					rate_limit,
 					req_snapshot,
 					log,
 					include_completion_in_log,
+					model_catalog.cloned(),
 					resp,
 				)
 				.await;
 		}
+		let model_catalog = model_catalog.map(Arc::as_ref);
 
 		// Buffer the body
 		let buffer_limit = http::response_buffer_limit(&resp);
@@ -1147,6 +1268,13 @@ impl AIProvider {
 				AIProvider::Anthropic(_) | AIProvider::Vertex(_) | AIProvider::Bedrock(_) => {
 					types::count_tokens::Response::translate_response(bytes)?
 				},
+				AIProvider::Azure(p)
+					if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+						&& p.is_anthropic_model(Some(&req.request_model)) =>
+				{
+					// Foundry returns the Anthropic-native count_tokens shape for Claude models.
+					types::count_tokens::Response::translate_response(bytes)?
+				},
 				AIProvider::Custom(p) if p.supports(custom::ProviderFormat::AnthropicTokenCount) => {
 					types::count_tokens::Response::translate_response(bytes)?
 				},
@@ -1162,13 +1290,14 @@ impl AIProvider {
 				count_tokens: Some(count),
 				..Default::default()
 			};
-			let llm_info = LLMInfo::new(req, llm_resp);
-			parts
-				.extensions
-				.insert(crate::cel::LLMContext::from(llm_info.clone()));
-			let resp = Response::from_parts(parts, bytes.into());
-			log.store(Some(llm_info));
-			return Ok(resp);
+			return Ok(Self::finalize_response(
+				parts,
+				bytes.into(),
+				req,
+				llm_resp,
+				model_catalog,
+				&log,
+			));
 		}
 
 		// embeddings has simplified response handling
@@ -1176,22 +1305,24 @@ impl AIProvider {
 			parts.headers.remove(header::CONTENT_LENGTH);
 			if !parts.status.is_success() {
 				let body = self.process_error(&req, parts.status, &bytes)?;
-				let llm_info = LLMInfo::new(req, LLMResponse::default());
-				parts
-					.extensions
-					.insert(crate::cel::LLMContext::from(llm_info.clone()));
-				let resp = Response::from_parts(parts, body.into());
-				log.store(Some(llm_info));
-				return Ok(resp);
+				return Ok(Self::finalize_response(
+					parts,
+					body.into(),
+					req,
+					LLMResponse::default(),
+					model_catalog,
+					&log,
+				));
 			}
 			let (llm_resp, bytes) = self.process_embeddings_response(&req, &parts.headers, bytes)?;
-			let llm_info = LLMInfo::new(req, llm_resp);
-			parts
-				.extensions
-				.insert(crate::cel::LLMContext::from(llm_info.clone()));
-			let resp = Response::from_parts(parts, bytes.into());
-			log.store(Some(llm_info));
-			return Ok(resp);
+			return Ok(Self::finalize_response(
+				parts,
+				bytes.into(),
+				req,
+				llm_resp,
+				model_catalog,
+				&log,
+			));
 		}
 
 		// rerank has simplified response handling (like embeddings)
@@ -1199,22 +1330,24 @@ impl AIProvider {
 			parts.headers.remove(header::CONTENT_LENGTH);
 			if !parts.status.is_success() {
 				let body = self.process_error(&req, parts.status, &bytes)?;
-				let llm_info = LLMInfo::new(req, LLMResponse::default());
-				parts
-					.extensions
-					.insert(crate::cel::LLMContext::from(llm_info.clone()));
-				let resp = Response::from_parts(parts, body.into());
-				log.store(Some(llm_info));
-				return Ok(resp);
+				return Ok(Self::finalize_response(
+					parts,
+					body.into(),
+					req,
+					LLMResponse::default(),
+					model_catalog,
+					&log,
+				));
 			}
 			let (llm_resp, bytes) = self.process_rerank_response(bytes)?;
-			let llm_info = LLMInfo::new(req, llm_resp);
-			parts
-				.extensions
-				.insert(crate::cel::LLMContext::from(llm_info.clone()));
-			let resp = Response::from_parts(parts, bytes.into());
-			log.store(Some(llm_info));
-			return Ok(resp);
+			return Ok(Self::finalize_response(
+				parts,
+				bytes.into(),
+				req,
+				llm_resp,
+				model_catalog,
+				&log,
+			));
 		}
 
 		let (llm_resp, body) = if !parts.status.is_success() {
@@ -1261,7 +1394,10 @@ impl AIProvider {
 		let llm_info = LLMInfo::new(req, llm_resp);
 		parts
 			.extensions
-			.insert(crate::cel::LLMContext::from(llm_info.clone()));
+			.insert(crate::cel::LLMContext::from_llm_info(
+				llm_info.clone(),
+				model_catalog,
+			));
 		let resp = Response::from_parts(parts, body);
 
 		if !rate_limit.local_rate_limit.is_empty() || rate_limit.remote_rate_limit.is_some() {
@@ -1272,6 +1408,25 @@ impl AIProvider {
 		}
 		log.store(Some(llm_info));
 		Ok(resp)
+	}
+
+	fn finalize_response(
+		mut parts: ::http::response::Parts,
+		body: Body,
+		req: LLMRequest,
+		llm_resp: LLMResponse,
+		model_catalog: Option<&cost::ModelCatalog>,
+		log: &AsyncLog<llm::LLMInfo>,
+	) -> Response {
+		let llm_info = LLMInfo::new(req, llm_resp);
+		parts
+			.extensions
+			.insert(crate::cel::LLMContext::from_llm_info(
+				llm_info.clone(),
+				model_catalog,
+			));
+		log.store(Some(llm_info));
+		Response::from_parts(parts, body)
 	}
 
 	fn process_embeddings_response(
@@ -1431,12 +1586,20 @@ impl AIProvider {
 			},
 			// Anthropic messages: passthrough
 			(AIProvider::Anthropic(_), InputFormat::Messages) => Self::parse_messages_response(bytes),
-			// OpenAI/Gemini/Azure messages: translate from chat completions
+			// Azure messages: Foundry+Claude uses Anthropic-native passthrough;
+			// all other Azure (OpenAI resource or GPT models) translate from chat completions.
+			(AIProvider::Azure(p), InputFormat::Messages) => {
+				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
+					&& p.is_anthropic_model(Some(&req.request_model))
+				{
+					Self::parse_messages_response(bytes)
+				} else {
+					conversion::completions::from_messages::translate_response(bytes)
+				}
+			},
+			// OpenAI/Gemini messages: translate from chat completions
 			(
-				AIProvider::OpenAI(_)
-				| AIProvider::Copilot(_)
-				| AIProvider::Gemini(_)
-				| AIProvider::Azure(_),
+				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Gemini(_),
 				InputFormat::Messages,
 			) => conversion::completions::from_messages::translate_response(bytes),
 			// Supported paths with conversion...
@@ -1485,13 +1648,16 @@ impl AIProvider {
 		}
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub async fn process_streaming(
 		&self,
+		client: PolicyClient,
 		req: LLMRequest,
-		rate_limit: LLMResponsePolicies,
+		response_policies: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
 		include_completion_in_log: bool,
+		model_catalog: Option<Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
 		let is_vertex_anthropic = match self {
@@ -1500,6 +1666,13 @@ impl AIProvider {
 		};
 		let is_vertex_gemini = match self {
 			AIProvider::Vertex(p) => p.is_gemini_model(Some(&req.request_model)),
+			_ => false,
+		};
+		let is_foundry_anthropic = match self {
+			AIProvider::Azure(p) => {
+				matches!(p.resource_type, azure::AzureResourceType::Foundry)
+					&& p.is_anthropic_model(Some(&req.request_model))
+			},
 			_ => false,
 		};
 		let model = req.request_model.clone();
@@ -1515,6 +1688,7 @@ impl AIProvider {
 
 		// Decompress before the SSE parser, which expects plaintext chunks.
 		let (mut parts, body) = resp.into_parts();
+		let body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer);
 		let ce = parts.headers.typed_get::<ContentEncoding>();
 		let (body, decompressed_encoding) = http::compression::decompress_body(body, ce.as_ref())
 			.map_err(|e| map_compression_error(e, &parts.headers))?;
@@ -1525,6 +1699,13 @@ impl AIProvider {
 			parts.headers.remove(header::CONTENT_LENGTH);
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}
+
+		// Build headers for guardrail evaluation (same as buffered path).
+		let prompt_guard_headers = response_prompt_guard_headers(
+			&parts.headers,
+			response_policies.request_traceparent.as_ref(),
+		);
+
 		let resp = Response::from_parts(parts, body);
 		let resp = if matches!(input_format, InputFormat::Detect) {
 			resp
@@ -1532,7 +1713,26 @@ impl AIProvider {
 			normalize_sse_response_headers(resp)
 		};
 
-		let logger = AmendOnDrop::new(log, rate_limit, req_snapshot);
+		// Build evaluators before format translation so guardrails run against translated
+		// SSE output, not raw upstream bytes. Applying them before translation silently
+		// breaks Bedrock (AWS Event Stream is binary, not SSE) and any provider whose
+		// wire format differs from SSE. Detect paths are raw pass-throughs; skip them.
+		let evaluators = if response_policies.streaming_prompt_guard_enabled
+			&& !response_policies.prompt_guard.is_empty()
+			&& !matches!(input_format, InputFormat::Detect)
+		{
+			use policy::PromptGuard;
+			let temp_guard = PromptGuard {
+				streaming: policy::PromptGuardStreamingMode::Enabled,
+				request: vec![],
+				response: response_policies.prompt_guard.clone(),
+			};
+			temp_guard.begin_streaming_response_guard(&client, &prompt_guard_headers)
+		} else {
+			vec![]
+		};
+
+		let logger = AmendOnDrop::new(log, response_policies, req_snapshot, model_catalog);
 		let stream_format = match self {
 			AIProvider::Bedrock(_) => "awsEventStream",
 			_ => "sseJson",
@@ -1545,7 +1745,7 @@ impl AIProvider {
 				stream_format.to_string(),
 			)
 		});
-		Ok(match (self, input_format, native_format) {
+		let translated = match (self, input_format, native_format) {
 			(
 				AIProvider::Custom(_),
 				InputFormat::Completions,
@@ -1622,6 +1822,10 @@ impl AIProvider {
 			(AIProvider::Anthropic(_), InputFormat::Messages, _) => resp.map(|b| {
 				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
 			}),
+			// Foundry + Claude model: Anthropic-native SSE stream, passthrough as-is
+			(AIProvider::Azure(_), InputFormat::Messages, _) if is_foundry_anthropic => resp.map(|b| {
+				conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
+			}),
 			// OpenAI/Gemini/Azure messages: translate from chat completions
 			(
 				AIProvider::OpenAI(_)
@@ -1684,7 +1888,13 @@ impl AIProvider {
 					"custom provider cannot translate {native:?} stream to {input:?}"
 				)));
 			},
-		})
+		};
+
+		if !evaluators.is_empty() {
+			// `logger` is owned by the translated body; pass None to avoid double-logging.
+			return Ok(translated.map(|b| GuardedSseBody::new(b, evaluators, buffer, None)));
+		}
+		Ok(translated)
 	}
 
 	async fn read_body_and_default_model<T: RequestType + DeserializeOwned>(
@@ -1993,6 +2203,7 @@ pub struct AmendOnDrop {
 	log: AsyncLog<llm::LLMInfo>,
 	pol: Option<LLMResponsePolicies>,
 	req: Option<Arc<RequestSnapshot>>,
+	catalog: Option<Arc<cost::ModelCatalog>>,
 }
 
 impl AmendOnDrop {
@@ -2000,11 +2211,13 @@ impl AmendOnDrop {
 		log: AsyncLog<llm::LLMInfo>,
 		pol: LLMResponsePolicies,
 		req: Option<Arc<RequestSnapshot>>,
+		catalog: Option<Arc<cost::ModelCatalog>>,
 	) -> Self {
 		Self {
 			log,
 			pol: Some(pol),
 			req,
+			catalog,
 		}
 	}
 	pub fn non_atomic_mutate(&self, f: impl FnOnce(&mut llm::LLMInfo)) {
@@ -2015,7 +2228,7 @@ impl AmendOnDrop {
 			&& (!pol.local_rate_limit.is_empty() || pol.remote_rate_limit.is_some())
 		{
 			self.log.non_atomic_mutate(|r| {
-				let ctx = LLMContext::from(r.clone());
+				let ctx = LLMContext::from_llm_info(r.clone(), self.catalog.as_deref());
 				let exec = cel::Executor::new_llm_rate_limit_streaming(self.req.as_deref(), &ctx);
 				amend_tokens(pol, r, exec)
 			});

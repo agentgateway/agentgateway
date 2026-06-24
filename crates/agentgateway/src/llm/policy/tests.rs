@@ -2,6 +2,58 @@ use ::http::{HeaderName, HeaderValue};
 
 use super::*;
 
+/// When a webhook guard fails open, exactly one metric must be emitted (`FailOpen`); the caller
+/// must not additionally record `Allow`.
+#[tokio::test]
+async fn webhook_fail_open_emits_single_metric() {
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailLabels, GuardrailPhase};
+	use crate::types::agent::SimpleBackendReference;
+
+	let guard = PromptGuard {
+		streaming: Default::default(),
+		request: vec![RequestGuard {
+			rejection: Default::default(),
+			kind: RequestGuardKind::Webhook(Webhook {
+				target: SimpleBackendReference::Invalid,
+				forward_header_matches: vec![],
+				failure_mode: FailureMode::FailOpen,
+			}),
+		}],
+		response: vec![],
+	};
+
+	let client = crate::test_helpers::policy_client();
+	let blocked = guard
+		.apply_realtime_request_guards("hello world", &client)
+		.await;
+	assert!(blocked.is_none(), "FailOpen must not block the request");
+
+	let fail_open = client
+		.inputs
+		.metrics
+		.guardrail_checks
+		.get_or_create(&GuardrailLabels {
+			phase: GuardrailPhase::Request,
+			action: GuardrailAction::FailOpen,
+		})
+		.get();
+	let allow = client
+		.inputs
+		.metrics
+		.guardrail_checks
+		.get_or_create(&GuardrailLabels {
+			phase: GuardrailPhase::Request,
+			action: GuardrailAction::Allow,
+		})
+		.get();
+
+	assert_eq!(fail_open, 1, "FailOpen should be recorded exactly once");
+	assert_eq!(
+		allow, 0,
+		"Allow must not be recorded for a FailOpen outcome"
+	);
+}
+
 #[test]
 fn test_get_webhook_forward_headers() {
 	let mut headers = HeaderMap::new();
@@ -1024,6 +1076,7 @@ mod prompt_guard_config_tests {
 		let policy: Policy = serde_json::from_value(json).unwrap();
 		let prompt_guard = policy.prompt_guard.unwrap();
 		assert_eq!(prompt_guard.response.len(), 1);
+		assert!(prompt_guard.streaming.is_disabled());
 
 		match &prompt_guard.response[0].kind {
 			ResponseGuardKind::BedrockGuardrails(bg) => {
@@ -1033,6 +1086,56 @@ mod prompt_guard_config_tests {
 			},
 			_ => panic!("Expected BedrockGuardrails response guard kind"),
 		}
+	}
+
+	#[test]
+	fn test_streaming_response_guards_are_opt_in() {
+		let json = json!({
+			"promptGuard": {
+				"response": [{
+					"regex": {
+						"action": "reject",
+						"rules": [{
+							"pattern": "secret"
+						}]
+					}
+				}]
+			}
+		});
+
+		let policy: Policy = serde_json::from_value(json).unwrap();
+
+		assert!(
+			policy
+				.prompt_guard
+				.as_ref()
+				.unwrap()
+				.streaming
+				.is_disabled()
+		);
+		assert!(!policy.has_streaming_response_guards());
+	}
+
+	#[test]
+	fn test_streaming_response_guards_enable_with_streaming_true() {
+		let json = json!({
+			"promptGuard": {
+				"streaming": "Enabled",
+				"response": [{
+					"regex": {
+						"action": "reject",
+						"rules": [{
+							"pattern": "secret"
+						}]
+					}
+				}]
+			}
+		});
+
+		let policy: Policy = serde_json::from_value(json).unwrap();
+
+		assert!(policy.prompt_guard.as_ref().unwrap().streaming.is_enabled());
+		assert!(policy.has_streaming_response_guards());
 	}
 
 	#[test]

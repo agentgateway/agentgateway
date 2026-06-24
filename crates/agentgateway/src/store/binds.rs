@@ -192,6 +192,7 @@ impl FrontendPolices {
 			add: fields_add,
 			remove: _,
 			otlp: _,
+			database,
 			access_log_policy: _,
 		}) = &self.access_log
 		{
@@ -200,6 +201,11 @@ impl FrontendPolices {
 			}
 			for (_, v) in fields_add.iter() {
 				ctx.register_log_expression(v)
+			}
+			if let Some(database) = database {
+				for (_, v) in database.add.iter() {
+					ctx.register_log_expression(v)
+				}
 			}
 		}
 		if let Some(mf) = &self.metrics_fields {
@@ -482,6 +488,7 @@ pub struct LLMResponsePolicies {
 	pub remote_rate_limit: Option<http::remoteratelimit::LLMResponseAmend>,
 	pub request_traceparent: Option<HeaderValue>,
 	pub prompt_guard: Vec<ResponseGuard>,
+	pub streaming_prompt_guard_enabled: bool,
 }
 
 impl Default for Store {
@@ -497,6 +504,7 @@ pub struct RoutePath<'a> {
 	// the originally intended service, pre-routing
 	pub service: Option<&'a NamespacedHostname>,
 	pub routes: Vec<&'a RouteName>,
+	pub route_inlines: Vec<&'a [TrafficPolicy]>,
 }
 
 impl<'a> RoutePath<'a> {
@@ -726,7 +734,7 @@ impl Store {
 		tokio_stream::wrappers::UnboundedReceiverStream::new(sub)
 	}
 
-	pub fn route_policies(&self, path: &RoutePath<'_>, inline: &[&[TrafficPolicy]]) -> RoutePolicies {
+	pub fn route_policies(&self, path: &RoutePath<'_>) -> RoutePolicies {
 		let listener = &path.listener;
 		let gateway = self
 			.policies_by_target
@@ -766,14 +774,9 @@ impl Store {
 							.map(|inner| (p.inheritance, inner))
 					}),
 			);
-			route_rules.extend(
-				inline
-					.get(idx)
-					.copied()
-					.unwrap_or_default()
-					.iter()
-					.map(|p| (PolicyInheritance::Default, p)),
-			);
+			if let Some(inline) = path.route_inlines.get(idx) {
+				route_rules.extend(inline.iter().map(|p| (PolicyInheritance::Default, p)));
+			}
 		}
 
 		let shared_rules = gateway
@@ -1661,38 +1664,44 @@ pub struct StoreUpdater {
 	state: Arc<RwLock<Store>>,
 }
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct RoutesDump {
-	http_mesh: HashMap<NamespacedHostname, RouteSet>,
-	tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
-	route_groups: HashMap<RouteGroupKey, RouteSet>,
+	pub http_mesh: HashMap<NamespacedHostname, RouteSet>,
+	pub tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
+	pub route_groups: HashMap<RouteGroupKey, RouteSet>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-struct DumpListener {
+pub struct DumpListener {
 	#[serde(flatten)]
-	listener: Listener,
+	pub listener: Listener,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	routes: Option<Arc<RouteSet>>,
+	pub routes: Option<Arc<RouteSet>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	tcp_routes: Option<Arc<TCPRouteSet>>,
+	pub tcp_routes: Option<Arc<TCPRouteSet>>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-struct DumpBind {
+pub struct DumpBind {
 	#[serde(flatten)]
-	bind: Arc<Bind>,
-	listeners: BTreeMap<ListenerKey, DumpListener>,
+	pub bind: Arc<Bind>,
+	pub listeners: BTreeMap<ListenerKey, DumpListener>,
 }
 
 #[derive(serde::Serialize)]
+#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
 pub struct Dump {
-	binds: Vec<DumpBind>,
-	routes: RoutesDump,
-	policies: Vec<Arc<TargetedPolicy>>,
-	backends: Vec<Arc<BackendWithPolicies>>,
+	pub binds: Vec<DumpBind>,
+	pub routes: RoutesDump,
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
+	pub policies: Vec<Arc<TargetedPolicy>>,
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
+	pub backends: Vec<Arc<BackendWithPolicies>>,
 }
 
 impl StoreUpdater {
@@ -2015,6 +2024,7 @@ mod tests {
 			add: Arc::new(OrderedStringMap::default()),
 			remove: Arc::new(FzHashSet::new(vec![remove_item.into()])),
 			otlp: None,
+			database: None,
 			access_log_policy: None,
 		})
 	}
@@ -2064,6 +2074,7 @@ mod tests {
 			},
 			hostnames: vec![],
 			matches: vec![],
+			llm_router: None,
 			inline_policies: vec![],
 			backends: vec![],
 		};
@@ -2172,14 +2183,12 @@ mod tests {
 			"route with route_group_key must not also live in service-keyed routes",
 		);
 
-		let pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: in_group.service_key.as_ref(),
-				routes: vec![&in_group.name],
-			},
-			&[],
-		);
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: in_group.service_key.as_ref(),
+			routes: vec![&in_group.name],
+			route_inlines: vec![&[]],
+		});
 		assert_eq!(
 			pols
 				.timeout
@@ -2322,14 +2331,12 @@ mod tests {
 		let http_timeout = insert_route_timeout_policy(&mut store, "p-http", http_route.clone(), 1);
 		let grpc_timeout = insert_route_timeout_policy(&mut store, "p-grpc", grpc_route.clone(), 2);
 
-		let http_pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&http_route],
-			},
-			&[],
-		);
+		let http_pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&http_route],
+			route_inlines: vec![&[]],
+		});
 		assert_eq!(
 			http_pols
 				.timeout
@@ -2339,14 +2346,12 @@ mod tests {
 			Some(http_timeout)
 		);
 
-		let grpc_pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&grpc_route],
-			},
-			&[],
-		);
+		let grpc_pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&grpc_route],
+			route_inlines: vec![&[]],
+		});
 		assert_eq!(
 			grpc_pols
 				.timeout
@@ -2368,14 +2373,44 @@ mod tests {
 			insert_route_timeout_policy(&mut store, "p-parent", parent_route.clone(), 1);
 		let child_timeout = insert_route_timeout_policy(&mut store, "p-child", child_route.clone(), 2);
 
-		let pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&parent_route, &child_route],
-			},
-			&[],
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&parent_route, &child_route],
+			route_inlines: vec![&[], &[]],
+		});
+
+		assert_ne!(parent_timeout, child_timeout);
+		assert_eq!(
+			pols
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned(),
+			Some(child_timeout)
 		);
+	}
+
+	#[test]
+	fn route_policies_preserve_inline_policy_route_specificity() {
+		let mut store = Store::default();
+		let listener = listener();
+		let parent_route = route("parent", "ns", Some("HTTPRoute"));
+		let child_route = route("child", "ns", Some("HTTPRoute"));
+
+		let parent_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		let child_timeout = insert_route_timeout_policy(&mut store, "p-child", child_route.clone(), 2);
+		let parent_inline = [TrafficPolicy::Timeout(parent_timeout.clone())];
+
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&parent_route, &child_route],
+			route_inlines: vec![&parent_inline, &[]],
+		});
 
 		assert_ne!(parent_timeout, child_timeout);
 		assert_eq!(
@@ -2430,14 +2465,12 @@ mod tests {
 			TrafficPolicy::HostRewrite(agent::HostRedirectOverride::Auto),
 		);
 
-		let pols = store.route_policies(
-			&RoutePath {
-				listener: &listener,
-				service: None,
-				routes: vec![&route],
-			},
-			&[],
-		);
+		let pols = store.route_policies(&RoutePath {
+			listener: &listener,
+			service: None,
+			routes: vec![&route],
+			route_inlines: vec![&[]],
+		});
 
 		assert_ne!(gateway_timeout, route_timeout);
 		assert_eq!(
@@ -2538,6 +2571,7 @@ mod tests {
 					raw_port: 12345,
 					tls: None,
 					unverified_workload: None,
+					connect_headers: http::HeaderMap::new(),
 				})
 				.is_ok()
 		);
@@ -2550,6 +2584,7 @@ mod tests {
 					raw_port: 12345,
 					tls: None,
 					unverified_workload: None,
+					connect_headers: http::HeaderMap::new(),
 				})
 				.is_ok()
 		);
@@ -2562,6 +2597,7 @@ mod tests {
 					raw_port: 12345,
 					tls: None,
 					unverified_workload: None,
+					connect_headers: http::HeaderMap::new(),
 				})
 				.is_err()
 		);
@@ -2838,6 +2874,7 @@ mod tests {
 		}));
 		let prompt_guard_policy = BackendTrafficPolicy::AI(Arc::new(llm::Policy {
 			prompt_guard: Some(PromptGuard {
+				streaming: Default::default(),
 				request: vec![RequestGuard {
 					rejection: Default::default(),
 					kind: RequestGuardKind::Regex(RegexRules {

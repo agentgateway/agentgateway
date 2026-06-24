@@ -1319,6 +1319,230 @@ async fn llm_openai_tokenize() {
 	.await;
 }
 
+async fn setup_local_llm_config(yaml: &str) -> TestBind {
+	let t = setup_proxy_test("{}").unwrap();
+	let normalized = crate::types::local::NormalizedLocalConfig::from(
+		t.pi.cfg.as_ref(),
+		t.pi.upstream.clone(),
+		t.pi.cfg.gateway(),
+		yaml,
+	)
+	.await
+	.expect("local config normalizes");
+	t.pi.stores.binds.sync_local(
+		normalized.binds,
+		normalized.listener_routes,
+		normalized.listener_tcp_routes,
+		normalized.policies,
+		normalized.backends,
+		normalized.route_groups,
+		Default::default(),
+	);
+	t
+}
+
+async fn setup_local_llm_config_with_user_model_header(yaml: &str) -> TestBind {
+	let t = setup_proxy_test("{}").unwrap();
+	let mut normalized = crate::types::local::NormalizedLocalConfig::from(
+		t.pi.cfg.as_ref(),
+		t.pi.upstream.clone(),
+		t.pi.cfg.gateway(),
+		yaml,
+	)
+	.await
+	.expect("local config normalizes");
+	let transformation = crate::http::transformation_cel::Transformation::try_from_local_config(
+		crate::http::transformation_cel::LocalTransformationConfig {
+			request: Some(crate::http::transformation_cel::LocalTransform {
+				add: vec![(
+					strng::literal!("x-user-model"),
+					strng::literal!("metadata.agentgateway_user_model"),
+				)],
+				..Default::default()
+			}),
+			response: None,
+		},
+		true,
+	)
+	.expect("transformation config");
+	let route = normalized
+		.listener_routes
+		.iter_mut()
+		.flat_map(|(_, routes)| routes)
+		.find(|route| route.key == "llm:request")
+		.expect("LLM request route");
+	route
+		.inline_policies
+		.push(crate::types::agent::TrafficPolicy::Transformation(
+			crate::store::RequestPolicy::single(transformation),
+		));
+	t.pi.stores.binds.sync_local(
+		normalized.binds,
+		normalized.listener_routes,
+		normalized.listener_tcp_routes,
+		normalized.policies,
+		normalized.backends,
+		normalized.route_groups,
+		Default::default(),
+	);
+	t
+}
+
+#[tokio::test]
+async fn llm_local_router_handles_models_virtual_model_and_missing_model() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 4000
+  models:
+  - name: real-model
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{}
+  virtualModels:
+  - name: public-model
+    routing:
+      weighted:
+        targets:
+        - model: real-model
+          weight: 1
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config_with_user_model_header(&config).await;
+	let io = t.serve_http(strng::literal!("bind/4000"));
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("models JSON");
+	assert_eq!(models["object"], "list");
+	let model_ids = models["data"]
+		.as_array()
+		.expect("model list")
+		.iter()
+		.map(|model| model["id"].as_str().expect("model id"))
+		.collect::<Vec<_>>();
+	assert_eq!(model_ids, vec!["public-model"]);
+
+	let mut request_body: Value = serde_json::from_slice(include_bytes!(
+		"../llm/tests/requests/completions/basic.json"
+	))
+	.expect("request JSON");
+	request_body["model"] = json!("public-model");
+	let request_body = serde_json::to_vec(&request_body).expect("serialized request");
+
+	let res = send_request_body(
+		io.clone(),
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		&request_body,
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::OK);
+	read_body_raw(res.into_body()).await;
+
+	let upstream_requests = mock.received_requests().await.expect("upstream requests");
+	assert_eq!(upstream_requests.len(), 1);
+	let upstream_body: Value =
+		serde_json::from_slice(&upstream_requests[0].body).expect("upstream request JSON");
+	assert_eq!(upstream_body["model"], "real-model");
+	assert_eq!(
+		upstream_requests[0]
+			.headers
+			.get("x-user-model")
+			.expect("user model header")
+			.to_str()
+			.expect("user model header value"),
+		"public-model"
+	);
+
+	let missing = json!({
+		"model": "missing-model",
+		"messages": [{"role": "user", "content": "hi"}]
+	});
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		&serde_json::to_vec(&missing).expect("serialized missing request"),
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::NOT_FOUND);
+	let missing_body: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("missing model JSON");
+	assert_eq!(missing_body["error"]["code"], "model_not_found");
+	assert_eq!(
+		mock
+			.received_requests()
+			.await
+			.expect("upstream requests")
+			.len(),
+		1
+	);
+}
+
+#[tokio::test]
+async fn llm_conditional_virtual_model_no_match_returns_json_error() {
+	let mock = body_mock(include_bytes!(
+		"../llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 4000
+  models:
+  - name: real-model
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{}
+  virtualModels:
+  - name: public-model
+    routing:
+      conditional:
+        targets:
+        - model: real-model
+          when: request.headers["x-use-model"] == "true"
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/4000"));
+	let request_body = json!({
+		"model": "public-model",
+		"messages": [{"role": "user", "content": "hi"}]
+	});
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		&serde_json::to_vec(&request_body).expect("serialized request"),
+	)
+	.await;
+
+	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	let body: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("error JSON");
+	assert_eq!(body["error"]["code"], "virtual_model_no_matching_target");
+	assert_eq!(body["error"]["type"], "invalid_request_error");
+	assert_eq!(
+		mock
+			.received_requests()
+			.await
+			.expect("upstream requests")
+			.len(),
+		0
+	);
+}
+
 #[tokio::test]
 async fn llm_custom_rerank() {
 	let mock = body_mock(include_bytes!("../llm/tests/response/cohere/rerank.json")).await;
@@ -1326,6 +1550,7 @@ async fn llm_custom_rerank() {
 		name: "default".into(),
 		provider: AIProvider::Custom(custom::Provider {
 			model: None,
+			provider_override: None,
 			formats: vec![custom::ProviderFormatConfig {
 				format: custom::ProviderFormat::Rerank,
 				path: None,
@@ -2387,6 +2612,137 @@ async fn gateway_ext_authz_response_headers_are_preserved() {
 }
 
 #[tokio::test]
+async fn gateway_http_ext_authz_caches_unauthorized_response() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	let authz = MockServer::start().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let calls_clone = calls.clone();
+	Mock::given(wiremock::matchers::any())
+		.respond_with(move |_req: &wiremock::Request| {
+			let call = calls_clone.fetch_add(1, Ordering::SeqCst) + 1;
+			ResponseTemplate::new(StatusCode::UNAUTHORIZED.as_u16())
+				.set_body_string(format!("authz-denied-{call}"))
+		})
+		.mount(&authz)
+		.await;
+
+	bind
+		.attach_gateway_policy(json!({
+			"extAuthz": {
+				"host": authz.address().to_string(),
+				"protocol": {"http": {}},
+				"cache": {
+					"key": ["request.path"],
+					"ttl": "60s",
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		b"authz-denied-1"
+	);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		b"authz-denied-1"
+	);
+	assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn gateway_http_ext_authz_does_not_cache_server_error_response() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	let authz = MockServer::start().await;
+	let calls = Arc::new(AtomicUsize::new(0));
+	let calls_clone = calls.clone();
+	Mock::given(wiremock::matchers::any())
+		.respond_with(move |_req: &wiremock::Request| {
+			let call = calls_clone.fetch_add(1, Ordering::SeqCst) + 1;
+			ResponseTemplate::new(StatusCode::INTERNAL_SERVER_ERROR.as_u16())
+				.set_body_string(format!("authz-error-{call}"))
+		})
+		.mount(&authz)
+		.await;
+
+	bind
+		.attach_gateway_policy(json!({
+			"extAuthz": {
+				"host": authz.address().to_string(),
+				"protocol": {"http": {}},
+				"cache": {
+					"key": ["request.path"],
+					"ttl": "60s",
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		b"authz-error-1"
+	);
+
+	let res = send_request(io.clone(), Method::GET, "http://lo/p").await;
+	assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+	assert_eq!(
+		read_body_raw(res.into_body()).await.as_ref(),
+		b"authz-error-2"
+	);
+	assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn gateway_http_ext_authz_body_expression_sets_auth_request_body() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	let authz = MockServer::start().await;
+	Mock::given(wiremock::matchers::any())
+		.respond_with(move |req: &wiremock::Request| {
+			ResponseTemplate::new(StatusCode::OK.as_u16()).insert_header(
+				"x-authz-body",
+				String::from_utf8(req.body.clone()).expect("authz request body is utf8"),
+			)
+		})
+		.mount(&authz)
+		.await;
+
+	bind
+		.attach_gateway_policy(json!({
+			"extAuthz": {
+				"host": authz.address().to_string(),
+				"protocol": {
+					"http": {
+						"body": r#"{"path": request.path, "method": request.method}"#,
+						"includeResponseHeaders": ["x-authz-body"],
+					},
+				},
+			},
+		}))
+		.await;
+
+	let res = send_request_body(io.clone(), Method::POST, "http://lo/p", b"original").await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let body = read_body(res.into_body()).await;
+	let authz_body: serde_json::Value =
+		serde_json::from_slice(body.headers.get("x-authz-body").unwrap().as_bytes()).unwrap();
+	assert_eq!(
+		authz_body,
+		json!({
+			"path": "/p",
+			"method": "POST",
+		})
+	);
+	assert_eq!(body.body.as_ref(), b"original");
+}
+
+#[tokio::test]
 async fn gateway_transformation_response_headers_are_applied() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
@@ -2729,6 +3085,88 @@ async fn incoming_connect_tunnel_reenters_bind_flow() {
 		String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"),
 		"unexpected tunneled response: {}",
 		String::from_utf8_lossy(&tunneled),
+	);
+}
+
+/// Headers carried on a CONNECT request are captured and surfaced to CEL as
+/// `source.connectHeaders` on the re-entered (tunneled) request, so an
+/// authorization policy on the inner bind can match against them.
+#[tokio::test]
+async fn incoming_connect_tunnel_exposes_connect_headers_to_cel() {
+	async fn tunnel_inner_request(custom_header: Option<&str>) -> String {
+		let mock = simple_mock().await;
+		let mut outer = simple_bind();
+		outer.key = strng::literal!("outer");
+		outer.address = "127.0.0.1:15008".parse().unwrap();
+		let mut inner = simple_bind();
+		inner.address = "127.0.0.1:18080".parse().unwrap();
+		let mut t = setup_proxy_test("{}")
+			.unwrap()
+			.with_backend(*mock.address())
+			.with_bind(outer)
+			.with_bind(inner)
+			.with_route(basic_route(*mock.address()))
+			.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15008);
+		// Authorization on the re-entered request only allows when the custom header
+		// carried on the CONNECT request is present and matches.
+		t.attach_route_policy(json!({
+			"authorization": {
+				"rules": ["source.connectHeaders[\"x-custom-header\"] == \"custom-value\""],
+			},
+		}))
+		.await;
+
+		let mut io = t.serve_tunnel(strng::literal!("outer"));
+		let connect = match custom_header {
+			Some(v) => format!(
+				"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: httpbingo.org:18080\r\nx-custom-header: {v}\r\n\r\n"
+			),
+			None => {
+				"CONNECT httpbingo.org:18080 HTTP/1.1\r\nHost: httpbingo.org:18080\r\n\r\n".to_string()
+			},
+		};
+		io.write_all(connect.as_bytes()).await.unwrap();
+
+		let mut response = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = io.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT response unexpectedly closed");
+			response.extend_from_slice(&chunk[..n]);
+			if response.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		assert!(
+			String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+			"unexpected CONNECT response: {}",
+			String::from_utf8_lossy(&response),
+		);
+
+		io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+		let mut tunneled = Vec::new();
+		tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+			.await
+			.expect("timed out waiting for tunneled HTTP response")
+			.unwrap();
+		String::from_utf8_lossy(&tunneled).to_string()
+	}
+
+	// Header present and matching: the inner request is authorized (200).
+	let allowed = tunnel_inner_request(Some("custom-value")).await;
+	assert!(
+		allowed.starts_with("HTTP/1.1 200 OK\r\n"),
+		"expected inner request to be authorized, got: {allowed}",
+	);
+
+	// Header absent: `source.connectHeaders` is empty, the rule does not match,
+	// and the inner request is denied (403).
+	let denied = tunnel_inner_request(None).await;
+	assert!(
+		denied.starts_with("HTTP/1.1 403 Forbidden\r\n"),
+		"expected inner request to be denied, got: {denied}",
 	);
 }
 
@@ -3778,6 +4216,7 @@ async fn waypoint_http_port_selects_distinct_backend() {
 			method: None,
 			query: vec![],
 		}],
+		llm_router: None,
 		inline_policies: vec![],
 		backends: vec![crate::types::agent::RouteBackendReference {
 			weight: 1,

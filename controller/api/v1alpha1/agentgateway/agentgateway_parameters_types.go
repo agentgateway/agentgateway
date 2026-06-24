@@ -161,6 +161,39 @@ type AgentgatewayParametersConfigs struct {
 	//
 	// +optional
 	Istio *IstioSpec `json:"istio,omitempty"`
+
+	// Model cost catalog sources. Only effective when set on a Gateway-level
+	// AgentgatewayParameters (via Gateway.spec.infrastructure.parametersRef);
+	// ignored on GatewayClass-level parameters because ConfigMap references
+	// are resolved from the Gateway's deployment namespace.
+	//
+	// +optional
+	ModelCatalog *ModelCatalogSpec `json:"modelCatalog,omitempty"`
+}
+
+// ModelCatalogSpec configures model cost catalog sources for the agentgateway proxy.
+type ModelCatalogSpec struct {
+	// +optional
+	Sources []ModelCatalogSource `json:"sources,omitempty"`
+}
+
+// ModelCatalogSource is a single source of model cost catalog data.
+type ModelCatalogSource struct {
+	// +optional
+	ConfigMap *ModelCatalogConfigMapRef `json:"configMap,omitempty"`
+}
+
+// ModelCatalogConfigMapRef identifies a ConfigMap holding model cost catalog JSON.
+// The ConfigMap must be in the same namespace as the Gateway that references it.
+type ModelCatalogConfigMapRef struct {
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Data key whose value is the catalog JSON. Defaults to "catalog.json".
+	//
+	// +optional
+	Key string `json:"key,omitempty"`
 }
 
 type IstioSpec struct {

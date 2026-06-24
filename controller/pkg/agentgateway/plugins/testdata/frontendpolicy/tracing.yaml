@@ -15,6 +15,7 @@ spec:
         port: 4318
       protocol: HTTP
       path: /custom/v1/traces
+      filter: request.path != "/healthz"
 ---
 apiVersion: v1
 kind: Service
@@ -35,6 +36,7 @@ output:
     policy:
       frontend:
         tracing:
+          filter: request.path != "/healthz"
           path: /custom/v1/traces
           providerBackend:
             port: 4318

@@ -2066,7 +2066,7 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 	}
 }
 
-// +kubebuilder:validation:XValidation:rule="!has(self.cache) || has(self.grpc)",message="cache requires grpc"
+// +kubebuilder:validation:XValidation:rule="!(has(self.forwardBody) && has(self.http) && has(self.http.body))",message="forwardBody cannot be used with http.body"
 type ExtAuth struct {
 	// External Authorization server to reach.
 	//
@@ -2097,7 +2097,7 @@ type ExtAuth struct {
 	// +optional
 	ForwardBody *ExtAuthBody `json:"forwardBody,omitempty"`
 
-	// Caches gRPC authorization results.
+	// Caches authorization results.
 	//
 	// WARNING: the safety of this feature depends on the cache key accurately
 	// capturing every request property that the authorization service uses to
@@ -2153,6 +2153,11 @@ type AgentExtAuthHTTP struct {
 	// sign-in page.
 	// +optional
 	Redirect *CELExpression `json:"redirect,omitempty"`
+
+	// Body is a CEL expression that produces the HTTP authorization request body.
+	// Strings and bytes are used directly; other values are JSON-encoded.
+	// +optional
+	Body *CELExpression `json:"body,omitempty"`
 
 	// Additional headers from the client request that
 	// will be sent to the authorization server.
@@ -2592,6 +2597,12 @@ type Tracing struct {
 	// `false`). If unspecified, client sampling is `100%` enabled.
 	// +optional
 	ClientSampling *CELExpression `json:"clientSampling,omitempty"`
+
+	// Expression that determines whether a sampled span is exported.
+	// This uses keep semantics: spans are exported only when the expression
+	// evaluates to `true`. If unspecified, all sampled spans are exported.
+	// +optional
+	Filter *CELExpression `json:"filter,omitempty"`
 }
 
 type ResourceAdd struct {

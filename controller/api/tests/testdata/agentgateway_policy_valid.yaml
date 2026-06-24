@@ -316,6 +316,24 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: traffic-extauth-http-body
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  traffic:
+    extAuth:
+      http:
+        body: '{"path": request.path}'
+      backendRef:
+        name: auth-server
+        kind: AgentgatewayBackend
+        group: agentgateway.dev
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: traffic-ratelimit-local-requests
 spec:
   targetRefs:

@@ -27,6 +27,7 @@ pub enum Error {
 
 /// Validation mode for API key authentication.
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "APIKeyMode"))]
 #[derive(Copy, PartialEq, Eq, Default)]
 pub enum Mode {
 	/// Require a valid API key.

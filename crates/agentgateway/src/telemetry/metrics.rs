@@ -110,6 +110,14 @@ pub struct GenAILabelsTokenUsage {
 	pub common: EncodeArc<GenAILabels>,
 }
 
+#[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct CostCatalogLookupLabels {
+	pub status: crate::llm::cost::CostLookupStatus,
+
+	#[prometheus(flatten)]
+	pub common: EncodeArc<GenAILabels>,
+}
+
 #[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct MCPCall {
 	pub method: DefaultedUnknown<RichStrng>,
@@ -195,6 +203,7 @@ pub struct Metrics {
 	pub mcp_requests: Family<MCPCall, counter::Counter>,
 
 	pub gen_ai_token_usage: Histogram<GenAILabelsTokenUsage>,
+	pub gen_ai_cost: Family<GenAILabels, counter::Counter<f64>>,
 	pub gen_ai_request_duration: Histogram<GenAILabels>,
 	pub gen_ai_time_per_output_token: Histogram<GenAILabels>,
 	pub gen_ai_time_to_first_token: Histogram<GenAILabels>,
@@ -210,6 +219,8 @@ pub struct Metrics {
 
 	// metrics for guardrail checks (allow/mask/reject) for request/response
 	pub guardrail_checks: Family<GuardrailLabels, counter::Counter>,
+
+	pub cost_catalog_lookups: Family<CostCatalogLookupLabels, counter::Counter>,
 
 	// metrics for request retries
 	pub retries: Counter,
@@ -302,6 +313,14 @@ impl Metrics {
 			gen_ai_token_usage.clone(),
 		);
 
+		let gen_ai_cost = Family::<GenAILabels, _>::default();
+		registry.register_with_unit(
+			"gen_ai_client_cost",
+			"Cumulative USD cost of generative AI requests",
+			Unit::Other("usd".to_string()),
+			gen_ai_cost.clone(),
+		);
+
 		// TODO: add error attribute if it ends with an error
 		let gen_ai_request_duration = Family::<GenAILabels, _>::new_with_constructor(move || {
 			PromHistogram::new(REQUEST_DURATION_BUCKET)
@@ -345,6 +364,15 @@ impl Metrics {
 				);
 				m
 			},
+			cost_catalog_lookups: {
+				let m = Family::<CostCatalogLookupLabels, _>::default();
+				registry.register(
+					"cost_catalog_lookups",
+					"Total number of model cost catalog lookups by resolution status",
+					m.clone(),
+				);
+				m
+			},
 			downstream_connection: build(
 				&mut registry,
 				"downstream_connections",
@@ -358,6 +386,7 @@ impl Metrics {
 			),
 
 			gen_ai_token_usage,
+			gen_ai_cost,
 			gen_ai_request_duration,
 			gen_ai_time_per_output_token,
 			gen_ai_time_to_first_token,

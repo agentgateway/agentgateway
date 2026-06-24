@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::{fmt, io};
+use std::{fmt, io, str};
 
 use agent_core::prelude::*;
 use control::caclient::CaClient;
@@ -60,6 +60,18 @@ use crate::types::local;
 /// and dynamic config
 pub struct NestedRawConfig {
 	config: Option<RawConfig>,
+}
+
+#[derive(serde::Deserialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct RawStandardAttributes {
+	/// CEL expression used to populate the `agentgateway.user` request log attribute.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub user: Option<String>,
+	/// CEL expression used to populate the `agentgateway.group` request log attribute.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub group: Option<String>,
 }
 
 /// Controls which IP address families the DNS resolver will query for
@@ -143,6 +155,11 @@ pub struct RawConfig {
 	/// Local XDS path. If not specified, the current configuration file will be used.
 	local_xds_path: Option<PathBuf>,
 
+	/// Model cost catalog sources; entries are merged in order, with later entries taking precedence.
+	model_catalog: Option<Vec<ModelCatalogSource>>,
+	/// Primary database used by local runtime features.
+	database: Option<telemetry::log_store::Config>,
+
 	ca_address: Option<String>,
 	ca_auth_token: Option<String>,
 	xds_address: Option<String>,
@@ -161,6 +178,8 @@ pub struct RawConfig {
 
 	/// Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	admin_addr: Option<String>,
+	/// Standard request log attributes populated for database-backed local runtime features.
+	standard_attributes: Option<RawStandardAttributes>,
 	/// Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	stats_addr: Option<String>,
 	/// Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
@@ -179,7 +198,6 @@ pub struct RawConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_min_termination_deadline: Option<Duration>,
 
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	worker_threads: Option<StringOrInt>,
 
 	tracing: Option<RawTracing>,
@@ -340,6 +358,7 @@ pub struct RawLogging {
 	fields: Option<RawLoggingFields>,
 	level: Option<RawLoggingLevel>,
 	format: Option<LoggingFormat>,
+	database: Option<telemetry::log_store::Config>,
 }
 
 #[apply(schema_de!)]
@@ -420,6 +439,23 @@ impl<'de> Deserialize<'de> for StringOrInt {
 		}
 
 		deserializer.deserialize_any(StringOrIntVisitor())
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for StringOrInt {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"StringOrInt".into()
+	}
+
+	fn schema_id() -> std::borrow::Cow<'static, str> {
+		"StringOrInt".into()
+	}
+
+	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		schemars::json_schema!({
+			"type": ["string", "integer"]
+		})
 	}
 }
 
@@ -509,6 +545,7 @@ pub struct Config {
 	pub tracing: Option<trc::DeprecatedConfig>,
 	pub metrics: crate::telemetry::log::MetricsConfig,
 	pub logging: crate::telemetry::log::Config,
+	pub database: Option<telemetry::log_store::Config>,
 
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
@@ -523,6 +560,23 @@ pub struct Config {
 	pub backend: BackendConfig,
 	pub mcp: McpConfig,
 	pub dynamic_ca_cert_cache: DynamicCaCertCacheConfig,
+	pub model_catalog: ModelCatalogConfig,
+}
+
+#[derive(serde::Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ModelCatalogConfig {
+	pub sources: Vec<ModelCatalogSource>,
+}
+
+/// A source of model cost catalog data.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged)]
+pub enum ModelCatalogSource {
+	File { file: PathBuf },
+	Inline { inline: String },
+	InlineCatalog { inline: llm::cost::Catalog },
 }
 
 #[apply(schema!)]
@@ -631,6 +685,7 @@ pub struct ProxyInputs {
 	pub upstream: client::Client,
 
 	pub metrics: Arc<metrics::Metrics>,
+	pub model_catalog: Arc<llm::cost::ModelCatalog>,
 
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
@@ -648,6 +703,7 @@ impl ProxyInputs {
 		upstream: client::Client,
 		metrics: Arc<metrics::Metrics>,
 		mcp_state: mcp::App,
+		model_catalog: Option<llm::cost::ModelCatalog>,
 		ca: Option<Arc<CaClient>>,
 	) -> Self {
 		Self {
@@ -655,6 +711,7 @@ impl ProxyInputs {
 			stores,
 			upstream,
 			metrics,
+			model_catalog: Arc::new(model_catalog.unwrap_or_default()),
 			mcp_state,
 			ca,
 		}

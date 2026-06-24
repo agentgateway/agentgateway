@@ -887,7 +887,20 @@ fn convert_backend_ai_policy(
 			Some(llm::policy::ResponseGuard { rejection, kind })
 		});
 
+		let streaming =
+			match proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::try_from(pg.streaming)
+				.map_err(|_| ProtoError::EnumParse("invalid prompt guard streaming mode".to_string()))?
+			{
+				proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::Enabled => {
+					llm::policy::PromptGuardStreamingMode::Enabled
+				},
+				proto::agent::backend_policy_spec::ai::prompt_guard::Streaming::Disabled => {
+					llm::policy::PromptGuardStreamingMode::Disabled
+				},
+			};
+
 		Ok(llm::policy::PromptGuard {
+			streaming,
 			request,
 			response: response.collect_vec(),
 		})
@@ -1231,6 +1244,7 @@ impl Route {
 				.iter()
 				.map(|backend| route_backend_reference_from_proto(backend, diagnostics))
 				.collect::<Result<Vec<_>, _>>()?,
+			llm_router: None,
 			inline_policies: s
 				.traffic_policies
 				.iter()
@@ -1368,6 +1382,7 @@ pub(crate) fn backend_with_policies_from_proto(
 								.collect::<Result<Vec<_>, _>>()?;
 							AIProvider::Custom(llm::custom::Provider {
 								model: custom.model.as_deref().map(strng::new),
+								provider_override: custom.provider_override.as_deref().map(strng::new),
 								formats,
 							})
 						},
@@ -1450,6 +1465,10 @@ pub(crate) fn backend_with_policies_from_proto(
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 			},
 		),
+		Some(backend::Kind::Guardrail(_)) => {
+			diagnostics.add_warning("guardrail backends are not yet implemented and will be ignored");
+			Backend::Invalid
+		},
 		None => {
 			return Err(ProtoError::Generic("unknown backend".to_string()));
 		},
@@ -2278,7 +2297,6 @@ fn traffic_policy_from_proto(
 					})
 					.collect::<Result<_, ProtoError>>()?,
 				status: StatusCode::from_u16(dr.status as u16)?,
-				authorization_filtered_model_list: None,
 			}))
 		},
 		Some(tps::Kind::Cors(c)) => TrafficPolicy::CORS(RequestPolicy::single(
@@ -2420,74 +2438,77 @@ fn external_auth_from_proto(
 			})
 		})
 		.transpose()?;
-	let protocol = match ea
-		.protocol
-		.as_ref()
-		.ok_or(ProtoError::MissingRequiredField)?
-	{
-		external_auth::Protocol::Grpc(g) => {
-			let metadata: HashMap<_, _> = g
-				.metadata
-				.iter()
-				.map(|(k, v)| {
-					let ve = permissive_cel_expression_arc(
-						diagnostics,
-						format!("traffic.extAuthz.grpc.metadata.{k}"),
-						v,
-					);
-					Ok::<_, ProtoError>((k.to_owned(), ve))
-				})
-				.collect::<Result<_, _>>()?;
-			http::ext_authz::Protocol::Grpc {
-				context: Some(g.context.clone()),
-				metadata: if metadata.is_empty() {
-					None
-				} else {
-					Some(metadata)
-				},
-			}
-		},
-		external_auth::Protocol::Http(h) => http::ext_authz::Protocol::Http {
-			path: h
-				.path
-				.as_ref()
-				.map(|expr| permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.path", expr)),
-			redirect: h.redirect.as_ref().map(|expr| {
-				permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.redirect", expr)
-			}),
-			include_response_headers: h
-				.include_response_headers
-				.iter()
-				.map(|k| HeaderName::try_from(k.as_str()))
-				.collect::<Result<_, _>>()?,
-			add_request_headers: h
-				.add_request_headers
-				.iter()
-				.map(|(k, v)| {
-					let tk = HeaderOrPseudo::try_from(k.as_str())?;
-					let tv = permissive_cel_expression_arc(
-						diagnostics,
-						format!("traffic.extAuthz.http.addRequestHeaders.{k}"),
-						v.as_str(),
-					);
-					Ok::<_, anyhow::Error>((tk, tv))
-				})
-				.collect::<Result<_, _>>()
-				.map_err(|e| ProtoError::Generic(e.to_string()))?,
-			metadata: h
-				.metadata
-				.iter()
-				.map(|(k, v)| {
-					let ve = permissive_cel_expression(
-						diagnostics,
-						format!("traffic.extAuthz.http.metadata.{k}"),
-						v,
-					);
-					Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
-				})
-				.collect::<Result<_, _>>()?,
-		},
-	};
+	let protocol =
+		match ea
+			.protocol
+			.as_ref()
+			.ok_or(ProtoError::MissingRequiredField)?
+		{
+			external_auth::Protocol::Grpc(g) => {
+				let metadata: HashMap<_, _> = g
+					.metadata
+					.iter()
+					.map(|(k, v)| {
+						let ve = permissive_cel_expression_arc(
+							diagnostics,
+							format!("traffic.extAuthz.grpc.metadata.{k}"),
+							v,
+						);
+						Ok::<_, ProtoError>((k.to_owned(), ve))
+					})
+					.collect::<Result<_, _>>()?;
+				http::ext_authz::Protocol::Grpc {
+					context: Some(g.context.clone()),
+					metadata: if metadata.is_empty() {
+						None
+					} else {
+						Some(metadata)
+					},
+				}
+			},
+			external_auth::Protocol::Http(h) => http::ext_authz::Protocol::Http {
+				path: h.path.as_ref().map(|expr| {
+					permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.path", expr)
+				}),
+				redirect: h.redirect.as_ref().map(|expr| {
+					permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.redirect", expr)
+				}),
+				body: h.body.as_ref().map(|expr| {
+					permissive_cel_expression_arc(diagnostics, "traffic.extAuthz.http.body", expr)
+				}),
+				include_response_headers: h
+					.include_response_headers
+					.iter()
+					.map(|k| HeaderName::try_from(k.as_str()))
+					.collect::<Result<_, _>>()?,
+				add_request_headers: h
+					.add_request_headers
+					.iter()
+					.map(|(k, v)| {
+						let tk = HeaderOrPseudo::try_from(k.as_str())?;
+						let tv = permissive_cel_expression_arc(
+							diagnostics,
+							format!("traffic.extAuthz.http.addRequestHeaders.{k}"),
+							v.as_str(),
+						);
+						Ok::<_, anyhow::Error>((tk, tv))
+					})
+					.collect::<Result<_, _>>()
+					.map_err(|e| ProtoError::Generic(e.to_string()))?,
+				metadata: h
+					.metadata
+					.iter()
+					.map(|(k, v)| {
+						let ve = permissive_cel_expression(
+							diagnostics,
+							format!("traffic.extAuthz.http.metadata.{k}"),
+							v,
+						);
+						Ok::<_, ProtoError>((k.to_owned(), Arc::new(ve)))
+					})
+					.collect::<Result<_, _>>()?,
+			},
+		};
 	let cache_store = cache
 		.as_ref()
 		.map(|cache| crate::http::ext_authz::cache_store(cache.max_entries))
@@ -2771,6 +2792,7 @@ fn frontend_policy_from_proto(
 				add: Arc::new(add),
 				remove: Arc::new(FzHashSet::new(rm)),
 				otlp,
+				database: None,
 				access_log_policy: None,
 			};
 			logging_policy.init_access_log_policy();
@@ -2863,6 +2885,10 @@ fn tracing_config_from_proto(
 		.client_sampling
 		.as_ref()
 		.map(|s| permissive_cel_expression_arc(diagnostics, "frontend.tracing.clientSampling", s));
+	let filter = t
+		.filter
+		.as_ref()
+		.map(|s| permissive_cel_expression_arc(diagnostics, "frontend.tracing.filter", s));
 
 	let path = t.path.clone().unwrap_or_else(|| "/v1/traces".to_string());
 
@@ -2884,6 +2910,7 @@ fn tracing_config_from_proto(
 		remove: t.remove.clone(),
 		random_sampling,
 		client_sampling,
+		filter,
 		path,
 		protocol,
 	}
@@ -4125,6 +4152,7 @@ mod tests {
 								},
 							],
 							model: None,
+							provider_override: None,
 						})),
 						inline_policies: vec![],
 					}],

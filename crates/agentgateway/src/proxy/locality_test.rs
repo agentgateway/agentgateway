@@ -795,6 +795,7 @@ fn service_route() -> Route {
 			method: None,
 			query: vec![],
 		}],
+		llm_router: None,
 		inline_policies: Default::default(),
 		backends: vec![RouteBackendReference {
 			weight: 1,

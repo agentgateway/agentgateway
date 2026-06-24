@@ -294,6 +294,25 @@ pub struct SourceContext {
 	/// authors should prefer `source.identity.*` for trust-sensitive checks.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub unverified_workload: Option<WorkloadContext>,
+	/// HTTP CONNECT request headers, when this stream originated from a CONNECT
+	/// tunnel. Empty otherwise. Exposed in CEL as `source.connectHeaders`, which
+	/// supports the same accessors as `request.headers` (indexing, `join()`,
+	/// `split()`, etc.).
+	///
+	/// CONNECT headers are client-supplied and unauthenticated at the transport
+	/// layer, so trust decisions should validate the values (e.g. signature or
+	/// issuer checks) rather than trusting header presence alone.
+	#[serde(
+		default,
+		with = "http_serde::header_map",
+		skip_serializing_if = "http::HeaderMap::is_empty"
+	)]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	#[dynamic(rename = "connectHeaders", with_value = "connect_headers_to_value")]
+	pub connect_headers: http::HeaderMap,
 }
 
 #[apply(schema!)]
@@ -326,6 +345,7 @@ impl SourceContext {
 			raw_port: raw_peer_addr.port(),
 			tls,
 			unverified_workload,
+			connect_headers: http::HeaderMap::new(),
 		}
 	}
 }
@@ -1194,7 +1214,7 @@ impl PartialEq for RequestRef<'_> {
 }
 
 #[apply(schema!)]
-#[derive(Eq, PartialEq, cel::DynamicType)]
+#[derive(cel::DynamicType)]
 pub struct LLMContext {
 	/// Whether the LLM response is streamed. If it is streamed some fields may be inconsistent based on when accessed during the response flow.
 	pub streaming: bool,
@@ -1291,10 +1311,24 @@ pub struct LLMContext {
 	pub completion: Option<Vec<String>>,
 	/// The parameters for the LLM request.
 	pub params: llm::LLMRequestParams,
+	/// The realized USD cost of the request from the model cost catalog.
+	/// Unset when the model could not be priced.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cost: Option<llm::cost::Breakdown>,
+	/// Effective model catalog rates in USD per 1M tokens after tier selection.
+	/// Unset when the model could not be priced.
+	#[dynamic(rename = "costRates")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cost_rates: Option<llm::cost::CostRates>,
+	#[serde(skip)]
+	#[dynamic(skip)]
+	pub cost_status: Option<llm::cost::CostLookupStatus>,
 }
 
-impl From<llm::LLMInfo> for LLMContext {
-	fn from(value: LLMInfo) -> Self {
+impl LLMContext {
+	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::cost::ModelCatalog>) -> Self {
+		let projection = model_catalog.map(|catalog| catalog.project(&value));
+
 		let resp = value.response;
 		let mut base = LLMContext {
 			output_tokens: resp.output_tokens,
@@ -1323,11 +1357,16 @@ impl From<llm::LLMInfo> for LLMContext {
 			// Better info, override
 			base.input_tokens = Some(pt);
 		}
+
+		if let Some(projection) = projection {
+			base.cost = projection.cost;
+			base.cost_rates = projection.cost_rates;
+			base.cost_status = Some(projection.status);
+		}
+
 		base
 	}
-}
 
-impl LLMContext {
 	pub fn set_token_timing(&mut self, request_start: Instant, response_end: Instant) {
 		let Some(first_token) = self.first_token else {
 			return;
@@ -1356,6 +1395,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			input_tokens,
 			input_format: _, // Expose this?
 			native_format: _,
+			cache_convention: _,
 			request_model,
 			provider,
 			streaming,
@@ -1388,6 +1428,9 @@ impl From<llm::LLMRequest> for LLMContext {
 			cached_input_tokens: None,
 			cache_creation_input_tokens: None,
 			service_tier: None,
+			cost: None,
+			cost_rates: None,
+			cost_status: None,
 		}
 	}
 }
@@ -1437,6 +1480,12 @@ pub fn secret_string_to_value(secret: &SecretString) -> Value<'_> {
 }
 fn version_to_value<'a>(c: &'a http::Version) -> Value<'a> {
 	Value::String(crate::http::version_str(c).into())
+}
+
+/// Expose a captured CONNECT `HeaderMap` to CEL with the same accessors as
+/// `request.headers` (map indexing, `join()`, `split()`, `redacted()`, etc.).
+fn connect_headers_to_value(headers: &http::HeaderMap) -> Value<'_> {
+	Value::Dynamic(DynamicValue::new_owned(Headers::new(headers)))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2007,6 +2056,10 @@ pub fn full_example_executor() -> ExecutorSerde {
 				namespace: "ns-1".into(),
 				service_account: "sa-1".into(),
 			}),
+			connect_headers: http::HeaderMap::from_iter([(
+				http::HeaderName::from_static("x-custom-header"),
+				http::HeaderValue::from_static("custom-value"),
+			)]),
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![
@@ -2061,6 +2114,9 @@ pub fn full_example_executor() -> ExecutorSerde {
 				encoding_format: None,
 				dimensions: None,
 			},
+			cost: None,
+			cost_rates: None,
+			cost_status: None,
 		}),
 		mcp: Some(MCPInfo {
 			method_name: Some("tools/call".to_string()),

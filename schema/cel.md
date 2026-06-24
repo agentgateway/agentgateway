@@ -78,6 +78,23 @@
 |`llm.params.max_tokens`|integer||
 |`llm.params.encoding_format`|string||
 |`llm.params.dimensions`|integer||
+|`llm.cost`|object|The realized USD cost of the request from the model cost catalog.<br>Unset when the model could not be priced.|
+|`llm.cost.total`|number||
+|`llm.cost.input`|number||
+|`llm.cost.output`|number||
+|`llm.cost.cacheRead`|number||
+|`llm.cost.cacheWrite`|number||
+|`llm.cost.reasoning`|number||
+|`llm.cost.inputAudio`|number||
+|`llm.cost.outputAudio`|number||
+|`llm.costRates`|object|Effective model catalog rates in USD per 1M tokens after tier selection.<br>Unset when the model could not be priced.|
+|`llm.costRates.input`|number||
+|`llm.costRates.output`|number||
+|`llm.costRates.cacheRead`|number||
+|`llm.costRates.cacheWrite`|number||
+|`llm.costRates.reasoning`|number||
+|`llm.costRates.inputAudio`|number||
+|`llm.costRates.outputAudio`|number||
 |`llmRequest`|any|`llmRequest` contains the raw LLM request before processing. This is only present *during* LLM policies;<br>policies occurring after the LLM policy, such as logs, will not have this field present even for LLM requests.|
 |`source`|object|`source` contains attributes about the source of the request.|
 |`source.address`|string|The IP address of the downstream connection.|
@@ -97,6 +114,7 @@
 |`source.unverifiedWorkload.name`|string|The pod name of the source workload.|
 |`source.unverifiedWorkload.namespace`|string|The namespace of the source workload.|
 |`source.unverifiedWorkload.serviceAccount`|string|The service account of the source workload.|
+|`source.connectHeaders`|object|HTTP CONNECT request headers, when this stream originated from a CONNECT<br>tunnel. Empty otherwise. Exposed in CEL as `source.connectHeaders`, which<br>supports the same accessors as `request.headers` (indexing, `join()`,<br>`split()`, etc.).<br><br>CONNECT headers are client-supplied and unauthenticated at the transport<br>layer, so trust decisions should validate the values (e.g. signature or<br>issuer checks) rather than trusting header presence alone.|
 |`mcp`|object|`mcp` contains attributes about the MCP request.<br>Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.<br>Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.|
 |`mcp.methodName`|string||
 |`mcp.sessionId`|string||

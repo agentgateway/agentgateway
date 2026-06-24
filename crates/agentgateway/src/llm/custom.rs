@@ -5,9 +5,15 @@ use crate::llm::{InputFormat, RouteType};
 use crate::*;
 
 #[apply(schema!)]
+#[cfg_attr(feature = "schema", schemars(rename = "CustomProvider"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	/// Provider identity for cost-catalog lookup and telemetry. Built-in named providers
+	/// (cohere, mistral, ...) set this so their cost resolves under the right catalog key;
+	/// a bare custom provider may set it to match a catalog entry. Falls back to "custom".
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub provider_override: Option<Strng>,
 	pub formats: Vec<ProviderFormatConfig>,
 }
 
@@ -20,17 +26,8 @@ impl Provider {
 	}
 
 	pub fn native_format_for(&self, input_format: InputFormat) -> Option<ProviderFormat> {
-		let preferences: &[ProviderFormat] = match input_format {
-			InputFormat::Completions => &[ProviderFormat::Completions, ProviderFormat::Messages],
-			InputFormat::Messages => &[ProviderFormat::Messages, ProviderFormat::Completions],
-			InputFormat::Responses => &[ProviderFormat::Responses, ProviderFormat::Completions],
-			InputFormat::Embeddings => &[ProviderFormat::Embeddings],
-			InputFormat::CountTokens => &[ProviderFormat::AnthropicTokenCount],
-			InputFormat::Realtime => &[ProviderFormat::Realtime],
-			InputFormat::Rerank => &[ProviderFormat::Rerank],
-			InputFormat::Detect => return None,
-		};
-		preferences
+		input_format
+			.provider_format_preferences()
 			.iter()
 			.copied()
 			.find(|format| self.supports(*format))
@@ -101,6 +98,7 @@ mod tests {
 	fn provider(supported_formats: Vec<ProviderFormat>) -> Provider {
 		Provider {
 			model: None,
+			provider_override: None,
 			formats: supported_formats
 				.into_iter()
 				.map(|format| ProviderFormatConfig { format, path: None })
@@ -137,6 +135,7 @@ mod tests {
 	fn path_for_returns_format_path() {
 		let provider = Provider {
 			model: None,
+			provider_override: None,
 			formats: vec![
 				ProviderFormatConfig {
 					format: ProviderFormat::Completions,

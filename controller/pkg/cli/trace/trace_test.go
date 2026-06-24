@@ -80,6 +80,45 @@ func TestRunRawFromTraceFile(t *testing.T) {
 	}
 }
 
+func TestConsumeTraceAcceptsStructuredPolicyEventDetails(t *testing.T) {
+	line := `{"eventEnd":1,"severity":"info","message":{"type":"policyEvent","kind":"llm_cost","details":{"provider":"openai","model":"gpt-4o-mini","status":"exact"}}}`
+
+	var got traceEnvelope
+	err := consumeTrace(strings.NewReader(line+"\n"), func(_ string, envelope traceEnvelope) error {
+		got = envelope
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Message.Kind != "llm_cost" {
+		t.Fatalf("got kind %q, want llm_cost", got.Message.Kind)
+	}
+	summary := summarizeEnvelope(got)
+	if !strings.Contains(summary, `"status":"exact"`) {
+		t.Fatalf("got summary %q, want structured details", summary)
+	}
+}
+
+func TestSummarizePolicyEventStringDetails(t *testing.T) {
+	line := `{"eventEnd":1,"severity":"info","message":{"type":"policyEvent","kind":"cors","details":"request has no Origin header"}}`
+
+	var got traceEnvelope
+	err := consumeTrace(strings.NewReader(line+"\n"), func(_ string, envelope traceEnvelope) error {
+		got = envelope
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	summary := summarizeEnvelope(got)
+	if summary != "cors: request has no Origin header" {
+		t.Fatalf("got summary %q", summary)
+	}
+}
+
 func TestTraceStreamURLEncodesExpression(t *testing.T) {
 	got := traceStreamURL("127.0.0.1:15000", `request.path == "/healthz"`)
 	want := "http://127.0.0.1:15000/debug/trace?expression=request.path+%3D%3D+%22%2Fhealthz%22"

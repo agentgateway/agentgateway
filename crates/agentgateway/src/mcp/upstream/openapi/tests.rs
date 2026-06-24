@@ -48,6 +48,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
 		)),
+		model_catalog: crate::llm::cost::ModelCatalog::empty(),
 		upstream: client.clone(),
 		ca: None,
 

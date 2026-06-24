@@ -26,6 +26,9 @@ deploymentAnnotations: {}
 podAnnotations:
   prometheus.io/scrape: "true"
 
+# -- Add labels to the agentgateway pods. Useful for `NetworkPolicy` selectors (e.g. opt-in egress labels on Cilium-based clusters).
+podLabels: {}
+
 # -- Set the pod-level security context. For example, 'fsGroup: 2000' sets the filesystem group to 2000.
 podSecurityContext: {}
 

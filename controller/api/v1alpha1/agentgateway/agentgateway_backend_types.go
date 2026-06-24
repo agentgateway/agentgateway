@@ -475,6 +475,8 @@ type VertexAIConfig struct {
 	ProjectId TinyString `json:"projectId"`
 
 	// The location of the Google Cloud Project that you use for the Vertex AI.
+	// Special values: `global` uses the global endpoint, while `us` and `eu` use restricted
+	// multi-region endpoints. Other values are treated as regional locations.
 	// Defaults to `global` if not specified.
 	// +optional
 	// +kubebuilder:default=global

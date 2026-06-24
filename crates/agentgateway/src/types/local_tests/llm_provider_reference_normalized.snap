@@ -1,0 +1,103 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for llm_provider_reference: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/4000
+    address: "[::]:4000"
+    protocol: http
+    tunnelProtocol: direct
+    listeners:
+      llm:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: llm
+        listenerName: llm
+        protocol: HTTP
+listener_routes:
+  - - llm
+    - - key: "llm:request"
+        llmRouter:
+          models:
+            - name: anthropic/*
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:anthropic/*:0"
+              routePolicies:
+                - ai:
+                    routes:
+                      "*": passthrough
+                      /v1/chat/completions: completions
+                      /v1/embeddings: embeddings
+                      /v1/images/edits: detect
+                      /v1/images/generations: detect
+                      /v1/images/variations: detect
+                      /v1/messages: messages
+                      /v1/rerank: rerank
+                      /v1/responses: responses
+                      /v1/responses/compact: detect
+                      /v2/rerank: rerank
+                      ":rawPredict": messages
+                      ":streamRawPredict": messages
+              backendPolicies: []
+          virtualModels: []
+          created: 0
+        matches:
+          - path:
+              pathPrefix: /
+        name: "llm:request"
+        namespace: internal
+listener_tcp_routes:
+  - - llm
+    - []
+policies: []
+backends:
+  - backend:
+      ai:
+        name: "llm:model:anthropic/*:0"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                anthropic/*:
+                  endpoint:
+                    name: anthropic/*
+                    provider:
+                      anthropic:
+                        model: claude-sonnet-4-5-20250929
+                    hostOverride: "anthropic.internal:443"
+                    pathOverride: ~
+                    pathPrefix: /v1
+                    tokenize: true
+                    inlinePolicies:
+                      - backendAuth:
+                          key:
+                            value: "<redacted>"
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - backendTLS:
+          systemRoots: true
+      - health:
+          unhealthyExpression: response.code >= 500 || response.code == 429
+      - ai:
+          transformations:
+            model: "llmRequest.model.stripPrefix(\"anthropic/\")"
+          promptCaching:
+            cacheSystem: true
+            cacheMessages: true
+            cacheTools: false
+            minTokens: 2048
+            cacheMessageOffset: 0
+route_groups: []
+workloads: []
+services: []
