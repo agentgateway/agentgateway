@@ -13,7 +13,7 @@ use secrecy::SecretString;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
-use crate::mcp::handler::Relay;
+use crate::mcp::handler::{Relay, RelayInputs};
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::{FailureMode, McpAuthorization, guardrails};
 use crate::proxy::httpproxy::PolicyClient;
@@ -2619,6 +2619,119 @@ async fn test_all_targets_fail_open_still_errors() {
 	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
 	let err = crate::mcp::upstream::UpstreamGroup::new(client, backend).unwrap_err();
 	assert!(matches!(err, crate::mcp::Error::NoBackends));
+}
+
+#[tokio::test]
+async fn reconcile_forks_roster_and_preserves_surviving_sessions() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let mock_c = mock_streamable_http_server(true).await;
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("a", mock_a.addr),
+				fake_streamable_target("b", mock_b.addr),
+			],
+			stateful: true,
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		client.clone(),
+	)
+	.unwrap();
+	// Simulate target "a" having an established upstream session.
+	relay
+		.upstreams
+		.get("a")
+		.unwrap()
+		.set_session_id(Some("sid-a"), None);
+
+	// Unchanged roster: no reconcile. Changed roster {a,b} -> {a,c}: reconcile.
+	let new_targets = vec![
+		fake_streamable_target("a", mock_a.addr),
+		fake_streamable_target("c", mock_c.addr),
+	];
+	assert!(!relay.upstreams.should_reconcile(&[
+		fake_streamable_target("a", mock_a.addr),
+		fake_streamable_target("b", mock_b.addr),
+	]));
+	assert!(relay.upstreams.should_reconcile(&new_targets));
+
+	let inputs = RelayInputs {
+		backend: McpBackendGroup {
+			targets: new_targets,
+			stateful: true,
+			..Default::default()
+		},
+		policies: empty_mcp_policies(),
+		mcp_guardrails: None,
+		client,
+	};
+	let forked = relay.fork_with_inputs(&inputs).unwrap();
+
+	// Surviving target keeps its upstream session; the removed one is gone and
+	// the new one starts fresh.
+	assert_eq!(
+		forked
+			.upstreams
+			.get("a")
+			.unwrap()
+			.get_session_state()
+			.and_then(|s| s.session)
+			.as_deref(),
+		Some("sid-a")
+	);
+	assert!(
+		forked
+			.upstreams
+			.get("c")
+			.unwrap()
+			.get_session_state()
+			.and_then(|s| s.session)
+			.is_none()
+	);
+	assert!(forked.upstreams.get("b").is_err());
+}
+
+#[tokio::test]
+async fn reconcile_skips_non_streamable_rosters() {
+	let mock_a = mock_streamable_http_server(true).await;
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("a", mock_a.addr),
+				// Nonexistent binary + failOpen: setup skips it, but it stays in
+				// the configured roster, so the relay is not all-streamable.
+				Arc::new(McpTarget {
+					name: "s".into(),
+					spec: crate::types::agent::McpTargetSpec::Stdio {
+						cmd: "this-binary-does-not-exist-agentgateway-test".into(),
+						args: vec![],
+						env: Default::default(),
+						clear_env: false,
+					},
+					backend_policies: Default::default(),
+					backend: None,
+					always_use_prefix: false,
+				}),
+			],
+			stateful: true,
+			failure_mode: FailureMode::FailOpen,
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		client,
+	)
+	.unwrap();
+	// Roster change to {a}, but the current relay has a non-streamable (stdio)
+	// target, so it must not reconcile.
+	assert!(
+		!relay
+			.upstreams
+			.should_reconcile(&[fake_streamable_target("a", mock_a.addr)])
+	);
 }
 
 fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
