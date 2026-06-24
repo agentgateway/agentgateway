@@ -44,6 +44,8 @@ type LocalRemoteRateLimitPolicy =
 	LocalExplicitOrConditional<crate::http::remoteratelimit::RemoteRateLimit>;
 type LocalTransformationPolicy = LocalExplicitOrConditional<LocalTransformationConfig>;
 type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
+const DEFAULT_LLM_PORT: u16 = 4000;
+const DEFAULT_MCP_PORT: u16 = 3000;
 
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
@@ -181,6 +183,7 @@ fn merge_deprecated_frontend_policies(
 			add: log.fields.add.clone(),
 			remove: log.fields.remove.clone(),
 			otlp: None,
+			database: None,
 			access_log_policy: None,
 		});
 	}
@@ -229,6 +232,7 @@ fn merge_deprecated_frontend_policies(
 				policies,
 				attributes: Arc::unwrap_or_clone(fields.add),
 				resources: Default::default(), // Not supported in the old config
+				filter: None,                  // Not supported in the old config
 				remove: Arc::unwrap_or_clone(fields.remove).into_iter().collect(),
 				random_sampling,
 				client_sampling,
@@ -260,7 +264,7 @@ pub struct NormalizedLocalConfig {
 #[apply(schema_de!)]
 pub struct LocalConfig {
 	#[serde(default)]
-	#[cfg_attr(feature = "schema", schemars(with = "RawConfig"))]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
 	config: Arc<Option<serde_json::Value>>,
 	#[serde(default)]
@@ -272,10 +276,16 @@ pub struct LocalConfig {
 	#[serde(default)]
 	policies: Vec<LocalPolicy>,
 	#[serde(default)]
-	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Vec<std::collections::HashMap<String, serde_json::Value>>")
+	)]
 	workloads: Vec<LocalWorkload>,
 	#[serde(default)]
-	#[cfg_attr(feature = "schema", schemars(with = "serde_json::value::RawValue"))]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Vec<std::collections::HashMap<String, serde_json::Value>>")
+	)]
 	services: Vec<Service>,
 	#[serde(default)]
 	backends: Vec<FullLocalBackend>,
@@ -344,6 +354,7 @@ pub struct LocalLLMProviderDefaults {
 	#[serde(rename = "tls", alias = "backendTLS", default)]
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
 	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	auth: Option<BackendAuth>,
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -657,6 +668,7 @@ pub struct LocalLLMModels {
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
 	/// auth configures authentication when connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	auth: Option<BackendAuth>,
 	/// health configures outlier detection for this model backend.
 	#[serde(default)]
@@ -1136,6 +1148,9 @@ pub struct FullLocalBackend {
 pub enum FullLocalBackendSpec {
 	#[serde(rename = "host")]
 	Opaque(Target),
+	/// Route to the in-process admin service instead of a network upstream.
+	#[serde(rename = "internal")]
+	Internal(InternalBackend),
 	#[serde(rename = "mcp")]
 	MCP(LocalMcpBackend),
 	#[serde(rename = "ai")]
@@ -1148,6 +1163,7 @@ impl From<FullLocalBackendSpec> for LocalBackend {
 	fn from(spec: FullLocalBackendSpec) -> Self {
 		match spec {
 			FullLocalBackendSpec::Opaque(t) => LocalBackend::Opaque(t),
+			FullLocalBackendSpec::Internal(t) => LocalBackend::Internal(t),
 			FullLocalBackendSpec::MCP(m) => LocalBackend::MCP(m),
 			FullLocalBackendSpec::AI(a) => LocalBackend::AI(a),
 			FullLocalBackendSpec::Aws(a) => LocalBackend::Aws(a),
@@ -1174,6 +1190,17 @@ pub struct LocalAgentCoreBackend {
 	pub qualifier: Option<String>,
 }
 
+#[apply(schema!)]
+/// Selects how an internal backend maps proxy requests to the admin API.
+pub enum InternalBackend {
+	/// Forward the request to the admin API using the request's current path and query.
+	#[serde(rename = "forward")]
+	Forward,
+	/// Rewrite all requests to this admin API path, preserving the original query string.
+	#[serde(untagged)]
+	Path(Strng),
+}
+
 #[apply(schema_de!)]
 #[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalBackend {
@@ -1186,6 +1213,8 @@ pub enum LocalBackend {
 	// Rest are inlined
 	#[serde(rename = "host")]
 	Opaque(Target), // Hostname or IP
+	/// Route to the in-process admin service instead of a network upstream.
+	Internal(InternalBackend),
 	Dynamic {},
 	#[serde(rename = "mcp")]
 	MCP(LocalMcpBackend),
@@ -1343,6 +1372,7 @@ impl LocalBackend {
 			LocalBackend::Service { .. } => vec![], // These stay as references
 			LocalBackend::Backend(_) => vec![],     // These stay as references
 			LocalBackend::Opaque(tgt) => vec![Backend::Opaque(name, tgt.clone()).into()],
+			LocalBackend::Internal(tgt) => vec![Backend::Internal(name, tgt.clone()).into()],
 			LocalBackend::Dynamic { .. } => vec![Backend::Dynamic(name, ()).into()],
 			LocalBackend::MCP(tgt) => {
 				let mut targets = vec![];
@@ -1521,9 +1551,27 @@ pub enum McpBackendHost {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(untagged)]
+#[allow(dead_code)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
-struct McpBackendHostSerde {
+enum McpBackendHostSerde {
+	HostUri {
+		host: String,
+	},
+	HostParts {
+		host: String,
+		port: u16,
+		path: String,
+	},
+	Backend {
+		backend: BackendKey,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		path: Option<String>,
+	},
+}
+
+#[apply(schema_de!)]
+struct McpBackendHostInput {
 	host: Option<String>,
 	port: Option<u16>,
 	path: Option<String>,
@@ -1547,7 +1595,7 @@ impl<'de> serde::Deserialize<'de> for McpBackendHost {
 	where
 		D: serde::Deserializer<'de>,
 	{
-		let raw = McpBackendHostSerde::deserialize(deserializer)?;
+		let raw = McpBackendHostInput::deserialize(deserializer)?;
 		match (raw.host, raw.port, raw.path, raw.backend) {
 			(Some(host), port, path, None) => Ok(Self::Host { host, port, path }),
 			(None, None, path, Some(backend)) => Ok(Self::Backend { backend, path }),
@@ -1677,6 +1725,7 @@ pub struct LocalTCPRouteBackend {
 }
 
 #[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackendSerde"))]
 pub enum SimpleLocalBackend {
 	/// Service reference. Service must be defined in the top level services list.
 	Service { name: NamespacedHostname, port: u16 },
@@ -1693,6 +1742,25 @@ pub enum SimpleLocalBackend {
 	#[serde(skip_deserializing)] // No need to deserialize an intentionally invalid entry
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	Invalid,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[allow(dead_code)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+enum SimpleLocalBackendSerde {
+	/// Service reference. Service must be defined in the top level services list.
+	Service { name: NamespacedHostname, port: u16 },
+	/// Hostname or IP address
+	#[serde(rename = "host")]
+	Opaque(
+		/// Hostname or IP address
+		Target,
+	),
+	Backend(
+		/// Explicit backend reference. Backend must be defined in the top level backends list
+		BackendKey,
+	),
 }
 
 impl SimpleLocalBackend {
@@ -1737,16 +1805,6 @@ pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D
 where
 	D: Deserializer<'de>,
 {
-	#[derive(serde::Deserialize)]
-	#[serde(untagged)]
-	enum BackendAuthCompat {
-		PlainKey {
-			#[serde(deserialize_with = "deser_key_from_file")]
-			key: SecretString,
-		},
-		Full(BackendAuth),
-	}
-
 	Option::<BackendAuthCompat>::deserialize(deserializer).map(|auth| {
 		auth.map(|auth| match auth {
 			BackendAuthCompat::Full(auth) => auth,
@@ -1756,6 +1814,18 @@ where
 			},
 		})
 	})
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+enum BackendAuthCompat {
+	PlainKey {
+		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+		#[serde(deserialize_with = "deser_key_from_file")]
+		key: SecretString,
+	},
+	Full(BackendAuth),
 }
 
 #[apply(schema_de!)]
@@ -1860,6 +1930,7 @@ pub struct SimpleLocalBackendPolicies {
 	pub backend_tls: Option<http::backendtls::LocalBackendTLS>,
 	/// Authentication credentials sent to this backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	pub backend_auth: Option<BackendAuth>,
 
 	/// HTTP protocol settings for this backend.
@@ -2157,6 +2228,7 @@ pub struct FilterOrPolicy {
 	backend_tunnel: Option<backend::Tunnel>,
 	/// Authentication credentials sent to the backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	backend_auth: Option<BackendAuth>,
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
@@ -2219,6 +2291,7 @@ async fn convert(
 	config: &crate::Config,
 	i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
+	validate_local_listener_ports(&i)?;
 	let LocalConfig {
 		config: _,
 		mut frontend_policies,
@@ -2324,7 +2397,8 @@ async fn convert(
 			| Backend::MCP(n, _)
 			| Backend::AI(n, _)
 			| Backend::Aws(n, _)
-			| Backend::Dynamic(n, _) => n == &name,
+			| Backend::Dynamic(n, _)
+			| Backend::Internal(n, _) => n == &name,
 			Backend::Service(_, _) | Backend::Invalid => false,
 		}) {
 			primary_bw.inline_policies.extend_from_slice(&policies);
@@ -2384,6 +2458,43 @@ async fn convert(
 		services,
 	};
 	Ok(normalized)
+}
+
+fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
+	let mut ports = HashMap::new();
+
+	let mut insert_local_listener_port = |port: u16, label: String| {
+		if let Some(existing) = ports.insert(port, label.clone()) {
+			bail!(
+				"port {port} is configured by both {existing} and {label}; binds, llm, and mcp must use unique ports"
+			);
+		}
+		Ok(())
+	};
+	for (idx, bind) in config.binds.iter().enumerate() {
+		insert_local_listener_port(bind.port, format!("binds[{idx}]"))?;
+	}
+	if let Some(llm) = &config.llm {
+		insert_local_listener_port(
+			llm.port.unwrap_or(DEFAULT_LLM_PORT),
+			if llm.port.is_some() {
+				"llm".to_string()
+			} else {
+				"llm (default)".to_string()
+			},
+		)?;
+	}
+	if let Some(mcp) = &config.mcp {
+		insert_local_listener_port(
+			mcp.port.unwrap_or(DEFAULT_MCP_PORT),
+			if mcp.port.is_some() {
+				"mcp".to_string()
+			} else {
+				"mcp (default)".to_string()
+			},
+		)?;
+	}
+	Ok(())
 }
 
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
@@ -2697,7 +2808,6 @@ async fn convert_llm_config(
 	Vec<TargetedPolicy>,
 	Vec<BackendWithPolicies>,
 )> {
-	const DEFAULT_LLM_PORT: u16 = 4000;
 	let LocalLLMConfig {
 		port,
 		tls,
@@ -3266,7 +3376,6 @@ async fn convert_mcp_config(
 	Vec<TargetedPolicy>,
 	Vec<BackendWithPolicies>,
 )> {
-	const DEFAULT_MCP_PORT: u16 = 3000;
 	let LocalSimpleMcpConfig {
 		port,
 		backend,

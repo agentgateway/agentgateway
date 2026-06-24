@@ -9262,7 +9262,9 @@ type FrontendPolicySpec_Tracing struct {
 	// OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/traces
 	Path *string `protobuf:"bytes,6,opt,name=path,proto3,oneof" json:"path,omitempty"`
 	// protocol specifies the OTLP protocol variant to use. Default is HTTP
-	Protocol      FrontendPolicySpec_Tracing_Protocol `protobuf:"varint,7,opt,name=protocol,proto3,enum=agentgateway.dev.resource.FrontendPolicySpec_Tracing_Protocol" json:"protocol,omitempty"`
+	Protocol FrontendPolicySpec_Tracing_Protocol `protobuf:"varint,7,opt,name=protocol,proto3,enum=agentgateway.dev.resource.FrontendPolicySpec_Tracing_Protocol" json:"protocol,omitempty"`
+	// CEL expression to filter exported spans with keep semantics. If unset, all sampled spans are exported.
+	Filter        *string `protobuf:"bytes,9,opt,name=filter,proto3,oneof" json:"filter,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9351,6 +9353,13 @@ func (x *FrontendPolicySpec_Tracing) GetProtocol() FrontendPolicySpec_Tracing_Pr
 		return x.Protocol
 	}
 	return FrontendPolicySpec_Tracing_HTTP
+}
+
+func (x *FrontendPolicySpec_Tracing) GetFilter() string {
+	if x != nil && x.Filter != nil {
+		return *x.Filter
+	}
+	return ""
 }
 
 type FrontendPolicySpec_TracingAttribute struct {
@@ -11073,6 +11082,7 @@ type TrafficPolicySpec_ExternalAuth_HTTPProtocol struct {
 	IncludeResponseHeaders []string               `protobuf:"bytes,3,rep,name=include_response_headers,json=includeResponseHeaders,proto3" json:"include_response_headers,omitempty"`
 	AddRequestHeaders      map[string]string      `protobuf:"bytes,4,rep,name=add_request_headers,json=addRequestHeaders,proto3" json:"add_request_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Metadata               map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Body                   *string                `protobuf:"bytes,6,opt,name=body,proto3,oneof" json:"body,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -11142,6 +11152,13 @@ func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) GetMetadata() map[string]s
 	return nil
 }
 
+func (x *TrafficPolicySpec_ExternalAuth_HTTPProtocol) GetBody() string {
+	if x != nil && x.Body != nil {
+		return *x.Body
+	}
+	return ""
+}
+
 type TrafficPolicySpec_JWT_MCP struct {
 	state            protoimpl.MessageState                                `protogen:"open.v1"`
 	Provider         BackendPolicySpec_McpAuthentication_McpIDP            `protobuf:"varint,1,opt,name=provider,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_McpAuthentication_McpIDP" json:"provider,omitempty"`
@@ -11206,6 +11223,7 @@ type TrafficPolicySpec_APIKey_User struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	Metadata      *structpb.Struct       `protobuf:"bytes,2,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	KeyHash       string                 `protobuf:"bytes,3,opt,name=key_hash,json=keyHash,proto3" json:"key_hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11252,6 +11270,13 @@ func (x *TrafficPolicySpec_APIKey_User) GetMetadata() *structpb.Struct {
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *TrafficPolicySpec_APIKey_User) GetKeyHash() string {
+	if x != nil {
+		return x.KeyHash
+	}
+	return ""
 }
 
 type TrafficPolicySpec_TransformationPolicy_Transform struct {
@@ -14923,7 +14948,7 @@ const file_resource_proto_rawDesc = "" +
 	"\binterval\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\binterval\x12\x1d\n" +
 	"\aretries\x18\x03 \x01(\rH\x00R\aretries\x88\x01\x01B\n" +
 	"\n" +
-	"\b_retries\"\xce#\n" +
+	"\b_retries\"\xf6#\n" +
 	"\x12FrontendPolicySpec\x12E\n" +
 	"\x03tcp\x18\x01 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TCPH\x00R\x03tcp\x12E\n" +
 	"\x03tls\x18\x02 \x01(\v21.agentgateway.dev.resource.FrontendPolicySpec.TLSH\x00R\x03tls\x12H\n" +
@@ -14996,7 +15021,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04HTTP\x10\x00\x12\b\n" +
 	"\x04GRPC\x10\x01B\a\n" +
 	"\x05_pathB\t\n" +
-	"\a_filter\x1a\xd9\x04\n" +
+	"\a_filter\x1a\x81\x05\n" +
 	"\aTracing\x12V\n" +
 	"\x10provider_backend\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x0fproviderBackend\x12^\n" +
 	"\n" +
@@ -15007,13 +15032,15 @@ const file_resource_proto_rawDesc = "" +
 	"\x0frandom_sampling\x18\x04 \x01(\tH\x00R\x0erandomSampling\x88\x01\x01\x12,\n" +
 	"\x0fclient_sampling\x18\x05 \x01(\tH\x01R\x0eclientSampling\x88\x01\x01\x12\x17\n" +
 	"\x04path\x18\x06 \x01(\tH\x02R\x04path\x88\x01\x01\x12Z\n" +
-	"\bprotocol\x18\a \x01(\x0e2>.agentgateway.dev.resource.FrontendPolicySpec.Tracing.ProtocolR\bprotocol\"\x1e\n" +
+	"\bprotocol\x18\a \x01(\x0e2>.agentgateway.dev.resource.FrontendPolicySpec.Tracing.ProtocolR\bprotocol\x12\x1b\n" +
+	"\x06filter\x18\t \x01(\tH\x03R\x06filter\x88\x01\x01\"\x1e\n" +
 	"\bProtocol\x12\b\n" +
 	"\x04HTTP\x10\x00\x12\b\n" +
 	"\x04GRPC\x10\x01B\x12\n" +
 	"\x10_random_samplingB\x12\n" +
 	"\x10_client_samplingB\a\n" +
-	"\x05_path\x1a<\n" +
+	"\x05_pathB\t\n" +
+	"\a_filter\x1a<\n" +
 	"\x10TracingAttribute\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x1a\x8a\x02\n" +
@@ -15046,7 +15073,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xaaL\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xe7L\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -15105,7 +15132,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x04type\x18\x04 \x01(\x0e2@.agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.TypeR\x04type\"\x1e\n" +
 	"\x04Type\x12\v\n" +
 	"\aREQUEST\x10\x00\x12\t\n" +
-	"\x05TOKEN\x10\x01\x1a\xfe\x0e\n" +
+	"\x05TOKEN\x10\x01\x1a\xa0\x0f\n" +
 	"\fExternalAuth\x12C\n" +
 	"\x06target\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x06target\x12\\\n" +
 	"\x04grpc\x18\x02 \x01(\v2F.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocolH\x00R\x04grpc\x12\\\n" +
@@ -15132,13 +15159,14 @@ const file_resource_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\x9d\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\xbf\x04\n" +
 	"\fHTTPProtocol\x12\x17\n" +
 	"\x04path\x18\x01 \x01(\tH\x00R\x04path\x88\x01\x01\x12\x1f\n" +
 	"\bredirect\x18\x02 \x01(\tH\x01R\bredirect\x88\x01\x01\x128\n" +
 	"\x18include_response_headers\x18\x03 \x03(\tR\x16includeResponseHeaders\x12\x8d\x01\n" +
 	"\x13add_request_headers\x18\x04 \x03(\v2].agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.AddRequestHeadersEntryR\x11addRequestHeaders\x12p\n" +
-	"\bmetadata\x18\x05 \x03(\v2T.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntryR\bmetadata\x1aD\n" +
+	"\bmetadata\x18\x05 \x03(\v2T.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntryR\bmetadata\x12\x17\n" +
+	"\x04body\x18\x06 \x01(\tH\x02R\x04body\x88\x01\x01\x1aD\n" +
 	"\x16AddRequestHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
@@ -15146,7 +15174,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
 	"\x05_pathB\v\n" +
-	"\t_redirect\"8\n" +
+	"\t_redirectB\a\n" +
+	"\x05_body\"8\n" +
 	"\vFailureMode\x12\b\n" +
 	"\x04DENY\x10\x00\x12\t\n" +
 	"\x05ALLOW\x10\x01\x12\x14\n" +
@@ -15190,14 +15219,15 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\f\n" +
 	"\bOPTIONAL\x10\x01B\b\n" +
-	"\x06_realm\x1a\x95\x03\n" +
+	"\x06_realm\x1a\xb0\x03\n" +
 	"\x06APIKey\x12S\n" +
 	"\bapi_keys\x18\x01 \x03(\v28.agentgateway.dev.resource.TrafficPolicySpec.APIKey.UserR\aapiKeys\x12L\n" +
 	"\x04mode\x18\x02 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.APIKey.ModeR\x04mode\x12g\n" +
-	"\x16authorization_location\x18\x03 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x1aM\n" +
+	"\x16authorization_location\x18\x03 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x1ah\n" +
 	"\x04User\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
-	"\bmetadata\x18\x02 \x01(\v2\x17.google.protobuf.StructR\bmetadata\"0\n" +
+	"\bmetadata\x18\x02 \x01(\v2\x17.google.protobuf.StructR\bmetadata\x12\x19\n" +
+	"\bkey_hash\x18\x03 \x01(\tR\akeyHash\"0\n" +
 	"\x04Mode\x12\n" +
 	"\n" +
 	"\x06STRICT\x10\x00\x12\f\n" +

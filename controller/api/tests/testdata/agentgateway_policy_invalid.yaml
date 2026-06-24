@@ -256,6 +256,23 @@ spec:
       forwardBody:
         maxSize: 1024
 ---
+_err: 'forwardBody cannot be used with http.body'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-http-body-with-forward-body
+spec:
+  traffic:
+    extAuth:
+      backendRef:
+        name: auth-server
+        kind: Service
+        port: 123
+      forwardBody:
+        maxSize: 1024
+      http:
+        body: '{"path": request.path}'
+---
 _err: 'exactly one of the fields in [requests tokens] must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

@@ -815,6 +815,13 @@
             }
           },
           "additionalProperties": false
+        },
+        "connectHeaders": {
+          "description": "HTTP CONNECT request headers, when this stream originated from a CONNECT\ntunnel. Empty otherwise. Exposed in CEL as `source.connectHeaders`, which\nsupports the same accessors as `request.headers` (indexing, `join()`,\n`split()`, etc.).\n\nCONNECT headers are client-supplied and unauthenticated at the transport\nlayer, so trust decisions should validate the values (e.g. signature or\nissuer checks) rather than trusting header presence alone.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

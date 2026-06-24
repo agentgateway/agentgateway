@@ -34,7 +34,7 @@ use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
 use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
-use crate::types::local::SimpleLocalBackend;
+use crate::types::local::{InternalBackend, SimpleLocalBackend};
 use crate::types::{agent, backend, frontend};
 use crate::*;
 
@@ -1217,6 +1217,9 @@ pub enum Backend {
 	Aws(ResourceName, crate::aws::AwsBackendConfig),
 	#[serde(serialize_with = "serialize_backend_tuple")]
 	Dynamic(ResourceName, ()),
+	/// In-process admin service backend. This is only valid for HTTP routes.
+	#[serde(serialize_with = "serialize_backend_tuple")]
+	Internal(ResourceName, InternalBackend),
 	Invalid,
 }
 
@@ -1405,7 +1408,8 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
-			| Backend::Dynamic(name, _) => BackendTarget::Backend {
+			| Backend::Dynamic(name, _)
+			| Backend::Internal(name, _) => BackendTarget::Backend {
 				name: name.name.clone(),
 				namespace: name.namespace.clone(),
 				section: None,
@@ -1425,7 +1429,8 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
-			| Backend::Dynamic(name, _) => BackendTargetRef::Backend {
+			| Backend::Dynamic(name, _)
+			| Backend::Internal(name, _) => BackendTargetRef::Backend {
 				name: name.name.as_ref(),
 				namespace: name.namespace.as_ref(),
 				section: None,
@@ -1441,7 +1446,8 @@ impl Backend {
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
 			| Backend::Aws(name, _)
-			| Backend::Dynamic(name, _) => {
+			| Backend::Dynamic(name, _)
+			| Backend::Internal(name, _) => {
 				let mut s = String::with_capacity(name.namespace.len() + name.name.len() + 1);
 				s.push_str(&name.namespace);
 				s.push('/');
@@ -1460,6 +1466,7 @@ impl Backend {
 			Backend::AI(_, _) => cel::BackendType::AI,
 			Backend::Aws(_, _) => cel::BackendType::Unknown,
 			Backend::Dynamic(_, _) => cel::BackendType::Dynamic,
+			Backend::Internal(_, _) => cel::BackendType::Unknown,
 			Backend::Invalid => cel::BackendType::Unknown,
 		}
 	}
@@ -2152,11 +2159,21 @@ pub struct TracingConfig {
 	/// Optional per-policy override for random sampling. If set, overrides global config for
 	/// requests that use this frontend policy.
 	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<crate::StringBoolFloat>"))]
 	pub random_sampling: Option<Arc<cel::Expression>>,
 	/// Optional per-policy override for client sampling. If set, overrides global config for
 	/// requests that use this frontend policy.
 	#[serde(default, deserialize_with = "deserialize_sampling_expr_opt")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<crate::StringBoolFloat>"))]
 	pub client_sampling: Option<Arc<cel::Expression>>,
+	/// Optional CEL filter with KEEP semantics. When set, only requests for which the expression
+	/// evaluates to `true` have their trace span(s) exported; all other spans are dropped. When
+	/// unset, no filtering is applied (all sampled spans are exported). Composes after sampling
+	/// (only sampled spans are evaluated). This matches `accessLog.filter` (keep-semantics):
+	/// `true` keeps. Missing/errored fields evaluate to `false`, so on eval error the span is
+	/// dropped (fail closed).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub filter: Option<Arc<cel::Expression>>,
 	/// OTLP HTTP path used to export traces.
 	#[serde(default = "default_otlp_path")]
 	pub path: String,

@@ -1,0 +1,11 @@
+{{ include "agentgateway-standalone.validate" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" . }}-config-bootstrap
+  namespace: {{ include "agentgateway-standalone.namespace" . }}
+  labels:
+    {{- include "agentgateway-standalone.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+{{ include "agentgateway-standalone.configYaml" . | nindent 4 }}

@@ -104,6 +104,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 
 	let admin_server = crate::management::admin::Service::new(
 		config.clone(),
+		model_catalog.clone(),
 		stores.clone(),
 		shutdown.trigger(),
 		drain_rx.clone(),
@@ -119,6 +120,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		stores: stores.clone(),
 		metrics: metrics_handle.clone(),
 		model_catalog,
+		admin: Some(admin_server.service()),
 		upstream: client.clone(),
 		ca,
 

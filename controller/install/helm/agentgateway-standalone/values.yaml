@@ -1,0 +1,148 @@
+imagePullSecrets: []
+commonLabels: {}
+nameOverride: ""
+fullnameOverride: ""
+namespaceOverride: agentgateway-system
+
+global:
+  imageRegistry: ""
+
+replicaCount: 1
+
+# Default to Recreate because the chart defaults to a single replica with
+# SQLite on an RWO PVC. Postgres + RWX users can override this strategy.
+strategy:
+  type: Recreate
+
+image:
+  registry: cr.agentgateway.dev
+  repository: agentgateway
+  tag: ""
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podSecurityContext: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop:
+    - ALL
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+admin:
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 15000
+    annotations: {}
+    extraLabels: {}
+    clusterIP: ""
+    clusterIPs: []
+    externalIPs: []
+    externalName: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    loadBalancerClass: ""
+    externalTrafficPolicy: ""
+    internalTrafficPolicy: ""
+    healthCheckNodePort: null
+    sessionAffinity: ""
+    sessionAffinityConfig: {}
+    ipFamilies: []
+    ipFamilyPolicy: ""
+    publishNotReadyAddresses: false
+    allocateLoadBalancerNodePorts: null
+    trafficDistribution: ""
+
+gateway:
+  service:
+    enabled: true
+    type: LoadBalancer
+    annotations: {}
+    extraLabels: {}
+    clusterIP: ""
+    clusterIPs: []
+    externalIPs: []
+    externalName: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    loadBalancerClass: ""
+    externalTrafficPolicy: ""
+    internalTrafficPolicy: ""
+    healthCheckNodePort: null
+    sessionAffinity: ""
+    sessionAffinityConfig: {}
+    ipFamilies: []
+    ipFamilyPolicy: ""
+    publishNotReadyAddresses: false
+    allocateLoadBalancerNodePorts: null
+    trafficDistribution: ""
+    ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 8443
+      protocol: TCP
+    - name: mcp
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+    - name: llm
+      port: 4000
+      targetPort: 4000
+      protocol: TCP
+  extraServices: []
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClassName: ""
+  accessModes:
+  - ReadWriteOnce
+  size: 1Gi
+  annotations: {}
+
+configBootstrap:
+  image:
+    registry: docker.io
+    repository: library/busybox
+    tag: "1.36"
+  overwrite: false
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+      - ALL
+
+config: {}
+configYaml: ""
+
+database:
+  type: sqlite
+  sqlite:
+    path: /config/data.db
+  postgres:
+    url: ""
+
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []

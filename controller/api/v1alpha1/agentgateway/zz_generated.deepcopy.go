@@ -225,6 +225,11 @@ func (in *AgentExtAuthHTTP) DeepCopyInto(out *AgentExtAuthHTTP) {
 		*out = new(CELExpression)
 		**out = **in
 	}
+	if in.Body != nil {
+		in, out := &in.Body, &out.Body
+		*out = new(CELExpression)
+		**out = **in
+	}
 	if in.AllowedRequestHeaders != nil {
 		in, out := &in.AllowedRequestHeaders, &out.AllowedRequestHeaders
 		*out = make([]ShortString, len(*in))
@@ -3979,6 +3984,11 @@ func (in *Tracing) DeepCopyInto(out *Tracing) {
 	}
 	if in.ClientSampling != nil {
 		in, out := &in.ClientSampling, &out.ClientSampling
+		*out = new(CELExpression)
+		**out = **in
+	}
+	if in.Filter != nil {
+		in, out := &in.Filter, &out.Filter
 		*out = new(CELExpression)
 		**out = **in
 	}

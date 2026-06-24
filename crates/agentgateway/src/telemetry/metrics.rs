@@ -203,6 +203,7 @@ pub struct Metrics {
 	pub mcp_requests: Family<MCPCall, counter::Counter>,
 
 	pub gen_ai_token_usage: Histogram<GenAILabelsTokenUsage>,
+	pub gen_ai_cost: Family<GenAILabels, counter::Counter<f64>>,
 	pub gen_ai_request_duration: Histogram<GenAILabels>,
 	pub gen_ai_time_per_output_token: Histogram<GenAILabels>,
 	pub gen_ai_time_to_first_token: Histogram<GenAILabels>,
@@ -312,6 +313,14 @@ impl Metrics {
 			gen_ai_token_usage.clone(),
 		);
 
+		let gen_ai_cost = Family::<GenAILabels, _>::default();
+		registry.register_with_unit(
+			"gen_ai_client_cost",
+			"Cumulative USD cost of generative AI requests",
+			Unit::Other("usd".to_string()),
+			gen_ai_cost.clone(),
+		);
+
 		// TODO: add error attribute if it ends with an error
 		let gen_ai_request_duration = Family::<GenAILabels, _>::new_with_constructor(move || {
 			PromHistogram::new(REQUEST_DURATION_BUCKET)
@@ -377,6 +386,7 @@ impl Metrics {
 			),
 
 			gen_ai_token_usage,
+			gen_ai_cost,
 			gen_ai_request_duration,
 			gen_ai_time_per_output_token,
 			gen_ai_time_to_first_token,

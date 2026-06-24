@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"istio.io/istio/pkg/kube"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
 )
 
-func extractConfigDump(kubeClient kube.CLIClient, podName, podNamespace string, port int) ([]byte, error) {
+func extractConfigDump(kubeClient kubeutil.CLIClient, podName, podNamespace string, port int) ([]byte, error) {
 	path := "config_dump"
-	debug, err := kubeClient.EnvoyDoWithPort(context.Background(), podName, podNamespace, "GET", path, port)
+	debug, err := kubeClient.AgentgatewayRequest(context.Background(), podName, podNamespace, "GET", path, port)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute command on %s.%s: %v", podName, podNamespace, err)
 	}

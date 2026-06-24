@@ -1,0 +1,79 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: http-body
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extAuth:
+      backendRef:
+        name: extauthz
+        port: 1024
+      http:
+        body: |
+          {"path": request.path, "method": request.method}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extauthz
+  namespace: default
+spec:
+  ports:
+  - port: 1024
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/http-body:extauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: http-body
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extAuthz:
+          http:
+            body: '{"path": request.path, "method": request.method}'
+          target:
+            port: 1024
+            service:
+              hostname: extauthz.default.svc.cluster.local
+              namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: http-body
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

@@ -3,6 +3,8 @@ use std::hash::Hash;
 use ::cel::Value;
 use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Deserializer, Serializer};
+use sha2::{Digest, Sha256};
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
@@ -66,6 +68,10 @@ impl APIKey {
 	pub fn new(s: impl Into<Box<str>>) -> Self {
 		APIKey(SecretString::new(s.into()))
 	}
+
+	pub(crate) fn sha256(&self) -> APIKeyHash {
+		APIKeyHash::from_raw_key(self.0.expose_secret())
+	}
 }
 
 pub fn api_key_to_value<'a>(key: &'a APIKey) -> Value<'a> {
@@ -88,11 +94,54 @@ impl PartialEq for APIKey {
 
 impl Eq for APIKey {}
 
+#[apply(schema!)]
+#[derive(Hash, PartialEq, Eq)]
+pub struct APIKeyHash(
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	#[serde(serialize_with = "ser_key_hash", deserialize_with = "deser_key_hash")]
+	String,
+);
+
+impl APIKeyHash {
+	pub fn from_raw_key(key: &str) -> Self {
+		let digest = Sha256::digest(key.as_bytes());
+		APIKeyHash(hex::encode(digest))
+	}
+
+	pub fn parse(key_hash: &str) -> Result<Self, String> {
+		let Some(digest) = key_hash.strip_prefix("sha256:") else {
+			return Err("keyHash must use the sha256:<hex> format".to_string());
+		};
+		let decoded = hex::decode(digest).map_err(|e| e.to_string())?;
+		if decoded.len() != 32 {
+			return Err("sha256 keyHash must decode to 32 bytes".to_string());
+		}
+		Ok(APIKeyHash(digest.to_ascii_lowercase()))
+	}
+}
+
+fn deser_key_hash<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let input = String::deserialize(deserializer)?;
+	APIKeyHash::parse(&input)
+		.map(|hash| hash.0)
+		.map_err(serde::de::Error::custom)
+}
+
+fn ser_key_hash<S>(digest: &str, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	serializer.serialize_str(&format!("sha256:{digest}"))
+}
+
 #[apply(schema_ser!)]
 pub struct APIKeyAuthentication {
 	// A map of API keys to the metadata for that key
 	#[serde(serialize_with = "ser_redact")]
-	pub users: Arc<HashMap<APIKey, UserMetadata>>,
+	pub users: Arc<HashMap<APIKeyHash, UserMetadata>>,
 
 	/// Validation mode for API Key authentication
 	pub mode: Mode,
@@ -108,7 +157,12 @@ impl APIKeyAuthentication {
 		location: AuthorizationLocation,
 	) -> Self {
 		Self {
-			users: Arc::new(keys.into_iter().collect()),
+			users: Arc::new(
+				keys
+					.into_iter()
+					.map(|(key, meta)| (key.sha256(), meta))
+					.collect(),
+			),
 			mode,
 			location,
 		}
@@ -134,7 +188,7 @@ impl APIKeyAuthentication {
 		};
 
 		let key = APIKey::new(key);
-		if let Some(meta) = self.users.get(&key) {
+		if let Some(meta) = self.users.get(&key.sha256()) {
 			pol_result!(
 				dtrace::Info,
 				Apply,
@@ -202,22 +256,38 @@ pub struct LocalAPIKeys {
 }
 
 #[apply(schema_de!)]
-pub struct LocalAPIKey {
-	/// API key value to accept.
-	pub key: APIKey,
-	/// Optional metadata attached to requests authenticated with this key.
-	pub metadata: Option<UserMetadata>,
+#[serde(untagged)]
+pub enum LocalAPIKey {
+	Key {
+		/// API key value to accept.
+		key: APIKey,
+		/// Optional metadata attached to requests authenticated with this key.
+		metadata: Option<UserMetadata>,
+	},
+	Sha256 {
+		/// SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.
+		#[serde(rename = "keyHash")]
+		key_hash: APIKeyHash,
+		/// Optional metadata attached to requests authenticated with this key.
+		metadata: Option<UserMetadata>,
+	},
+}
+
+impl LocalAPIKey {
+	fn into_parts(self) -> (APIKeyHash, UserMetadata) {
+		match self {
+			LocalAPIKey::Key { key, metadata } => (key.sha256(), metadata.unwrap_or_default()),
+			LocalAPIKey::Sha256 { key_hash, metadata } => (key_hash, metadata.unwrap_or_default()),
+		}
+	}
 }
 
 impl LocalAPIKeys {
 	pub fn into(self) -> APIKeyAuthentication {
-		APIKeyAuthentication::new(
-			self
-				.keys
-				.into_iter()
-				.map(|k| (k.key, k.metadata.unwrap_or_default())),
-			self.mode,
-			self.location,
-		)
+		APIKeyAuthentication {
+			users: Arc::new(self.keys.into_iter().map(LocalAPIKey::into_parts).collect()),
+			mode: self.mode,
+			location: self.location,
+		}
 	}
 }

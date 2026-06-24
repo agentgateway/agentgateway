@@ -68,6 +68,7 @@ rustls-openssl = { version = "0.3", features = ["tls12"] }
 axum = { version = "0.8", features = ["macros"] }
 axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
+multer = "3.0.0"
 # Disable default features to avoid pulling in native-tls and requiring openssl
 # TODO: allow default features if we ever add an openssl feature
 azure_identity = { version = "1.0", default-features = false }
@@ -144,7 +145,7 @@ pprof = { version = "0.15", features = [
     "criterion",
 ] }
 pretty_env_logger = "0.5"
-prometheus-client = "0.24"
+prometheus-client = "0.25"
 prost = "0.14"
 prost-build = "0.14"
 prost-types = "0.14"
@@ -187,6 +188,15 @@ shellexpand = "3.1"
 socket2 = "0.6"
 split-iter = "0.1"
 sse-stream = "0.2"
+sqlx = { version = "0.9", default-features = false, features = [
+    "chrono",
+    "json",
+    "postgres",
+    "runtime-tokio",
+    "sqlite",
+    "tls-rustls",
+    "uuid",
+] }
 stacker = "0.1"
 tempfile = "3.27"
 thiserror = "2.0"

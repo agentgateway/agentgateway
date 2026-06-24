@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::json;
 use tracing::event;
 
-use crate::cel::{Error, Expression, ROOT_CONTEXT, query};
+use crate::cel::{Error, Expression, context, query};
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
 use crate::http::transformation_cel::TransformationMetadata;
@@ -294,6 +294,25 @@ pub struct SourceContext {
 	/// authors should prefer `source.identity.*` for trust-sensitive checks.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub unverified_workload: Option<WorkloadContext>,
+	/// HTTP CONNECT request headers, when this stream originated from a CONNECT
+	/// tunnel. Empty otherwise. Exposed in CEL as `source.connectHeaders`, which
+	/// supports the same accessors as `request.headers` (indexing, `join()`,
+	/// `split()`, etc.).
+	///
+	/// CONNECT headers are client-supplied and unauthenticated at the transport
+	/// layer, so trust decisions should validate the values (e.g. signature or
+	/// issuer checks) rather than trusting header presence alone.
+	#[serde(
+		default,
+		with = "http_serde::header_map",
+		skip_serializing_if = "http::HeaderMap::is_empty"
+	)]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	#[dynamic(rename = "connectHeaders", with_value = "connect_headers_to_value")]
+	pub connect_headers: http::HeaderMap,
 }
 
 #[apply(schema!)]
@@ -326,6 +345,7 @@ impl SourceContext {
 			raw_port: raw_peer_addr.port(),
 			tls,
 			unverified_workload,
+			connect_headers: http::HeaderMap::new(),
 		}
 	}
 }
@@ -438,8 +458,8 @@ static DUMP: Lazy<Expression> =
 impl ExecutorResolver<'_> {
 	pub fn slow_debug(&self) -> serde_json::Value {
 		let expr = &DUMP;
-		let cel_value = Value::resolve(expr.expression.expression(), ROOT_CONTEXT.as_ref(), self)
-			.unwrap_or(Value::Null);
+		let cel_value =
+			Value::resolve(expr.expression.expression(), context(), self).unwrap_or(Value::Null);
 		let mut v = cel_value.json().unwrap_or(serde_json::Value::Null);
 		// Filter nulls which are just noisy
 		if let serde_json::Value::Object(obj) = &mut v {
@@ -665,11 +685,7 @@ impl<'a> Executor<'a> {
 	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
 		let resolver = ExecutorResolver { executor: self };
 		let start = dtrace::timed_start();
-		let res = Value::resolve(
-			expr.expression.expression(),
-			ROOT_CONTEXT.as_ref(),
-			&resolver,
-		);
+		let res = Value::resolve(expr.expression.expression(), context(), &resolver);
 		dtrace::trace(|t| {
 			t.cel_eval(
 				start,
@@ -1471,6 +1487,12 @@ fn version_to_value<'a>(c: &'a http::Version) -> Value<'a> {
 	Value::String(crate::http::version_str(c).into())
 }
 
+/// Expose a captured CONNECT `HeaderMap` to CEL with the same accessors as
+/// `request.headers` (map indexing, `join()`, `split()`, `redacted()`, etc.).
+fn connect_headers_to_value(headers: &http::HeaderMap) -> Value<'_> {
+	Value::Dynamic(DynamicValue::new_owned(Headers::new(headers)))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HeadersMode {
 	First,
@@ -2039,6 +2061,10 @@ pub fn full_example_executor() -> ExecutorSerde {
 				namespace: "ns-1".into(),
 				service_account: "sa-1".into(),
 			}),
+			connect_headers: http::HeaderMap::from_iter([(
+				http::HeaderName::from_static("x-custom-header"),
+				http::HeaderValue::from_static("custom-value"),
+			)]),
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![

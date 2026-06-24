@@ -1,0 +1,70 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: guardrails-backend
+  namespace: default
+spec:
+  static:
+    host: 127.0.0.1
+    port: 18081
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-guardrails
+  namespace: default
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    mcp:
+      guardrails:
+        processors:
+        - remote:
+            backendRef:
+              name: guardrails-backend
+              group: agentgateway.dev
+              kind: AgentgatewayBackend
+            failureMode: FailClosed
+          methods:
+            tools/call: Full
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    backend:
+      key: default/guardrails-backend
+      name:
+        name: guardrails-backend
+        namespace: default
+      static:
+        host: 127.0.0.1
+        port: 18081
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        mcpGuardrails:
+          processors:
+          - methods:
+              tools/call: FULL
+            remote:
+              target:
+                backend: default/guardrails-backend
+      key: backend/default/mcp-guardrails:mcp-guardrails:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: mcp-guardrails
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+status: []

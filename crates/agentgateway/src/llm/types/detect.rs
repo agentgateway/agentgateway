@@ -47,6 +47,7 @@ impl Request {
 	pub fn new_raw(body: Bytes) -> Self {
 		Self::Raw(body)
 	}
+
 	pub fn lookup<'a, T, const C: usize>(
 		&'a self,
 		path: [&[&str]; C],

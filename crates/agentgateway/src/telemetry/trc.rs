@@ -25,6 +25,18 @@ pub struct Tracer {
 	pub provider: SdkTracerProvider,
 	pub processor: SharedSpanProcessor,
 	pub fields: Arc<LoggingFields>,
+	pub(crate) filter: Option<Arc<cel::Expression>>,
+}
+
+/// Decides whether a trace span should be exported given an optional CEL *keep* filter.
+/// Keep semantics (matching `accessLog.filter`): when `filter` evaluates to `true`, the span is
+/// exported (returns true); otherwise it is dropped. On eval error / missing fields, `eval_bool`
+/// returns false, so the span is dropped. `None` => no filtering (always export).
+pub(crate) fn should_export_span(filter: Option<&cel::Expression>, exec: &cel::Executor) -> bool {
+	match filter {
+		Some(f) => exec.eval_bool(f),
+		None => true,
+	}
 }
 
 #[derive(Clone)]
@@ -253,6 +265,7 @@ impl Tracer {
 			provider,
 			processor,
 			fields,
+			filter: config.filter.clone(),
 		})
 	}
 
@@ -275,6 +288,9 @@ impl Tracer {
 			.collect_vec();
 		let out_span = request.outgoing_span.as_ref().unwrap();
 		if !out_span.is_sampled() {
+			return;
+		}
+		if !should_export_span(self.filter.as_deref(), &cel_exec.executor) {
 			return;
 		}
 		let start = request.start.as_system_time();
@@ -767,6 +783,7 @@ mod tests {
 				provider,
 				processor,
 				fields: Arc::new(LoggingFields::default()),
+				filter: None,
 			},
 			exporter,
 		)
@@ -778,6 +795,7 @@ mod tests {
 			filter: None,
 			fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
+			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();
 		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));
@@ -812,11 +830,13 @@ mod tests {
 		let filter = None;
 		let fields = LoggingFields::default();
 		let metric_fields = Arc::new(MetricFields::default());
+		let database_fields = LoggingFields::default();
 		let cel_exec = CelLoggingExecutor {
 			executor: crate::cel::Executor::new_empty(),
 			filter: &filter,
 			fields: &fields,
 			metric_fields: &metric_fields,
+			database_fields: &database_fields,
 		};
 
 		tracer.send(&request, &Timestamp::now(), &cel_exec, &[]);
@@ -831,5 +851,96 @@ mod tests {
 		assert_eq!(span.parent_span_id, incoming.span_id.into());
 		assert!(span.parent_span_is_remote);
 		assert!(span.links.iter().next().is_none());
+	}
+
+	#[test]
+	fn should_export_span_keep_filter_cases() {
+		use crate::cel::{Executor, Expression, snapshot_request, snapshot_response};
+
+		// Keep-semantics: the expression returns `true` for spans we want to export.
+		// Here we export everything except the noisy probe/SSE-connection spans.
+		let keep_expr = Expression::new_strict(
+			"!((request.method == 'GET' && response.code == 405) || (mcp != null && request.method == 'GET' && response.code == 200))",
+		)
+		.unwrap();
+
+		fn req(method: ::http::Method) -> crate::http::Request {
+			::http::Request::builder()
+				.method(method)
+				.uri("http://example.com/")
+				.body(crate::http::Body::empty())
+				.unwrap()
+		}
+		fn resp(code: u16) -> crate::http::Response {
+			::http::Response::builder()
+				.status(code)
+				.body(crate::http::Body::empty())
+				.unwrap()
+		}
+
+		let mcp = crate::mcp::MCPInfo {
+			method_name: Some("tools/call".to_string()),
+			..Default::default()
+		};
+
+		// GET + 405, no mcp => drop (should_export == false)
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
+			let resp_snap = snapshot_response(&mut resp(405));
+			let exec = Executor::new_logger(Some(&req_snap), Some(&resp_snap), None, None, None, None);
+			assert!(!should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// GET + 200, mcp present => drop (false)
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
+			let resp_snap = snapshot_response(&mut resp(200));
+			let exec = Executor::new_logger(
+				Some(&req_snap),
+				Some(&resp_snap),
+				None,
+				Some(&mcp),
+				None,
+				None,
+			);
+			assert!(!should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// POST + 200, mcp present (tool call) => keep (true)
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::POST), true);
+			let resp_snap = snapshot_response(&mut resp(200));
+			let exec = Executor::new_logger(
+				Some(&req_snap),
+				Some(&resp_snap),
+				None,
+				Some(&mcp),
+				None,
+				None,
+			);
+			assert!(should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// GET + 200, no mcp => keep (true)
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
+			let resp_snap = snapshot_response(&mut resp(200));
+			let exec = Executor::new_logger(Some(&req_snap), Some(&resp_snap), None, None, None, None);
+			assert!(should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// GET + no response snapshot (unknown status) => expression errors => drop (false).
+		// Under keep-semantics, eval errors fail closed (the span is dropped).
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
+			let exec = Executor::new_logger(Some(&req_snap), None, None, None, None, None);
+			assert!(!should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// filter == None => keep (true)
+		{
+			let exec = Executor::new_empty();
+			assert!(should_export_span(None, &exec));
+		}
 	}
 }

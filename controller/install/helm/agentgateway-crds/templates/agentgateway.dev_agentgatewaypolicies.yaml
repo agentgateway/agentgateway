@@ -4493,7 +4493,7 @@ spec:
                             ? has(self.port) : true'
                       cache:
                         description: |-
-                          Caches gRPC authorization results.
+                          Caches authorization results.
 
                           WARNING: the safety of this feature depends on the cache key accurately
                           capturing every request property that the authorization service uses to
@@ -4642,6 +4642,13 @@ spec:
                               type: string
                             maxItems: 64
                             type: array
+                          body:
+                            description: |-
+                              Body is a CEL expression that produces the HTTP authorization request body.
+                              Strings and bytes are used directly; other values are JSON-encoded.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           path:
                             description: |-
                               Path to send to the authorization server. If
@@ -4677,8 +4684,8 @@ spec:
                         type: object
                     type: object
                     x-kubernetes-validations:
-                    - message: cache requires grpc
-                      rule: '!has(self.cache) || has(self.grpc)'
+                    - message: forwardBody cannot be used with http.body
+                      rule: '!(has(self.forwardBody) && has(self.http) && has(self.http.body))'
                   health:
                     description: Settings for passive and active health checking.
                     properties:
@@ -6411,6 +6418,14 @@ spec:
                         maxLength: 16384
                         minLength: 1
                         type: string
+                      filter:
+                        description: |-
+                          Expression that determines whether a sampled span is exported.
+                          This uses keep semantics: spans are exported only when the expression
+                          evaluates to `true`. If unspecified, all sampled spans are exported.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
                       path:
                         description: |-
                           OTLP path to use. This is only applicable when
@@ -6707,16 +6722,20 @@ spec:
                           `secretSelector` can be used instead.\n\nEach entry in the
                           credential data represents one API key. The key is an\narbitrary
                           identifier. The value can either be:\n* A string representing
-                          the API key.\n* A JSON object with two fields, `key` and
-                          `metadata`. `key` contains\n  the API key. `metadata` contains
-                          arbitrary JSON metadata associated\n  with the key, which
-                          may be used by other policies. For example, you\n  may write
-                          an authorization policy allowing `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
-                          v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
-                          \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
-                          {\n\t        \"group\": \"sales\",\n\t        \"created_at\":
-                          \"2024-10-01T12:00:00Z\"\n\t      }\n\t    }\n\t  client2:
-                          \"k-456\""
+                          the API key.\n* A JSON object with `key` or `keyHash`, plus
+                          optional `metadata`.\n  `key` contains the API key. `keyHash`
+                          contains a hashed API key in\n  `sha256:<hex>` format. `metadata`
+                          contains arbitrary JSON metadata\n  associated with the
+                          key, which may be used by other policies. For\n  example,
+                          you may write an authorization policy allowing\n  `apiKey.group
+                          == 'sales'`.\n\nExample:\n\n\tapiVersion: v1\n\tkind: Secret\n\tmetadata:\n\t
+                          \ name: api-key\n\tstringData:\n\t  client1: |\n\t    {\n\t
+                          \     \"key\": \"k-123\",\n\t      \"metadata\": {\n\t        \"group\":
+                          \"sales\",\n\t        \"created_at\": \"2024-10-01T12:00:00Z\"\n\t
+                          \     }\n\t    }\n\t  client2: \"k-456\"\n\t  client3: |\n\t
+                          \   {\n\t      \"keyHash\": \"sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad\",\n\t
+                          \     \"metadata\": {\n\t        \"group\": \"engineering\"\n\t
+                          \     }\n\t    }"
                         properties:
                           group:
                             description: |-
@@ -6750,11 +6769,12 @@ spec:
                           is undefined.\n\nEach entry in the `Secret` data represents
                           one API key. The key is an\narbitrary identifier. The value
                           can either be:\n* A string representing the API key.\n*
-                          A JSON object with two fields, `key` and `metadata`. `key`
-                          contains\n  the API key. `metadata` contains arbitrary JSON
-                          metadata associated\n  with the key, which may be used by
-                          other policies. For example, you\n  may write an authorization
-                          policy allowing `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
+                          A JSON object with `key` or `keyHash`, plus optional `metadata`.\n
+                          \ `key` contains the API key. `keyHash` contains a hashed
+                          API key in\n  `sha256:<hex>` format. `metadata` contains
+                          arbitrary JSON metadata\n  associated with the key, which
+                          may be used by other policies. For\n  example, you may write
+                          an authorization policy allowing\n  `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
                           v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
                           \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
                           {\n\t        \"group\": \"sales\",\n\t        \"created_at\":
@@ -7570,7 +7590,7 @@ spec:
                             ? has(self.port) : true'
                       cache:
                         description: |-
-                          Caches gRPC authorization results.
+                          Caches authorization results.
 
                           WARNING: the safety of this feature depends on the cache key accurately
                           capturing every request property that the authorization service uses to
@@ -7707,7 +7727,7 @@ spec:
                                       ''Service'') ? has(self.port) : true'
                                 cache:
                                   description: |-
-                                    Caches gRPC authorization results.
+                                    Caches authorization results.
 
                                     WARNING: the safety of this feature depends on the cache key accurately
                                     capturing every request property that the authorization service uses to
@@ -7859,6 +7879,13 @@ spec:
                                         type: string
                                       maxItems: 64
                                       type: array
+                                    body:
+                                      description: |-
+                                        Body is a CEL expression that produces the HTTP authorization request body.
+                                        Strings and bytes are used directly; other values are JSON-encoded.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
                                     path:
                                       description: |-
                                         Path to send to the authorization server. If
@@ -7901,8 +7928,9 @@ spec:
                                   must be set
                                 rule: '[has(self.grpc),has(self.http)].filter(x,x==true).size()
                                   == 1'
-                              - message: cache requires grpc
-                                rule: '!has(self.cache) || has(self.grpc)'
+                              - message: forwardBody cannot be used with http.body
+                                rule: '!(has(self.forwardBody) && has(self.http) &&
+                                  has(self.http.body))'
                           required:
                           - policy
                           type: object
@@ -8017,6 +8045,13 @@ spec:
                               type: string
                             maxItems: 64
                             type: array
+                          body:
+                            description: |-
+                              Body is a CEL expression that produces the HTTP authorization request body.
+                              Strings and bytes are used directly; other values are JSON-encoded.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           path:
                             description: |-
                               Path to send to the authorization server. If
@@ -8055,8 +8090,8 @@ spec:
                     - message: exactly one of the fields in [grpc http] must be set
                       rule: has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 1
-                    - message: cache requires grpc
-                      rule: '!has(self.cache) || has(self.grpc)'
+                    - message: forwardBody cannot be used with http.body
+                      rule: '!(has(self.forwardBody) && has(self.http) && has(self.http.body))'
                     - message: conditional cannot be set with any other field
                       rule: 'has(self.conditional) ? [has(self.backendRef),has(self.cache),has(self.failureMode),has(self.forwardBody),has(self.grpc),has(self.http)].filter(x,x==true).size()
                         == 0 : true'

@@ -1199,10 +1199,12 @@ type APIKeyAuthentication struct {
 	// Each entry in the credential data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
-	// * A JSON object with two fields, `key` and `metadata`. `key` contains
-	//   the API key. `metadata` contains arbitrary JSON metadata associated
-	//   with the key, which may be used by other policies. For example, you
-	//   may write an authorization policy allowing `apiKey.group == 'sales'`.
+	// * A JSON object with `key` or `keyHash`, plus optional `metadata`.
+	//   `key` contains the API key. `keyHash` contains a hashed API key in
+	//   `sha256:<hex>` format. `metadata` contains arbitrary JSON metadata
+	//   associated with the key, which may be used by other policies. For
+	//   example, you may write an authorization policy allowing
+	//   `apiKey.group == 'sales'`.
 	//
 	// Example:
 	//
@@ -1220,6 +1222,13 @@ type APIKeyAuthentication struct {
 	//	      }
 	//	    }
 	//	  client2: "k-456"
+	//	  client3: |
+	//	    {
+	//	      "keyHash": "sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad",
+	//	      "metadata": {
+	//	        "group": "engineering"
+	//	      }
+	//	    }
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
@@ -1231,10 +1240,12 @@ type APIKeyAuthentication struct {
 	// Each entry in the `Secret` data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
 	// * A string representing the API key.
-	// * A JSON object with two fields, `key` and `metadata`. `key` contains
-	//   the API key. `metadata` contains arbitrary JSON metadata associated
-	//   with the key, which may be used by other policies. For example, you
-	//   may write an authorization policy allowing `apiKey.group == 'sales'`.
+	// * A JSON object with `key` or `keyHash`, plus optional `metadata`.
+	//   `key` contains the API key. `keyHash` contains a hashed API key in
+	//   `sha256:<hex>` format. `metadata` contains arbitrary JSON metadata
+	//   associated with the key, which may be used by other policies. For
+	//   example, you may write an authorization policy allowing
+	//   `apiKey.group == 'sales'`.
 	//
 	// Example:
 	//
@@ -2066,7 +2077,7 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 	}
 }
 
-// +kubebuilder:validation:XValidation:rule="!has(self.cache) || has(self.grpc)",message="cache requires grpc"
+// +kubebuilder:validation:XValidation:rule="!(has(self.forwardBody) && has(self.http) && has(self.http.body))",message="forwardBody cannot be used with http.body"
 type ExtAuth struct {
 	// External Authorization server to reach.
 	//
@@ -2097,7 +2108,7 @@ type ExtAuth struct {
 	// +optional
 	ForwardBody *ExtAuthBody `json:"forwardBody,omitempty"`
 
-	// Caches gRPC authorization results.
+	// Caches authorization results.
 	//
 	// WARNING: the safety of this feature depends on the cache key accurately
 	// capturing every request property that the authorization service uses to
@@ -2153,6 +2164,11 @@ type AgentExtAuthHTTP struct {
 	// sign-in page.
 	// +optional
 	Redirect *CELExpression `json:"redirect,omitempty"`
+
+	// Body is a CEL expression that produces the HTTP authorization request body.
+	// Strings and bytes are used directly; other values are JSON-encoded.
+	// +optional
+	Body *CELExpression `json:"body,omitempty"`
 
 	// Additional headers from the client request that
 	// will be sent to the authorization server.
@@ -2592,6 +2608,12 @@ type Tracing struct {
 	// `false`). If unspecified, client sampling is `100%` enabled.
 	// +optional
 	ClientSampling *CELExpression `json:"clientSampling,omitempty"`
+
+	// Expression that determines whether a sampled span is exported.
+	// This uses keep semantics: spans are exported only when the expression
+	// evaluates to `true`. If unspecified, all sampled spans are exported.
+	// +optional
+	Filter *CELExpression `json:"filter,omitempty"`
 }
 
 type ResourceAdd struct {

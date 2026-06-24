@@ -11,13 +11,13 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 const (
-	shortOutput = "short"
-	jsonOutput  = "json"
-	yamlOutput  = "yaml"
+	shortOutput    = "short"
+	jsonOutput     = "json"
+	yamlOutput     = "yaml"
+	proxyAdminPort = 15000
 )
 
 type commonFlags struct {
@@ -37,7 +37,7 @@ type configDumpSource struct {
 
 func Command() flag.Command {
 	common := &commonFlags{
-		proxyAdminPort: wellknown.ProxyAdminPort,
+		proxyAdminPort: proxyAdminPort,
 		outputFormat:   shortOutput,
 	}
 
@@ -109,7 +109,7 @@ func loadConfigDumpSource(ctx context.Context, common *commonFlags, args []strin
 		return nil, err
 	}
 
-	podName, podNamespace, err := kubeutil.ResolvePodForResource(kubeClient, resourceName, namespace)
+	podName, podNamespace, err := kubeutil.ResolvePodForResource(ctx, kubeClient, resourceName, namespace)
 	if err != nil {
 		return nil, err
 	}

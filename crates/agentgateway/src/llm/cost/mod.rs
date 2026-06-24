@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, bail};
 use arc_swap::ArcSwap;
-pub use catalog::Breakdown;
+pub use catalog::{Breakdown, Catalog};
 use catalog::{Catalog as CatalogData, Rates, Usage};
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::Decimal;
@@ -17,6 +17,7 @@ use super::{CacheTokenConvention, LLMInfo, LLMResponse};
 use crate::ModelCatalogSource;
 
 mod catalog;
+pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
 
@@ -51,6 +52,7 @@ impl ModelCatalog {
 			.filter_map(|s| match s {
 				ModelCatalogSource::File { file } => Some(file.clone()),
 				ModelCatalogSource::Inline { .. } => None,
+				ModelCatalogSource::InlineCatalog { .. } => None,
 			})
 			.collect();
 		tokio::spawn({
@@ -80,6 +82,14 @@ impl ModelCatalog {
 
 	pub fn snapshot(&self) -> Arc<CatalogSnapshot> {
 		self.snapshot.load_full()
+	}
+
+	pub fn list_models(&self) -> ModelCatalogModels {
+		self.snapshot.load().list_models()
+	}
+
+	pub fn replace(&self, snapshot: CatalogSnapshot) {
+		self.snapshot.store(Arc::new(snapshot));
 	}
 
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
@@ -135,6 +145,26 @@ impl CatalogSnapshot {
 
 	fn empty() -> Self {
 		CatalogSnapshot { catalog: None }
+	}
+
+	fn list_models(&self) -> ModelCatalogModels {
+		let Some(catalog) = &self.catalog else {
+			return ModelCatalogModels {
+				loaded: false,
+				providers: Vec::new(),
+			};
+		};
+		ModelCatalogModels {
+			loaded: true,
+			providers: catalog
+				.providers
+				.iter()
+				.map(|(provider, data)| ModelCatalogProviderModels {
+					provider: provider.clone(),
+					models: data.models.keys().cloned().collect(),
+				})
+				.collect(),
+		}
 	}
 
 	fn project(
@@ -237,6 +267,20 @@ impl CatalogSnapshot {
 			cost_rates: Some(cost_rates),
 		}
 	}
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogModels {
+	pub loaded: bool,
+	pub providers: Vec<ModelCatalogProviderModels>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelCatalogProviderModels {
+	pub provider: String,
+	pub models: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -441,6 +485,10 @@ async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCa
 			ModelCatalogSource::Inline { inline } => {
 				let catalog = catalog::from_json(inline).context("invalid inline model catalog")?;
 				catalogs.push(catalog);
+			},
+			ModelCatalogSource::InlineCatalog { inline } => {
+				inline.validate().context("invalid inline model catalog")?;
+				catalogs.push(inline.clone());
 			},
 		}
 	}

@@ -1198,6 +1198,7 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 			Default::default(),
 		)),
 		model_catalog: cost::ModelCatalog::empty(),
+		admin: None,
 		upstream: client.clone(),
 		ca: None,
 

@@ -49,6 +49,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 			Default::default(),
 		)),
 		model_catalog: crate::llm::cost::ModelCatalog::empty(),
+		admin: None,
 		upstream: client.clone(),
 		ca: None,
 

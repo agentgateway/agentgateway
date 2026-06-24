@@ -2,6 +2,8 @@ package plugins
 
 import (
 	"bytes"
+	"cmp"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -839,7 +841,23 @@ func processBasicAuthenticationPolicy(
 
 type APIKeyEntry struct {
 	Key      string          `json:"key"`
+	KeyHash  string          `json:"keyHash"`
 	Metadata json.RawMessage `json:"metadata"`
+}
+
+func validateAPIKeyHash(keyHash string) error {
+	const prefix = "sha256:"
+	if !strings.HasPrefix(keyHash, prefix) {
+		return fmt.Errorf("keyHash must use the %s<hex> format", prefix)
+	}
+	decoded, err := hex.DecodeString(strings.TrimPrefix(keyHash, prefix))
+	if err != nil {
+		return fmt.Errorf("keyHash must contain a valid sha256 hex digest: %w", err)
+	}
+	if len(decoded) != 32 {
+		return fmt.Errorf("keyHash sha256 digest must decode to 32 bytes")
+	}
+	return nil
 }
 
 func processAPIKeyAuthenticationPolicy(
@@ -898,11 +916,22 @@ func processAPIKeyAuthenticationPolicy(
 				// A raw key entry without metadata
 				ke = APIKeyEntry{
 					Key:      string(v),
+					KeyHash:  "",
 					Metadata: nil,
 				}
 			} else if err := json.Unmarshal(trimmed, &ke); err != nil {
 				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
 				continue
+			}
+			if (ke.Key == "") == (ke.KeyHash == "") {
+				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: exactly one of key or keyHash must be set", s.name, k))
+				continue
+			}
+			if ke.KeyHash != "" {
+				if err := validateAPIKeyHash(ke.KeyHash); err != nil {
+					errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
+					continue
+				}
 			}
 
 			pbs, err := toStruct(ke.Metadata)
@@ -912,13 +941,17 @@ func processAPIKeyAuthenticationPolicy(
 			}
 			p.ApiKeys = append(p.ApiKeys, &api.TrafficPolicySpec_APIKey_User{
 				Key:      ke.Key,
+				KeyHash:  ke.KeyHash,
 				Metadata: pbs,
 			})
 		}
 	}
 	// Ensure deterministic ordering
-	slices.SortBy(p.ApiKeys, func(a *api.TrafficPolicySpec_APIKey_User) string {
-		return a.Key
+	slices.SortFunc(p.ApiKeys, func(a, b *api.TrafficPolicySpec_APIKey_User) int {
+		return cmp.Or(
+			cmp.Compare(a.Key, b.Key),
+			cmp.Compare(a.KeyHash, b.KeyHash),
+		)
 	})
 	apiKeyPolicy := &api.Policy{
 		Key:  basePolicyName + apiKeyPolicySuffix,
@@ -1195,6 +1228,9 @@ func buildExtAuthSpec(
 		redirect := castCELPtr(h.Redirect, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http redirect is not a valid CEL expression: %s", expr))
 		})
+		body := castCELPtr(h.Body, func(expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("extAuth http body is not a valid CEL expression: %s", expr))
+		})
 		addRequestHeaders := castCELMap(h.AddRequestHeaders, func(key string, expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http addRequestHeaders %q is not a valid CEL expression: %s", key, expr))
 		})
@@ -1204,6 +1240,7 @@ func buildExtAuthSpec(
 		p := &api.TrafficPolicySpec_ExternalAuth_HTTPProtocol{
 			Path:                   path,
 			Redirect:               redirect,
+			Body:                   body,
 			IncludeResponseHeaders: h.AllowedResponseHeaders,
 			AddRequestHeaders:      addRequestHeaders,
 			Metadata:               metadata,
@@ -2123,6 +2160,13 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 	}
 	if s.MCP != nil && s.MCP.Authentication != nil {
 		app(s.MCP.Authentication.JWKS.BackendRef)
+	}
+	if s.MCP != nil && s.MCP.Guardrails != nil {
+		for _, p := range s.MCP.Guardrails.Processors {
+			if p.Remote != nil {
+				app(p.Remote.BackendRef)
+			}
+		}
 	}
 	if s.AI != nil && s.AI.PromptGuard != nil {
 		for _, p := range s.AI.PromptGuard.Request {

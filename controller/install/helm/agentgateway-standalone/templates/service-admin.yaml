@@ -1,0 +1,29 @@
+{{- if .Values.admin.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" . }}-admin
+  namespace: {{ include "agentgateway-standalone.namespace" . }}
+  labels:
+    {{- include "agentgateway-standalone.labels" . | nindent 4 }}
+    {{- with .Values.admin.service.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.admin.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.admin.service.type | quote }}
+{{- $serviceSpecFields := include "agentgateway-standalone.serviceSpecFields" .Values.admin.service }}
+{{- if $serviceSpecFields }}
+{{ $serviceSpecFields | trim | nindent 2 }}
+{{- end }}
+  ports:
+  - name: "admin"
+    protocol: "TCP"
+    port: {{ .Values.admin.service.port }}
+    targetPort: admin
+  selector:
+    {{- include "agentgateway-standalone.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -6,6 +6,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Catalog {
 	#[serde(default)]
@@ -55,6 +56,7 @@ pub fn from_json(s: &str) -> anyhow::Result<Catalog> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Provider {
 	#[serde(default)]
@@ -62,6 +64,7 @@ pub struct Provider {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Model {
 	#[serde(default, skip_serializing_if = "Rates::is_empty")]
@@ -71,6 +74,7 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Rates {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -109,6 +113,7 @@ impl Rates {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Tier {
 	pub context_over: u64,
@@ -118,6 +123,17 @@ pub struct Tier {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct Money(pub Decimal);
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for Money {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"Money".into()
+	}
+
+	fn json_schema(schema_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		String::json_schema(schema_gen)
+	}
+}
 
 impl Money {
 	pub fn parse(s: &str) -> Result<Money, String> {

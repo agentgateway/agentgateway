@@ -195,7 +195,7 @@ macro_rules! provider_env_model_test {
 const VERTEX_RERANK_MODEL: &str = "semantic-ranker-default@latest";
 
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
-	let policies = if provider == "azure" {
+	let policies = if provider == "azure" || provider == "foundry" {
 		r#"
       policies:
         backendAuth:
@@ -239,8 +239,20 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
               resourceType: $AZURE_RESOURCE_TYPE
               "#
 		.to_string()
+	} else if provider == "foundry" {
+		r#"
+              resourceName: $FOUNDRY_RESOURCE_NAME
+              resourceType: foundry
+              "#
+		.to_string()
 	} else {
 		String::new()
+	};
+	// "foundry" is an alias for the "azure" YAML provider key with Foundry-specific config.
+	let yaml_provider = if provider == "foundry" {
+		"azure"
+	} else {
+		provider
 	};
 	format!(
 		r#"
@@ -275,7 +287,7 @@ binds:
                 /v1/rerank: rerank
                 "*": passthrough
           provider:
-            {provider}:
+            {yaml_provider}:
               model: {model}
 {extra}
 "#
@@ -688,6 +700,74 @@ mod azure {
 	);
 }
 
+// Azure AI Foundry tests.
+//
+// Required env vars:
+//   AGENTGATEWAY_E2E=true
+//   FOUNDRY_RESOURCE_NAME   — Foundry resource/workspace name (e.g. my-foundry-resource)
+//   FOUNDRY_ANTHROPIC_MODEL — Anthropic model deployed in Foundry (e.g. claude-3-5-haiku-20241022)
+//   FOUNDRY_OPENAI_MODEL    — OpenAI-compatible model deployed in Foundry (e.g. gpt-4o-mini)
+//
+// Example:
+//   AGENTGATEWAY_E2E=true \
+//   FOUNDRY_RESOURCE_NAME=my-resource \
+//   FOUNDRY_ANTHROPIC_MODEL=claude-3-5-haiku-20241022 \
+//   FOUNDRY_OPENAI_MODEL=gpt-4o-mini \
+//   cargo test --test integration tests::llm::foundry::
+mod foundry {
+	use super::*;
+
+	// Messages route hits the Anthropic-native endpoint (/anthropic/v1/messages).
+	provider_env_model_test!(
+		messages,
+		"foundry",
+		"",
+		"FOUNDRY_ANTHROPIC_MODEL",
+		send_messages,
+		false
+	);
+	provider_env_model_test!(
+		messages_streaming,
+		"foundry",
+		"",
+		"FOUNDRY_ANTHROPIC_MODEL",
+		send_messages,
+		true
+	);
+	provider_env_model_test!(
+		messages_tool_use,
+		"foundry",
+		"",
+		"FOUNDRY_ANTHROPIC_MODEL",
+		send_messages_with_tools
+	);
+	provider_env_model_test!(
+		messages_count_tokens,
+		"foundry",
+		"",
+		"FOUNDRY_ANTHROPIC_MODEL",
+		send_messages_count_tokens
+	);
+
+	// Completions route hits the OpenAI-compatible endpoint (/api/projects/{name}/openai/v1/...).
+	provider_env_model_test!(
+		completions,
+		"foundry",
+		"",
+		"FOUNDRY_OPENAI_MODEL",
+		send_completions,
+		false
+	);
+	provider_env_model_test!(
+		completions_streaming,
+		"foundry",
+		"",
+		"FOUNDRY_OPENAI_MODEL",
+		send_completions,
+		true
+	);
+}
+
 pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
 	// Explicitly opt in to avoid accidentally using implicit configs
 	if !require_env("AGENTGATEWAY_E2E") {
@@ -703,6 +783,9 @@ pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGatewa
 		return None;
 	}
 	if provider == "azure" && !require_env("AZURE_RESOURCE_TYPE") {
+		return None;
+	}
+	if provider == "foundry" && !require_env("FOUNDRY_RESOURCE_NAME") {
 		return None;
 	}
 	let gw = AgentGateway::new(llm_config(provider, env, model))

@@ -761,6 +761,9 @@ message FrontendPolicySpec {
     // protocol specifies the OTLP protocol variant to use. Default is HTTP
     Protocol protocol = 7;
 
+    // CEL expression to filter exported spans with keep semantics. If unset, all sampled spans are exported.
+    optional string filter = 9;
+
     enum Protocol {
       HTTP = 0;
       GRPC = 1;
@@ -897,6 +900,7 @@ message TrafficPolicySpec {
       repeated string include_response_headers = 3;
       map<string, string> add_request_headers = 4;
       map<string, string> metadata = 5;
+      optional string body = 6;
     }
     BackendReference target = 1;
     oneof protocol {
@@ -993,6 +997,7 @@ message TrafficPolicySpec {
     message User {
       string key = 1;
       google.protobuf.Struct metadata = 2;
+      string key_hash = 3;
     }
 
     repeated User api_keys = 1;

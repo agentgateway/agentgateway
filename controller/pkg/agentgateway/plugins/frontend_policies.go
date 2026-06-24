@@ -140,6 +140,13 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		})
 	}
 
+	var filter *string
+	if tracing.Filter != nil {
+		filter = castCELPtr(tracing.Filter, func(expr agentgateway.CELExpression) {
+			errs = append(errs, fmt.Errorf("frontend tracing filter is not a valid CEL expression: %s", expr))
+		})
+	}
+
 	var path *string
 	if tracing.Path != nil {
 		path = new(*tracing.Path)
@@ -170,6 +177,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 					Path:            path,
 					RandomSampling:  randomSampling,
 					ClientSampling:  clientSampling,
+					Filter:          filter,
 				}},
 			},
 		},

@@ -17,6 +17,8 @@ pub const DISCOVERY_ENGINE_HOST: Strng = strng::literal!("discoveryengine.google
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
+	/// Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`
+	/// use restricted multi-region endpoints. Other values are treated as regional locations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub region: Option<Strng>,
 	pub project_id: Strng,
@@ -138,6 +140,9 @@ impl Provider {
 		match &self.region {
 			None => strng::literal!("aiplatform.googleapis.com"),
 			Some(region) if region == "global" => strng::literal!("aiplatform.googleapis.com"),
+			Some(region) if region == "us" || region == "eu" => {
+				strng::format!("aiplatform.{region}.rep.googleapis.com")
+			},
 			Some(region) => strng::format!("{region}-aiplatform.googleapis.com"),
 		}
 	}
@@ -252,6 +257,7 @@ mod tests {
 	#[rstest::rstest]
 	#[case::no_region(None, "aiplatform.googleapis.com")]
 	#[case::global_region(Some("global"), "aiplatform.googleapis.com")]
+	#[case::multi_region(Some("us"), "aiplatform.us.rep.googleapis.com")]
 	#[case::regional(Some("us-central1"), "us-central1-aiplatform.googleapis.com")]
 	fn test_get_host(#[case] region: Option<&str>, #[case] expected: &str) {
 		let p = Provider {

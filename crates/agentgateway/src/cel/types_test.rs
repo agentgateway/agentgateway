@@ -34,6 +34,7 @@ fn build_test_request() -> crate::http::Request {
 		raw_port: 54321,
 		tls: None,
 		unverified_workload: None,
+		connect_headers: http::HeaderMap::new(),
 	};
 	req.extensions_mut().insert(source);
 
@@ -423,6 +424,7 @@ fn test_extension_or_direct_serialization() {
 		raw_port: 8080,
 		tls: None,
 		unverified_workload: None,
+		connect_headers: http::HeaderMap::new(),
 	};
 	let ext_or_direct: ExtensionOrDirect<SourceContext> = ExtensionOrDirect::Direct(Some(&value));
 	let json = serde_json::to_value(&ext_or_direct).expect("failed to serialize");
@@ -435,4 +437,97 @@ fn test_extension_or_direct_serialization() {
 	let ext_or_direct_none: ExtensionOrDirect<SourceContext> = ExtensionOrDirect::Direct(None);
 	let json_none = serde_json::to_value(&ext_or_direct_none).expect("failed to serialize");
 	assert!(json_none.is_null());
+}
+
+#[test]
+fn test_source_connect_headers() {
+	// Populated map: `source.connectHeaders["x-custom-header"]` resolves to the value,
+	// and multi-value headers are preserved (HeaderMap fidelity).
+	let mut headers = http::HeaderMap::new();
+	headers.insert(
+		http::HeaderName::from_static("x-custom-header"),
+		http::HeaderValue::from_static("custom-value"),
+	);
+	headers.append(
+		http::HeaderName::from_static("x-multi"),
+		http::HeaderValue::from_static("a"),
+	);
+	headers.append(
+		http::HeaderName::from_static("x-multi"),
+		http::HeaderValue::from_static("b"),
+	);
+	let src = SourceContext {
+		address: "10.0.0.1".parse().unwrap(),
+		port: 12345,
+		raw_address: "10.0.0.1".parse().unwrap(),
+		raw_port: 12345,
+		tls: None,
+		unverified_workload: None,
+		connect_headers: headers,
+	};
+	let exec = ExecutorSerde {
+		source: Some(src),
+		..Default::default()
+	};
+	let executor = exec.as_executor();
+	let expr = Expression::new_strict(
+		r#"source.connectHeaders["x-custom-header"] == "custom-value" && source.connectHeaders.raw()["x-multi"] == ["a", "b"]"#,
+	)
+	.expect("failed to compile");
+	assert!(executor.eval_bool(&expr));
+
+	// Empty map when unset: indexing a missing key yields a no-such-key error.
+	let src_empty = SourceContext {
+		address: "10.0.0.1".parse().unwrap(),
+		port: 12345,
+		raw_address: "10.0.0.1".parse().unwrap(),
+		raw_port: 12345,
+		tls: None,
+		unverified_workload: None,
+		connect_headers: http::HeaderMap::new(),
+	};
+	let exec_empty = ExecutorSerde {
+		source: Some(src_empty),
+		..Default::default()
+	};
+	let executor_empty = exec_empty.as_executor();
+	let missing = Expression::new_strict(r#"source.connectHeaders["x-custom-header"]"#)
+		.expect("failed to compile");
+	assert!(
+		executor_empty.eval(&missing).is_err(),
+		"indexing an empty connectHeaders map should error"
+	);
+}
+
+#[test]
+fn test_source_connect_headers_sensitive_redacted_in_debug() {
+	// Sensitive-marked connect headers (as done at capture for authorization/cookie
+	// etc.) must not leak their value via SourceContext's Debug, which is what
+	// `DebugExtensions` prints into debug logs.
+	let mut headers = http::HeaderMap::new();
+	let mut secret = http::HeaderValue::from_static("Bearer super-secret-token");
+	secret.set_sensitive(true);
+	headers.insert(http::header::AUTHORIZATION, secret);
+	headers.insert(
+		http::HeaderName::from_static("x-custom-header"),
+		http::HeaderValue::from_static("custom-value"),
+	);
+	let src = SourceContext {
+		address: "10.0.0.1".parse().unwrap(),
+		port: 12345,
+		raw_address: "10.0.0.1".parse().unwrap(),
+		raw_port: 12345,
+		tls: None,
+		unverified_workload: None,
+		connect_headers: headers,
+	};
+	let debug = format!("{src:?}");
+	assert!(
+		!debug.contains("super-secret-token"),
+		"sensitive header value leaked in Debug: {debug}"
+	);
+	assert!(
+		debug.contains("custom-value"),
+		"non-sensitive header should still be visible in Debug: {debug}"
+	);
 }

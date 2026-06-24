@@ -45,6 +45,7 @@ use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog, TraceSampl
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, Socket, TCPConnectionInfo, TLSConnectionInfo};
+use crate::types::local::InternalBackend;
 use crate::types::{backend, frontend};
 use crate::{ProxyInputs, store, *};
 
@@ -111,14 +112,16 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	if lp.filter.is_some() {
 		log.cel.filter = lp.filter.clone();
 	}
-	if lp.add.is_empty() && lp.remove.is_empty() {
-		return;
-	}
 	if !lp.add.is_empty() {
 		log.cel.fields.add = lp.add.clone();
 	}
 	if !lp.remove.is_empty() {
 		log.cel.fields.remove = lp.remove.clone();
+	}
+	if let Some(database) = &lp.database
+		&& !database.add.is_empty()
+	{
+		log.cel.database_fields.add = database.add.clone();
 	}
 }
 
@@ -1167,6 +1170,9 @@ impl HTTPProxy {
 				sampler.client_sampling = Some(cs.clone());
 				log.cel.cel_context.register_expression(cs.as_ref());
 			}
+			if let Some(f) = &tp.config.filter {
+				log.cel.cel_context.register_log_expression(f.as_ref());
+			}
 			// Re-apply request so any newly required attributes are captured before sampling
 		}
 		log.cel.ctx().maybe_buffer_request_body(req).await;
@@ -2091,6 +2097,10 @@ async fn make_backend_call(
 			let backend_call = BackendCall::from_shared(target_from_request(&req)?, policies);
 			(backend_call, http::ext_proc::InferencePoolRouter::default())
 		},
+		Backend::Internal(_, _) => (
+			BackendCall::from_shared(Target::Hostname("internal".into(), 80), policies),
+			http::ext_proc::InferencePoolRouter::default(),
+		),
 		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();
 			let backend = backend.clone();
@@ -2354,6 +2364,32 @@ async fn make_backend_call(
 		&mut req,
 	)
 	.await?;
+	if let Backend::Internal(_, internal) = backend {
+		apply_internal_path(&mut req, internal).map_err(ProxyError::Processing)?;
+		let admin = inputs.admin.clone().ok_or_else(|| {
+			ProxyError::ProcessingString("internal backend requires admin service".to_string())
+		})?;
+		let outbound_start = std::time::Instant::now();
+		log.add(|l| {
+			if l.request_processing_duration.is_none() {
+				l.request_processing_duration = Some(l.request_processing_start.elapsed());
+			}
+		});
+		let resp = admin.handle(req).await;
+		let outbound_end = Instant::now();
+		log.add(|l| {
+			l.metrics
+				.upstream_call_duration
+				.get_or_create(&OutboundCallLabels {
+					kind: OutboundCallKind::Primary,
+					subtype: OutboundCallSubtype::Http,
+				})
+				.observe((outbound_end - outbound_start).as_secs_f64());
+			l.upstream_duration = Some(outbound_end - outbound_start);
+			l.response_processing_start = Some(outbound_end);
+		});
+		return Ok(resp);
+	}
 	let transport = build_backend_transport(&inputs, &backend_call, hbone_source).await?;
 	dtrace::snapshot!(Request, "final request", &req);
 	let request_body_limit = crate::http::buffer_limit(&req);
@@ -2513,7 +2549,7 @@ fn build_connect_backend_call(
 			policies,
 		)),
 		Backend::Invalid => Err(ProxyError::BackendDoesNotExist),
-		Backend::AI(_, _) | Backend::MCP(_, _) | Backend::Aws(_, _) => {
+		Backend::AI(_, _) | Backend::MCP(_, _) | Backend::Aws(_, _) | Backend::Internal(_, _) => {
 			Err(ProxyError::InvalidBackendType)
 		},
 	}
@@ -3576,6 +3612,26 @@ fn apply_auto_hostname(req: &mut Request, target: &Target) -> Result<(), ProxyEr
 		Ok(())
 	})
 	.map_err(ProxyError::Processing)
+}
+
+fn apply_internal_path(req: &mut Request, internal: &InternalBackend) -> Result<(), anyhow::Error> {
+	let InternalBackend::Path(target) = internal else {
+		return Ok(());
+	};
+	let target = if target.starts_with('/') {
+		target.to_string()
+	} else {
+		format!("/{target}")
+	};
+
+	let query = req.uri().query().map(str::to_string);
+	http::modify_req_uri(req, |uri| {
+		uri.path_and_query = Some(match query.as_deref() {
+			Some(query) => format!("{target}?{query}").parse()?,
+			None => target.parse()?,
+		});
+		Ok(())
+	})
 }
 
 pub struct BackendCall {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -9,7 +10,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"

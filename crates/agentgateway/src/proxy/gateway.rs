@@ -27,7 +27,7 @@ use crate::store::{BindEvent, BindListeners, FrontendPolices};
 use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
-	Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
+	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
 };
 use crate::transport::tls::TlsInfo;
 use crate::types::agent::{
@@ -636,7 +636,48 @@ impl Gateway {
 				let _ = Self::terminate_gateway_hbone(inputs, raw_stream, policies, drain).await;
 			},
 			TunnelProtocol::Connect => {
-				let err = Self::terminate_connect_tunnel(inputs, raw_stream, policies, drain).await;
+				// Terminate the OUTER TLS (when the bind is TLS) BEFORE serving CONNECT,
+				// so the CONNECT request and its headers are encrypted on the wire.
+				// Without this, a `tunnelProtocol: Connect` bind would ignore its listener
+				// TLS config and serve CONNECT in plaintext on the raw socket. Any inner
+				// TLS is terminated separately when the tunnel re-enters the destination
+				// bind (maybe_terminate_tls in proxy_bind).
+				let stream = if matches!(bind_protocol, BindProtocol::tls) {
+					match Self::maybe_terminate_tls(
+						inputs.clone(),
+						raw_stream,
+						&policies,
+						bind_name.clone(),
+						true,
+					)
+					.await
+					{
+						Ok((listener, tls_stream)) => {
+							// A TLS-passthrough listener (`ListenerProtocol::TLS(None)`) does not
+							// terminate TLS, so `tls_stream` is still encrypted. Serving CONNECT
+							// would parse HTTP from ciphertext and fail opaquely. CONNECT requires
+							// plaintext to read the request, so passthrough is incompatible; reject
+							// with an actionable error instead.
+							if matches!(listener.protocol, ListenerProtocol::TLS(None)) {
+								warn!(
+									src.addr = %peer_addr,
+									"cannot serve CONNECT tunnel: listener {} is TLS passthrough (no termination); \
+									 configure TLS termination on this listener to use tunnelProtocol: Connect",
+									listener.name.listener_name,
+								);
+								return;
+							}
+							tls_stream
+						},
+						Err(e) => {
+							warn!(src.addr = %peer_addr, "connect tunnel TLS termination error: {e}");
+							return;
+						},
+					}
+				} else {
+					raw_stream
+				};
+				let err = Self::terminate_connect_tunnel(inputs, stream, policies, drain).await;
 				if let Err(e) = err {
 					warn!(src.addr = %peer_addr, "connect tunnel error: {e}");
 				}
@@ -690,6 +731,20 @@ impl Gateway {
 					let Some(upgrade) = req.extensions_mut().remove::<hyper::upgrade::OnUpgrade>() else {
 						return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
 					};
+					// Snapshot the CONNECT request headers so they can be surfaced to CEL
+					// policies on the tunneled request via `source.connectHeaders`. Mark
+					// well-known sensitive headers so their values are redacted in debug logs
+					// (SourceContext derives Debug and is printed via DebugExtensions) and by
+					// the CEL `source.connectHeaders.redacted()` accessor.
+					let mut connect_headers = req.headers().clone();
+					for (name, value) in connect_headers.iter_mut() {
+						if matches!(
+							name.as_str(),
+							"authorization" | "proxy-authorization" | "cookie" | "set-cookie"
+						) {
+							value.set_sensitive(true);
+						}
+					}
 					let authority = match req.uri().authority() {
 						Some(authority) => authority.as_str(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
@@ -725,7 +780,8 @@ impl Gateway {
 								return;
 							},
 						};
-						let downstream = Socket::from_upgraded(connection, target_address, downstream);
+						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
+						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
 					});
 
@@ -789,11 +845,18 @@ impl Gateway {
 			&inputs.cfg.network,
 			tcp.peer_addr.ip(),
 		);
-		let src = crate::cel::SourceContext::from_tcp_connection(
+		let mut src = crate::cel::SourceContext::from_tcp_connection(
 			tcp,
 			tls.and_then(|t| t.src_identity.clone()),
 			unverified_workload,
 		);
+		// Surface CONNECT tunnel headers (captured in `terminate_connect_tunnel`) on
+		// the source context so request policies can reference `source.connectHeaders`.
+		// Move the map out of the stream extension (it has no other consumer) to avoid
+		// cloning the header map.
+		if let Some(ch) = stream.ext_mut().remove::<ConnectHeaders>() {
+			src.connect_headers = ch.0;
+		}
 		if let Some(network_authorization) = policies.network_authorization.as_ref()
 			&& let Err(e) = network_authorization.apply(&src)
 		{
