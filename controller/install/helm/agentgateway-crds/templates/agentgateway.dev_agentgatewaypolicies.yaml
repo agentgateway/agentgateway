@@ -7008,6 +7008,14 @@ spec:
                                 uint32
                               rule: (self >= 1 && self <= 4294967295) || self.size()
                                 > 0
+                          onOverflow:
+                            description: |-
+                              Action to perform when request/response body overflows the buffer
+                              If unset, defaults to Error, returns error 413 if request body is too large and 502 if response body is too large
+                            enum:
+                            - ContinueStreaming
+                            - ReturnError
+                            type: string
                         type: object
                       response:
                         description: Response body buffering settings.
@@ -7028,6 +7036,14 @@ spec:
                                 uint32
                               rule: (self >= 1 && self <= 4294967295) || self.size()
                                 > 0
+                          onOverflow:
+                            description: |-
+                              Action to perform when request/response body overflows the buffer
+                              If unset, defaults to Error, returns error 413 if request body is too large and 502 if response body is too large
+                            enum:
+                            - ContinueStreaming
+                            - ReturnError
+                            type: string
                         type: object
                     type: object
                     x-kubernetes-validations:

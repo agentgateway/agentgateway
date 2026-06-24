@@ -6109,9 +6109,20 @@
           ],
           "format": "uint",
           "minimum": 0
+        },
+        "onOverflow": {
+          "$ref": "#/$defs/OverflowAction",
+          "default": "returnError"
         }
       },
       "additionalProperties": false
+    },
+    "OverflowAction": {
+      "type": "string",
+      "enum": [
+        "returnError",
+        "continueStreaming"
+      ]
     },
     "TimeoutPolicy": {
       "type": "object",

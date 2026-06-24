@@ -2281,8 +2281,10 @@
 |`binds[].listeners[].routes[].policies.buffer`|object|Buffer request and response bodies.|
 |`binds[].listeners[].routes[].policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
 |`binds[].listeners[].routes[].policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`binds[].listeners[].routes[].policies.buffer.request.onOverflow`|enum|Possible values: `returnError`, `continueStreaming`.|
 |`binds[].listeners[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`binds[].listeners[].routes[].policies.buffer.response.onOverflow`|enum|Possible values: `returnError`, `continueStreaming`.|
 |`binds[].listeners[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -10033,8 +10035,10 @@
 |`policies[].policy.buffer`|object|Buffer request and response bodies.|
 |`policies[].policy.buffer.request`|object|Buffer incoming request bodies before forwarding.|
 |`policies[].policy.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`policies[].policy.buffer.request.onOverflow`|enum|Possible values: `returnError`, `continueStreaming`.|
 |`policies[].policy.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`policies[].policy.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`policies[].policy.buffer.response.onOverflow`|enum|Possible values: `returnError`, `continueStreaming`.|
 |`policies[].policy.timeout`|object|Set request timeout limits.|
 |`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -16631,8 +16635,10 @@
 |`routeGroups[].routes[].policies.buffer`|object|Buffer request and response bodies.|
 |`routeGroups[].routes[].policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
 |`routeGroups[].routes[].policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`routeGroups[].routes[].policies.buffer.request.onOverflow`|enum|Possible values: `returnError`, `continueStreaming`.|
 |`routeGroups[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`routeGroups[].routes[].policies.buffer.response.onOverflow`|enum|Possible values: `returnError`, `continueStreaming`.|
 |`routeGroups[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -26437,8 +26443,10 @@
 |`mcp.policies.buffer`|object|Buffer request and response bodies.|
 |`mcp.policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
 |`mcp.policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`mcp.policies.buffer.request.onOverflow`|enum|Possible values: `returnError`, `continueStreaming`.|
 |`mcp.policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`mcp.policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`mcp.policies.buffer.response.onOverflow`|enum|Possible values: `returnError`, `continueStreaming`.|
 |`mcp.policies.timeout`|object|Set request timeout limits.|
 |`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
