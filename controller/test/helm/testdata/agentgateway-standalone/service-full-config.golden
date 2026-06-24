@@ -184,11 +184,11 @@ spec:
   ports:
   - name: "public-http"
     protocol: "TCP"
-    port: 8080
+    port: 80
     targetPort: 8080
   - name: "public-https"
     protocol: "TCP"
-    port: 8443
+    port: 443
     targetPort: 8443
   selector:
     app.kubernetes.io/name: agentgateway-standalone

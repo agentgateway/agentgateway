@@ -115,11 +115,11 @@ gateway:
     trafficDistribution: PreferClose
     ports:
     - name: public-http
-      port: 8080
+      port: 80
       targetPort: 8080
       protocol: TCP
     - name: public-https
-      port: 8443
+      port: 443
       targetPort: 8443
       protocol: TCP
   extraServices:
@@ -220,16 +220,10 @@ func TestStandaloneChartDefaultRender(t *testing.T) {
 	require.Contains(t, out, "strategy:\n    type: Recreate")
 	require.Contains(t, out, "name: agentgateway-standalone-admin")
 	require.Contains(t, out, "name: agentgateway-standalone-gateway")
-	require.Contains(t, out, "name: \"http\"")
-	require.Contains(t, out, "targetPort: 8080")
-	require.Contains(t, out, "name: \"https\"")
-	require.Contains(t, out, "targetPort: 8443")
-	require.Contains(t, out, "name: \"mcp\"")
-	require.Contains(t, out, "port: 3000")
-	require.Contains(t, out, "targetPort: 3000")
-	require.Contains(t, out, "name: \"llm\"")
-	require.Contains(t, out, "port: 4000")
-	require.Contains(t, out, "targetPort: 4000")
+	require.Contains(t, out, "- name: \"http\"\n    protocol: \"TCP\"\n    port: 80\n    targetPort: 8080")
+	require.Contains(t, out, "- name: \"https\"\n    protocol: \"TCP\"\n    port: 443\n    targetPort: 8443")
+	require.Contains(t, out, "- name: \"mcp\"\n    protocol: \"TCP\"\n    port: 3000\n    targetPort: 3000")
+	require.Contains(t, out, "- name: \"llm\"\n    protocol: \"TCP\"\n    port: 4000\n    targetPort: 4000")
 	require.NotContains(t, out, "net.ipv4.ip_unprivileged_port_start")
 	require.NotContains(t, out, "runAsUser: 10101")
 	require.NotContains(t, out, "runAsGroup: 10101")

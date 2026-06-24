@@ -102,11 +102,11 @@ spec:
   ports:
   - name: "http"
     protocol: "TCP"
-    port: 8080
+    port: 80
     targetPort: 8080
   - name: "https"
     protocol: "TCP"
-    port: 8443
+    port: 443
     targetPort: 8443
   - name: "mcp"
     protocol: "TCP"
