@@ -291,6 +291,7 @@ async fn apply_backend_policies(
 		mcp_guardrails: _,
 		// Applied elsewhere
 		inference_routing: _,
+		authorization,
 		ext_authz,
 		request_header_modifier,
 		response_header_modifier,
@@ -312,6 +313,10 @@ async fn apply_backend_policies(
 		.as_ref()
 		.unwrap_or(&dh)
 		.apply(req, backend_call.http_version_override);
+
+	let _ = authorization
+		.apply("backend authorization", &client, log, req, rp.headers())
+		.await?;
 
 	// Ext auth has no response-side
 	let _ = ext_authz

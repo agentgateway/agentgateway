@@ -1477,54 +1477,6 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 	t
 }
 
-async fn setup_local_llm_config_with_user_model_header(yaml: &str) -> TestBind {
-	let t = setup_proxy_test("{}").unwrap();
-	let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
-	let mut normalized = crate::types::local::NormalizedLocalConfig::from(
-		t.pi.cfg.as_ref(),
-		&resources,
-		t.pi.cfg.gateway(),
-		yaml,
-	)
-	.await
-	.expect("local config normalizes");
-	let transformation = crate::http::transformation_cel::Transformation::try_from_local_config(
-		crate::http::transformation_cel::LocalTransformationConfig {
-			request: Some(crate::http::transformation_cel::LocalTransform {
-				add: vec![(
-					strng::literal!("x-user-model"),
-					strng::literal!("metadata.agentgateway_user_model"),
-				)],
-				..Default::default()
-			}),
-			response: None,
-		},
-		true,
-	)
-	.expect("transformation config");
-	let route = normalized
-		.listener_routes
-		.iter_mut()
-		.flat_map(|(_, routes)| routes)
-		.find(|route| route.key == "llm:request")
-		.expect("LLM request route");
-	route
-		.inline_policies
-		.push(crate::types::agent::TrafficPolicy::Transformation(
-			crate::store::RequestPolicy::single(transformation),
-		));
-	t.pi.stores.binds.sync_local(
-		normalized.binds,
-		normalized.listener_routes,
-		normalized.listener_tcp_routes,
-		normalized.policies,
-		normalized.backends,
-		normalized.route_groups,
-		Default::default(),
-	);
-	t
-}
-
 #[tokio::test]
 async fn llm_local_router_handles_models_virtual_model_and_missing_model() {
 	let mock = body_mock(include_bytes!(
@@ -1539,19 +1491,30 @@ llm:
   - name: real-model
     visibility: internal
     provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-model-auth"] == "yes"'
+    params:
+      baseUrl: http://{}
+  - name: direct-model
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-model-auth"] == "yes"'
     params:
       baseUrl: http://{}
   virtualModels:
   - name: public-model
     routing:
-      weighted:
+      failover:
         targets:
         - model: real-model
-          weight: 1
+          priority: 0
 "#,
+		mock.address(),
 		mock.address()
 	);
-	let t = setup_local_llm_config_with_user_model_header(&config).await;
+	let t = setup_local_llm_config(&config).await;
 	let io = t.serve_http(strng::literal!("bind/4000"));
 
 	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
@@ -1567,20 +1530,56 @@ llm:
 		.collect::<Vec<_>>();
 	assert_eq!(model_ids, vec!["public-model"]);
 
-	let mut request_body: Value = serde_json::from_slice(include_bytes!(
-		"../llm/tests/requests/completions/basic.json"
-	))
-	.expect("request JSON");
-	request_body["model"] = json!("public-model");
-	let request_body = serde_json::to_vec(&request_body).expect("serialized request");
+	let res = send_request_headers(
+		io.clone(),
+		Method::GET,
+		"http://lo/v1/models",
+		&[("x-model-auth", "yes")],
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("models JSON");
+	let model_ids = models["data"]
+		.as_array()
+		.expect("model list")
+		.iter()
+		.map(|model| model["id"].as_str().expect("model id"))
+		.collect::<Vec<_>>();
+	assert_eq!(model_ids, vec!["direct-model", "public-model"]);
+
+	let request_body = |model: &str| {
+		let mut body: Value = serde_json::from_slice(include_bytes!(
+			"../llm/tests/requests/completions/basic.json"
+		))
+		.expect("request JSON");
+		body["model"] = json!(model);
+		serde_json::to_vec(&body).expect("serialized request")
+	};
 
 	let res = send_request_body(
 		io.clone(),
 		Method::POST,
 		"http://lo/v1/chat/completions",
-		&request_body,
+		&request_body("public-model"),
 	)
 	.await;
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
+	assert_eq!(
+		mock
+			.received_requests()
+			.await
+			.expect("upstream requests")
+			.len(),
+		0
+	);
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+		.header("x-model-auth", "yes")
+		.body(Body::from(request_body("public-model")))
+		.send(io.clone())
+		.await
+		.expect("virtual model request");
 	assert_eq!(res.status(), StatusCode::OK);
 	read_body_raw(res.into_body()).await;
 
@@ -1589,15 +1588,38 @@ llm:
 	let upstream_body: Value =
 		serde_json::from_slice(&upstream_requests[0].body).expect("upstream request JSON");
 	assert_eq!(upstream_body["model"], "real-model");
+
+	let res = send_request_body(
+		io.clone(),
+		Method::POST,
+		"http://lo/v1/chat/completions",
+		&request_body("direct-model"),
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::FORBIDDEN);
 	assert_eq!(
-		upstream_requests[0]
-			.headers
-			.get("x-user-model")
-			.expect("user model header")
-			.to_str()
-			.expect("user model header value"),
-		"public-model"
+		mock
+			.received_requests()
+			.await
+			.expect("upstream requests")
+			.len(),
+		1
 	);
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+		.header("x-model-auth", "yes")
+		.body(Body::from(request_body("direct-model")))
+		.send(io.clone())
+		.await
+		.expect("direct model request");
+	assert_eq!(res.status(), StatusCode::OK);
+	read_body_raw(res.into_body()).await;
+
+	let upstream_requests = mock.received_requests().await.expect("upstream requests");
+	assert_eq!(upstream_requests.len(), 2);
+	let upstream_body: Value =
+		serde_json::from_slice(&upstream_requests[1].body).expect("upstream request JSON");
+	assert_eq!(upstream_body["model"], "direct-model");
 
 	let missing = json!({
 		"model": "missing-model",
@@ -1620,7 +1642,7 @@ llm:
 			.await
 			.expect("upstream requests")
 			.len(),
-		1
+		2
 	);
 }
 

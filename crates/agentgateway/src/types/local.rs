@@ -1373,19 +1373,19 @@ impl LocalBackend {
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> Result<BackendWithPolicies, anyhow::Error> {
 		let mut inline_policies = match policies {
-			Some(p) => {
-				LocalBackendPolicies {
-					simple: p.simple,
-					mcp_authorization: p.mcp_authorization,
-					mcp_guardrails: p.mcp_guardrails,
-					a2a: None,
-					inference_routing: None,
-					ai: None,
-					response_header_modifier: None,
-					request_redirect: None,
-					health: None,
-					ext_authz: None,
-				}
+			Some(p) => { LocalBackendPolicies {
+				simple: p.simple,
+				mcp_authorization: p.mcp_authorization,
+				mcp_guardrails: p.mcp_guardrails,
+				a2a: None,
+				inference_routing: None,
+				ai: None,
+				response_header_modifier: None,
+				request_redirect: None,
+				health: None,
+				ext_authz: None,
+				authorization: None,
+			}
 				.translate(resources)
 				.await?
 			},
@@ -2052,6 +2052,9 @@ pub struct LocalBackendPolicies {
 	/// Authorize incoming requests by calling an external authorization service after this backend is selected.
 	#[serde(default)]
 	pub ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Authorize incoming requests after this backend is selected.
+	#[serde(default)]
+	pub authorization: Option<Authorization>,
 
 	/// Authorization rules for MCP requests.
 	#[serde(default)]
@@ -2125,6 +2128,7 @@ impl LocalBackendPolicies {
 			request_redirect,
 			health,
 			ext_authz,
+			authorization,
 		} = self;
 		let mut pols = vec![];
 		if let Some(p) = tcp {
@@ -2175,6 +2179,9 @@ impl LocalBackendPolicies {
 			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
 				p.with_configured_cache_store(),
 			)))
+		}
+		if let Some(p) = authorization {
+			pols.push(BackendTrafficPolicy::Authorization(p))
 		}
 		if let Some(mut p) = ai {
 			p.compile_model_alias_patterns();
@@ -2647,7 +2654,6 @@ struct ResolvedLLMModelTarget {
 	name: String,
 	provider: NamedAIProvider,
 	inline_policies: Vec<BackendTrafficPolicy>,
-	authorization: Option<Authorization>,
 }
 
 struct LocalLLMModelRegistry {
@@ -2830,17 +2836,6 @@ impl ResolvedLLMModelRegistry {
 			}
 		}
 		bail!("virtual model target {target} does not match any llm.models entry")
-	}
-
-	fn resolve_failover_target(&self, target: &str) -> anyhow::Result<ResolvedLLMModelTarget> {
-		let resolved = self.resolve(target)?;
-		if resolved.authorization.is_some() {
-			// Technically this is possible but would require us to move authorization down into post-LB.
-			bail!(
-				"virtual model target {target} has authorization; failover virtual models cannot target authorized models"
-			);
-		}
-		Ok(resolved)
 	}
 }
 
@@ -3262,6 +3257,9 @@ async fn convert_llm_config(
 				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
 			)?));
 		}
+		if let Some(authorization) = model_config.authorization.clone() {
+			pols.push(BackendTrafficPolicy::Authorization(authorization));
+		}
 		let prompt_guard =
 			merge_prompt_guards(shared_prompt_guard.clone(), model_config.guardrails.clone());
 		pols.push(BackendTrafficPolicy::AI(Arc::new(llm::Policy {
@@ -3285,7 +3283,6 @@ async fn convert_llm_config(
 			name: model_config.name.clone(),
 			provider: resolved_provider,
 			inline_policies: resolved_inline_policies,
-			authorization: model_config.authorization.clone(),
 		});
 
 		router_models.push(llm::model_router::ModelRoute {
@@ -3356,7 +3353,7 @@ async fn convert_llm_config(
 					.map(|(_, targets)| {
 						targets
 							.map(|target| {
-								let resolved = resolved_models.resolve_failover_target(&target.model)?;
+								let resolved = resolved_models.resolve(&target.model)?;
 								let mut provider = resolved.provider.clone();
 								provider.name = strng::new(&target.model);
 								ensure_ai_provider_model(&mut provider.provider, &target.model);

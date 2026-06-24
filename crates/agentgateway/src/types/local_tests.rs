@@ -574,36 +574,6 @@ llm:
 }
 
 #[tokio::test]
-async fn test_llm_failover_virtual_model_rejects_authorized_target() {
-	let err = normalize_test_config(
-		r#"
-llm:
-  models:
-  - name: concrete
-    provider: openAI
-    authorization:
-      rules:
-      - 'request.headers["x-user"] == "admin"'
-  virtualModels:
-  - name: smart
-    routing:
-      failover:
-        targets:
-        - model: concrete
-          priority: 0
-"#,
-	)
-	.await
-	.expect_err("failover target authorization cannot be enforced after provider selection");
-	assert!(
-		err.to_string().contains(
-			"virtual model target concrete has authorization; failover virtual models cannot target authorized models"
-		),
-		"{err:?}"
-	);
-}
-
-#[tokio::test]
 async fn test_llm_conditional_virtual_model_allows_authorized_internal_target() {
 	let normalized = normalize_test_config(
 		r#"
