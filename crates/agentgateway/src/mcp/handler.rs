@@ -220,6 +220,23 @@ impl Relay {
 		}
 		Ok(())
 	}
+
+	pub fn fork_with_inputs(&self, inputs: &RelayInputs) -> Result<Relay, mcp::Error> {
+		let new = Relay::new(
+			inputs.backend.clone(),
+			inputs.policies.clone(),
+			inputs.client.clone(),
+		)?;
+		for (name, old) in self.upstreams.iter_named() {
+			if let Ok(new_up) = new.upstreams.get(name.as_str())
+				&& let Some(s) = old.get_session_state()
+			{
+				new_up.set_session_id(s.session.as_deref(), s.backend);
+			}
+		}
+		Ok(new)
+	}
+
 	pub fn is_multiplexing(&self) -> bool {
 		self.upstreams.is_multiplexing
 	}
