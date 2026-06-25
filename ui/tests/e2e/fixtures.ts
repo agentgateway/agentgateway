@@ -423,3 +423,19 @@ async function json(
     body: JSON.stringify(body),
   });
 }
+
+export function configWithClaudeSubscriptionKey(): TestConfig {
+  const config = populatedConfig();
+  const llm = config.llm as {
+    models: Array<Record<string, unknown>>;
+    providers?: unknown[];
+  };
+  llm.models.push({
+    name: "claude-sub",
+    provider: "anthropic",
+    params: {
+      apiKey: "sk-ant-oat01-testkey1234567890abcdef",
+    },
+  });
+  return config;
+}

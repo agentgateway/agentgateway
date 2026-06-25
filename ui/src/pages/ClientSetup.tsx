@@ -10,6 +10,7 @@ import {
   StatusBanner,
 } from "../components/Primitives";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
+import { claudeSubscriptionWarning } from "../claudeSubscription";
 import { hasKeyValue, keyLabel, maskKey } from "../credentialDisplay";
 import { gatewayOrigin } from "../gatewayUrls";
 import { useGatewayConfig } from "../hooks";
@@ -131,6 +132,17 @@ export function ClientSetupPage() {
       {modelOptions.length === 0 && !config.isLoading ? (
         <StatusBanner state="warn" title="No models configured">
           Create an LLM model before wiring clients to the gateway.
+        </StatusBanner>
+      ) : null}
+      {claudeSubscriptionWarning(
+        selectedModelConfig,
+        config.data?.llm?.providers ?? [],
+      ) ? (
+        <StatusBanner state="warn" title="Claude subscription key detected">
+          {claudeSubscriptionWarning(
+            selectedModelConfig,
+            config.data?.llm?.providers ?? [],
+          )}
         </StatusBanner>
       ) : null}
 
