@@ -107,7 +107,7 @@ libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
-rmcp = { version = "1.5", features = [
+rmcp = { version = "1.8", features = [
     "client",
     "server",
     "base64",
@@ -189,7 +189,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "1.5", features = [
+rmcp = { version = "1.8", features = [
     "client",
     "server",
     "base64",

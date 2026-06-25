@@ -910,7 +910,7 @@ fn into_sse_stream(
 			},
 			Err(e) => ServerJsonRpcMessage::error(
 				ErrorData::internal_error(e.to_string(), None),
-				request_id.clone(),
+				Some(request_id.clone()),
 			),
 		};
 		// TODO: is it ok to have no event_id here?
@@ -938,7 +938,7 @@ async fn apply_guardrails_response_intercept(
 			tracing::warn!(error = %e, "mcpGuardrails: failed to serialize result for inspection");
 			return Some(ServerJsonRpcMessage::error(
 				ErrorData::internal_error(format!("mcpGuardrails: serialize result: {e}"), None),
-				resp.id.clone(),
+				Some(resp.id.clone()),
 			));
 		},
 	};
@@ -956,7 +956,7 @@ async fn apply_guardrails_response_intercept(
 		Outcome::Mutated(new_result) => {
 			Some(ServerJsonRpcMessage::response(new_result, resp.id.clone()))
 		},
-		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, resp.id.clone())),
+		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, Some(resp.id.clone()))),
 	}
 }
 
@@ -972,7 +972,7 @@ fn capture_terminal_mcp_payload(
 			}
 			true
 		},
-		ServerJsonRpcMessage::Error(error) if error.id == *request_id => {
+		ServerJsonRpcMessage::Error(error) if error.id.as_ref() == Some(request_id) => {
 			log.non_atomic_mutate(|mcp| mcp.capture_call_error(&error.error));
 			true
 		},
@@ -1019,7 +1019,7 @@ mod tests {
 			)),
 			Ok(ServerJsonRpcMessage::error(
 				ErrorData::internal_error("later error", None),
-				RequestId::Number(42),
+				Some(RequestId::Number(42)),
 			)),
 		]);
 
@@ -1070,7 +1070,7 @@ mod tests {
 
 		let stream = stream::iter(vec![Ok(ServerJsonRpcMessage::error(
 			ErrorData::internal_error("boom", None),
-			RequestId::Number(7),
+			Some(RequestId::Number(7)),
 		))]);
 		let response = messages_to_response(RequestId::Number(7), stream, Some(log.clone())).unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
