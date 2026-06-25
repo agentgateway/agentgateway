@@ -8,7 +8,6 @@ use super::{
 	ClientConfig, CookieSecureMode, Error, OidcPolicy, PolicyId, Provider, ProviderEndpoint,
 	RedirectUri, SameSiteMode, SessionConfig, dedupe_scopes, session,
 };
-use crate::client::Client;
 use crate::http::oauth::{
 	TokenEndpointAuth, openid_configuration_metadata_url, parse_token_endpoint_auth_methods,
 };
@@ -106,17 +105,20 @@ struct DiscoveredProviderMetadata {
 impl LocalOidcConfig {
 	pub(crate) async fn compile(
 		self,
-		client: Client,
+		resources: &crate::resource_manager::ResourceFetcher,
 		policy_id: PolicyId,
 		oidc_cookie_encoder: &crate::http::sessionpersistence::Encoder,
 	) -> Result<OidcPolicy, Error> {
 		self
-			.resolve(client)
+			.resolve(resources)
 			.await?
 			.compile(policy_id, oidc_cookie_encoder)
 	}
 
-	async fn resolve(self, client: Client) -> Result<PreparedOidcPolicy, Error> {
+	async fn resolve(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> Result<PreparedOidcPolicy, Error> {
 		let LocalOidcConfig {
 			issuer,
 			discovery,
@@ -146,8 +148,8 @@ impl LocalOidcConfig {
 						url: default_discovery_url(&issuer)?,
 					},
 				};
-				let discovered = discover_provider_metadata(client.clone(), &issuer, discovery).await?;
-				let id_token_jwks = load_jwks(client, discovered.jwks, "discovered jwks source").await?;
+				let discovered = discover_provider_metadata(resources, &issuer, discovery).await?;
+				let id_token_jwks = load_jwks(resources, discovered.jwks, "discovered jwks source").await?;
 
 				PreparedOidcProvider {
 					issuer,
@@ -164,7 +166,7 @@ impl LocalOidcConfig {
 					));
 				}
 				resolve_explicit_provider(
-					client,
+					resources,
 					issuer,
 					authorization_endpoint.expect("checked above"),
 					token_endpoint.expect("checked above"),
@@ -192,12 +194,15 @@ impl LocalOidcConfig {
 }
 
 async fn discover_provider_metadata(
-	client: Client,
+	resources: &crate::resource_manager::ResourceFetcher,
 	issuer: &str,
 	discovery: FileInlineOrRemote,
 ) -> Result<DiscoveredProviderMetadata, Error> {
 	let document = discovery
-		.load::<OidcDiscoveryDocument>(client)
+		.load::<OidcDiscoveryDocument>(
+			resources,
+			crate::resource_manager::ResourceKind::OidcDiscovery,
+		)
 		.await
 		.map_err(|e| {
 			Error::Config(format!(
@@ -236,14 +241,14 @@ async fn discover_provider_metadata(
 }
 
 async fn resolve_explicit_provider(
-	client: Client,
+	resources: &crate::resource_manager::ResourceFetcher,
 	issuer: String,
 	authorization_endpoint: ProviderEndpoint,
 	token_endpoint: ProviderEndpoint,
 	token_endpoint_auth: TokenEndpointAuth,
 	jwks: FileInlineOrRemote,
 ) -> Result<PreparedOidcProvider, Error> {
-	let id_token_jwks = load_jwks(client, jwks, "explicit jwks source").await?;
+	let id_token_jwks = load_jwks(resources, jwks, "explicit jwks source").await?;
 
 	Ok(PreparedOidcProvider {
 		issuer,
@@ -265,17 +270,20 @@ fn default_discovery_url(issuer: &str) -> Result<http::Uri, Error> {
 }
 
 async fn load_jwks(
-	client: Client,
+	resources: &crate::resource_manager::ResourceFetcher,
 	jwks: FileInlineOrRemote,
 	source: &'static str,
 ) -> Result<JwkSet, Error> {
-	let jwks = jwks.load::<JwkSet>(client).await.map_err(|e| {
-		Error::Config(format!(
-			"failed to load oidc jwks from {} {}: {e}",
-			source,
-			describe_file_inline_or_remote(&jwks)
-		))
-	})?;
+	let jwks = jwks
+		.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
+		.await
+		.map_err(|e| {
+			Error::Config(format!(
+				"failed to load oidc jwks from {} {}: {e}",
+				source,
+				describe_file_inline_or_remote(&jwks)
+			))
+		})?;
 	Ok(jwks)
 }
 

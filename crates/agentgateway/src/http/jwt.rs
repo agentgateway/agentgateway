@@ -8,7 +8,6 @@ use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use secrecy::SecretString;
 use serde_json::{Map, Value};
 
-use crate::client::Client;
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::dtrace::{self};
@@ -245,7 +244,10 @@ impl Default for JWTValidationOptions {
 }
 
 impl LocalJwtConfig {
-	pub async fn try_into(self, client: Client) -> Result<Jwt, JwkError> {
+	pub async fn try_into(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> Result<Jwt, JwkError> {
 		let (mode, authorization_location, providers_cfg) = match self {
 			LocalJwtConfig::Multi {
 				mode,
@@ -275,7 +277,7 @@ impl LocalJwtConfig {
 		for pc in providers_cfg {
 			let jwks: JwkSet = pc
 				.jwks
-				.load::<JwkSet>(client.clone())
+				.load::<JwkSet>(resources, crate::resource_manager::ResourceKind::Jwks)
 				.await
 				.map_err(JwkError::JwkLoadError)?;
 			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;

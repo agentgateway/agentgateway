@@ -1479,8 +1479,13 @@ async fn test_openapi_from_url() {
 
 	// Convert to runtime backends
 	let backend_name = ResourceName::new("test-users".into(), "".into());
+	let resources = crate::resource_manager::ResourceFetcher::direct(client);
 	let result = local_backend
-		.as_backends(backend_name, client, crate::mcp::DEFAULT_SESSION_IDLE_TTL)
+		.as_backends(
+			backend_name,
+			&resources,
+			crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+		)
 		.await;
 
 	// Verify the conversion succeeded

@@ -16,9 +16,9 @@ use crate::types::agent::{parse_cert, parse_key};
 use crate::{apply, transport};
 
 pub static SYSTEM_TRUST: Lazy<BackendTLS> =
-	Lazy::new(|| LocalBackendTLS::default().try_into().unwrap());
+	Lazy::new(|| ResolvedBackendTLS::default().try_into().unwrap());
 pub static INSECURE_TRUST: Lazy<BackendTLS> = Lazy::new(|| {
-	LocalBackendTLS {
+	ResolvedBackendTLS {
 		cert: None,
 		key: None,
 		root: None,
@@ -285,11 +285,42 @@ impl ResolvedBackendTLS {
 }
 
 impl LocalBackendTLS {
-	pub fn try_into(self) -> anyhow::Result<BackendTLS> {
+	pub async fn try_into(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<BackendTLS> {
+		let cert = match self.cert {
+			Some(path) => Some(
+				resources
+					.fetch(crate::resource_manager::ResourceRef::File(path))
+					.await?
+					.to_vec(),
+			),
+			None => None,
+		};
+		let key = match self.key {
+			Some(path) => Some(
+				resources
+					.fetch(crate::resource_manager::ResourceRef::File(path))
+					.await?
+					.to_vec(),
+			),
+			None => None,
+		};
+		let root = match self.root {
+			Some(path) => Some(
+				resources
+					.fetch(crate::resource_manager::ResourceRef::File(path))
+					.await?
+					.to_vec(),
+			),
+			None => None,
+		};
+
 		ResolvedBackendTLS {
-			cert: self.cert.map(fs_err::read).transpose()?,
-			key: self.key.map(fs_err::read).transpose()?,
-			root: self.root.map(fs_err::read).transpose()?,
+			cert,
+			key,
+			root,
 			hostname: self.hostname,
 			insecure: self.insecure,
 			insecure_host: self.insecure_host,

@@ -147,9 +147,11 @@ pub fn setup_llm_named_provider_mock(
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test(config).unwrap();
-	let be = crate::types::local::LocalAIBackend::Provider(provider)
-		.translate()
-		.unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
+	let be = futures::executor::block_on(
+		crate::types::local::LocalAIBackend::Provider(provider).translate(&resources),
+	)
+	.unwrap();
 	let b = Backend::AI(
 		ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 		be,
@@ -816,13 +818,12 @@ impl TestBind {
 	}
 	pub async fn attach_backend(&mut self, p: serde_json::Value) {
 		let b: local::FullLocalBackend = serde_json::from_value(p).unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
 
-		let policies = b
-			.policies
-			.map(|p| p.translate())
-			.transpose()
-			.unwrap()
-			.unwrap_or_default();
+		let policies = match b.policies {
+			Some(p) => p.translate(&resources).await.unwrap(),
+			None => Vec::new(),
+		};
 		let local::FullLocalBackendSpec::Opaque(host) = b.spec else {
 			panic!("attach_backend only supports Opaque (host) backends");
 		};
@@ -840,15 +841,11 @@ impl TestBind {
 	pub async fn attach_route(&mut self, p: serde_json::Value) {
 		let pol: local::LocalRoute = serde_json::from_value(p).unwrap();
 		self.routes += 1;
-		let (route, backends) = local::convert_route(
-			self.pi.upstream.clone(),
-			&self.pi.cfg,
-			pol,
-			self.routes,
-			LISTENER_KEY,
-		)
-		.await
-		.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let (route, backends) =
+			local::convert_route(&resources, &self.pi.cfg, pol, self.routes, LISTENER_KEY)
+				.await
+				.unwrap();
 		for b in backends {
 			self
 				.pi
@@ -867,13 +864,10 @@ impl TestBind {
 	pub async fn attach_route_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(
-			self.pi.upstream.clone(),
-			pol,
-			self.pi.cfg.as_policy_context(oidc_key),
-		)
-		.await
-		.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let pols = local::split_policies(&resources, pol, self.pi.cfg.as_policy_context(oidc_key))
+			.await
+			.unwrap();
 		assert!(pols.backend_policies.is_empty());
 		for v in pols.route_policies {
 			self.policies += 1;
@@ -895,13 +889,10 @@ impl TestBind {
 	pub async fn attach_gateway_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("pol/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(
-			self.pi.upstream.clone(),
-			pol,
-			self.pi.cfg.as_policy_context(&oidc_key),
-		)
-		.await
-		.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let pols = local::split_policies(&resources, pol, self.pi.cfg.as_policy_context(&oidc_key))
+			.await
+			.unwrap();
 		assert!(pols.backend_policies.is_empty());
 		for v in pols.route_policies {
 			self.policies += 1;
@@ -923,13 +914,10 @@ impl TestBind {
 	pub async fn attach_service_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(
-			self.pi.upstream.clone(),
-			pol,
-			self.pi.cfg.as_policy_context(oidc_key),
-		)
-		.await
-		.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let pols = local::split_policies(&resources, pol, self.pi.cfg.as_policy_context(oidc_key))
+			.await
+			.unwrap();
 		assert!(pols.backend_policies.is_empty());
 		for v in pols.route_policies {
 			self.policies += 1;
@@ -951,9 +939,10 @@ impl TestBind {
 		let cfg = serde_json::json!({
 			"frontendPolicies": p,
 		});
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
 		let normalized = local::NormalizedLocalConfig::from(
 			self.pi.cfg.as_ref(),
-			self.pi.upstream.clone(),
+			&resources,
 			self.pi.cfg.gateway(),
 			&serde_json::to_string(&cfg).unwrap(),
 		)
@@ -969,9 +958,8 @@ impl TestBind {
 	}
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(self.pi.upstream.clone(), pol, None)
-			.await
-			.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let pols = local::split_policies(&resources, pol, None).await.unwrap();
 		for v in pols.backend_policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {

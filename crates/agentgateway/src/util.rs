@@ -18,12 +18,13 @@ pub fn is_runtime_shutdown(e: &Error) -> bool {
 
 pub struct WatchedFiles {
 	paths: Vec<PathBuf>,
-	changes: mpsc::Receiver<()>,
+	changes: mpsc::Receiver<FileWatchChange>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WatchFilesOptions {
 	reload_on_disappearance: bool,
+	close_on_removal: bool,
 }
 
 impl WatchFilesOptions {
@@ -31,6 +32,15 @@ impl WatchFilesOptions {
 		self.reload_on_disappearance = reload;
 		self
 	}
+
+	pub fn close_on_removal(mut self, close: bool) -> Self {
+		self.close_on_removal = close;
+		self
+	}
+}
+
+struct FileWatchChange {
+	invalidated: bool,
 }
 
 impl WatchedFiles {
@@ -39,6 +49,12 @@ impl WatchedFiles {
 	}
 	pub async fn changed(&mut self) -> bool {
 		self.changes.recv().await.is_some()
+	}
+
+	/// Waits for the next reload-worthy change and reports whether the underlying
+	/// watch was invalidated by file removal/replacement.
+	pub async fn changed_invalidated(&mut self) -> Option<bool> {
+		self.changes.recv().await.map(|change| change.invalidated)
 	}
 }
 
@@ -110,6 +126,8 @@ pub fn watch_files_with_options(
 			match events {
 				Ok(events) => {
 					let current = resolve_targets(&paths);
+					let invalidated = options.close_on_removal
+						&& batch_invalidates_watch(events.iter().map(|e| &**e), &paths, &targets);
 					let triggered = batch_triggers_reload(
 						events.iter().map(|e| &**e),
 						&paths,
@@ -118,7 +136,15 @@ pub fn watch_files_with_options(
 						options,
 					);
 					targets = current;
-					if triggered && change_tx.send(()).await.is_err() {
+					if triggered
+						&& change_tx
+							.send(FileWatchChange { invalidated })
+							.await
+							.is_err()
+					{
+						break;
+					}
+					if invalidated {
 						break;
 					}
 				},
@@ -235,14 +261,50 @@ fn batch_triggers_reload<'a>(
 	target_rotated
 		|| events
 			.into_iter()
-			.any(|event| should_reload(event, abspaths, current_targets))
+			.any(|event| should_reload(event, abspaths, previous_targets, current_targets))
 }
 
-fn should_reload(event: &notify::Event, abspaths: &[PathBuf], targets: &[Option<PathBuf>]) -> bool {
+fn batch_invalidates_watch<'a>(
+	events: impl IntoIterator<Item = &'a notify::Event>,
+	abspaths: &[PathBuf],
+	previous_targets: &[Option<PathBuf>],
+) -> bool {
+	// File removal can invalidate an OS file watch even if the replacement exists
+	// by debounce time. Callers can use this to close and re-register the watch.
+	events.into_iter().any(|event| {
+		matches!(event.kind, EventKind::Remove(_))
+			&& event.paths.iter().any(|path| {
+				abspaths
+					.iter()
+					.zip(previous_targets.iter())
+					.any(|(abspath, previous)| abspath == path || previous.as_deref() == Some(path.as_path()))
+			})
+	})
+}
+
+fn should_reload(
+	event: &notify::Event,
+	abspaths: &[PathBuf],
+	previous_targets: &[Option<PathBuf>],
+	current_targets: &[Option<PathBuf>],
+) -> bool {
 	if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
 		return event.paths.iter().any(|path| {
 			abspaths.iter().any(|abspath| abspath == path)
-				|| targets.iter().any(|t| t.as_deref() == Some(path.as_path()))
+				|| current_targets
+					.iter()
+					.any(|t| t.as_deref() == Some(path.as_path()))
+		});
+	}
+	if matches!(event.kind, EventKind::Remove(_)) {
+		return event.paths.iter().any(|path| {
+			abspaths
+				.iter()
+				.zip(previous_targets.iter())
+				.zip(current_targets.iter())
+				.any(|((abspath, previous), current)| {
+					current.is_some() && (abspath == path || previous.as_deref() == Some(path.as_path()))
+				})
 		});
 	}
 	false
@@ -330,6 +392,7 @@ mod tests {
 		assert!(should_reload(
 			&event,
 			std::slice::from_ref(&file),
+			&[Some(target.clone())],
 			&[Some(target)]
 		));
 	}
@@ -339,7 +402,12 @@ mod tests {
 		let file = PathBuf::from("/cfg/price.json");
 		let target = PathBuf::from("/cfg/..data/price.json");
 		let event = modify("/cfg/..data/price.json");
-		assert!(should_reload(&event, &[file], &[Some(target)]));
+		assert!(should_reload(
+			&event,
+			&[file],
+			&[Some(target.clone())],
+			&[Some(target)]
+		));
 	}
 
 	#[test]
@@ -351,6 +419,7 @@ mod tests {
 		assert!(!should_reload(
 			&event,
 			std::slice::from_ref(&file),
+			&[Some(target.clone())],
 			&[Some(target)]
 		));
 	}
@@ -363,7 +432,22 @@ mod tests {
 		assert!(!should_reload(
 			&event,
 			std::slice::from_ref(&file),
+			&[Some(target.clone())],
 			&[Some(target)]
+		));
+	}
+
+	#[test]
+	fn reloads_when_vim_replaces_watched_file_before_debounce() {
+		let file = PathBuf::from("/cfg/price.json");
+		let event =
+			notify::Event::new(EventKind::Remove(notify::event::RemoveKind::File)).add_path(file.clone());
+		assert!(batch_triggers_reload(
+			[&event],
+			std::slice::from_ref(&file),
+			&[Some(file.clone())],
+			&[Some(file.clone())],
+			WatchFilesOptions::default()
 		));
 	}
 

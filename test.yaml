@@ -1,0 +1,35 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        jwtAuth:
+          issuer: https://agentgateway.dev
+          jwks:
+            url: http://127.0.0.1:9002/org-one/keys
+          jwtValidationOptions:
+            requiredClaims: []
+      backends:
+      - service:
+          name: default/example.com
+          port: 80
+workloads:
+- uid: cluster1//v1/Pod/default/local
+  name: local
+  namespace: default
+  serviceAccount: default
+  workloadIps: ["127.0.0.1"]
+  protocol: HBONE
+  node: local
+  network: ""
+  services:
+    "default/example.com":
+      80: 8080
+services:
+- name: local
+  namespace: default
+  hostname: example.com
+  vips:
+    - /127.10.0.1
+  ports:
+    80: 8080

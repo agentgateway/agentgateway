@@ -19,7 +19,7 @@ use tower_serve_static::ServeDir;
 
 use crate::cel::{self, ExecutorSerde};
 use crate::llm::cost::ModelCatalog;
-use crate::{Config, ConfigSource, client, yamlviajson};
+use crate::{Config, ConfigSource, yamlviajson};
 
 const BASE_COSTS_FILE: &str = "base-costs.json";
 const CONFIG_SCHEMA_HEADER: &str =
@@ -28,7 +28,7 @@ const CONFIG_SCHEMA_HEADER: &str =
 #[derive(Clone, Debug)]
 struct App {
 	state: Arc<Config>,
-	client: client::Client,
+	resource_manager: crate::resource_manager::ResourceManager,
 	model_catalog: Arc<ModelCatalog>,
 }
 
@@ -47,7 +47,11 @@ lazy_static::lazy_static! {
 	static ref ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../ui/out");
 }
 
-pub fn router(cfg: Arc<Config>, model_catalog: Arc<ModelCatalog>) -> Router {
+pub fn router(
+	cfg: Arc<Config>,
+	model_catalog: Arc<ModelCatalog>,
+	resource_manager: crate::resource_manager::ResourceManager,
+) -> Router {
 	let ui_service = tower::service_fn(move |req| serve_ui_asset(req, &ASSETS_DIR));
 	Router::new()
 		// Redirect to the UI
@@ -66,7 +70,7 @@ pub fn router(cfg: Arc<Config>, model_catalog: Arc<ModelCatalog>) -> Router {
 		.route("/", get(|| async { Redirect::permanent("/ui") }))
 		.with_state(App {
 			state: cfg.clone(),
-			client: client::Client::new(&cfg.dns, None, Default::default(), None),
+			resource_manager,
 			model_catalog,
 		})
 }
@@ -198,9 +202,11 @@ async fn write_config(
 		yamlviajson::to_string(&config_json).map_err(|e| ErrorResponse::Anyhow(e.into()))?;
 	let yaml_file_content = format!("{CONFIG_SCHEMA_HEADER}{yaml_content}");
 
+	let resources =
+		crate::resource_manager::ResourceFetcher::cached_or_direct(app.resource_manager.clone());
 	if let Err(e) = crate::types::local::NormalizedLocalConfig::from(
 		&app.state,
-		app.client.clone(),
+		&resources,
 		app.state.gateway(),
 		yaml_content.as_str(),
 	)

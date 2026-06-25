@@ -2725,10 +2725,10 @@ impl LocalMcpAuthentication {
 	/// Translate the local (file/env) config into a runtime `McpAuthentication` with a ready validator.
 	pub async fn translate(
 		&self,
-		client: crate::client::Client,
+		resources: &crate::resource_manager::ResourceFetcher,
 	) -> anyhow::Result<McpAuthentication> {
 		let jwt_cfg = self.as_jwt()?;
-		let jwt = jwt_cfg.try_into(client).await?;
+		let jwt = jwt_cfg.try_into(resources).await?;
 		Ok(McpAuthentication {
 			issuer: self.issuer.clone(),
 			audiences: self.audiences.clone(),

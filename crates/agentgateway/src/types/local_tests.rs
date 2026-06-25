@@ -118,8 +118,9 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 async fn normalize_test_policies(
 	policies: Vec<super::LocalPolicy>,
 ) -> anyhow::Result<super::NormalizedLocalConfig> {
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
 	super::convert(
-		test_client(),
+		&resources,
 		ListenerTarget {
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
@@ -144,9 +145,10 @@ async fn normalize_test_policies(
 }
 
 async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig> {
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
 	NormalizedLocalConfig::from(
 		&test_config(),
-		test_client(),
+		&resources,
 		ListenerTarget {
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
@@ -160,11 +162,12 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 
 async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocalConfig> {
 	let client = test_client();
+	let resources = crate::resource_manager::ResourceFetcher::direct(client);
 	let config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
 
 	NormalizedLocalConfig::from(
 		&config,
-		client,
+		&resources,
 		ListenerTarget {
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),

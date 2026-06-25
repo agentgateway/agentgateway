@@ -35,6 +35,7 @@ pub mod management;
 pub mod mcp;
 pub mod parse;
 pub mod proxy;
+pub mod resource_manager;
 pub mod serdes;
 pub mod state_manager;
 pub mod store;

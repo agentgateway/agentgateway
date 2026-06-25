@@ -3405,7 +3405,12 @@ mod tests {
 		.expect("local AI backend");
 		let backend = Backend::AI(
 			ResourceName::new("llm".into(), "".into()),
-			local_backend.translate().expect("translated backend"),
+			local_backend
+				.translate(&crate::resource_manager::ResourceFetcher::direct(
+					bind.pi.upstream.clone(),
+				))
+				.await
+				.expect("translated backend"),
 		);
 		bind
 			.pi
