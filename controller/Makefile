@@ -509,10 +509,11 @@ HELM_PACKAGE_ARGS ?= --version $(HELM_CHART_VERSION_NO_V) --app-version $(HELM_C
 EXTRA_HELM_TAG ?=
 HELM_CHART_DIR_AGW=install/helm/agentgateway
 HELM_CHART_DIR_AGW_CRD=install/helm/agentgateway-crds
+HELM_CHART_DIR_AGW_STANDALONE=install/helm/agentgateway-standalone
 HELM_ADDITIONAL_VALUES ?= hack/helm/dev.yaml
 
 .PHONY: package-agentgateway-charts
-package-agentgateway-charts: package-agentgateway-chart package-agentgateway-crd-chart ## Package the agentgateway charts
+package-agentgateway-charts: package-agentgateway-chart package-agentgateway-crd-chart package-agentgateway-standalone-chart ## Package the agentgateway charts
 
 .PHONY: package-agentgateway-chart
 package-agentgateway-chart: ## Package the agentgateway chart
@@ -526,7 +527,13 @@ package-agentgateway-crd-chart: ## Package the agentgateway crd chart
 	$(HELM) package $(HELM_PACKAGE_ARGS) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
 	$(HELM) repo index $(TEST_ASSET_DIR);
 
-CHART_NAMES := agentgateway agentgateway-crds
+.PHONY: package-agentgateway-standalone-chart
+package-agentgateway-standalone-chart: ## Package the standalone agentgateway chart
+	mkdir -p $(TEST_ASSET_DIR); \
+	$(HELM) package $(HELM_PACKAGE_ARGS) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_STANDALONE); \
+	$(HELM) repo index $(TEST_ASSET_DIR);
+
+CHART_NAMES := agentgateway agentgateway-crds agentgateway-standalone
 
 .PHONY: release-charts
 release-charts: package-agentgateway-charts
@@ -536,12 +543,18 @@ release-charts: package-agentgateway-charts
 	mkdir -p $(TEST_ASSET_DIR); \
 	$(HELM) package --version $(HELM_CHART_VERSION_V) --app-version $(HELM_CHART_VERSION_V) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
 	$(HELM) repo index $(TEST_ASSET_DIR);
+	mkdir -p $(TEST_ASSET_DIR); \
+	$(HELM) package --version $(HELM_CHART_VERSION_V) --app-version $(HELM_CHART_VERSION_V) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_STANDALONE); \
+	$(HELM) repo index $(TEST_ASSET_DIR);
 	@if [ -n "$(EXTRA_HELM_TAG)" ]; then \
 		mkdir -p $(TEST_ASSET_DIR); \
 		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW); \
 		$(HELM) repo index $(TEST_ASSET_DIR); \
 		mkdir -p $(TEST_ASSET_DIR); \
 		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
+		$(HELM) repo index $(TEST_ASSET_DIR); \
+		mkdir -p $(TEST_ASSET_DIR); \
+		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_STANDALONE); \
 		$(HELM) repo index $(TEST_ASSET_DIR); \
 	fi
 	@for chart in $(CHART_NAMES); do \
@@ -569,6 +582,7 @@ deploy-agentgateway-chart: ## Deploy the agentgateway chart
 lint-charts: ## Lint the agentgateway charts
 	$(HELM) lint $(HELM_CHART_DIR_AGW)
 	$(HELM) lint $(HELM_CHART_DIR_AGW_CRD)
+	$(HELM) lint $(HELM_CHART_DIR_AGW_STANDALONE)
 
 #----------------------------------------------------------------------------------
 # Release
