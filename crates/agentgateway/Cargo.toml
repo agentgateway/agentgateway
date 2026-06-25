@@ -111,6 +111,7 @@ rmcp = { version = "1.8", features = [
     "client",
     "server",
     "base64",
+    "server-side-http",
     "transport-child-process",
 ] }
 rust_decimal.workspace = true
