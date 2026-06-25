@@ -1213,7 +1213,10 @@ pub mod to_completions {
 				self.tool_index += 1;
 				tool_calls.push(completions::ChatCompletionMessageToolCallChunk {
 					index: idx,
-					id: Some(tool_call_id(call.id, &id, idx)),
+					id: Some(join_tool_call_id(
+						tool_call_id(call.id, &id, idx),
+						call.thought_signature,
+					)),
 					r#type: Some(completions::FunctionType::Function),
 					function: Some(completions::FunctionCallStream {
 						name: Some(call.name.to_string()),

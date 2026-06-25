@@ -1214,24 +1214,36 @@ fn streaming_preserves_native_tool_call_id() {
 }
 
 #[test]
-#[ignore = "follow-up: streaming must embed thoughtSignature into the streamed tool_call id the \
-            same way the non-streaming path does; cf. litellm #16895"]
 fn streaming_tool_call_id_embeds_thought_signature() {
-	let sig = "STREAM_THOUGHT_SIGNATURE_abc123==";
+	// Streaming must embed each functionCall's thoughtSignature into its tool_call id exactly like
+	// the non-streaming path, or the next turn 400s ("Function call is missing a thought_signature
+	// ... position N"). Parallel calls in one chunk mirror the production failure. Cf. litellm #16895.
+	let sig0 = "STREAM_SIG_ZERO_abc123==";
+	let sig1 = "STREAM_SIG_ONE_def456==";
 	let mut s = to_completions::StreamState::new();
 	let c = stream_chunk(
 		&mut s,
 		json!({ "candidates": [{ "content": { "role": "model", "parts": [
-			{ "functionCall": { "name": "get_weather", "args": {} }, "thoughtSignature": sig }
+			{ "functionCall": { "name": "get_weather", "args": { "city": "Columbus" } },
+				"thoughtSignature": sig0 },
+			{ "functionCall": { "name": "get_weather", "args": { "city": "Berlin" } },
+				"thoughtSignature": sig1 }
 		]}}]}),
 	)
 	.unwrap();
-	let id = c["choices"][0]["delta"]["tool_calls"][0]["id"]
-		.as_str()
-		.expect("streamed tool call id");
+	let tcs = c["choices"][0]["delta"]["tool_calls"]
+		.as_array()
+		.expect("tool_calls");
+	assert_eq!(tcs.len(), 2);
+	let id0 = tcs[0]["id"].as_str().expect("id0");
+	let id1 = tcs[1]["id"].as_str().expect("id1");
 	assert!(
-		id.contains(sig),
-		"streamed tool_call id must embed the thoughtSignature, got {id:?}"
+		id0.contains(sig0),
+		"first streamed tool_call id must embed its signature, got {id0:?}"
+	);
+	assert!(
+		id1.contains(sig1),
+		"second streamed tool_call id must embed its signature, got {id1:?}"
 	);
 }
 
