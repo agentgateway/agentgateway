@@ -1326,10 +1326,10 @@ async fn test_call_tool_structured_content_fallback() {
 		.first()
 		.expect("content should have at least one item");
 
-	let RawContent::Text(text_content) = &content_item.raw else {
+	let rmcp::model::ContentBlock::Text(text_content) = content_item else {
 		panic!(
 			"content[0] should be Text content type, got: {:?}",
-			content_item.raw
+			content_item
 		);
 	};
 

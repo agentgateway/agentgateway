@@ -552,9 +552,10 @@ impl Session {
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 
-					ClientRequest::ListTasksRequest(_)
-					| ClientRequest::GetTaskInfoRequest(_)
-					| ClientRequest::GetTaskResultRequest(_)
+					ClientRequest::DiscoverRequest(_)
+					| ClientRequest::ListTasksRequest(_)
+					| ClientRequest::GetTaskRequest(_)
+					| ClientRequest::GetTaskPayloadRequest(_)
 					| ClientRequest::CancelTaskRequest(_)
 					| ClientRequest::CustomRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
@@ -582,6 +583,7 @@ impl Session {
 							cr.params.r#ref = Reference::for_resource(original_uri);
 							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 						},
+						_ => Err(UpstreamError::InvalidMethod(method)),
 					},
 				}
 			},
@@ -591,6 +593,7 @@ impl Session {
 					ClientNotification::ProgressNotification(r) => r.method.as_str(),
 					ClientNotification::InitializedNotification(r) => r.method.as_str(),
 					ClientNotification::RootsListChangedNotification(r) => r.method.as_str(),
+					ClientNotification::TaskStatusNotification(r) => r.method.as_str(),
 					ClientNotification::CustomNotification(r) => r.method.as_str(),
 				};
 				let ctx = IncomingRequestContext::new(&parts);

@@ -10,10 +10,10 @@ use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
-	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
-	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
-	ServerNotification, ServerResult,
+	CacheScope, ClientNotification, ClientRequest, Implementation, JsonRpcNotification,
+	JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+	ListToolsResult, ProtocolVersion, RequestId, ServerCapabilities, ServerInfo,
+	ServerJsonRpcMessage, ServerNotification, ServerResult,
 };
 use tracing::{debug, warn};
 
@@ -350,9 +350,10 @@ impl Relay {
 			Ok(
 				ListToolsResult {
 					tools,
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
 				.into(),
 			)
 		})
@@ -429,9 +430,10 @@ impl Relay {
 			Ok(
 				ListPromptsResult {
 					prompts,
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
 				.into(),
 			)
 		})
@@ -469,9 +471,10 @@ impl Relay {
 			Ok(
 				ListResourcesResult {
 					resources,
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
 				.into(),
 			)
 		})
@@ -513,9 +516,10 @@ impl Relay {
 			Ok(
 				ListResourceTemplatesResult {
 					resource_templates,
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
 				.into(),
 			)
 		})
@@ -1006,8 +1010,7 @@ mod tests {
 			Ok(ServerJsonRpcMessage::response(
 				ServerResult::ListToolsResult(ListToolsResult {
 					tools: vec![],
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}),
 				RequestId::Number(1),
 			)),

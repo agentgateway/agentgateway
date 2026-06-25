@@ -106,10 +106,7 @@ async fn stream_to_multiplex() {
 		)
 		.await
 		.unwrap();
-	assert_eq!(
-		&ctr.content[0].raw.as_text().unwrap().text,
-		r#"{"hi":"world"}"#
-	);
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"{"hi":"world"}"#);
 
 	let ctr = client
 		.call_tool(
@@ -122,10 +119,7 @@ async fn stream_to_multiplex() {
 		)
 		.await
 		.unwrap();
-	assert_eq!(
-		&ctr.content[0].raw.as_text().unwrap().text,
-		r#"{"hi":"world"}"#
-	);
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"{"hi":"world"}"#);
 
 	// No target set...
 	assert!(
@@ -629,10 +623,7 @@ async fn stream_to_stream_single_tls() {
 		)
 		.await
 		.unwrap();
-	assert_eq!(
-		&ctr.content[0].raw.as_text().unwrap().text,
-		r#"Bearer my-key"#
-	);
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"Bearer my-key"#);
 }
 
 /// Test that calling a tool denied by MCP authorization policy returns proper JSON-RPC error
@@ -1167,10 +1158,7 @@ async fn standard_assertions(client: RunningService<RoleClient, InitializeReques
 		)
 		.await
 		.unwrap();
-	assert_eq!(
-		&ctr.content[0].raw.as_text().unwrap().text,
-		r#"{"hi":"world"}"#
-	);
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"{"hi":"world"}"#);
 }
 
 async fn standard_sse_assertions(client: LegacyService) {
@@ -1190,10 +1178,7 @@ async fn standard_sse_assertions(client: LegacyService) {
 		})
 		.await
 		.unwrap();
-	assert_eq!(
-		&ctr.content[0].raw.as_text().unwrap().text,
-		r#"{"hi":"world"}"#
-	);
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"{"hi":"world"}"#);
 }
 
 fn access_log_payload_policy() -> crate::types::frontend::LoggingPolicy {
@@ -1273,7 +1258,7 @@ async fn tool_call_exposes_payload_fields_to_access_log_cel() {
 		)
 		.await
 		.unwrap();
-	let direct_result_text = &result.content[0].raw.as_text().unwrap().text;
+	let direct_result_text = &result.content[0].as_text().unwrap().text;
 	let direct_result_json: serde_json::Value =
 		serde_json::from_str(direct_result_text).expect("tool result should be valid JSON text");
 	assert_eq!(direct_result_json["traceId"], trace_id);
@@ -1412,7 +1397,7 @@ async fn legacy_sse_tool_call_exposes_arguments_without_terminal_payloads() {
 		})
 		.await
 		.unwrap();
-	let direct_result_text = &result.content[0].raw.as_text().unwrap().text;
+	let direct_result_text = &result.content[0].as_text().unwrap().text;
 	let direct_result_json: serde_json::Value =
 		serde_json::from_str(direct_result_text).expect("tool result should be valid JSON text");
 	assert_eq!(direct_result_json["traceId"], trace_id);
@@ -1782,14 +1767,14 @@ mod mockserver {
 		}
 
 		fn _create_resource_text(&self, uri: &str, name: &str) -> Resource {
-			RawResource::new(uri, name.to_string()).no_annotation()
+			Resource::new(uri, name.to_string())
 		}
 
 		#[tool(description = "Increment the counter by 1")]
 		async fn increment(&self) -> Result<CallToolResult, McpError> {
 			let mut counter = self.counter.lock().await;
 			*counter += 1;
-			Ok(CallToolResult::success(vec![Content::text(
+			Ok(CallToolResult::success(vec![ContentBlock::text(
 				counter.to_string(),
 			)]))
 		}
@@ -1798,7 +1783,7 @@ mod mockserver {
 		async fn decrement(&self) -> Result<CallToolResult, McpError> {
 			let mut counter = self.counter.lock().await;
 			*counter -= 1;
-			Ok(CallToolResult::success(vec![Content::text(
+			Ok(CallToolResult::success(vec![ContentBlock::text(
 				counter.to_string(),
 			)]))
 		}
@@ -1806,19 +1791,19 @@ mod mockserver {
 		#[tool(description = "Get the current counter value")]
 		async fn get_value(&self) -> Result<CallToolResult, McpError> {
 			let counter = self.counter.lock().await;
-			Ok(CallToolResult::success(vec![Content::text(
+			Ok(CallToolResult::success(vec![ContentBlock::text(
 				counter.to_string(),
 			)]))
 		}
 
 		#[tool(description = "Say hello to the client")]
 		fn say_hello(&self) -> Result<CallToolResult, McpError> {
-			Ok(CallToolResult::success(vec![Content::text("hello")]))
+			Ok(CallToolResult::success(vec![ContentBlock::text("hello")]))
 		}
 
 		#[tool(description = "Repeat what you say")]
 		fn echo(&self, Parameters(object): Parameters<JsonObject>) -> Result<CallToolResult, McpError> {
-			Ok(CallToolResult::success(vec![Content::text(
+			Ok(CallToolResult::success(vec![ContentBlock::text(
 				serde_json::Value::Object(object).to_string(),
 			)]))
 		}
@@ -1828,7 +1813,7 @@ mod mockserver {
 			&self,
 			Parameters(StructRequest { a, b }): Parameters<StructRequest>,
 		) -> Result<CallToolResult, McpError> {
-			Ok(CallToolResult::success(vec![Content::text(
+			Ok(CallToolResult::success(vec![ContentBlock::text(
 				(a + b).to_string(),
 			)]))
 		}
@@ -1836,7 +1821,7 @@ mod mockserver {
 		#[tool(description = "Echo HTTP attributes")]
 		fn echo_http(&self, rq: RequestContext<RoleServer>) -> Result<CallToolResult, McpError> {
 			let ext = rq.extensions.get::<Parts>();
-			Ok(CallToolResult::success(vec![Content::text(
+			Ok(CallToolResult::success(vec![ContentBlock::text(
 				ext
 					.unwrap()
 					.headers
@@ -1849,7 +1834,7 @@ mod mockserver {
 		#[tool(description = "Get initialize call count")]
 		async fn get_init_count(&self) -> Result<CallToolResult, McpError> {
 			let init_counter = self.init_counter.lock().await;
-			Ok(CallToolResult::success(vec![Content::text(
+			Ok(CallToolResult::success(vec![ContentBlock::text(
 				init_counter.to_string(),
 			)]))
 		}
@@ -1868,10 +1853,7 @@ mod mockserver {
 				"This is an example prompt with your message here: '{}'",
 				args.message
 			);
-			Ok(vec![PromptMessage::new(
-				PromptMessageRole::User,
-				PromptMessageContent::text(prompt),
-			)])
+			Ok(vec![PromptMessage::new_text(Role::User, prompt)])
 		}
 
 		/// Analyze the current counter value and suggest next steps
@@ -1887,11 +1869,11 @@ mod mockserver {
 
 			let messages = vec![
 				PromptMessage::new_text(
-					PromptMessageRole::Assistant,
+					Role::Assistant,
 					"I'll analyze the counter situation and suggest the best approach.",
 				),
 				PromptMessage::new_text(
-					PromptMessageRole::User,
+					Role::User,
 					format!(
 						"Current counter value: {}\nGoal value: {}\nDifference: {}\nStrategy preference: {}\n\nPlease analyze the situation and suggest the best approach to reach the goal.",
 						current_value, args.goal, difference, strategy
@@ -1932,8 +1914,7 @@ mod mockserver {
 					self._create_resource_text("str:////Users/to/some/path/", "cwd"),
 					self._create_resource_text("memo://insights", "memo-name"),
 				],
-				next_cursor: None,
-				meta: None,
+				..Default::default()
 			})
 		}
 
@@ -2011,9 +1992,8 @@ mod mockserver {
 			_: RequestContext<RoleServer>,
 		) -> Result<ListResourceTemplatesResult, McpError> {
 			Ok(ListResourceTemplatesResult {
-				next_cursor: None,
 				resource_templates: Vec::new(),
-				meta: None,
+				..Default::default()
 			})
 		}
 
@@ -2164,10 +2144,10 @@ mod legacymockserver {
 				"This is an example prompt with your message here: '{}'",
 				args.message
 			);
-			Ok(vec![PromptMessage {
-				role: PromptMessageRole::User,
-				content: PromptMessageContent::text(prompt),
-			}])
+			Ok(vec![PromptMessage::new_text(
+				PromptMessageRole::User,
+				prompt,
+			)])
 		}
 
 		/// Analyze the current counter value and suggest next steps
@@ -2231,7 +2211,7 @@ mod legacymockserver {
 					self._create_resource_text("str:////Users/to/some/path/", "cwd"),
 					self._create_resource_text("memo://insights", "memo-name"),
 				],
-				next_cursor: None,
+				..Default::default()
 			})
 		}
 
@@ -2268,8 +2248,8 @@ mod legacymockserver {
 			_: RequestContext<RoleServer>,
 		) -> Result<ListResourceTemplatesResult, McpError> {
 			Ok(ListResourceTemplatesResult {
-				next_cursor: None,
 				resource_templates: Vec::new(),
+				..Default::default()
 			})
 		}
 
@@ -2890,8 +2870,7 @@ async fn test_runtime_fanout_fail_open() {
 	let ok_msg = ServerJsonRpcMessage::response(
 		rmcp::model::ServerResult::ListToolsResult(ListToolsResult {
 			tools: vec![],
-			next_cursor: None,
-			meta: None,
+			..Default::default()
 		}),
 		RequestId::Number(1),
 	);
@@ -2947,8 +2926,7 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 			Ok(rmcp::model::ServerResult::ListToolsResult(
 				ListToolsResult {
 					tools: vec![],
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				},
 			))
 		},
@@ -3147,7 +3125,7 @@ mod guardrails_test_support {
 	use std::net::SocketAddr;
 	use std::sync::Arc;
 
-	use rmcp::model::{CallToolResult, RawContent};
+	use rmcp::model::CallToolResult;
 
 	use crate::mcp::guardrails;
 	use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
@@ -3194,10 +3172,7 @@ mod guardrails_test_support {
 	pub fn echo_text(r: &CallToolResult) -> String {
 		r.content
 			.iter()
-			.find_map(|c| match c.raw {
-				RawContent::Text(ref t) => Some(t.text.clone()),
-				_ => None,
-			})
+			.find_map(|c| c.as_text().map(|t| t.text.clone()))
 			.expect("echo returned text")
 	}
 }
@@ -4239,7 +4214,7 @@ async fn mcp_guardrails_mutated_prompt_request_reaches_upstream() {
 		.messages
 		.iter()
 		.find_map(|m| match &m.content {
-			rmcp::model::PromptMessageContent::Text { text } => Some(text.clone()),
+			rmcp::model::ContentBlock::Text(text) => Some(text.text.clone()),
 			_ => None,
 		})
 		.expect("prompt should have text content");
