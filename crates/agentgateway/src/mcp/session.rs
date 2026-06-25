@@ -15,7 +15,9 @@ use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
 	InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId, ServerJsonRpcMessage,
 };
-use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
+use rmcp::transport::common::http_header::{
+	EVENT_STREAM_MIME_TYPE, HEADER_MCP_PROTOCOL_VERSION, JSON_MIME_TYPE,
+};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -80,7 +82,21 @@ impl Session {
 		};
 		let is_init = request_type.is_some_and(|r| matches!(r, ClientRequest::InitializeRequest(_)));
 		if !is_init {
-			let init_request = rmcp::model::InitializeRequest::new(get_client_info());
+			let mut client_info = get_client_info();
+			// TODO: proper general protocol negotiation.
+			if let Some(protocol_version) = parts
+				.headers
+				.get(HEADER_MCP_PROTOCOL_VERSION)
+				.and_then(|value| value.to_str().ok())
+				.and_then(|value| {
+					ProtocolVersion::KNOWN_VERSIONS
+						.iter()
+						.find(|version| version.as_str() == value)
+						.cloned()
+				}) {
+				client_info.protocol_version = protocol_version;
+			}
+			let init_request = rmcp::model::InitializeRequest::new(client_info);
 			// first, determine how widely to send the initialize
 			match request_type {
 				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_)) => {
