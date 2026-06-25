@@ -693,6 +693,7 @@ jobs:
           **Helm charts** are available:
           * `cr.agentgateway.dev/charts/agentgateway:v${{ env.VERSION }}`
           * `cr.agentgateway.dev/charts/agentgateway-crds:v${{ env.VERSION }}`
+          * `cr.agentgateway.dev/charts/agentgateway-standalone:v${{ env.VERSION }}`
 
           **Binaries** for `agentgateway` and the `agctl` CLI are available below.
 

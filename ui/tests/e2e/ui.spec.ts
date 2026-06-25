@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { emptyConfig, mockGateway, populatedConfig } from "./fixtures";
+import {
+  configWithClaudeSubscriptionKey,
+  emptyConfig,
+  mockGateway,
+  populatedConfig,
+} from "./fixtures";
 
 const pages = [
   ["/", "Gateway Overview"],
@@ -448,6 +453,48 @@ test("edits listener and route policies from traffic drawers", async ({
     routePolicy.binds?.[0].listeners[0].routes?.[0].policies?.cors
       ?.allowOrigins,
   ).toContain("http://127.0.0.1:19100");
+});
+
+test("Playground shows Claude subscription key warning", async ({ page }) => {
+  await mockGateway(page, configWithClaudeSubscriptionKey());
+  await page.goto("/llm/playground");
+
+  await page.getByRole("combobox", { name: "Model" }).click();
+  await page.getByRole("option", { name: /claude-sub/ }).click();
+
+  await expect(
+    page.getByText("Claude subscription key detected"),
+  ).toBeVisible();
+  await expect(page.getByText("sk-ant-oat")).toBeVisible();
+});
+
+test("Client Setup shows Claude subscription key warning", async ({
+  page,
+}) => {
+  await mockGateway(page, configWithClaudeSubscriptionKey());
+  await page.goto("/llm/client-setup");
+
+  await page.getByRole("combobox", { name: "Model" }).click();
+  await page.getByRole("option", { name: /claude-sub/ }).click();
+
+  await expect(
+    page.getByText("Claude subscription key detected"),
+  ).toBeVisible();
+  await expect(page.getByText("sk-ant-oat")).toBeVisible();
+});
+
+test("no Claude subscription warning for env-var API keys", async ({
+  page,
+}) => {
+  await mockGateway(page);
+  await page.goto("/llm/playground");
+
+  await page.getByRole("combobox", { name: "Model" }).click();
+  await page.getByRole("option", { name: /anthropic/ }).click();
+
+  await expect(
+    page.getByText("Claude subscription key detected"),
+  ).toHaveCount(0);
 });
 
 function emptyConfigWithModels() {

@@ -2791,6 +2791,18 @@
           "description": "Authenticate to GitHub Copilot.",
           "type": "string",
           "const": "copilot"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "oAuthTokenExchange": {
+              "$ref": "#/$defs/OAuthTokenExchangeAuth"
+            }
+          },
+          "required": [
+            "oAuthTokenExchange"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -3199,6 +3211,74 @@
           ],
           "additionalProperties": false
         }
+      ]
+    },
+    "OAuthTokenExchangeAuth": {
+      "type": "object",
+      "properties": {
+        "tokenEndpoint": {
+          "description": "Backend serving the RFC 8693 token endpoint.",
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "tokenEndpointPath": {
+          "description": "Token endpoint path on the backend; defaults to \"/\".",
+          "type": "string"
+        },
+        "audiences": {
+          "description": "`audience` parameters naming the target services at the authorization server.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "description": "`scope` values for the requested token, sent space-delimited.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "description": "`resource` parameters with the target service URIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requestedTokenType": {
+          "description": "`requested_token_type` parameter; the server picks when unset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientAuth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OAuthClientAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tokenEndpoint"
+      ]
+    },
+    "OAuthClientAuth": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "description": "`client_id` parameter identifying the gateway at the authorization server.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clientId"
       ]
     },
     "HTTP": {
