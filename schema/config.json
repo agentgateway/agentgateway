@@ -948,10 +948,15 @@
       "type": "object",
       "properties": {
         "port": {
-          "type": "integer",
+          "description": "Port to bind on. Omit it for an internal wildcard bind (which serves any destination port\nvia in-process routing). A numeric port is required unless `mode` is `internal`.",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint16",
           "minimum": 0,
-          "maximum": 65535
+          "maximum": 65535,
+          "default": null
         },
         "listeners": {
           "type": "array",
@@ -962,11 +967,15 @@
         "tunnelProtocol": {
           "$ref": "#/$defs/TunnelProtocol",
           "default": "direct"
+        },
+        "mode": {
+          "description": "Whether the bind opens an OS listener socket. Defaults to `standard` (binds the port).\nSet to `internal` to create a routing-only bind that does not bind a socket.",
+          "$ref": "#/$defs/BindMode",
+          "default": "standard"
         }
       },
       "additionalProperties": false,
       "required": [
-        "port",
         "listeners"
       ]
     },
@@ -7803,6 +7812,20 @@
         "hboneGateway",
         "proxy",
         "connect"
+      ]
+    },
+    "BindMode": {
+      "oneOf": [
+        {
+          "description": "Open a listener socket on the bind's address (the normal behavior).",
+          "type": "string",
+          "const": "standard"
+        },
+        {
+          "description": "Do not open a socket. The bind is registered for routing only and is reachable\nvia in-process re-entry (e.g. another listener redirecting CONNECT traffic to it).",
+          "type": "string",
+          "const": "internal"
+        }
       ]
     },
     "LocalFrontendPolicies": {

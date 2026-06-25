@@ -1,6 +1,5 @@
 ---
 source: crates/agentgateway/src/types/local_tests.rs
-assertion_line: 137
 description: "Config normalization test for mcp_simple: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
 ---
 binds:
@@ -8,6 +7,7 @@ binds:
     address: "[::]:3000"
     protocol: http
     tunnelProtocol: direct
+    mode: standard
     listeners:
       mcp:
         gatewayName: name

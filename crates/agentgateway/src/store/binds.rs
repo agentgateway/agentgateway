@@ -701,6 +701,13 @@ impl Store {
 
 		let listeners = if self.binds.contains_key(&key) {
 			None
+		} else if bind.mode == agent::BindMode::Internal {
+			// Internal binds are routing-only; they never open an OS socket and thus never
+			// emit a BindEvent::Add (which is what spawns the accept loop). They are still
+			// inserted into `self.binds` below so find_bind/find_bind_by_port and in-process
+			// re-entry via proxy_bind can reach them.
+			debug!(bind=%key, "internal bind; not opening a listener socket");
+			None
 		} else {
 			match self.bind_listeners(bind.address) {
 				Ok(listeners) => {
@@ -1316,6 +1323,13 @@ impl Store {
 			.values()
 			.find(|b| b.address.port() == port)
 			.cloned()
+	}
+
+	/// find_wildcard_bind returns the internal wildcard bind, if one is configured. This is the
+	/// catch-all used for CONNECT re-entry when no other bind matches the destination port, so a
+	/// single internal listener (with a dynamic backend) can serve any destination port.
+	pub fn find_wildcard_bind(&self) -> Option<Arc<Bind>> {
+		self.binds.values().find(|b| b.is_wildcard()).cloned()
 	}
 
 	pub fn all_policies(&self) -> Vec<Arc<TargetedPolicy>> {
@@ -2050,6 +2064,7 @@ mod tests {
 			address: "127.0.0.1:0".parse().unwrap(),
 			protocol: BindProtocol::http,
 			tunnel_protocol: TunnelProtocol::Direct,
+			mode: agent::BindMode::Standard,
 			listeners: ListenerSet::from_list([Listener {
 				key: strng::literal!("listener"),
 				name: ListenerName {
@@ -2656,6 +2671,7 @@ mod tests {
 			port: 8080,
 			protocol: 0,        // HTTP
 			tunnel_protocol: 0, // Direct
+			mode: 0,            // Standard
 		};
 
 		let bind = Bind::from_xds(&xds_bind, false, &mut Diagnostics::default()).unwrap();
@@ -2673,6 +2689,7 @@ mod tests {
 			port: 9090,
 			protocol: 0,        // HTTP
 			tunnel_protocol: 0, // Direct
+			mode: 0,            // Standard
 		};
 
 		let bind = Bind::from_xds(&xds_bind, true, &mut Diagnostics::default()).unwrap();

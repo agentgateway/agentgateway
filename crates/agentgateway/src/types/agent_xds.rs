@@ -1165,6 +1165,10 @@ impl Bind {
 				proto::agent::bind::TunnelProtocol::Proxy => TunnelProtocol::Proxy,
 				proto::agent::bind::TunnelProtocol::Connect => TunnelProtocol::Connect,
 			},
+			mode: match proto::agent::bind::Mode::try_from(s.mode)? {
+				proto::agent::bind::Mode::Standard => BindMode::Standard,
+				proto::agent::bind::Mode::Internal => BindMode::Internal,
+			},
 		})
 	}
 }

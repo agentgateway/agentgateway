@@ -186,6 +186,55 @@ binds:
 	);
 }
 
+#[tokio::test]
+async fn test_multiple_wildcard_binds_rejected() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect_err("two wildcard binds should be rejected");
+	assert!(
+		err.to_string().contains("at most one wildcard bind"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_single_wildcard_bind_with_exact_internal_bind_allowed() {
+	// One exact internal bind (port 443) plus one wildcard internal bind is valid: the exact
+	// bind is matched by port, the wildcard serves everything else.
+	normalize_test_yaml(
+		r#"
+binds:
+- port: 443
+  mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect("one wildcard bind alongside an exact internal bind should normalize");
+}
+
 async fn test_config_parsing(test_name: &str) {
 	// Make it static
 	super::STARTUP_TIMESTAMP.get_or_init(|| 0);

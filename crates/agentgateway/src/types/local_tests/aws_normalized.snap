@@ -7,6 +7,7 @@ binds:
     address: "[::]:3000"
     protocol: http
     tunnelProtocol: direct
+    mode: standard
     listeners:
       ns/name/bind/3000/listener0:
         gatewayName: name

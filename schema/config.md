@@ -80,7 +80,7 @@
 |`config.hbone.poolMaxStreamsPerConn`|integer||
 |`config.hbone.poolUnusedReleaseTimeout`|string||
 |`binds`|[]object||
-|`binds[].port`|integer||
+|`binds[].port`|integer|Port to bind on. Omit it for an internal wildcard bind (which serves any destination port<br>via in-process routing). A numeric port is required unless `mode` is `internal`.|
 |`binds[].listeners`|[]object||
 |`binds[].listeners[].name`|string||
 |`binds[].listeners[].namespace`|string||
@@ -7411,6 +7411,7 @@
 |`binds[].listeners[].policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
 |`binds[].listeners[].policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].tunnelProtocol`|enum|Possible values: `direct`, `hboneWaypoint`, `hboneGateway`, `proxy`, `connect`.|
+|`binds[].mode`|enum|Whether the bind opens an OS listener socket. Defaults to `standard` (binds the port).<br>Set to `internal` to create a routing-only bind that does not bind a socket.<br>Possible values: `standard`, `internal`.|
 |`frontendPolicies`|object||
 |`frontendPolicies.http`|object|Settings for handling incoming HTTP requests.|
 |`frontendPolicies.http.maxBufferSize`|integer|Maximum request or response body size buffered by the frontend.|
