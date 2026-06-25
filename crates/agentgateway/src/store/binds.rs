@@ -1328,8 +1328,17 @@ impl Store {
 	/// find_wildcard_bind returns the internal wildcard bind, if one is configured. This is the
 	/// catch-all used for CONNECT re-entry when no other bind matches the destination port, so a
 	/// single internal listener (with a dynamic backend) can serve any destination port.
+	///
+	/// Local config enforces at most one wildcard bind, but other sources (e.g. XDS) could supply
+	/// several. Select the lowest key so the choice is deterministic rather than dependent on
+	/// HashMap iteration order.
 	pub fn find_wildcard_bind(&self) -> Option<Arc<Bind>> {
-		self.binds.values().find(|b| b.is_wildcard()).cloned()
+		self
+			.binds
+			.values()
+			.filter(|b| b.is_wildcard())
+			.min_by(|a, b| a.key.cmp(&b.key))
+			.cloned()
 	}
 
 	pub fn all_policies(&self) -> Vec<Arc<TargetedPolicy>> {

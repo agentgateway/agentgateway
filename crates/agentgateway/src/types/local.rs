@@ -2323,12 +2323,15 @@ async fn convert(
 		if b.port.is_none() && b.mode != BindMode::Internal {
 			bail!("a bind without a port must set mode: internal");
 		}
-		// Wildcard (portless) internal binds use address port 0 as the sentinel matched by
-		// find_wildcard_bind; exact binds use their configured port.
+		// The runtime treats an internal bind with port 0 as the wildcard, whether the port was
+		// omitted or explicitly set to 0. Keep both representations on the single `bind/wildcard`
+		// key (and address port 0) so they are indistinguishable downstream.
 		let bind_port = b.port.unwrap_or(0);
-		let bind_name = match b.port {
-			Some(p) => strng::format!("bind/{p}"),
-			None => strng::literal!("bind/wildcard"),
+		let is_wildcard = b.mode == BindMode::Internal && bind_port == 0;
+		let bind_name = if is_wildcard {
+			strng::literal!("bind/wildcard")
+		} else {
+			strng::format!("bind/{bind_port}")
 		};
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
@@ -2492,18 +2495,14 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 	};
 	let mut wildcard_binds = Vec::new();
 	for (idx, bind) in config.binds.iter().enumerate() {
-		match bind.port {
-			// Numeric ports participate in uniqueness checks.
-			Some(port) => {
-				insert_local_listener_port(port, format!("binds[{idx}]"))?;
-			},
-			// A portless internal bind is the wildcard fallback, which opens no socket (so there is
-			// no port to deconflict). There can be at most one, since lookups would otherwise resolve
-			// the wildcard ambiguously.
-			None if bind.mode == BindMode::Internal => {
-				wildcard_binds.push(idx);
-			},
-			None => {},
+		// An internal bind whose effective port is 0 (port omitted or explicitly `0`) is the
+		// wildcard fallback, which opens no socket (so there is no port to deconflict). There can be
+		// at most one, since lookups would otherwise resolve the wildcard ambiguously. Everything
+		// else with a numeric port participates in uniqueness checks.
+		if bind.mode == BindMode::Internal && bind.port.unwrap_or(0) == 0 {
+			wildcard_binds.push(idx);
+		} else if let Some(port) = bind.port {
+			insert_local_listener_port(port, format!("binds[{idx}]"))?;
 		}
 	}
 	if wildcard_binds.len() > 1 {

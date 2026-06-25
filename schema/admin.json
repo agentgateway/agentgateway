@@ -54,7 +54,7 @@
           "$ref": "#/$defs/TunnelProtocol"
         },
         "mode": {
-          "description": "Controls whether this bind opens an OS listener socket.\n`Standard` (default) binds the `address`; `Internal` does not bind a socket and is only\nreachable via in-process routing (e.g. CONNECT tunnel re-entry by other listeners).",
+          "description": "Controls whether this bind opens an OS listener socket.\n`standard` (default) binds the `address`; `internal` does not bind a socket and is only\nreachable via in-process routing (e.g. CONNECT tunnel re-entry by other listeners).",
           "$ref": "#/$defs/BindMode"
         },
         "listeners": {

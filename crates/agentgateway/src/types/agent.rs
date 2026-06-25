@@ -47,7 +47,7 @@ pub struct Bind {
 	pub protocol: BindProtocol,
 	pub tunnel_protocol: TunnelProtocol,
 	/// Controls whether this bind opens an OS listener socket.
-	/// `Standard` (default) binds the `address`; `Internal` does not bind a socket and is only
+	/// `standard` (default) binds the `address`; `internal` does not bind a socket and is only
 	/// reachable via in-process routing (e.g. CONNECT tunnel re-entry by other listeners).
 	pub mode: BindMode,
 	pub listeners: ListenerSet,
