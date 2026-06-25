@@ -29,25 +29,15 @@ import (
 
 var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
-func truncate(message string, limit int) string {
-	if len(message) <= limit {
-		return message
-	}
-	if limit <= 3 {
-		return message[:limit]
-	}
-	return message[:limit-3] + "..."
-}
-
 func (s *Test) applyYAML(contents ...string) {
-	redactedContents := truncate(strings.Join(contents, "\n---\n"), 120)
+	yaml := strings.Join(contents, "\n---\n")
 	done := func() {}
 	if len(contents) > 0 {
-		done = traceStep(s, "applied YAML %q", redactedContents)
+		done = traceStep(s, "applied YAML %q", yaml)
 	}
 	err := s.TestInstallation.ClusterContext.Client.ApplyYAMLContents("", contents...)
 	if err != nil {
-		istioassert.NoError(s, fmt.Errorf("failed to apply YAML %q: %w", redactedContents, err))
+		istioassert.NoError(s, fmt.Errorf("failed to apply YAML %q: %w", yaml, err))
 	}
 	done()
 
