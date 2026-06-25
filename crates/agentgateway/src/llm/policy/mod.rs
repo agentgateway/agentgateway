@@ -1919,3 +1919,18 @@ fn test_apply_prompt_guard_regex_mask(
 		_ => panic!("expected masked result"),
 	}
 }
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::regex(vec![RegexRule::Regex { pattern: regex::Regex::new(r"\d{2}").unwrap() }], "id:12")]
+#[case::builtin(vec![RegexRule::Builtin { builtin: Builtin::Email }], "contact john.doe@example.com")]
+fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] input: &str) {
+	let result = Policy::apply_prompt_guard_regex(
+		input,
+		&RegexRules {
+			action: Action::Reject,
+			rules,
+		},
+	);
+	assert!(matches!(result, Some(RegexResult::Reject)));
+}
