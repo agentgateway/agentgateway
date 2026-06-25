@@ -1,0 +1,10 @@
+# Configuration for the CustomResourceDefinitions shipped by this chart.
+crds:
+  # annotations are merged into metadata.annotations of every CRD.
+  # For example, to stop Helm from deleting the CRDs (and every agentgateway
+  # custom resource cluster-wide) when the release is uninstalled:
+  #
+  #   crds:
+  #     annotations:
+  #       helm.sh/resource-policy: keep
+  annotations: {}
