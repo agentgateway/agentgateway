@@ -15,14 +15,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
-	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	"istio.io/istio/pkg/test/util/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 )
 
 const (
@@ -53,26 +54,26 @@ func TestFrontendTLS(tt *testing.T) {
 
 	t.Run("ClientCertValidation", func(t base.Test) {
 		t.Apply(manifest("frontendtls", "gateway-ca1.yaml"))
-		gateway := gateway(t, "https", 1)
+		gateway := gateway(t)
 		assertSuccess(t, gateway, client1, client1Key, ca1)
 		assertFailure(t, gateway, client2, client2Key, ca1)
 	})
 	t.Run("ClientCertValidationAllowInsecureFallback", func(t base.Test) {
 		t.Apply(manifest("frontendtls", "gateway-ca1-with-insecure-fallback.yaml"))
-		gateway := gateway(t, "https", 1)
+		gateway := gateway(t)
 		assertSuccess(t, gateway, client1, client1Key, ca1)
 		assertSuccess(t, gateway, client2, client2Key, ca1)
 	})
 	t.Run("ClientCertValidationWithMultipleCAs", func(t base.Test) {
 		t.Apply(manifest("frontendtls", "gateway-ca1-ca2.yaml"))
-		gateway := gateway(t, "https", 1)
+		gateway := gateway(t)
 		assertSuccess(t, gateway, client1, client1Key, ca1)
 		assertSuccess(t, gateway, client2, client2Key, ca1)
 	})
 	t.Run("ClientCertValidationWithSomeCARefsInvalid", func(t base.Test) {
 		t.Apply(manifest("frontendtls", "gateway-ca1-invalid1.yaml"))
-		gateway := gateway(t, "https", 1)
-		assertListenerConditions(t, "https", map[gwv1.ListenerConditionType]metav1.ConditionStatus{
+		gateway := gateway(t)
+		assertListenerConditions(t, map[gwv1.ListenerConditionType]metav1.ConditionStatus{
 			gwv1.ListenerConditionAccepted:     metav1.ConditionTrue,
 			gwv1.ListenerConditionProgrammed:   metav1.ConditionTrue,
 			gwv1.ListenerConditionResolvedRefs: metav1.ConditionFalse,
@@ -82,12 +83,12 @@ func TestFrontendTLS(tt *testing.T) {
 	})
 	t.Run("ClientCertValidationWithAllCARefsInvalid", func(t base.Test) {
 		t.Apply(manifest("frontendtls", "gateway-invalid1-invalid2.yaml"))
-		assertListenerConditions(t, "https", map[gwv1.ListenerConditionType]metav1.ConditionStatus{
+		assertListenerConditions(t, map[gwv1.ListenerConditionType]metav1.ConditionStatus{
 			gwv1.ListenerConditionAccepted:     metav1.ConditionFalse,
 			gwv1.ListenerConditionProgrammed:   metav1.ConditionFalse,
 			gwv1.ListenerConditionResolvedRefs: metav1.ConditionFalse,
 		})
-		gateway := gateway(t, "https", 1)
+		gateway := gateway(t)
 		assertFailure(t, gateway, client1, client1Key, ca1)
 		assertFailure(t, gateway, client2, client2Key, ca1)
 	})
@@ -107,6 +108,7 @@ func assertSuccess(t base.Test, gateway base.Gateway, clientCert *x509.Certifica
 		RootCAs:      caCertPool,
 		// Generating certs with proper gateway IP SANs is bothersome and not the point of this test,
 		// so we skip verification of the server certs on the client side.
+		//gosec:disable G402
 		InsecureSkipVerify: true,
 	}
 
@@ -135,6 +137,7 @@ func assertFailure(t base.Test, gateway base.Gateway, clientCert *x509.Certifica
 		RootCAs:      caCertPool,
 		// Generating certs with proper gateway IP SANs is bothersome and not the point of this test,
 		// so we skip verification of the server certs on the client side.
+		//gosec:disable G402
 		InsecureSkipVerify: true,
 	}
 
@@ -158,13 +161,13 @@ func assertFailure(t base.Test, gateway base.Gateway, clientCert *x509.Certifica
 	}, connectionError, 10*time.Second)
 }
 
-func gateway(t base.Test, listenerName string, attachedRoutes int) base.Gateway {
+func gateway(t base.Test) base.Gateway {
 	t.GatewayReady("gateway", frontendTLSNamespace)
 	assertions.EventuallyGatewayListenerAttachedRoutes(t,
 		"gateway",
 		frontendTLSNamespace,
-		gwv1.SectionName(listenerName),
-		int32(attachedRoutes),
+		gwv1.SectionName("https"),
+		int32(1),
 	)
 	name := types.NamespacedName{Name: "gateway", Namespace: frontendTLSNamespace}
 	return base.Gateway{
@@ -173,13 +176,13 @@ func gateway(t base.Test, listenerName string, attachedRoutes int) base.Gateway 
 	}
 }
 
-func assertListenerConditions(t base.Test, listenerName string, expected map[gwv1.ListenerConditionType]metav1.ConditionStatus) {
+func assertListenerConditions(t base.Test, expected map[gwv1.ListenerConditionType]metav1.ConditionStatus) {
 	for conditionType, expectedStatus := range expected {
 		assertions.EventuallyGatewayListenerCondition(
 			t,
 			"gateway",
 			frontendTLSNamespace,
-			gwv1.SectionName(listenerName),
+			gwv1.SectionName("https"),
 			conditionType,
 			expectedStatus,
 		)
