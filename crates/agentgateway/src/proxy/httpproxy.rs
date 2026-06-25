@@ -297,6 +297,7 @@ async fn apply_backend_policies(
 	let BackendPolicies {
 		backend_tls: _,
 		backend_auth,
+		backend_auth_headers,
 		a2a,
 		http,
 		// Doesn't currently have any options to set, todo
@@ -347,8 +348,14 @@ async fn apply_backend_policies(
 		.apply("backend ext authz", &client, log, req, rp.headers())
 		.await?;
 
-	if let Some(auth) = backend_auth {
-		auth::apply_backend_auth(&backend_info, auth, req).await?;
+	if backend_auth.is_some() || !backend_auth_headers.is_empty() {
+		auth::apply_backend_auth(
+			&backend_info,
+			backend_auth.as_ref(),
+			backend_auth_headers,
+			req,
+		)
+		.await?;
 		dtrace::snapshot!(Request, "backend auth", &req);
 	}
 	rp.backend_transformation = transformation
@@ -1593,6 +1600,7 @@ pub async fn build_transport(
 		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
+		let tunnel_auth_headers = call.backend_policies.backend_auth_headers.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
 		// we never set it.
 		let transport = Box::pin(build_transport(
@@ -1607,7 +1615,7 @@ pub async fn build_transport(
 		.await?;
 		trace!("built tunnel to {:?}", call.target);
 		let token = if let Some(auth) = tunnel_auth {
-			Some(auth::apply_tunnel_auth(&auth)?)
+			Some(auth::apply_tunnel_auth(&auth, &tunnel_auth_headers)?)
 		} else {
 			None
 		};

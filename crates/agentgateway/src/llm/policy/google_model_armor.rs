@@ -327,7 +327,7 @@ impl GoogleModelArmor {
 		pols.push(BackendTrafficPolicy::BackendTLS(
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
-		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Gcp(
+		pols.push(BackendTrafficPolicy::backend_auth(BackendAuth::Gcp(
 			GcpAuth::default(),
 		)));
 		pols

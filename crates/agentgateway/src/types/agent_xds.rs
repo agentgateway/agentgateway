@@ -967,13 +967,30 @@ fn convert_backend_ai_policy(
 	Ok(policy)
 }
 
+fn backend_auth_headers_from_proto(
+	headers: Vec<proto::agent::BackendAuthHeader>,
+) -> Result<Vec<crate::http::auth::BackendAuthHeader>, ProtoError> {
+	headers
+		.into_iter()
+		.map(|h| {
+			let name = ::http::HeaderName::from_bytes(h.header_name.as_bytes())
+				.map_err(|e| ProtoError::Generic(format!("invalid header name: {e}")))?;
+			Ok(crate::http::auth::BackendAuthHeader {
+				name,
+				prefix: h.prefix,
+				value: h.value.into(),
+			})
+		})
+		.collect()
+}
+
 fn backend_auth_from_proto(
 	s: proto::agent::BackendAuthPolicy,
 	diagnostics: &mut Diagnostics,
-) -> Result<BackendAuth, ProtoError> {
+) -> Result<Option<BackendAuth>, ProtoError> {
 	use proto::agent::azure_managed_identity_credential::user_assigned_identity;
 	use proto::agent::{azure_explicit_config, gcp};
-	Ok(match s.kind {
+	Ok(Some(match s.kind {
 		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuth::Passthrough {
 			location: optional_authorization_location(p.authorization_location.as_ref())?,
 		},
@@ -1171,8 +1188,8 @@ fn backend_auth_from_proto(
 				diagnostics,
 			)?))
 		},
-		None => return Err(ProtoError::MissingRequiredField),
-	})
+		None => return Ok(None),
+	}))
 }
 
 fn listener_protocol_from_proto(
@@ -1828,8 +1845,16 @@ fn backend_policy_from_proto(
 			BackendTrafficPolicy::BackendTLS(tls)
 		},
 		Some(bps::Kind::Auth(auth)) => {
-			BackendTrafficPolicy::BackendAuth(backend_auth_from_proto(auth.clone(), diagnostics)?)
-		},
+			let headers = backend_auth_headers_from_proto(auth.headers.clone())?;
+			let auth_kind = backend_auth_from_proto(auth.clone(), diagnostics)?;
+			if auth_kind.is_none() && headers.is_empty() {
+				return Err(ProtoError::MissingRequiredField);
+			}
+			BackendTrafficPolicy::BackendAuth {
+				auth: auth_kind,
+				headers,
+			}
+		}, // BackendAuth with optional kind + headers
 		Some(bps::Kind::McpAuthorization(rbac)) => {
 			BackendTrafficPolicy::McpAuthorization(mcp_authorization_from_proto(rbac, diagnostics))
 		},
@@ -4205,14 +4230,15 @@ mod tests {
 						region: "us-east-1".to_string(),
 					},
 				)),
+				headers: vec![],
 			},
 			&mut Diagnostics::default(),
 		)?;
-		let BackendAuth::Aws(AwsAuth::Implicit {
+		let Some(BackendAuth::Aws(AwsAuth::Implicit {
 			service_name,
 			region,
 			..
-		}) = auth
+		})) = auth
 		else {
 			panic!("Expected implicit AWS auth, got {auth:?}");
 		};

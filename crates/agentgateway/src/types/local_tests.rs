@@ -455,6 +455,11 @@ async fn test_llm_virtual_model_conditional_config() {
 }
 
 #[tokio::test]
+async fn test_backend_auth_multi_header_config() {
+	test_config_parsing("backend_auth_multi_header").await;
+}
+
+#[tokio::test]
 async fn test_llm_conditional_virtual_model_requires_fallback_last() {
 	let err = normalize_test_config(
 		r#"

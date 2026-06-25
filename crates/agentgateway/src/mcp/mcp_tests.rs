@@ -2028,7 +2028,7 @@ async fn stream_to_stream_single_tls() {
 		&mock,
 		true,
 		false,
-		vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		vec![BackendTrafficPolicy::backend_auth(BackendAuth::Key {
 			value: SecretString::new("my-key".into()),
 			location: None,
 		})],

@@ -352,6 +352,14 @@ message BackendAuthPolicy {
     OAuthTokenExchange oauth_token_exchange = 6;
     CrossAppAccessAuth cross_app_access = 7;
   }
+
+  repeated BackendAuthHeader headers = 8;
+}
+
+message BackendAuthHeader {
+  string header_name = 1;
+  optional string prefix = 2;
+  string value = 3;
 }
 
 message AuthorizationLocation {

@@ -444,7 +444,7 @@ pub struct LocalLLMProviderDefaults {
 	/// Authentication configuration for connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<BackendAuth>,
+	auth: Option<LocalBackendAuth>,
 	/// Outlier detection and health checking for this provider backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -784,7 +784,7 @@ pub struct LocalLLMModels {
 	/// auth configures authentication when connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<BackendAuth>,
+	auth: Option<LocalBackendAuth>,
 	/// health configures outlier detection for this model backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -2194,31 +2194,47 @@ where
 		.map_err(serde::de::Error::custom)
 }
 
-pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D::Error>
+pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<LocalBackendAuth>, D::Error>
 where
 	D: Deserializer<'de>,
 {
 	Option::<BackendAuthCompat>::deserialize(deserializer)?
 		.map(|auth| match auth {
-			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
-				// OAuth has a few cross-field checks serde won't catch on its own.
-				// Keep them here so untagged compat parsing still returns the real error.
-				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::OAuthTokenExchange(auth))
+			BackendAuthCompat::Full { auth, headers } => {
+				let auth = auth
+					.map(|auth| match auth {
+						BackendAuth::OAuthTokenExchange(auth) => {
+							// OAuth has a few cross-field checks serde won't catch on its own.
+							// Keep them here so untagged compat parsing still returns the real error.
+							auth.validate_load().map_err(serde::de::Error::custom)?;
+							Ok(BackendAuth::OAuthTokenExchange(auth))
+						},
+						BackendAuth::CrossAppAccess(auth) => {
+							// The derived exchange is built on deserialize; validate here so untagged
+							// compat parsing still returns the real cross-field error.
+							auth.validate_load().map_err(serde::de::Error::custom)?;
+							Ok(BackendAuth::CrossAppAccess(auth))
+						},
+						auth => Ok(auth),
+					})
+					.transpose()?;
+				Ok(LocalBackendAuth { auth, headers })
 			},
-			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
-				// The derived exchange is built on deserialize; validate here so untagged
-				// compat parsing still returns the real cross-field error.
-				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::CrossAppAccess(auth))
-			},
-			BackendAuthCompat::Full(auth) => Ok(auth),
-			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
-				value: key,
-				location: None,
+			BackendAuthCompat::PlainKey { key } => Ok(LocalBackendAuth {
+				auth: Some(BackendAuth::Key {
+					value: key,
+					location: None,
+				}),
+				headers: Vec::new(),
 			}),
 		})
 		.transpose()
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LocalBackendAuth {
+	pub auth: Option<BackendAuth>,
+	pub headers: Vec<crate::http::auth::BackendAuthHeader>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -2230,7 +2246,12 @@ enum BackendAuthCompat {
 		#[serde(deserialize_with = "deser_key_from_file")]
 		key: SecretString,
 	},
-	Full(BackendAuth),
+	Full {
+		#[serde(flatten, default)]
+		auth: Option<BackendAuth>,
+		#[serde(default)]
+		headers: Vec<crate::http::auth::BackendAuthHeader>,
+	},
 }
 
 #[apply(schema_de!)]
@@ -2405,7 +2426,7 @@ pub struct SimpleLocalBackendPolicies {
 	/// Authentication credentials sent to this backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	pub backend_auth: Option<BackendAuth>,
+	pub backend_auth: Option<LocalBackendAuth>,
 
 	/// HTTP protocol settings for this backend.
 	#[serde(default)]
@@ -2561,7 +2582,10 @@ impl LocalBackendPolicies {
 			))
 		}
 		if let Some(p) = backend_auth {
-			pols.push(BackendTrafficPolicy::BackendAuth(p))
+			pols.push(BackendTrafficPolicy::BackendAuth {
+				auth: p.auth,
+				headers: p.headers,
+			})
 		}
 		if let Some(p) = ext_authz {
 			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
@@ -2707,7 +2731,7 @@ pub struct FilterOrPolicy {
 	/// Authentication credentials sent to the backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	backend_auth: Option<BackendAuth>,
+	backend_auth: Option<LocalBackendAuth>,
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
@@ -4365,7 +4389,7 @@ async fn convert_llm_config(
 				value: key.0.clone(),
 				location: None,
 			};
-			pols.push(BackendTrafficPolicy::BackendAuth(backend_auth));
+			pols.push(BackendTrafficPolicy::backend_auth(backend_auth));
 		}
 
 		// Create AI backend
@@ -4395,7 +4419,10 @@ async fn convert_llm_config(
 			));
 		}
 		if let Some(p) = model_config.auth.clone() {
-			pols.push(BackendTrafficPolicy::BackendAuth(p));
+			pols.push(BackendTrafficPolicy::BackendAuth {
+				auth: p.auth,
+				headers: p.headers,
+			});
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
 			pols.push(BackendTrafficPolicy::Tunnel(p));
@@ -5217,7 +5244,10 @@ pub(crate) async fn split_policies_for_target(
 		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
 	if let Some(p) = backend_auth {
-		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
+		backend_policies.push(BackendTrafficPolicy::BackendAuth {
+			auth: p.auth,
+			headers: p.headers,
+		})
 	}
 
 	// Route policies (AI is dual-role when targeting a backend)

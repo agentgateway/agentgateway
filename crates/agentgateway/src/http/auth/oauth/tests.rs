@@ -1779,7 +1779,8 @@ async fn enforce_may_act_checks_validated_subject_claims(
 		.insert(claims_with_may_act(&subject, may_act));
 
 	let result =
-		crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req).await;
+		crate::http::auth::apply_backend_auth(&backend_info(), Some(&backend_auth), &[], &mut req)
+			.await;
 	if expect_authorized {
 		result.unwrap();
 	} else {
@@ -1804,9 +1805,10 @@ async fn enforce_may_act_ignores_validated_claims_for_a_different_subject_token(
 		json!({"sub": "actor-b"}),
 	));
 
-	let err = crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
-		.await
-		.unwrap_err();
+	let err =
+		crate::http::auth::apply_backend_auth(&backend_info(), Some(&backend_auth), &[], &mut req)
+			.await
+			.unwrap_err();
 	assert!(matches!(err, ProxyError::AuthorizationFailed));
 	assert!(mock.received_requests().await.unwrap().is_empty());
 }
@@ -1819,7 +1821,7 @@ async fn enforce_may_act_falls_back_to_unvalidated_subject_token_without_jwt_pol
 	let subject = jwt_with_claims(&json!({"may_act": {"sub": "actor-a"}}));
 	let mut req = request_with_actor_header(&subject, &jwt_with_claims(&json!({"sub": "actor-a"})));
 
-	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
+	crate::http::auth::apply_backend_auth(&backend_info(), Some(&backend_auth), &[], &mut req)
 		.await
 		.unwrap();
 }
@@ -1914,7 +1916,7 @@ async fn dispatch_inserts_default_bearer_and_marks_explicit() {
 		crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(auth(endpoint(&mock))));
 	let mut req = incoming_request();
 
-	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
+	crate::http::auth::apply_backend_auth(&backend_info(), Some(&backend_auth), &[], &mut req)
 		.await
 		.unwrap();
 
@@ -1945,7 +1947,7 @@ async fn dispatch_uses_configured_output_location_and_marks_explicit() {
 	let backend_auth = crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a));
 	let mut req = incoming_request();
 
-	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
+	crate::http::auth::apply_backend_auth(&backend_info(), Some(&backend_auth), &[], &mut req)
 		.await
 		.unwrap();
 
@@ -1978,7 +1980,7 @@ async fn dispatch_supports_query_parameter_output_location() {
 	let backend_auth = crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a));
 	let mut req = incoming_request();
 
-	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
+	crate::http::auth::apply_backend_auth(&backend_info(), Some(&backend_auth), &[], &mut req)
 		.await
 		.unwrap();
 
@@ -2018,7 +2020,7 @@ async fn dispatch_removes_input_token_locations_before_inserting_output() {
 		.body(Body::empty())
 		.unwrap();
 
-	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
+	crate::http::auth::apply_backend_auth(&backend_info(), Some(&backend_auth), &[], &mut req)
 		.await
 		.unwrap();
 
