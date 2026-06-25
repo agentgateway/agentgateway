@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - name: iflytek-spark
+    routes:
+    - backends:
+      - ai:
+          name: iflytek-spark
+          provider:
+            openAI:
+              model: generalv3.5
+          # iFlytek Spark exposes an OpenAI-compatible API at
+          # https://spark-api-open.xf-yun.com/v1/chat/completions, so the
+          # built-in openAI provider works once the host is overridden.
+          hostOverride: spark-api-open.xf-yun.com
+      policies:
+        backendAuth:
+          key: $SPARK_API_PASSWORD

@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - name: iflytek-astron-maas
+    routes:
+    - backends:
+      - ai:
+          name: iflytek-astron-maas
+          provider:
+            openAI:
+              model: xsparkx2
+          # iFlytek Astron MaaS (Token Plan) serves an OpenAI-compatible API at
+          # https://maas-token-api.cn-huabei-1.xf-yun.com/v2/chat/completions.
+          # Override the host and base path prefix (/v2) accordingly. For the
+          # Coding Plan, use maas-coding-api.cn-huabei-1.xf-yun.com and the
+          # astron-code-latest model.
+          hostOverride: maas-token-api.cn-huabei-1.xf-yun.com
+          pathPrefix: /v2
+      policies:
+        backendAuth:
+          key: $ASTRON_API_KEY
