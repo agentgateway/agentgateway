@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# AgentGateway + Dominion Observatory Trust Scoring
+#
+# Routes MCP traffic through AgentGateway with external authorization
+# powered by Dominion Observatory's behavioral trust scores.
+#
+# Trust scores are checked before each tool call. Servers with scores
+# below the threshold are blocked automatically.
+
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        extAuthz:
+          conditional:
+          - host: observatory-authz
+            port: 8080
+            protocol: http
+            path: '"/authorize"'
+            headers:
+              - authorization
+              - x-mcp-server-url
+      backends:
+      - mcp:
+          targets:
+          - name: upstream-mcp-server
+            host: upstream-server
+            port: 8080

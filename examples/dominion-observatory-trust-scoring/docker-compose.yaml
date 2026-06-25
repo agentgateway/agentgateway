@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  # Dominion Observatory authorization service
+  observatory-authz:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      TRUST_THRESHOLD: "60"
+      OBSERVATORY_URL: "https://dominionobservatory.com"
+      CACHE_TTL: "300"
+      PORT: "8080"
+
+  # AgentGateway with external authorization
+  agentgateway:
+    image: ghcr.io/agentgateway/agentgateway:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config.yaml:/etc/agentgateway/config.yaml
+    depends_on:
+      - observatory-authz
