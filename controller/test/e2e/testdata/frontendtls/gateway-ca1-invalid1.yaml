@@ -29,3 +29,7 @@ spec:
             kind: ConfigMap
             name: ca1
             namespace: agentgateway-frontendtls
+          - group: ""
+            kind: ConfigMap
+            name: invalid1
+            namespace: agentgateway-frontendtls

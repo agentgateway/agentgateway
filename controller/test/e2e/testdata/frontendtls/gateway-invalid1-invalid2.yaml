@@ -27,5 +27,9 @@ spec:
           caCertificateRefs:
           - group: ""
             kind: ConfigMap
-            name: ca1
+            name: invalid1
+            namespace: agentgateway-frontendtls
+          - group: ""
+            kind: ConfigMap
+            name: invalid2
             namespace: agentgateway-frontendtls

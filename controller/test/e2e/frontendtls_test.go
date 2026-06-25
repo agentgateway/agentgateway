@@ -45,8 +45,9 @@ func TestFrontendTLS(tt *testing.T) {
 		manifest("frontendtls", "routes.yaml"),
 	)
 	t.ApplyYAML(
-		caManifest(t, "ca1", ca1),
-		caManifest(t, "ca2", ca2),
+		caManifest(t, "ca1", certificatePEM(ca1)),
+		caManifest(t, "ca2", certificatePEM(ca2)),
+		caManifest(t, "invalid1", []byte("invalid1")),
 		tlsSecretManifest(t, "gateway-cert", ca1, server, serverKey),
 	)
 
@@ -67,6 +68,28 @@ func TestFrontendTLS(tt *testing.T) {
 		gateway := gateway(t, "https", 1)
 		assertSuccess(t, gateway, client1, client1Key, ca1)
 		assertSuccess(t, gateway, client2, client2Key, ca1)
+	})
+	t.Run("ClientCertValidationWithSomeCARefsInvalid", func(t base.Test) {
+		t.Apply(manifest("frontendtls", "gateway-ca1-invalid1.yaml"))
+		gateway := gateway(t, "https", 1)
+		assertListenerConditions(t, "https", map[gwv1.ListenerConditionType]metav1.ConditionStatus{
+			gwv1.ListenerConditionAccepted:     metav1.ConditionTrue,
+			gwv1.ListenerConditionProgrammed:   metav1.ConditionTrue,
+			gwv1.ListenerConditionResolvedRefs: metav1.ConditionFalse,
+		})
+		assertSuccess(t, gateway, client1, client1Key, ca1)
+		assertFailure(t, gateway, client2, client2Key, ca1)
+	})
+	t.Run("ClientCertValidationWithAllCARefsInvalid", func(t base.Test) {
+		t.Apply(manifest("frontendtls", "gateway-invalid1-invalid2.yaml"))
+		assertListenerConditions(t, "https", map[gwv1.ListenerConditionType]metav1.ConditionStatus{
+			gwv1.ListenerConditionAccepted:     metav1.ConditionFalse,
+			gwv1.ListenerConditionProgrammed:   metav1.ConditionFalse,
+			gwv1.ListenerConditionResolvedRefs: metav1.ConditionFalse,
+		})
+		gateway := gateway(t, "https", 1)
+		assertFailure(t, gateway, client1, client1Key, ca1)
+		assertFailure(t, gateway, client2, client2Key, ca1)
 	})
 }
 
@@ -150,6 +173,19 @@ func gateway(t base.Test, listenerName string, attachedRoutes int) base.Gateway 
 	}
 }
 
+func assertListenerConditions(t base.Test, listenerName string, expected map[gwv1.ListenerConditionType]metav1.ConditionStatus) {
+	for conditionType, expectedStatus := range expected {
+		assertions.EventuallyGatewayListenerCondition(
+			t,
+			"gateway",
+			frontendTLSNamespace,
+			gwv1.SectionName(listenerName),
+			conditionType,
+			expectedStatus,
+		)
+	}
+}
+
 func tlsSecretManifest(t base.Test, name string, ca, cert *x509.Certificate, key *rsa.PrivateKey) string {
 	return fmt.Sprintf(`
 apiVersion: v1
@@ -171,7 +207,7 @@ data:
 	)
 }
 
-func caManifest(t base.Test, name string, cert *x509.Certificate) string {
+func caManifest(t base.Test, name string, cert []byte) string {
 	cm := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
@@ -182,7 +218,7 @@ func caManifest(t base.Test, name string, cert *x509.Certificate) string {
 			Name:      name,
 		},
 		Data: map[string]string{
-			"ca.crt": string(certificatePEM(cert)),
+			"ca.crt": string(cert),
 		},
 	}
 	data, err := json.Marshal(cm)
