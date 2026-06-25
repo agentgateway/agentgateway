@@ -60,7 +60,7 @@ export function claudeSubscriptionWarning(
 
   return (
     "This model uses a Claude subscription key (sk-ant-oat…). " +
-    "Anthropic requires the client to identify as Claude Code " +
-    "for sonnet and opus models on subscription plans."
+    "Anthropic maybe reject clients other than Claude Code " +
+    "for Sonnet and Opus models with subscription key."
   );
 }
