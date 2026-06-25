@@ -905,6 +905,7 @@ spec:
     buffer:
       request:
         maxBytes: 10Mi
+        onOverflow: "ReturnError"
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -919,6 +920,7 @@ spec:
     buffer:
       response:
         maxBytes: 5Mi
+        onOverflow: "ContinueStreaming"
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

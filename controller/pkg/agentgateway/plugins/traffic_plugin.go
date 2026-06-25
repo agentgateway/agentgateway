@@ -567,14 +567,21 @@ func translateTrafficPolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
-func translateBufferBody(b *agentgateway.BufferBody) *api.BufferBody {
+func bufferBodyOnOverflow(mode agentgateway.OverflowAction) api.TrafficPolicySpec_Buffer_OverflowAction {
+	if mode == agentgateway.ContinueStreaming {
+		return api.TrafficPolicySpec_Buffer_CONTINUE_STREAMING
+	}
+	return api.TrafficPolicySpec_Buffer_RETURN_ERROR
+}
+
+func translateBufferBody(b *agentgateway.BufferBody) *api.TrafficPolicySpec_Buffer_BufferBody {
+	bBody := &api.TrafficPolicySpec_Buffer_BufferBody{}
 	if b != nil {
 		if v := b.MaxBytes; v != nil {
-			return &api.BufferBody{
-				MaxBytes: quantityUint32(v),
-			}
+			bBody.MaxBytes = quantityUint32(v)
 		}
-		return &api.BufferBody{}
+		bBody.OnOverflow = bufferBodyOnOverflow(b.OnOverflow)
+		return bBody
 	}
 
 	return nil
@@ -582,7 +589,7 @@ func translateBufferBody(b *agentgateway.BufferBody) *api.BufferBody {
 
 func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
 	var errs []error
-	translatedBuffer := &api.Buffer{}
+	translatedBuffer := &api.TrafficPolicySpec_Buffer{}
 	translatedBuffer.Request = translateBufferBody(buffer.Request)
 	translatedBuffer.Response = translateBufferBody(buffer.Response)
 
@@ -591,7 +598,7 @@ func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, pol
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policyName),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Buffer{
+				Kind: &api.TrafficPolicySpec_Buffer_{
 					Buffer: translatedBuffer,
 				},
 			},
