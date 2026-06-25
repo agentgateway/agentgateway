@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Local development config for the AAuth end-to-end walkthrough in README.md.
+#
+# Pairs with the Go reference's `agent-client`
+# (https://github.com/christian-posta/extauth-aauth-resource). Differences from the
+# production `config.yaml`:
+#
+#   - Backend points at the agent-client's `/echo` endpoint (127.0.0.1:9099) so signed
+#     requests have somewhere to land.
+#   - `allowInsecureHttpIssuer: true` because the agent-client uses
+#     `http://127.0.0.1:9099` as its issuer (loopback HTTP, fine for dev only).
+#   - No authorization rule — every successfully verified signature is accepted.
+
+binds:
+  - port: 3000
+    listeners:
+      - name: default
+        protocol: HTTP
+        routes:
+          - name: echo
+            matches:
+              - path:
+                  pathPrefix: /echo
+            backends:
+              - host: 127.0.0.1:9099
+            policies:
+              aauth:
+                mode: strict
+                # Require an `aa-agent+jwt`-bound signing key (the typical "verified
+                # agent identity" case). Switch to `authJwt` to additionally require an
+                # `aa-auth+jwt` authorization token, or to `hwk` / `jwks` for the weaker
+                # pseudonymous / identified-only schemes.
+                requiredScheme: agentJwt
+                allowInsecureHttpIssuer: true
