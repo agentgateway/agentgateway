@@ -23,7 +23,7 @@ use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::control::caclient::CaClient;
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthHeader};
 use crate::http::authorization::RuleSet;
 use crate::http::{
 	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, health, remoteratelimit, retry,
@@ -2518,7 +2518,12 @@ pub enum BackendTrafficPolicy {
 	Tunnel(backend::Tunnel),
 	#[serde(rename = "backendTLS")]
 	BackendTLS(http::backendtls::BackendTLS),
-	BackendAuth(BackendAuth),
+	BackendAuth {
+		#[serde(flatten)]
+		auth: Option<BackendAuth>,
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		headers: Vec<BackendAuthHeader>,
+	},
 	InferenceRouting(ext_proc::InferenceRouting),
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
@@ -2531,6 +2536,21 @@ pub enum BackendTrafficPolicy {
 	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
 	RequestRedirect(filters::RequestRedirect),
 	RequestMirror(Vec<filters::RequestMirror>),
+}
+
+impl BackendTrafficPolicy {
+	pub fn backend_auth(auth: BackendAuth) -> Self {
+		Self::BackendAuth {
+			auth: Some(auth),
+			headers: Vec::new(),
+		}
+	}
+	pub fn backend_auth_headers(headers: Vec<BackendAuthHeader>) -> Self {
+		Self::BackendAuth {
+			auth: None,
+			headers,
+		}
+	}
 }
 
 #[apply(schema!)]

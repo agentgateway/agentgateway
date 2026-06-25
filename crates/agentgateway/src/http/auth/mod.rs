@@ -59,6 +59,25 @@ pub enum BackendAuth {
 	OAuthTokenExchange(token_exchange::OAuthTokenExchangeAuth),
 }
 
+/// A single secret-sourced header to inject on the backend request.
+#[apply(schema!)]
+pub struct BackendAuthHeader {
+	/// HTTP header name to set.
+	#[serde(with = "http_serde::header_name")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
+	pub name: http::HeaderName,
+	/// Optional prefix prepended to the secret value (e.g. "Bearer ").
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub prefix: Option<String>,
+	/// Resolved secret value (resolved controller-side; runtime sees the value, not the ref).
+	#[serde(
+		serialize_with = "ser_redact",
+		deserialize_with = "deser_key_from_file"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+	pub value: SecretString,
+}
+
 /// Records whether the backend auth location was explicitly configured by the user
 /// (vs. defaulted).
 ///
@@ -76,7 +95,15 @@ pub struct BackendInfo {
 	pub inputs: Arc<ProxyInputs>,
 }
 
-pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> {
+pub fn apply_tunnel_auth(
+	auth: &BackendAuth,
+	headers: &[BackendAuthHeader],
+) -> Result<HeaderValue, ProxyError> {
+	if !headers.is_empty() {
+		return Err(ProcessingString(
+			"backendAuth.headers is not supported on tunnel-bound backends".to_string(),
+		));
+	}
 	match auth {
 		BackendAuth::Key {
 			value: key,
@@ -106,6 +133,29 @@ pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> 
 	}
 }
 pub async fn apply_backend_auth(
+	backend_info: &BackendInfo,
+	auth: Option<&BackendAuth>,
+	headers: &[BackendAuthHeader],
+	req: &mut Request,
+) -> Result<(), ProxyError> {
+	if let Some(auth) = auth {
+		apply_backend_auth_kind(backend_info, auth, req).await?;
+	}
+	for h in headers {
+		let raw = h.value.expose_secret();
+		let value = match h.prefix.as_deref() {
+			Some(prefix) => Cow::Owned(format!("{prefix}{raw}")),
+			None => Cow::Borrowed(raw),
+		};
+		let mut header_value =
+			HeaderValue::from_str(&value).map_err(|e| ProxyError::Processing(e.into()))?;
+		header_value.set_sensitive(true);
+		req.headers_mut().insert(&h.name, header_value);
+	}
+	Ok(())
+}
+
+async fn apply_backend_auth_kind(
 	backend_info: &BackendInfo,
 	auth: &BackendAuth,
 	req: &mut Request,

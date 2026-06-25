@@ -12,7 +12,7 @@ use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthHeader};
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
@@ -222,6 +222,8 @@ impl FrontendPolices {
 pub struct BackendPolicies {
 	pub backend_tls: Option<BackendTLS>,
 	pub backend_auth: Option<BackendAuth>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub backend_auth_headers: Vec<BackendAuthHeader>,
 	pub a2a: Option<A2aPolicy>,
 	pub llm_provider: Option<Arc<llm::NamedAIProvider>>,
 	pub llm: Option<Arc<llm::Policy>>,
@@ -258,6 +260,11 @@ impl BackendPolicies {
 		Self {
 			backend_tls: other.backend_tls.or(self.backend_tls),
 			backend_auth: other.backend_auth.or(self.backend_auth),
+			backend_auth_headers: if other.backend_auth_headers.is_empty() {
+				self.backend_auth_headers
+			} else {
+				other.backend_auth_headers
+			},
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
@@ -1111,8 +1118,13 @@ impl Store {
 				BackendTrafficPolicy::BackendTLS(p) => {
 					pol.backend_tls.get_or_insert_with(|| p.clone());
 				},
-				BackendTrafficPolicy::BackendAuth(p) => {
-					pol.backend_auth.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::BackendAuth { auth, headers } => {
+					if let Some(a) = auth {
+						pol.backend_auth.get_or_insert_with(|| a.clone());
+					}
+					if pol.backend_auth_headers.is_empty() && !headers.is_empty() {
+						pol.backend_auth_headers = headers.clone();
+					}
 				},
 				BackendTrafficPolicy::InferenceRouting(p) => {
 					pol.inference_routing.get_or_insert_with(|| p.clone());
