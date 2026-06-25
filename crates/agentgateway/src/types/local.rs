@@ -1373,19 +1373,20 @@ impl LocalBackend {
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> Result<BackendWithPolicies, anyhow::Error> {
 		let mut inline_policies = match policies {
-			Some(p) => { LocalBackendPolicies {
-				simple: p.simple,
-				mcp_authorization: p.mcp_authorization,
-				mcp_guardrails: p.mcp_guardrails,
-				a2a: None,
-				inference_routing: None,
-				ai: None,
-				response_header_modifier: None,
-				request_redirect: None,
-				health: None,
-				ext_authz: None,
-				authorization: None,
-			}
+			Some(p) => {
+				LocalBackendPolicies {
+					simple: p.simple,
+					mcp_authorization: p.mcp_authorization,
+					mcp_guardrails: p.mcp_guardrails,
+					a2a: None,
+					inference_routing: None,
+					ai: None,
+					response_header_modifier: None,
+					request_redirect: None,
+					health: None,
+					ext_authz: None,
+					authorization: None,
+				}
 				.translate(resources)
 				.await?
 			},

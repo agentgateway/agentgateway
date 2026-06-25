@@ -1496,6 +1496,16 @@ llm:
       - 'request.headers["x-model-auth"] == "yes"'
     params:
       baseUrl: http://{}
+    health:
+      eviction: {{}}
+      unhealthyExpression: 'response.code == 403'
+  - name: prefix/*
+    visibility: internal
+    provider: openai
+    params:
+      baseUrl: http://{}
+    transformation:
+      model: llmRequest.model.stripPrefix("prefix/")
   - name: direct-model
     provider: openAI
     authorization:
@@ -1504,146 +1514,124 @@ llm:
     params:
       baseUrl: http://{}
   virtualModels:
-  - name: public-model
+  - name: virtual-model
     routing:
       failover:
         targets:
         - model: real-model
           priority: 0
+  - name: failover
+    routing:
+      failover:
+        targets:
+        - model: real-model
+          priority: 0
+        - model: prefix/without-prefix
+          priority: 1
 "#,
+		mock.address(),
 		mock.address(),
 		mock.address()
 	);
 	let t = setup_local_llm_config(&config).await;
 	let io = t.serve_http(strng::literal!("bind/4000"));
 
-	let res = send_request(io.clone(), Method::GET, "http://lo/v1/models").await;
-	assert_eq!(res.status(), StatusCode::OK);
-	let models: Value =
-		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("models JSON");
-	assert_eq!(models["object"], "list");
-	let model_ids = models["data"]
-		.as_array()
-		.expect("model list")
-		.iter()
-		.map(|model| model["id"].as_str().expect("model id"))
-		.collect::<Vec<_>>();
-	assert_eq!(model_ids, vec!["public-model"]);
+	// check model list respects authorization
+	{
+		let model_ids = list_models(io.clone(), &[]).await;
+		assert_eq!(model_ids, vec!["virtual-model", "failover"]);
+		let model_ids = list_models(io.clone(), &[("x-model-auth", "yes")]).await;
+		assert_eq!(model_ids, vec!["direct-model", "virtual-model", "failover"]);
+	}
 
-	let res = send_request_headers(
-		io.clone(),
-		Method::GET,
-		"http://lo/v1/models",
-		&[("x-model-auth", "yes")],
-	)
-	.await;
-	assert_eq!(res.status(), StatusCode::OK);
-	let models: Value =
-		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("models JSON");
-	let model_ids = models["data"]
-		.as_array()
-		.expect("model list")
-		.iter()
-		.map(|model| model["id"].as_str().expect("model id"))
-		.collect::<Vec<_>>();
-	assert_eq!(model_ids, vec!["direct-model", "public-model"]);
+	// Virtual model
+	{
+		let res = send_completions_with_model(io.clone(), "virtual-model", &[]).await;
+		assert_eq!(res.status(), StatusCode::FORBIDDEN);
+		assert_eq!(
+			mock
+				.received_requests()
+				.await
+				.expect("upstream requests")
+				.len(),
+			0
+		);
 
-	let request_body = |model: &str| {
-		let mut body: Value = serde_json::from_slice(include_bytes!(
-			"../llm/tests/requests/completions/basic.json"
-		))
-		.expect("request JSON");
-		body["model"] = json!(model);
-		serde_json::to_vec(&body).expect("serialized request")
-	};
+		let res =
+			send_completions_with_model(io.clone(), "virtual-model", &[("x-model-auth", "yes")]).await;
+		assert_eq!(res.status(), StatusCode::OK);
 
-	let res = send_request_body(
-		io.clone(),
-		Method::POST,
-		"http://lo/v1/chat/completions",
-		&request_body("public-model"),
-	)
-	.await;
-	assert_eq!(res.status(), StatusCode::FORBIDDEN);
-	assert_eq!(
-		mock
-			.received_requests()
-			.await
-			.expect("upstream requests")
-			.len(),
-		0
-	);
+		let upstream_requests = mock.received_requests().await.expect("upstream requests");
+		assert_eq!(upstream_requests.len(), 1);
+		let upstream_body: Value =
+			serde_json::from_slice(&upstream_requests[0].body).expect("upstream request JSON");
+		assert_eq!(upstream_body["model"], "real-model");
+	}
 
-	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
-		.header("x-model-auth", "yes")
-		.body(Body::from(request_body("public-model")))
-		.send(io.clone())
-		.await
-		.expect("virtual model request");
-	assert_eq!(res.status(), StatusCode::OK);
-	read_body_raw(res.into_body()).await;
+	// Direct model
+	{
+		let res = send_completions_with_model(io.clone(), "direct-model", &[]).await;
+		assert_eq!(res.status(), StatusCode::FORBIDDEN);
+		assert_eq!(
+			mock
+				.received_requests()
+				.await
+				.expect("upstream requests")
+				.len(),
+			1
+		);
 
-	let upstream_requests = mock.received_requests().await.expect("upstream requests");
-	assert_eq!(upstream_requests.len(), 1);
-	let upstream_body: Value =
-		serde_json::from_slice(&upstream_requests[0].body).expect("upstream request JSON");
-	assert_eq!(upstream_body["model"], "real-model");
+		let res =
+			send_completions_with_model(io.clone(), "direct-model", &[("x-model-auth", "yes")]).await;
+		assert_eq!(res.status(), StatusCode::OK);
+		let upstream_requests = mock.received_requests().await.expect("upstream requests");
+		assert_eq!(upstream_requests.len(), 2);
+		let upstream_body: Value =
+			serde_json::from_slice(&upstream_requests[1].body).expect("upstream request JSON");
+		assert_eq!(upstream_body["model"], "direct-model");
+	}
 
-	let res = send_request_body(
-		io.clone(),
-		Method::POST,
-		"http://lo/v1/chat/completions",
-		&request_body("direct-model"),
-	)
-	.await;
-	assert_eq!(res.status(), StatusCode::FORBIDDEN);
-	assert_eq!(
-		mock
-			.received_requests()
-			.await
-			.expect("upstream requests")
-			.len(),
-		1
-	);
+	// Failover model
+	{
+		// First attempt: fails
+		let res = send_completions_with_model(io.clone(), "failover", &[]).await;
+		assert_eq!(res.status(), StatusCode::FORBIDDEN);
+		assert_eq!(
+			mock
+				.received_requests()
+				.await
+				.expect("upstream requests")
+				.len(),
+			2
+		);
 
-	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
-		.header("x-model-auth", "yes")
-		.body(Body::from(request_body("direct-model")))
-		.send(io.clone())
-		.await
-		.expect("direct model request");
-	assert_eq!(res.status(), StatusCode::OK);
-	read_body_raw(res.into_body()).await;
+		// Second attempt: failover to model without authz
+		let res = send_completions_with_model(io.clone(), "failover", &[]).await;
+		assert_eq!(res.status(), StatusCode::OK);
+		let upstream_requests = mock.received_requests().await.expect("upstream requests");
+		assert_eq!(upstream_requests.len(), 3);
+		let upstream_body: Value =
+			serde_json::from_slice(&upstream_requests[2].body).expect("upstream request JSON");
+		// Model should be explicitly rewritten and have the prefix removed
+		assert_eq!(upstream_body["model"], "without-prefix");
+	}
 
-	let upstream_requests = mock.received_requests().await.expect("upstream requests");
-	assert_eq!(upstream_requests.len(), 2);
-	let upstream_body: Value =
-		serde_json::from_slice(&upstream_requests[1].body).expect("upstream request JSON");
-	assert_eq!(upstream_body["model"], "direct-model");
-
-	let missing = json!({
-		"model": "missing-model",
-		"messages": [{"role": "user", "content": "hi"}]
-	});
-	let res = send_request_body(
-		io,
-		Method::POST,
-		"http://lo/v1/chat/completions",
-		&serde_json::to_vec(&missing).expect("serialized missing request"),
-	)
-	.await;
-	assert_eq!(res.status(), StatusCode::NOT_FOUND);
-	let missing_body: Value =
-		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("missing model JSON");
-	assert_eq!(missing_body["error"]["code"], "model_not_found");
-	assert_eq!(
-		mock
-			.received_requests()
-			.await
-			.expect("upstream requests")
-			.len(),
-		2
-	);
+	// Missing model
+	{
+		let res = send_completions_with_model(io, "missing-model", &[]).await;
+		assert_eq!(res.status(), StatusCode::NOT_FOUND);
+		let missing_body: Value =
+			serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("missing model JSON");
+		assert_eq!(missing_body["error"]["code"], "model_not_found");
+		assert_eq!(
+			mock
+				.received_requests()
+				.await
+				.expect("upstream requests")
+				.len(),
+			3
+		);
+	}
 }
 
 #[tokio::test]
@@ -1674,18 +1662,7 @@ llm:
 	);
 	let t = setup_local_llm_config(&config).await;
 	let io = t.serve_http(strng::literal!("bind/4000"));
-	let request_body = json!({
-		"model": "public-model",
-		"messages": [{"role": "user", "content": "hi"}]
-	});
-
-	let res = send_request_body(
-		io,
-		Method::POST,
-		"http://lo/v1/chat/completions",
-		&serde_json::to_vec(&request_body).expect("serialized request"),
-	)
-	.await;
+	let res = send_completions_with_model(io, "public-model", &[]).await;
 
 	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 	let body: Value =
@@ -1866,13 +1843,7 @@ async fn llm_custom_provider_routes_to_provider_backend() {
 	let (mock, _bind, io) =
 		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Completions]);
 
-	let res = send_request_body(
-		io,
-		Method::POST,
-		"http://lo/v1/chat/completions",
-		include_bytes!("../llm/tests/requests/completions/basic.json"),
-	)
-	.await;
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
 	assert_eq!(res.status(), 200);
 	let _ = res.into_body().collect().await.unwrap();
 
@@ -1896,13 +1867,7 @@ async fn llm_custom_provider_uses_native_format_fallback() {
 	let (mock, _bind, io) =
 		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Messages]);
 
-	let res = send_request_body(
-		io,
-		Method::POST,
-		"http://lo/v1/chat/completions",
-		include_bytes!("../llm/tests/requests/completions/basic.json"),
-	)
-	.await;
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
 	assert_eq!(res.status(), 200);
 	let response_body: Value =
 		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
@@ -1936,13 +1901,7 @@ async fn llm_custom_provider_uses_format_path_override() {
 		}],
 	);
 
-	let res = send_request_body(
-		io,
-		Method::POST,
-		"http://lo/v1/chat/completions",
-		include_bytes!("../llm/tests/requests/completions/basic.json"),
-	)
-	.await;
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
 	assert_eq!(res.status(), 200);
 	let _ = res.into_body().collect().await.unwrap();
 
@@ -1966,13 +1925,7 @@ async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
 	let (mock, _bind, io) =
 		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Embeddings]);
 
-	let res = send_request_body(
-		io,
-		Method::POST,
-		"http://lo/v1/chat/completions",
-		include_bytes!("../llm/tests/requests/completions/basic.json"),
-	)
-	.await;
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
 	assert_eq!(res.status(), 503);
 	let body = res.into_body().collect().await.unwrap().to_bytes();
 	assert!(
@@ -2026,6 +1979,50 @@ fn completions_request_body(streaming: bool) -> Vec<u8> {
 		body["stream"] = json!(true);
 	}
 	serde_json::to_vec(&body).expect("request fixture should serialize")
+}
+
+fn completions_request_body_with_model(model: &str) -> Vec<u8> {
+	let mut body: Value = serde_json::from_slice(include_bytes!(
+		"../llm/tests/requests/completions/basic.json"
+	))
+	.expect("request fixture should be valid JSON");
+	body["model"] = json!(model);
+	serde_json::to_vec(&body).expect("request fixture should serialize")
+}
+
+async fn send_completions_with_model(
+	io: Client<MemoryConnector, Body>,
+	model: &str,
+	headers: &[(&str, &str)],
+) -> Response {
+	let request_body = completions_request_body_with_model(model);
+	let mut request = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions");
+	for (key, value) in headers {
+		request = request.header(*key, *value);
+	}
+	request
+		.body(Body::from(request_body))
+		.send(io)
+		.await
+		.expect("completions request")
+}
+
+async fn list_models(io: Client<MemoryConnector, Body>, headers: &[(&str, &str)]) -> Vec<String> {
+	let res = if headers.is_empty() {
+		send_request(io, Method::GET, "http://lo/v1/models").await
+	} else {
+		send_request_headers(io, Method::GET, "http://lo/v1/models", headers).await
+	};
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("models JSON");
+	assert_eq!(models["object"], "list");
+	models["data"]
+		.as_array()
+		.expect("model list")
+		.iter()
+		.map(|model| model["id"].as_str().expect("model id").to_string())
+		.collect()
 }
 
 async fn assert_llm_remote_rate_limit_cost(

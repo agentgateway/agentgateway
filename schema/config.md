@@ -2899,6 +2899,11 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -4282,6 +4287,11 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -5635,6 +5645,11 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`binds[].listeners[].routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`binds[].listeners[].routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`binds[].listeners[].routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -10658,6 +10673,11 @@
 |`backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].ai.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -12041,6 +12061,11 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].ai.groups[].providers[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -13392,6 +13417,11 @@
 |`backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -17261,6 +17291,11 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routeGroups[].routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`routeGroups[].routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -18644,6 +18679,11 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -19997,6 +20037,11 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.key`|[]string|CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.ttl`|string|CEL expression that returns how long cached authorization results are reused.<br>The expression is evaluated after the authorization response has been applied<br>to the request, and must return either a duration or timestamp.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.cache.maxEntries`|integer|Maximum number of authorization results to keep in the cache.|
+|`routeGroups[].routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
+|`routeGroups[].routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
+|`routeGroups[].routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|

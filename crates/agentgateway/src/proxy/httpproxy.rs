@@ -4017,11 +4017,12 @@ impl PolicyClient {
 					&backend,
 					pols.into(),
 					None,
-				MustSnapshot::new(&mut req),
-				// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
-				// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
-				None,
-				&mut Default::default(),)
+					MustSnapshot::new(&mut req),
+					// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
+					// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
+					None,
+					&mut Default::default(),
+				)
 				.assert_size::<{ 7 * 1024 }>(),
 			)
 			.await
