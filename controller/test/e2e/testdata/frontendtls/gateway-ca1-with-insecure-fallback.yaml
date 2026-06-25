@@ -9,6 +9,9 @@ spec:
   - protocol: HTTPS
     port: 443
     name: https
+    allowedRoutes:
+      namespaces:
+        from: All
     tls:
       mode: Terminate
       certificateRefs:

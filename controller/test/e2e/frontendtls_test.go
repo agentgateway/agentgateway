@@ -41,7 +41,7 @@ func TestFrontendTLS(tt *testing.T) {
 	server, serverKey := generateCertificate(t, "*.example.com", 24*time.Hour, ca1, ca1Key)
 
 	t.Apply(
-		manifest("frontendtls", "backends.yaml"),
+		manifest("frontendtls", "namespace.yaml"),
 		manifest("frontendtls", "routes.yaml"),
 	)
 	t.ApplyYAML(
