@@ -710,8 +710,11 @@ kind-load: kind-load-testbox
 #----------------------------------------------------------------------------------
 
 # Agent Gateway conformance test configuration
+AGW_CONFORMANCE_GATEWAY_CLASS ?= agentgateway
 AGW_CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/agw-$(VERSION)-report.yaml -organization=agentgateway -project=agentgateway -version=$(VERSION) -url=github.com/agentgateway/agentgateway -contact=github.com/agentgateway/agentgateway/issues/new/choose
-AGW_CONFORMANCE_ARGS := -gateway-class=agentgateway $(AGW_CONFORMANCE_REPORT_ARGS)
+AGW_CONFORMANCE_SKIP_TESTS ?=
+AGW_CONFORMANCE_SKIP_ARGS := $(if $(AGW_CONFORMANCE_SKIP_TESTS),-skip-tests=$(AGW_CONFORMANCE_SKIP_TESTS))
+AGW_CONFORMANCE_ARGS := -gateway-class=$(AGW_CONFORMANCE_GATEWAY_CLASS) $(AGW_CONFORMANCE_REPORT_ARGS) $(AGW_CONFORMANCE_SKIP_ARGS)
 .PHONY: agw-conformance ## Run the agent gateway conformance test suite
 agw-conformance:
 	@mkdir -p $(TEST_ASSET_DIR)/conformance
@@ -731,8 +734,9 @@ GIE_CONFORMANCE_REPORT_ARGS ?= \
     -contact=github.com/agentgateway/agentgateway/issues/new/choose
 
 # The args to pass into the Gateway API Inference Extension conformance test suite.
+GIE_CONFORMANCE_GATEWAY_CLASS ?= agentgateway
 GIE_CONFORMANCE_ARGS := \
-    -gateway-class=agentgateway \
+    -gateway-class=$(GIE_CONFORMANCE_GATEWAY_CLASS) \
     $(GIE_CONFORMANCE_REPORT_ARGS)
 
 .PHONY: gie-conformance
