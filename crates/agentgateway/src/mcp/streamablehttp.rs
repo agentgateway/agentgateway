@@ -1,11 +1,16 @@
 use std::sync::Arc;
 
-use ::http::StatusCode;
+use ::http::{HeaderMap, StatusCode};
 use agent_core::prelude::AssertSize;
-use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ServerJsonRpcMessage};
-use rmcp::transport::common::http_header::{
-	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
+use rmcp::model::{
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta, ProtocolVersion,
+	RequestId, ServerJsonRpcMessage,
 };
+use rmcp::transport::common::http_header::{
+	EVENT_STREAM_MIME_TYPE, HEADER_MCP_METHOD, HEADER_MCP_NAME, HEADER_MCP_PARAM_PREFIX,
+	HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID, JSON_MIME_TYPE,
+};
+use rmcp::transport::common::mcp_headers::decode_header_value;
 
 use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::RelayInputs;
@@ -33,6 +38,24 @@ pub enum StreamableHttpPostResponse {
 	Accepted,
 	Json(ServerJsonRpcMessage, Option<String>),
 	Sse(BoxedSseStream, Option<String>),
+}
+
+#[derive(Debug, Clone)]
+struct RequestProtocol {
+	version: Option<ProtocolVersion>,
+}
+
+impl RequestProtocol {
+	fn is_modern(&self) -> bool {
+		self
+			.version
+			.as_ref()
+			.is_some_and(|version| version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str())
+	}
+
+	fn uses_sessions(&self) -> bool {
+		!self.is_modern()
+	}
 }
 
 impl std::fmt::Debug for StreamableHttpPostResponse {
@@ -112,10 +135,9 @@ impl StreamableHttpService {
 			Ok(b) => b,
 			Err(e) => return mcp::Error::Deserialize(e).into(),
 		};
-		// The gateway can parse modern versions, but it still sends through legacy
-		// session paths. Reject modern requests before they reach that code.
-		protocol::RequestProtocolContext::extract(&part.headers, &message)?
-			.reject_if_unsupported_downstream()?;
+		let request_id = request_id(&message);
+		let protocol = request_protocol(&part.headers, &message, request_id.clone())?;
+		validate_standard_headers(&part.headers, &message)?;
 
 		if !self.config.stateful_mode {
 			let relay = inputs.build_new_connections()?;
@@ -140,6 +162,9 @@ impl StreamableHttpService {
 			.and_then(|v| v.to_str().ok());
 
 		if let Some(session_id) = session_id {
+			if !protocol.uses_sessions() {
+				return mcp::Error::InvalidSessionIdHeader.into();
+			}
 			let Some(mut session) = self
 				.session_manager
 				.get_or_resume_session(session_id, inputs)?
@@ -150,11 +175,7 @@ impl StreamableHttpService {
 			return Box::pin(session.send(part, message)).await;
 		}
 
-		if matches!(
-			&message,
-			ClientJsonRpcMessage::Request(req)
-				if matches!(req.request, ClientRequest::DiscoverRequest(_))
-		) {
+		if !protocol.uses_sessions() {
 			let relay = inputs.build_new_connections()?;
 			let mut session = self.session_manager.create_stateless_session(relay);
 			return Box::pin(session.send(part, message)).await;
@@ -237,6 +258,167 @@ impl StreamableHttpService {
 				.await
 				.unwrap_or_else(accepted_response),
 		)
+	}
+}
+
+fn validate_standard_headers(
+	headers: &HeaderMap,
+	message: &ClientJsonRpcMessage,
+) -> Result<(), ProxyError> {
+	let request_id = request_id(message);
+
+	validate_standard_header(
+		headers,
+		HEADER_MCP_METHOD,
+		message_method(message),
+		request_id.clone(),
+	)?;
+	validate_standard_header(
+		headers,
+		HEADER_MCP_NAME,
+		message_name(message),
+		request_id.clone(),
+	)?;
+
+	for (name, value) in headers {
+		if name
+			.as_str()
+			.get(..HEADER_MCP_PARAM_PREFIX.len())
+			.is_some_and(|prefix| prefix.eq_ignore_ascii_case(HEADER_MCP_PARAM_PREFIX))
+		{
+			let value = value.to_str().map_err(|_| {
+				mcp::Error::InvalidRoutingHeader(request_id.clone(), HEADER_MCP_PARAM_PREFIX)
+			})?;
+			if decode_header_value(value).is_none() {
+				return Err(
+					mcp::Error::InvalidRoutingHeader(request_id.clone(), HEADER_MCP_PARAM_PREFIX).into(),
+				);
+			}
+		}
+	}
+
+	Ok(())
+}
+
+fn validate_standard_header(
+	headers: &HeaderMap,
+	header_name: &'static str,
+	body_value: Option<&str>,
+	request_id: Option<RequestId>,
+) -> Result<(), ProxyError> {
+	let Some(raw) = headers.get(header_name) else {
+		return Ok(());
+	};
+	let raw = raw
+		.to_str()
+		.map_err(|_| mcp::Error::InvalidRoutingHeader(request_id.clone(), header_name))?;
+	let decoded = decode_header_value(raw)
+		.ok_or_else(|| mcp::Error::InvalidRoutingHeader(request_id.clone(), header_name))?;
+	if let Some(body_value) = body_value
+		&& decoded != body_value
+	{
+		return Err(mcp::Error::HeaderBodyMismatch(request_id, header_name).into());
+	}
+	Ok(())
+}
+
+fn request_id(message: &ClientJsonRpcMessage) -> Option<RequestId> {
+	match message {
+		ClientJsonRpcMessage::Request(req) => Some(req.id.clone()),
+		_ => None,
+	}
+}
+
+fn message_method(message: &ClientJsonRpcMessage) -> Option<&str> {
+	match message {
+		ClientJsonRpcMessage::Request(req) => Some(req.request.method()),
+		ClientJsonRpcMessage::Notification(notification) => Some(match &notification.notification {
+			ClientNotification::CancelledNotification(n) => n.method.as_str(),
+			ClientNotification::ProgressNotification(n) => n.method.as_str(),
+			ClientNotification::InitializedNotification(n) => n.method.as_str(),
+			ClientNotification::RootsListChangedNotification(n) => n.method.as_str(),
+			ClientNotification::TaskStatusNotification(n) => n.method.as_str(),
+			ClientNotification::CustomNotification(n) => n.method.as_str(),
+		}),
+		_ => None,
+	}
+}
+
+fn message_name(message: &ClientJsonRpcMessage) -> Option<&str> {
+	let ClientJsonRpcMessage::Request(req) = message else {
+		return None;
+	};
+	match &req.request {
+		ClientRequest::CallToolRequest(r) => Some(&r.params.name),
+		ClientRequest::GetPromptRequest(r) => Some(&r.params.name),
+		ClientRequest::ReadResourceRequest(r) => Some(&r.params.uri),
+		ClientRequest::SubscribeRequest(r) => Some(&r.params.uri),
+		ClientRequest::UnsubscribeRequest(r) => Some(&r.params.uri),
+		_ => None,
+	}
+}
+
+pub(crate) fn protocol_version_header(
+	headers: &::http::HeaderMap,
+	request_id: Option<RequestId>,
+) -> Result<Option<ProtocolVersion>, ProxyError> {
+	let Some(value) = headers.get(HEADER_MCP_PROTOCOL_VERSION) else {
+		return Ok(None);
+	};
+	let value = value
+		.to_str()
+		.map_err(|_| ProxyError::MCP(mcp::Error::InvalidProtocolVersion))?;
+	let version = ProtocolVersion::KNOWN_VERSIONS
+		.iter()
+		.find(|version| version.as_str() == value)
+		.cloned()
+		.ok_or_else(|| {
+			ProxyError::MCP(mcp::Error::UnsupportedVersion(
+				request_id,
+				value.to_string(),
+			))
+		})?;
+	Ok(Some(version))
+}
+
+fn request_protocol(
+	headers: &::http::HeaderMap,
+	message: &ClientJsonRpcMessage,
+	request_id: Option<RequestId>,
+) -> Result<RequestProtocol, ProxyError> {
+	let header_version = protocol_version_header(headers, request_id.clone())?;
+	let body_version = message_protocol_version(message);
+
+	if let (Some(header), Some(body)) = (&header_version, &body_version)
+		&& header != body
+	{
+		return Err(mcp::Error::VersionMismatch(request_id).into());
+	}
+
+	if header_version
+		.as_ref()
+		.or(body_version.as_ref())
+		.is_some_and(|version| version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str())
+		&& (header_version.is_none() || body_version.is_none())
+	{
+		return Err(mcp::Error::InvalidProtocolVersion.into());
+	}
+
+	Ok(RequestProtocol {
+		version: body_version.or(header_version),
+	})
+}
+
+fn message_protocol_version(message: &ClientJsonRpcMessage) -> Option<ProtocolVersion> {
+	match message {
+		ClientJsonRpcMessage::Request(req) => match &req.request {
+			ClientRequest::InitializeRequest(init) => Some(init.params.protocol_version.clone()),
+			_ => req.request.get_meta().protocol_version(),
+		},
+		ClientJsonRpcMessage::Notification(notification) => {
+			notification.notification.get_meta().protocol_version()
+		},
+		_ => None,
 	}
 }
 

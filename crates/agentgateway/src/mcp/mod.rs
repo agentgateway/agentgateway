@@ -73,6 +73,8 @@ pub enum Error {
 	SessionIdRequired,
 	#[error("invalid session ID header")]
 	InvalidSessionIdHeader,
+	#[error("invalid MCP protocol version header")]
+	InvalidProtocolVersion,
 	#[error("unsupported MCP protocol version: {1}")]
 	UnsupportedVersion(Option<RequestId>, String),
 	#[error("MCP protocol version header/body mismatch")]
