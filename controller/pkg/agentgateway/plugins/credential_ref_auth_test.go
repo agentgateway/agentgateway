@@ -81,20 +81,10 @@ func TestAzureAuthBuildsExplicitAndImplicitConfigs(t *testing.T) {
 		assert.Equal(t, explicit.GetWorkloadIdentityCredential() != nil, true)
 	})
 
-	t.Run("implicit", func(t *testing.T) {
-		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
-			Implicit: &agentgateway.AzureImplicit{},
-		}, "default")
+	t.Run("implicit when no credential source is set", func(t *testing.T) {
+		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{}, "default")
 		assert.NoError(t, err)
 		assert.Equal(t, policy.GetAzure().GetImplicit() != nil, true)
-	})
-
-	t.Run("developerImplicit", func(t *testing.T) {
-		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
-			DeveloperImplicit: &agentgateway.AzureDeveloperImplicit{},
-		}, "default")
-		assert.NoError(t, err)
-		assert.Equal(t, policy.GetAzure().GetDeveloperImplicit() != nil, true)
 	})
 }
 

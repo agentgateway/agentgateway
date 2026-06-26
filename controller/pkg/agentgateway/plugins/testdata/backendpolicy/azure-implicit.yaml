@@ -10,8 +10,7 @@ spec:
       group: gateway.networking.k8s.io
   backend:
     auth:
-      azure:
-        implicit: {}
+      azure: {}
 
 ---
 # Output

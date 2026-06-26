@@ -366,18 +366,6 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
-                                                developerImplicit:
-                                                  description: |-
-                                                    DeveloperImplicit authentication uses local developer tooling credentials.
-                                                    This is intended for development use cases only and must not be used in
-                                                    production.
-                                                  type: object
-                                                implicit:
-                                                  description: |-
-                                                    Implicit authentication automatically detects the authentication method
-                                                    based on the environment: Workload Identity on Kubernetes, Managed
-                                                    Identity on Azure VMs, or developer tooling locally.
-                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -439,12 +427,11 @@ spec:
                                                   type: object
                                               type: object
                                               x-kubernetes-validations:
-                                              - message: exactly one of the fields
-                                                  in [secretRef managedIdentity workloadIdentity
-                                                  implicit developerImplicit] must
-                                                  be set
-                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
-                                                  == 1'
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -1060,18 +1047,6 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
-                                                developerImplicit:
-                                                  description: |-
-                                                    DeveloperImplicit authentication uses local developer tooling credentials.
-                                                    This is intended for development use cases only and must not be used in
-                                                    production.
-                                                  type: object
-                                                implicit:
-                                                  description: |-
-                                                    Implicit authentication automatically detects the authentication method
-                                                    based on the environment: Workload Identity on Kubernetes, Managed
-                                                    Identity on Azure VMs, or developer tooling locally.
-                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -1133,12 +1108,11 @@ spec:
                                                   type: object
                                               type: object
                                               x-kubernetes-validations:
-                                              - message: exactly one of the fields
-                                                  in [secretRef managedIdentity workloadIdentity
-                                                  implicit developerImplicit] must
-                                                  be set
-                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
-                                                  == 1'
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -1749,18 +1723,6 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
-                                                developerImplicit:
-                                                  description: |-
-                                                    DeveloperImplicit authentication uses local developer tooling credentials.
-                                                    This is intended for development use cases only and must not be used in
-                                                    production.
-                                                  type: object
-                                                implicit:
-                                                  description: |-
-                                                    Implicit authentication automatically detects the authentication method
-                                                    based on the environment: Workload Identity on Kubernetes, Managed
-                                                    Identity on Azure VMs, or developer tooling locally.
-                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -1822,12 +1784,11 @@ spec:
                                                   type: object
                                               type: object
                                               x-kubernetes-validations:
-                                              - message: exactly one of the fields
-                                                  in [secretRef managedIdentity workloadIdentity
-                                                  implicit developerImplicit] must
-                                                  be set
-                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
-                                                  == 1'
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -2664,18 +2625,6 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
-                                                developerImplicit:
-                                                  description: |-
-                                                    DeveloperImplicit authentication uses local developer tooling credentials.
-                                                    This is intended for development use cases only and must not be used in
-                                                    production.
-                                                  type: object
-                                                implicit:
-                                                  description: |-
-                                                    Implicit authentication automatically detects the authentication method
-                                                    based on the environment: Workload Identity on Kubernetes, Managed
-                                                    Identity on Azure VMs, or developer tooling locally.
-                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -2737,12 +2686,11 @@ spec:
                                                   type: object
                                               type: object
                                               x-kubernetes-validations:
-                                              - message: exactly one of the fields
-                                                  in [secretRef managedIdentity workloadIdentity
-                                                  implicit developerImplicit] must
-                                                  be set
-                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
-                                                  == 1'
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -3358,18 +3306,6 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
-                                                developerImplicit:
-                                                  description: |-
-                                                    DeveloperImplicit authentication uses local developer tooling credentials.
-                                                    This is intended for development use cases only and must not be used in
-                                                    production.
-                                                  type: object
-                                                implicit:
-                                                  description: |-
-                                                    Implicit authentication automatically detects the authentication method
-                                                    based on the environment: Workload Identity on Kubernetes, Managed
-                                                    Identity on Azure VMs, or developer tooling locally.
-                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -3431,12 +3367,11 @@ spec:
                                                   type: object
                                               type: object
                                               x-kubernetes-validations:
-                                              - message: exactly one of the fields
-                                                  in [secretRef managedIdentity workloadIdentity
-                                                  implicit developerImplicit] must
-                                                  be set
-                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
-                                                  == 1'
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -4333,18 +4268,6 @@ spec:
                       azure:
                         description: Azure authentication method for the backend.
                         properties:
-                          developerImplicit:
-                            description: |-
-                              DeveloperImplicit authentication uses local developer tooling credentials.
-                              This is intended for development use cases only and must not be used in
-                              production.
-                            type: object
-                          implicit:
-                            description: |-
-                              Implicit authentication automatically detects the authentication method
-                              based on the environment: Workload Identity on Kubernetes, Managed
-                              Identity on Azure VMs, or developer tooling locally.
-                            type: object
                           managedIdentity:
                             description: Managed identity authentication settings.
                             properties:
@@ -4403,10 +4326,10 @@ spec:
                             type: object
                         type: object
                         x-kubernetes-validations:
-                        - message: exactly one of the fields in [secretRef managedIdentity
-                            workloadIdentity implicit developerImplicit] must be set
-                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
-                            == 1'
+                        - message: at most one of the fields in [secretRef managedIdentity
+                            workloadIdentity] may be set
+                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                            <= 1'
                       gcp:
                         description: |-
                           Google authentication method for the backend.

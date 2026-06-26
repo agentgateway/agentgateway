@@ -1419,11 +1419,12 @@ type AwsAssumeRole struct {
 	RoleArn string `json:"roleArn"`
 }
 
-// AzureAuth configures authentication to Azure services. Exactly one
-// credential source must be set, mirroring the agentgateway proxy's Azure
-// authentication options.
+// AzureAuth configures authentication to Azure services. At most one explicit
+// credential source may be set. When none is set, authentication is implicit:
+// the method is automatically detected from the environment, which resolves to
+// Workload Identity when running on Kubernetes.
 //
-// +kubebuilder:validation:ExactlyOneOf=secretRef;managedIdentity;workloadIdentity;implicit;developerImplicit
+// +kubebuilder:validation:AtMostOneOf=secretRef;managedIdentity;workloadIdentity
 type AzureAuth struct {
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, containing the Azure credentials. When using the default Secret
@@ -1447,20 +1448,6 @@ type AzureAuth struct {
 	//
 	// +optional
 	WorkloadIdentity *AzureWorkloadIdentity `json:"workloadIdentity,omitempty"`
-
-	// Implicit authentication automatically detects the authentication method
-	// based on the environment: Workload Identity on Kubernetes, Managed
-	// Identity on Azure VMs, or developer tooling locally.
-	//
-	// +optional
-	Implicit *AzureImplicit `json:"implicit,omitempty"`
-
-	// DeveloperImplicit authentication uses local developer tooling credentials.
-	// This is intended for development use cases only and must not be used in
-	// production.
-	//
-	// +optional
-	DeveloperImplicit *AzureDeveloperImplicit `json:"developerImplicit,omitempty"`
 }
 
 type AzureManagedIdentity struct {
@@ -1474,16 +1461,6 @@ type AzureManagedIdentity struct {
 
 // AzureWorkloadIdentity configures Azure Workload Identity authentication.
 type AzureWorkloadIdentity struct {
-}
-
-// AzureImplicit configures automatic detection of the Azure authentication
-// method based on the runtime environment.
-type AzureImplicit struct {
-}
-
-// AzureDeveloperImplicit configures developer-only implicit Azure
-// authentication.
-type AzureDeveloperImplicit struct {
 }
 
 type BackendAuthPassthrough struct {
