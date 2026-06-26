@@ -1,0 +1,11 @@
+{
+  "model": "us.anthropic.claude-opus-4-8-v1",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Deeply analyze this topic."
+    }
+  ],
+  "max_completion_tokens": 64,
+  "reasoning_effort": "high"
+}

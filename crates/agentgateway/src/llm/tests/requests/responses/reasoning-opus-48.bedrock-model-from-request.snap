@@ -1,0 +1,34 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/reasoning-opus-48.json
+info:
+  model: us.anthropic.claude-opus-4-8-v1
+  max_output_tokens: 64
+  input: Classify the intent.
+  reasoning:
+    effort: high
+---
+{
+  "modelId": "us.anthropic.claude-opus-4-8-v1",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "text": "Classify the intent."
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 64
+  },
+  "additionalModelRequestFields": {
+    "thinking": {
+      "type": "adaptive"
+    },
+    "output_config": {
+      "effort": "high"
+    }
+  }
+}
