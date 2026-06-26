@@ -961,6 +961,7 @@ fn into_sse_stream(
 	stream.map(move |rpc| {
 		let r = match rpc {
 			Ok(rpc) => {
+				let rpc = with_gateway_cache_policy(rpc);
 				if !captured_terminal && let Some(log) = mcp_log.as_ref() {
 					captured_terminal = capture_terminal_mcp_payload(log, &request_id, &rpc);
 				}
@@ -977,6 +978,47 @@ fn into_sse_stream(
 			message: Arc::new(r),
 		}
 	})
+}
+
+fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMessage {
+	let ServerJsonRpcMessage::Response(resp) = &mut msg else {
+		return msg;
+	};
+
+	// Cache hints must describe the gateway-visible result, not the upstream's result.
+	// For now, keep all cacheable MCP responses immediately stale/private because
+	// routing config, backend membership, and authz filtering can change without a
+	// client invalidation path. A future opt-in can allow positive TTLs when no
+	// per-user/authz-dependent filtering applies.
+	match &mut resp.result {
+		ServerResult::DiscoverResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListToolsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListPromptsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListResourcesResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListResourceTemplatesResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ReadResourceResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		_ => {},
+	}
+
+	msg
 }
 
 async fn apply_guardrails_response_intercept(
