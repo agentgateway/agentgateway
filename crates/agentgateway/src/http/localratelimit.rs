@@ -70,11 +70,10 @@ impl TryFrom<RateLimitSpec> for RateLimit {
 }
 
 impl RateLimit {
-	pub fn check_request(&self) -> Result<(), ProxyError> {
+	pub fn check_request(&self) -> Result<http::PolicyResponse, ProxyError> {
 		if self.spec.limit_type != RateLimitType::Requests {
-			return Ok(());
+			return Ok(http::PolicyResponse::default());
 		}
-		// TODO: return headers on success, not just failure
 		self
 			.ratelimit
 			.try_wait()
@@ -82,6 +81,26 @@ impl RateLimit {
 				limit,
 				remaining,
 				reset_seconds: reset.as_secs(),
+			})
+			.map(|()| {
+				let limit = self.ratelimit.max_tokens();
+				let remaining = self.ratelimit.available();
+				let reset = (self.ratelimit.next_refill() - clocksource::precise::Instant::now())
+					.as_secs();
+				let mut headers = http::HeaderMap::new();
+				if let Ok(v) = http::HeaderValue::try_from(limit.to_string()) {
+					headers.insert(http::x_headers::X_RATELIMIT_LIMIT, v);
+				}
+				if let Ok(v) = http::HeaderValue::try_from(remaining.to_string()) {
+					headers.insert(http::x_headers::X_RATELIMIT_REMAINING, v);
+				}
+				if let Ok(v) = http::HeaderValue::try_from(reset.to_string()) {
+					headers.insert(http::x_headers::X_RATELIMIT_RESET, v);
+				}
+				http::PolicyResponse {
+					direct_response: None,
+					response_headers: Some(headers),
+				}
 			})
 	}
 
@@ -134,10 +153,12 @@ impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
 		_log: &mut crate::telemetry::log::RequestLog,
 		_req: &mut http::Request,
 	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+		let mut combined = http::PolicyResponse::default();
 		for rate_limit in self {
-			rate_limit.check_request()?;
+			let resp = rate_limit.check_request()?;
+			combined = combined.merge(resp);
 		}
-		Ok(http::PolicyResponse::default())
+		Ok(combined)
 	}
 }
 
