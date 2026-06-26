@@ -780,3 +780,77 @@ mod ratelimit {
 		}
 	}
 }
+
+#[cfg(test)]
+mod check_request_tests {
+	use std::time::Duration;
+
+	use super::*;
+
+	fn make_rate_limit(max_tokens: u64) -> RateLimit {
+		RateLimit::try_from(RateLimitSpec {
+			max_tokens,
+			tokens_per_fill: 1,
+			fill_interval: Duration::from_secs(60),
+			limit_type: RateLimitType::Requests,
+		})
+		.unwrap()
+	}
+
+	#[test]
+	fn success_returns_rate_limit_headers() {
+		let rl = make_rate_limit(10);
+		let resp = rl.check_request().unwrap();
+		let headers = resp.response_headers.unwrap();
+		assert!(headers.contains_key(http::x_headers::X_RATELIMIT_LIMIT));
+		assert!(headers.contains_key(http::x_headers::X_RATELIMIT_REMAINING));
+		assert!(headers.contains_key(http::x_headers::X_RATELIMIT_RESET));
+	}
+
+	#[test]
+	fn remaining_decreases_each_request() {
+		let rl = make_rate_limit(5);
+		let remaining1 = rl.check_request().unwrap().response_headers.unwrap()
+			.get(http::x_headers::X_RATELIMIT_REMAINING).unwrap()
+			.to_str().unwrap().parse::<u64>().unwrap();
+		let remaining2 = rl.check_request().unwrap().response_headers.unwrap()
+			.get(http::x_headers::X_RATELIMIT_REMAINING).unwrap()
+			.to_str().unwrap().parse::<u64>().unwrap();
+		assert!(remaining1 > remaining2);
+	}
+
+	#[test]
+	fn exhausted_bucket_returns_error() {
+		let rl = make_rate_limit(2);
+		let _ = rl.check_request();
+		let _ = rl.check_request();
+		let err = rl.check_request().unwrap_err();
+		assert!(matches!(err, ProxyError::RateLimitExceeded { .. }));
+	}
+
+	#[test]
+	fn token_type_skips_check() {
+		let rl = RateLimit::try_from(RateLimitSpec {
+			max_tokens: 10,
+			tokens_per_fill: 1,
+			fill_interval: Duration::from_secs(60),
+			limit_type: RateLimitType::Tokens,
+		})
+		.unwrap();
+		let resp = rl.check_request().unwrap();
+		assert!(resp.response_headers.is_none());
+	}
+
+	#[test]
+	fn remaining_counts_down_to_zero() {
+		let rl = make_rate_limit(5);
+		for expected_remaining in (0..5).rev() {
+			let resp = rl.check_request().unwrap();
+			let remaining = resp.response_headers.unwrap()
+				.get(http::x_headers::X_RATELIMIT_REMAINING).unwrap()
+				.to_str().unwrap().parse::<u64>().unwrap();
+			assert_eq!(remaining, expected_remaining);
+		}
+		assert!(matches!(rl.check_request().unwrap_err(), ProxyError::RateLimitExceeded { .. }));
+	}
+}
