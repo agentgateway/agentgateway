@@ -366,6 +366,18 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
+                                                developerImplicit:
+                                                  description: |-
+                                                    DeveloperImplicit authentication uses local developer tooling credentials.
+                                                    This is intended for development use cases only and must not be used in
+                                                    production.
+                                                  type: object
+                                                implicit:
+                                                  description: |-
+                                                    Implicit authentication automatically detects the authentication method
+                                                    based on the environment: Workload Identity on Kubernetes, Managed
+                                                    Identity on Azure VMs, or developer tooling locally.
+                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -416,7 +428,23 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity
+                                                  implicit developerImplicit] must
+                                                  be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
+                                                  == 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -1032,6 +1060,18 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
+                                                developerImplicit:
+                                                  description: |-
+                                                    DeveloperImplicit authentication uses local developer tooling credentials.
+                                                    This is intended for development use cases only and must not be used in
+                                                    production.
+                                                  type: object
+                                                implicit:
+                                                  description: |-
+                                                    Implicit authentication automatically detects the authentication method
+                                                    based on the environment: Workload Identity on Kubernetes, Managed
+                                                    Identity on Azure VMs, or developer tooling locally.
+                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -1082,7 +1122,23 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity
+                                                  implicit developerImplicit] must
+                                                  be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
+                                                  == 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -1693,6 +1749,18 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
+                                                developerImplicit:
+                                                  description: |-
+                                                    DeveloperImplicit authentication uses local developer tooling credentials.
+                                                    This is intended for development use cases only and must not be used in
+                                                    production.
+                                                  type: object
+                                                implicit:
+                                                  description: |-
+                                                    Implicit authentication automatically detects the authentication method
+                                                    based on the environment: Workload Identity on Kubernetes, Managed
+                                                    Identity on Azure VMs, or developer tooling locally.
+                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -1743,7 +1811,23 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity
+                                                  implicit developerImplicit] must
+                                                  be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
+                                                  == 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -2580,6 +2664,18 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
+                                                developerImplicit:
+                                                  description: |-
+                                                    DeveloperImplicit authentication uses local developer tooling credentials.
+                                                    This is intended for development use cases only and must not be used in
+                                                    production.
+                                                  type: object
+                                                implicit:
+                                                  description: |-
+                                                    Implicit authentication automatically detects the authentication method
+                                                    based on the environment: Workload Identity on Kubernetes, Managed
+                                                    Identity on Azure VMs, or developer tooling locally.
+                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -2630,7 +2726,23 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity
+                                                  implicit developerImplicit] must
+                                                  be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
+                                                  == 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -3246,6 +3358,18 @@ spec:
                                               description: Azure authentication method
                                                 for the backend.
                                               properties:
+                                                developerImplicit:
+                                                  description: |-
+                                                    DeveloperImplicit authentication uses local developer tooling credentials.
+                                                    This is intended for development use cases only and must not be used in
+                                                    production.
+                                                  type: object
+                                                implicit:
+                                                  description: |-
+                                                    Implicit authentication automatically detects the authentication method
+                                                    based on the environment: Workload Identity on Kubernetes, Managed
+                                                    Identity on Azure VMs, or developer tooling locally.
+                                                  type: object
                                                 managedIdentity:
                                                   description: Managed identity authentication
                                                     settings.
@@ -3296,7 +3420,23 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity
+                                                  implicit developerImplicit] must
+                                                  be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
+                                                  == 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -4193,6 +4333,18 @@ spec:
                       azure:
                         description: Azure authentication method for the backend.
                         properties:
+                          developerImplicit:
+                            description: |-
+                              DeveloperImplicit authentication uses local developer tooling credentials.
+                              This is intended for development use cases only and must not be used in
+                              production.
+                            type: object
+                          implicit:
+                            description: |-
+                              Implicit authentication automatically detects the authentication method
+                              based on the environment: Workload Identity on Kubernetes, Managed
+                              Identity on Azure VMs, or developer tooling locally.
+                            type: object
                           managedIdentity:
                             description: Managed identity authentication settings.
                             properties:
@@ -4240,7 +4392,21 @@ spec:
                                 (!has(self.kind) || size(self.kind) == 0 || self.kind
                                 == ''Secret'') : (has(self.kind) && size(self.kind)
                                 > 0)'
+                          workloadIdentity:
+                            description: |-
+                              Workload identity authentication settings. Uses the federated token
+                              projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                              `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                              environment variables) to authenticate. This is the recommended method
+                              when running on Azure Kubernetes Service (AKS) with Workload Identity
+                              enabled.
+                            type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: exactly one of the fields in [secretRef managedIdentity
+                            workloadIdentity implicit developerImplicit] must be set
+                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity),has(self.implicit),has(self.developerImplicit)].filter(x,x==true).size()
+                            == 1'
                       gcp:
                         description: |-
                           Google authentication method for the backend.

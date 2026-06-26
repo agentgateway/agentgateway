@@ -1419,6 +1419,11 @@ type AwsAssumeRole struct {
 	RoleArn string `json:"roleArn"`
 }
 
+// AzureAuth configures authentication to Azure services. Exactly one
+// credential source must be set, mirroring the agentgateway proxy's Azure
+// authentication options.
+//
+// +kubebuilder:validation:ExactlyOneOf=secretRef;managedIdentity;workloadIdentity;implicit;developerImplicit
 type AzureAuth struct {
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, containing the Azure credentials. When using the default Secret
@@ -1432,6 +1437,30 @@ type AzureAuth struct {
 	//
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
+
+	// Workload identity authentication settings. Uses the federated token
+	// projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+	// `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+	// environment variables) to authenticate. This is the recommended method
+	// when running on Azure Kubernetes Service (AKS) with Workload Identity
+	// enabled.
+	//
+	// +optional
+	WorkloadIdentity *AzureWorkloadIdentity `json:"workloadIdentity,omitempty"`
+
+	// Implicit authentication automatically detects the authentication method
+	// based on the environment: Workload Identity on Kubernetes, Managed
+	// Identity on Azure VMs, or developer tooling locally.
+	//
+	// +optional
+	Implicit *AzureImplicit `json:"implicit,omitempty"`
+
+	// DeveloperImplicit authentication uses local developer tooling credentials.
+	// This is intended for development use cases only and must not be used in
+	// production.
+	//
+	// +optional
+	DeveloperImplicit *AzureDeveloperImplicit `json:"developerImplicit,omitempty"`
 }
 
 type AzureManagedIdentity struct {
@@ -1441,6 +1470,20 @@ type AzureManagedIdentity struct {
 	ObjectID string `json:"objectId"`
 	// +required
 	ResourceID string `json:"resourceId"`
+}
+
+// AzureWorkloadIdentity configures Azure Workload Identity authentication.
+type AzureWorkloadIdentity struct {
+}
+
+// AzureImplicit configures automatic detection of the Azure authentication
+// method based on the runtime environment.
+type AzureImplicit struct {
+}
+
+// AzureDeveloperImplicit configures developer-only implicit Azure
+// authentication.
+type AzureDeveloperImplicit struct {
 }
 
 type BackendAuthPassthrough struct {
