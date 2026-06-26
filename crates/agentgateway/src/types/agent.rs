@@ -1506,6 +1506,10 @@ pub struct McpBackend {
 	#[serde(with = "crate::serdes::serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub session_idle_ttl: Duration,
+	/// When true, re-encode JSON text content in tool call responses using GCF
+	/// (Graph Compact Format) for reduced token usage.
+	#[serde(default)]
+	pub gcf_encoding: bool,
 }
 
 impl McpBackend {

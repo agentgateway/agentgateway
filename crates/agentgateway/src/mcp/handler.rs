@@ -78,6 +78,8 @@ pub struct Relay {
 	pub policies: McpAuthorizationSet,
 	pub(crate) mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 	pub(crate) policy_client: PolicyClient,
+	/// When true, re-encode JSON text content in CallToolResult responses as GCF.
+	pub(crate) gcf_encoding: bool,
 }
 
 pub struct RelayInputs {
@@ -85,6 +87,7 @@ pub struct RelayInputs {
 	pub policies: McpAuthorizationSet,
 	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 	pub client: PolicyClient,
+	pub gcf_encoding: bool,
 }
 
 impl RelayInputs {
@@ -92,6 +95,7 @@ impl RelayInputs {
 		let r = Relay::new(self.backend, self.policies, self.client)?;
 		Ok(Relay {
 			mcp_guardrails: self.mcp_guardrails,
+			gcf_encoding: self.gcf_encoding,
 			..r
 		})
 	}
@@ -108,6 +112,7 @@ impl Relay {
 			policies,
 			mcp_guardrails: None,
 			policy_client: client,
+			gcf_encoding: false,
 		})
 	}
 	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
@@ -116,15 +121,22 @@ impl Relay {
 			policies,
 			mcp_guardrails: self.mcp_guardrails.clone(),
 			policy_client: self.policy_client.clone(),
+			gcf_encoding: self.gcf_encoding,
 		}
 	}
 
 	fn rewrite_outbound_server_messages(&self, target: &str, stream: Messages) -> Messages {
 		let target = target.to_string();
 		let default_target_name = self.upstreams.default_target_name.clone();
-		stream.map_server_messages(move |message| {
+		let gcf_enabled = self.gcf_encoding;
+		let stream = stream.map_server_messages(move |message| {
 			rewrite_resource_update_message(default_target_name.as_ref(), &target, message)
-		})
+		});
+		if gcf_enabled {
+			stream.map_server_messages(super::gcf::encode_tool_result)
+		} else {
+			stream
+		}
 	}
 
 	pub fn parse_resource_name<'a, 'b: 'a>(

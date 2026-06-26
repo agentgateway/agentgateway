@@ -188,6 +188,7 @@ dependencies = [
  "futures",
  "futures-core",
  "futures-util",
+ "gcf",
  "google-cloud-auth",
  "hashbrown 0.17.1",
  "headers",
@@ -2832,6 +2833,17 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "gcf"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b85e05979e34f2bff69b37a2a537bb0c56174cc65ec0cde512dfd04547050e68"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

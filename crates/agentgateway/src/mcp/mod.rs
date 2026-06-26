@@ -1,4 +1,5 @@
 pub(crate) mod auth;
+pub(crate) mod gcf;
 pub(crate) mod guardrails;
 mod handler;
 mod mergestream;

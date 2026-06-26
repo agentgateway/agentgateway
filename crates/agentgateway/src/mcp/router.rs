@@ -155,6 +155,7 @@ impl App {
 					policies: authorization_policies.clone(),
 					mcp_guardrails: mcp_guardrails.clone(),
 					client: client.clone(),
+					gcf_encoding: backend.gcf_encoding,
 				},
 			))
 			.await
@@ -172,6 +173,7 @@ impl App {
 					policies: authorization_policies.clone(),
 					mcp_guardrails: mcp_guardrails.clone(),
 					client: client.clone(),
+					gcf_encoding: backend.gcf_encoding,
 				},
 			))
 			.await
