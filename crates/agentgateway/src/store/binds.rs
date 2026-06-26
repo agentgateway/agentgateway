@@ -288,13 +288,14 @@ impl BackendPolicies {
 			override_dest: other.override_dest.or(self.override_dest),
 		}
 	}
-	/// build the inference routing configuration. This may be a NO-OP config.
-	pub fn build_inference(&self, client: PolicyClient) -> ext_proc::InferencePoolRouter {
-		if let Some(inference) = &self.inference_routing {
-			inference.build(client)
-		} else {
-			ext_proc::InferencePoolRouter::default()
-		}
+	pub fn build_inference(
+		&self,
+		client: PolicyClient,
+	) -> Option<Box<ext_proc::InferencePoolRouter>> {
+		self
+			.inference_routing
+			.as_ref()
+			.map(|inference| Box::new(inference.build(client)))
 	}
 
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {

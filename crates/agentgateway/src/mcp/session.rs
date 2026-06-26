@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use ::http::StatusCode;
 use ::http::header::CONTENT_TYPE;
 use ::http::request::Parts;
+use agent_core::prelude::AssertSize;
 use agent_core::version::BuildInfo;
 use anyhow::anyhow;
 use futures_util::StreamExt;
@@ -56,7 +57,11 @@ impl Session {
 			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
 			_ => None,
 		};
-		Self::handle_error(req_id, self.send_internal(parts, message).await).await
+		let res = self
+			.send_internal(parts, message)
+			.assert_size::<{ 6 * 1024 }>()
+			.await;
+		Self::handle_error(req_id, res).await
 	}
 
 	/// send a message to upstream server(s), when using stateless mode. In stateless mode, every message
@@ -398,16 +403,16 @@ impl Session {
 						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
 
 						let pv = ir.params.protocol_version.clone();
-						let res = self
-							.relay
-							.send_fanout(
+						let res = Box::pin(
+							self.relay.send_fanout(
 								r,
 								ctx,
 								self
 									.relay
 									.merge_initialize(pv, self.relay.is_multiplexing()),
-							)
-							.await;
+							),
+						)
+						.await;
 						if let Some(sessions) = self.relay.get_sessions() {
 							let s = http::sessionpersistence::SessionState::MCP(
 								http::sessionpersistence::MCPSessionState::new(sessions),
@@ -419,36 +424,26 @@ impl Session {
 						res
 					},
 					ClientRequest::ListToolsRequest(_) => {
-						self
-							.relay
-							.send_fanout(r, ctx, self.relay.merge_tools())
-							.await
+						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_tools())).await
 					},
 					// TODO(keithmattix): should we forward pings or should we do our own independent pings
 					// as heuristic for the connection pool (and handle client pings as a local reply from agentgateway)?
 					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
-						self
-							.relay
-							.send_fanout(r, ctx, self.relay.merge_empty())
-							.await
+						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_empty())).await
 					},
 					ClientRequest::ListPromptsRequest(_) => {
-						self
-							.relay
-							.send_fanout(r, ctx, self.relay.merge_prompts())
-							.await
+						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_prompts())).await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
-						self
-							.relay
-							.send_fanout(r, ctx, self.relay.merge_resources())
-							.await
+						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_resources())).await
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
-						self
-							.relay
-							.send_fanout(r, ctx, self.relay.merge_resource_templates())
-							.await
+						Box::pin(
+							self
+								.relay
+								.send_fanout(r, ctx, self.relay.merge_resource_templates()),
+						)
+						.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
@@ -461,24 +456,25 @@ impl Session {
 						});
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
-						self
-							.authorize_with_ctx(
-								service_name,
-								mcp::guardrails::methods::TOOLS_CALL,
-								&mut ctr.params,
-								&mut ctx,
-								rbac::ResourceType::Tool(rbac::ResourceId::new(
-									service_name.to_string(),
-									tool.to_string(),
-								)),
-								"tool",
-								&name,
-							)
-							.await?;
-						self
-							.relay
-							.send_single(r, ctx, service_name, Some(log.clone()))
-							.await
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							mcp::guardrails::methods::TOOLS_CALL,
+							&mut ctr.params,
+							&mut ctx,
+							rbac::ResourceType::Tool(rbac::ResourceId::new(
+								service_name.to_string(),
+								tool.to_string(),
+							)),
+							"tool",
+							&name,
+						))
+						.await?;
+						Box::pin(
+							self
+								.relay
+								.send_single(r, ctx, service_name, Some(log.clone())),
+						)
+						.await
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
@@ -488,21 +484,20 @@ impl Session {
 							l.set_prompt(service_name.to_string(), prompt.to_string());
 						});
 						gpr.params.name = prompt.to_string();
-						self
-							.authorize_with_ctx(
-								service_name,
-								mcp::guardrails::methods::PROMPTS_GET,
-								&mut gpr.params,
-								&mut ctx,
-								rbac::ResourceType::Prompt(rbac::ResourceId::new(
-									service_name.to_string(),
-									prompt.to_string(),
-								)),
-								"prompt",
-								&name,
-							)
-							.await?;
-						self.relay.send_single(r, ctx, service_name, None).await
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							mcp::guardrails::methods::PROMPTS_GET,
+							&mut gpr.params,
+							&mut ctx,
+							rbac::ResourceType::Prompt(rbac::ResourceId::new(
+								service_name.to_string(),
+								prompt.to_string(),
+							)),
+							"prompt",
+							&name,
+						))
+						.await?;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						let uri = rrr.params.uri.clone();
@@ -512,21 +507,20 @@ impl Session {
 							l.set_resource(service_name.to_string(), original_uri.to_string());
 						});
 						rrr.params.uri = original_uri.clone();
-						self
-							.authorize_with_ctx(
-								service_name,
-								mcp::guardrails::methods::RESOURCES_READ,
-								&mut rrr.params,
-								&mut ctx,
-								rbac::ResourceType::Resource(rbac::ResourceId::new(
-									service_name.to_string(),
-									original_uri,
-								)),
-								"resource",
-								&uri,
-							)
-							.await?;
-						self.relay.send_single(r, ctx, service_name, None).await
+						Box::pin(self.authorize_with_ctx(
+							service_name,
+							mcp::guardrails::methods::RESOURCES_READ,
+							&mut rrr.params,
+							&mut ctx,
+							rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								original_uri,
+							)),
+							"resource",
+							&uri,
+						))
+						.await?;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::SubscribeRequest(sr) => {
 						let uri = sr.params.uri.clone();
@@ -540,7 +534,7 @@ impl Session {
 							&cel,
 						)?;
 						sr.params.uri = original_uri;
-						self.relay.send_single(r, ctx, service_name, None).await
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::UnsubscribeRequest(ur) => {
 						let uri = ur.params.uri.clone();
@@ -554,7 +548,7 @@ impl Session {
 							&cel,
 						)?;
 						ur.params.uri = original_uri;
-						self.relay.send_single(r, ctx, service_name, None).await
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 
 					ClientRequest::ListTasksRequest(_)
@@ -571,7 +565,7 @@ impl Session {
 							let (service_name, prompt_name) =
 								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
-							self.relay.send_single(r, ctx, service_name, None).await
+							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 						},
 						Reference::Resource(resource) => {
 							let uri = resource.uri.clone();
@@ -585,7 +579,7 @@ impl Session {
 								&cel,
 							)?;
 							cr.params.r#ref = Reference::for_resource(original_uri);
-							self.relay.send_single(r, ctx, service_name, None).await
+							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 						},
 					},
 				}
@@ -607,7 +601,7 @@ impl Session {
 				});
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
-				self.relay.send_notification(r, ctx).await
+				Box::pin(self.relay.send_notification(r, ctx)).await
 			},
 
 			_ => Err(UpstreamError::InvalidRequest(

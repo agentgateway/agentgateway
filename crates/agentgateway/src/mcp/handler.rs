@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use agent_core::prelude::AssertSize;
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use http::StatusCode;
@@ -536,8 +537,10 @@ impl Relay {
 			)));
 		};
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
-		let stream =
-			self.rewrite_outbound_server_messages(service_name, us.generic_stream(r, &ctx).await?);
+		let stream = self.rewrite_outbound_server_messages(
+			service_name,
+			Box::pin(us.generic_stream(r, &ctx).assert_size::<{ 3 * 1024 }>()).await?,
+		);
 
 		match guardrails {
 			Some(guardrails) => {
@@ -661,15 +664,18 @@ impl Relay {
 		if let Some(ext) = self.mcp_guardrails.as_ref() {
 			// params is None, so mutations are discarded unparsed and the params
 			// type is never used.
-			let outcome = crate::mcp::guardrails::run_call_request::<serde_json::Value>(
-				ext,
-				&mut crate::mcp::guardrails::CallRequestCtx {
-					backends: service_names.as_deref().unwrap_or_default(),
-					method,
-					params: None,
-				},
-				&mut ctx,
-				&self.policy_client,
+			let outcome = Box::pin(
+				crate::mcp::guardrails::run_call_request::<serde_json::Value>(
+					ext,
+					&mut crate::mcp::guardrails::CallRequestCtx {
+						backends: service_names.as_deref().unwrap_or_default(),
+						method,
+						params: None,
+					},
+					&mut ctx,
+					&self.policy_client,
+				)
+				.assert_size::<{ 4 * 1024 }>(),
 			)
 			.await;
 			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {

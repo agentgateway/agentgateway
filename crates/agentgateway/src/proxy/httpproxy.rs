@@ -6,8 +6,10 @@ use std::sync::{Arc, Mutex};
 
 use ::http::uri::PathAndQuery;
 use ::http::{HeaderMap, header};
+use agent_core::prelude::AssertSize;
 use anyhow::anyhow;
 use frozen_collections::Len;
+use futures_util::FutureExt;
 use headers::HeaderMapExt;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
@@ -190,7 +192,11 @@ async fn apply_request_policies(
 		.select("ext proc", req)
 		.map(|p| p.build(c.clone()));
 	if let Some(x) = rp.ext_proc.as_mut() {
-		x.mutate_request(req).await?.apply(rp.headers())?;
+		x.mutate_request(req)
+			.assert_size::<{ 4 * 1024 }>()
+			.boxed()
+			.await?
+			.apply(rp.headers())?;
 		dtrace::snapshot!(Request, "ext proc", &req);
 	}
 
@@ -399,6 +405,8 @@ async fn apply_gateway_policies(
 		.map(|p| p.build(client.clone()));
 	if let Some(x) = ext_proc.as_mut() {
 		x.mutate_request(req)
+			.assert_size::<{ 4 * 1024 }>()
+			.boxed()
 			.await?
 			.apply(response_policies.headers())?;
 		dtrace::snapshot!(Request, "gateway ext proc", &req);
@@ -890,12 +898,12 @@ impl HTTPProxy {
 			.snapshot_on_err(log, &mut req)?;
 		let selected_backend =
 			resolve_backend(selected_backend_ref, self.inputs.as_ref()).snapshot_on_err(log, &mut req)?;
-		let backend_policies = get_backend_policies(
+		let backend_policies = Arc::new(get_backend_policies(
 			self.inputs.as_ref(),
 			&selected_backend.backend,
 			&selected_backend.inline_policies,
 			Some(route_path.clone()),
-		);
+		));
 		backend_policies.register_cel_expressions(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 		log.health_policy = backend_policies.health.clone();
@@ -917,6 +925,8 @@ impl HTTPProxy {
 					response_policies,
 					&mut req,
 				)
+				.assert_size::<{ 11 * 1024 }>()
+				.boxed()
 				.await
 				.snapshot_on_err(log, &mut req);
 		}
@@ -947,7 +957,6 @@ impl HTTPProxy {
 				}
 			});
 		}
-
 		const MAX_BUFFERED_BYTES: usize = 64 * 1024;
 		let retries = route_retry;
 
@@ -1069,14 +1078,14 @@ impl HTTPProxy {
 		log: &mut RequestLog,
 		upgrade: OnUpgrade,
 		selected_backend: &RouteBackend,
-		backend_policies: BackendPolicies,
+		backend_policies: Arc<BackendPolicies>,
 		response_policies: &mut ResponsePolicies,
 		req: &mut Request,
 	) -> Result<Response, ProxyResponse> {
 		let backend_call = build_connect_backend_call(
 			self.inputs.as_ref(),
 			&selected_backend.backend.backend,
-			backend_policies.into(),
+			backend_policies,
 			log,
 			req,
 		)?;
@@ -1282,7 +1291,7 @@ impl HTTPProxy {
 		req_upgrade: &mut Option<RequestUpgrade>,
 		route_policies: Arc<store::LLMRequestPolicies>,
 		selected_backend: &RouteBackend,
-		backend_policies: BackendPolicies,
+		backend_policies: Arc<BackendPolicies>,
 		response_policies: &mut ResponsePolicies,
 		mut req: Request,
 	) -> Result<Response, SnapshottedProxyResponse> {
@@ -1306,11 +1315,12 @@ impl HTTPProxy {
 			self.inputs.clone(),
 			route_policies.clone(),
 			&selected_backend.backend.backend,
-			backend_policies.into(),
+			backend_policies,
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
-		);
+		)
+		.assert_size::<{ 7 * 1024 }>();
 
 		// Setup timeout
 		let call_result = if let Some(timeout) = timeout {
@@ -1590,7 +1600,7 @@ pub async fn build_transport(
 	}
 
 	// Check if we should route through a waypoint proxy (ingress_use_waypoint)
-	if let (Some(wp), Some(ca)) = (&backend_call.waypoint, &inputs.ca) {
+	if let (Some(wp), Some(ca)) = (backend_call.waypoint(), &inputs.ca) {
 		if ca.get_identity().await.is_ok() {
 			tracing::debug!("using HBONE waypoint at {} for service", wp.address);
 			return Ok(Transport::HboneWaypoint {
@@ -1611,7 +1621,7 @@ pub async fn build_transport(
 		Some((InboundProtocol::HBONE, waypoint_identities)),
 		Some(ca),
 	) = (
-		&backend_call.network_gateway,
+		backend_call.network_gateway(),
 		&backend_call.transport_override,
 		&inputs.ca,
 	) {
@@ -1791,9 +1801,19 @@ async fn apply_inference_routing(
 	req: &mut Request,
 	log: &mut Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
-) -> Result<(http::ext_proc::InferencePoolRouter, ServiceCallOverride), ProxyResponse> {
+) -> Result<
+	(
+		Option<Box<http::ext_proc::InferencePoolRouter>>,
+		ServiceCallOverride,
+	),
+	ProxyResponse,
+> {
 	let mut maybe_inference = policies.build_inference(policy_client);
-	let inference_result = Box::pin(maybe_inference.mutate_request(req)).await?;
+	let inference_result = if let Some(maybe_inference) = maybe_inference.as_mut() {
+		Box::pin(maybe_inference.mutate_request(req)).await?
+	} else {
+		Default::default()
+	};
 	inference_result
 		.policy_response
 		.apply(response_policies.headers())?;
@@ -1826,7 +1846,13 @@ async fn build_simple_backend_call(
 	log: &mut Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
 	hbone_source: Option<HboneSourceRole>,
-) -> Result<(BackendCall, http::ext_proc::InferencePoolRouter), ProxyResponse> {
+) -> Result<
+	(
+		BackendCall,
+		Option<Box<http::ext_proc::InferencePoolRouter>>,
+	),
+	ProxyResponse,
+> {
 	let (maybe_inference, service_override) =
 		apply_inference_routing(&policies, policy_client, req, log, response_policies).await?;
 	let backend_call = match backend {
@@ -2095,11 +2121,11 @@ async fn make_backend_call(
 		},
 		Backend::Dynamic(_, _) => {
 			let backend_call = BackendCall::from_shared(target_from_request(&req)?, policies);
-			(backend_call, http::ext_proc::InferencePoolRouter::default())
+			(backend_call, None)
 		},
 		Backend::Internal(_, _) => (
 			BackendCall::from_shared(Target::Hostname("internal".into(), 80), policies),
-			http::ext_proc::InferencePoolRouter::default(),
+			None,
 		),
 		Backend::MCP(name, backend) => {
 			let inputs = inputs.clone();
@@ -2111,11 +2137,14 @@ async fn make_backend_call(
 					ProxyError::ProcessingString("invalid: log required for MCP".to_string()).into(),
 				);
 			};
-			let res = inputs
-				.clone()
-				.mcp_state
-				.serve(inputs, name, backend, policies.as_ref().clone(), req, log)
-				.await;
+			let res = Box::pin(
+				inputs
+					.clone()
+					.mcp_state
+					.serve(inputs, name, backend, policies.as_ref().clone(), req, log)
+					.assert_size::<{ 4 * 1024 }>(),
+			)
+			.await;
 			return res.map_err(ProxyResponse::from);
 		},
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
@@ -2284,12 +2313,15 @@ async fn make_backend_call(
 					let response_policies = if route_type == RouteType::AnthropicTokenCount {
 						LLMResponsePolicies::default()
 					} else {
-						apply_llm_request_policies(
-							&llm_request_policies,
-							policy_client.clone(),
-							&mut req,
-							&llm_request,
-							&mut response_policies.response_headers,
+						Box::pin(
+							apply_llm_request_policies(
+								&llm_request_policies,
+								policy_client.clone(),
+								&mut req,
+								&llm_request,
+								&mut response_policies.response_headers,
+							)
+							.assert_size::<{ 3 * 1024 }>(),
 						)
 						.await?
 					};
@@ -2363,6 +2395,7 @@ async fn make_backend_call(
 		backend_call.backend_policies.backend_auth.as_ref(),
 		&mut req,
 	)
+	.assert_size::<{ 2 * 1024 }>()
 	.await?;
 	if let Backend::Internal(_, internal) = backend {
 		apply_internal_path(&mut req, internal).map_err(ProxyError::Processing)?;
@@ -2470,25 +2503,35 @@ async fn make_backend_call(
 		backend_call.backend_policies.llm_provider.clone(),
 		llm_request,
 	) {
-		llm
-			.provider
-			.process_response(
-				policy_client.clone(),
-				llm_request,
-				llm_response_policies,
-				log.as_ref().expect("must be set").request_snapshot.clone(),
-				llm_response_log.expect("must be set"),
-				include_completion_in_log,
-				Some(&inputs.model_catalog),
-				resp,
-			)
-			.await
-			.map_err(|e| ProxyError::Processing(e.into()))?
+		Box::pin(
+			llm
+				.provider
+				.process_response(
+					policy_client.clone(),
+					llm_request,
+					llm_response_policies,
+					log.as_ref().expect("must be set").request_snapshot.clone(),
+					llm_response_log.expect("must be set"),
+					include_completion_in_log,
+					Some(&inputs.model_catalog),
+					resp,
+				)
+				.assert_size::<{ 4 * 1024 }>(),
+		)
+		.await
+		.map_err(|e| ProxyError::Processing(e.into()))?
 	} else {
 		resp
 	};
 	// TODO: we currently do not support ImmediateResponse from inference router
-	let _ = maybe_inference.mutate_response(&mut resp).await?;
+	if let Some(maybe_inference) = maybe_inference.as_mut() {
+		let _ = Box::pin(
+			maybe_inference
+				.mutate_response(&mut resp)
+				.assert_size::<{ 4 * 1024 }>(),
+		)
+		.await?;
+	}
 	if let Some(log) = log.as_ref() {
 		dtrace::snapshot!(Response, "backend response ready", log, &resp);
 	}
@@ -2576,8 +2619,7 @@ pub fn build_service_call(
 			http_version_override,
 			transport_override: None,
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-			network_gateway: None,
-			waypoint: None,
+			advanced_routing: None,
 			backend_policies,
 		});
 	}
@@ -2741,8 +2783,7 @@ pub fn build_service_call(
 		http_version_override,
 		transport_override,
 		hbone_port,
-		network_gateway,
-		waypoint,
+		advanced_routing: BackendCallAdvancedRouting::new(network_gateway, waypoint),
 		backend_policies,
 	})
 }
@@ -3633,8 +3674,7 @@ pub struct BackendCall {
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub hbone_port: u16,
-	pub network_gateway: Option<(GatewayAddress, Vec<Identity>)>, /* For double hbone: (gateway_address, gateway_identities) */
-	pub waypoint: Option<WaypointTarget>,                         // For ingress waypoint routing
+	advanced_routing: Option<Box<BackendCallAdvancedRouting>>,
 	pub backend_policies: Arc<BackendPolicies>,
 }
 
@@ -3649,9 +3689,45 @@ impl BackendCall {
 			http_version_override: None,
 			transport_override: None,
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
-			network_gateway: None,
-			waypoint: None,
+			advanced_routing: None,
 			backend_policies,
+		}
+	}
+
+	pub(crate) fn network_gateway(&self) -> Option<&(GatewayAddress, Vec<Identity>)> {
+		self
+			.advanced_routing
+			.as_ref()
+			.and_then(|routing| routing.network_gateway.as_ref())
+	}
+
+	pub(crate) fn waypoint(&self) -> Option<&WaypointTarget> {
+		self
+			.advanced_routing
+			.as_ref()
+			.and_then(|routing| routing.waypoint.as_ref())
+	}
+}
+
+struct BackendCallAdvancedRouting {
+	/// For double hbone: (gateway_address, gateway_identities)
+	network_gateway: Option<(GatewayAddress, Vec<Identity>)>,
+	/// For ingress waypoint routing.
+	waypoint: Option<WaypointTarget>,
+}
+
+impl BackendCallAdvancedRouting {
+	fn new(
+		network_gateway: Option<(GatewayAddress, Vec<Identity>)>,
+		waypoint: Option<WaypointTarget>,
+	) -> Option<Box<Self>> {
+		if network_gateway.is_none() && waypoint.is_none() {
+			None
+		} else {
+			Some(Box::new(Self {
+				network_gateway,
+				waypoint,
+			}))
 		}
 	}
 }
@@ -3742,12 +3818,16 @@ impl ResponsePolicies {
 		if is_upstream_response {
 			if let Some(x) = self.ext_proc.as_mut() {
 				x.mutate_response(resp, l.request_snapshot.as_deref())
+					.assert_size::<{ 4 * 1024 }>()
+					.boxed()
 					.await?
 					.apply(&mut self.response_headers)?;
 				dtrace::snapshot!(Response, "ext proc", l, &resp);
 			};
 			if let Some(x) = self.gateway_ext_proc.as_mut() {
 				x.mutate_response(resp, l.request_snapshot.as_deref())
+					.assert_size::<{ 4 * 1024 }>()
+					.boxed()
 					.await?
 					.apply(&mut self.response_headers)?;
 				dtrace::snapshot!(Response, "gateway ext proc", l, &resp);
@@ -3900,16 +3980,19 @@ impl PolicyClient {
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
 		let mut req = Some(req);
 		Box::pin(async move {
-			make_backend_call(
-				self.inputs.clone(),
-				Arc::new(LLMRequestPolicies::default()),
-				&backend,
-				pols.into(),
-				MustSnapshot::new(&mut req),
-				// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
-				// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
-				None,
-				&mut Default::default(),
+			Box::pin(
+				make_backend_call(
+					self.inputs.clone(),
+					Arc::new(LLMRequestPolicies::default()),
+					&backend,
+					pols.into(),
+					MustSnapshot::new(&mut req),
+					// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
+					// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
+					None,
+					&mut Default::default(),
+				)
+				.assert_size::<{ 7 * 1024 }>(),
 			)
 			.await
 			.map_err(ProxyResponse::downcast)

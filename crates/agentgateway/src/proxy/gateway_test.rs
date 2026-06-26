@@ -5476,7 +5476,7 @@ async fn ingress_use_waypoint_sets_waypoint_target() {
 
 	// Waypoint target should be populated
 	let wp = backend_call
-		.waypoint
+		.waypoint()
 		.expect("waypoint target must be set when ingress_use_waypoint is true");
 	assert_eq!(
 		wp.address.ip(),
@@ -5537,7 +5537,7 @@ async fn ingress_use_waypoint_false_no_waypoint() {
 
 	// Waypoint should NOT be set
 	assert!(
-		backend_call.waypoint.is_none(),
+		backend_call.waypoint().is_none(),
 		"waypoint should not be set when ingress_use_waypoint is false"
 	);
 
@@ -5679,13 +5679,13 @@ async fn ingress_use_waypoint_remote_waypoint_uses_network_gateway() {
 	.expect("build_service_call should succeed");
 
 	assert!(
-		backend_call.waypoint.is_none(),
+		backend_call.waypoint().is_none(),
 		"remote waypoint should be reached through double HBONE, not direct waypoint transport"
 	);
 	let (resolved_gw, gw_identities) = backend_call
-		.network_gateway
+		.network_gateway()
 		.expect("remote waypoint should resolve a network gateway");
-	assert_matches!(resolved_gw.destination, Destination::Address(addr) => {
+	assert_matches!(&resolved_gw.destination, Destination::Address(addr) => {
 		assert_eq!(addr.address, gateway_ip);
 		assert_eq!(addr.network, remote_network);
 	});
@@ -5693,7 +5693,7 @@ async fn ingress_use_waypoint_remote_waypoint_uses_network_gateway() {
 	// Outer tunnel: gateway workload id (the gateway is referenced by address, so no SANs).
 	assert_eq!(
 		gw_identities,
-		vec![Identity::Spiffe {
+		&vec![Identity::Spiffe {
 			trust_domain: strng::EMPTY,
 			namespace: strng::literal!("istio-gateways"),
 			service_account: strng::literal!("istio-eastwest"),
@@ -5810,7 +5810,7 @@ async fn ingress_use_waypoint_ip_based_waypoint() {
 	.expect("build_service_call should succeed");
 
 	let wp = backend_call
-		.waypoint
+		.waypoint()
 		.expect("waypoint target must be set for IP-based waypoint");
 	assert_eq!(wp.address.ip(), waypoint_ip);
 	assert_eq!(wp.address.port(), 15008);
@@ -5883,7 +5883,7 @@ async fn ingress_use_waypoint_no_waypoint_field_no_routing() {
 
 	// No waypoint configured, so it should fall back to direct routing
 	assert!(
-		backend_call.waypoint.is_none(),
+		backend_call.waypoint().is_none(),
 		"waypoint should not be set when no waypoint is configured on the service"
 	);
 	assert_matches!(backend_call.target, Target::Address(_));
@@ -5923,7 +5923,7 @@ async fn ingress_use_waypoint_build_transport_falls_back_without_ca() {
 	)
 	.expect("build_service_call should succeed");
 
-	assert!(backend_call.waypoint.is_some());
+	assert!(backend_call.waypoint().is_some());
 
 	// build_transport with no CA should fall back to plain transport
 	let transport = httpproxy::build_transport(&t.pi, &backend_call, None, None, None, None)
@@ -6050,10 +6050,10 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 	.expect("build_service_call should succeed");
 
 	let (resolved_gw, gw_identities) = backend_call
-		.network_gateway
+		.network_gateway()
 		.expect("network_gateway must be resolved for hostname-form destination");
 
-	assert_matches!(resolved_gw.destination, Destination::Address(addr) => {
+	assert_matches!(&resolved_gw.destination, Destination::Address(addr) => {
 		assert_eq!(addr.address, gw_ip, "should resolve to the gateway endpoint IP");
 		assert_eq!(addr.network, remote_network, "network should be the gateway workload's network");
 	});
@@ -6064,7 +6064,7 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 	// Outer-tunnel identities match ztunnel: gateway workload id + gateway service SANs.
 	assert_eq!(
 		gw_identities,
-		vec![
+		&vec![
 			Identity::Spiffe {
 				trust_domain: strng::EMPTY,
 				namespace: gateway_namespace.clone(),

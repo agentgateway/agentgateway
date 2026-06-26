@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
+use agent_core::prelude::AssertSize;
 use agent_core::{drain, strng, telemetry};
 use agent_hbone::server::H2Request;
 use anyhow::anyhow;
@@ -880,9 +881,14 @@ impl Gateway {
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
 				let req = req.map(crate::http::Body::new);
-				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(req, |req| async move {
-					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
-				}))
+				telemetry::request_scope(
+					// This is the per-request HTTP flow future. It is the baseline task state
+					// multiplied by concurrent in-flight requests on this connection.
+					dtrace::DebugTracer::maybe_scope(req, |req| async move {
+						proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
+					})
+					.assert_size::<{ 15 * 1024 }>(),
+				)
 			}),
 		);
 		let (connection_drain_tx, connection_drain_rx) = drain::new();
