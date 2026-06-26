@@ -439,6 +439,12 @@ async fn stateful_streamable_http_rejects_no_session_non_initialize_messages() {
 		serde_json::json!({
 			"jsonrpc": "2.0",
 			"id": 1,
+			"method": "tools/list",
+			"params": {}
+		}),
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
 			"result": {}
 		}),
 		serde_json::json!({
@@ -457,6 +463,66 @@ async fn stateful_streamable_http_rejects_no_session_non_initialize_messages() {
 			"rejected no-session message must not create a session"
 		);
 	}
+}
+
+#[tokio::test]
+async fn modern_stateful_streamable_http_does_not_use_sessions() {
+	let mock = mock_streamable_http_server(false).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let meta = serde_json::json!({
+		"io.modelcontextprotocol/protocolVersion": "2026-07-28"
+	});
+
+	let discover_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "server/discover",
+		"params": {
+			"_meta": meta
+		}
+	});
+	let discover = mcp_json_post(&client, &url, &discover_body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "server/discover")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(discover.status(), reqwest::StatusCode::OK);
+	assert!(
+		discover.headers().get("mcp-session-id").is_none(),
+		"modern discover must not create a legacy session"
+	);
+
+	let list_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/list",
+		"params": {
+			"_meta": meta
+		}
+	});
+	let list = mcp_json_post(&client, &url, &list_body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/list")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(list.status(), reqwest::StatusCode::OK);
+	assert!(
+		list.headers().get("mcp-session-id").is_none(),
+		"modern follow-up requests must not create a legacy session"
+	);
+
+	let with_session = mcp_json_post(&client, &url, &list_body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/list")
+		.header("mcp-session-id", "legacy-session")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(with_session.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
