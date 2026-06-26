@@ -30,6 +30,9 @@ use tracing_subscriber::filter;
 use super::hyper_helpers::{Server, plaintext_response};
 use crate::Config;
 use crate::http::{Request, Response};
+#[cfg(test)]
+#[path = "admin_tests.rs"]
+mod tests;
 
 // Constants for pprof profiling
 #[cfg(target_os = "linux")]

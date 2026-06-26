@@ -333,6 +333,7 @@ message BackendAuthPolicy {
     Gcp gcp = 3;
     Aws aws = 4;
     Azure azure = 5;
+    OAuthTokenExchange oauth_token_exchange = 6;
   }
 }
 
@@ -1711,4 +1712,20 @@ message BackendReference {
 
 message Alpn {
   repeated string protocols = 1;
+}
+
+// RFC 8693 OAuth 2.0 Token Exchange.
+message OAuthTokenExchange {
+  message ClientAuth {
+    string client_id = 1;
+  }
+  BackendReference token_endpoint = 1;
+  // Token endpoint path on the backend; defaults to "/".
+  string token_endpoint_path = 7;
+  // Optional RFC 8693 request parameters; sent only when non-empty.
+  repeated string audiences = 2;
+  repeated string scopes = 3;
+  repeated string resources = 4;
+  string requested_token_type = 5;
+  ClientAuth client_auth = 6;
 }

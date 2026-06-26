@@ -133,6 +133,7 @@ stacker.workspace = true
 shellexpand.workspace = true
 socket2.workspace = true
 sse-stream.workspace = true
+subtle.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true

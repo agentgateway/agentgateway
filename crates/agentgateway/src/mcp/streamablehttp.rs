@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use ::http::StatusCode;
+use agent_core::prelude::AssertSize;
 use rmcp::model::{ClientJsonRpcMessage, ClientRequest, ProtocolVersion, ServerJsonRpcMessage};
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID, JSON_MIME_TYPE,
@@ -63,7 +64,14 @@ impl StreamableHttpService {
 		let method = request.method().clone();
 
 		match (method, self.config.stateful_mode) {
-			(http::Method::POST, _) => Box::pin(self.handle_post(request, inputs)).await,
+			(http::Method::POST, _) => {
+				Box::pin(
+					self
+						.handle_post(request, inputs)
+						.assert_size::<{ 4 * 1024 }>(),
+				)
+				.await
+			},
 			// if we're not in stateful mode, we don't support GET or DELETE because there is no session
 			(http::Method::GET, true) => self.handle_get(request, inputs).await,
 			(http::Method::DELETE, true) => self.handle_delete(request).await,

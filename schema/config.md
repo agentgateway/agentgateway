@@ -266,6 +266,20 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -430,6 +444,20 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -536,6 +564,20 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -642,6 +684,20 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -746,6 +802,20 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -885,6 +955,20 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -991,6 +1075,20 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1095,6 +1193,20 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1218,6 +1330,20 @@
 |`binds[].listeners[].routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -1321,6 +1447,20 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1437,6 +1577,20 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1628,6 +1782,20 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1757,6 +1925,20 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -1889,6 +2071,20 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2008,6 +2204,20 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2199,6 +2409,20 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2313,6 +2537,20 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2461,6 +2699,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2590,6 +2842,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2726,6 +2992,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2868,6 +3148,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -2974,6 +3268,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3080,6 +3388,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3184,6 +3506,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3323,6 +3659,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3429,6 +3779,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3533,6 +3897,20 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3704,6 +4082,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3833,6 +4225,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -3969,6 +4375,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4111,6 +4531,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4217,6 +4651,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4323,6 +4771,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4427,6 +4889,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4566,6 +5042,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4672,6 +5162,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4776,6 +5280,20 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -4917,6 +5435,20 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5046,6 +5578,20 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5182,6 +5728,20 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5324,6 +5884,20 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5430,6 +6004,20 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5536,6 +6124,20 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5640,6 +6242,20 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5779,6 +6395,20 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5885,6 +6515,20 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -5989,6 +6633,20 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6220,6 +6878,20 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6349,6 +7021,20 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6481,6 +7167,20 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6600,6 +7300,20 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`binds[].listeners[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`binds[].listeners[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6829,6 +7543,20 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.accessLog.otlp.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.accessLog.otlp.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.accessLog.otlp.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -6945,6 +7673,20 @@
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.logging.otlp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange`|object||
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`frontendPolicies.logging.otlp.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.logging.otlp.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.logging.otlp.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.logging.otlp.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7057,6 +7799,20 @@
 |`frontendPolicies.tracing.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`frontendPolicies.tracing.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`frontendPolicies.tracing.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange`|object||
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`frontendPolicies.tracing.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.tracing.policies.http`|object|HTTP protocol settings for this backend.|
 |`frontendPolicies.tracing.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`frontendPolicies.tracing.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7261,6 +8017,20 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7425,6 +8195,20 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7531,6 +8315,20 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7637,6 +8435,20 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7741,6 +8553,20 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7880,6 +8706,20 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -7986,6 +8826,20 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8090,6 +8944,20 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8213,6 +9081,20 @@
 |`policies[].policy.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.localRateLimit`|object|Local rate limits for incoming requests.|
 |`policies[].policy.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -8316,6 +9198,20 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8432,6 +9328,20 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8623,6 +9533,20 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8752,6 +9676,20 @@
 |`policies[].policy.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -8884,6 +9822,20 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9003,6 +9955,20 @@
 |`policies[].policy.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`policies[].policy.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`policies[].policy.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange`|object||
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`policies[].policy.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`policies[].policy.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`policies[].policy.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9191,6 +10157,20 @@
 |`backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9305,6 +10285,20 @@
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9453,6 +10447,20 @@
 |`backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9582,6 +10590,20 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9718,6 +10740,20 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9860,6 +10896,20 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -9966,6 +11016,20 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10072,6 +11136,20 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10176,6 +11254,20 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10315,6 +11407,20 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10421,6 +11527,20 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10525,6 +11645,20 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10696,6 +11830,20 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10825,6 +11973,20 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -10961,6 +12123,20 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11103,6 +12279,20 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11209,6 +12399,20 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11315,6 +12519,20 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11419,6 +12637,20 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11558,6 +12790,20 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11664,6 +12910,20 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11768,6 +13028,20 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -11907,6 +13181,20 @@
 |`backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12036,6 +13324,20 @@
 |`backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12172,6 +13474,20 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12314,6 +13630,20 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12420,6 +13750,20 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12526,6 +13870,20 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12630,6 +13988,20 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12769,6 +14141,20 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12875,6 +14261,20 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -12979,6 +14379,20 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13201,6 +14615,20 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13365,6 +14793,20 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13471,6 +14913,20 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13577,6 +15033,20 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13681,6 +15151,20 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13820,6 +15304,20 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -13926,6 +15424,20 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14030,6 +15542,20 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14153,6 +15679,20 @@
 |`routeGroups[].routes[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -14256,6 +15796,20 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14372,6 +15926,20 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14563,6 +16131,20 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14692,6 +16274,20 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14824,6 +16420,20 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -14943,6 +16553,20 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15134,6 +16758,20 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15248,6 +16886,20 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15396,6 +17048,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15525,6 +17191,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15661,6 +17341,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15803,6 +17497,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -15909,6 +17617,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16015,6 +17737,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16119,6 +17855,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16258,6 +18008,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16364,6 +18128,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16468,6 +18246,20 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16639,6 +18431,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16768,6 +18574,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -16904,6 +18724,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17046,6 +18880,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17152,6 +19000,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17258,6 +19120,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17362,6 +19238,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17501,6 +19391,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17607,6 +19511,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17711,6 +19629,20 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17852,6 +19784,20 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -17981,6 +19927,20 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18117,6 +20077,20 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18259,6 +20233,20 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18365,6 +20353,20 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18471,6 +20473,20 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18575,6 +20591,20 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18714,6 +20744,20 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18820,6 +20864,20 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -18924,6 +20982,20 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19101,6 +21173,20 @@
 |`llm.providers[].defaults.auth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.providers[].defaults.auth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.providers[].defaults.auth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.providers[].defaults.auth.oAuthTokenExchange`|object||
+|`llm.providers[].defaults.auth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.providers[].defaults.auth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.providers[].defaults.auth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.providers[].defaults.auth.oAuthTokenExchange.clientAuth`|object||
+|`llm.providers[].defaults.auth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.providers[].defaults.health`|object|Local/config health policy with CEL as string; converted to Policy by compiling the expression.<br>Mirrors the proto `Health` message structure.|
 |`llm.providers[].defaults.health.unhealthyExpression`|string|CEL expression where `true` marks the backend response as unhealthy.<br>When unset, any 5xx response or connection failure is treated as unhealthy.|
 |`llm.providers[].defaults.health.eviction`|object|Settings for temporarily removing unhealthy backends.|
@@ -19240,6 +21326,20 @@
 |`llm.models[].auth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].auth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].auth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].auth.oAuthTokenExchange`|object||
+|`llm.models[].auth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].auth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.models[].auth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.models[].auth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.models[].auth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.models[].auth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].auth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.models[].auth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.models[].auth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.models[].auth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.models[].auth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].auth.oAuthTokenExchange.clientAuth`|object||
+|`llm.models[].auth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].health`|object|health configures outlier detection for this model backend.|
 |`llm.models[].health.unhealthyExpression`|string|CEL expression where `true` marks the backend response as unhealthy.<br>When unset, any 5xx response or connection failure is treated as unhealthy.|
 |`llm.models[].health.eviction`|object|Settings for temporarily removing unhealthy backends.|
@@ -19360,6 +21460,20 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19466,6 +21580,20 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19572,6 +21700,20 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19676,6 +21818,20 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19815,6 +21971,20 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -19921,6 +22091,20 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20025,6 +22209,20 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20224,6 +22422,20 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20353,6 +22565,20 @@
 |`llm.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20485,6 +22711,20 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20604,6 +22844,20 @@
 |`llm.policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20806,6 +23060,20 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -20912,6 +23180,20 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21018,6 +23300,20 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21122,6 +23418,20 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21261,6 +23571,20 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21367,6 +23691,20 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21471,6 +23809,20 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21599,6 +23951,20 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`llm.policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`llm.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`llm.policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`llm.policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21736,6 +24102,20 @@
 |`mcp.targets[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.targets[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.targets[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.targets[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.targets[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.targets[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.targets[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -21850,6 +24230,20 @@
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22027,6 +24421,20 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22191,6 +24599,20 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22297,6 +24719,20 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22403,6 +24839,20 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22507,6 +24957,20 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22646,6 +25110,20 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22752,6 +25230,20 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22856,6 +25348,20 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -22979,6 +25485,20 @@
 |`mcp.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.localRateLimit`|object|Local rate limits for incoming requests.|
 |`mcp.policies.localRateLimit.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.localRateLimit.conditional[].condition`|string|condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.|
@@ -23082,6 +25602,20 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23198,6 +25732,20 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.remoteRateLimit.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.remoteRateLimit.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.remoteRateLimit.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23389,6 +25937,20 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extAuthz.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extAuthz.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extAuthz.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23518,6 +26080,20 @@
 |`mcp.policies.extAuthz.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extAuthz.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extAuthz.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.extAuthz.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extAuthz.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extAuthz.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extAuthz.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23650,6 +26226,20 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extProc.conditional[].policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extProc.conditional[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extProc.conditional[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
@@ -23769,6 +26359,20 @@
 |`mcp.policies.extProc.policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
 |`mcp.policies.extProc.policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
 |`mcp.policies.extProc.policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange`|object||
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
+|`mcp.policies.extProc.policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extProc.policies.http`|object|HTTP protocol settings for this backend.|
 |`mcp.policies.extProc.policies.http.version`|string|HTTP version to use when connecting to the backend.|
 |`mcp.policies.extProc.policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|

@@ -32,7 +32,7 @@ use x509_parser::nom::AsBytes;
 
 use crate::http::tests_common::*;
 use crate::http::{Body, Response, ext_proc};
-use crate::llm::{AIProvider, custom, openai};
+use crate::llm::{AIProvider, custom, gemini, openai};
 use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
@@ -2133,6 +2133,102 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	let upstream = &requests[0];
 	assert_eq!(
 		&upstream.url[Position::BeforePath..Position::AfterQuery],
+		expected_url
+	);
+}
+
+#[rstest::rstest]
+#[case::preserves_path(None, "/v1/models", "/v1/models")]
+#[case::path_prefix(Some("/openai/v1"), "/v1/models", "/openai/v1/models")]
+#[case::path_prefix_with_query(
+	Some("/openai/v1"),
+	"/v1/models?foo=bar",
+	"/openai/v1/models?foo=bar"
+)]
+#[case::path_prefix_non_default_path(Some("/openai/v1"), "/foo", "/openai/v1/foo")]
+#[tokio::test]
+async fn llm_openai_passthrough_applies_path_prefix(
+	#[case] path_prefix: Option<&str>,
+	#[case] request_path: &str,
+	#[case] expected_url: &str,
+) {
+	let mock = body_mock(b"{}").await;
+	let provider = crate::test_helpers::proxymock::llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+	);
+	let provider = crate::types::local::LocalNamedAIProvider {
+		path_prefix: path_prefix.map(strng::new),
+		..provider
+	};
+	let (mock, mut bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"*": "passthrough"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, &format!("http://lo{request_path}")).await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		expected_url
+	);
+}
+
+// Providers without a DEFAULT_BASE_PATH (e.g. Gemini) prepend pathPrefix to the
+// full incoming path rather than replacing /v1.
+#[rstest::rstest]
+#[case::preserves_path(None, "/some/path", "/some/path")]
+#[case::path_prefix(Some("/my/prefix"), "/some/path", "/my/prefix/some/path")]
+#[tokio::test]
+async fn llm_non_openai_passthrough_prepends_path_prefix(
+	#[case] path_prefix: Option<&str>,
+	#[case] request_path: &str,
+	#[case] expected_url: &str,
+) {
+	let mock = body_mock(b"{}").await;
+	let provider = crate::test_helpers::proxymock::llm_named_provider(
+		&mock,
+		AIProvider::Gemini(gemini::Provider { model: None }),
+		false,
+	);
+	let provider = crate::types::local::LocalNamedAIProvider {
+		path_prefix: path_prefix.map(strng::new),
+		..provider
+	};
+	let (mock, mut bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/some/path": "passthrough"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, &format!("http://lo{request_path}")).await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
 		expected_url
 	);
 }
@@ -5380,7 +5476,7 @@ async fn ingress_use_waypoint_sets_waypoint_target() {
 
 	// Waypoint target should be populated
 	let wp = backend_call
-		.waypoint
+		.waypoint()
 		.expect("waypoint target must be set when ingress_use_waypoint is true");
 	assert_eq!(
 		wp.address.ip(),
@@ -5441,7 +5537,7 @@ async fn ingress_use_waypoint_false_no_waypoint() {
 
 	// Waypoint should NOT be set
 	assert!(
-		backend_call.waypoint.is_none(),
+		backend_call.waypoint().is_none(),
 		"waypoint should not be set when ingress_use_waypoint is false"
 	);
 
@@ -5583,13 +5679,13 @@ async fn ingress_use_waypoint_remote_waypoint_uses_network_gateway() {
 	.expect("build_service_call should succeed");
 
 	assert!(
-		backend_call.waypoint.is_none(),
+		backend_call.waypoint().is_none(),
 		"remote waypoint should be reached through double HBONE, not direct waypoint transport"
 	);
 	let (resolved_gw, gw_identities) = backend_call
-		.network_gateway
+		.network_gateway()
 		.expect("remote waypoint should resolve a network gateway");
-	assert_matches!(resolved_gw.destination, Destination::Address(addr) => {
+	assert_matches!(&resolved_gw.destination, Destination::Address(addr) => {
 		assert_eq!(addr.address, gateway_ip);
 		assert_eq!(addr.network, remote_network);
 	});
@@ -5597,7 +5693,7 @@ async fn ingress_use_waypoint_remote_waypoint_uses_network_gateway() {
 	// Outer tunnel: gateway workload id (the gateway is referenced by address, so no SANs).
 	assert_eq!(
 		gw_identities,
-		vec![Identity::Spiffe {
+		&vec![Identity::Spiffe {
 			trust_domain: strng::EMPTY,
 			namespace: strng::literal!("istio-gateways"),
 			service_account: strng::literal!("istio-eastwest"),
@@ -5714,7 +5810,7 @@ async fn ingress_use_waypoint_ip_based_waypoint() {
 	.expect("build_service_call should succeed");
 
 	let wp = backend_call
-		.waypoint
+		.waypoint()
 		.expect("waypoint target must be set for IP-based waypoint");
 	assert_eq!(wp.address.ip(), waypoint_ip);
 	assert_eq!(wp.address.port(), 15008);
@@ -5787,7 +5883,7 @@ async fn ingress_use_waypoint_no_waypoint_field_no_routing() {
 
 	// No waypoint configured, so it should fall back to direct routing
 	assert!(
-		backend_call.waypoint.is_none(),
+		backend_call.waypoint().is_none(),
 		"waypoint should not be set when no waypoint is configured on the service"
 	);
 	assert_matches!(backend_call.target, Target::Address(_));
@@ -5827,7 +5923,7 @@ async fn ingress_use_waypoint_build_transport_falls_back_without_ca() {
 	)
 	.expect("build_service_call should succeed");
 
-	assert!(backend_call.waypoint.is_some());
+	assert!(backend_call.waypoint().is_some());
 
 	// build_transport with no CA should fall back to plain transport
 	let transport = httpproxy::build_transport(&t.pi, &backend_call, None, None, None, None)
@@ -5954,10 +6050,10 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 	.expect("build_service_call should succeed");
 
 	let (resolved_gw, gw_identities) = backend_call
-		.network_gateway
+		.network_gateway()
 		.expect("network_gateway must be resolved for hostname-form destination");
 
-	assert_matches!(resolved_gw.destination, Destination::Address(addr) => {
+	assert_matches!(&resolved_gw.destination, Destination::Address(addr) => {
 		assert_eq!(addr.address, gw_ip, "should resolve to the gateway endpoint IP");
 		assert_eq!(addr.network, remote_network, "network should be the gateway workload's network");
 	});
@@ -5968,7 +6064,7 @@ async fn network_gateway_hostname_resolves_via_service_endpoint() {
 	// Outer-tunnel identities match ztunnel: gateway workload id + gateway service SANs.
 	assert_eq!(
 		gw_identities,
-		vec![
+		&vec![
 			Identity::Spiffe {
 				trust_domain: strng::EMPTY,
 				namespace: gateway_namespace.clone(),

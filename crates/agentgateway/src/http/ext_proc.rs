@@ -195,6 +195,10 @@ impl InferenceRouting {
 }
 
 impl InferencePoolRouter {
+	pub fn is_enabled(&self) -> bool {
+		self.ext_proc.is_some()
+	}
+
 	pub async fn mutate_request(
 		&mut self,
 		req: &mut http::Request,

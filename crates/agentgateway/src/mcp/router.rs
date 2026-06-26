@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use agent_core::prelude::Strng;
+use agent_core::prelude::{AssertSize, Strng};
 use axum::response::Response;
 
 use crate::http::authorization::RuleSets;
@@ -148,15 +148,19 @@ impl App {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise
 			let sse = LegacySSEService::new(sessions);
-			Box::pin(sse.handle(
-				req,
-				RelayInputs {
-					backend: backends.clone(),
-					policies: authorization_policies.clone(),
-					mcp_guardrails: mcp_guardrails.clone(),
-					client: client.clone(),
-				},
-			))
+			Box::pin(
+				sse
+					.handle(
+						req,
+						RelayInputs {
+							backend: backends.clone(),
+							policies: authorization_policies.clone(),
+							mcp_guardrails: mcp_guardrails.clone(),
+							client: client.clone(),
+						},
+					)
+					.assert_size::<{ 20 * 1024 }>(),
+			)
 			.await
 		} else {
 			let streamable = StreamableHttpService::new(
@@ -165,15 +169,19 @@ impl App {
 					stateful_mode: backend.stateful,
 				},
 			);
-			Box::pin(streamable.handle(
-				req,
-				RelayInputs {
-					backend: backends.clone(),
-					policies: authorization_policies.clone(),
-					mcp_guardrails: mcp_guardrails.clone(),
-					client: client.clone(),
-				},
-			))
+			Box::pin(
+				streamable
+					.handle(
+						req,
+						RelayInputs {
+							backend: backends.clone(),
+							policies: authorization_policies.clone(),
+							mcp_guardrails: mcp_guardrails.clone(),
+							client: client.clone(),
+						},
+					)
+					.assert_size::<{ 4 * 1024 }>(),
+			)
 			.await
 		};
 		let upstream_end = Instant::now();

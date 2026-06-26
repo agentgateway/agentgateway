@@ -196,3 +196,179 @@ async fn test_apply_to_response_rewrites_agent_card_url() {
 	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 	assert_eq!(json["url"], "https://example.com/api");
 }
+
+#[tokio::test]
+async fn test_apply_to_response_rewrites_v1_agent_card_single_interface() {
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "example",
+				"supportedInterfaces": [
+					{ "protocolBinding": "JSONRPC", "url": "http://backend.internal/a2a/jsonrpc/" }
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"https://example.com/api/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"https://example.com/api/a2a/jsonrpc/"
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_rewrites_v1_agent_card_multiple_interfaces() {
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "example",
+				"supportedInterfaces": [
+					{ "protocolBinding": "JSONRPC", "url": "http://backend.internal/a2a/jsonrpc/" },
+					{ "protocolBinding": "GRPC", "url": "http://backend.internal/grpc/" },
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"https://example.com/api/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"https://example.com/api/a2a/jsonrpc/"
+	);
+	assert_eq!(
+		json["supportedInterfaces"][1]["url"],
+		"https://example.com/api/grpc/"
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_rewrites_v1_agent_card_root_path() {
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "example",
+				"supportedInterfaces": [
+					{ "protocolBinding": "JSONRPC", "url": "http://backend.internal/a2a/jsonrpc/" }
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"https://example.com/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"https://example.com/a2a/jsonrpc/"
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_skips_interface_without_url() {
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "example",
+				"supportedInterfaces": [
+					{ "protocolBinding": "GRPC" },
+					{ "protocolBinding": "JSONRPC", "url": "http://backend.internal/a2a/jsonrpc/" },
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"https://example.com/api/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert!(json["supportedInterfaces"][0].get("url").is_none());
+	assert_eq!(
+		json["supportedInterfaces"][1]["url"],
+		"https://example.com/api/a2a/jsonrpc/"
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_errors_when_neither_url_field_present() {
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({ "name": "example" })).unwrap(),
+		))
+		.unwrap();
+
+	let result = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"https://example.com/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+		),
+		&mut resp,
+	)
+	.await;
+
+	assert!(result.is_err());
+	assert!(
+		result
+			.unwrap_err()
+			.to_string()
+			.contains("agent card missing URL")
+	);
+}

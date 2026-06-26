@@ -243,6 +243,44 @@ pub fn ser_redact<S: Serializer, T>(_: &T, serializer: S) -> Result<S::Ok, S::Er
 	serializer.serialize_str("<redacted>")
 }
 
+fn is_sensitive_header(name: &str) -> bool {
+	name.eq_ignore_ascii_case("authorization")
+}
+
+pub fn ser_sensitive_header_map<S: Serializer>(
+	map: &std::collections::HashMap<String, String>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	use serde::ser::SerializeMap;
+	let mut m = serializer.serialize_map(Some(map.len()))?;
+	for (k, v) in map {
+		let v: &str = if is_sensitive_header(k) {
+			"<redacted>"
+		} else {
+			v
+		};
+		m.serialize_entry(k, v)?;
+	}
+	m.end()
+}
+
+pub fn ser_sensitive_header_vec<S: Serializer>(
+	vec: &Vec<(String, String)>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	use serde::ser::SerializeSeq;
+	let mut s = serializer.serialize_seq(Some(vec.len()))?;
+	for (k, v) in vec {
+		let v: &str = if is_sensitive_header(k) {
+			"<redacted>"
+		} else {
+			v
+		};
+		s.serialize_element(&(k, v))?;
+	}
+	s.end()
+}
+
 pub fn ser_string_or_bytes<S: Serializer, T: AsRef<[u8]>>(
 	t: &T,
 	serializer: S,

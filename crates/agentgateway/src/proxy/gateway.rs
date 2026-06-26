@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
+use agent_core::prelude::AssertSize;
 use agent_core::{drain, strng, telemetry};
 use agent_hbone::server::H2Request;
 use anyhow::anyhow;
@@ -462,17 +463,7 @@ impl Gateway {
 						},
 					},
 					Err(e) => {
-						event!(
-							target: "downstream connection",
-							parent: None,
-							tracing::Level::WARN,
-
-							src.addr = %peer_addr,
-							protocol = ?bind_protocol,
-							error = ?e.to_string(),
-
-							"failed to terminate TLS",
-						);
+						log_tls_termination_error(peer_addr, &bind_protocol, &e);
 					},
 				}
 			},
@@ -538,15 +529,7 @@ impl Gateway {
 									},
 								},
 								Err(e) => {
-									event!(
-										target: "downstream connection",
-										parent: None,
-										tracing::Level::WARN,
-										src.addr = %peer_addr,
-										protocol = ?bind_protocol,
-										error = ?e.to_string(),
-										"failed to terminate TLS (auto-detected)",
-									);
+									log_tls_termination_error(peer_addr, &bind_protocol, &e);
 								},
 							}
 						} else {
@@ -898,9 +881,14 @@ impl Gateway {
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
 				let req = req.map(crate::http::Body::new);
-				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(req, |req| async move {
-					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
-				}))
+				telemetry::request_scope(
+					// This is the per-request HTTP flow future. It is the baseline task state
+					// multiplied by concurrent in-flight requests on this connection.
+					dtrace::DebugTracer::maybe_scope(req, |req| async move {
+						proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
+					})
+					.assert_size::<{ 15 * 1024 }>(),
+				)
 			}),
 		);
 		let (connection_drain_tx, connection_drain_rx) = drain::new();
@@ -1617,6 +1605,47 @@ fn should_ignore_downstream_connection_error(err: &(dyn StdError + 'static)) -> 
 		return true;
 	}
 
+	false
+}
+
+fn log_tls_termination_error(
+	peer_addr: SocketAddr,
+	bind_protocol: &BindProtocol,
+	e: &anyhow::Error,
+) {
+	if is_tls_unexpected_eof(e.as_ref()) {
+		event!(
+			target: "downstream connection",
+			parent: None,
+			tracing::Level::DEBUG,
+			src.addr = %peer_addr,
+			protocol = ?bind_protocol,
+			error = ?e.to_string(),
+			"failed to terminate TLS",
+		);
+	} else {
+		event!(
+			target: "downstream connection",
+			parent: None,
+			tracing::Level::WARN,
+			src.addr = %peer_addr,
+			protocol = ?bind_protocol,
+			error = ?e.to_string(),
+			"failed to terminate TLS",
+		);
+	}
+}
+
+fn is_tls_unexpected_eof(err: &(dyn StdError + 'static)) -> bool {
+	let mut err = Some(err);
+	while let Some(e) = err {
+		if let Some(io_err) = e.downcast_ref::<std::io::Error>()
+			&& io_err.kind() == std::io::ErrorKind::UnexpectedEof
+		{
+			return true;
+		}
+		err = e.source();
+	}
 	false
 }
 

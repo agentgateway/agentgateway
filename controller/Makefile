@@ -509,10 +509,11 @@ HELM_PACKAGE_ARGS ?= --version $(HELM_CHART_VERSION_NO_V) --app-version $(HELM_C
 EXTRA_HELM_TAG ?=
 HELM_CHART_DIR_AGW=install/helm/agentgateway
 HELM_CHART_DIR_AGW_CRD=install/helm/agentgateway-crds
+HELM_CHART_DIR_AGW_STANDALONE=install/helm/agentgateway-standalone
 HELM_ADDITIONAL_VALUES ?= hack/helm/dev.yaml
 
 .PHONY: package-agentgateway-charts
-package-agentgateway-charts: package-agentgateway-chart package-agentgateway-crd-chart ## Package the agentgateway charts
+package-agentgateway-charts: package-agentgateway-chart package-agentgateway-crd-chart package-agentgateway-standalone-chart ## Package the agentgateway charts
 
 .PHONY: package-agentgateway-chart
 package-agentgateway-chart: ## Package the agentgateway chart
@@ -526,7 +527,13 @@ package-agentgateway-crd-chart: ## Package the agentgateway crd chart
 	$(HELM) package $(HELM_PACKAGE_ARGS) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
 	$(HELM) repo index $(TEST_ASSET_DIR);
 
-CHART_NAMES := agentgateway agentgateway-crds
+.PHONY: package-agentgateway-standalone-chart
+package-agentgateway-standalone-chart: ## Package the standalone agentgateway chart
+	mkdir -p $(TEST_ASSET_DIR); \
+	$(HELM) package $(HELM_PACKAGE_ARGS) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_STANDALONE); \
+	$(HELM) repo index $(TEST_ASSET_DIR);
+
+CHART_NAMES := agentgateway agentgateway-crds agentgateway-standalone
 
 .PHONY: release-charts
 release-charts: package-agentgateway-charts
@@ -536,12 +543,18 @@ release-charts: package-agentgateway-charts
 	mkdir -p $(TEST_ASSET_DIR); \
 	$(HELM) package --version $(HELM_CHART_VERSION_V) --app-version $(HELM_CHART_VERSION_V) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
 	$(HELM) repo index $(TEST_ASSET_DIR);
+	mkdir -p $(TEST_ASSET_DIR); \
+	$(HELM) package --version $(HELM_CHART_VERSION_V) --app-version $(HELM_CHART_VERSION_V) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_STANDALONE); \
+	$(HELM) repo index $(TEST_ASSET_DIR);
 	@if [ -n "$(EXTRA_HELM_TAG)" ]; then \
 		mkdir -p $(TEST_ASSET_DIR); \
 		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW); \
 		$(HELM) repo index $(TEST_ASSET_DIR); \
 		mkdir -p $(TEST_ASSET_DIR); \
 		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_CRD); \
+		$(HELM) repo index $(TEST_ASSET_DIR); \
+		mkdir -p $(TEST_ASSET_DIR); \
+		$(HELM) package --version $(EXTRA_HELM_TAG) --app-version $(VERSION) --destination $(TEST_ASSET_DIR) $(HELM_CHART_DIR_AGW_STANDALONE); \
 		$(HELM) repo index $(TEST_ASSET_DIR); \
 	fi
 	@for chart in $(CHART_NAMES); do \
@@ -569,6 +582,7 @@ deploy-agentgateway-chart: ## Deploy the agentgateway chart
 lint-charts: ## Lint the agentgateway charts
 	$(HELM) lint $(HELM_CHART_DIR_AGW)
 	$(HELM) lint $(HELM_CHART_DIR_AGW_CRD)
+	$(HELM) lint $(HELM_CHART_DIR_AGW_STANDALONE)
 
 #----------------------------------------------------------------------------------
 # Release
@@ -696,8 +710,11 @@ kind-load: kind-load-testbox
 #----------------------------------------------------------------------------------
 
 # Agent Gateway conformance test configuration
+AGW_CONFORMANCE_GATEWAY_CLASS ?= agentgateway
 AGW_CONFORMANCE_REPORT_ARGS ?= -report-output=$(TEST_ASSET_DIR)/conformance/agw-$(VERSION)-report.yaml -organization=agentgateway -project=agentgateway -version=$(VERSION) -url=github.com/agentgateway/agentgateway -contact=github.com/agentgateway/agentgateway/issues/new/choose
-AGW_CONFORMANCE_ARGS := -gateway-class=agentgateway $(AGW_CONFORMANCE_REPORT_ARGS)
+AGW_CONFORMANCE_SKIP_TESTS ?=
+AGW_CONFORMANCE_SKIP_ARGS := $(if $(AGW_CONFORMANCE_SKIP_TESTS),-skip-tests=$(AGW_CONFORMANCE_SKIP_TESTS))
+AGW_CONFORMANCE_ARGS := -gateway-class=$(AGW_CONFORMANCE_GATEWAY_CLASS) $(AGW_CONFORMANCE_REPORT_ARGS) $(AGW_CONFORMANCE_SKIP_ARGS)
 .PHONY: agw-conformance ## Run the agent gateway conformance test suite
 agw-conformance:
 	@mkdir -p $(TEST_ASSET_DIR)/conformance
@@ -717,8 +734,9 @@ GIE_CONFORMANCE_REPORT_ARGS ?= \
     -contact=github.com/agentgateway/agentgateway/issues/new/choose
 
 # The args to pass into the Gateway API Inference Extension conformance test suite.
+GIE_CONFORMANCE_GATEWAY_CLASS ?= agentgateway
 GIE_CONFORMANCE_ARGS := \
-    -gateway-class=agentgateway \
+    -gateway-class=$(GIE_CONFORMANCE_GATEWAY_CLASS) \
     $(GIE_CONFORMANCE_REPORT_ARGS)
 
 .PHONY: gie-conformance

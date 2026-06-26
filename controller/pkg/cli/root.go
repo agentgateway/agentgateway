@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -27,20 +26,10 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(controllercmd.Command())
 	rootCmd.AddCommand(costs.Command())
 
-	// Deprecated top-level aliases — delegate to the canonical subcommands.
-	rootCmd.AddCommand(deprecatedAlias("config", "agctl proxy config", flag.BuildCobra(config.Command)))
-	rootCmd.AddCommand(deprecatedAlias("trace", "agctl proxy trace", flag.BuildCobra(trace.Command)))
+	rootCmd.AddCommand(flag.BuildCobra(config.Command))
+	rootCmd.AddCommand(flag.BuildCobra(trace.Command))
 
 	return rootCmd
-}
-
-// deprecatedAlias wraps cmd so that running it prints a deprecation notice and
-// then executes the same underlying logic.
-func deprecatedAlias(use, canonical string, cmd *cobra.Command) *cobra.Command {
-	cmd.Use = use
-	cmd.Deprecated = fmt.Sprintf("use \"%s\" instead", canonical)
-	cmd.Hidden = true
-	return cmd
 }
 
 func Execute() {

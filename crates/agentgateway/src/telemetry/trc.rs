@@ -145,6 +145,7 @@ pub enum Protocol {
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct DeprecatedConfig {
 	pub endpoint: Option<String>,
+	#[serde(serialize_with = "crate::serdes::ser_sensitive_header_map")]
 	pub headers: HashMap<String, String>,
 	pub protocol: Protocol,
 	pub fields: LoggingFields,

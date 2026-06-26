@@ -992,7 +992,7 @@ mod tests {
 		);
 		assert!(result.http_version_override.is_none());
 		assert!(result.transport_override.is_none());
-		assert!(result.network_gateway.is_none());
+		assert!(result.network_gateway().is_none());
 	}
 
 	#[test]

@@ -1196,10 +1196,8 @@ impl Policy {
 	// }
 
 	fn apply_prompt_guard_regex(original_content: &str, rgx: &RegexRules) -> Option<RegexResult> {
-		let mut current_content = original_content.to_string();
-		let mut content_modified = false;
+		let mut working: Option<String> = None;
 
-		// Process each rule sequentially, updating the content as we go
 		for r in &rgx.rules {
 			match r {
 				RegexRule::Builtin { builtin } => {
@@ -1210,62 +1208,54 @@ impl Policy {
 						Builtin::Email => &*pii::EMAIL,
 						Builtin::CaSin => &*pii::CA_SIN,
 					};
-					let results = pii::recognizer(rec, &current_content);
-
-					if !results.is_empty() {
-						match &rgx.action {
-							Action::Reject => {
-								return Some(RegexResult::Reject);
-							},
-							Action::Mask => {
-								// Replace matches in reverse order while also combining any overlapping ranges
-								let replacement = format!("<{}>", results[0].entity_type);
-								for range in results
-									.into_iter()
-									.map(|r| r.start..r.end)
-									.sorted_unstable_by(|a, b| b.start.cmp(&a.start).then_with(|| a.end.cmp(&b.end)))
-									.coalesce(|a, b| {
-										if b.end > a.start {
-											Ok(b.start..std::cmp::max(a.end, b.end))
-										} else {
-											Err((a, b))
-										}
-									}) {
-									current_content.replace_range(range, &replacement);
-								}
-								content_modified = true;
-							},
-						}
+					let results = pii::recognizer(rec, working.as_deref().unwrap_or(original_content));
+					if results.is_empty() {
+						continue;
+					}
+					match &rgx.action {
+						Action::Reject => return Some(RegexResult::Reject),
+						Action::Mask => {
+							let replacement = format!("<{}>", results[0].entity_type);
+							let buf = working.get_or_insert_with(|| original_content.to_string());
+							// Replace in reverse order to avoid index shifting, coalescing overlaps
+							for range in results
+								.into_iter()
+								.map(|r| r.start..r.end)
+								.sorted_unstable_by(|a, b| b.start.cmp(&a.start).then_with(|| a.end.cmp(&b.end)))
+								.coalesce(|a, b| {
+									if b.end > a.start {
+										Ok(b.start..std::cmp::max(a.end, b.end))
+									} else {
+										Err((a, b))
+									}
+								}) {
+								buf.replace_range(range, &replacement);
+							}
+						},
 					}
 				},
 				RegexRule::Regex { pattern } => {
-					let ranges: Vec<std::ops::Range<usize>> = pattern
-						.find_iter(&current_content)
-						.map(|m| m.range())
-						.collect();
-
-					if !ranges.is_empty() {
-						match &rgx.action {
-							Action::Reject => {
-								return Some(RegexResult::Reject);
-							},
-							Action::Mask => {
-								// Process matches in reverse order to avoid index shifting
-								for range in ranges.into_iter().rev() {
-									current_content.replace_range(range, "<masked>");
-								}
-								content_modified = true;
-							},
+					let content = working.as_deref().unwrap_or(original_content);
+					if matches!(rgx.action, Action::Reject) {
+						if pattern.is_match(content) {
+							return Some(RegexResult::Reject);
 						}
+						continue;
+					}
+					let ranges: Vec<std::ops::Range<usize>> =
+						pattern.find_iter(content).map(|m| m.range()).collect();
+					if ranges.is_empty() {
+						continue;
+					}
+					let buf = working.get_or_insert_with(|| original_content.to_string());
+					// Reverse order to avoid index shifting
+					for range in ranges.into_iter().rev() {
+						buf.replace_range(range, "<masked>");
 					}
 				},
 			}
 		}
-		// Only update the message if content was actually modified
-		if content_modified {
-			return Some(RegexResult::Mask(current_content));
-		}
-		None
+		working.map(RegexResult::Mask)
 	}
 
 	pub async fn apply_response_prompt_guard(
@@ -1928,4 +1918,19 @@ fn test_apply_prompt_guard_regex_mask(
 		Some(RegexResult::Mask(masked)) => assert_eq!(masked, expected),
 		_ => panic!("expected masked result"),
 	}
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::regex(vec![RegexRule::Regex { pattern: regex::Regex::new(r"\d{2}").unwrap() }], "id:12")]
+#[case::builtin(vec![RegexRule::Builtin { builtin: Builtin::Email }], "contact john.doe@example.com")]
+fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] input: &str) {
+	let result = Policy::apply_prompt_guard_regex(
+		input,
+		&RegexRules {
+			action: Action::Reject,
+			rules,
+		},
+	);
+	assert!(matches!(result, Some(RegexResult::Reject)));
 }

@@ -13,6 +13,7 @@ import {
   User,
 } from "lucide-react";
 import { sendChatCompletion, sendMcpJsonRpc } from "../api/playgroundApi";
+import { claudeSubscriptionWarning } from "../claudeSubscription";
 import { providerLabel } from "../config";
 import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
 import { hasKeyValue, keyLabel } from "../credentialDisplay";
@@ -562,6 +563,11 @@ export function PlaygroundPage() {
       {modelOptions.length === 0 ? (
         <StatusBanner state="warn" title="No configured models">
           Create a model before testing chat traffic.
+        </StatusBanner>
+      ) : null}
+      {claudeSubscriptionWarning(selectedModelConfig, providers) ? (
+        <StatusBanner state="warn" title="Claude subscription key detected">
+          {claudeSubscriptionWarning(selectedModelConfig, providers)}
         </StatusBanner>
       ) : null}
       {error ? (

@@ -156,7 +156,7 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
-	let creds = load_credentials(aws_auth, region).await?.into();
+	let creds = Box::pin(load_credentials(aws_auth, region)).await?.into();
 
 	let service = signing_service_name(req, aws_auth);
 	trace!("AWS signing with region: {}, service: {}", region, service);

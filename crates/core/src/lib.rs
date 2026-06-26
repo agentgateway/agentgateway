@@ -1,4 +1,5 @@
 mod arc;
+pub mod assertions;
 pub mod bow;
 pub mod copy;
 pub mod drain;

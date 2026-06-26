@@ -2,6 +2,7 @@ pub mod aws;
 pub mod azure;
 mod copilot;
 pub mod gcp;
+pub mod token_exchange;
 
 use std::borrow::Cow;
 
@@ -11,6 +12,7 @@ pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;
 use secrecy::{ExposeSecret, SecretString};
+pub use token_exchange::{OAuthClientAuth, OAuthTokenExchangeAuth};
 use url::form_urlencoded;
 
 use crate::http::Request;
@@ -54,6 +56,7 @@ pub enum BackendAuth {
 	/// Authenticate to GitHub Copilot.
 	#[serde(rename = "copilot")]
 	Copilot,
+	OAuthTokenExchange(token_exchange::OAuthTokenExchangeAuth),
 }
 
 /// Records whether the backend auth location was explicitly configured by the user
@@ -158,6 +161,33 @@ pub async fn apply_backend_auth(
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
+		BackendAuth::OAuthTokenExchange(te_auth) => {
+			let subject_token = if let Some(claims) = req.extensions().get::<Claims>() {
+				claims.jwt.expose_secret().to_string()
+			} else if let Some(token) = DEFAULT_AUTHORIZATION_LOCATION.extract(req) {
+				token.into_owned()
+			} else {
+				return Err(ProxyError::ProcessingString(
+					"token exchange backend auth requires a bearer token in the request".to_string(),
+				));
+			};
+			let policy_client = crate::proxy::httpproxy::PolicyClient::new(backend_info.inputs.clone());
+			let access_token = token_exchange::fetch_token(
+				&policy_client,
+				te_auth,
+				&subject_token,
+				token_exchange::TOKEN_TYPE_ACCESS,
+			)
+			.await
+			.map_err(ProxyError::BackendAuthenticationFailed)?;
+			let mut hv = HeaderValue::from_str(&format!("Bearer {}", access_token.expose_secret()))
+				.map_err(|e| ProxyError::Processing(e.into()))?;
+			hv.set_sensitive(true);
+			req.headers_mut().insert(http::header::AUTHORIZATION, hv);
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit: true });
+		},
 	}
 	Ok(())
 }
@@ -180,6 +210,7 @@ pub async fn apply_late_backend_auth(
 		},
 		BackendAuth::Azure(_) => {},
 		BackendAuth::Copilot => {},
+		BackendAuth::OAuthTokenExchange(_) => {},
 	};
 	Ok(())
 }

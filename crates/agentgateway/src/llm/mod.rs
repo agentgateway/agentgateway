@@ -378,6 +378,14 @@ impl AIProvider {
 				.unwrap_or(custom::Provider::NAME),
 		}
 	}
+	fn default_base_path(&self) -> Option<&'static str> {
+		match self {
+			AIProvider::OpenAI(_) | AIProvider::Copilot(_) => Some(openai::DEFAULT_BASE_PATH),
+			AIProvider::Anthropic(_) => Some(anthropic::DEFAULT_BASE_PATH),
+			_ => None,
+		}
+	}
+
 	pub fn override_model(&self) -> Option<Strng> {
 		match self {
 			AIProvider::OpenAI(p) => p.model.clone(),
@@ -564,6 +572,35 @@ impl AIProvider {
 		has_host_override: bool,
 	) -> anyhow::Result<()> {
 		if matches!(route_type, RouteType::Passthrough | RouteType::Detect) {
+			if let Some(prefix) = path_prefix {
+				http::modify_req(req, |req| {
+					http::modify_uri(req, |uri| {
+						let current = uri
+							.path_and_query
+							.as_ref()
+							.map(|pq| pq.path())
+							.unwrap_or("/");
+						let new_path = match self.default_base_path() {
+							// For providers with a default base path (e.g. /v1), strip it so
+							// that pathPrefix replaces it — consistent with non-passthrough routes.
+							// If the path doesn't start with the default base, still apply
+							// pathPrefix so it is never silently dropped.
+							Some(base) => {
+								let rest = current
+									.strip_prefix(base)
+									.filter(|rest| rest.is_empty() || rest.starts_with('/'))
+									.unwrap_or(current);
+								format!("{}{}", prefix.trim_end_matches('/'), rest)
+							},
+							// For other providers, pathPrefix is prepended to the full path,
+							// consistent with with_path_prefix used in their non-passthrough code.
+							None => format!("{}{}", prefix.trim_end_matches('/'), current),
+						};
+						Self::set_path_and_query(uri, &new_path)?;
+						Ok(())
+					})
+				})?;
+			}
 			return Ok(());
 		}
 
