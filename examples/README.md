@@ -27,6 +27,10 @@ The oauth2-proxy example shows how to integrate with an external `oauth2-proxy` 
 
 The backend OAuth example shows how to use `extAuthz` to acquire Keycloak tokens for upstream requests using token exchange or client credentials.
 
+### [OAuth Token Exchange](oauth-token-exchange/README.md)
+
+The OAuth token exchange examples show first-class `backendAuth.oauth` configs for Entra OBO, Okta, Keycloak, and Google STS.
+
 ### [TLS](tls/README.md)
 
 The tls example shows how to use agentgateway to terminate TLS connections.

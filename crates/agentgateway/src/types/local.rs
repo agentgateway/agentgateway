@@ -1879,15 +1879,21 @@ pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D
 where
 	D: Deserializer<'de>,
 {
-	Option::<BackendAuthCompat>::deserialize(deserializer).map(|auth| {
-		auth.map(|auth| match auth {
-			BackendAuthCompat::Full(auth) => auth,
-			BackendAuthCompat::PlainKey { key } => BackendAuth::Key {
+	Option::<BackendAuthCompat>::deserialize(deserializer)?
+		.map(|auth| match auth {
+			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
+				// OAuth has a few cross-field checks serde won't catch on its own.
+				// Keep them here so untagged compat parsing still returns the real error.
+				auth.validate_load().map_err(serde::de::Error::custom)?;
+				Ok(BackendAuth::OAuthTokenExchange(auth))
+			},
+			BackendAuthCompat::Full(auth) => Ok(auth),
+			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
 				value: key,
 				location: None,
-			},
+			}),
 		})
-	})
+		.transpose()
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

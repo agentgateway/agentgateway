@@ -1490,3 +1490,72 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 		"{err}"
 	);
 }
+
+fn oauth_local_backend_auth_yaml(snippet: &str) -> String {
+	let snippet = snippet
+		.lines()
+		.map(|line| format!("              {line}"))
+		.collect::<Vec<_>>()
+		.join("\n");
+
+	format!(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauth:
+              tokenEndpoint:
+                host: 127.0.0.1:9000
+{snippet}
+"#,
+	)
+}
+
+#[rstest::rstest]
+#[case::unsupported_requested_token_type(
+	"unsupported requested token type",
+	"requestedTokenType: urn:ietf:params:oauth:token-type:saml2",
+	"unsupported requested_token_type"
+)]
+#[case::client_secret_basic_without_secret(
+	"client secret basic without secret",
+	"clientAuth:\n  clientId: gateway-client",
+	"client_secret"
+)]
+#[case::actor_token_with_jwt_bearer_grant(
+	"actor token with jwt bearer grant",
+	"grantType: jwtBearer\nactorToken:\n  source:\n    header:\n      name: x-actor-token",
+	"actor_token"
+)]
+#[case::relative_token_endpoint_path(
+	"relative token endpoint path",
+	"tokenEndpointPath: token",
+	"must start with /"
+)]
+#[case::reserved_additional_parameter(
+	"reserved additional parameter",
+	"additionalParams:\n  scope: '\"read\"'",
+	"reserved"
+)]
+#[tokio::test]
+async fn test_oauth_token_exchange_rejects_invalid_local_config(
+	#[case] name: &str,
+	#[case] snippet: &str,
+	#[case] expected: &str,
+) {
+	let yaml = oauth_local_backend_auth_yaml(snippet);
+	let err = match normalize_test_yaml(&yaml).await {
+		Ok(_) => panic!("{name} should fail at config load"),
+		Err(err) => err,
+	};
+
+	assert!(
+		err.to_string().contains(expected),
+		"{name} returned unexpected error: {err}"
+	);
+}

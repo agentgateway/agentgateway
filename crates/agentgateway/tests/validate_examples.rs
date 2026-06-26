@@ -106,7 +106,9 @@ fn example_configs() -> Vec<String> {
 			let path = entry.path();
 			if path.is_dir() {
 				walk(&path, configs);
-			} else if path.file_name().is_some_and(|name| name == "config.yaml") {
+			} else if path.file_name().is_some_and(|name| name == "config.yaml")
+				|| is_oauth_token_exchange_example(&path)
+			{
 				configs.push(path);
 			}
 		}
@@ -128,6 +130,12 @@ fn example_configs() -> Vec<String> {
 				.replace('\\', "/")
 		})
 		.collect()
+}
+
+fn is_oauth_token_exchange_example(path: &Path) -> bool {
+	path
+		.strip_prefix(workspace_root().join("examples/oauth-token-exchange"))
+		.is_ok_and(|relative| relative.extension().is_some_and(|ext| ext == "yaml"))
 }
 
 fn example_name(path: &str) -> String {
