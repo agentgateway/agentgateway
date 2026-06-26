@@ -12,8 +12,9 @@ use anyhow::anyhow;
 use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
-	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
-	InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId, ServerJsonRpcMessage,
+	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
+	Implementation, InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId,
+	ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -405,6 +406,7 @@ impl Session {
 					l.method_name = Some(method.clone());
 					l.session_id = Some(session_id);
 				});
+				self.strip_unsupported_client_capabilities_from_meta(&mut r.request);
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
 						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
@@ -429,6 +431,14 @@ impl Session {
 							}
 						}
 						res
+					},
+					ClientRequest::DiscoverRequest(_) => {
+						Box::pin(self.relay.send_fanout(
+							r,
+							ctx,
+							self.relay.merge_discover(self.relay.is_multiplexing()),
+						))
+						.await
 					},
 					ClientRequest::ListToolsRequest(_) => {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_tools())).await
@@ -558,8 +568,7 @@ impl Session {
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 
-					ClientRequest::DiscoverRequest(_)
-					| ClientRequest::ListTasksRequest(_)
+					ClientRequest::ListTasksRequest(_)
 					| ClientRequest::GetTaskRequest(_)
 					| ClientRequest::GetTaskPayloadRequest(_)
 					| ClientRequest::CancelTaskRequest(_)
@@ -593,7 +602,7 @@ impl Session {
 					},
 				}
 			},
-			ClientJsonRpcMessage::Notification(r) => {
+			ClientJsonRpcMessage::Notification(mut r) => {
 				let method = match &r.notification {
 					ClientNotification::CancelledNotification(r) => r.method.as_str(),
 					ClientNotification::ProgressNotification(r) => r.method.as_str(),
@@ -609,6 +618,7 @@ impl Session {
 					l.method_name = Some(method.to_string());
 					l.session_id = Some(session_id);
 				});
+				self.strip_unsupported_client_capabilities_from_meta(&mut r.notification);
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
 				Box::pin(self.relay.send_notification(r, ctx)).await
@@ -630,6 +640,14 @@ impl Session {
 		capabilities.roots = None;
 		capabilities.sampling = None;
 		capabilities.elicitation = None;
+	}
+
+	fn strip_unsupported_client_capabilities_from_meta<T: GetMeta>(&self, message: &mut T) {
+		let Some(mut capabilities) = message.get_meta().client_capabilities() else {
+			return;
+		};
+		self.strip_unsupported_client_capabilities(&mut capabilities);
+		message.get_meta_mut().set_client_capabilities(capabilities);
 	}
 }
 

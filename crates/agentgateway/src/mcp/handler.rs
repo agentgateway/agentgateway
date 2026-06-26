@@ -10,9 +10,9 @@ use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	CacheScope, ClientNotification, ClientRequest, Implementation, JsonRpcNotification,
-	JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
-	ListToolsResult, ProtocolVersion, RequestId, ServerCapabilities, ServerInfo,
+	CacheScope, ClientNotification, ClientRequest, DiscoverResult, Implementation,
+	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
+	ListResourcesResult, ListToolsResult, ProtocolVersion, RequestId, ServerCapabilities, ServerInfo,
 	ServerJsonRpcMessage, ServerNotification, ServerResult,
 };
 use tracing::{debug, warn};
@@ -395,6 +395,43 @@ impl Relay {
 			}
 
 			Ok(Self::get_info(lowest_version, resource_subscribe, upstream_instructions).into())
+		})
+	}
+
+	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
+		let resource_subscribe = self.upstreams.stateful();
+		Box::new(move |s, _cel| {
+			if !multiplexing {
+				let res = s.into_iter().next().and_then(|(_, r)| match r {
+					ServerResult::DiscoverResult(dr) => Some(dr),
+					_ => None,
+				});
+				if let Some(dr) = res {
+					// Cache hints describe the gateway's presented server, not the upstream.
+					// Gateway routing/backend config can change without client invalidation.
+					return Ok(dr.with_cache(0, CacheScope::Private).into());
+				}
+				// If we got here in FailOpen mode, it means the only target failed.
+				// Return a default discovery response so clients can continue negotiation.
+				return Ok(Self::get_discovery(resource_subscribe, Vec::new()).into());
+			}
+
+			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
+			let mut supported_versions = ProtocolVersion::KNOWN_VERSIONS.to_vec();
+			for (server_name, v) in s {
+				if let ServerResult::DiscoverResult(r) = v {
+					supported_versions.retain(|version| r.supported_versions.contains(version));
+					if let Some(instructions) = r.instructions
+						&& !instructions.is_empty()
+					{
+						upstream_instructions.push((server_name.to_string(), instructions));
+					}
+				}
+			}
+
+			let mut discover = Self::get_discovery(resource_subscribe, upstream_instructions);
+			discover.supported_versions = supported_versions;
+			Ok(discover.into())
 		})
 	}
 
@@ -833,6 +870,23 @@ impl Relay {
 				BuildInfo::new().version.to_string(),
 			))
 			.with_instructions(instructions.unwrap_or_default())
+	}
+
+	fn get_discovery(
+		resource_subscribe: bool,
+		upstream_instructions: Vec<(String, String)>,
+	) -> DiscoverResult {
+		let info = Self::get_info(
+			ProtocolVersion::default(),
+			resource_subscribe,
+			upstream_instructions,
+		);
+		DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
+			.with_server_info(info.server_info)
+			.with_instructions(info.instructions.unwrap_or_default())
+			// Discovery is immediately stale because the gateway has no way to
+			// invalidate clients when backend membership or routing config changes.
+			.with_cache(0, CacheScope::Private)
 	}
 }
 

@@ -678,9 +678,14 @@ impl Handler {
 				.with_ttl_ms(0)
 				.with_cache_scope(CacheScope::Private),
 			),
-			ClientRequest::DiscoverRequest(_) => {
-				return Err(UpstreamError::InvalidMethod(method.to_string()));
-			},
+			ClientRequest::DiscoverRequest(_) => Messages::from_result(
+				id,
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::builder().enable_tools().build(),
+				)
+				.with_cache(0, CacheScope::Private),
+			),
 			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
 			ClientRequest::GetTaskRequest(_) => {
 				Messages::from_result(id, GetTaskResult::new(Task::default()))

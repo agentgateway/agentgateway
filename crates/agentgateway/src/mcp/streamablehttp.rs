@@ -150,6 +150,16 @@ impl StreamableHttpService {
 			return Box::pin(session.send(part, message)).await;
 		}
 
+		if matches!(
+			&message,
+			ClientJsonRpcMessage::Request(req)
+				if matches!(req.request, ClientRequest::DiscoverRequest(_))
+		) {
+			let relay = inputs.build_new_connections()?;
+			let mut session = self.session_manager.create_stateless_session(relay);
+			return Box::pin(session.send(part, message)).await;
+		}
+
 		// No session header... we need to create one, if it is an initialize.
 		// Notifications and responses are subsequent-session messages too.
 		let is_initialize_request = match &message {
