@@ -41,19 +41,19 @@ pub enum StreamableHttpPostResponse {
 }
 
 #[derive(Debug, Clone)]
-struct RequestProtocol {
+pub(crate) struct RequestProtocol {
 	version: Option<ProtocolVersion>,
 }
 
 impl RequestProtocol {
-	fn is_modern(&self) -> bool {
+	pub(crate) fn is_modern(&self) -> bool {
 		self
 			.version
 			.as_ref()
 			.is_some_and(|version| version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str())
 	}
 
-	fn uses_sessions(&self) -> bool {
+	pub(crate) fn uses_sessions(&self) -> bool {
 		!self.is_modern()
 	}
 }
@@ -130,7 +130,7 @@ impl StreamableHttpService {
 		}
 
 		let limit = http::buffer_limit(&request);
-		let (part, body) = request.into_parts();
+		let (mut part, body) = request.into_parts();
 		let message = match json::from_body_with_limit::<ClientJsonRpcMessage>(body, limit).await {
 			Ok(b) => b,
 			Err(e) => return mcp::Error::Deserialize(e).into(),
@@ -138,6 +138,7 @@ impl StreamableHttpService {
 		let request_id = request_id(&message);
 		let protocol = request_protocol(&part.headers, &message, request_id.clone())?;
 		validate_standard_headers(&part.headers, &message)?;
+		part.extensions.insert(protocol.clone());
 
 		if !self.config.stateful_mode {
 			let relay = inputs.build_new_connections()?;

@@ -23,7 +23,7 @@ use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
-use crate::mcp::streamablehttp::ServerSseMessage;
+use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
@@ -584,10 +584,13 @@ impl Relay {
 		);
 
 		match guardrails {
-			Some(guardrails) => {
-				messages_to_response(id, wrap_with_guardrails(stream, guardrails), mcp_log)
-			},
-			None => messages_to_response(id, stream, mcp_log),
+			Some(guardrails) => messages_to_response(
+				id,
+				wrap_with_guardrails(stream, guardrails),
+				mcp_log,
+				ctx_downstream_modern(&ctx),
+			),
+			None => messages_to_response(id, stream, mcp_log, ctx_downstream_modern(&ctx)),
 		}
 	}
 	pub async fn send_fanout_deletion(
@@ -680,11 +683,16 @@ impl Relay {
 			// FailClosed: unreachable — InitializeRequest would have failed with NoBackends.
 			// FailOpen: keep the SSE connection open so legacy SSE clients do not immediately
 			// reconnect in a tight loop after all upstream GET streams disappear.
-			return messages_to_response(RequestId::Number(0), Messages::pending(), None);
+			return messages_to_response(
+				RequestId::Number(0),
+				Messages::pending(),
+				None,
+				ctx_downstream_modern(&ctx),
+			);
 		}
 
 		let ms = mergestream::MergeStream::new_without_merge(streams, self.upstreams.failure_mode);
-		messages_to_response(RequestId::Number(0), ms, None)
+		messages_to_response(RequestId::Number(0), ms, None, ctx_downstream_modern(&ctx))
 	}
 
 	pub async fn send_fanout(
@@ -778,8 +786,13 @@ impl Relay {
 
 		// Response-phase hook runs once on the merged (muxed) result.
 		match service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)) {
-			Some(guardrails) => messages_to_response(id, wrap_with_guardrails(ms, guardrails), None),
-			None => messages_to_response(id, ms, None),
+			Some(guardrails) => messages_to_response(
+				id,
+				wrap_with_guardrails(ms, guardrails),
+				None,
+				ctx_downstream_modern(&ctx),
+			),
+			None => messages_to_response(id, ms, None, ctx_downstream_modern(&ctx)),
 		}
 	}
 	pub async fn send_notification(
@@ -922,11 +935,20 @@ fn messages_to_response(
 	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
+	downstream_modern: bool,
 ) -> Result<Response, UpstreamError> {
 	Ok(mcp::session::sse_stream_response(
-		into_sse_stream(id, stream, mcp_log),
+		into_sse_stream(id, stream, mcp_log, downstream_modern),
 		None,
 	))
+}
+
+fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
+	ctx
+		.as_request()
+		.extensions()
+		.get::<RequestProtocol>()
+		.is_some_and(RequestProtocol::is_modern)
 }
 
 fn wrap_with_guardrails(
@@ -955,6 +977,7 @@ fn into_sse_stream(
 	request_id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
+	downstream_modern: bool,
 ) -> impl Stream<Item = ServerSseMessage> + Send + 'static {
 	use futures_util::StreamExt;
 	let mut captured_terminal = false;
@@ -962,6 +985,7 @@ fn into_sse_stream(
 		let r = match rpc {
 			Ok(rpc) => {
 				let rpc = with_gateway_cache_policy(rpc);
+				let rpc = normalize_outbound_for_protocol(rpc, downstream_modern);
 				if !captured_terminal && let Some(log) = mcp_log.as_ref() {
 					captured_terminal = capture_terminal_mcp_payload(log, &request_id, &rpc);
 				}
@@ -978,6 +1002,76 @@ fn into_sse_stream(
 			message: Arc::new(r),
 		}
 	})
+}
+
+fn normalize_outbound_for_protocol(
+	mut msg: ServerJsonRpcMessage,
+	downstream_modern: bool,
+) -> ServerJsonRpcMessage {
+	if downstream_modern {
+		return msg;
+	}
+
+	let ServerJsonRpcMessage::Response(resp) = &mut msg else {
+		return msg;
+	};
+
+	match &mut resp.result {
+		ServerResult::DiscoverResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::InitializeResult(r) => r.result_type = None,
+		ServerResult::CompleteResult(r) => r.result_type = None,
+		ServerResult::GetPromptResult(r) => r.result_type = None,
+		ServerResult::ListPromptsResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ListResourcesResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ListResourceTemplatesResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ReadResourceResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ListToolsResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ElicitResult(r) => r.result_type = None,
+		ServerResult::CreateTaskResult(r) => r.result_type = None,
+		ServerResult::ListTasksResult(r) => r.result_type = None,
+		ServerResult::GetTaskResult(r) => r.result_type = None,
+		ServerResult::CancelTaskResult(r) => r.result_type = None,
+		ServerResult::CallToolResult(r) => r.result_type = None,
+		ServerResult::GetTaskPayloadResult(r) => strip_protocol_result_fields(&mut r.0),
+		ServerResult::EmptyResult(r) => r.result_type = None,
+		ServerResult::CustomResult(r) => strip_protocol_result_fields(&mut r.0),
+		ServerResult::InputRequiredResult(_) => {},
+	}
+
+	msg
+}
+
+fn strip_protocol_result_fields(value: &mut serde_json::Value) {
+	let Some(obj) = value.as_object_mut() else {
+		return;
+	};
+	obj.remove("resultType");
+	obj.remove("ttlMs");
+	obj.remove("cacheScope");
 }
 
 fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMessage {
@@ -1095,6 +1189,29 @@ mod tests {
 
 	use super::*;
 
+	#[test]
+	fn normalize_outbound_result_type_by_downstream_protocol() {
+		let response = ServerJsonRpcMessage::response(
+			ServerResult::ListToolsResult(
+				ListToolsResult::with_all_items(vec![])
+					.with_ttl_ms(30_000)
+					.with_cache_scope(CacheScope::Public),
+			),
+			RequestId::Number(1),
+		);
+
+		let modern =
+			serde_json::to_value(normalize_outbound_for_protocol(response.clone(), true)).unwrap();
+		assert_eq!(modern["result"]["resultType"], "complete");
+		assert_eq!(modern["result"]["ttlMs"], 30_000);
+		assert_eq!(modern["result"]["cacheScope"], "public");
+
+		let legacy = serde_json::to_value(normalize_outbound_for_protocol(response, false)).unwrap();
+		assert!(legacy["result"].get("resultType").is_none());
+		assert!(legacy["result"].get("ttlMs").is_none());
+		assert!(legacy["result"].get("cacheScope").is_none());
+	}
+
 	#[tokio::test]
 	async fn messages_to_response_captures_first_matching_tool_result() {
 		let log = AsyncLog::default();
@@ -1122,7 +1239,8 @@ mod tests {
 			)),
 		]);
 
-		let response = messages_to_response(RequestId::Number(42), stream, Some(log.clone())).unwrap();
+		let response =
+			messages_to_response(RequestId::Number(42), stream, Some(log.clone()), false).unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();
@@ -1149,7 +1267,8 @@ mod tests {
 				RequestId::Number(7),
 			)),
 		]);
-		let response = messages_to_response(RequestId::Number(7), stream, Some(log.clone())).unwrap();
+		let response =
+			messages_to_response(RequestId::Number(7), stream, Some(log.clone()), false).unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();
@@ -1171,7 +1290,8 @@ mod tests {
 			ErrorData::internal_error("boom", None),
 			Some(RequestId::Number(7)),
 		))]);
-		let response = messages_to_response(RequestId::Number(7), stream, Some(log.clone())).unwrap();
+		let response =
+			messages_to_response(RequestId::Number(7), stream, Some(log.clone()), false).unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();

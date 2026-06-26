@@ -579,6 +579,14 @@ async fn streamable_http_validates_protocol_version_header() {
 		"method": "tools/list",
 		"params": {}
 	});
+	let list = mcp_json_post(&client, &url, &list_body)
+		.header("mcp-session-id", session_id.clone())
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(list.status(), reqwest::StatusCode::OK);
+
 	let subsequent_unsupported = mcp_json_post(&client, &url, &list_body)
 		.header("mcp-session-id", session_id)
 		.header("mcp-protocol-version", "1900-01-01")
