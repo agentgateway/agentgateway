@@ -1,0 +1,30 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          pathPrefix: /google-sts
+      backends:
+      - host: api.internal.example.com:443
+        policies:
+          backendTLS: {}
+          backendAuth:
+            oauth:
+              tokenEndpoint:
+                backend: google-sts-token-endpoint
+              tokenEndpointPath: /v1/token
+              subjectToken:
+                # Use jwt for generic OIDC/JWT credentials, or id_token when the
+                # external credential is specifically an OpenID Connect ID token.
+                tokenType: urn:ietf:params:oauth:token-type:id_token
+              audiences:
+              - //iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/pool/providers/provider
+              scopes:
+              - https://www.googleapis.com/auth/cloud-platform
+
+backends:
+- name: google-sts-token-endpoint
+  host: sts.googleapis.com:443
+  policies:
+    backendTLS: {}

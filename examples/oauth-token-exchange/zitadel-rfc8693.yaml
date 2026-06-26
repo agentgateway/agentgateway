@@ -1,0 +1,33 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          pathPrefix: /zitadel
+      backends:
+      - host: api.internal.example.com:443
+        policies:
+          backendTLS: {}
+          backendAuth:
+            oauth:
+              tokenEndpoint:
+                backend: zitadel-token-endpoint
+              tokenEndpointPath: /oauth/v2/token
+              subjectToken:
+                tokenType: urn:ietf:params:oauth:token-type:jwt
+              audiences:
+              - urn:zitadel:iam:org:project:id:123456789012345678
+              scopes:
+              - openid
+              - profile
+              requestedTokenType: urn:ietf:params:oauth:token-type:jwt
+              clientAuth:
+                clientId: 123456789012345678@example
+                clientSecret: replace-with-zitadel-client-secret
+
+backends:
+- name: zitadel-token-endpoint
+  host: example.zitadel.cloud:443
+  policies:
+    backendTLS: {}

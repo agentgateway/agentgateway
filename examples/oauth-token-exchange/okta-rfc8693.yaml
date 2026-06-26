@@ -1,0 +1,30 @@
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - matches:
+      - path:
+          pathPrefix: /okta
+      backends:
+      - host: api.internal.example.com:443
+        policies:
+          backendTLS: {}
+          backendAuth:
+            oauth:
+              tokenEndpoint:
+                backend: okta-token-endpoint
+              tokenEndpointPath: /oauth2/default/v1/token
+              audiences:
+              - com.example.api
+              scopes:
+              - api:access:read
+              - api:access:write
+              clientAuth:
+                clientId: 0oa0000000000000000
+                clientSecret: replace-with-okta-client-secret
+
+backends:
+- name: okta-token-endpoint
+  host: dev-00000000.okta.com:443
+  policies:
+    backendTLS: {}

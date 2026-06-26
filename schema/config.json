@@ -2802,14 +2802,15 @@
           "const": "copilot"
         },
         {
+          "description": "Use OAuth token exchange flows to obtain a backend access token.",
           "type": "object",
           "properties": {
-            "oAuthTokenExchange": {
+            "oauth": {
               "$ref": "#/$defs/OAuthTokenExchangeAuth"
             }
           },
           "required": [
-            "oAuthTokenExchange"
+            "oauth"
           ],
           "additionalProperties": false
         }
@@ -3233,6 +3234,40 @@
           "description": "Token endpoint path on the backend; defaults to \"/\".",
           "type": "string"
         },
+        "tokenEndpointTimeout": {
+          "description": "Max time to wait for the token endpoint; defaults to 10s.",
+          "type": "string",
+          "default": "10s"
+        },
+        "grantType": {
+          "description": "Selects which RFC the request follows; defaults to token exchange (RFC 8693).",
+          "$ref": "#/$defs/OAuthGrantType",
+          "default": "tokenExchange"
+        },
+        "subjectToken": {
+          "description": "Where the subject token is read from, and its token type. Defaults to the\nAuthorization Bearer header with token type access_token.",
+          "$ref": "#/$defs/TokenSpec",
+          "default": {
+            "source": {
+              "header": {
+                "name": "authorization",
+                "prefix": "Bearer "
+              }
+            },
+            "tokenType": "urn:ietf:params:oauth:token-type:access_token"
+          }
+        },
+        "actorToken": {
+          "description": "RFC 8693 delegation actor token. Token-exchange grant only.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActorTokenSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "audiences": {
           "description": "`audience` parameters naming the target services at the authorization server.",
           "type": "array",
@@ -3255,16 +3290,35 @@
           }
         },
         "requestedTokenType": {
-          "description": "`requested_token_type` parameter; the server picks when unset.",
+          "description": "`requested_token_type` parameter. When unset, the form field is omitted\nand a declared response type is expected to be access_token.",
           "type": [
             "string",
             "null"
           ]
         },
+        "additionalParams": {
+          "description": "Extra form parameters appended to the token request. Values are CEL\nexpressions evaluated against the incoming request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint. When unset,\nno client authentication fields are sent.",
           "anyOf": [
             {
               "$ref": "#/$defs/OAuthClientAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorizationLocation": {
+          "description": "Where to place the exchanged token in the backend request. Defaults to the\nAuthorization header with a \"Bearer \" prefix. The CEL `expression` source is\nnot valid here (it cannot insert).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthorizationLocation"
             },
             {
               "type": "null"
@@ -3277,17 +3331,96 @@
         "tokenEndpoint"
       ]
     },
+    "OAuthGrantType": {
+      "oneOf": [
+        {
+          "description": "RFC 8693 token exchange; the subject token is sent as `subject_token`.",
+          "type": "string",
+          "const": "tokenExchange"
+        },
+        {
+          "description": "RFC 7523; the subject token is sent as the `assertion`.",
+          "type": "string",
+          "const": "jwtBearer"
+        }
+      ]
+    },
+    "TokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the token is read from in the incoming request. The CEL `expression`\nsource is permitted (extraction only).",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "tokenType": {
+          "description": "RFC 8693 token type URN; empty defaults to access_token.",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ActorTokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the actor token is read from in the incoming request. The CEL\n`expression` source is permitted (extraction only). Unlike subject tokens,\nactor tokens have no default source.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "tokenType": {
+          "description": "RFC 8693 actor token type URN; empty defaults to access_token and is still sent.",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ]
+    },
     "OAuthClientAuth": {
       "type": "object",
       "properties": {
         "clientId": {
           "description": "`client_id` parameter identifying the gateway at the authorization server.",
           "type": "string"
+        },
+        "clientSecret": {
+          "description": "Client secret. When absent the client is public, which is only valid with\n`ClientSecretPost`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method": {
+          "description": "RFC 6749 §2.3 client authentication method.",
+          "$ref": "#/$defs/OAuthClientAuthMethod",
+          "default": "clientSecretBasic"
         }
       },
       "additionalProperties": false,
       "required": [
         "clientId"
+      ]
+    },
+    "OAuthClientAuthMethod": {
+      "oneOf": [
+        {
+          "description": "`client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).",
+          "type": "string",
+          "const": "clientSecretBasic"
+        },
+        {
+          "description": "`client_id`/`client_secret` sent in the request form body.",
+          "type": "string",
+          "const": "clientSecretPost"
+        }
       ]
     },
     "HTTP": {

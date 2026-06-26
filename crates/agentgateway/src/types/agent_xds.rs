@@ -25,7 +25,7 @@ use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth, OAuthTokenExchangeAuth};
+use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
 use crate::http::buffer::BufferBody;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
@@ -1081,21 +1081,7 @@ fn backend_auth_from_proto(
 			BackendAuth::Azure(azure_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(t)) => {
-			let opt = |s: String| (!s.is_empty()).then_some(s);
-			let endpoint = Arc::new(resolve_simple_reference(t.token_endpoint.as_ref()));
-			let client_auth = t
-				.client_auth
-				.and_then(|c| opt(c.client_id))
-				.map(auth::OAuthClientAuth::new);
-			BackendAuth::OAuthTokenExchange(OAuthTokenExchangeAuth::new(
-				endpoint,
-				t.token_endpoint_path,
-				t.audiences,
-				t.scopes,
-				t.resources,
-				opt(t.requested_token_type),
-				client_auth,
-			))
+			BackendAuth::OAuthTokenExchange(Box::new(t.try_into()?))
 		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
@@ -2611,7 +2597,7 @@ fn authorization_location(
 
 /// Like [`authorization_location`], but returns `None` when the proto field is absent,
 /// preserving the distinction between "not set" (default) and "explicitly configured".
-fn optional_authorization_location(
+pub(crate) fn optional_authorization_location(
 	location: Option<&proto::agent::AuthorizationLocation>,
 ) -> Result<Option<http::auth::AuthorizationLocation>, ProtoError> {
 	use proto::agent::authorization_location::Kind;
@@ -3253,7 +3239,7 @@ impl From<&proto::agent::ListenerName> for ListenerName {
 	}
 }
 
-fn resolve_simple_reference(
+pub(crate) fn resolve_simple_reference(
 	target: Option<&proto::agent::BackendReference>,
 ) -> SimpleBackendReference {
 	let Some(target) = target else {
