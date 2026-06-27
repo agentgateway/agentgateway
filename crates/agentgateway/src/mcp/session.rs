@@ -64,10 +64,11 @@ impl Session {
 		Self::handle_error(req_id, res).await
 	}
 
-	/// send a message to upstream server(s), when using stateless mode. In stateless mode, every message
-	/// is wrapped in an InitializeRequest (except the actual InitializeRequest from the downstream).
-	/// This ensures servers that require an InitializeRequest behave correctly.
-	/// In the future, we may have a mode where we know the downstream is stateless as well, and can just forward as-is.
+	/// Send a downstream message to upstream server(s) in gateway stateless mode.
+	/// Every non-initialize message gets a gateway-generated InitializeRequest
+	/// first, because many legacy servers require initialize before any other
+	/// request. Once downstream stateless transport is supported, remove this
+	/// wrapper and forward the message as-is.
 	pub async fn stateless_send_and_initialize(
 		&mut self,
 		parts: Parts,
@@ -94,8 +95,9 @@ impl Session {
 						Ok(target) => target,
 						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
 					};
+					let init_parts = synthetic_handshake_parts(parts.clone());
 					let res = self
-						.send_init_single(parts.clone(), init_request, service_name)
+						.send_init_single(init_parts, init_request, service_name)
 						.await;
 					if let Some(sessions) = self.relay.get_sessions() {
 						let s = http::sessionpersistence::SessionState::MCP(
@@ -110,16 +112,20 @@ impl Session {
 					let _ = Self::handle_error(
 						None,
 						self
-							.send_initialized_notification_single(parts.clone(), service_name)
+							.send_initialized_notification_single(
+								synthetic_handshake_parts(parts.clone()),
+								service_name,
+							)
 							.await,
 					)
 					.await?;
 				},
 				_ => {
 					// We should fan out the initialize request to all MCP servers
+					let init_parts = synthetic_handshake_parts(parts.clone());
 					let _ = self
 						.send(
-							parts.clone(),
+							init_parts,
 							ClientJsonRpcMessage::request(init_request.into(), RequestId::Number(0)),
 						)
 						.await?;
@@ -130,7 +136,9 @@ impl Session {
 						}
 						.into(),
 					);
-					let _ = self.send(parts.clone(), notification).await?;
+					let _ = self
+						.send(synthetic_handshake_parts(parts.clone()), notification)
+						.await?;
 				},
 			}
 		}
@@ -632,6 +640,11 @@ pub struct SessionManager {
 
 fn session_id() -> Arc<str> {
 	uuid::Uuid::new_v4().to_string().into()
+}
+
+fn synthetic_handshake_parts(mut parts: Parts) -> Parts {
+	mcp::protocol::strip_headers_for_synthetic_initialize(&mut parts.headers);
+	parts
 }
 
 impl SessionManager {
