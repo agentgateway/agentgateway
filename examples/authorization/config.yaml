@@ -23,10 +23,10 @@ binds:
           rules:
           # Allow anyone to call 'echo'
           - 'mcp.tool.name == "echo"'
-          # Only the test-user can call 'add'
-          - 'jwt.sub == "test-user" && mcp.tool.name == "add"'
-          # Any authenticated user with the claim `nested.key == value` can access 'printEnv'
-          - 'mcp.tool.name == "printEnv" && jwt.nested.key == "value"'
+          # Only the test-user can call 'get-sum'
+          - 'jwt.sub == "test-user" && mcp.tool.name == "get-sum"'
+          # Any authenticated user with the claim `nested.key == value` can access 'get-env'
+          - 'mcp.tool.name == "get-env" && jwt.nested.key == "value"'
       backends:
       - mcp:
           targets:
