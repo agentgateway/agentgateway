@@ -638,6 +638,40 @@ mod bedrock_guardrails_tests {
 		assert!(!response.is_blocked());
 		assert!(!response.is_anonymized());
 	}
+
+	#[test]
+	fn test_detect_only_log_redacts_matched_pii() {
+		// The raw matched PII string lives in `match`; detect-only logging must
+		// strip it while keeping the structural metadata (type/action/detected).
+		let json = json!({
+			"action": "NONE",
+			"assessments": [{
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{
+						"action": "NONE",
+						"type": "EMAIL",
+						"detected": true,
+						"match": "jane.doe@example.com"
+					}]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		let redacted = serde_json::to_string(&response.redacted_assessments()).unwrap();
+		// The matched secret must be gone...
+		assert!(
+			!redacted.contains("jane.doe@example.com"),
+			"matched PII leaked into the redacted assessment: {redacted}"
+		);
+		assert!(
+			!redacted.contains("\"match\""),
+			"the `match` key must be removed"
+		);
+		// ...but the useful metadata must survive.
+		assert!(redacted.contains("EMAIL"));
+		assert!(redacted.contains("detected"));
+		assert!(redacted.contains("piiEntities"));
+	}
 }
 
 // ============================================================================
