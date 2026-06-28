@@ -89,6 +89,40 @@ impl ApplyGuardrailResponse {
 		self.outputs.iter().map(|o| o.text.clone()).collect()
 	}
 
+	/// The decision the guardrail would have enforced, as a stable string:
+	/// `BLOCKED`, `ANONYMIZED`, or `NONE`. Used for detect-only logging/metrics.
+	pub fn would_action(&self) -> &'static str {
+		if self.is_blocked() {
+			"BLOCKED"
+		} else if self.is_anonymized() {
+			"ANONYMIZED"
+		} else {
+			"NONE"
+		}
+	}
+
+	/// Emit a structured, ingestible record of a detect-only evaluation. The
+	/// `assessments` array carries the per-filter findings (category, confidence,
+	/// `detected`) exactly as AWS returns them; downstream log pipelines (e.g. a
+	/// CloudWatch subscription into a data lake) can parse these fields. No prompt
+	/// or completion text is logged — only the assessment metadata.
+	pub fn log_detect_only(
+		&self,
+		guardrail_id: &str,
+		guardrail_version: &str,
+		source: GuardrailSource,
+	) {
+		tracing::info!(
+			target: "agentgateway::guardrail::detect",
+			guardrail_id = %guardrail_id,
+			guardrail_version = %guardrail_version,
+			source = ?source,
+			would_action = %self.would_action(),
+			assessments = %serde_json::to_string(&self.assessments).unwrap_or_default(),
+			"bedrock guardrail detect-only evaluation"
+		);
+	}
+
 	/// Check if any assessment contains a BLOCKED action
 	fn has_blocked_assessment(&self) -> bool {
 		self.assessments.iter().any(Self::value_contains_blocked)

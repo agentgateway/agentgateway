@@ -595,6 +595,49 @@ mod bedrock_guardrails_tests {
 		assert!(!response.is_blocked());
 		assert!(response.is_anonymized());
 	}
+
+	#[test]
+	fn test_would_action_blocked() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"assessments": [{
+				"contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] }
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "BLOCKED");
+	}
+
+	#[test]
+	fn test_would_action_anonymized() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "redacted {NAME}"}],
+			"assessments": [{
+				"sensitiveInformationPolicy": { "piiEntities": [{ "action": "ANONYMIZED", "type": "NAME" }] }
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "ANONYMIZED");
+	}
+
+	#[test]
+	fn test_would_action_none() {
+		// Detect-only mode: AWS returns the detection with per-filter action NONE
+		// and a top-level action of NONE, so the gateway would take no action.
+		let json = json!({
+			"action": "NONE",
+			"assessments": [{
+				"contentPolicy": {
+					"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "NONE");
+		assert!(!response.is_blocked());
+		assert!(!response.is_anonymized());
+	}
 }
 
 // ============================================================================

@@ -788,6 +788,15 @@ impl Policy {
 		guardrails: &BedrockGuardrails,
 	) -> anyhow::Result<GuardrailOutcome> {
 		let resp = bedrock_guardrails::send_request(req, claims.clone(), client, guardrails).await?;
+		// Detect-only: record what the guardrail would have done, then pass through.
+		if guardrails.detect_only {
+			resp.log_detect_only(
+				&guardrails.guardrail_identifier,
+				&guardrails.guardrail_version,
+				bedrock_guardrails::GuardrailSource::Input,
+			);
+			return Ok(GuardrailOutcome::None);
+		}
 		if resp.is_blocked() {
 			Ok(GuardrailOutcome::Rejected(rej.as_response()))
 		} else if resp.is_anonymized() {
@@ -823,6 +832,15 @@ impl Policy {
 
 		let guardrail_resp =
 			bedrock_guardrails::send_response(content, claims, client, guardrails).await?;
+		// Detect-only: record what the guardrail would have done, then pass through.
+		if guardrails.detect_only {
+			guardrail_resp.log_detect_only(
+				&guardrails.guardrail_identifier,
+				&guardrails.guardrail_version,
+				bedrock_guardrails::GuardrailSource::Output,
+			);
+			return Ok(GuardrailOutcome::None);
+		}
 		if guardrail_resp.is_blocked() {
 			Ok(GuardrailOutcome::Rejected(rej.as_response()))
 		} else if guardrail_resp.is_anonymized() {
@@ -1508,6 +1526,17 @@ pub struct BedrockGuardrails {
 	pub guardrail_version: Strng,
 	/// AWS region where the guardrail is deployed
 	pub region: Strng,
+	/// Detect-only (observe) mode. When true, the guardrail is still invoked and
+	/// its assessment is recorded (metrics + structured log), but the request and
+	/// response are never blocked or masked — the outcome is always treated as
+	/// pass-through. Use this to evaluate a guardrail's behavior without affecting
+	/// traffic. Defaults to false (enforce). Note: enforcement also depends on the
+	/// guardrail resource's own filter actions; setting those to NONE in AWS makes
+	/// `ApplyGuardrail` return assessments without intervening regardless of this
+	/// flag. This flag guarantees non-enforcement gateway-side even when the
+	/// resource is configured to BLOCK/ANONYMIZE.
+	#[serde(default, rename = "detectOnly")]
+	pub detect_only: bool,
 	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
 	#[serde(
 		default,
