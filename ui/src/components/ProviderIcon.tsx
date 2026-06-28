@@ -18,6 +18,7 @@ import mistralIcon from "../assets/providers/mistral.svg";
 import ollamaIcon from "../assets/providers/ollama.svg";
 import openAiIcon from "../assets/providers/openai.svg";
 import openrouterIcon from "../assets/providers/openrouter.svg";
+import requestyIcon from "../assets/providers/requesty.svg";
 import togetheraiIcon from "../assets/providers/togetherai.svg";
 import vertexIcon from "../assets/providers/vertex.svg";
 import xaiIcon from "../assets/providers/xai.svg";
@@ -41,6 +42,7 @@ const providerIcons: Record<string, string> = {
   huggingface: huggingfaceIcon,
   mistral: mistralIcon,
   openrouter: openrouterIcon,
+  requesty: requestyIcon,
   togetherai: togetheraiIcon,
   xai: xaiIcon,
   fireworks: fireworksIcon,
@@ -55,6 +57,7 @@ const monochromeProviders = new Set<string>([
   "copilot",
   "ollama",
   "openrouter",
+  "requesty",
   "togetherai",
   "xai",
 ]);

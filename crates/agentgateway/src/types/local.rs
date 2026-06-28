@@ -737,6 +737,7 @@ pub enum LocalModelAIProvider {
 	Huggingface,
 	Mistral,
 	Openrouter,
+	Requesty,
 	Togetherai,
 	XAI,
 	Fireworks,
@@ -918,6 +919,12 @@ impl LocalLLMModels {
 					.params
 					.base_url
 					.get_or_insert_with(|| strng::new("https://openrouter.ai/api/v1"));
+			},
+			LocalModelAIProvider::Requesty => {
+				self
+					.params
+					.base_url
+					.get_or_insert_with(|| strng::new("https://router.requesty.ai/v1"));
 			},
 			LocalModelAIProvider::Togetherai => {
 				self
@@ -3066,6 +3073,17 @@ async fn convert_llm_config(
 			LocalModelAIProvider::Openrouter => AIProvider::Custom(custom::Provider {
 				model,
 				provider_override: Some(strng::literal!("openrouter")),
+				formats: vec![
+					custom_provider_format(custom::ProviderFormat::Completions, None),
+					custom_provider_format(custom::ProviderFormat::Messages, None),
+					custom_provider_format(custom::ProviderFormat::Responses, None),
+					custom_provider_format(custom::ProviderFormat::Embeddings, None),
+					custom_provider_format(custom::ProviderFormat::Rerank, None),
+				],
+			}),
+			LocalModelAIProvider::Requesty => AIProvider::Custom(custom::Provider {
+				model,
+				provider_override: Some(strng::literal!("requesty")),
 				formats: vec![
 					custom_provider_format(custom::ProviderFormat::Completions, None),
 					custom_provider_format(custom::ProviderFormat::Messages, None),
