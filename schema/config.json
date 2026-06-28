@@ -3988,6 +3988,11 @@
           "description": "AWS region where the guardrail is deployed",
           "type": "string"
         },
+        "detectOnly": {
+          "description": "Detect-only (observe) mode. When true, the guardrail is still invoked and\nits assessment is recorded (metrics + structured log), but the request and\nresponse are never blocked or masked — the outcome is always treated as\npass-through. Use this to evaluate a guardrail's behavior without affecting\ntraffic. Defaults to false (enforce). Note: enforcement also depends on the\nguardrail resource's own filter actions; setting those to NONE in AWS makes\n`ApplyGuardrail` return assessments without intervening regardless of this\nflag. This flag guarantees non-enforcement gateway-side even when the\nresource is configured to BLOCK/ANONYMIZE.",
+          "type": "boolean",
+          "default": false
+        },
         "policies": {
           "description": "Backend policies for AWS authentication (optional, defaults to implicit AWS auth)",
           "anyOf": [

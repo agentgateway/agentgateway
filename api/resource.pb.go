@@ -12848,7 +12848,11 @@ type BackendPolicySpec_Ai_BedrockGuardrails struct {
 	Region         string               `protobuf:"bytes,3,opt,name=region,proto3" json:"region,omitempty"`
 	InlinePolicies []*BackendPolicySpec `protobuf:"bytes,4,rep,name=inline_policies,json=inlinePolicies,proto3" json:"inline_policies,omitempty"`
 	// Not yet implemented. Reserved for a future release.
-	BackendRef    *BackendReference `protobuf:"bytes,5,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
+	BackendRef *BackendReference `protobuf:"bytes,5,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
+	// Detect-only (observe) mode. When true, the guardrail is invoked and its
+	// assessment recorded, but the request/response is never blocked or masked.
+	// Defaults to false (enforce).
+	DetectOnly    bool `protobuf:"varint,6,opt,name=detect_only,json=detectOnly,proto3" json:"detect_only,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -12916,6 +12920,13 @@ func (x *BackendPolicySpec_Ai_BedrockGuardrails) GetBackendRef() *BackendReferen
 		return x.BackendRef
 	}
 	return nil
+}
+
+func (x *BackendPolicySpec_Ai_BedrockGuardrails) GetDetectOnly() bool {
+	if x != nil {
+		return x.DetectOnly
+	}
+	return false
 }
 
 type BackendPolicySpec_Ai_GoogleModelArmor struct {
@@ -15525,7 +15536,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xd6X\n" +
+	"\x04kind\"\xf7X\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -15547,7 +15558,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x06health\x18\x0f \x01(\v23.agentgateway.dev.resource.BackendPolicySpec.HealthH\x00R\x06health\x12c\n" +
 	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x12X\n" +
 	"\text_authz\x18\x11 \x01(\v29.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuthH\x00R\bextAuthz\x12c\n" +
-	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x1a\xc1,\n" +
+	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x1a\xe2,\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -15584,7 +15595,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x0finline_policies\x18\x02 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePolicies\x12L\n" +
 	"\vbackend_ref\x18\x03 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\n" +
 	"backendRefB\b\n" +
-	"\x06_model\x1a\x8a\x02\n" +
+	"\x06_model\x1a\xab\x02\n" +
 	"\x11BedrockGuardrails\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
@@ -15593,7 +15604,9 @@ const file_resource_proto_rawDesc = "" +
 	"\x06region\x18\x03 \x01(\tR\x06region\x12U\n" +
 	"\x0finline_policies\x18\x04 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePolicies\x12L\n" +
 	"\vbackend_ref\x18\x05 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\n" +
-	"backendRef\x1a\xa5\x02\n" +
+	"backendRef\x12\x1f\n" +
+	"\vdetect_only\x18\x06 \x01(\bR\n" +
+	"detectOnly\x1a\xa5\x02\n" +
 	"\x10GoogleModelArmor\x12\x1f\n" +
 	"\vtemplate_id\x18\x01 \x01(\tR\n" +
 	"templateId\x12\x1d\n" +

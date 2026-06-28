@@ -1373,6 +1373,7 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
+		detect_only: false,
 		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
 			AwsAuth::ExplicitConfig {
 				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
@@ -1410,6 +1411,7 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-west-2"),
+		detect_only: false,
 		policies: vec![],
 	};
 

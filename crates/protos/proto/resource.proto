@@ -1198,6 +1198,11 @@ message BackendPolicySpec {
 
       // Not yet implemented. Reserved for a future release.
       BackendReference backend_ref = 5;
+
+      // Detect-only (observe) mode. When true, the guardrail is invoked and its
+      // assessment recorded, but the request/response is never blocked or masked.
+      // Defaults to false (enforce).
+      bool detect_only = 6;
     }
 
     message GoogleModelArmor {
