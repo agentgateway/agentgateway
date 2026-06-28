@@ -10,14 +10,14 @@
 
 ## Summary
 
-agentgateway already emits rich debug-trace events (`Policy`, `AuthorizationResult`, `RouteSelection`, MCP tool
-calls, and backend lifecycle events) through the `dtrace` pipeline and can export spans via OTLP. Operators still lack a
-documented, portable vocabulary for **governance metadata**: fields that answer whether a call succeeded through a
-scoped, reviewable path rather than only whether it returned HTTP 200.
+agentgateway already emits debug-trace events (`Policy`, `AuthorizationResult`, `RouteSelection`, MCP tool calls, and
+backend lifecycle events) through the `dtrace` pipeline and can export spans via OTLP. Operators still lack a documented
+vocabulary for the subset of trace metadata that explains *why* a gateway call was allowed, denied, routed, or sent to a
+specific backend.
 
-This design proposes a **recommended metadata convention** for gateway traces. It does not require new runtime behavior
-in the first iteration. The goal is a stable doc + JSON examples + OpenTelemetry attribute mapping that implementors,
-SIEM exporters, and downstream audit tools can rely on.
+This design proposes a small metadata convention for exported gateway traces. The fields intentionally map to concepts
+that exist in the current codebase: listeners, routes, backends, MCP targets and tools, policies, authorization results,
+and trace/span ids. The first iteration is documentation only.
 
 ## Background
 
@@ -25,107 +25,109 @@ Issue [#2141](https://github.com/agentgateway/agentgateway/issues/2141) asks whe
 metadata conventions for traces that capture:
 
 - decision result for a call
-- risk class of the action
-- selected capability or tool
-- whether output was bounded before returning upstream
-- audit id for later review
+- policy or rule that produced the decision
+- selected route and backend target
+- MCP target, method, or tool name
+- stable id for later review
 
 The data plane already records related facts in debug traces. For example, `MessageType::AuthorizationResult` exposes
 allow/deny outcomes, `MessageType::Policy` records apply/skip decisions, and MCP paths emit tool-call counters. What is
 missing is a **cross-export contract** so OTLP spans, JSONL `agctl proxy trace` output, and external audit systems use
 consistent field names and semantics.
 
-Multi-step workflows fail in subtle ways when traces only show success/failure:
-
-- a session goes stale but the gateway returns an empty success payload
-- an earlier human approval is reused after tool arguments change
-- a phase gate passes but a later destructive action proceeds without a fresh authorization binding
-
-Governance metadata makes those cases visible in the execution history.
+Without that contract, an operator may see that a request returned HTTP 200 but still have to reconstruct which route was
+selected, which policy applied, and which MCP tool/backend was reached by reading several trace events manually.
 
 ## Goals
 
 - Document a minimal, recommended set of governance fields for gateway spans.
-- Map each field to existing `dtrace` concepts where possible.
-- Provide JSON examples for an allowed read call and a denied write call.
+- Map each field to existing `dtrace`, telemetry, or request-log concepts where possible.
+- Provide JSON examples for an allowed MCP tool call and a denied authorization decision.
 - Provide an OpenTelemetry attribute mapping table for OTLP exporters.
-- Give operators enough structure to answer: *was this call allowed, under which policy, for which target, with which
-  arguments, and was the response bounded before return?*
+- Give operators enough structure to answer: *which route/backend/MCP target was selected, which policy decided the
+  request, and what trace/span id can be used for follow-up inspection?*
 
 ## Non-Goals
 
 - Implement new dataplane enforcement in this design iteration.
-- Define a global workflow orchestration standard (see AAIF Workflows working group for adjacent work).
 - Replace existing debug-trace JSONL format or `agctl proxy trace` output.
 - Mandate a single SIEM schema; this doc recommends conventions, not a proprietary product format.
+- Define approval, checkpoint, or orchestration fields that do not currently exist in the gateway runtime model.
 
 ## Recommended metadata fields
 
-Each gateway span that represents an enforced tool/API call SHOULD include the following logical fields. Names below
-use dot notation; OTel mapping follows in a later section.
+Each gateway span that represents a routed request or MCP call SHOULD include the following logical fields when the
+source data exists. Names below use dot notation; OTel mapping follows in a later section.
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `decision.result` | Yes | `allow`, `deny`, `redact`, or `require_confirmation` |
-| `decision.policy_id` | No | Stable id or name of the guardrail, route rule, or CEL policy that fired |
-| `action.risk_class` | Yes | `read`, `write`, `destructive`, or `external_publish` |
-| `action.target` | Yes | Tool name, resource URI, route target, or backend identifier |
-| `action.arguments_digest` | Recommended | SHA-256 (or similar) of normalized arguments at enforcement time |
-| `capability.selected` | No | Resolved capability, tool version, or MCP server name |
-| `output.bounded` | No | `true` if response was truncated, redacted, or schema-limited before return |
-| `workflow.phase` | No | Optional phase label when the call sits inside a multi-step process |
-| `workflow.checkpoint_ref` | No | Link to a prior human gate or approval record, if any |
-| `audit.id` | Recommended | Stable id for cross-system correlation (span id, trace id, or operator-assigned id) |
-| `identity.subject` | Recommended | Caller identity propagated through the gateway (JWT sub, mTLS CN, etc.) |
+| `decision.result` | Yes, when evaluated | `allow`, `deny`, `apply`, or `skip` |
+| `decision.policy_kind` | No | Policy kind that produced the decision, matching `Policy.kind` |
+| `decision.policy_name` | No | Policy name when available from a selected attached policy |
+| `route.listener` | Recommended | Listener or bind name associated with the request |
+| `route.selected` | Recommended | Selected HTTP/TCP route key from `RouteSelection.selectedRoute` |
+| `backend.target` | Recommended | Backend target from `BackendCallStart.target` |
+| `mcp.target` | No | MCP target/server name when the call is routed to MCP |
+| `mcp.method` | No | MCP method name, for example `tools/call` or `tools/list` |
+| `mcp.tool.name` | No | MCP tool name for `tools/call` |
+| `request.arguments_digest` | No | SHA-256 (or similar) of normalized MCP tool arguments, if captured |
+| `audit.trace_id` | Recommended | Trace id used for cross-system correlation |
+| `audit.span_id` | Recommended | Span id used for cross-system correlation |
+| `identity.subject` | No | Caller identity propagated through the gateway (JWT sub, mTLS CN, etc.) |
 
 ### `decision.result` semantics
 
 | Value | Meaning |
 |-------|---------|
-| `allow` | Call proceeded under policy |
-| `deny` | Call blocked; upstream must not execute |
-| `redact` | Call proceeded but response was redacted or bounded |
-| `require_confirmation` | Call deferred pending explicit confirmation binding |
-
-`require_confirmation` is reserved for integrations that bind human approval to a specific action envelope (see related
-discussion in [agentskills#413](https://github.com/agentskills/agentskills/issues/413)).
+| `allow` | Authorization rule allowed the request |
+| `deny` | Authorization rule denied the request |
+| `apply` | A policy applied and changed request/response handling |
+| `skip` | A policy was evaluated but did not apply |
 
 ### Mapping to existing `dtrace` events
 
 | Governance field | Existing `MessageType` / event |
 |------------------|--------------------------------|
-| `decision.result` | `AuthorizationResult.result` (`Allow` / `Deny`); extend for `redact` / `require_confirmation` at export |
-| `decision.policy_id` | `Policy.kind`, `PolicySelection.effectivePolicy` |
-| `action.target` | `BackendCallStart.target`, MCP tool name metrics, `RouteSelection.selectedRoute` |
-| `action.arguments_digest` | Derived from `RequestSnapshot` / MCP tool call args at enforcement time (export-time hash) |
-| `capability.selected` | MCP server name, `LlmRouteResolved.provider` |
-| `output.bounded` | Policy apply with redaction / response snapshot limits |
-| `audit.id` | Trace id + span id, or operator-provided correlation id |
+| `decision.result` | `AuthorizationResult.result`, `Policy.result` (`Apply` / `Skip`) |
+| `decision.policy_kind` | `Policy.kind`, `PolicyEvent.kind` |
+| `decision.policy_name` | `PolicySelection.effectivePolicy`, where a named attached policy is available |
+| `route.selected` | `RouteSelection.selectedRoute` |
+| `backend.target` | `BackendCallStart.target` |
+| `mcp.target` | MCP server/target name recorded in request logs and MCP metrics |
+| `mcp.method` | MCP method name recorded on MCP request logs |
+| `mcp.tool.name` | MCP tool name recorded on MCP request logs and `tool_calls_total` |
+| `request.arguments_digest` | Derived from captured MCP tool arguments at export time |
+| `audit.trace_id` / `audit.span_id` | Existing trace/span identifiers |
 | `identity.subject` | JWT / RBAC context already augmented in telemetry examples |
 
 ## JSON examples
 
-### Example A: allowed MCP read
+### Example A: allowed MCP tool call
 
 ```json
 {
   "decision": {
     "result": "allow",
-    "policy_id": "mcp-rbac/tools-read"
+    "policy_kind": "mcp_authorization",
+    "policy_name": "tools-read"
   },
-  "action": {
-    "risk_class": "read",
-    "target": "mcp://everything/tools/list",
-    "arguments_digest": "sha256:8f14e45fceea167a5a36dedd4bea2543ad36b3c6"
+  "route": {
+    "listener": "bind/3000",
+    "selected": "default/default"
   },
-  "capability": {
-    "selected": "everything"
+  "backend": {
+    "target": "everything"
   },
-  "output": {
-    "bounded": false
+  "mcp": {
+    "target": "everything",
+    "method": "tools/call",
+    "tool": {
+      "name": "echo"
+    }
   },
   "audit": {
-    "id": "01JXYZ9ABCDEFGHJKMNPQRSTVW"
+    "trace_id": "0af7651916cd43dd8448eb211c80319c",
+    "span_id": "b9c7c989f97918e1"
   },
   "identity": {
     "subject": "user:alice@example.com"
@@ -133,28 +135,35 @@ discussion in [agentskills#413](https://github.com/agentskills/agentskills/issue
 }
 ```
 
-### Example B: denied write (arguments changed after checkpoint)
+### Example B: denied MCP tool call
 
 ```json
 {
   "decision": {
     "result": "deny",
-    "policy_id": "mcp-guardrails/write-envelope"
+    "policy_kind": "mcp_authorization",
+    "policy_name": "tools-write-deny"
   },
-  "action": {
-    "risk_class": "write",
-    "target": "mcp://inventory/tools/update_asset",
+  "route": {
+    "listener": "bind/3000",
+    "selected": "default/default"
+  },
+  "backend": {
+    "target": "inventory"
+  },
+  "mcp": {
+    "target": "inventory",
+    "method": "tools/call",
+    "tool": {
+      "name": "update_asset"
+    }
+  },
+  "request": {
     "arguments_digest": "sha256:b6d767d2f8ed5d21a44b0e5886680cb91f5851b2"
   },
-  "capability": {
-    "selected": "inventory"
-  },
-  "workflow": {
-    "phase": "before_state_transition",
-    "checkpoint_ref": "approval:01JXYZ8ZYXWVUTSRQPNMLKJIHG"
-  },
   "audit": {
-    "id": "01JXYZ9ABCDEFGHJKMNPQRSTVW"
+    "trace_id": "0af7651916cd43dd8448eb211c80319c",
+    "span_id": "b9c7c989f97918e1"
   },
   "identity": {
     "subject": "user:bob@example.com"
@@ -162,7 +171,8 @@ discussion in [agentskills#413](https://github.com/agentskills/agentskills/issue
 }
 ```
 
-Deny reason (companion field, optional): `arguments_digest mismatch vs checkpoint_ref; re-confirmation required`.
+Deny reason remains in the underlying `AuthorizationResult.rules` / `Policy.result` details rather than a separate
+metadata field.
 
 ## OpenTelemetry attribute mapping
 
@@ -171,15 +181,17 @@ When exporting via OTLP, map logical fields to span attributes under the `agentg
 | Logical field | Suggested OTel attribute |
 |---------------|--------------------------|
 | `decision.result` | `agentgateway.governance.decision.result` |
-| `decision.policy_id` | `agentgateway.governance.decision.policy_id` |
-| `action.risk_class` | `agentgateway.governance.action.risk_class` |
-| `action.target` | `agentgateway.governance.action.target` |
-| `action.arguments_digest` | `agentgateway.governance.action.arguments_digest` |
-| `capability.selected` | `agentgateway.governance.capability.selected` |
-| `output.bounded` | `agentgateway.governance.output.bounded` |
-| `workflow.phase` | `agentgateway.governance.workflow.phase` |
-| `workflow.checkpoint_ref` | `agentgateway.governance.workflow.checkpoint_ref` |
-| `audit.id` | `agentgateway.governance.audit.id` |
+| `decision.policy_kind` | `agentgateway.governance.decision.policy_kind` |
+| `decision.policy_name` | `agentgateway.governance.decision.policy_name` |
+| `route.listener` | `agentgateway.governance.route.listener` |
+| `route.selected` | `agentgateway.governance.route.selected` |
+| `backend.target` | `agentgateway.governance.backend.target` |
+| `mcp.target` | `agentgateway.governance.mcp.target` |
+| `mcp.method` | `agentgateway.governance.mcp.method` |
+| `mcp.tool.name` | `agentgateway.governance.mcp.tool.name` |
+| `request.arguments_digest` | `agentgateway.governance.request.arguments_digest` |
+| `audit.trace_id` | `agentgateway.governance.audit.trace_id` |
+| `audit.span_id` | `agentgateway.governance.audit.span_id` |
 | `identity.subject` | `agentgateway.governance.identity.subject` |
 
 Existing HTTP and MCP metrics (for example `tool_calls_total`, `agentgateway_requests_total`) remain unchanged. Governance
@@ -190,14 +202,14 @@ attributes complement metrics by making individual calls auditable.
 **Phase 1 (this PR):** documentation only — design doc, examples, telemetry README cross-link.
 
 **Phase 2 (follow-up implementation):** populate governance attributes on OTLP spans at export time by translating
-existing `dtrace` messages:
+existing debug-trace and request-log data:
 
 ```text
 request
-  -> route selection (action.target)
-  -> authorization (decision.result, identity.subject)
-  -> policy evaluation (decision.policy_id, output.bounded)
-  -> backend / MCP call (capability.selected, action.arguments_digest)
+  -> route selection (route.selected)
+  -> authorization / policy evaluation (decision.result, decision.policy_kind)
+  -> backend / MCP call (backend.target, mcp.target, mcp.method, mcp.tool.name)
+  -> trace context (audit.trace_id, audit.span_id)
   -> export span with governance.* attributes
 ```
 
@@ -212,24 +224,23 @@ Phase 2 should not duplicate logging; it should attach the same facts already em
 
 ## Risks and Tradeoffs
 
-- **Attribute cardinality:** `action.target` and `identity.subject` can be high-cardinality; operators may need sampling
+- **Attribute cardinality:** `backend.target`, `mcp.tool.name`, and `identity.subject` can be high-cardinality; operators may need sampling
   or aggregation in metrics backends while retaining full attributes on trace spans.
 - **Digest algorithm:** documenting `sha256` as recommended but not mandating a single canonical JSON normalization
   may cause inconsistent digests across exporters until a normative normalization spec is added.
-- **Overlap with OTel GenAI conventions:** some fields may eventually align with upstream semantic conventions; the
+- **Overlap with OTel semantic conventions:** some fields may eventually align with upstream semantic conventions; the
   `agentgateway.governance.*` prefix avoids collision until alignment is agreed.
 
 ## Test Plan
 
 - Doc review only for Phase 1.
 - Phase 2 implementation should add:
-  - unit tests mapping `AuthorizationResult` / `Policy` messages to governance attributes
+  - unit tests mapping `AuthorizationResult`, `Policy`, `RouteSelection`, and `BackendCallStart` messages to attributes
   - an integration test in `examples/telemetry` asserting expected attributes appear in exported spans
   - a fixture JSON golden file for Example A and Example B
 
 ## Open Questions
 
-1. Should `action.arguments_digest` use a normative JSON canonicalization spec in-repo, or reference an external standard?
-2. Should `require_confirmation` integrate with an external approval store, or remain gateway-local in v1?
-3. Do maintainers prefer governance attributes on the root request span only, or also on nested backend/MCP child spans?
-4. Should this convention be proposed to the AAIF Observability working group as a reference profile?
+1. Should `request.arguments_digest` use a normative JSON canonicalization spec in-repo, or reference an external standard?
+2. Do maintainers prefer governance attributes on the root request span only, or also on nested backend/MCP child spans?
+3. Should `decision.policy_name` be omitted until the policy selection path consistently exposes a stable name?
