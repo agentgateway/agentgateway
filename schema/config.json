@@ -3446,7 +3446,14 @@
           "$ref": "#/$defs/JWTValidationOptions"
         },
         "clientId": {
-          "description": "OAuth client ID advertised to MCP clients when needed.",
+          "description": "When set, short-circuits Dynamic Client Registration by returning this value directly.\nUse this for IdPs that do not support DCR (e.g. Amazon Cognito).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "metadataUrl": {
+          "description": "Optional override for the OIDC discovery URL. When set, the gateway fetches authorization\nserver metadata from this URL instead of the RFC 8414 default.\nUse this for IdPs that only support `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).",
           "type": [
             "string",
             "null"

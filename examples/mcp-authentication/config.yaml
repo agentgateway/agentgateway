@@ -219,5 +219,54 @@ binds:
             #         - query
             #         resourceDocumentation: http://localhost:3000/okta/docs
             #         resourcePolicyUri: http://localhost:3000/okta/policies
+            # --- Scenario D: Local stdio MCP + Amazon Cognito
+            # Cognito does not support Dynamic Client Registration (DCR). AgentGateway works
+            # around this by injecting a synthetic `registration_endpoint` into the
+            # OAuth metadata it serves, and returning the pre-configured `clientId` to any
+            # MCP client that calls that endpoint. Only a single pre-registered app client is
+            # supported per listener.
+            # Example configuration for Cognito:
+            # - backends:
+            #   - mcp:
+            #       targets:
+            #       - name: everything
+            #         stdio:
+            #           args:
+            #           - '@modelcontextprotocol/server-everything'
+            #           cmd: npx
+            #   matches:
+            #   - path:
+            #       exact: /cognito/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-protected-resource/cognito/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/cognito/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/cognito/mcp/client-registration
+            #   policies:
+            #     cors:
+            #       allowHeaders:
+            #       - mcp-protocol-version
+            #       - content-type
+            #       allowOrigins:
+            #       - '*'
+            #     mcpAuthentication:
+            #       issuer: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_<YOUR_POOL_ID>
+            #       # audiences must be the Cognito app client ID — Cognito uses it as the `aud` claim.
+            #       audiences:
+            #       - <YOUR_APP_CLIENT_ID>
+            #       jwks:
+            #         url: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_<YOUR_POOL_ID>/.well-known/jwks.json
+            #       # clientId is required for Cognito (it does not support DCR).
+            #       clientId: <YOUR_APP_CLIENT_ID>
+            #       # metadataUrl is required for Cognito — it does not serve the RFC 8414 discovery path.
+            #       metadataUrl: https://cognito-idp.us-east-1.amazonaws.com/us-east-1_<YOUR_POOL_ID>/.well-known/openid-configuration
+            #       resourceMetadata:
+            #         resource: http://localhost:3000/cognito/mcp
+            #         scopesSupported:
+            #         - openid
+            #         bearerMethodsSupported:
+            #         - header
+            #         resourceDocumentation: http://localhost:3000/cognito/docs
   # Public port to listen on
   port: 3000

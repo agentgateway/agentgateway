@@ -635,9 +635,10 @@ func translateMCPAuthenticationSpec(
 		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
 			Extra: extraResourceMetadata,
 		},
-		JwksInline: translatedInlineJwks,
-		Mode:       mode,
-		ClientId:   authnPolicy.ClientID,
+		JwksInline:  translatedInlineJwks,
+		Mode:        mode,
+		ClientId:    nonEmptyStringPtr(authnPolicy.ClientID),
+		MetadataUrl: nonEmptyStringPtr(authnPolicy.MetadataURL),
 	}
 	return mcpAuthn, errors.Join(errs...)
 }
@@ -653,8 +654,18 @@ func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySp
 		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
 			Extra: extraResourceMetadata,
 		},
-		ClientId: mcp.ClientID,
+		ClientId:    nonEmptyStringPtr(mcp.ClientID),
+		MetadataUrl: nonEmptyStringPtr(mcp.MetadataURL),
 	}, nil
+}
+
+// nonEmptyStringPtr returns nil for nil or empty-string pointers so downstream
+// Rust code sees None rather than Some("") for unset optional fields.
+func nonEmptyStringPtr(s *string) *string {
+	if s == nil || *s == "" {
+		return nil
+	}
+	return s
 }
 
 func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAuthentication_McpIDP {

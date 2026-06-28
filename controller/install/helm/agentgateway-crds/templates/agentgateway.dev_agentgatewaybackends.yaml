@@ -11873,8 +11873,9 @@ spec:
                             type: array
                           clientId:
                             description: |-
-                              Client ID to use for short-circuiting Dynamic Client Registration.
-                              If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+                              `clientId` is the OAuth app client ID. When set, the gateway short-circuits Dynamic
+                              Client Registration by returning this value directly. Use for IdPs that do not support DCR.
+                            minLength: 1
                             type: string
                           issuer:
                             description: |-
@@ -11982,6 +11983,13 @@ spec:
                             - backendRef
                             - jwksPath
                             type: object
+                          metadataUrl:
+                            description: |-
+                              `metadataUrl` overrides the OIDC discovery URL. When set, the gateway fetches authorization
+                              server metadata from this URL instead of the RFC 8414 default.
+                              Use for IdPs that only expose `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).
+                            minLength: 1
+                            type: string
                           mode:
                             default: Strict
                             description: Validation mode for JWT authentication.

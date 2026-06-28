@@ -1059,10 +1059,18 @@ type JWTMCPConfig struct {
 	// +optional
 	Provider *McpIDP `json:"provider,omitempty"`
 
-	// Client ID to use for short-circuiting Dynamic Client Registration.
-	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+	// `clientId` is the OAuth app client ID. When set, the gateway short-circuits Dynamic
+	// Client Registration by returning this value directly. Use for IdPs that do not support DCR.
+	// +kubebuilder:validation:MinLength=1
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
+
+	// `metadataUrl` overrides the OIDC discovery URL. When set, the gateway fetches authorization
+	// server metadata from this URL instead of the RFC 8414 default.
+	// Use for IdPs that only expose `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	MetadataURL *string `json:"metadataUrl,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf=remote;inline
@@ -1677,10 +1685,18 @@ type MCPAuthentication struct {
 	// +optional
 	Mode JWTAuthenticationMode `json:"mode,omitempty"`
 
-	// Client ID to use for short-circuiting Dynamic Client Registration.
-	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
+	// `clientId` is the OAuth app client ID. When set, the gateway short-circuits Dynamic
+	// Client Registration by returning this value directly. Use for IdPs that do not support DCR.
+	// +kubebuilder:validation:MinLength=1
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
+
+	// `metadataUrl` overrides the OIDC discovery URL. When set, the gateway fetches authorization
+	// server metadata from this URL instead of the RFC 8414 default.
+	// Use for IdPs that only expose `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	MetadataURL *string `json:"metadataUrl,omitempty"`
 }
 
 // +k8s:enum

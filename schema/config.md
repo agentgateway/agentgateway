@@ -335,7 +335,8 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|When set, short-circuits Dynamic Client Registration by returning this value directly.<br>Use this for IdPs that do not support DCR (e.g. Amazon Cognito).|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.metadataUrl`|string|Optional override for the OIDC discovery URL. When set, the gateway fetches authorization<br>server metadata from this URL instead of the RFC 8414 default.<br>Use this for IdPs that only support `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -8087,7 +8088,8 @@
 |`policies[].policy.mcpAuthentication.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`policies[].policy.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
+|`policies[].policy.mcpAuthentication.clientId`|string|When set, short-circuits Dynamic Client Registration by returning this value directly.<br>Use this for IdPs that do not support DCR (e.g. Amazon Cognito).|
+|`policies[].policy.mcpAuthentication.metadataUrl`|string|Optional override for the OIDC discovery URL. When set, the gateway fetches authorization<br>server metadata from this URL instead of the RFC 8414 default.<br>Use this for IdPs that only support `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -14685,7 +14687,8 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
+|`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|When set, short-circuits Dynamic Client Registration by returning this value directly.<br>Use this for IdPs that do not support DCR (e.g. Amazon Cognito).|
+|`routeGroups[].routes[].policies.mcpAuthentication.metadataUrl`|string|Optional override for the OIDC discovery URL. When set, the gateway fetches authorization<br>server metadata from this URL instead of the RFC 8414 default.<br>Use this for IdPs that only support `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).|
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -24491,7 +24494,8 @@
 |`mcp.policies.mcpAuthentication.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
-|`mcp.policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
+|`mcp.policies.mcpAuthentication.clientId`|string|When set, short-circuits Dynamic Client Registration by returning this value directly.<br>Use this for IdPs that do not support DCR (e.g. Amazon Cognito).|
+|`mcp.policies.mcpAuthentication.metadataUrl`|string|Optional override for the OIDC discovery URL. When set, the gateway fetches authorization<br>server metadata from this URL instead of the RFC 8414 default.<br>Use this for IdPs that only support `{issuer}/.well-known/openid-configuration` (e.g. Amazon Cognito).|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|

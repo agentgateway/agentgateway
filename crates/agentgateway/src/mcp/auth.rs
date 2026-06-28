@@ -132,13 +132,13 @@ pub(super) async fn protected_resource_metadata(
 ) -> Response {
 	let new_uri = strip_oauth_protected_resource_prefix(req);
 
-	// Determine the issuer to use - either use the same request URL and path that it was initially with,
-	// or else keep the auth.issuer
-	let issuer = if auth.provider.is_some() {
-		// When a provider is configured, use the same request URL with the well-known prefix stripped
+	// Determine the issuer to advertise in the protected-resource document.
+	// When a provider is set OR when clientId is set (mock DCR mode), the gateway is acting as
+	// the auth server — advertise the gateway's own URL so MCP clients discover the gateway's
+	// DCR endpoint, not the upstream IdP's.
+	let issuer = if auth.provider.is_some() || auth.client_id.is_some() {
 		strip_oauth_protected_resource_prefix(req)
 	} else {
-		// No provider configured, use the original issuer
 		auth.issuer.clone()
 	};
 
@@ -222,13 +222,17 @@ pub(super) async fn authorization_server_metadata(
 ) -> Result<Response, ProxyError> {
 	// RFC 8414 URL for standard AS metadata. Keycloak does not implement RFC 8414; it only
 	// exposes OpenID Provider Metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
-	let metadata_uri = match &auth.provider {
-		// Keycloak and Okta do not support the RFC 8414 path-based issuer format;
-		// they serve metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
-		Some(McpIDP::Keycloak { .. }) | Some(McpIDP::Okta {}) => {
-			openid_configuration_metadata_url(&auth.issuer)
-		},
-		_ => authorization_server_metadata_url(&auth.issuer),
+	let metadata_uri = if let Some(url) = &auth.metadata_url {
+		url.clone()
+	} else {
+		match &auth.provider {
+			// Keycloak and Okta do not support the RFC 8414 path-based issuer format;
+			// they serve metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
+			Some(McpIDP::Keycloak { .. }) | Some(McpIDP::Okta {}) => {
+				openid_configuration_metadata_url(&auth.issuer)
+			},
+			_ => authorization_server_metadata_url(&auth.issuer),
+		}
 	};
 	let ureq = ::http::Request::builder()
 		.uri(metadata_uri)
@@ -241,6 +245,10 @@ pub(super) async fn authorization_server_metadata(
 	let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
 		.await
 		.map_err(ProxyError::Body)?;
+	// Provider-specific modifications to the authorization server metadata.
+	// Audience injection (Auth0/Okta) always runs regardless of clientId.
+	// DCR endpoint proxying (Okta/Keycloak) only runs when clientId is NOT set,
+	// because clientId means the gateway handles DCR itself (mock DCR).
 	match &auth.provider {
 		Some(McpIDP::Auth0 {}) => {
 			// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
@@ -269,24 +277,27 @@ pub(super) async fn authorization_server_metadata(
 				ae.push_str(&format!("?audience={}", aud));
 			}
 
-			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak)
-			let current_uri = request_uri_for_oauth_metadata(req);
-			if let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
-			{
-				*re = format!("{current_uri}/client-registration");
+			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak).
+			// Skip when clientId is set; the mock DCR injection below takes precedence.
+			if auth.client_id.is_none() {
+				let current_uri = request_uri_for_oauth_metadata(req);
+				if let Some(serde_json::Value::String(re)) =
+					json::traverse_mut(&mut resp, &["registration_endpoint"])
+				{
+					*re = format!("{current_uri}/client-registration");
+				}
 			}
 		},
-		Some(McpIDP::Keycloak { .. }) => {
-			// Keycloak does not support RFC 8707.
-			// We do not currently have a workload :-(
-			// users will have to hardcode the audience.
-			// https://github.com/keycloak/keycloak/issues/10169 and https://github.com/keycloak/keycloak/issues/14355
-
-			// Keycloak doesn't do CORS for client registrations
-			// https://github.com/keycloak/keycloak/issues/39629
-			// We can workaround this by proxying it
-
+		// Keycloak does not support RFC 8707.
+		// We do not currently have a workload :-(
+		// users will have to hardcode the audience.
+		// https://github.com/keycloak/keycloak/issues/10169 and https://github.com/keycloak/keycloak/issues/14355
+		//
+		// Keycloak doesn't do CORS for client registrations
+		// https://github.com/keycloak/keycloak/issues/39629
+		// We can workaround this by proxying it.
+		// When clientId is set, the mock DCR injection below takes precedence — skip proxy.
+		Some(McpIDP::Keycloak { .. }) if auth.client_id.is_none() => {
 			let current_uri = request_uri_for_oauth_metadata(req);
 			let Some(serde_json::Value::String(re)) =
 				json::traverse_mut(&mut resp, &["registration_endpoint"])
@@ -297,7 +308,15 @@ pub(super) async fn authorization_server_metadata(
 			};
 			*re = format!("{current_uri}/client-registration");
 		},
+		Some(McpIDP::Keycloak { .. }) => {},
 		_ => {},
+	}
+	// When clientId is configured, the gateway is the trust anchor for DCR: inject our own
+	// registration_endpoint so MCP clients discover and call it. We return the pre-configured
+	// clientId without involving the upstream IdP's registration flow.
+	if auth.client_id.is_some() {
+		let current_uri = request_uri_for_oauth_metadata(req);
+		inject_gateway_registration_endpoint(&mut resp, &current_uri.to_string());
 	}
 
 	let response = ::http::Response::builder()
@@ -407,6 +426,19 @@ async fn build_mock_dcr_response(
 	)
 }
 
+fn inject_gateway_registration_endpoint(resp: &mut serde_json::Value, gateway_uri: &str) {
+	if let Some(obj) = resp.as_object_mut() {
+		obj.insert(
+			"registration_endpoint".to_string(),
+			serde_json::Value::String(format!("{gateway_uri}/client-registration")),
+		);
+	} else {
+		warn!(
+			"upstream metadata response is not a JSON object; registration_endpoint injection skipped"
+		);
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
@@ -480,6 +512,7 @@ mod tests {
 				)),
 				mode: crate::types::agent::McpAuthenticationMode::Strict,
 				client_id: None,
+				metadata_url: None,
 			},
 		);
 
@@ -513,6 +546,7 @@ mod tests {
 			)),
 			mode: crate::types::agent::McpAuthenticationMode::Strict,
 			client_id: None,
+			metadata_url: None,
 		}
 	}
 
@@ -637,5 +671,62 @@ mod tests {
 		assert_eq!(json["client_id"], "operator-id");
 		assert!(json.is_object());
 		assert_eq!(json["redirect_uris"], serde_json::json!([]));
+	}
+
+	#[test]
+	fn client_id_present_injects_registration_endpoint() {
+		let mut metadata = serde_json::json!({
+			"issuer": "https://idp.example.com",
+			"authorization_endpoint": "https://idp.example.com/oauth2/authorize",
+			"token_endpoint": "https://idp.example.com/oauth2/token"
+		});
+		assert!(metadata.get("registration_endpoint").is_none());
+
+		inject_gateway_registration_endpoint(&mut metadata, "https://gateway.example.com/mcp");
+
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/mcp/client-registration"
+		);
+	}
+
+	#[test]
+	fn client_id_overwrites_existing_registration_endpoint() {
+		let mut metadata = serde_json::json!({
+			"registration_endpoint": "https://idp.example.com/register"
+		});
+
+		inject_gateway_registration_endpoint(&mut metadata, "https://gateway.example.com/mcp");
+
+		assert_eq!(
+			metadata["registration_endpoint"],
+			"https://gateway.example.com/mcp/client-registration"
+		);
+	}
+
+	#[test]
+	fn client_id_set_advertises_gateway_as_issuer_in_protected_resource() {
+		// When clientId is set, protected_resource_metadata must advertise the gateway URL
+		// (not the upstream IdP) so MCP clients reach the gateway's mock DCR endpoint.
+		let auth = McpAuthentication {
+			issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example".to_string(),
+			client_id: Some("abc123".to_string()),
+			..default_auth()
+		};
+		let req = auth_request(
+			"https://gateway.example.com/.well-known/oauth-protected-resource/mcp",
+			auth,
+		);
+		// The issuer in the protected-resource doc should be the gateway URL, not Cognito.
+		// We verify indirectly: the www-authenticate header uses the request URL (gateway), not auth.issuer.
+		let www = www_authenticate_resource_metadata(&req);
+		assert!(
+			www.contains("gateway.example.com"),
+			"should advertise gateway URL, got: {www}"
+		);
+		assert!(
+			!www.contains("cognito"),
+			"should not advertise Cognito URL, got: {www}"
+		);
 	}
 }
