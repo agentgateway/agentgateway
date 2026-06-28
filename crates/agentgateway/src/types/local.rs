@@ -201,7 +201,7 @@ fn merge_deprecated_frontend_policies(
 			path,
 		} = tracing;
 
-		let policies = if !headers.is_empty() {
+		let mut policies = if !headers.is_empty() {
 			let backend_xfm = transformation_cel::LocalTransformationConfig {
 				request: Some(transformation_cel::LocalTransform {
 					set: headers
@@ -218,17 +218,15 @@ fn merge_deprecated_frontend_policies(
 			Vec::new()
 		};
 		if let Some(ep) = endpoint {
-			// Strip the scheme (http://, https://), or grpc://) from the endpoint URL to get host:port
-			let host_port = ep
-				.strip_prefix("http://")
-				.or_else(|| ep.strip_prefix("https://"))
-				.or_else(|| ep.strip_prefix("grpc://"))
-				.unwrap_or(&ep);
+			let (backend, use_tls) = parse_deprecated_tracing_endpoint(&ep)
+				.with_context(|| format!("failed parsing tracing endpoint: {}", ep))?;
+			if use_tls {
+				policies.push(BackendTrafficPolicy::BackendTLS(
+					LocalBackendTLS::default().try_into()?,
+				));
+			}
 			frontend_policies.tracing = Some(TracingConfig {
-				provider_backend: SimpleBackendReference::InlineBackend(
-					Target::try_from(host_port)
-						.with_context(|| format!("failed parsing tracing endpoint: {}", ep))?,
-				),
+				provider_backend: SimpleBackendReference::InlineBackend(backend),
 				policies,
 				attributes: Arc::unwrap_or_clone(fields.add),
 				resources: Default::default(), // Not supported in the old config
@@ -245,6 +243,33 @@ fn merge_deprecated_frontend_policies(
 		}
 	}
 	Ok(())
+}
+
+fn parse_deprecated_tracing_endpoint(endpoint: &str) -> anyhow::Result<(Target, bool)> {
+	if !endpoint.contains("://") {
+		return Ok((Target::try_from(endpoint)?, false));
+	}
+
+	let uri = Uri::try_from(endpoint)?;
+	let Some(scheme) = uri.scheme_str() else {
+		return Ok((Target::try_from(endpoint)?, false));
+	};
+	if !matches!(scheme, "http" | "https" | "grpc") {
+		anyhow::bail!("unsupported tracing endpoint scheme: {scheme}");
+	}
+	let host = uri
+		.host()
+		.with_context(|| format!("tracing endpoint {endpoint} must include a host"))?;
+	let port = uri.port_u16().or_else(|| match scheme {
+		"http" => Some(80),
+		"https" => Some(443),
+		"grpc" => Some(4317),
+		_ => unreachable!("unsupported tracing endpoint scheme checked above"),
+	});
+	let Some(port) = port else {
+		anyhow::bail!("unsupported tracing endpoint scheme: {scheme}");
+	};
+	Ok((Target::from((host, port)), scheme == "https"))
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

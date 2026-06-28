@@ -15,6 +15,57 @@ use crate::*;
 
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
+struct ClearTracingEnv {
+	_guard: std::sync::MutexGuard<'static, ()>,
+	values: Vec<(&'static str, Option<std::ffi::OsString>)>,
+}
+
+impl ClearTracingEnv {
+	fn new() -> Self {
+		let guard = crate::config::lock_env_for_tests();
+		let keys = [
+			"OTLP_ENDPOINT",
+			"OTLP_HEADERS",
+			"OTLP_PROTOCOL",
+			"OTEL_EXPORTER_OTLP_ENDPOINT",
+			"OTEL_EXPORTER_OTLP_HEADERS",
+			"OTEL_EXPORTER_OTLP_PROTOCOL",
+			"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+			"OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+			"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+		];
+		let values = keys
+			.into_iter()
+			.map(|key| {
+				let value = std::env::var_os(key);
+				unsafe {
+					std::env::remove_var(key);
+				}
+				(key, value)
+			})
+			.collect();
+		Self {
+			_guard: guard,
+			values,
+		}
+	}
+}
+
+impl Drop for ClearTracingEnv {
+	fn drop(&mut self) {
+		for (key, value) in &self.values {
+			match value {
+				Some(value) => unsafe {
+					std::env::set_var(key, value);
+				},
+				None => unsafe {
+					std::env::remove_var(key);
+				},
+			}
+		}
+	}
+}
+
 fn test_client() -> client::Client {
 	client::Client::new(
 		&client::Config {
@@ -1140,6 +1191,7 @@ binds:
 
 #[test]
 fn test_migrate_deprecated_local_config_moves_fields() {
+	let _env = ClearTracingEnv::new();
 	let input = r#"
 config:
   logging:
@@ -1184,6 +1236,53 @@ config:
 	assert_eq!(tracing.get("protocol").unwrap(), "http");
 }
 
+#[test]
+fn test_migrate_deprecated_tracing_https_endpoint_adds_backend_tls() {
+	let _env = ClearTracingEnv::new();
+	let input = r#"
+config:
+  tracing:
+    otlpEndpoint: https://tracing.example.com:4318
+    otlpProtocol: http
+"#;
+	let out = super::migrate_deprecated_local_config(input).unwrap();
+	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
+	let policies = tracing
+		.get("policies")
+		.and_then(serde_json::Value::as_array)
+		.expect("https tracing endpoint should add backend TLS policy");
+	assert!(
+		policies.iter().any(|policy| {
+			policy
+				.get("backendTLS")
+				.and_then(|tls| tls.get("systemRoots"))
+				.and_then(serde_json::Value::as_bool)
+				.unwrap_or(false)
+		}),
+		"https tracing endpoint should use system root TLS"
+	);
+}
+
+#[test]
+fn test_migrate_deprecated_tracing_https_endpoint_uses_default_port_and_path() {
+	let _env = ClearTracingEnv::new();
+	let input = r#"
+config:
+  tracing:
+    otlpEndpoint: https://tracing.example.com/api/public/otel/v1/traces
+    otlpProtocol: http
+"#;
+	let out = super::migrate_deprecated_local_config(input).unwrap();
+	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
+	assert_eq!(
+		tracing.get("inlineBackend").unwrap(),
+		"tracing.example.com:443"
+	);
+	assert_eq!(tracing.get("path").unwrap(), "/api/public/otel/v1/traces");
+}
+
 #[rstest::rstest]
 #[case::https_scheme("https://tracing.example.com:4318", "http", "tracing.example.com:4318")]
 #[case::http_scheme("http://tracing.example.com:4318", "http", "tracing.example.com:4318")]
@@ -1194,6 +1293,7 @@ fn test_deprecated_tracing_endpoint_schemes(
 	#[case] protocol: &str,
 	#[case] expected: &str,
 ) {
+	let _env = ClearTracingEnv::new();
 	let input =
 		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: {protocol}\n");
 	let out = super::migrate_deprecated_local_config(&input).unwrap();
@@ -1205,6 +1305,7 @@ fn test_deprecated_tracing_endpoint_schemes(
 #[rstest::rstest]
 #[case::unrecognized_scheme("nateisgreat://tracing.example.com:4317")]
 fn test_deprecated_tracing_endpoint_unrecognized_scheme_error(#[case] endpoint: &str) {
+	let _env = ClearTracingEnv::new();
 	let input =
 		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: grpc\n");
 	let err = super::migrate_deprecated_local_config(&input)
