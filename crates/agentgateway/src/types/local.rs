@@ -2198,33 +2198,43 @@ pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<LocalBackendAut
 where
 	D: Deserializer<'de>,
 {
+	fn validate_auth<E: serde::de::Error>(auth: BackendAuth) -> Result<BackendAuth, E> {
+		match auth {
+			BackendAuth::OAuthTokenExchange(auth) => {
+				// OAuth has a few cross-field checks serde won't catch on its own.
+				// Keep them here so untagged compat parsing still returns the real error.
+				auth.validate_load().map_err(serde::de::Error::custom)?;
+				Ok(BackendAuth::OAuthTokenExchange(auth))
+			},
+			BackendAuth::CrossAppAccess(auth) => {
+				// The derived exchange is built on deserialize; validate here so untagged
+				// compat parsing still returns the real cross-field error.
+				auth.validate_load().map_err(serde::de::Error::custom)?;
+				Ok(BackendAuth::CrossAppAccess(auth))
+			},
+			auth => Ok(auth),
+		}
+	}
+
 	Option::<BackendAuthCompat>::deserialize(deserializer)?
 		.map(|auth| match auth {
-			BackendAuthCompat::Full { auth, headers } => {
-				let auth = auth
-					.map(|auth| match auth {
-						BackendAuth::OAuthTokenExchange(auth) => {
-							// OAuth has a few cross-field checks serde won't catch on its own.
-							// Keep them here so untagged compat parsing still returns the real error.
-							auth.validate_load().map_err(serde::de::Error::custom)?;
-							Ok(BackendAuth::OAuthTokenExchange(auth))
-						},
-						BackendAuth::CrossAppAccess(auth) => {
-							// The derived exchange is built on deserialize; validate here so untagged
-							// compat parsing still returns the real cross-field error.
-							auth.validate_load().map_err(serde::de::Error::custom)?;
-							Ok(BackendAuth::CrossAppAccess(auth))
-						},
-						auth => Ok(auth),
-					})
-					.transpose()?;
-				Ok(LocalBackendAuth { auth, headers })
-			},
 			BackendAuthCompat::PlainKey { key } => Ok(LocalBackendAuth {
 				auth: Some(BackendAuth::Key {
 					value: key,
 					location: None,
 				}),
+				headers: Vec::new(),
+			}),
+			BackendAuthCompat::FullWithHeaders { auth, headers } => Ok(LocalBackendAuth {
+				auth: Some(validate_auth::<D::Error>(auth)?),
+				headers,
+			}),
+			BackendAuthCompat::HeadersOnly { headers } => Ok(LocalBackendAuth {
+				auth: None,
+				headers,
+			}),
+			BackendAuthCompat::Full(auth) => Ok(LocalBackendAuth {
+				auth: Some(validate_auth::<D::Error>(auth)?),
 				headers: Vec::new(),
 			}),
 		})
@@ -2246,12 +2256,15 @@ enum BackendAuthCompat {
 		#[serde(deserialize_with = "deser_key_from_file")]
 		key: SecretString,
 	},
-	Full {
-		#[serde(flatten, default)]
-		auth: Option<BackendAuth>,
-		#[serde(default)]
+	FullWithHeaders {
+		#[serde(flatten)]
+		auth: BackendAuth,
 		headers: Vec<crate::http::auth::BackendAuthHeader>,
 	},
+	HeadersOnly {
+		headers: Vec<crate::http::auth::BackendAuthHeader>,
+	},
+	Full(BackendAuth),
 }
 
 #[apply(schema_de!)]

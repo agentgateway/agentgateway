@@ -1616,6 +1616,10 @@ pub async fn build_transport(
 		trace!("built tunnel to {:?}", call.target);
 		let token = if let Some(auth) = tunnel_auth {
 			Some(auth::apply_tunnel_auth(&auth, &tunnel_auth_headers)?)
+		} else if !tunnel_auth_headers.is_empty() {
+			return Err(ProxyError::ProcessingString(
+				"backendAuth.headers is not supported on tunnel-bound backends".to_string(),
+			));
 		} else {
 			None
 		};

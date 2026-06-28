@@ -948,13 +948,11 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 
 	translatedHeaders, headerErrs := translateBackendAuthHeaders(ctx, auth.Headers, policy.Namespace)
 	errs = append(errs, headerErrs...)
-	if len(auth.Headers) > 0 {
+	if len(translatedHeaders) > 0 {
 		if translatedAuth == nil {
 			translatedAuth = &api.BackendAuthPolicy{}
 		}
-		if len(translatedHeaders) > 0 {
-			translatedAuth.Headers = translatedHeaders
-		}
+		translatedAuth.Headers = translatedHeaders
 	}
 
 	if translatedAuth == nil {

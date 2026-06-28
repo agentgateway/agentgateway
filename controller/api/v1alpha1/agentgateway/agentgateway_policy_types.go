@@ -1433,8 +1433,8 @@ const (
 )
 
 // +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
-// +kubebuilder:validation:XValidation:rule="has(self.headers) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)",message="must specify headers or exactly one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess"
-// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
+// +kubebuilder:validation:XValidation:rule="has(self.headers) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)",message="must specify headers, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess (headers may be combined with one of the primary auth kinds)"
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key, secretRef, or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
 	// `Authorization` header. This option is the least secure; usage of a
@@ -1496,7 +1496,8 @@ type BackendAuth struct {
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:rule="self.all(h1, self.exists_one(h2, h1.name == h2.name))",message="header names must be unique"
+	// +listType=map
+	// +listMapKey=name
 	Headers []BackendAuthHeader `json:"headers,omitempty"`
 }
 

@@ -31,24 +31,7 @@ data:
   # app-key key intentionally missing
 ---
 # Output
-output:
-- gateway:
-    Name: test
-    Namespace: default
-  resource:
-    policy:
-      backend:
-        auth: {}
-      key: backend/default/auth-multi-header-missing-key:backend-auth:default/test
-      name:
-        kind: AgentgatewayPolicy
-        name: auth-multi-header-missing-key
-        namespace: default
-      target:
-        route:
-          kind: HTTPRoute
-          name: test
-          namespace: default
+output: []
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
@@ -67,7 +50,12 @@ status:
       - lastTransitionTime: fake
         message: 'backendAuth header "DD-APPLICATION-KEY": secret default/datadog-partial
           missing key "app-key"'
-        reason: PartiallyValid
-        status: "True"
+        reason: Invalid
+        status: "False"
         type: Accepted
+      - lastTransitionTime: fake
+        message: Policy is not attached due to invalid status
+        reason: Pending
+        status: "False"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
