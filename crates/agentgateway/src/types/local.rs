@@ -1814,12 +1814,23 @@ where
 {
 	Option::<BackendAuthCompat>::deserialize(deserializer).map(|auth| {
 		auth.map(|auth| match auth {
-			BackendAuthCompat::Full { auth, headers } => LocalBackendAuth { auth, headers },
 			BackendAuthCompat::PlainKey { key } => LocalBackendAuth {
 				auth: Some(BackendAuth::Key {
 					value: key,
 					location: None,
 				}),
+				headers: Vec::new(),
+			},
+			BackendAuthCompat::FullWithHeaders { auth, headers } => LocalBackendAuth {
+				auth: Some(auth),
+				headers,
+			},
+			BackendAuthCompat::HeadersOnly { headers } => LocalBackendAuth {
+				auth: None,
+				headers,
+			},
+			BackendAuthCompat::Full(auth) => LocalBackendAuth {
+				auth: Some(auth),
 				headers: Vec::new(),
 			},
 		})
@@ -1841,12 +1852,15 @@ enum BackendAuthCompat {
 		#[serde(deserialize_with = "deser_key_from_file")]
 		key: SecretString,
 	},
-	Full {
-		#[serde(flatten, default)]
-		auth: Option<BackendAuth>,
-		#[serde(default)]
+	FullWithHeaders {
+		#[serde(flatten)]
+		auth: BackendAuth,
 		headers: Vec<crate::http::auth::BackendAuthHeader>,
 	},
+	HeadersOnly {
+		headers: Vec<crate::http::auth::BackendAuthHeader>,
+	},
+	Full(BackendAuth),
 }
 
 #[apply(schema_de!)]

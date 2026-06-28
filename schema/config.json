@@ -2676,128 +2676,142 @@
               "type": "array",
               "items": {
                 "$ref": "#/$defs/BackendAuthHeader"
-              },
-              "default": []
+              }
             }
           },
-          "anyOf": [
+          "oneOf": [
             {
-              "oneOf": [
-                {
-                  "description": "Forward the validated incoming JWT to the backend.",
+              "description": "Forward the validated incoming JWT to the backend.",
+              "type": "object",
+              "properties": {
+                "passthrough": {
                   "type": "object",
                   "properties": {
-                    "passthrough": {
-                      "type": "object",
-                      "properties": {
-                        "location": {
-                          "description": "Where to place the forwarded credential in the backend request.",
-                          "anyOf": [
-                            {
-                              "$ref": "#/$defs/AuthorizationLocation"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        }
-                      },
-                      "additionalProperties": false
-                    }
-                  },
-                  "required": [
-                    "passthrough"
-                  ]
-                },
-                {
-                  "description": "Send a configured secret value to the backend.",
-                  "type": "object",
-                  "properties": {
-                    "key": {
-                      "type": "object",
-                      "properties": {
-                        "value": {
-                          "description": "Secret value to send to the backend.",
-                          "$ref": "#/$defs/FileOrInline"
+                    "location": {
+                      "description": "Where to place the forwarded credential in the backend request.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AuthorizationLocation"
                         },
-                        "location": {
-                          "description": "Where to place the secret in the backend request.",
-                          "anyOf": [
-                            {
-                              "$ref": "#/$defs/AuthorizationLocation"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
+                        {
+                          "type": "null"
                         }
-                      },
-                      "additionalProperties": false,
-                      "required": [
-                        "value"
                       ]
                     }
                   },
-                  "required": [
-                    "key"
-                  ]
-                },
-                {
-                  "description": "Authenticate to Google Cloud services.",
-                  "type": "object",
-                  "properties": {
-                    "gcp": {
-                      "$ref": "#/$defs/GcpAuth"
-                    }
-                  },
-                  "required": [
-                    "gcp"
-                  ]
-                },
-                {
-                  "description": "Sign backend requests with AWS credentials.",
-                  "type": "object",
-                  "properties": {
-                    "aws": {
-                      "$ref": "#/$defs/AwsAuth"
-                    }
-                  },
-                  "required": [
-                    "aws"
-                  ]
-                },
-                {
-                  "description": "Authenticate to Azure services.",
-                  "type": "object",
-                  "properties": {
-                    "azure": {
-                      "$ref": "#/$defs/AzureAuth"
-                    }
-                  },
-                  "required": [
-                    "azure"
-                  ]
-                },
-                {
-                  "description": "Authenticate to GitHub Copilot.",
-                  "type": "string",
-                  "const": "copilot"
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "oAuthTokenExchange": {
-                      "$ref": "#/$defs/OAuthTokenExchangeAuth"
-                    }
-                  },
-                  "required": [
-                    "oAuthTokenExchange"
-                  ]
+                  "additionalProperties": false
                 }
+              },
+              "required": [
+                "passthrough"
               ]
             },
-            {}
+            {
+              "description": "Send a configured secret value to the backend.",
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "description": "Secret value to send to the backend.",
+                      "$ref": "#/$defs/FileOrInline"
+                    },
+                    "location": {
+                      "description": "Where to place the secret in the backend request.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AuthorizationLocation"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "value"
+                  ]
+                }
+              },
+              "required": [
+                "key"
+              ]
+            },
+            {
+              "description": "Authenticate to Google Cloud services.",
+              "type": "object",
+              "properties": {
+                "gcp": {
+                  "$ref": "#/$defs/GcpAuth"
+                }
+              },
+              "required": [
+                "gcp"
+              ]
+            },
+            {
+              "description": "Sign backend requests with AWS credentials.",
+              "type": "object",
+              "properties": {
+                "aws": {
+                  "$ref": "#/$defs/AwsAuth"
+                }
+              },
+              "required": [
+                "aws"
+              ]
+            },
+            {
+              "description": "Authenticate to Azure services.",
+              "type": "object",
+              "properties": {
+                "azure": {
+                  "$ref": "#/$defs/AzureAuth"
+                }
+              },
+              "required": [
+                "azure"
+              ]
+            },
+            {
+              "description": "Authenticate to GitHub Copilot.",
+              "type": "string",
+              "const": "copilot"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "oAuthTokenExchange": {
+                  "$ref": "#/$defs/OAuthTokenExchangeAuth"
+                }
+              },
+              "required": [
+                "oAuthTokenExchange"
+              ]
+            }
+          ],
+          "required": [
+            "headers"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "headers": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthHeader"
+              }
+            }
+          },
+          "required": [
+            "headers"
+          ]
+        },
+        {
+          "$ref": "#/$defs/BackendAuth"
         }
       ]
     },
@@ -3318,6 +3332,127 @@
       "required": [
         "name",
         "value"
+      ]
+    },
+    "BackendAuth": {
+      "oneOf": [
+        {
+          "description": "Forward the validated incoming JWT to the backend.",
+          "type": "object",
+          "properties": {
+            "passthrough": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "description": "Where to place the forwarded credential in the backend request.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "passthrough"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Send a configured secret value to the backend.",
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "description": "Secret value to send to the backend.",
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                "location": {
+                  "description": "Where to place the secret in the backend request.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "value"
+              ]
+            }
+          },
+          "required": [
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to Google Cloud services.",
+          "type": "object",
+          "properties": {
+            "gcp": {
+              "$ref": "#/$defs/GcpAuth"
+            }
+          },
+          "required": [
+            "gcp"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Sign backend requests with AWS credentials.",
+          "type": "object",
+          "properties": {
+            "aws": {
+              "$ref": "#/$defs/AwsAuth"
+            }
+          },
+          "required": [
+            "aws"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to Azure services.",
+          "type": "object",
+          "properties": {
+            "azure": {
+              "$ref": "#/$defs/AzureAuth"
+            }
+          },
+          "required": [
+            "azure"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to GitHub Copilot.",
+          "type": "string",
+          "const": "copilot"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "oAuthTokenExchange": {
+              "$ref": "#/$defs/OAuthTokenExchangeAuth"
+            }
+          },
+          "required": [
+            "oAuthTokenExchange"
+          ],
+          "additionalProperties": false
+        }
       ]
     },
     "HTTP": {

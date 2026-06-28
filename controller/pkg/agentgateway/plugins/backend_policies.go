@@ -898,6 +898,10 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		translatedAuth.Headers = translatedHeaders
 	}
 
+	if translatedAuth == nil {
+		return nil, errors.Join(append(errs, kindErrs...)...)
+	}
+
 	authPolicy := &api.Policy{
 		Key:  name + backendauthPolicySuffix,
 		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),

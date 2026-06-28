@@ -948,12 +948,9 @@ spec:
                                                                 type: object
                                                               maxItems: 16
                                                               type: array
-                                                              x-kubernetes-validations:
-                                                              - message: header names
-                                                                  must be unique
-                                                                rule: self.all(h1,
-                                                                  self.exists_one(h2,
-                                                                  h1.name == h2.name))
+                                                              x-kubernetes-list-map-keys:
+                                                              - name
+                                                              x-kubernetes-list-type: map
                                                             key:
                                                               description: |-
                                                                 Inline key to use as the value of the
@@ -1074,8 +1071,11 @@ spec:
                                                           type: object
                                                           x-kubernetes-validations:
                                                           - message: must specify
-                                                              headers or exactly one
-                                                              of key/secretRef/passthrough/aws/azure/gcp
+                                                              headers, or at most
+                                                              one of key/secretRef/passthrough/aws/azure/gcp
+                                                              (headers may be combined
+                                                              with one of the primary
+                                                              auth kinds)
                                                             rule: has(self.headers)
                                                               || has(self.key) ||
                                                               has(self.secretRef)
@@ -1083,8 +1083,9 @@ spec:
                                                               || has(self.aws) ||
                                                               has(self.azure) || has(self.gcp)
                                                           - message: location may
-                                                              only be set for key
-                                                              or passthrough auth
+                                                              only be set for key,
+                                                              secretRef, or passthrough
+                                                              auth
                                                             rule: 'has(self.location)
                                                               ? has(self.key) || has(self.secretRef)
                                                               || has(self.passthrough)
@@ -1797,12 +1798,9 @@ spec:
                                                                 type: object
                                                               maxItems: 16
                                                               type: array
-                                                              x-kubernetes-validations:
-                                                              - message: header names
-                                                                  must be unique
-                                                                rule: self.all(h1,
-                                                                  self.exists_one(h2,
-                                                                  h1.name == h2.name))
+                                                              x-kubernetes-list-map-keys:
+                                                              - name
+                                                              x-kubernetes-list-type: map
                                                             key:
                                                               description: |-
                                                                 Inline key to use as the value of the
@@ -1923,8 +1921,11 @@ spec:
                                                           type: object
                                                           x-kubernetes-validations:
                                                           - message: must specify
-                                                              headers or exactly one
-                                                              of key/secretRef/passthrough/aws/azure/gcp
+                                                              headers, or at most
+                                                              one of key/secretRef/passthrough/aws/azure/gcp
+                                                              (headers may be combined
+                                                              with one of the primary
+                                                              auth kinds)
                                                             rule: has(self.headers)
                                                               || has(self.key) ||
                                                               has(self.secretRef)
@@ -1932,8 +1933,9 @@ spec:
                                                               || has(self.aws) ||
                                                               has(self.azure) || has(self.gcp)
                                                           - message: location may
-                                                              only be set for key
-                                                              or passthrough auth
+                                                              only be set for key,
+                                                              secretRef, or passthrough
+                                                              auth
                                                             rule: 'has(self.location)
                                                               ? has(self.key) || has(self.secretRef)
                                                               || has(self.passthrough)
@@ -2642,12 +2644,9 @@ spec:
                                                                 type: object
                                                               maxItems: 16
                                                               type: array
-                                                              x-kubernetes-validations:
-                                                              - message: header names
-                                                                  must be unique
-                                                                rule: self.all(h1,
-                                                                  self.exists_one(h2,
-                                                                  h1.name == h2.name))
+                                                              x-kubernetes-list-map-keys:
+                                                              - name
+                                                              x-kubernetes-list-type: map
                                                             key:
                                                               description: |-
                                                                 Inline key to use as the value of the
@@ -2768,8 +2767,11 @@ spec:
                                                           type: object
                                                           x-kubernetes-validations:
                                                           - message: must specify
-                                                              headers or exactly one
-                                                              of key/secretRef/passthrough/aws/azure/gcp
+                                                              headers, or at most
+                                                              one of key/secretRef/passthrough/aws/azure/gcp
+                                                              (headers may be combined
+                                                              with one of the primary
+                                                              auth kinds)
                                                             rule: has(self.headers)
                                                               || has(self.key) ||
                                                               has(self.secretRef)
@@ -2777,8 +2779,9 @@ spec:
                                                               || has(self.aws) ||
                                                               has(self.azure) || has(self.gcp)
                                                           - message: location may
-                                                              only be set for key
-                                                              or passthrough auth
+                                                              only be set for key,
+                                                              secretRef, or passthrough
+                                                              auth
                                                             rule: 'has(self.location)
                                                               ? has(self.key) || has(self.secretRef)
                                                               || has(self.passthrough)
@@ -3719,12 +3722,9 @@ spec:
                                                                 type: object
                                                               maxItems: 16
                                                               type: array
-                                                              x-kubernetes-validations:
-                                                              - message: header names
-                                                                  must be unique
-                                                                rule: self.all(h1,
-                                                                  self.exists_one(h2,
-                                                                  h1.name == h2.name))
+                                                              x-kubernetes-list-map-keys:
+                                                              - name
+                                                              x-kubernetes-list-type: map
                                                             key:
                                                               description: |-
                                                                 Inline key to use as the value of the
@@ -3845,8 +3845,11 @@ spec:
                                                           type: object
                                                           x-kubernetes-validations:
                                                           - message: must specify
-                                                              headers or exactly one
-                                                              of key/secretRef/passthrough/aws/azure/gcp
+                                                              headers, or at most
+                                                              one of key/secretRef/passthrough/aws/azure/gcp
+                                                              (headers may be combined
+                                                              with one of the primary
+                                                              auth kinds)
                                                             rule: has(self.headers)
                                                               || has(self.key) ||
                                                               has(self.secretRef)
@@ -3854,8 +3857,9 @@ spec:
                                                               || has(self.aws) ||
                                                               has(self.azure) || has(self.gcp)
                                                           - message: location may
-                                                              only be set for key
-                                                              or passthrough auth
+                                                              only be set for key,
+                                                              secretRef, or passthrough
+                                                              auth
                                                             rule: 'has(self.location)
                                                               ? has(self.key) || has(self.secretRef)
                                                               || has(self.passthrough)
@@ -4568,12 +4572,9 @@ spec:
                                                                 type: object
                                                               maxItems: 16
                                                               type: array
-                                                              x-kubernetes-validations:
-                                                              - message: header names
-                                                                  must be unique
-                                                                rule: self.all(h1,
-                                                                  self.exists_one(h2,
-                                                                  h1.name == h2.name))
+                                                              x-kubernetes-list-map-keys:
+                                                              - name
+                                                              x-kubernetes-list-type: map
                                                             key:
                                                               description: |-
                                                                 Inline key to use as the value of the
@@ -4694,8 +4695,11 @@ spec:
                                                           type: object
                                                           x-kubernetes-validations:
                                                           - message: must specify
-                                                              headers or exactly one
-                                                              of key/secretRef/passthrough/aws/azure/gcp
+                                                              headers, or at most
+                                                              one of key/secretRef/passthrough/aws/azure/gcp
+                                                              (headers may be combined
+                                                              with one of the primary
+                                                              auth kinds)
                                                             rule: has(self.headers)
                                                               || has(self.key) ||
                                                               has(self.secretRef)
@@ -4703,8 +4707,9 @@ spec:
                                                               || has(self.aws) ||
                                                               has(self.azure) || has(self.gcp)
                                                           - message: location may
-                                                              only be set for key
-                                                              or passthrough auth
+                                                              only be set for key,
+                                                              secretRef, or passthrough
+                                                              auth
                                                             rule: 'has(self.location)
                                                               ? has(self.key) || has(self.secretRef)
                                                               || has(self.passthrough)
@@ -5663,10 +5668,9 @@ spec:
                                           type: object
                                         maxItems: 16
                                         type: array
-                                        x-kubernetes-validations:
-                                        - message: header names must be unique
-                                          rule: self.all(h1, self.exists_one(h2, h1.name
-                                            == h2.name))
+                                        x-kubernetes-list-map-keys:
+                                        - name
+                                        x-kubernetes-list-type: map
                                       key:
                                         description: |-
                                           Inline key to use as the value of the
@@ -5776,13 +5780,15 @@ spec:
                                             && size(self.kind) > 0)'
                                     type: object
                                     x-kubernetes-validations:
-                                    - message: must specify headers or exactly one
+                                    - message: must specify headers, or at most one
                                         of key/secretRef/passthrough/aws/azure/gcp
+                                        (headers may be combined with one of the primary
+                                        auth kinds)
                                       rule: has(self.headers) || has(self.key) ||
                                         has(self.secretRef) || has(self.passthrough)
                                         || has(self.aws) || has(self.azure) || has(self.gcp)
-                                    - message: location may only be set for key or
-                                        passthrough auth
+                                    - message: location may only be set for key, secretRef,
+                                        or passthrough auth
                                       rule: 'has(self.location) ? has(self.key) ||
                                         has(self.secretRef) || has(self.passthrough)
                                         : true'
@@ -7339,10 +7345,9 @@ spec:
                                         type: object
                                       maxItems: 16
                                       type: array
-                                      x-kubernetes-validations:
-                                      - message: header names must be unique
-                                        rule: self.all(h1, self.exists_one(h2, h1.name
-                                          == h2.name))
+                                      x-kubernetes-list-map-keys:
+                                      - name
+                                      x-kubernetes-list-type: map
                                     key:
                                       description: |-
                                         Inline key to use as the value of the
@@ -7452,13 +7457,15 @@ spec:
                                           && size(self.kind) > 0)'
                                   type: object
                                   x-kubernetes-validations:
-                                  - message: must specify headers or exactly one of
-                                      key/secretRef/passthrough/aws/azure/gcp
+                                  - message: must specify headers, or at most one
+                                      of key/secretRef/passthrough/aws/azure/gcp (headers
+                                      may be combined with one of the primary auth
+                                      kinds)
                                     rule: has(self.headers) || has(self.key) || has(self.secretRef)
                                       || has(self.passthrough) || has(self.aws) ||
                                       has(self.azure) || has(self.gcp)
-                                  - message: location may only be set for key or passthrough
-                                      auth
+                                  - message: location may only be set for key, secretRef,
+                                      or passthrough auth
                                     rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
                                       || has(self.passthrough) : true'
                                   - message: at most one of the fields in [key secretRef
@@ -8302,10 +8309,9 @@ spec:
                                                 type: object
                                               maxItems: 16
                                               type: array
-                                              x-kubernetes-validations:
-                                              - message: header names must be unique
-                                                rule: self.all(h1, self.exists_one(h2,
-                                                  h1.name == h2.name))
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             key:
                                               description: |-
                                                 Inline key to use as the value of the
@@ -8417,14 +8423,16 @@ spec:
                                                   > 0)'
                                           type: object
                                           x-kubernetes-validations:
-                                          - message: must specify headers or exactly
+                                          - message: must specify headers, or at most
                                               one of key/secretRef/passthrough/aws/azure/gcp
+                                              (headers may be combined with one of
+                                              the primary auth kinds)
                                             rule: has(self.headers) || has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               || has(self.aws) || has(self.azure)
                                               || has(self.gcp)
                                           - message: location may only be set for
-                                              key or passthrough auth
+                                              key, secretRef, or passthrough auth
                                             rule: 'has(self.location) ? has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               : true'
@@ -9052,10 +9060,9 @@ spec:
                                                 type: object
                                               maxItems: 16
                                               type: array
-                                              x-kubernetes-validations:
-                                              - message: header names must be unique
-                                                rule: self.all(h1, self.exists_one(h2,
-                                                  h1.name == h2.name))
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             key:
                                               description: |-
                                                 Inline key to use as the value of the
@@ -9167,14 +9174,16 @@ spec:
                                                   > 0)'
                                           type: object
                                           x-kubernetes-validations:
-                                          - message: must specify headers or exactly
+                                          - message: must specify headers, or at most
                                               one of key/secretRef/passthrough/aws/azure/gcp
+                                              (headers may be combined with one of
+                                              the primary auth kinds)
                                             rule: has(self.headers) || has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               || has(self.aws) || has(self.azure)
                                               || has(self.gcp)
                                           - message: location may only be set for
-                                              key or passthrough auth
+                                              key, secretRef, or passthrough auth
                                             rule: 'has(self.location) ? has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               : true'
@@ -9797,10 +9806,9 @@ spec:
                                                 type: object
                                               maxItems: 16
                                               type: array
-                                              x-kubernetes-validations:
-                                              - message: header names must be unique
-                                                rule: self.all(h1, self.exists_one(h2,
-                                                  h1.name == h2.name))
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             key:
                                               description: |-
                                                 Inline key to use as the value of the
@@ -9912,14 +9920,16 @@ spec:
                                                   > 0)'
                                           type: object
                                           x-kubernetes-validations:
-                                          - message: must specify headers or exactly
+                                          - message: must specify headers, or at most
                                               one of key/secretRef/passthrough/aws/azure/gcp
+                                              (headers may be combined with one of
+                                              the primary auth kinds)
                                             rule: has(self.headers) || has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               || has(self.aws) || has(self.azure)
                                               || has(self.gcp)
                                           - message: location may only be set for
-                                              key or passthrough auth
+                                              key, secretRef, or passthrough auth
                                             rule: 'has(self.location) ? has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               : true'
@@ -10768,10 +10778,9 @@ spec:
                                                 type: object
                                               maxItems: 16
                                               type: array
-                                              x-kubernetes-validations:
-                                              - message: header names must be unique
-                                                rule: self.all(h1, self.exists_one(h2,
-                                                  h1.name == h2.name))
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             key:
                                               description: |-
                                                 Inline key to use as the value of the
@@ -10883,14 +10892,16 @@ spec:
                                                   > 0)'
                                           type: object
                                           x-kubernetes-validations:
-                                          - message: must specify headers or exactly
+                                          - message: must specify headers, or at most
                                               one of key/secretRef/passthrough/aws/azure/gcp
+                                              (headers may be combined with one of
+                                              the primary auth kinds)
                                             rule: has(self.headers) || has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               || has(self.aws) || has(self.azure)
                                               || has(self.gcp)
                                           - message: location may only be set for
-                                              key or passthrough auth
+                                              key, secretRef, or passthrough auth
                                             rule: 'has(self.location) ? has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               : true'
@@ -11518,10 +11529,9 @@ spec:
                                                 type: object
                                               maxItems: 16
                                               type: array
-                                              x-kubernetes-validations:
-                                              - message: header names must be unique
-                                                rule: self.all(h1, self.exists_one(h2,
-                                                  h1.name == h2.name))
+                                              x-kubernetes-list-map-keys:
+                                              - name
+                                              x-kubernetes-list-type: map
                                             key:
                                               description: |-
                                                 Inline key to use as the value of the
@@ -11633,14 +11643,16 @@ spec:
                                                   > 0)'
                                           type: object
                                           x-kubernetes-validations:
-                                          - message: must specify headers or exactly
+                                          - message: must specify headers, or at most
                                               one of key/secretRef/passthrough/aws/azure/gcp
+                                              (headers may be combined with one of
+                                              the primary auth kinds)
                                             rule: has(self.headers) || has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               || has(self.aws) || has(self.azure)
                                               || has(self.gcp)
                                           - message: location may only be set for
-                                              key or passthrough auth
+                                              key, secretRef, or passthrough auth
                                             rule: 'has(self.location) ? has(self.key)
                                               || has(self.secretRef) || has(self.passthrough)
                                               : true'
@@ -12536,9 +12548,9 @@ spec:
                           type: object
                         maxItems: 16
                         type: array
-                        x-kubernetes-validations:
-                        - message: header names must be unique
-                          rule: self.all(h1, self.exists_one(h2, h1.name == h2.name))
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
                       key:
                         description: |-
                           Inline key to use as the value of the
@@ -12646,11 +12658,13 @@ spec:
                             (has(self.kind) && size(self.kind) > 0)'
                     type: object
                     x-kubernetes-validations:
-                    - message: must specify headers or exactly one of key/secretRef/passthrough/aws/azure/gcp
+                    - message: must specify headers, or at most one of key/secretRef/passthrough/aws/azure/gcp
+                        (headers may be combined with one of the primary auth kinds)
                       rule: has(self.headers) || has(self.key) || has(self.secretRef)
                         || has(self.passthrough) || has(self.aws) || has(self.azure)
                         || has(self.gcp)
-                    - message: location may only be set for key or passthrough auth
+                    - message: location may only be set for key, secretRef, or passthrough
+                        auth
                       rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
                         || has(self.passthrough) : true'
                     - message: at most one of the fields in [key secretRef passthrough

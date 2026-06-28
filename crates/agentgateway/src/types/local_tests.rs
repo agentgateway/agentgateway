@@ -1393,3 +1393,43 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 		"{err}"
 	);
 }
+
+#[test]
+fn test_de_backend_auth_accepts_each_shape() {
+	use crate::http::auth::BackendAuth;
+	use serde::de::IntoDeserializer;
+
+	let parse = |v: serde_json::Value| -> super::LocalBackendAuth {
+		super::de_backend_auth::<serde_json::Value>(v.into_deserializer())
+			.unwrap()
+			.unwrap()
+	};
+
+	let copilot_scalar = parse(serde_json::json!("copilot"));
+	assert!(matches!(copilot_scalar.auth, Some(BackendAuth::Copilot)));
+	assert!(copilot_scalar.headers.is_empty());
+
+	let plain_key = parse(serde_json::json!({"key": "plain-secret"}));
+	assert!(matches!(
+		plain_key.auth,
+		Some(BackendAuth::Key { location: None, .. })
+	));
+	assert!(plain_key.headers.is_empty());
+
+	let full_key = parse(serde_json::json!({"key": {"value": "explicit-secret"}}));
+	assert!(matches!(full_key.auth, Some(BackendAuth::Key { .. })));
+	assert!(full_key.headers.is_empty());
+
+	let full_with_headers = parse(serde_json::json!({
+		"key": {"value": "explicit-secret"},
+		"headers": [{"name": "x-token", "value": "tok"}],
+	}));
+	assert!(matches!(full_with_headers.auth, Some(BackendAuth::Key { .. })));
+	assert_eq!(full_with_headers.headers.len(), 1);
+
+	let headers_only = parse(serde_json::json!({
+		"headers": [{"name": "x-token", "value": "tok"}],
+	}));
+	assert!(headers_only.auth.is_none());
+	assert_eq!(headers_only.headers.len(), 1);
+}
