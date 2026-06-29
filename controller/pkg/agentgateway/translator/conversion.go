@@ -653,8 +653,7 @@ func buildAgwDestination(
 	// Even in the error case, we still populate a partial backend
 	rb.Backend = backendRef
 	if err != nil {
-		var backendErr *plugins.BackendReferenceError
-		if errors.As(err, &backendErr) {
+		if backendErr, ok := errors.AsType[*plugins.BackendReferenceError](err); ok {
 			switch backendErr.Reason {
 			case plugins.BackendReferenceErrorReasonUnsupportedValue:
 				return rb, &reporter.RouteCondition{
