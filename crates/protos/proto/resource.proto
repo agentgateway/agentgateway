@@ -1791,8 +1791,6 @@ message OAuthTokenExchange {
   BackendReference token_endpoint = 1;
   // Token endpoint path on the backend that must start with "/" (defaults to "/")
   optional string token_endpoint_path = 7;
-  // Max time to wait for the token endpoint (defaults to 10s)
-  optional google.protobuf.Duration token_endpoint_timeout = 8;
 
   // ----- Grant and incoming tokens -----
   // Selects which RFC the request follows. Defaults to TOKEN_EXCHANGE (RFC 8693)
@@ -1831,21 +1829,14 @@ message OAuthTokenExchange {
   AuthorizationLocation authorization_location = 13;
 
   message TokenCache {
-    message Disabled {}
     message InMemory {
-      optional uint32 max_entries = 1; // default 8192
+      optional uint32 max_entries = 1; // default 8192 (0 disables cache)
       // TTL used when the token endpoint omits expires_in.
       optional google.protobuf.Duration default_ttl = 3; // default 300s
     }
-    // TODO(mk): will we want a shared cache in future? if not we can simplify
 
-    oneof backend {
-      InMemory in_memory = 1; // default when cache or backend is unset
-      Disabled disabled  = 2;
-    }
+    InMemory in_memory = 1; // default when cache is unset
   }
-  // Response cache configuration. When unset, an in-memory cache is used with
-  // the defaults above. Local YAML currently uses the same defaults and does
-  // not expose this field.
+  // Response cache configuration. When unset uses InMemory cache with defaults
   TokenCache cache = 14;
 }

@@ -2,7 +2,7 @@ pub mod aws;
 pub mod azure;
 mod copilot;
 pub mod gcp;
-mod oauth;
+pub mod oauth;
 
 use std::borrow::Cow;
 

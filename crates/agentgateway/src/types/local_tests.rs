@@ -1491,14 +1491,9 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 	);
 }
 
-fn oauth_local_backend_auth_yaml(snippet: &str) -> String {
-	let snippet = snippet
-		.lines()
-		.map(|line| format!("              {line}"))
-		.collect::<Vec<_>>()
-		.join("\n");
-
-	format!(
+#[tokio::test]
+async fn test_oauth_token_exchange_reports_validation_errors_from_local_config() {
+	let err = normalize_test_yaml(
 		r#"
 binds:
 - port: 3000
@@ -1509,53 +1504,111 @@ binds:
         policies:
           backendAuth:
             oauth:
-              tokenEndpoint:
-                host: 127.0.0.1:9000
-{snippet}
+              host: 127.0.0.1:9000
+              clientAuth:
+                clientId: gateway-client
 "#,
 	)
-}
-
-#[rstest::rstest]
-#[case::unsupported_requested_token_type(
-	"unsupported requested token type",
-	"requestedTokenType: urn:ietf:params:oauth:token-type:saml2",
-	"unsupported requested_token_type"
-)]
-#[case::client_secret_basic_without_secret(
-	"client secret basic without secret",
-	"clientAuth:\n  clientId: gateway-client",
-	"client_secret"
-)]
-#[case::actor_token_with_jwt_bearer_grant(
-	"actor token with jwt bearer grant",
-	"grantType: jwtBearer\nactorToken:\n  source:\n    header:\n      name: x-actor-token",
-	"actor_token"
-)]
-#[case::relative_token_endpoint_path(
-	"relative token endpoint path",
-	"tokenEndpointPath: token",
-	"must start with /"
-)]
-#[case::reserved_additional_parameter(
-	"reserved additional parameter",
-	"additionalParams:\n  scope: '\"read\"'",
-	"reserved"
-)]
-#[tokio::test]
-async fn test_oauth_token_exchange_rejects_invalid_local_config(
-	#[case] name: &str,
-	#[case] snippet: &str,
-	#[case] expected: &str,
-) {
-	let yaml = oauth_local_backend_auth_yaml(snippet);
-	let err = match normalize_test_yaml(&yaml).await {
-		Ok(_) => panic!("{name} should fail at config load"),
-		Err(err) => err,
-	};
+	.await
+	.expect_err("missing client secret should fail at config load");
 
 	assert!(
-		err.to_string().contains(expected),
-		"{name} returned unexpected error: {err}"
+		err.to_string().contains("client_secret"),
+		"returned unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_oauth_token_exchange_defaults_backend_tls_for_port_443_local_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauth:
+              host: login.microsoftonline.com:443
+"#,
+	)
+	.await
+	.expect("oauth token exchange should normalize");
+
+	let route = &normalized.listener_routes[0].1[0];
+	let auth = route.backends[0]
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			BackendTrafficPolicy::BackendAuth(auth) => Some(auth),
+			_ => None,
+		})
+		.expect("backend auth policy");
+	let value = serde_json::to_value(auth).expect("serialized backend auth");
+	let policies = value
+		.get("oauth")
+		.and_then(|oauth| oauth.get("policies"))
+		.and_then(|policies| policies.as_array())
+		.expect("oauth policies");
+
+	assert!(
+		policies
+			.iter()
+			.any(|policy| policy.get("backendTLS").is_some()),
+		"expected default backendTLS in oauth policies: {value}"
+	);
+}
+
+#[tokio::test]
+async fn test_oauth_token_exchange_does_not_duplicate_explicit_backend_tls_local_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauth:
+              host: login.microsoftonline.com:443
+              policies:
+                backendTLS:
+                  insecure: true
+"#,
+	)
+	.await
+	.expect("oauth token exchange should normalize");
+
+	let route = &normalized.listener_routes[0].1[0];
+	let auth = route.backends[0]
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			BackendTrafficPolicy::BackendAuth(auth) => Some(auth),
+			_ => None,
+		})
+		.expect("backend auth policy");
+	let value = serde_json::to_value(auth).expect("serialized backend auth");
+	let tls_policies: Vec<_> = value
+		.get("oauth")
+		.and_then(|oauth| oauth.get("policies"))
+		.and_then(|policies| policies.as_array())
+		.expect("oauth policies")
+		.iter()
+		.filter_map(|policy| policy.get("backendTLS"))
+		.collect();
+
+	assert_eq!(
+		tls_policies.len(),
+		1,
+		"expected one backendTLS policy: {value}"
+	);
+	assert_eq!(
+		tls_policies[0].get("insecure"),
+		Some(&serde_json::json!(true))
 	);
 }

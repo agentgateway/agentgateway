@@ -1,69 +1,29 @@
+use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use base64::Engine;
-use base64::prelude::BASE64_URL_SAFE_NO_PAD;
-use quick_cache::sync::Cache;
+use quick_cache::sync::{Cache, EntryAction, EntryResult};
 use secrecy::{ExposeSecret, SecretString};
 use sha2::{Digest, Sha256};
 
 use super::ExchangeRequest;
+use super::transport::TokenEndpointResponse;
 
-pub(super) const CACHE_SAFETY_MARGIN: Duration = Duration::from_secs(30);
 const DEFAULT_CACHE_CAPACITY: usize = 8192;
 const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(300);
 
-/// SHA-256 digest of the per-request exchange inputs. Keyed by digest so the raw
-/// bearer credential is never retained as a cache key.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub(super) struct TokenCacheKey([u8; 32]);
-
-impl TokenCacheKey {
-	pub(super) fn new(request: &ExchangeRequest) -> Self {
-		let mut h = Sha256::new();
-		feed(&mut h, request.subject_token.expose_secret().as_bytes());
-		// Tag actor presence so "no actor" and an empty actor token cannot collide.
-		match &request.actor {
-			Some((token, _)) => {
-				feed(&mut h, &[1]);
-				feed(&mut h, token.expose_secret().as_bytes());
-			},
-			None => feed(&mut h, &[0]),
-		}
-		// `extra_params` arrives sorted by key (built from a BTreeMap) for a stable digest.
-		for (k, v) in &request.extra_params {
-			feed(&mut h, k.as_bytes());
-			feed(&mut h, v.as_bytes());
-		}
-		let mut key = [0u8; 32];
-		key.copy_from_slice(&h.finalize());
-		Self(key)
-	}
-}
-
-/// Length-prefix each field so distinct inputs cannot collide through concatenation.
-fn feed(h: &mut Sha256, bytes: &[u8]) {
-	h.update((bytes.len() as u64).to_le_bytes());
-	h.update(bytes);
-}
-
-#[derive(Clone)]
-pub(super) struct CachedToken {
-	pub(super) access_token: SecretString,
-	pub(super) expires_at: SystemTime,
-}
+// Avoid caching tokens near expiry
+const CACHE_SAFETY_MARGIN: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Debug)]
-pub(super) struct TokenCacheConfig {
-	pub(super) enabled: bool,
-	pub(super) max_entries: usize,
-	pub(super) default_ttl: Duration,
+pub struct TokenCacheConfig {
+	pub max_entries: usize,
+	pub default_ttl: Duration,
 }
 
 impl Default for TokenCacheConfig {
 	fn default() -> Self {
 		Self {
-			enabled: true,
 			max_entries: DEFAULT_CACHE_CAPACITY,
 			default_ttl: DEFAULT_CACHE_TTL,
 		}
@@ -72,16 +32,70 @@ impl Default for TokenCacheConfig {
 
 #[derive(Clone)]
 pub(super) struct TokenExchangeCache {
-	pub(super) entries: Option<Arc<Cache<TokenCacheKey, CachedToken>>>,
-	pub(super) default_ttl: Duration,
+	entries: Option<Arc<Cache<TokenCacheKey, CachedToken>>>,
+	default_ttl: Duration,
 }
 
 impl TokenExchangeCache {
 	pub(super) fn new(cfg: &TokenCacheConfig) -> Self {
 		Self {
-			entries: cfg.enabled.then(|| Arc::new(Cache::new(cfg.max_entries))),
+			entries: (cfg.max_entries > 0).then(|| Arc::new(Cache::new(cfg.max_entries))),
 			default_ttl: cfg.default_ttl,
 		}
+	}
+
+	pub(super) async fn get_or_insert_with<F, E>(
+		&self,
+		req: &ExchangeRequest,
+		fetch: F,
+	) -> Result<TokenCacheResult, E>
+	where
+		F: AsyncFnOnce(&ExchangeRequest) -> Result<TokenEndpointResponse, E>,
+	{
+		let Some(entries) = self.entries.as_ref() else {
+			let TokenEndpointResponse { access_token, .. } = fetch(req).await?;
+			return Ok(TokenCacheResult::Miss(access_token));
+		};
+
+		let now = SystemTime::now();
+		let subject_token = req.subject_token.expose_secret();
+		let cache_key = TokenCacheKey::from(req);
+		let guard = match entries
+			.entry_async(&cache_key, |_key, cached| {
+				if is_fresh(cached.expires_at, now) {
+					EntryAction::Retain(cached.access_token.clone())
+				} else {
+					EntryAction::ReplaceWithGuard
+				}
+			})
+			.await
+		{
+			EntryResult::Retained(access_token) => return Ok(TokenCacheResult::Hit(access_token)),
+			EntryResult::Vacant(guard) | EntryResult::Replaced(guard, _) => guard,
+			EntryResult::Removed(_, _) | EntryResult::Timeout => unreachable!(),
+		};
+
+		let TokenEndpointResponse {
+			access_token,
+			expires_in,
+		} = fetch(req).await?;
+		if let Some(expires_at) = cache_expiry(expires_in, subject_token, self.default_ttl) {
+			let _ = guard.insert(CachedToken {
+				access_token: access_token.clone(),
+				expires_at,
+			});
+		}
+		Ok(TokenCacheResult::Miss(access_token))
+	}
+
+	#[cfg(test)]
+	pub(super) fn enabled(&self) -> bool {
+		self.entries.is_some()
+	}
+
+	#[cfg(test)]
+	pub(super) fn default_ttl(&self) -> Duration {
+		self.default_ttl
 	}
 }
 
@@ -91,24 +105,101 @@ impl Default for TokenExchangeCache {
 	}
 }
 
-impl std::fmt::Debug for TokenExchangeCache {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for TokenExchangeCache {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str("TokenExchangeCache")
 	}
 }
 
-pub(super) fn cache_expiry(expires_in: Option<u64>, subject_token: &str) -> Option<SystemTime> {
-	let ttl = Duration::from_secs(expires_in?);
+/// SHA-256 digest of the per-request exchange inputs. Keyed by digest so the raw
+/// bearer credential is never retained as a cache key.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+struct TokenCacheKey([u8; 32]);
+
+impl From<&ExchangeRequest> for TokenCacheKey {
+	fn from(req: &ExchangeRequest) -> Self {
+		let mut digest = CacheKeyDigest::new();
+		digest.field(req.subject_token.expose_secret().as_bytes());
+		digest.field(req.subject_token_type.as_bytes());
+
+		match &req.actor {
+			Some((token, token_type)) => {
+				digest.field([1]);
+				digest.field(token.expose_secret().as_bytes());
+				digest.field(token_type.as_bytes());
+			},
+			None => digest.field([0]),
+		}
+
+		// Expects sorted keys to ensure a stable digest.
+		for (key, value) in &req.extra_params {
+			digest.field(key.as_bytes());
+			digest.field(value.as_bytes());
+		}
+
+		digest.finish()
+	}
+}
+
+struct CacheKeyDigest(Sha256);
+
+impl CacheKeyDigest {
+	fn new() -> Self {
+		Self(Sha256::new())
+	}
+
+	fn field(&mut self, bytes: impl AsRef<[u8]>) {
+		let bytes = bytes.as_ref();
+		self.0.update((bytes.len() as u64).to_le_bytes());
+		self.0.update(bytes);
+	}
+
+	fn finish(self) -> TokenCacheKey {
+		TokenCacheKey(self.0.finalize().into())
+	}
+}
+
+#[derive(Clone)]
+struct CachedToken {
+	access_token: SecretString,
+	expires_at: SystemTime,
+}
+
+pub enum TokenCacheResult {
+	Hit(SecretString),
+	Miss(SecretString),
+}
+
+impl TokenCacheResult {
+	pub fn into_token(self) -> SecretString {
+		match self {
+			Self::Hit(token) | Self::Miss(token) => token,
+		}
+	}
+}
+
+// Best-effort `exp` from a JWT-shaped subject token; opaque tokens yield None.
+// Decoded without signature or expiry validation — we only need the raw `exp`.
+fn subject_token_exp(token: &str) -> Option<SystemTime> {
+	#[derive(serde::Deserialize)]
+	struct ExpClaim {
+		exp: Option<u64>,
+	}
+	let decoded = jsonwebtoken::dangerous::insecure_decode::<ExpClaim>(token).ok()?;
+	UNIX_EPOCH.checked_add(Duration::from_secs(decoded.claims.exp?))
+}
+
+fn cache_expiry(
+	expires_in: Option<u64>,
+	subject_token: &str,
+	default_ttl: Duration,
+) -> Option<SystemTime> {
 	let now = SystemTime::now();
-	let mut expires_at = now.checked_add(ttl)?;
+	let mut expires_at = now.checked_add(expires_in.map_or(default_ttl, Duration::from_secs))?;
 	if let Some(subject_exp) = subject_token_exp(subject_token) {
 		expires_at = expires_at.min(subject_exp);
 	}
 	is_fresh(expires_at, now).then_some(expires_at)
-}
-
-pub(super) fn cached_token_valid(token: &CachedToken, now: SystemTime) -> bool {
-	is_fresh(token.expires_at, now)
 }
 
 fn is_fresh(expires_at: SystemTime, now: SystemTime) -> bool {
@@ -117,26 +208,17 @@ fn is_fresh(expires_at: SystemTime, now: SystemTime) -> bool {
 		.is_ok_and(|remaining| remaining > CACHE_SAFETY_MARGIN)
 }
 
-fn subject_token_exp(token: &str) -> Option<SystemTime> {
-	#[derive(serde::Deserialize)]
-	struct ExpClaim {
-		exp: Option<u64>,
-	}
-
-	let payload = token.split('.').nth(1)?;
-	let decoded = BASE64_URL_SAFE_NO_PAD.decode(payload).ok()?;
-	let exp = serde_json::from_slice::<ExpClaim>(&decoded).ok()?.exp?;
-	UNIX_EPOCH.checked_add(Duration::from_secs(exp))
-}
-
 #[cfg(test)]
 mod tests {
+	use base64::Engine;
+	use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+
 	use super::*;
 
-	fn unsigned_jwt(exp: u64) -> String {
-		let header = BASE64_URL_SAFE_NO_PAD.encode(br#"{"alg":"none","typ":"JWT"}"#);
+	fn jwt_with_exp(exp: u64) -> String {
+		let header = BASE64_URL_SAFE_NO_PAD.encode(br#"{"alg":"RS256","typ":"JWT"}"#);
 		let body = BASE64_URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#).as_bytes());
-		format!("{header}.{body}.")
+		format!("{header}.{body}.sig")
 	}
 
 	#[test]
@@ -146,16 +228,16 @@ mod tests {
 			.unwrap()
 			.as_secs()
 			+ 90;
-		let token = unsigned_jwt(subject_exp);
+		let token = jwt_with_exp(subject_exp);
 
-		let expires_at = cache_expiry(Some(3600), &token).unwrap();
+		let expires_at = cache_expiry(Some(3600), &token, DEFAULT_CACHE_TTL).unwrap();
 		assert_eq!(expires_at, UNIX_EPOCH + Duration::from_secs(subject_exp));
 	}
 
 	#[test]
 	fn cache_expiry_stores_endpoint_expiry_without_safety_margin() {
 		let now = SystemTime::now();
-		let expires_at = cache_expiry(Some(300), "not-a-jwt").unwrap();
+		let expires_at = cache_expiry(Some(300), "not-a-jwt", DEFAULT_CACHE_TTL).unwrap();
 
 		assert!(
 			expires_at.duration_since(now).unwrap() > Duration::from_secs(290),
@@ -174,9 +256,9 @@ mod tests {
 			.unwrap()
 			.as_secs()
 			.saturating_sub(10);
-		let token = unsigned_jwt(subject_exp);
+		let token = jwt_with_exp(subject_exp);
 
-		assert!(cache_expiry(Some(3600), &token).is_none());
+		assert!(cache_expiry(Some(3600), &token, DEFAULT_CACHE_TTL).is_none());
 	}
 
 	#[test]
@@ -186,29 +268,31 @@ mod tests {
 			.unwrap()
 			.as_secs()
 			+ CACHE_SAFETY_MARGIN.as_secs();
-		let token = unsigned_jwt(subject_exp);
+		let token = jwt_with_exp(subject_exp);
 
-		assert!(cache_expiry(Some(3600), &token).is_none());
+		assert!(cache_expiry(Some(3600), &token, DEFAULT_CACHE_TTL).is_none());
 	}
 
 	#[test]
-	fn cache_expiry_skips_responses_without_expires_in() {
-		assert!(cache_expiry(None, "not-a-jwt").is_none());
-	}
-
-	#[test]
-	fn cached_token_valid_requires_safety_margin() {
+	fn cache_expiry_falls_back_to_default_ttl_without_expires_in() {
 		let now = SystemTime::now();
-		let near_expiry = CachedToken {
-			access_token: "near".into(),
-			expires_at: now + CACHE_SAFETY_MARGIN,
-		};
-		let fresh = CachedToken {
-			access_token: "fresh".into(),
-			expires_at: now + CACHE_SAFETY_MARGIN + Duration::from_secs(1),
-		};
+		let expires_at = cache_expiry(None, "not-a-jwt", Duration::from_secs(300)).unwrap();
 
-		assert!(!cached_token_valid(&near_expiry, now));
-		assert!(cached_token_valid(&fresh, now));
+		let remaining = expires_at.duration_since(now).unwrap();
+		assert!(
+			remaining > Duration::from_secs(290) && remaining <= Duration::from_secs(301),
+			"expiry should reflect the default ttl, got {remaining:?}"
+		);
+	}
+
+	#[test]
+	fn is_fresh_requires_safety_margin() {
+		let now = SystemTime::now();
+
+		assert!(!is_fresh(now + CACHE_SAFETY_MARGIN, now));
+		assert!(is_fresh(
+			now + CACHE_SAFETY_MARGIN + Duration::from_secs(1),
+			now
+		));
 	}
 }

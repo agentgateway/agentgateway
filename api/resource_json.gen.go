@@ -1854,17 +1854,6 @@ func (this *OAuthTokenExchange_TokenCache) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
-// MarshalJSON is a custom marshaler for OAuthTokenExchange_TokenCache_Disabled
-func (this *OAuthTokenExchange_TokenCache_Disabled) MarshalJSON() ([]byte, error) {
-	str, err := ResourceMarshaler.MarshalToString(this)
-	return []byte(str), err
-}
-
-// UnmarshalJSON is a custom unmarshaler for OAuthTokenExchange_TokenCache_Disabled
-func (this *OAuthTokenExchange_TokenCache_Disabled) UnmarshalJSON(b []byte) error {
-	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
-}
-
 // MarshalJSON is a custom marshaler for OAuthTokenExchange_TokenCache_InMemory
 func (this *OAuthTokenExchange_TokenCache_InMemory) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
