@@ -270,6 +270,26 @@ impl UpstreamGroup {
 		self.by_name.len()
 	}
 
+	/// Whether a live session should rebuild its relay for the `new` roster:
+	/// only when the target name set actually changed and both the current and
+	/// new rosters are entirely streamable HTTP (the only transport that
+	/// rebuilds cheaply, without spawning a process or doing I/O).
+	pub(crate) fn should_reconcile(&self, new: &[Arc<McpTarget>]) -> bool {
+		let cur: std::collections::HashSet<&str> = self
+			.backend
+			.targets
+			.iter()
+			.map(|t| t.name.as_str())
+			.collect();
+		let next: std::collections::HashSet<&str> = new.iter().map(|t| t.name.as_str()).collect();
+		if cur == next {
+			return false;
+		}
+		let all_streamable =
+			|ts: &[Arc<McpTarget>]| ts.iter().all(|t| matches!(t.spec, McpTargetSpec::Mcp(_)));
+		all_streamable(&self.backend.targets) && all_streamable(new)
+	}
+
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
 		let mut is_multiplexing = false;
 		let default_target_name = if backend.targets.len() != 1 {
