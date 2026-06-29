@@ -245,7 +245,7 @@ dependencies = [
  "reqwest 0.12.28",
  "reqwest 0.13.3",
  "rmcp 0.10.0",
- "rmcp 1.8.0",
+ "rmcp 2.0.0",
  "rstest",
  "rust_decimal",
  "rustls",
@@ -5938,9 +5938,7 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "1.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d1f571c72940a19d9532fe52dbea8bc9912bf1d766c2970bb824056b86f3f59"
+version = "2.0.0"
 dependencies = [
  "async-trait",
  "base64",
@@ -5956,7 +5954,7 @@ dependencies = [
  "process-wrap",
  "rand 0.10.1",
  "reqwest 0.13.3",
- "rmcp-macros 1.8.0",
+ "rmcp-macros 2.0.0",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -5986,9 +5984,7 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "1.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aad0035b69380782d78ea95b508327e6deaa2235909053e596eea8f27b5e1d5"
+version = "2.0.0"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -8914,7 +8910,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "rmcp"
-version = "2.0.0"
