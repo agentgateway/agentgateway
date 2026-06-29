@@ -1085,3 +1085,64 @@ spec:
         name: api-key-secret
         kind: Secret
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-tcp-port
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+      port: 8080
+  frontend:
+    tcp:
+      keepalive:
+        retries: 5
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-tracing-listener
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+      sectionName: https
+  frontend:
+    tracing:
+      backendRef:
+        name: otel
+        kind: Service
+        port: 4317
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-accesslog-port
+spec:
+  targetSelectors:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      matchLabels:
+        app: foo
+      port: 443
+  frontend:
+    accessLog:
+      filter: 'true'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-connect-port
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+      port: 8443
+  frontend:
+    connect:
+      mode: Tunnel
+---

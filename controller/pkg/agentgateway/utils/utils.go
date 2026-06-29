@@ -126,16 +126,21 @@ func ServiceTargetWithHostname(namespace, hostname string, port *string) *api.Po
 	}
 }
 
-func GatewayTarget[T ~string](namespace, name string, listener *T) *api.PolicyTarget_Gateway {
+func GatewayTarget[T ~string](namespace, name string, listener *T, port *gwv1.PortNumber) *api.PolicyTarget_Gateway {
 	var ls *string
 	if listener != nil {
 		ls = new((string)(*listener))
+	}
+	var p *uint32
+	if port != nil {
+		p = new(uint32(*port)) //nolint:gosec // G115: kubebuilder validation ensures 1-65535
 	}
 	return &api.PolicyTarget_Gateway{
 		Gateway: &api.PolicyTarget_GatewayTarget{
 			Name:      name,
 			Namespace: namespace,
 			Listener:  ls,
+			Port:      p,
 		},
 	}
 }

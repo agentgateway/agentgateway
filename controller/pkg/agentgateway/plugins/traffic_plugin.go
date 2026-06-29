@@ -240,25 +240,30 @@ func TranslateAgentgatewayPolicy(
 		Name        string
 		Namespace   string
 		SectionName string
+		Port        int32
 	}
 	seen := make(map[targetKey]struct{})
-	tryProcessTarget := func(gk schema.GroupKind, name gwv1.ObjectName, sectionName *gwv1.SectionName, targetNamespace string) {
+	tryProcessTarget := func(gk schema.GroupKind, name gwv1.ObjectName, sectionName *gwv1.SectionName, port *gwv1.PortNumber, targetNamespace string) {
 		section := ""
 		if sectionName != nil {
 			section = string(*sectionName)
 		}
-		key := targetKey{Group: gk.Group, Kind: gk.Kind, Name: string(name), Namespace: targetNamespace, SectionName: section}
+		var portNum int32
+		if port != nil {
+			portNum = int32(*port)
+		}
+		key := targetKey{Group: gk.Group, Kind: gk.Kind, Name: string(name), Namespace: targetNamespace, SectionName: section, Port: portNum}
 		if _, ok := seen[key]; ok {
 			return
 		}
 		seen[key] = struct{}{}
-		policyTargets, targetExists := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName)
+		policyTargets, targetExists := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName, port)
 		processTarget(name, targetNamespace, gk, policyTargets, targetExists)
 	}
 
 	for _, target := range policy.Spec.TargetRefs {
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
-		tryProcessTarget(gk, target.Name, target.SectionName, policy.Namespace)
+		tryProcessTarget(gk, target.Name, target.SectionName, target.Port, policy.Namespace)
 	}
 	for _, selector := range policy.Spec.TargetSelectors {
 		gk := schema.GroupKind{Group: string(selector.Group), Kind: string(selector.Kind)}
@@ -1918,6 +1923,9 @@ func attachmentName(target *api.PolicyTarget) string {
 		if v.Gateway.Listener != nil {
 			b += "/" + *v.Gateway.Listener
 		}
+		if v.Gateway.Port != nil {
+			b += "/" + strconv.Itoa(int(*v.Gateway.Port))
+		}
 		return b
 	case *api.PolicyTarget_Route:
 		b := ":" + v.Route.Namespace + "/" + v.Route.Name
@@ -2021,7 +2029,7 @@ func BackendReferencesFromPolicyForSource(
 	}
 	for _, tgt := range s.TargetRefs {
 		gk := schema.GroupKind{Group: string(tgt.Group), Kind: string(tgt.Kind)}
-		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName)
+		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName, tgt.Port)
 		if policyTarget == nil || !targetExists {
 			continue
 		}

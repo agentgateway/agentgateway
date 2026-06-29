@@ -3,11 +3,64 @@ package agentgateway
 import (
 	"encoding/json"
 	"math"
+	"reflect"
+	"strings"
 	"testing"
 
 	"istio.io/istio/pkg/ptr"
 	"sigs.k8s.io/yaml"
 )
+
+// frontendConnectionFields are the Frontend policy fields resolved at the bind
+// (gateway-or-port) level by the data plane's frontend_policies path. They may
+// only target a Gateway or a port, never a listener (sectionName).
+//
+// frontendObservabilityFields are resolved per-listener by the data plane's
+// listener_frontend_policies path, so they may additionally target a listener.
+//
+// Both sets are mirrored in the AgentgatewayPolicySpec CEL validation. When a
+// new Frontend field is added, classify it here AND update the connection/L4
+// XValidation rule in agentgateway_policy_types.go if the new field must not be
+// listener-scoped. TestFrontendFieldsAreClassified fails until that is done.
+var (
+	frontendConnectionFields = map[string]struct{}{
+		"tcp":                  {},
+		"networkAuthorization": {},
+		"tls":                  {},
+		"http":                 {},
+		"proxyProtocol":        {},
+		"connect":              {},
+	}
+	frontendObservabilityFields = map[string]struct{}{
+		"accessLog": {},
+		"tracing":   {},
+		"metrics":   {},
+	}
+)
+
+// TestFrontendFieldsAreClassified guards the CEL rules that decide which
+// frontend policies may target a listener (sectionName). Every field on the
+// Frontend struct must be classified as either a connection/L4 field (no
+// sectionName) or an observability field (sectionName allowed). A newly added,
+// unclassified field fails this test so the author cannot silently grant it
+// listener targeting that the data plane does not honor.
+func TestFrontendFieldsAreClassified(t *testing.T) {
+	for field := range reflect.TypeFor[Frontend]().Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		_, isConn := frontendConnectionFields[name]
+		_, isObs := frontendObservabilityFields[name]
+		switch {
+		case isConn && isObs:
+			t.Errorf("Frontend field %q is classified as both connection and observability", name)
+		case !isConn && !isObs:
+			t.Errorf("Frontend field %q is not classified; add it to frontendConnectionFields or "+
+				"frontendObservabilityFields and update the AgentgatewayPolicySpec CEL rules accordingly", name)
+		}
+	}
+}
 
 func TestByteSizeInvalidJSONDecodesAsUnset(t *testing.T) {
 	var b ByteSize

@@ -6522,7 +6522,7 @@ spec:
                 items:
                   description: |-
                     Selects one same-namespace object by `group`, `kind`, `name`, and,
-                    optionally, `sectionName`.
+                    optionally, `sectionName` or `port`.
                     The object must be in the same namespace as the policy.
                   properties:
                     group:
@@ -6544,6 +6544,15 @@ spec:
                       maxLength: 253
                       minLength: 1
                       type: string
+                    port:
+                      description: |-
+                        The port of the target resource this policy applies to.
+                        At most one of `sectionName` or `port` may be set.
+                        Only valid on frontend policies targeting a `Gateway`.
+                      format: int32
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
                     sectionName:
                       description: The named section of the target resource.
                       maxLength: 253
@@ -6555,6 +6564,11 @@ spec:
                   - kind
                   - name
                   type: object
+                  x-kubernetes-validations:
+                  - message: at most one of the fields in [sectionName port] may be
+                      set
+                    rule: '[has(self.sectionName),has(self.port)].filter(x,x==true).size()
+                      <= 1'
                 maxItems: 16
                 minItems: 1
                 type: array
@@ -6602,6 +6616,15 @@ spec:
                       description: Labels that must be present on each selected target
                         resource.
                       type: object
+                    port:
+                      description: |-
+                        The port of each selected target resource this policy applies to.
+                        At most one of `sectionName` or `port` may be set.
+                        Only valid on frontend policies targeting a `Gateway`.
+                      format: int32
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
                     sectionName:
                       description: The named section of each selected target resource.
                       maxLength: 253
@@ -6613,6 +6636,11 @@ spec:
                   - kind
                   - matchLabels
                   type: object
+                  x-kubernetes-validations:
+                  - message: at most one of the fields in [sectionName port] may be
+                      set
+                    rule: '[has(self.sectionName),has(self.port)].filter(x,x==true).size()
+                      <= 1'
                 maxItems: 16
                 minItems: 1
                 type: array
@@ -10161,10 +10189,30 @@ spec:
                 has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))'
             - message: the 'frontend' field can only target a Gateway
               rule: 'has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t,
-                t.kind == ''Gateway'' && !has(t.sectionName)) : true'
+                t.kind == ''Gateway'') : true'
             - message: the 'frontend' field can only target a Gateway
               rule: 'has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t,
-                t.kind == ''Gateway'' && !has(t.sectionName)) : true'
+                t.kind == ''Gateway'') : true'
+            - message: frontend tcp, networkAuthorization, tls, http, proxyProtocol,
+                and connect policies may only target a Gateway or port, not a listener
+                (sectionName)
+              rule: 'has(self.frontend) && (has(self.frontend.tcp) || has(self.frontend.networkAuthorization)
+                || has(self.frontend.tls) || has(self.frontend.http) || has(self.frontend.proxyProtocol)
+                || has(self.frontend.connect)) && has(self.targetRefs) ? self.targetRefs.all(t,
+                !has(t.sectionName)) : true'
+            - message: frontend tcp, networkAuthorization, tls, http, proxyProtocol,
+                and connect policies may only target a Gateway or port, not a listener
+                (sectionName)
+              rule: 'has(self.frontend) && (has(self.frontend.tcp) || has(self.frontend.networkAuthorization)
+                || has(self.frontend.tls) || has(self.frontend.http) || has(self.frontend.proxyProtocol)
+                || has(self.frontend.connect)) && has(self.targetSelectors) ? self.targetSelectors.all(t,
+                !has(t.sectionName)) : true'
+            - message: port may only be set on frontend policies
+              rule: 'has(self.targetRefs) && self.targetRefs.exists(t, has(t.port))
+                ? has(self.frontend) : true'
+            - message: port may only be set on frontend policies
+              rule: 'has(self.targetSelectors) && self.targetSelectors.exists(t, has(t.port))
+                ? has(self.frontend) : true'
             - message: the 'traffic' field can only target a Gateway, ListenerSet,
                 GRPCRoute, HTTPRoute, or InferencePool
               rule: 'has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t,
