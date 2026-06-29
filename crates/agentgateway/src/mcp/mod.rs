@@ -151,7 +151,7 @@ impl Error {
 			Error::InvalidRoutingHeader(Some(id), _) => (
 				id.clone(),
 				ErrorData {
-					code: ErrorCode::INVALID_PARAMS,
+					code: protocol::HEADER_MISMATCH,
 					message: self.to_string().into(),
 					data: None,
 				},

@@ -95,9 +95,8 @@ impl Session {
 						Ok(target) => target,
 						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
 					};
-					let init_parts = synthetic_handshake_parts(parts.clone());
 					let res = self
-						.send_init_single(init_parts, init_request, service_name)
+						.send_init_single(parts.clone(), init_request, service_name)
 						.await;
 					if let Some(sessions) = self.relay.get_sessions() {
 						let s = http::sessionpersistence::SessionState::MCP(
@@ -112,20 +111,16 @@ impl Session {
 					let _ = Self::handle_error(
 						None,
 						self
-							.send_initialized_notification_single(
-								synthetic_handshake_parts(parts.clone()),
-								service_name,
-							)
+							.send_initialized_notification_single(parts.clone(), service_name)
 							.await,
 					)
 					.await?;
 				},
 				_ => {
 					// We should fan out the initialize request to all MCP servers
-					let init_parts = synthetic_handshake_parts(parts.clone());
 					let _ = self
 						.send(
-							init_parts,
+							parts.clone(),
 							ClientJsonRpcMessage::request(init_request.into(), RequestId::Number(0)),
 						)
 						.await?;
@@ -136,9 +131,7 @@ impl Session {
 						}
 						.into(),
 					);
-					let _ = self
-						.send(synthetic_handshake_parts(parts.clone()), notification)
-						.await?;
+					let _ = self.send(parts.clone(), notification).await?;
 				},
 			}
 		}
@@ -640,11 +633,6 @@ pub struct SessionManager {
 
 fn session_id() -> Arc<str> {
 	uuid::Uuid::new_v4().to_string().into()
-}
-
-fn synthetic_handshake_parts(mut parts: Parts) -> Parts {
-	mcp::protocol::strip_headers_for_synthetic_initialize(&mut parts.headers);
-	parts
 }
 
 impl SessionManager {

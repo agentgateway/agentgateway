@@ -563,7 +563,7 @@ async fn pre_stateless_rejects_modern_requests_before_upstream() {
 		let response = req.send().await.unwrap();
 		assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 		let body: serde_json::Value = response.json().await.unwrap();
-		assert_eq!(body["error"]["code"], -32004);
+		assert_eq!(body["error"]["code"], -32022);
 	}
 
 	assert_eq!(mock.init_count().await, 0);
@@ -571,53 +571,6 @@ async fn pre_stateless_rejects_modern_requests_before_upstream() {
 		captured.lock().unwrap().is_empty(),
 		"modern requests must be rejected before any upstream POST"
 	);
-}
-
-#[test]
-fn stateless_synthetic_initialize_strips_downstream_protocol_headers() {
-	// Stateless proxy + real upstream stacks the proxy, stateless initialize wrapper,
-	// and upstream streamable HTTP client in one flow; use the same larger worker
-	// stack as the other stateless integration tests.
-	let runtime = tokio::runtime::Builder::new_multi_thread()
-		.enable_all()
-		.thread_stack_size(4 * 1024 * 1024)
-		.build()
-		.unwrap();
-	runtime.block_on(async {
-		let (mock, captured) = mock_streamable_http_server_with_capture(true).await;
-		let (_bind, io) = setup_proxy(&mock, false, false).await;
-		let client = reqwest::Client::new();
-		let url = format!("http://{io}/mcp");
-		let body = serde_json::json!({
-			"jsonrpc": "2.0",
-			"id": 9,
-			"method": "tools/call",
-			"params": {"name": "echo", "arguments": {}}
-		});
-
-		let response = mcp_json_post(&client, &url, &body)
-			.header("mcp-protocol-version", "2025-06-18")
-			.header("mcp-method", "tools/call")
-			.header("mcp-name", "echo")
-			.send()
-			.await
-			.unwrap();
-		assert!(response.status().is_success(), "{response:?}");
-
-		let headers = captured.lock().unwrap().clone();
-		let first = headers
-			.first()
-			.expect("stateless request should first initialize upstream");
-		assert!(
-			first.get("mcp-protocol-version").is_none(),
-			"synthetic initialize must not inherit downstream protocol version"
-		);
-		assert!(
-			first.get("mcp-method").is_none() && first.get("mcp-name").is_none(),
-			"synthetic initialize must not inherit standard request headers"
-		);
-	});
-	runtime.shutdown_timeout(std::time::Duration::from_secs(1));
 }
 
 fn mcp_json_post<'a>(

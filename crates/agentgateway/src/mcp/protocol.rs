@@ -30,33 +30,17 @@ mod tests;
 pub const HEADER_MCP_METHOD: &str = "Mcp-Method";
 pub const HEADER_MCP_NAME: &str = "Mcp-Name";
 
-/// Remove protocol/session headers from a gateway-generated legacy initialize.
-///
-/// The gateway builds the synthetic initialize body with its own legacy
-/// `protocolVersion`. Downstream request headers describe a different JSON-RPC
-/// message and must not leak onto this handshake. That includes the SEP-2243
-/// `Mcp-Method`/`Mcp-Name` pair, which names the downstream request, not this
-/// `initialize`. This strip only applies to the synthetic handshake. Real
-/// downstream requests forward their headers unchanged.
-pub fn strip_headers_for_synthetic_initialize(headers: &mut ::http::HeaderMap) {
-	headers.remove(rmcp::transport::common::http_header::HEADER_MCP_PROTOCOL_VERSION);
-	headers.remove(rmcp::transport::common::http_header::HEADER_SESSION_ID);
-	headers.remove(rmcp::transport::common::http_header::HEADER_LAST_EVENT_ID);
-	headers.remove(HEADER_MCP_METHOD);
-	headers.remove(HEADER_MCP_NAME);
-}
-
 /// SEP-2575 per-request protocol version carried in `_meta`. The RC draft
 /// defines this wire key. Recheck the final SEP text before `2026-07-28` is
 /// advertised as supported.
 pub const META_PROTOCOL_VERSION_KEY: &str = "io.modelcontextprotocol/protocolVersion";
 
 /// JSON-RPC error code for an unsupported/unrecognized protocol version.
-/// RC-draft value; reconcile against final SEP-2575 text before GA.
-pub const UNSUPPORTED_PROTOCOL_VERSION: ErrorCode = ErrorCode(-32004);
+/// Final SEP-2575 value from the MCP reserved protocol-error range.
+pub const UNSUPPORTED_PROTOCOL_VERSION: ErrorCode = ErrorCode(-32022);
 /// JSON-RPC error code for a standard header that disagrees with the body.
-/// RC-draft value; reconcile against final SEP-2243 text before GA.
-pub const HEADER_MISMATCH: ErrorCode = ErrorCode(-32001);
+/// Final SEP-2243 value from the MCP reserved protocol-error range.
+pub const HEADER_MISMATCH: ErrorCode = ErrorCode(-32020);
 
 /// MCP protocol versions the gateway recognizes on the wire.
 ///
