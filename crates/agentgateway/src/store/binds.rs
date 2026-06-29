@@ -133,7 +133,8 @@ impl BindListeners {
 	}
 }
 
-#[derive(Default, Debug, Clone)]
+#[serde_with::skip_serializing_none]
+#[derive(Default, Debug, Clone, serde::Serialize)]
 pub struct FrontendPolices {
 	pub http: Option<frontend::HTTP>,
 	pub tls: Option<frontend::TLS>,
@@ -1251,6 +1252,10 @@ impl Store {
 
 		let mut pol = FrontendPolices::default();
 		rules.for_each(|r| pol.set_if_empty(r));
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies("frontend", s)
+		});
 		pol
 	}
 
@@ -1290,6 +1295,10 @@ impl Store {
 			.filter_map(|p| p.policy.as_frontend());
 		let mut pol = FrontendPolices::default();
 		rules.for_each(|r| pol.set_if_empty(r));
+		dtrace::trace(|t| {
+			let s = serde_json::to_value(&pol).unwrap_or_default();
+			t.selected_policies("listenerFrontend", s)
+		});
 		pol
 	}
 

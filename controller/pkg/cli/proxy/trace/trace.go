@@ -34,7 +34,6 @@ import (
 const (
 	localForwardAddress = "127.0.0.1"
 	localRuntimeAddress = "localhost"
-	maxScannerTokenSize = 8 * 1024 * 1024
 )
 
 var (
@@ -518,8 +517,7 @@ func curlConnectTo(localAddress string, requestURL *url.URL) (string, error) {
 }
 
 func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelope) error) error {
-	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, 64*1024), maxScannerTokenSize)
+	reader := bufio.NewReader(body)
 
 	var dataLines []string
 	emit := func(raw string) error {
@@ -538,19 +536,22 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 		return emit(raw)
 	}
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to read trace stream: %w", err)
+		}
+		if line != "" {
+			line = strings.TrimSuffix(line, "\n")
+			line = strings.TrimSuffix(line, "\r")
+		}
 		if line == "" {
 			if err := flush(); err != nil {
 				return err
 			}
-			continue
-		}
-		if after, ok := strings.CutPrefix(line, "data: "); ok {
+		} else if after, ok := strings.CutPrefix(line, "data: "); ok {
 			dataLines = append(dataLines, after)
-			continue
-		}
-		if strings.HasPrefix(strings.TrimSpace(line), "{") {
+		} else if strings.HasPrefix(strings.TrimSpace(line), "{") {
 			if err := flush(); err != nil {
 				return err
 			}
@@ -558,9 +559,10 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 				return err
 			}
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("failed to read trace stream: %w", err)
+
+		if errors.Is(err, io.EOF) {
+			break
+		}
 	}
 	return flush()
 }
@@ -839,6 +841,10 @@ func summarizePolicySelection(phase string, raw json.RawMessage) string {
 
 func displayPolicySelectionPhase(phase string) string {
 	switch phase {
+	case "frontend":
+		return "frontend"
+	case "listenerFrontend":
+		return "listener frontend"
 	case "subBackend":
 		return "sub-backend"
 	case "inlineBackend":
