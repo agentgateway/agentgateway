@@ -396,7 +396,7 @@ async fn test_aws_sign_request_implicit_with_extension() {
 }
 
 #[test]
-fn extract_exchange_token_falls_back_to_claims_for_authorization_header() {
+fn extract_token_falls_back_to_claims_for_authorization_header() {
 	// Default source is the Authorization Bearer header; a JWT policy stripped it,
 	// leaving only the Claims extension.
 	let mut req = ::http::Request::builder()
@@ -408,24 +408,24 @@ fn extract_exchange_token_falls_back_to_claims_for_authorization_header() {
 		jwt: SecretString::from("claims-jwt"),
 	});
 
-	let token = oauth::extract_exchange_token(&AuthorizationLocation::default(), &req);
+	let token = oauth::extract_token(&AuthorizationLocation::default(), &req);
 	assert_eq!(token.as_deref(), Some("claims-jwt"));
 }
 
 #[test]
-fn extract_exchange_token_uses_authorization_header_without_claims() {
+fn extract_token_uses_authorization_header_without_claims() {
 	let req = ::http::Request::builder()
 		.uri("http://example/")
 		.header(::http::header::AUTHORIZATION, "Bearer header-tok")
 		.body(crate::http::Body::empty())
 		.unwrap();
 
-	let token = oauth::extract_exchange_token(&AuthorizationLocation::default(), &req);
+	let token = oauth::extract_token(&AuthorizationLocation::default(), &req);
 	assert_eq!(token.as_deref(), Some("header-tok"));
 }
 
 #[test]
-fn extract_exchange_token_prefers_authorization_header_over_claims() {
+fn extract_token_prefers_authorization_header_over_claims() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.header(::http::header::AUTHORIZATION, "Bearer header-tok")
@@ -436,12 +436,12 @@ fn extract_exchange_token_prefers_authorization_header_over_claims() {
 		jwt: SecretString::from("claims-jwt"),
 	});
 
-	let token = oauth::extract_exchange_token(&AuthorizationLocation::default(), &req);
+	let token = oauth::extract_token(&AuthorizationLocation::default(), &req);
 	assert_eq!(token.as_deref(), Some("header-tok"));
 }
 
 #[test]
-fn extract_exchange_token_custom_source_ignores_claims() {
+fn extract_token_custom_source_ignores_claims() {
 	// A non-Authorization source must read only its configured location.
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
@@ -457,12 +457,12 @@ fn extract_exchange_token_custom_source_ignores_claims() {
 		prefix: None,
 	};
 
-	let token = oauth::extract_exchange_token(&source, &req);
+	let token = oauth::extract_token(&source, &req);
 	assert_eq!(token.as_deref(), Some("custom-tok"));
 }
 
 #[test]
-fn extract_exchange_token_actor_authorization_source_falls_back_to_claims() {
+fn extract_token_actor_authorization_source_falls_back_to_claims() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.body(crate::http::Body::empty())
@@ -476,12 +476,12 @@ fn extract_exchange_token_actor_authorization_source_falls_back_to_claims() {
 		prefix: Some("Bearer ".into()),
 	};
 
-	let token = oauth::extract_exchange_token(&source, &req);
+	let token = oauth::extract_token(&source, &req);
 	assert_eq!(token.as_deref(), Some("claims-jwt"));
 }
 
 #[test]
-fn extract_exchange_token_basic_authorization_source_does_not_fall_back_to_claims() {
+fn extract_token_basic_authorization_source_does_not_fall_back_to_claims() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.body(crate::http::Body::empty())
@@ -495,6 +495,6 @@ fn extract_exchange_token_basic_authorization_source_does_not_fall_back_to_claim
 		prefix: Some("Basic ".into()),
 	};
 
-	let token = oauth::extract_exchange_token(&source, &req);
+	let token = oauth::extract_token(&source, &req);
 	assert_eq!(token, None);
 }

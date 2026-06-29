@@ -112,7 +112,7 @@ fn permissive_cel_expression(
 	expression
 }
 
-fn permissive_cel_expression_arc(
+pub(crate) fn permissive_cel_expression_arc(
 	diagnostics: &mut Diagnostics,
 	context: impl AsRef<str>,
 	original_expression: impl Into<String>,
@@ -960,7 +960,7 @@ fn convert_backend_ai_policy(
 
 fn backend_auth_from_proto(
 	s: proto::agent::BackendAuthPolicy,
-	_diagnostics: &mut Diagnostics,
+	diagnostics: &mut Diagnostics,
 ) -> Result<BackendAuth, ProtoError> {
 	use proto::agent::azure_managed_identity_credential::user_assigned_identity;
 	use proto::agent::{azure_explicit_config, gcp};
@@ -1081,7 +1081,10 @@ fn backend_auth_from_proto(
 			BackendAuth::Azure(azure_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(t)) => {
-			BackendAuth::OAuthTokenExchange(Box::new(t.try_into()?))
+			BackendAuth::OAuthTokenExchange(Box::new(auth::oauth::from_proto_with_diagnostics(
+				t,
+				diagnostics,
+			)?))
 		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
@@ -2565,7 +2568,7 @@ fn convert_duration(d: prost_types::Duration) -> Duration {
 	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
 }
 
-fn authorization_location(
+pub(crate) fn authorization_location(
 	diagnostics: &mut Diagnostics,
 	context: impl AsRef<str>,
 	location: Option<&proto::agent::AuthorizationLocation>,
