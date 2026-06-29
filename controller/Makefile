@@ -130,6 +130,9 @@ mod-tidy: mod-download mod-tidy-nested ## Tidy the go mod file
 # Analyze
 #----------------------------------------------------------------------------
 
+.PHONY: lint
+lint: analyze
+
 .PHONY: analyze
 analyze: ensure-custom-golangci-lint  ## Run golangci-lint. Override options with ANALYZE_ARGS.
 	$(CUSTOM_GOLANGCI_LINT_RUN) $(ANALYZE_ARGS) ./...

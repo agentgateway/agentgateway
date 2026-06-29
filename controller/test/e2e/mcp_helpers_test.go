@@ -261,8 +261,8 @@ func isTimeoutError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
-	var netErr net.Error
-	return errors.As(err, &netErr) && netErr.Timeout()
+	netErr, ok := errors.AsType[net.Error](err)
+	return ok && netErr.Timeout()
 }
 
 // ExtractMCPSessionID finds the mcp-session-id response header value.

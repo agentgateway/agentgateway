@@ -187,7 +187,7 @@ func getCRDs(crdDir string) ([]*apiextensions.CustomResourceDefinition, error) {
 		filePath := filepath.Join(crdDir, f.Name())
 		specs, err := parseCRDs(filePath)
 		if err != nil {
-			if errors.As(err, &utilyaml.JSONSyntaxError{}) {
+			if _, ok := errors.AsType[utilyaml.JSONSyntaxError](err); ok {
 				// If there is a parsing error, ignore the CRD as it is templated
 				continue
 			}
