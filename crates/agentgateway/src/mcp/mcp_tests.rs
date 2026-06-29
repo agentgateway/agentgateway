@@ -526,6 +526,113 @@ async fn modern_stateful_streamable_http_does_not_use_sessions() {
 }
 
 #[tokio::test]
+async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize() {
+	let old = mock_streamable_http_server(false).await;
+	let new = mock_modern_streamable_http_server().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("old", old.addr, false), ("new", new.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let discover = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "server/discover",
+		"params": {
+			"_meta": {
+				"io.modelcontextprotocol/protocolVersion": "2026-07-28"
+			}
+		}
+	});
+	let discover = mcp_json_post(&client, &url, &discover)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "server/discover")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(discover.status(), reqwest::StatusCode::OK);
+	assert!(
+		discover.headers().get("mcp-session-id").is_none(),
+		"modern discover must not create a legacy session"
+	);
+	let discover_body = discover.text().await.unwrap();
+	assert!(
+		discover_body.contains("server/discover") || discover_body.contains("method"),
+		"mixed old/new discover should surface an error that lets the client fall back, got {discover_body}"
+	);
+
+	let init = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "fallback-client",
+				"version": "0.0.1"
+			}
+		}
+	});
+	let init = mcp_json_post(&client, &url, &init)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init
+		.headers()
+		.get("mcp-session-id")
+		.expect("legacy fallback initialize should create a session")
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	let list = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 3,
+		"method": "tools/list",
+		"params": {}
+	});
+	let list = mcp_json_post(&client, &url, &list)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(list.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn old_client_multiplex_mixed_servers_uses_legacy_session_flow() {
+	let old = mock_streamable_http_server(false).await;
+	let new = mock_modern_streamable_http_server().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("old", old.addr, false), ("new", new.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	let tools = client.list_tools(Default::default()).await.unwrap();
+	let names = tools.tools.iter().map(|t| t.name.as_ref()).collect_vec();
+	assert!(names.contains(&"old_echo"));
+	assert!(names.contains(&"new_echo"));
+}
+
+#[tokio::test]
 async fn streamable_http_validates_protocol_version_header() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -1693,6 +1800,88 @@ impl MockServer {
 
 async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 	mock_streamable_http_server_inner(stateful, None).await
+}
+
+async fn mock_modern_streamable_http_server() -> MockServer {
+	agent_core::telemetry::testing::setup_test_logging();
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let init_counter = std::sync::Arc::new(tokio::sync::Mutex::new(0_i32));
+	let init_counter_clone = init_counter.clone();
+	let router = axum::Router::new().route(
+		"/mcp",
+		axum::routing::post(move |body: axum::Json<serde_json::Value>| {
+			let init_counter = init_counter_clone.clone();
+			async move {
+				let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
+				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
+				let result = match method {
+					"server/discover" => serde_json::json!({
+						"resultType": "complete",
+						"supportedVersions": ["2025-06-18", "2026-07-28"],
+						"capabilities": {
+							"tools": {}
+						},
+						"serverInfo": {
+							"name": "modern-mock",
+							"version": "0.0.1"
+						}
+					}),
+					"initialize" => {
+						*init_counter.lock().await += 1;
+						serde_json::json!({
+							"protocolVersion": "2025-06-18",
+							"capabilities": {
+								"tools": {}
+							},
+							"serverInfo": {
+								"name": "modern-mock",
+								"version": "0.0.1"
+							}
+						})
+					},
+					"tools/list" => serde_json::json!({
+						"resultType": "complete",
+						"tools": [{
+							"name": "echo",
+							"description": "Echo input",
+							"inputSchema": {
+								"type": "object"
+							}
+						}]
+					}),
+					_ => {
+						return axum::Json(serde_json::json!({
+							"jsonrpc": "2.0",
+							"id": id,
+							"error": {
+								"code": -32601,
+								"message": method
+							}
+						}));
+					},
+				};
+				axum::Json(serde_json::json!({
+					"jsonrpc": "2.0",
+					"id": id,
+					"result": result
+				}))
+			}
+		}),
+	);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	MockServer {
+		addr,
+		init_counter,
+		_cancel: tx,
+	}
 }
 
 type HeaderCapture = std::sync::Arc<std::sync::Mutex<Vec<http::HeaderMap>>>;
