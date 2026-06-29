@@ -47,7 +47,10 @@ lint:
 	cargo clippy --all-targets -- -D warnings
 
 .PHONY: fix-lint
-fix-lint: format
+fix-lint: clippy format
+
+.PHONY: clippy
+clippy:
 	cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs
 
 .PHONY: format
