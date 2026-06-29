@@ -1676,6 +1676,17 @@
             }
           ]
         },
+        "aauth": {
+          "description": "Authenticate incoming requests using AAuth (HTTP Message Signing).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAAuthConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "extAuthz": {
           "description": "Authorize incoming requests by calling an external authorization service.",
           "anyOf": [
@@ -5146,6 +5157,75 @@
         }
       ]
     },
+    "LocalAAuthConfig": {
+      "description": "User-facing AAuth policy configuration. Parsed from YAML and turned into [`AAuth`] via\n[`LocalAAuthConfig::try_build`].",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Controls whether requests must carry a valid AAuth signature.",
+          "$ref": "#/$defs/AAuthMode",
+          "default": "strict"
+        },
+        "requiredScheme": {
+          "description": "Minimum acceptable signature-key scheme.\n\nThe schemes are ordered by strength: `hwk` < `jwks` < `jwt`. A request signed with a\nstronger scheme always satisfies a weaker requirement.",
+          "$ref": "#/$defs/AAuthRequiredScheme",
+          "default": "hwk"
+        },
+        "timestampTolerance": {
+          "description": "Maximum permitted clock skew in seconds between the signer's `created` timestamp and\nlocal time. Defaults to 60.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 60
+        },
+        "allowInsecureHttpIssuer": {
+          "description": "Accept `http://` in JWT `iss` claims for agent and auth tokens.\n\nIntended for local development against `http://localhost` only. Production deployments\nMUST leave this `false` — enabling it lets unauthenticated HTTP origins pose as AAuth\nservers.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "AAuthMode": {
+      "description": "Controls how missing or invalid signatures are handled.",
+      "oneOf": [
+        {
+          "description": "Require a valid AAuth signature meeting `requiredScheme`. Reject otherwise.\nThis is the default.",
+          "type": "string",
+          "const": "strict"
+        },
+        {
+          "description": "Verify the signature if present, but allow unsigned requests through.\nUseful for incremental rollout — log first, enforce later.",
+          "type": "string",
+          "const": "optional"
+        },
+        {
+          "description": "Verify the signature if present, but allow requests with invalid signatures through.\nUseful for extracting AAuth claims for observability without enforcing — verification\noutcome is still recorded in logs.",
+          "type": "string",
+          "const": "permissive"
+        }
+      ]
+    },
+    "AAuthRequiredScheme": {
+      "description": "Minimum scheme strength accepted by the policy.\n\nStrength hierarchy (low → high): `hwk` < `jwks` < `agentJwt`. A request signed at\nlevel N satisfies any requirement at level ≤ N.\n\n**Naming note:** the policy values here (`hwk`, `jwks`, `agentJwt`) are policy-level\nidentifiers for *categories* of signing schemes, NOT the on-the-wire Signature-Key\nscheme tokens defined by draft-hardt-httpbis-signature-key. The mapping is:\n\n| Policy value | Accepted `Signature-Key` schemes on the wire        |\n|--------------|------------------------------------------------------|\n| `hwk`        | any (`hwk`, `jwks_uri`, or `jwt`)                    |\n| `jwks`       | `jwks_uri` or `jwt` — the bare `jwks` token is NOT  |\n|              | a valid wire scheme and is rejected by the verifier  |\n| `agentJwt`   | `jwt` (with `typ=aa-agent+jwt` or `typ=aa-auth+jwt`) |\n\n`agentJwt` is the strongest level we support today; an `aa-auth+jwt` (authorization\ntoken) is accepted at this level because it embeds the same agent identity that\n`aa-agent+jwt` does. The gateway does not currently issue or require auth tokens\n(draft-hardt-oauth-aauth-protocol §6.6 `requirement=auth-token`); agent identity is\nthe only token-level guarantee enforced.",
+      "oneOf": [
+        {
+          "description": "Accepts any signed request — pseudonymous `hwk`, identified `jwks_uri`, or\nJWT-bound `jwt`.",
+          "type": "string",
+          "const": "hwk"
+        },
+        {
+          "description": "Requires identified scheme or stronger. On the wire this means\n`Signature-Key: ...=jwks_uri;...` or `Signature-Key: ...=jwt;...` — the bare\n`scheme=jwks` (used by some pre-04 drafts) is not a valid wire form and is\nrejected by the verifier.",
+          "type": "string",
+          "const": "jwks"
+        },
+        {
+          "description": "Requires a JWT-bound signing key (`Signature-Key: ...=jwt;jwt=\"...\"`). The JWT's\n`typ` may be `aa-agent+jwt` (agent identity) or `aa-auth+jwt` (authorization);\nboth satisfy this requirement because both carry verified agent identity.\n\nOn rejection, the gateway advertises `AAuth-Requirement: requirement=agent-token`\nper draft-hardt-oauth-aauth-protocol §6.3.",
+          "type": "string",
+          "const": "agentJwt"
+        }
+      ]
+    },
     "LocalExplicitOrConditional_ExtAuthz": {
       "anyOf": [
         {
@@ -7722,6 +7802,17 @@
             }
           ]
         },
+        "aauth": {
+          "description": "Authenticate incoming requests using AAuth (HTTP Message Signing).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAAuthConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "authorization": {
           "description": "Authorization rules for incoming HTTP requests.",
           "anyOf": [
@@ -9716,6 +9807,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/LocalJwtConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "aauth": {
+          "description": "Authenticate incoming requests using AAuth (HTTP Message Signing).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAAuthConfig"
             },
             {
               "type": "null"

@@ -3166,6 +3166,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::Oidc(_) => "oidc",
 		TrafficPolicy::BasicAuth(_) => "basicAuth",
 		TrafficPolicy::APIKey(_) => "apiKey",
+		TrafficPolicy::AAuth(_) => "aauth",
 		TrafficPolicy::Transformation(_) => "transformation",
 		TrafficPolicy::Csrf(_) => "csrf",
 		TrafficPolicy::RequestHeaderModifier(_) => "requestHeaderModifier",
