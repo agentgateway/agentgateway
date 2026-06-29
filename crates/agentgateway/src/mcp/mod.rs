@@ -2,7 +2,6 @@ pub(crate) mod auth;
 pub(crate) mod guardrails;
 mod handler;
 mod mergestream;
-pub(crate) mod protocol;
 mod rbac;
 mod router;
 mod session;
@@ -84,7 +83,7 @@ pub enum Error {
 	#[error("{1} header/body mismatch")]
 	HeaderBodyMismatch(Option<RequestId>, &'static str),
 	#[error("invalid MCP routing header: {1}")]
-	InvalidRoutingHeader(Option<RequestId>, String),
+	InvalidRoutingHeader(Option<RequestId>, &'static str),
 	#[error("failed to start stdio server: {0}")]
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
@@ -133,7 +132,7 @@ impl Error {
 			Error::UnsupportedVersion(Some(id), _) => (
 				id.clone(),
 				ErrorData {
-					code: protocol::UNSUPPORTED_PROTOCOL_VERSION,
+					code: ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,
 					message: self.to_string().into(),
 					data: None,
 				},
@@ -141,7 +140,7 @@ impl Error {
 			Error::VersionMismatch(Some(id)) => (
 				id.clone(),
 				ErrorData {
-					code: protocol::HEADER_MISMATCH,
+					code: ErrorCode::HEADER_MISMATCH,
 					message: self.to_string().into(),
 					data: None,
 				},
@@ -149,7 +148,7 @@ impl Error {
 			Error::HeaderBodyMismatch(Some(id), _) => (
 				id.clone(),
 				ErrorData {
-					code: protocol::HEADER_MISMATCH,
+					code: ErrorCode::HEADER_MISMATCH,
 					message: self.to_string().into(),
 					data: None,
 				},
@@ -157,7 +156,7 @@ impl Error {
 			Error::InvalidRoutingHeader(Some(id), _) => (
 				id.clone(),
 				ErrorData {
-					code: protocol::HEADER_MISMATCH,
+					code: ErrorCode::HEADER_MISMATCH,
 					message: self.to_string().into(),
 					data: None,
 				},
@@ -167,7 +166,7 @@ impl Error {
 
 		serde_json::to_string(&JsonRpcError {
 			jsonrpc: Default::default(),
-			id,
+			id: Some(id),
 			error,
 		})
 		.ok()

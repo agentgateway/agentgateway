@@ -14,7 +14,6 @@ use rmcp::transport::common::mcp_headers::{decode_header_value, encode_header_va
 
 use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::RelayInputs;
-use crate::mcp::protocol;
 use crate::mcp::session::SessionManager;
 use crate::proxy::ProxyError;
 use crate::*;
@@ -212,7 +211,7 @@ impl StreamableHttpService {
 		inputs: RelayInputs,
 	) -> Result<Response, ProxyError> {
 		// The GET event stream is legacy-only (SEP-2567 removed it for modern).
-		protocol::reject_modern_session_request(request.headers())?;
+		reject_modern_session_request(request.headers())?;
 		// check accept header
 		if !request
 			.headers()
@@ -241,7 +240,7 @@ impl StreamableHttpService {
 
 	pub async fn handle_delete(&self, request: Request) -> Result<Response, ProxyError> {
 		// Session deletion is legacy-only (SEP-2567 removed sessions for modern).
-		protocol::reject_modern_session_request(request.headers())?;
+		reject_modern_session_request(request.headers())?;
 		// check session id
 		let session_id = request
 			.headers()
@@ -476,4 +475,13 @@ fn accepted_response() -> Response {
 		.status(StatusCode::ACCEPTED)
 		.body(crate::http::Body::empty())
 		.expect("valid response")
+}
+
+fn reject_modern_session_request(headers: &::http::HeaderMap) -> Result<(), ProxyError> {
+	if let Some(version) = protocol_version_header(headers, None)?
+		&& version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str()
+	{
+		return Err(mcp::Error::UnsupportedVersion(None, version.to_string()).into());
+	}
+	Ok(())
 }
