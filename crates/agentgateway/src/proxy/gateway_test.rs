@@ -37,7 +37,7 @@ use crate::proxy::request_builder::RequestBuilder;
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{extauthmock, oteltracemock, ratelimitmock};
 use crate::types::agent::{
-	Backend, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind, BindProtocol,
+	Backend, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind, BindMode, BindProtocol,
 	FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget, PathMatch,
 	PolicyInheritance, PolicyTarget, ResourceName, Route, RouteMatch, SimpleBackendReference, Target,
 	TargetedPolicy, TunnelProtocol,
@@ -161,6 +161,7 @@ fn https_bind() -> Bind {
 		}]),
 		protocol: BindProtocol::tls,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	}
 }
 
@@ -3389,6 +3390,135 @@ async fn incoming_connect_tunnel_reenters_bind_flow() {
 	);
 }
 
+/// An internal bind (`mode: internal`) never opens an OS socket, yet remains reachable
+/// via CONNECT tunnel re-entry: the outer bind reads `CONNECT host:18080`, looks the inner
+/// bind up by port, and re-enters it in-process. This mirrors
+/// `incoming_connect_tunnel_reenters_bind_flow`, but asserts that (a) a direct TCP connection
+/// to the inner port is refused (no socket was bound) while (b) re-entry still succeeds.
+#[tokio::test]
+async fn incoming_connect_tunnel_reenters_internal_bind() {
+	let mock = simple_mock().await;
+	let mut outer = simple_bind();
+	outer.key = strng::literal!("outer");
+	outer.address = "127.0.0.1:15009".parse().unwrap();
+	let mut inner = simple_bind();
+	inner.address = "127.0.0.1:18081".parse().unwrap();
+	// The inner bind is routing-only: it must not open a listener socket.
+	inner.mode = BindMode::Internal;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_route(basic_route(*mock.address()))
+		.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15009);
+
+	// The internal bind did not open a socket, so a direct connection to its port is refused.
+	let direct = TcpStream::connect("127.0.0.1:18081").await;
+	assert!(
+		direct.is_err(),
+		"internal bind must not open a socket, but a direct connection to 127.0.0.1:18081 succeeded",
+	);
+
+	let mut io = t.serve_tunnel(strng::literal!("outer"));
+	io.write_all(b"CONNECT httpbingo.org:18081 HTTP/1.1\r\nHost: httpbingo.org:18081\r\n\r\n")
+		.await
+		.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+		.await
+		.unwrap();
+	let mut tunneled = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+		.await
+		.expect("timed out waiting for tunneled HTTP response")
+		.unwrap();
+	assert!(
+		String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected tunneled response: {}",
+		String::from_utf8_lossy(&tunneled),
+	);
+}
+
+/// A wildcard internal bind (`mode: internal` with no port) is the catch-all for CONNECT
+/// re-entry: when no other bind matches the requested destination port, the tunnel falls back
+/// to it via `find_wildcard_bind`. Here the only inner bind is the wildcard (port 0), and a
+/// `CONNECT host:18085` (a port no bind listens on) is served by re-entering it.
+#[tokio::test]
+async fn incoming_connect_tunnel_reenters_wildcard_bind() {
+	let mock = simple_mock().await;
+	let mut outer = simple_bind();
+	outer.key = strng::literal!("outer");
+	outer.address = "127.0.0.1:15012".parse().unwrap();
+	// Wildcard internal bind: internal mode + port 0 (address from simple_bind is 127.0.0.1:0).
+	let mut inner = simple_bind();
+	inner.key = strng::literal!("bind/wildcard");
+	inner.mode = BindMode::Internal;
+	assert!(
+		inner.is_wildcard(),
+		"inner bind should be the wildcard fallback"
+	);
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_backend(*mock.address())
+		.with_bind(outer)
+		.with_bind(inner)
+		.with_route(basic_route(*mock.address()))
+		.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15012);
+
+	let mut io = t.serve_tunnel(strng::literal!("outer"));
+	// No bind listens on 18085; the wildcard bind serves it.
+	io.write_all(b"CONNECT httpbingo.org:18085 HTTP/1.1\r\nHost: httpbingo.org:18085\r\n\r\n")
+		.await
+		.unwrap();
+
+	let mut response = Vec::new();
+	loop {
+		let mut chunk = [0; 1024];
+		let n = io.read(&mut chunk).await.unwrap();
+		assert!(n > 0, "CONNECT response unexpectedly closed");
+		response.extend_from_slice(&chunk[..n]);
+		if response.windows(4).any(|w| w == b"\r\n\r\n") {
+			break;
+		}
+	}
+	assert!(
+		String::from_utf8_lossy(&response).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected CONNECT response: {}",
+		String::from_utf8_lossy(&response),
+	);
+
+	io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+		.await
+		.unwrap();
+	let mut tunneled = Vec::new();
+	tokio::time::timeout(Duration::from_secs(5), io.read_to_end(&mut tunneled))
+		.await
+		.expect("timed out waiting for tunneled HTTP response")
+		.unwrap();
+	assert!(
+		String::from_utf8_lossy(&tunneled).starts_with("HTTP/1.1 200 OK\r\n"),
+		"unexpected tunneled response: {}",
+		String::from_utf8_lossy(&tunneled),
+	);
+}
+
 /// Headers carried on a CONNECT request are captured and surfaced to CEL as
 /// `source.connectHeaders` on the re-entered (tunneled) request, so an
 /// authorization policy on the inner bind can match against them.
@@ -3514,6 +3644,7 @@ async fn connect_tunnel_terminates_outer_tls() {
 			}]),
 			protocol: BindProtocol::tls,
 			tunnel_protocol: TunnelProtocol::Connect,
+			mode: Default::default(),
 		};
 
 		// INNER plain bind, re-entered by the CONNECT authority port.
@@ -4025,6 +4156,7 @@ async fn connect_tunnel_dynamic_ca_obo_dynamic_backend() {
 		}]),
 		protocol: BindProtocol::tls,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	};
 
 	// `dynamic: {}` backend: the upstream is resolved from the decrypted request's
@@ -4802,6 +4934,7 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 		}]),
 		protocol: BindProtocol::tls,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	};
 
 	let t = setup_proxy_test("{}").unwrap();
@@ -4982,6 +5115,7 @@ async fn auto_protocol_plaintext_http() {
 		}]),
 		protocol: BindProtocol::auto,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	};
 
 	let t = setup_proxy_test("{}")
@@ -5080,6 +5214,7 @@ async fn auto_protocol_tls_rejected_for_http_only() {
 		}]),
 		protocol: BindProtocol::auto,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	};
 
 	let t = setup_proxy_test("{}")
@@ -5136,6 +5271,7 @@ async fn auto_protocol_mixed_listeners() {
 		]),
 		protocol: BindProtocol::auto,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	};
 
 	let t = setup_proxy_test("{}")
@@ -5193,6 +5329,7 @@ async fn auto_protocol_peek_timeout() {
 		}]),
 		protocol: BindProtocol::auto,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	};
 
 	let t = setup_proxy_test("{}")

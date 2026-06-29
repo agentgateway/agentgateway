@@ -288,6 +288,7 @@ pub fn simple_bind() -> Bind {
 		}]),
 		protocol: BindProtocol::http,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	}
 }
 
@@ -308,6 +309,7 @@ pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
 		}]),
 		protocol: BindProtocol::http,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	}
 }
 
@@ -324,6 +326,7 @@ pub fn simple_tcp_bind() -> Bind {
 		}]),
 		protocol: BindProtocol::tcp,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	}
 }
 

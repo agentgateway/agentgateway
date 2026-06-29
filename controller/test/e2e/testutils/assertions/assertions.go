@@ -80,6 +80,23 @@ func EventuallyGatewayListenerAttachedRoutes(t Test, gatewayName string, gateway
 	})
 }
 
+func EventuallyGatewayListenerCondition(t Test, gatewayName string, gatewayNamespace string, listener gwv1.SectionName, cond gwv1.ListenerConditionType, expect metav1.ConditionStatus) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		gw := &gwv1.Gateway{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
+			return fmt.Errorf("failed to get Gateway %s/%s: %w", gatewayNamespace, gatewayName, err)
+		}
+		for _, l := range gw.Status.Listeners {
+			if l.Name != listener {
+				continue
+			}
+			return expectMatch(l.Conditions, matchers.HaveCondition(string(cond), expect), "Gateway %s/%s listener %s condition %s=%s", gatewayNamespace, gatewayName, listener, cond, expect)
+		}
+		return fmt.Errorf("listener %s not found in Gateway %s/%s; full status: %+v", listener, gatewayNamespace, gatewayName, gw.Status)
+	})
+}
+
 func EventuallyHTTPRouteCondition(t Test, routeName string, routeNamespace string, cond gwv1.RouteConditionType, expect metav1.ConditionStatus) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {

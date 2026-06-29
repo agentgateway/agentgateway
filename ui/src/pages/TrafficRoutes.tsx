@@ -285,7 +285,7 @@ function TrafficRoutesEditorPage() {
                         {context.kind.toUpperCase()}
                       </span>
                     </td>
-                    <td>{context.bind.port}</td>
+                    <td>{context.bind.port ?? "*"}</td>
                     <td>
                       <Link
                         className="table-link"
@@ -377,7 +377,7 @@ function TrafficRoutesEditorPage() {
 
 function RouteEditor(props: {
   listeners: Array<{
-    bind: { port: number };
+    bind: { port?: number | null };
     bindIndex: number;
     listener: TrafficListener;
     listenerIndex: number;
@@ -465,7 +465,7 @@ function RouteEditor(props: {
               value={listenerKey}
               options={props.listeners.map((item) => ({
                 value: `${item.bindIndex}:${item.listenerIndex}`,
-                label: `:${item.bind.port} · ${listenerDisplayName(item.listener, item.listenerIndex)} · ${listenerRouteKind(item.listener).toUpperCase()}`,
+                label: `:${item.bind.port ?? "*"} · ${listenerDisplayName(item.listener, item.listenerIndex)} · ${listenerRouteKind(item.listener).toUpperCase()}`,
               }))}
               onChange={(value) => {
                 setListenerKey(value);

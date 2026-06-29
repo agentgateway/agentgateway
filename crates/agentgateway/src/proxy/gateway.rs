@@ -732,8 +732,11 @@ impl Gateway {
 						Some(authority) => authority.as_str(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
 					};
+					let binds = inputs.stores.read_binds();
 					let (target_address, bind) = if let Ok(addr) = authority.parse::<SocketAddr>() {
-						let Some(bind) = inputs.stores.read_binds().find_bind(addr) else {
+						// Match an exact bind for this address; otherwise fall back to the internal
+						// wildcard bind, preserving the requested address as the tunnel target.
+						let Some(bind) = binds.find_bind(addr).or_else(|| binds.find_wildcard_bind()) else {
 							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
 						};
 						(addr, bind)
@@ -741,7 +744,12 @@ impl Gateway {
 						let Some(port) = req.uri().port_u16() else {
 							return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
 						};
-						let Some(bind) = inputs.stores.read_binds().find_bind_by_port(port) else {
+						// Match a bind by the requested port; otherwise fall back to the internal
+						// wildcard bind, which serves any destination port via a dynamic backend.
+						let Some(bind) = binds
+							.find_bind_by_port(port)
+							.or_else(|| binds.find_wildcard_bind())
+						else {
 							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
 						};
 						let target_ip = if bind.address.ip().is_unspecified() {
@@ -754,6 +762,8 @@ impl Gateway {
 						};
 						(SocketAddr::new(target_ip, port), bind)
 					};
+					// Release the binds read lock before spawning the tunnel task.
+					drop(binds);
 
 					tokio::task::spawn(async move {
 						let downstream = match upgrade.await {

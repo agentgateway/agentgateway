@@ -4109,6 +4109,7 @@ mod route_chain_tests {
 			}]),
 			protocol: BindProtocol::http,
 			tunnel_protocol: Default::default(),
+			mode: Default::default(),
 		}
 	}
 

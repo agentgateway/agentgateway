@@ -186,6 +186,107 @@ binds:
 	);
 }
 
+#[tokio::test]
+async fn test_multiple_wildcard_binds_rejected() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect_err("two wildcard binds should be rejected");
+	assert!(
+		err.to_string().contains("at most one wildcard bind"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_explicit_port_zero_counts_as_wildcard() {
+	// `port: 0` on an internal bind is the same wildcard sentinel as omitting the port. A portless
+	// wildcard plus an explicit `port: 0` wildcard must still be rejected as two wildcards.
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+- port: 0
+  mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect_err("port: 0 and a portless wildcard are both wildcards and should be rejected");
+	assert!(
+		err.to_string().contains("at most one wildcard bind"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_single_explicit_port_zero_wildcard_allowed() {
+	// A lone `port: 0` internal bind is a valid wildcard and normalizes to the same `bind/wildcard`
+	// key as a portless one.
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 0
+  mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect("a single port: 0 internal bind should normalize");
+	assert!(
+		normalized.binds.iter().any(|b| b.key == "bind/wildcard"),
+		"expected a bind/wildcard key, got: {:?}",
+		normalized.binds.iter().map(|b| &b.key).collect::<Vec<_>>()
+	);
+}
+
+#[tokio::test]
+async fn test_single_wildcard_bind_with_exact_internal_bind_allowed() {
+	// One exact internal bind (port 443) plus one wildcard internal bind is valid: the exact
+	// bind is matched by port, the wildcard serves everything else.
+	normalize_test_yaml(
+		r#"
+binds:
+- port: 443
+  mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect("one wildcard bind alongside an exact internal bind should normalize");
+}
+
 async fn test_config_parsing(test_name: &str) {
 	// Make it static
 	super::STARTUP_TIMESTAMP.get_or_init(|| 0);

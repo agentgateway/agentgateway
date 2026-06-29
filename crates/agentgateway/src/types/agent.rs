@@ -46,7 +46,19 @@ pub struct Bind {
 	pub address: SocketAddr,
 	pub protocol: BindProtocol,
 	pub tunnel_protocol: TunnelProtocol,
+	/// Controls whether this bind opens an OS listener socket.
+	/// `standard` (default) binds the `address`; `internal` does not bind a socket and is only
+	/// reachable via in-process routing (e.g. CONNECT tunnel re-entry by other listeners).
+	pub mode: BindMode,
 	pub listeners: ListenerSet,
+}
+
+impl Bind {
+	/// An internal bind with no concrete port (address port 0) acts as the wildcard fallback:
+	/// it handles CONNECT re-entry for any destination port that no other bind matches by port.
+	pub fn is_wildcard(&self) -> bool {
+		self.mode == BindMode::Internal && self.address.port() == 0
+	}
 }
 
 pub type BindKey = Strng;
@@ -664,6 +676,18 @@ pub enum TunnelProtocol {
 	HboneGateway,
 	Proxy,
 	Connect,
+}
+
+// Controls whether a bind opens an OS listener socket.
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq, Hash, EncodeLabelValue)]
+pub enum BindMode {
+	/// Open a listener socket on the bind's address (the normal behavior).
+	#[default]
+	Standard,
+	/// Do not open a socket. The bind is registered for routing only and is reachable
+	/// via in-process re-entry (e.g. another listener redirecting CONNECT traffic to it).
+	Internal,
 }
 
 // Protocol of the request

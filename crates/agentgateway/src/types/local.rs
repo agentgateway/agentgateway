@@ -24,12 +24,12 @@ use crate::mcp::{FailureMode, McpAuthorization};
 use crate::store::{LocalWorkload, RequestPolicy};
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
-	BackendWithPolicies, Bind, BindProtocol, FrontendPolicy, HeaderMatch, JwtAuthentication,
-	Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet, ListenerTarget,
-	LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName, McpTargetSpec,
-	OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName, Route,
-	RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName, ServerTLSConfig,
-	SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec,
+	BackendWithPolicies, Bind, BindMode, BindProtocol, FrontendPolicy, HeaderMatch,
+	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName,
+	McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
+	Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName,
+	ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec,
 	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target, TargetedPolicy,
 	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName, validate_mcp_target_name,
 };
@@ -1002,10 +1002,17 @@ fn custom_provider_format(
 
 #[apply(schema_de!)]
 struct LocalBind {
-	port: u16,
+	/// Port to bind on. Omit it for an internal wildcard bind (which serves any destination port
+	/// via in-process routing). A numeric port is required unless `mode` is `internal`.
+	#[serde(default)]
+	port: Option<u16>,
 	listeners: Vec<LocalListener>,
 	#[serde(default)]
 	tunnel_protocol: TunnelProtocol,
+	/// Whether the bind opens an OS listener socket. Defaults to `standard` (binds the port).
+	/// Set to `internal` to create a routing-only bind that does not bind a socket.
+	#[serde(default)]
+	mode: BindMode,
 }
 
 #[apply(schema_de!)]
@@ -2311,7 +2318,21 @@ async fn convert(
 	let mut all_listener_routes = vec![];
 	let mut all_listener_tcp_routes = vec![];
 	for b in binds {
-		let bind_name = strng::format!("bind/{}", b.port);
+		// A standard bind requires a numeric port; an internal bind may omit the port to act as
+		// the wildcard fallback that serves any destination port via in-process routing.
+		if b.port.is_none() && b.mode != BindMode::Internal {
+			bail!("a bind without a port must set mode: internal");
+		}
+		// The runtime treats an internal bind with port 0 as the wildcard, whether the port was
+		// omitted or explicitly set to 0. Keep both representations on the single `bind/wildcard`
+		// key (and address port 0) so they are indistinguishable downstream.
+		let bind_port = b.port.unwrap_or(0);
+		let is_wildcard = b.mode == BindMode::Internal && bind_port == 0;
+		let bind_name = if is_wildcard {
+			strng::literal!("bind/wildcard")
+		} else {
+			strng::format!("bind/{bind_port}")
+		};
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
 			let (l, routes, tcp_routes, pol, backends) = convert_listener(
@@ -2330,10 +2351,10 @@ async fn convert(
 			ls.insert(l)
 		}
 		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
-			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), b.port)
+			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), bind_port)
 		} else {
 			// Windows and IPv6 don't mix well apparently?
-			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), b.port)
+			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), bind_port)
 		};
 		let b = Bind {
 			key: bind_name,
@@ -2341,6 +2362,7 @@ async fn convert(
 			protocol: detect_bind_protocol(&ls),
 			listeners: ls,
 			tunnel_protocol: b.tunnel_protocol,
+			mode: b.mode,
 		};
 		all_binds.push(b)
 	}
@@ -2471,8 +2493,24 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 		}
 		Ok(())
 	};
+	let mut wildcard_binds = Vec::new();
 	for (idx, bind) in config.binds.iter().enumerate() {
-		insert_local_listener_port(bind.port, format!("binds[{idx}]"))?;
+		// An internal bind whose effective port is 0 (port omitted or explicitly `0`) is the
+		// wildcard fallback, which opens no socket (so there is no port to deconflict). There can be
+		// at most one, since lookups would otherwise resolve the wildcard ambiguously. Everything
+		// else with a numeric port participates in uniqueness checks.
+		if bind.mode == BindMode::Internal && bind.port.unwrap_or(0) == 0 {
+			wildcard_binds.push(idx);
+		} else if let Some(port) = bind.port {
+			insert_local_listener_port(port, format!("binds[{idx}]"))?;
+		}
+	}
+	if wildcard_binds.len() > 1 {
+		bail!(
+			"at most one wildcard bind (an internal bind without a numeric port) is allowed, but found {}: binds{:?}",
+			wildcard_binds.len(),
+			wildcard_binds
+		);
 	}
 	if let Some(llm) = &config.llm {
 		insert_local_listener_port(
@@ -3360,6 +3398,7 @@ async fn convert_llm_config(
 		},
 		listeners: listener_set,
 		tunnel_protocol: TunnelProtocol::Direct,
+		mode: BindMode::Standard,
 	};
 
 	Ok((bind, routes, all_policies, all_backends))
@@ -3442,6 +3481,7 @@ async fn convert_mcp_config(
 		protocol: BindProtocol::http,
 		listeners: listener_set,
 		tunnel_protocol: TunnelProtocol::Direct,
+		mode: BindMode::Standard,
 	};
 
 	let backends = LocalBackend::MCP(backend)

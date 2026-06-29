@@ -755,7 +755,6 @@ mod response {
 				None,
 				i,
 			)
-			.await
 		};
 		test_streaming(provider, test, "-streaming", test_fn).await
 	}
@@ -780,7 +779,6 @@ mod response {
 				None,
 				i,
 			)
-			.await
 		};
 		test_streaming(provider, test, "-streaming-toolcalls", test_fn).await
 	}
@@ -1498,7 +1496,6 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			None,
 			resp,
 		)
-		.await
 		.expect("Bedrock streaming translation should succeed");
 
 	crate::http::tests_common::assert_header(

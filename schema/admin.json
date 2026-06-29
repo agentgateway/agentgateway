@@ -53,6 +53,10 @@
         "tunnelProtocol": {
           "$ref": "#/$defs/TunnelProtocol"
         },
+        "mode": {
+          "description": "Controls whether this bind opens an OS listener socket.\n`standard` (default) binds the `address`; `internal` does not bind a socket and is only\nreachable via in-process routing (e.g. CONNECT tunnel re-entry by other listeners).",
+          "$ref": "#/$defs/BindMode"
+        },
         "listeners": {
           "type": "object",
           "additionalProperties": {
@@ -65,6 +69,7 @@
         "address",
         "protocol",
         "tunnelProtocol",
+        "mode",
         "listeners",
         "listeners"
       ]
@@ -94,6 +99,20 @@
         "hboneGateway",
         "proxy",
         "connect"
+      ]
+    },
+    "BindMode": {
+      "oneOf": [
+        {
+          "description": "Open a listener socket on the bind's address (the normal behavior).",
+          "type": "string",
+          "const": "standard"
+        },
+        {
+          "description": "Do not open a socket. The bind is registered for routing only and is reachable\nvia in-process re-entry (e.g. another listener redirecting CONNECT traffic to it).",
+          "type": "string",
+          "const": "internal"
+        }
       ]
     },
     "Listener": {

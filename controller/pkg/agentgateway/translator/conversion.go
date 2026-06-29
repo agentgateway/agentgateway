@@ -1106,11 +1106,23 @@ func BuildListener(
 			listenerConditions[string(gwv1.ListenerConditionResolvedRefs)].Error = backendTLSErr
 		}
 	}
-	if err == nil && tlsInfo != nil {
-		// If there were no other errors, also check the Key/Cert are actually valid
-		err = validateTLS(tlsInfo)
+	if tlsInfo != nil && (err == nil || tlsInfo != dummyTls) {
+		// If there were no other errors or errors were not critical (e.g., tlsInfo != dummyTls) also check the Key/Cert are actually valid
+		validationErr := validateTLS(tlsInfo)
+		if validationErr != nil {
+			err = validationErr
+			tlsInfo = dummyTls
+		}
 	}
 	if err != nil {
+		// We encountered some issues in the TLS configuration, but those error may not be fatal, so listener may still work.
+		// In this case we only report ResolvedRefs condition as false to indicate that there were some issues with the certificates.
+		listenerConditions[string(gwv1.ListenerConditionResolvedRefs)].Error = err
+	}
+
+	if err != nil && tlsInfo == dummyTls {
+		// If the tlsInfo is dummyTls info, it indicates that issues with the TLS configuration are fatal and the listener is not usable.
+		// In this case report all Accepted and Programmed conditions as false to indicate that the issues are fatal.
 		if forListenerSet {
 			listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
 				Reason:  string(gwv1.ListenerSetReasonListenersNotValid),
@@ -1118,19 +1130,19 @@ func BuildListener(
 			}
 		} else if err.Reason == InvalidTLSCA ||
 			err.Reason == InvalidTLSCAKind ||
-			(err.Reason == string(gwv1.GatewayReasonRefNotPermitted) && strings.HasPrefix(err.Message, "caCertificateRef")) {
+			(err.Reason == string(gwv1.ListenerReasonRefNotPermitted) && strings.HasPrefix(err.Message, "caCertificateRef")) {
 			listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
 				Reason:  string(gwv1.ListenerReasonNoValidCACertificate),
 				Message: err.Message,
 			}
 		}
-		listenerConditions[string(gwv1.ListenerConditionResolvedRefs)].Error = err
-		listenerConditions[string(gwv1.GatewayConditionProgrammed)].Error = &ConfigError{
-			Reason:  string(gwv1.GatewayReasonInvalid),
+		listenerConditions[string(gwv1.ListenerConditionProgrammed)].Error = &ConfigError{
+			Reason:  string(gwv1.ListenerReasonInvalid),
 			Message: "Bad TLS configuration",
 		}
 		ok = false
 	}
+
 	if portErr != nil {
 		listenerConditions[string(gwv1.ListenerConditionAccepted)].Error = &ConfigError{
 			Reason:  string(gwv1.ListenerReasonUnsupportedProtocol),
@@ -1233,6 +1245,64 @@ func validateTLS(certInfo *TLSInfo) *ConfigError {
 	return nil
 }
 
+func updateError(statusErr *ConfigError, newErr *ConfigError) *ConfigError {
+	if statusErr == nil {
+		return newErr
+	}
+	return statusErr
+}
+
+// bundleCaCertificates takes a list of CA references, resolves them and returns a bundle of CA certificates in PEM format.
+// It's important to keep in mind that this function may return partial error - some references may be valid, while others
+// are not. This function will bundle valid CAs together, but will still return an error if any of the references are invalid.
+func bundleCaCertificates(
+	ctx krt.HandlerContext,
+	secrets krt.Collection[*corev1.Secret],
+	configMaps krt.Collection[*corev1.ConfigMap],
+	grants ReferenceGrants,
+	gw controllers.Object,
+	caCertRefs []gwv1.ObjectReference,
+) ([]byte, *ConfigError) {
+	namespace := gw.GetNamespace()
+	caPool := x509.NewCertPool()
+	var caBundle []byte
+	var statusErr *ConfigError
+
+	for _, ref := range caCertRefs {
+		cred, err := buildCaCertificateReference(ctx, ref, gw, configMaps, secrets)
+		if err != nil {
+			statusErr = updateError(statusErr, err)
+			continue
+		}
+
+		if !caPool.AppendCertsFromPEM(cred.Info.CaCert) {
+			statusErr = updateError(statusErr, &ConfigError{
+				Reason:  InvalidTLSCA,
+				Message: fmt.Sprintf("invalid CA certificate reference %v, the bundle is malformed", cred.Source),
+			})
+			continue
+		}
+
+		sameNamespace := cred.Source.Namespace == namespace
+		if !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
+			statusErr = updateError(statusErr, &ConfigError{
+				Reason: InvalidListenerRefNotPermitted,
+				Message: fmt.Sprintf(
+					"caCertificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
+					cred.Source.Namespace, ref.Name, namespace,
+				),
+			})
+			continue
+		}
+
+		if len(caBundle) > 0 {
+			caBundle = append(caBundle, '\n')
+		}
+		caBundle = append(caBundle, cred.Info.CaCert...)
+	}
+	return caBundle, statusErr
+}
+
 func buildTLS(
 	ctx krt.HandlerContext,
 	secrets krt.Collection[*corev1.Secret],
@@ -1293,31 +1363,15 @@ func buildTLS(
 
 		if gatewayTLS != nil && gatewayTLS.Validation != nil && len(gatewayTLS.Validation.CACertificateRefs) > 0 {
 			// TODO: add 'Mode'
-			if len(gatewayTLS.Validation.CACertificateRefs) > 1 {
-				return dummyTls, &ConfigError{
-					Reason:  InvalidTLS,
-					Message: "only one caCertificateRef is supported",
-				}
-			}
-			caCertRef := gatewayTLS.Validation.CACertificateRefs[0]
-			cred, err := buildCaCertificateReference(ctx, caCertRef, gw, configMaps, secrets)
-			if err != nil {
+			caBundle, err := bundleCaCertificates(ctx, secrets, configMaps, grants, gw, gatewayTLS.Validation.CACertificateRefs)
+			if caBundle == nil && err != nil {
 				return dummyTls, err
 			}
-			sameNamespace := cred.Source.Namespace == namespace
-			if !sameNamespace && !grants.SecretAllowed(ctx, GvkFromObject(gw), cred.Source, namespace) {
-				return dummyTls, &ConfigError{
-					Reason: InvalidListenerRefNotPermitted,
-					Message: fmt.Sprintf(
-						"caCertificateRef %v/%v not accessible to a Gateway in namespace %q (missing a ReferenceGrant?)",
-						cred.Source.Namespace, caCertRef.Name, namespace,
-					),
-				}
-			}
-			tlsRes.Info.CaCert = cred.Info.CaCert
+			tlsRes.Info.CaCert = caBundle
 			if gatewayTLS.Validation.Mode == gwv1.AllowInsecureFallback {
 				tlsRes.Info.MtlsFallbackEnabled = true
 			}
+			return &tlsRes.Info, err
 		}
 		if dynamicCA {
 			tlsRes.Info.DynamicCA = true

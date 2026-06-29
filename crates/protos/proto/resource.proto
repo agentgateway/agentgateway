@@ -40,10 +40,20 @@ message Bind {
     HBONE_GATEWAY = 3;
     CONNECT = 4;
   }
+  // Mode controls whether the bind opens an OS listener socket.
+  enum Mode {
+    // Open a listener socket on the bind's port (the normal behavior).
+    STANDARD = 0;
+    // Do not open a socket. The bind is routing-only and reachable via in-process re-entry
+    // (e.g. another listener redirecting CONNECT traffic to it). A port of 0 designates the
+    // wildcard fallback that serves any destination port.
+    INTERNAL = 1;
+  }
   string key = 1;
   uint32 port = 2;
   Protocol protocol = 3;
   TunnelProtocol tunnel_protocol = 4;
+  Mode mode = 5;
 }
 
 message RouteName {
