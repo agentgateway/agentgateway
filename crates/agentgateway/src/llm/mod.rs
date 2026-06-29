@@ -1264,18 +1264,16 @@ impl AIProvider {
 		// Only enter the streaming path for successful responses; errors
 		// fall through to the buffered path where process_error translates them.
 		if req.streaming && resp.status().is_success() {
-			return self
-				.process_streaming(
-					client,
-					req,
-					rate_limit,
-					req_snapshot,
-					log,
-					include_completion_in_log,
-					model_catalog.cloned(),
-					resp,
-				)
-				.await;
+			return self.process_streaming(
+				client,
+				req,
+				rate_limit,
+				req_snapshot,
+				log,
+				include_completion_in_log,
+				model_catalog.cloned(),
+				resp,
+			);
 		}
 		let model_catalog = model_catalog.map(Arc::as_ref);
 
@@ -1686,7 +1684,7 @@ impl AIProvider {
 	}
 
 	#[allow(clippy::too_many_arguments)]
-	pub async fn process_streaming(
+	pub fn process_streaming(
 		&self,
 		client: PolicyClient,
 		req: LLMRequest,
