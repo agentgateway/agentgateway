@@ -88,6 +88,13 @@ impl AIBackend {
 		let handle = self.providers.start_request(ep.name.clone(), ep_info);
 		Some((ep, handle))
 	}
+
+	pub fn select_provider_if(
+		&self,
+		eligible: impl FnMut(&NamedAIProvider) -> bool,
+	) -> Option<(Arc<NamedAIProvider>, ActiveHandle)> {
+		self.providers.select_matching(eligible)
+	}
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
