@@ -389,6 +389,7 @@ fn request_protocol(
 ) -> Result<RequestProtocol, ProxyError> {
 	let header_version = protocol_version_header(headers, request_id.clone())?;
 	let body_version = message_protocol_version(message);
+	let initialize = is_initialize_request(message);
 
 	if let (Some(header), Some(body)) = (&header_version, &body_version)
 		&& header != body
@@ -396,18 +397,34 @@ fn request_protocol(
 		return Err(mcp::Error::VersionMismatch(request_id).into());
 	}
 
-	if header_version
-		.as_ref()
-		.or(body_version.as_ref())
-		.is_some_and(|version| version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str())
-		&& (header_version.is_none() || body_version.is_none())
-	{
+	let declared_version = header_version.as_ref().or(body_version.as_ref());
+	let declares_modern_version = declared_version
+		.is_some_and(|version| version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str());
+	let missing_modern_version_source = header_version.is_none() || body_version.is_none();
+	if declares_modern_version && missing_modern_version_source {
 		return Err(mcp::Error::InvalidProtocolVersion.into());
 	}
 
-	Ok(RequestProtocol {
-		version: body_version.or(header_version),
-	})
+	let version = body_version.or(header_version);
+	if initialize
+		&& let Some(v) = version.as_ref()
+		&& v.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str()
+	{
+		// `initialize` selects legacy session semantics. Modern versions use
+		// `server/discover` plus per-request `_meta`, so accepting 2026+ here would
+		// create a session that claims a protocol era that no longer defines it.
+		return Err(mcp::Error::UnsupportedVersion(request_id, v.to_string()).into());
+	}
+
+	Ok(RequestProtocol { version })
+}
+
+fn is_initialize_request(message: &ClientJsonRpcMessage) -> bool {
+	matches!(
+		message,
+		ClientJsonRpcMessage::Request(req)
+			if matches!(req.request, ClientRequest::InitializeRequest(_))
+	)
 }
 
 fn message_protocol_version(message: &ClientJsonRpcMessage) -> Option<ProtocolVersion> {
