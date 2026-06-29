@@ -14,7 +14,7 @@ use macro_rules_attribute::apply;
 use secrecy::SecretString;
 
 use crate::http::auth::BackendAuth;
-use crate::http::backendtls::LocalBackendTLS;
+use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
@@ -224,7 +224,7 @@ fn merge_deprecated_frontend_policies(
 				.with_context(|| format!("failed parsing tracing endpoint: {}", ep))?;
 			if use_tls {
 				policies.push(BackendTrafficPolicy::BackendTLS(
-					LocalBackendTLS::default().try_into()?,
+					ResolvedBackendTLS::default().try_into()?,
 				));
 			}
 			frontend_policies.tracing = Some(TracingConfig {

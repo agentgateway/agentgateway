@@ -136,19 +136,31 @@ impl LocalClient {
 		path: &Path,
 		mut next_state: PreviousState,
 	) -> anyhow::Result<()> {
-		let mut watched = crate::util::watch_files(vec![path.to_path_buf()])?;
+		let watch_options = crate::util::WatchFilesOptions::default().close_on_removal(true);
+		let mut watched =
+			crate::util::watch_files_with_options(vec![path.to_path_buf()], watch_options)?;
 		info!("Watching config file: {}", path.display());
 
 		let lc: LocalClient = self.to_owned();
+		let path = path.to_path_buf();
 		let mut resource_changes = lc.resource_manager.subscribe_changes();
 		tokio::task::spawn(async move {
 			loop {
 				tokio::select! {
-					changed = watched.changed() => {
-						if !changed {
+					changed = watched.changed_invalidated() => {
+						let Some(invalidated) = changed else {
 							break;
-						}
+						};
 						next_state = lc.reload_config_after_change(next_state).await;
+						if invalidated {
+							match crate::util::watch_files_with_options(vec![path.clone()], watch_options) {
+								Ok(new_watched) => watched = new_watched,
+								Err(e) => {
+									warn!("failed to re-watch config file {}: {e}", path.display());
+									break;
+								},
+							}
+						}
 					}
 					changed = resource_changes.changed() => {
 						if changed.is_err() {
@@ -216,10 +228,12 @@ impl LocalClient {
 		debug!("Config dependency changed, reloading...");
 		match self.reload_config(prev.clone()).await {
 			Ok(nxt) => {
+				self.metrics.config_synchronized.set(1);
 				debug!("Config reloaded successfully");
 				nxt
 			},
 			Err(e) => {
+				self.metrics.config_synchronized.set(0);
 				error!("Failed to reload config: {}", e);
 				prev
 			},
@@ -342,9 +356,12 @@ async fn watch_self_workload(
 
 #[cfg(test)]
 mod tests {
+	use std::sync::Arc;
+
 	use agent_core::readiness::Ready;
 
 	use super::*;
+	use crate::ConfigSource;
 	use crate::store::{DiscoveryPreviousState, LocalWorkload, Stores};
 	use crate::types::discovery::Workload;
 
@@ -356,6 +373,29 @@ mod tests {
 
 	fn test_stores() -> Stores {
 		Stores::new(false, crate::ThreadingMode::Multithreaded)
+	}
+
+	fn test_client() -> Client {
+		Client::new(
+			&client::Config {
+				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			},
+			None,
+			crate::BackendConfig::default(),
+			None,
+		)
+	}
+
+	fn local_config(remove_field: &str) -> String {
+		format!(
+			r#"
+frontendPolicies:
+  accessLog:
+    remove:
+    - {remove_field}
+"#
+		)
 	}
 
 	fn wds_identity(name: &str, ns: &str, cluster: &str) -> SelfIdentitySource {
@@ -370,6 +410,32 @@ mod tests {
 		while ready.pending().contains(TASK_NAME) {
 			tokio::time::sleep(Duration::from_millis(10)).await;
 		}
+	}
+
+	async fn replace_config(path: &Path, remove_field: &str) {
+		let replacement = path.with_extension(format!("{remove_field}.tmp"));
+		fs_err::tokio::write(&replacement, local_config(remove_field))
+			.await
+			.unwrap();
+		fs_err::rename(&replacement, path).unwrap();
+	}
+
+	async fn wait_for_access_log_remove(config: &crate::Config, stores: &Stores, remove_field: &str) {
+		tokio::time::timeout(Duration::from_secs(5), async {
+			loop {
+				let frontend = stores.binds.read().frontend_policies(config.gateway_ref());
+				if frontend
+					.access_log
+					.as_ref()
+					.is_some_and(|access_log| access_log.remove.contains(remove_field))
+				{
+					return;
+				}
+				tokio::time::sleep(Duration::from_millis(10)).await;
+			}
+		})
+		.await
+		.unwrap_or_else(|_| panic!("timed out waiting for access log remove {remove_field}"));
 	}
 
 	#[tokio::test]
@@ -425,5 +491,51 @@ mod tests {
 			.await
 			.expect("task should clear once matching workload is inserted");
 		assert!(stores.discovery.read().self_workload.get().is_some());
+	}
+
+	#[tokio::test]
+	async fn file_config_reloads_after_repeated_rename_replacement() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("config.yaml");
+		fs_err::tokio::write(&path, local_config("first"))
+			.await
+			.unwrap();
+
+		let mut config = test_config();
+		config.xds.local_config = Some(ConfigSource::File(path.clone()));
+		let config = Arc::new(config);
+		let stores = test_stores();
+		let mut registry = prometheus_client::registry::Registry::default();
+		let metrics = Arc::new(agent_xds::Metrics::new(&mut registry));
+		let client = test_client();
+		let resource_manager = crate::resource_manager::ResourceManager::new(client.clone()).unwrap();
+		let local_client = LocalClient {
+			config: config.clone(),
+			cfg: ConfigSource::File(path.clone()),
+			stores: stores.clone(),
+			client,
+			resource_manager,
+			gateway: config.gateway(),
+			metrics,
+		};
+
+		local_client.run().await.unwrap();
+		wait_for_access_log_remove(&config, &stores, "first").await;
+
+		fs_err::tokio::write(&path, local_config("ready"))
+			.await
+			.unwrap();
+		wait_for_access_log_remove(&config, &stores, "ready").await;
+
+		replace_config(&path, "second").await;
+		wait_for_access_log_remove(&config, &stores, "second").await;
+
+		fs_err::tokio::write(&path, local_config("ready-again"))
+			.await
+			.unwrap();
+		wait_for_access_log_remove(&config, &stores, "ready-again").await;
+
+		replace_config(&path, "third").await;
+		wait_for_access_log_remove(&config, &stores, "third").await;
 	}
 }

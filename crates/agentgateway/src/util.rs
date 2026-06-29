@@ -136,7 +136,7 @@ pub fn watch_files_with_options(
 						options,
 					);
 					targets = current;
-					if triggered
+					if (triggered || invalidated)
 						&& change_tx
 							.send(FileWatchChange { invalidated })
 							.await
@@ -269,16 +269,18 @@ fn batch_invalidates_watch<'a>(
 	abspaths: &[PathBuf],
 	previous_targets: &[Option<PathBuf>],
 ) -> bool {
-	// File removal can invalidate an OS file watch even if the replacement exists
-	// by debounce time. Callers can use this to close and re-register the watch.
+	// File removal or rename can invalidate an OS file watch even if the replacement
+	// exists by debounce time. Callers can use this to close and re-register the watch.
 	events.into_iter().any(|event| {
-		matches!(event.kind, EventKind::Remove(_))
-			&& event.paths.iter().any(|path| {
-				abspaths
-					.iter()
-					.zip(previous_targets.iter())
-					.any(|(abspath, previous)| abspath == path || previous.as_deref() == Some(path.as_path()))
-			})
+		matches!(
+			event.kind,
+			EventKind::Remove(_) | EventKind::Modify(notify::event::ModifyKind::Name(_))
+		) && event.paths.iter().any(|path| {
+			abspaths
+				.iter()
+				.zip(previous_targets.iter())
+				.any(|(abspath, previous)| abspath == path || previous.as_deref() == Some(path.as_path()))
+		})
 	})
 }
 
@@ -312,7 +314,7 @@ fn should_reload(
 
 #[cfg(test)]
 mod tests {
-	use notify::event::{AccessKind, AccessMode, CreateKind, DataChange, ModifyKind};
+	use notify::event::{AccessKind, AccessMode, CreateKind, DataChange, ModifyKind, RenameMode};
 
 	use super::*;
 
@@ -448,6 +450,18 @@ mod tests {
 			&[Some(file.clone())],
 			&[Some(file.clone())],
 			WatchFilesOptions::default()
+		));
+	}
+
+	#[test]
+	fn rename_of_watched_file_invalidates_watch() {
+		let file = PathBuf::from("/cfg/price.json");
+		let event = notify::Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Any)))
+			.add_path(file.clone());
+		assert!(batch_invalidates_watch(
+			[&event],
+			std::slice::from_ref(&file),
+			&[Some(file.clone())]
 		));
 	}
 
