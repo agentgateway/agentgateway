@@ -10,7 +10,7 @@ use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_MCP_METHOD, HEADER_MCP_NAME, HEADER_MCP_PARAM_PREFIX,
 	HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
-use rmcp::transport::common::mcp_headers::decode_header_value;
+use rmcp::transport::common::mcp_headers::{decode_header_value, encode_header_value};
 
 use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::RelayInputs;
@@ -137,7 +137,7 @@ impl StreamableHttpService {
 		};
 		let request_id = request_id(&message);
 		let protocol = request_protocol(&part.headers, &message, request_id.clone())?;
-		validate_standard_headers(&part.headers, &message)?;
+		validate_standard_headers(&part.headers, &message, &protocol)?;
 		part.extensions.insert(protocol.clone());
 
 		if !self.config.stateful_mode {
@@ -262,22 +262,49 @@ impl StreamableHttpService {
 	}
 }
 
+pub(crate) fn emit_standard_headers(headers: &mut HeaderMap, message: &ClientJsonRpcMessage) {
+	match message_method(message) {
+		Some(method) => {
+			if let Ok(value) = ::http::HeaderValue::from_str(&encode_header_value(method)) {
+				headers.insert(HEADER_MCP_METHOD, value);
+			}
+		},
+		None => {
+			headers.remove(HEADER_MCP_METHOD);
+		},
+	}
+	match message_name(message) {
+		Some(name) => {
+			if let Ok(value) = ::http::HeaderValue::from_str(&encode_header_value(name)) {
+				headers.insert(HEADER_MCP_NAME, value);
+			}
+		},
+		None => {
+			headers.remove(HEADER_MCP_NAME);
+		},
+	}
+}
+
 fn validate_standard_headers(
 	headers: &HeaderMap,
 	message: &ClientJsonRpcMessage,
+	protocol: &RequestProtocol,
 ) -> Result<(), ProxyError> {
 	let request_id = request_id(message);
+	let modern = protocol.is_modern();
 
 	validate_standard_header(
 		headers,
 		HEADER_MCP_METHOD,
 		message_method(message),
+		modern && message_method(message).is_some(),
 		request_id.clone(),
 	)?;
 	validate_standard_header(
 		headers,
 		HEADER_MCP_NAME,
 		message_name(message),
+		modern && message_name(message).is_some(),
 		request_id.clone(),
 	)?;
 
@@ -305,9 +332,13 @@ fn validate_standard_header(
 	headers: &HeaderMap,
 	header_name: &'static str,
 	body_value: Option<&str>,
+	required: bool,
 	request_id: Option<RequestId>,
 ) -> Result<(), ProxyError> {
 	let Some(raw) = headers.get(header_name) else {
+		if required {
+			return Err(mcp::Error::InvalidRoutingHeader(request_id, header_name).into());
+		}
 		return Ok(());
 	};
 	let raw = raw
@@ -413,7 +444,7 @@ fn request_protocol(
 		// `initialize` selects legacy session semantics. Modern versions use
 		// `server/discover` plus per-request `_meta`, so accepting 2026+ here would
 		// create a session that claims a protocol era that no longer defines it.
-		return Err(mcp::Error::UnsupportedVersion(request_id, v.to_string()).into());
+		return Err(mcp::Error::UnsupportedVersionForInitialize(request_id, v.to_string()).into());
 	}
 
 	Ok(RequestProtocol { version })

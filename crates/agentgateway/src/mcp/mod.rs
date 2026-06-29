@@ -77,6 +77,8 @@ pub enum Error {
 	InvalidProtocolVersion,
 	#[error("unsupported MCP protocol version: {1}")]
 	UnsupportedVersion(Option<RequestId>, String),
+	#[error("unsupported MCP protocol version for initialize: {1}")]
+	UnsupportedVersionForInitialize(Option<RequestId>, String),
 	#[error("MCP protocol version header/body mismatch")]
 	VersionMismatch(Option<RequestId>),
 	#[error("{1} header/body mismatch")]
