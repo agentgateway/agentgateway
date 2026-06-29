@@ -4683,6 +4683,50 @@ mod metadata_context_and_attributes {
 	}
 
 	#[tokio::test]
+	async fn test_invalid_reserved_metadata_entries_are_skipped() {
+		let mock = simple_mock().await;
+		let tracker = MetadataTracker::new();
+		let open_metadata = tracker.open_metadata.clone();
+
+		let meta = HashMap::from([(
+			super::super::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE.to_string(),
+			[
+				(
+					"x-policy-ref".to_string(),
+					Arc::new(Expression::new_strict("'default/my-policy'").unwrap()),
+				),
+				(
+					"BadKey".to_string(),
+					Arc::new(Expression::new_strict("'should-be-skipped'").unwrap()),
+				),
+			]
+			.into(),
+		)]);
+
+		let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+			mock,
+			ext_proc::FailureMode::FailClosed,
+			ExtProcMock::new(move || tracker.clone()),
+			"{}",
+			Some(meta),
+			None,
+			None,
+		)
+		.await;
+
+		let res = send_request(io, Method::GET, "http://lo/test-path").await;
+		assert_eq!(res.status(), 200);
+
+		let open = open_metadata.lock().unwrap();
+		assert!(!open.is_empty());
+		assert_eq!(
+			open[0].get("x-policy-ref").map(String::as_str),
+			Some("default/my-policy")
+		);
+		assert!(!open[0].contains_key("BadKey"));
+	}
+
+	#[tokio::test]
 	async fn test_cel_req_attributes() {
 		let mock = simple_mock().await;
 		let tracker = MetadataTracker::new();

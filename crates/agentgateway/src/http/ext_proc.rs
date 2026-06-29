@@ -433,12 +433,13 @@ impl ExtProcInstance {
 
 	fn ensure_stream_started(
 		&mut self,
-		grpc_initial_metadata: tonic::metadata::MetadataMap,
+		exec: &Executor<'_>,
 	) -> Result<(), Error> {
 		if self.tx_req.is_some() {
 			return Ok(());
 		}
 
+		let grpc_initial_metadata = build_grpc_initial_metadata(exec, self.metadata_context.as_ref());
 		let Some(mut client) = self.client.take() else {
 			return Err(Error::RequestSend);
 		};
@@ -828,8 +829,7 @@ impl ExtProcInstance {
 		let headers = req_to_header_map(&req);
 
 		let exec = cel::Executor::new_request(&req);
-		let grpc_initial_metadata = build_grpc_initial_metadata(&exec, self.metadata_context.as_ref())?;
-		self.ensure_stream_started(grpc_initial_metadata)?;
+		self.ensure_stream_started(&exec)?;
 		// request_attributes should only be sent on first ProcessingRequest
 		// this will need to be modified if we configure which Requests to send
 		// Wrap metadata_context in Arc for cheap cloning across body chunks
@@ -1340,8 +1340,7 @@ impl ExtProcInstance {
 		let send_response_headers = self.mode_state.response_header_mode == HeaderSendMode::Send;
 
 		let exec = cel::Executor::new_response(request, &response);
-		let grpc_initial_metadata = build_grpc_initial_metadata(&exec, self.metadata_context.as_ref())?;
-		self.ensure_stream_started(grpc_initial_metadata)?;
+		self.ensure_stream_started(&exec)?;
 		// Wrap metadata_context in Arc for cheap cloning across body chunks
 		let metadata_context = if self.metadata_context.is_none()
 			&& let Some(rd) = resolved_destination_metadata
@@ -1685,28 +1684,52 @@ fn build_request_attributes(
 fn build_grpc_initial_metadata(
 	exec: &Executor<'_>,
 	metadata_context: Option<&HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
-) -> Result<tonic::metadata::MetadataMap, Error> {
+) -> tonic::metadata::MetadataMap {
 	let mut metadata = tonic::metadata::MetadataMap::new();
 	let Some(expressions) =
 		metadata_context.and_then(|ctx| ctx.get(EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE))
 	else {
-		return Ok(metadata);
+		return metadata;
 	};
 
 	for (key, expr) in expressions {
-		let value =
-			eval_expression(exec, expr).map_err(|e| Error::MetadataEvaluation(e.to_string()))?;
+		let value = match eval_expression(exec, expr) {
+			Ok(value) => value,
+			Err(error) => {
+				warn!(
+					%key,
+					%error,
+					"failed to evaluate gRPC initial metadata CEL expression"
+				);
+				continue;
+			},
+		};
 		let Some(string_value) = prost_value_to_metadata_string(&value) else {
 			continue;
 		};
-		let metadata_key = tonic::metadata::MetadataKey::from_bytes(key.as_bytes())
-			.map_err(|e| Error::MetadataConversion(e.to_string()))?;
-		let metadata_value = tonic::metadata::MetadataValue::try_from(string_value.as_str())
-			.map_err(|e| Error::MetadataConversion(e.to_string()))?;
+		let metadata_key = match tonic::metadata::MetadataKey::from_bytes(key.as_bytes()) {
+			Ok(metadata_key) => metadata_key,
+			Err(error) => {
+				warn!(%key, %error, "failed to convert gRPC initial metadata key");
+				continue;
+			},
+		};
+		let metadata_value = match tonic::metadata::MetadataValue::try_from(string_value.as_str()) {
+			Ok(metadata_value) => metadata_value,
+			Err(error) => {
+				warn!(
+					%key,
+					value = %string_value,
+					%error,
+					"failed to convert gRPC initial metadata value"
+				);
+				continue;
+			},
+		};
 		metadata.insert(metadata_key, metadata_value);
 	}
 
-	Ok(metadata)
+	metadata
 }
 
 fn prost_value_to_metadata_string(value: &prost_wkt_types::Value) -> Option<String> {
