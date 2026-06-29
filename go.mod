@@ -57,10 +57,10 @@ require (
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/controller-tools v0.21.0
-	sigs.k8s.io/gateway-api v1.6.0-rc.1
+	sigs.k8s.io/gateway-api v1.6.0
 	sigs.k8s.io/gateway-api-inference-extension v1.5.0
 	sigs.k8s.io/gateway-api-inference-extension/conformance v1.5.0
-	sigs.k8s.io/gateway-api/conformance v1.6.0-rc.1
+	sigs.k8s.io/gateway-api/conformance v1.6.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
