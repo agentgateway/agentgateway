@@ -52,6 +52,8 @@ mod tests;
 pub enum Error {
 	#[error("method not allowed; must be GET, POST, or DELETE")]
 	MethodNotAllowed,
+	#[error("GET event stream is not supported by any upstream")]
+	GetStreamNotSupported,
 	#[error("client must accept both application/json and text/event-stream")]
 	InvalidAccept,
 	#[error("client must accept text/event-stream")]

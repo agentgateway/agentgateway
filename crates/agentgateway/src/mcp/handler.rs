@@ -633,8 +633,8 @@ impl Relay {
 		}
 
 		if streams.is_empty() {
-			if unsupported_get_streams == self.upstreams.size() {
-				return Err(crate::proxy::ProxyError::MCP(mcp::Error::MethodNotAllowed).into());
+			if unsupported_get_streams > 0 && unsupported_get_streams == self.upstreams.size() {
+				return Err(crate::proxy::ProxyError::MCP(mcp::Error::GetStreamNotSupported).into());
 			}
 			// FailClosed: unreachable — InitializeRequest would have failed with NoBackends.
 			// FailOpen: keep the SSE connection open so legacy SSE clients do not immediately
