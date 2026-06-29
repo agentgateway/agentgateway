@@ -448,6 +448,46 @@ impl Session {
 					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_empty())).await
 					},
+					ClientRequest::SubscriptionsListenRequest(slr) => {
+						let subscription_id = r.id.clone();
+						let target_names = if let Some(resource_subscriptions) =
+							&mut slr.params.notifications.resource_subscriptions
+						{
+							let mut target_name = None;
+							for uri in resource_subscriptions.iter_mut() {
+								let requested_uri = uri.clone();
+								let (service_name, original_uri) = self.relay.parse_resource_uri(&requested_uri)?;
+								if let Some(target_name) = &target_name
+									&& target_name != service_name
+								{
+									return Err(UpstreamError::InvalidRequest(
+										"subscriptions/listen resourceSubscriptions must target one upstream"
+											.to_string(),
+									));
+								}
+								self.authorize_resource_request(
+									service_name,
+									&original_uri,
+									&method,
+									&mut span,
+									&log,
+									&cel,
+								)?;
+								target_name = Some(service_name.to_string());
+								*uri = original_uri;
+							}
+							target_name.map(|target| vec![target])
+						} else {
+							None
+						};
+						Box::pin(self.relay.send_fanout_to(
+							r,
+							ctx,
+							self.relay.merge_subscriptions_listen(subscription_id),
+							target_names,
+						))
+						.await
+					},
 					ClientRequest::ListPromptsRequest(_) => {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_prompts())).await
 					},

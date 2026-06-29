@@ -12,8 +12,8 @@ use rmcp::ErrorData;
 use rmcp::model::{
 	CacheScope, ClientNotification, ClientRequest, DiscoverResult, Implementation,
 	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
-	ListResourcesResult, ListToolsResult, ProtocolVersion, RequestId, ServerCapabilities, ServerInfo,
-	ServerJsonRpcMessage, ServerNotification, ServerResult,
+	ListResourcesResult, ListToolsResult, Meta, ProtocolVersion, RequestId, ServerCapabilities,
+	ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerResult, SubscriptionsListenResult,
 };
 use tracing::{debug, warn};
 
@@ -69,6 +69,21 @@ fn rewrite_resource_update_message(
 			target,
 			resource_updated.params.uri.as_str(),
 		);
+	}
+	message
+}
+
+fn set_subscription_ack_id(
+	mut message: ServerJsonRpcMessage,
+	subscription_id: &RequestId,
+) -> ServerJsonRpcMessage {
+	if let ServerJsonRpcMessage::Notification(notification) = &mut message
+		&& let ServerNotification::SubscriptionsAcknowledgedNotification(ack) =
+			&mut notification.notification
+	{
+		let mut meta = ack.params.meta.take().unwrap_or_else(Meta::new);
+		meta.set_subscription_id(subscription_id.clone());
+		ack.params.meta = Some(meta);
 	}
 	message
 }
@@ -564,6 +579,10 @@ impl Relay {
 	pub fn merge_empty(&self) -> Box<MergeFn> {
 		Box::new(move |_, _cel| Ok(rmcp::model::ServerResult::empty(())))
 	}
+
+	pub fn merge_subscriptions_listen(&self, subscription_id: RequestId) -> Box<MergeFn> {
+		Box::new(move |_, _cel| Ok(SubscriptionsListenResult::new(subscription_id).into()))
+	}
 	pub async fn send_single(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
@@ -698,20 +717,48 @@ impl Relay {
 	pub async fn send_fanout(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
-		mut ctx: IncomingRequestContext,
+		ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
+		self.send_fanout_to(r, ctx, merge, None).await
+	}
+
+	pub async fn send_fanout_to(
+		&self,
+		r: JsonRpcRequest<ClientRequest>,
+		mut ctx: IncomingRequestContext,
+		merge: Box<MergeFn>,
+		target_names: Option<Vec<String>>,
+	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
+		let subscription_id = if matches!(&r.request, ClientRequest::SubscriptionsListenRequest(_)) {
+			Some(id.clone())
+		} else {
+			None
+		};
 		let mut streams = Vec::new();
 		let method = r.request.method().to_string();
 		let method = method.as_str();
+		let selected_upstreams = self
+			.upstreams
+			.iter_named()
+			.filter(|(name, _)| {
+				target_names
+					.as_ref()
+					.is_none_or(|targets| targets.iter().any(|target| target == name.as_str()))
+			})
+			.collect::<Vec<_>>();
+		if selected_upstreams.is_empty() {
+			return Err(UpstreamError::InvalidRequest(
+				"no upstreams available".to_string(),
+			));
+		}
 
 		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
 		// fans out to (just the one name when there is a single backend).
 		let service_names = self.mcp_guardrails.as_ref().map(|_| {
-			self
-				.upstreams
-				.iter_named()
+			selected_upstreams
+				.iter()
 				.map(|(n, _)| n.to_string())
 				.collect::<Vec<_>>()
 		});
@@ -741,9 +788,8 @@ impl Relay {
 			}
 		}
 
-		let futs: Vec<_> = self
-			.upstreams
-			.iter_named()
+		let futs: Vec<_> = selected_upstreams
+			.into_iter()
 			.map(|(name, con)| {
 				let r = r.clone();
 				let ctx = &ctx;
@@ -757,7 +803,12 @@ impl Relay {
 		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
-					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					let mut s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					if let Some(subscription_id) = subscription_id.clone() {
+						s = s.map_server_messages(move |message| {
+							set_subscription_ack_id(message, &subscription_id)
+						});
+					}
 					streams.push((name, s));
 				},
 				Err(e) => {
@@ -1055,6 +1106,7 @@ fn normalize_outbound_for_protocol(
 		ServerResult::ListTasksResult(r) => r.result_type = None,
 		ServerResult::GetTaskResult(r) => r.result_type = None,
 		ServerResult::CancelTaskResult(r) => r.result_type = None,
+		ServerResult::SubscriptionsListenResult(r) => r.result_type = None,
 		ServerResult::CallToolResult(r) => r.result_type = None,
 		ServerResult::GetTaskPayloadResult(r) => strip_protocol_result_fields(&mut r.0),
 		ServerResult::EmptyResult(r) => r.result_type = None,

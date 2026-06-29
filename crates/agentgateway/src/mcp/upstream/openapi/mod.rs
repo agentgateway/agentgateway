@@ -698,6 +698,10 @@ impl Handler {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
 			ClientRequest::PingRequest(_) => Messages::from_result(id, ServerResult::empty(())),
+			ClientRequest::SubscriptionsListenRequest(_) => {
+				let subscription_id = id.clone();
+				Messages::from_result(id, SubscriptionsListenResult::new(subscription_id))
+			},
 			ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)
