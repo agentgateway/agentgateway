@@ -74,12 +74,10 @@ impl Buffer {
 				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
 			},
 		};
-		debug!(bytes = bytes.len(), "buffered request body");
-		*req.body_mut() = crate::http::Body::from(bytes);
+		*req.body_mut() = buffered;
 		req
 			.extensions_mut()
 			.insert(crate::transport::BufferLimit::new(limit));
-
 		Ok(())
 	}
 
@@ -114,8 +112,7 @@ impl Buffer {
 				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(err)));
 			},
 		};
-		debug!(bytes = bytes.len(), "buffered response body");
-		*resp.body_mut() = crate::http::Body::from(bytes);
+		*resp.body_mut() = buffered;
 		resp
 			.extensions_mut()
 			.insert(crate::transport::BufferLimit::new(limit));
@@ -135,9 +132,9 @@ async fn buffer_body(
 ) -> Result<crate::http::Body, axum_core::Error> {
 	match on_overflow {
 		OverflowAction::ReturnError => {
-			let bytes = crate::http::read_body_with_limit(body, limit).await?;
-			debug!(bytes = bytes.len(), "buffered body");
-			Ok(crate::http::Body::from(bytes))
+			let b = crate::http::read_body_with_limit(body, limit).await?;
+			debug!(b = b.len(), "buffered body");
+			Ok(crate::http::Body::from(b))
 		},
 		OverflowAction::ContinueStreaming => {
 			debug!(limit, "buffering up to limit, then streaming the rest");
@@ -210,9 +207,9 @@ impl HttpBody for BufferUpToLimitBody {
 				BufferState::FlushThenStream => {
 					*this.state = BufferState::Streaming;
 					let len = this.buffer.remaining();
-					let bytes = this.buffer.copy_to_bytes(len);
-					if bytes.has_remaining() {
-						return Poll::Ready(Some(Ok(Frame::data(bytes))));
+					let b = this.buffer.copy_to_bytes(len);
+					if b.has_remaining() {
+						return Poll::Ready(Some(Ok(Frame::data(b))));
 					}
 				},
 				BufferState::Streaming => return this.inner.as_mut().poll_frame(cx),
@@ -227,13 +224,13 @@ impl HttpBody for BufferUpToLimitBody {
 				},
 				None => {
 					let len = this.buffer.remaining();
-					let bytes = this.buffer.copy_to_bytes(len);
+					let b = this.buffer.copy_to_bytes(len);
 					*this.state = if this.trailers.is_some() {
 						BufferState::EmitTrailers
 					} else {
 						BufferState::Done
 					};
-					return Poll::Ready(Some(Ok(Frame::data(bytes))));
+					return Poll::Ready(Some(Ok(Frame::data(b))));
 				},
 			};
 
@@ -244,9 +241,9 @@ impl HttpBody for BufferUpToLimitBody {
 						.buffered
 						.checked_add(len)
 						.is_none_or(|next| next > *this.limit);
-					let bytes = data.copy_to_bytes(len);
-					if bytes.has_remaining() {
-						this.buffer.push(bytes);
+					let b = data.copy_to_bytes(len);
+					if b.has_remaining() {
+						this.buffer.push(b);
 					}
 					if exceeds {
 						*this.state = BufferState::FlushThenStream;
