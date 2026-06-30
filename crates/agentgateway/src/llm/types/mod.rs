@@ -54,7 +54,7 @@ pub trait RequestType: Send + Sync {
 		_provider: &crate::llm::bedrock::Provider,
 		_headers: Option<&::http::HeaderMap>,
 		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<Vec<u8>, AIError> {
+	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
 		Err(AIError::UnsupportedConversion(strng::literal!("bedrock")))
 	}
 

@@ -1,3 +1,6 @@
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
+
 use rand::RngExt;
 use tracing::trace;
 
@@ -9,6 +12,119 @@ use crate::llm::types::{bedrock, messages, responses};
 #[cfg(test)]
 #[path = "bedrock_tests.rs"]
 mod tests;
+
+/// Bedrock Converse `toolSpec.name` length limit.
+pub const BEDROCK_TOOL_NAME_MAX_LEN: usize = 64;
+
+/// Serialized Bedrock request body plus any tool-name remapping applied for that request.
+pub struct BedrockRequest {
+	pub body: Vec<u8>,
+	pub tool_name_map: BedrockToolNameMap,
+}
+
+/// Per-request mapping between client tool names and Bedrock-safe tool names.
+#[derive(Debug, Clone, Default)]
+pub struct BedrockToolNameMap {
+	forward: HashMap<String, String>,
+	reverse: HashMap<String, String>,
+	used_sanitized: HashSet<String>,
+}
+
+impl BedrockToolNameMap {
+	pub fn is_empty(&self) -> bool {
+		self.reverse.is_empty()
+	}
+
+	/// Return the Bedrock-safe name for `original`, registering a reverse mapping when sanitized.
+	pub fn register(&mut self, original: &str) -> String {
+		let original = if original.is_empty() {
+			"tool".to_string()
+		} else {
+			original.to_string()
+		};
+		if let Some(mapped) = self.forward.get(&original) {
+			return mapped.clone();
+		}
+
+		if is_valid_bedrock_tool_name(&original) && !self.used_sanitized.contains(&original) {
+			self.used_sanitized.insert(original.clone());
+			self.forward.insert(original.clone(), original.clone());
+			return original;
+		}
+
+		let sanitized = make_valid_bedrock_tool_name(&original, &self.used_sanitized);
+		self.used_sanitized.insert(sanitized.clone());
+		self.forward.insert(original.clone(), sanitized.clone());
+		if sanitized != original {
+			self.reverse.insert(sanitized.clone(), original);
+		}
+		sanitized
+	}
+
+	/// Restore the client-facing tool name from a Bedrock response.
+	pub fn restore(&self, sanitized: &str) -> String {
+		self.reverse
+			.get(sanitized)
+			.cloned()
+			.unwrap_or_else(|| sanitized.to_string())
+	}
+}
+
+fn is_valid_bedrock_tool_name(name: &str) -> bool {
+	!name.is_empty()
+		&& name.len() <= BEDROCK_TOOL_NAME_MAX_LEN
+		&& name
+			.chars()
+			.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+fn sanitize_bedrock_tool_name_chars(name: &str) -> String {
+	let mut out = String::with_capacity(name.len());
+	for c in name.chars() {
+		if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+			out.push(c);
+		} else {
+			out.push('_');
+		}
+	}
+	if out.is_empty() {
+		"tool".to_string()
+	} else {
+		out
+	}
+}
+
+fn make_valid_bedrock_tool_name(original: &str, used: &HashSet<String>) -> String {
+	let base = sanitize_bedrock_tool_name_chars(original);
+	if base.len() <= BEDROCK_TOOL_NAME_MAX_LEN && !used.contains(&base) {
+		return base;
+	}
+
+	let mut hasher = std::collections::hash_map::DefaultHasher::new();
+	original.hash(&mut hasher);
+	let hash = format!("{:06x}", hasher.finish() & 0xFFFFFF);
+	let prefix_len = BEDROCK_TOOL_NAME_MAX_LEN - 7;
+	let prefix: String = base.chars().take(prefix_len).collect();
+	let mut candidate = format!("{prefix}_{hash}");
+
+	let mut counter = 0u32;
+	while used.contains(&candidate) {
+		counter += 1;
+		let suffix = format!("_{counter:x}");
+		let trim = BEDROCK_TOOL_NAME_MAX_LEN.saturating_sub(suffix.len());
+		candidate = format!(
+			"{}{}",
+			candidate.chars().take(trim).collect::<String>(),
+			suffix
+		);
+	}
+	candidate
+}
+
+fn restore_tool_name(map: Option<&BedrockToolNameMap>, name: &str) -> String {
+	map.map(|m| m.restore(name))
+		.unwrap_or_else(|| name.to_string())
+}
 
 fn error_message(bytes: &[u8]) -> String {
 	serde_json::from_slice::<bedrock::ConverseErrorResponse>(bytes)
@@ -334,6 +450,7 @@ pub mod from_completions {
 
 	fn assistant_content_to_bedrock(
 		msg: &completions::RequestAssistantMessage,
+		tool_name_map: &mut super::BedrockToolNameMap,
 	) -> Vec<bedrock::ContentBlock> {
 		let mut content = Vec::new();
 		// Replay a previously-emitted thinking block first. Anthropic (via Bedrock Converse) requires
@@ -389,7 +506,7 @@ pub mod from_completions {
 							.unwrap_or_else(|_| serde_json::Value::String(call.function.arguments.clone()));
 						content.push(bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
 							tool_use_id: call.id.clone(),
-							name: call.function.name.clone(),
+							name: tool_name_map.register(&call.function.name),
 							input,
 						}));
 					},
@@ -398,7 +515,7 @@ pub mod from_completions {
 							.unwrap_or_else(|_| serde_json::Value::String(call.custom_tool.input.clone()));
 						content.push(bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
 							tool_use_id: call.id.clone(),
-							name: call.custom_tool.name.clone(),
+							name: tool_name_map.register(&call.custom_tool.name),
 							input,
 						}));
 					},
@@ -442,11 +559,50 @@ pub mod from_completions {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<Vec<u8>, AIError> {
+	) -> Result<super::BedrockRequest, AIError> {
 		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestParsing)?;
 		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(typed, model_id, provider, headers, prompt_caching);
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+		let (xlated, tool_name_map) =
+			translate_internal(typed, model_id, provider, headers, prompt_caching);
+		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
+		Ok(super::BedrockRequest {
+			body,
+			tool_name_map,
+		})
+	}
+
+	fn collect_completions_tool_names(req: &completions::Request) -> Vec<String> {
+		let mut names = Vec::new();
+		if let Some(tools) = &req.tools {
+			for tool in tools {
+				if let completions::Tool::Function(function_tool) = tool {
+					names.push(function_tool.function.name.clone());
+				}
+			}
+		}
+		if let Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice {
+			function,
+		})) = &req.tool_choice
+		{
+			names.push(function.name.clone());
+		}
+		for msg in &req.messages {
+			if let completions::RequestMessage::Assistant(assistant) = msg {
+				if let Some(tool_calls) = &assistant.tool_calls {
+					for call in tool_calls {
+						match call {
+							completions::MessageToolCalls::Function(call) => {
+								names.push(call.function.name.clone());
+							},
+							completions::MessageToolCalls::Custom(call) => {
+								names.push(call.custom_tool.name.clone());
+							},
+						}
+					}
+				}
+			}
+		}
+		names
 	}
 
 	pub(super) fn translate_internal(
@@ -455,7 +611,11 @@ pub mod from_completions {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> bedrock::ConverseRequest {
+	) -> (bedrock::ConverseRequest, super::BedrockToolNameMap) {
+		let mut tool_name_map = super::BedrockToolNameMap::default();
+		for name in collect_completions_tool_names(&req) {
+			tool_name_map.register(&name);
+		}
 		// Extract and join system prompts from completions format
 		let system_text = req
 			.messages
@@ -481,7 +641,7 @@ pub mod from_completions {
 					}
 				},
 				completions::RequestMessage::Assistant(assistant) => {
-					let content = assistant_content_to_bedrock(assistant);
+					let content = assistant_content_to_bedrock(assistant, &mut tool_name_map);
 					if content.is_empty() {
 						None
 					} else {
@@ -550,7 +710,7 @@ pub mod from_completions {
 		let tool_choice = match req.tool_choice {
 			Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice { function })) => {
 				Some(bedrock::ToolChoice::Tool {
-					name: function.name,
+					name: tool_name_map.register(&function.name),
 				})
 			},
 			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Auto)) => {
@@ -568,7 +728,7 @@ pub mod from_completions {
 				.filter_map(|tool| match tool {
 					completions::Tool::Function(function_tool) => {
 						let tool_spec = bedrock::ToolSpecification {
-							name: function_tool.function.name,
+							name: tool_name_map.register(&function_tool.function.name),
 							description: function_tool.function.description,
 							input_schema: function_tool
 								.function
@@ -669,7 +829,7 @@ pub mod from_completions {
 			}
 		}
 
-		bedrock_request
+		(bedrock_request, tool_name_map)
 	}
 
 	fn reasoning_effort_to_enabled_budget(effort: &completions::ReasoningEffort) -> Option<u64> {
@@ -721,10 +881,14 @@ pub mod from_completions {
 		})
 	}
 
-	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
+	pub fn translate_response(
+		bytes: &Bytes,
+		model: &str,
+		tool_name_map: Option<&super::BedrockToolNameMap>,
+	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		let openai = translate_response_internal(resp, model)?;
+		let openai = translate_response_internal(resp, model, tool_name_map)?;
 		let passthrough = json::convert::<_, types::completions::Response>(&openai)
 			.map_err(AIError::ResponseParsing)?;
 		Ok(Box::new(passthrough))
@@ -733,9 +897,10 @@ pub mod from_completions {
 	fn translate_response_internal(
 		resp: bedrock::ConverseResponse,
 		model: &str,
+		tool_name_map: Option<&super::BedrockToolNameMap>,
 	) -> Result<types::completions::typed::Response, AIError> {
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
-		Ok(adapter.to_completions())
+		Ok(adapter.to_completions(tool_name_map))
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
@@ -761,6 +926,7 @@ pub mod from_completions {
 		log: AmendOnDrop,
 		model: &str,
 		message_id: &str,
+		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		// This is static for all chunks!
 		let created = chrono::Utc::now().timestamp() as u32;
@@ -769,6 +935,7 @@ pub mod from_completions {
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		let model = model.to_string();
 		let message_id = message_id.to_string();
+		let tool_name_map = tool_name_map;
 		let body = parse::aws_sse::transform(b, buffer_limit, move |f| {
 			let res = bedrock::ConverseStreamOutput::deserialize(f).ok()?;
 			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
@@ -796,7 +963,7 @@ pub mod from_completions {
 								id: Some(tu.tool_use_id),
 								r#type: Some(completions::FunctionType::Function),
 								function: Some(completions::FunctionCallStream {
-									name: Some(tu.name),
+									name: Some(super::restore_tool_name(tool_name_map.as_ref(), &tu.name)),
 									arguments: None,
 								}),
 							}]),
@@ -1020,17 +1187,45 @@ pub mod from_messages {
 		req: &types::messages::Request,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
-	) -> Result<Vec<u8>, AIError> {
+	) -> Result<super::BedrockRequest, AIError> {
 		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestParsing)?;
-		let xlated = translate_internal(typed, provider, headers)?;
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+		let (xlated, tool_name_map) = translate_internal(typed, provider, headers)?;
+		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
+		Ok(super::BedrockRequest {
+			body,
+			tool_name_map,
+		})
+	}
+
+	fn collect_messages_tool_names(req: &messages::Request) -> Vec<String> {
+		let mut names = Vec::new();
+		if let Some(tools) = &req.tools {
+			for tool in tools {
+				names.push(tool.name.clone());
+			}
+		}
+		if let Some(messages::ToolChoice::Tool { name, .. }) = &req.tool_choice {
+			names.push(name.clone());
+		}
+		for msg in &req.messages {
+			for block in &msg.content {
+				if let messages::ContentBlock::ToolUse { name, .. } = block {
+					names.push(name.clone());
+				}
+			}
+		}
+		names
 	}
 
 	pub(super) fn translate_internal(
 		req: messages::Request,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
-	) -> Result<bedrock::ConverseRequest, AIError> {
+	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
+		let mut tool_name_map = super::BedrockToolNameMap::default();
+		for name in collect_messages_tool_names(&req) {
+			tool_name_map.register(&name);
+		}
 		let mut cache_points_used = 0;
 		// Converse placement note (AWS docs):
 		// - Anthropic-specific params are sent via additionalModelRequestFields for Converse:
@@ -1169,7 +1364,7 @@ pub mod from_messages {
 					} => (
 						bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
 							tool_use_id: id,
-							name,
+							name: tool_name_map.register(&name),
 							input,
 						}),
 						cache_control.is_some(),
@@ -1285,7 +1480,7 @@ pub mod from_messages {
 					let has_cache_control = tool.cache_control.is_some();
 
 					result.push(bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
-						name: tool.name,
+						name: tool_name_map.register(&tool.name),
 						description: tool.description,
 						input_schema: Some(bedrock::ToolInputSchema::Json(tool.input_schema)),
 					}));
@@ -1314,7 +1509,9 @@ pub mod from_messages {
 						if thinking_enabled {
 							Some(bedrock::ToolChoice::Any)
 						} else {
-							Some(bedrock::ToolChoice::Tool { name })
+							Some(bedrock::ToolChoice::Tool {
+								name: tool_name_map.register(&name),
+							})
 						}
 					},
 					Some(messages::ToolChoice::None {}) | None => {
@@ -1403,20 +1600,23 @@ pub mod from_messages {
 			Some(metadata)
 		};
 
-		Ok(bedrock::ConverseRequest {
-			model_id: req.model,
-			messages,
-			system: system_content,
-			inference_config: Some(inference_config),
-			output_config,
-			tool_config,
-			guardrail_config,
-			additional_model_request_fields: additional_fields,
-			prompt_variables: None,
-			additional_model_response_field_paths: None,
-			request_metadata: metadata,
-			performance_config: None,
-		})
+		Ok((
+			bedrock::ConverseRequest {
+				model_id: req.model,
+				messages,
+				system: system_content,
+				inference_config: Some(inference_config),
+				output_config,
+				tool_config,
+				guardrail_config,
+				additional_model_request_fields: additional_fields,
+				prompt_variables: None,
+				additional_model_response_field_paths: None,
+				request_metadata: metadata,
+				performance_config: None,
+			},
+			tool_name_map,
+		))
 	}
 
 	fn messages_output_format_to_bedrock_output_config(
@@ -1446,10 +1646,14 @@ pub mod from_messages {
 		})
 	}
 
-	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
+	pub fn translate_response(
+		bytes: &Bytes,
+		model: &str,
+		tool_name_map: Option<&super::BedrockToolNameMap>,
+	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		let openai = translate_response_internal(resp, model)?;
+		let openai = translate_response_internal(resp, model, tool_name_map)?;
 		let passthrough =
 			json::convert::<_, types::messages::Response>(&openai).map_err(AIError::ResponseParsing)?;
 		Ok(Box::new(passthrough))
@@ -1458,9 +1662,10 @@ pub mod from_messages {
 	fn translate_response_internal(
 		resp: bedrock::ConverseResponse,
 		model: &str,
+		tool_name_map: Option<&super::BedrockToolNameMap>,
 	) -> Result<types::messages::typed::MessagesResponse, AIError> {
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
-		adapter.to_anthropic()
+		adapter.to_anthropic(tool_name_map)
 	}
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
@@ -1484,6 +1689,7 @@ pub mod from_messages {
 		model: &str,
 		_message_id: &str,
 		include_completion_in_log: bool,
+		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		let mut saw_token = false;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
@@ -1491,6 +1697,7 @@ pub mod from_messages {
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut completion = include_completion_in_log.then(String::new);
 		let model = model.to_string();
+		let tool_name_map = tool_name_map;
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
 				Ok(e) => e,
@@ -1539,7 +1746,7 @@ pub mod from_messages {
 					let content_block = match start.start {
 						Some(bedrock::ContentBlockStart::ToolUse(s)) => messages::ContentBlock::ToolUse {
 							id: s.tool_use_id,
-							name: s.name,
+							name: super::restore_tool_name(tool_name_map.as_ref(), &s.name),
 							input: serde_json::json!({}),
 							cache_control: None,
 						},
@@ -1762,12 +1969,12 @@ pub mod from_responses {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<Vec<u8>, AIError> {
+	) -> Result<super::BedrockRequest, AIError> {
 		let typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
 		let explicit_thinking_budget = extract_responses_thinking_budget_tokens(req);
 		let model_id = typed.model.clone().unwrap_or_default();
-		let xlated = translate_internal(
+		let (xlated, tool_name_map) = translate_internal(
 			typed,
 			explicit_thinking_budget,
 			model_id,
@@ -1775,7 +1982,40 @@ pub mod from_responses {
 			headers,
 			prompt_caching,
 		);
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
+		Ok(super::BedrockRequest {
+			body,
+			tool_name_map,
+		})
+	}
+
+	fn collect_responses_tool_names(req: &responses::CreateResponse) -> Vec<String> {
+		use responses::{
+			InputItem, InputParam, Item, Tool, ToolChoiceFunction, ToolChoiceParam,
+		};
+		let mut names = Vec::new();
+		if let Some(tools) = &req.tools {
+			for tool in tools {
+				if let Tool::Function(func) = tool {
+					names.push(func.name.clone());
+				}
+			}
+		}
+		if let Some(ToolChoiceParam::Function(ToolChoiceFunction { name })) = &req.tool_choice {
+			names.push(name.clone());
+		}
+		let items = match &req.input {
+			InputParam::Text(_) => vec![],
+			InputParam::Items(items) => items.clone(),
+		};
+		for item in items {
+			if let InputItem::Item(Item::FunctionCall(call)) = item {
+				names.push(call.name);
+			} else if let InputItem::Item(Item::CustomToolCall(call)) = item {
+				names.push(call.name);
+			}
+		}
+		names
 	}
 
 	pub(super) fn translate_internal(
@@ -1785,12 +2025,17 @@ pub mod from_responses {
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> bedrock::ConverseRequest {
+	) -> (bedrock::ConverseRequest, super::BedrockToolNameMap) {
 		use responses::{
 			CustomToolCallOutput, CustomToolCallOutputOutput, EasyInputContent, FunctionCallOutput,
 			InputContent, InputItem, InputMessage, InputParam, InputRole, InputTextContent, Item,
 			MessageItem, OutputMessageContent, Role as ResponsesRole,
 		};
+
+		let mut tool_name_map = super::BedrockToolNameMap::default();
+		for name in collect_responses_tool_names(&req) {
+			tool_name_map.register(&name);
+		}
 
 		let supports_caching = req.model.as_deref().is_some_and(supports_prompt_caching);
 
@@ -1929,7 +2174,7 @@ pub mod from_responses {
 							role: bedrock::Role::Assistant,
 							content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
 								tool_use_id: call.call_id,
-								name: call.name,
+								name: tool_name_map.register(&call.name),
 								input,
 							})],
 						},
@@ -1971,7 +2216,7 @@ pub mod from_responses {
 							role: bedrock::Role::Assistant,
 							content: vec![bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
 								tool_use_id: call.call_id,
-								name: call.name,
+								name: tool_name_map.register(&call.name),
 								input: serde_json::json!({ "input": call.input }),
 							})],
 						},
@@ -2087,7 +2332,7 @@ pub mod from_responses {
 					use responses::Tool;
 					match tool_def {
 						Tool::Function(func) => Some(bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
-							name: func.name.clone(),
+							name: tool_name_map.register(&func.name),
 							description: func.description.clone(),
 							input_schema: Some(bedrock::ToolInputSchema::Json(
 								func.parameters.clone().unwrap_or_default(),
@@ -2108,7 +2353,9 @@ pub mod from_responses {
 					ToolChoiceParam::Mode(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any),
 					ToolChoiceParam::Mode(ToolChoiceOptions::None) => None,
 					ToolChoiceParam::Function(ToolChoiceFunction { name }) => {
-						Some(bedrock::ToolChoice::Tool { name: name.clone() })
+						Some(bedrock::ToolChoice::Tool {
+							name: tool_name_map.register(&name),
+						})
 					},
 					ToolChoiceParam::Hosted(_) => {
 						tracing::warn!("Hosted tool choice not supported for Bedrock");
@@ -2207,7 +2454,7 @@ pub mod from_responses {
 				.and_then(|tc| tc.tool_choice.as_ref())
 		);
 
-		bedrock_request
+		(bedrock_request, tool_name_map)
 	}
 
 	fn extract_responses_thinking_budget_tokens(req: &types::responses::Request) -> Option<u64> {
@@ -2266,11 +2513,15 @@ pub mod from_responses {
 		})
 	}
 
-	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
+	pub fn translate_response(
+		bytes: &Bytes,
+		model: &str,
+		tool_name_map: Option<&super::BedrockToolNameMap>,
+	) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
-		let typed = adapter.to_responses_typed();
+		let typed = adapter.to_responses_typed(tool_name_map);
 		let mut passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
 		passthrough.rest = serde_json::Value::Object(serde_json::Map::new());
@@ -2306,6 +2557,7 @@ pub mod from_responses {
 		log: AmendOnDrop,
 		model: &str,
 		_message_id: &str,
+		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		let mut saw_token = false;
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
@@ -2326,6 +2578,7 @@ pub mod from_responses {
 		// Track message item ID for text content
 		let message_item_id = format!("msg_{:016x}", rand::rng().random::<u64>());
 		let model = model.to_string();
+		let tool_name_map = tool_name_map;
 
 		let response_builder = crate::llm::types::responses::ResponseBuilder::new(response_id, model);
 
@@ -2393,11 +2646,12 @@ pub mod from_responses {
 							let tool_call_item_id = format!("call_{:016x}", rand::rng().random::<u64>());
 							let output_index = next_output_index;
 							next_output_index += 1;
+							let restored_name = super::restore_tool_name(tool_name_map.as_ref(), &tu.name);
 							tool_calls.insert(
 								start.content_block_index,
 								(
 									tool_call_item_id.clone(),
-									tu.name.clone(),
+									restored_name.clone(),
 									String::new(),
 									output_index,
 								),
@@ -2412,7 +2666,7 @@ pub mod from_responses {
 										arguments: String::new(),
 										call_id: tool_call_item_id.clone(),
 										namespace: None,
-										name: tu.name,
+										name: restored_name,
 										id: Some(tool_call_item_id),
 										status: Some(OutputStatus::InProgress),
 									}),
@@ -2945,7 +3199,10 @@ impl ConverseResponseAdapter {
 		})
 	}
 
-	fn to_completions(&self) -> crate::llm::types::completions::typed::Response {
+	fn to_completions(
+		&self,
+		tool_name_map: Option<&BedrockToolNameMap>,
+	) -> crate::llm::types::completions::typed::Response {
 		use crate::llm::types::completions::typed as completions;
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
@@ -2985,7 +3242,7 @@ impl ConverseResponseAdapter {
 						completions::MessageToolCall {
 							id: tu.tool_use_id.clone(),
 							function: completions::FunctionCall {
-								name: tu.name.clone(),
+								name: restore_tool_name(tool_name_map, &tu.name),
 								arguments: args,
 							},
 						},
@@ -3055,7 +3312,10 @@ impl ConverseResponseAdapter {
 		}
 	}
 
-	fn to_responses_typed(&self) -> responses::typed::Response {
+	fn to_responses_typed(
+		&self,
+		tool_name_map: Option<&BedrockToolNameMap>,
+	) -> responses::typed::Response {
 		use crate::llm::types::responses::typed as responsest;
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder =
@@ -3101,7 +3361,7 @@ impl ConverseResponseAdapter {
 							arguments: arguments_str,
 							call_id: tool_use.tool_use_id.clone(),
 							namespace: None,
-							name: tool_use.name.clone(),
+							name: restore_tool_name(tool_name_map, &tool_use.name),
 							id: Some(tool_use.tool_use_id.clone()),
 							status: Some(responsest::OutputStatus::Completed),
 						},
@@ -3180,10 +3440,14 @@ impl ConverseResponseAdapter {
 		response
 	}
 
-	fn to_anthropic(&self) -> Result<messages::typed::MessagesResponse, AIError> {
+	fn to_anthropic(
+		&self,
+		tool_name_map: Option<&BedrockToolNameMap>,
+	) -> Result<messages::typed::MessagesResponse, AIError> {
 		use crate::llm::types::messages::typed as messagest;
 		fn translate_content_block_to_anthropic(
 			block: &bedrock::ContentBlock,
+			tool_name_map: Option<&BedrockToolNameMap>,
 		) -> Option<messagest::ContentBlock> {
 			match block {
 				bedrock::ContentBlock::Text(text) => {
@@ -3209,7 +3473,7 @@ impl ConverseResponseAdapter {
 				},
 				bedrock::ContentBlock::ToolUse(tool_use) => Some(messagest::ContentBlock::ToolUse {
 					id: tool_use.tool_use_id.clone(),
-					name: tool_use.name.clone(),
+					name: restore_tool_name(tool_name_map, &tool_use.name),
 					input: tool_use.input.clone(),
 					cache_control: None,
 				}),
@@ -3231,7 +3495,7 @@ impl ConverseResponseAdapter {
 			.message
 			.content
 			.iter()
-			.filter_map(translate_content_block_to_anthropic)
+			.filter_map(|block| translate_content_block_to_anthropic(block, tool_name_map))
 			.collect();
 
 		let usage = self

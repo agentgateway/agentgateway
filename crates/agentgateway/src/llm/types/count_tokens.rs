@@ -46,6 +46,7 @@ impl RequestType for Request {
 			streaming: false,
 			params: Default::default(),
 			prompt: Default::default(),
+			bedrock_tool_names: None,
 		})
 	}
 
