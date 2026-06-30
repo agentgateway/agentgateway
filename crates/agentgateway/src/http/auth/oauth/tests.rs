@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use base64::Engine;
-use base64::prelude::BASE64_STANDARD;
+use base64::prelude::{BASE64_STANDARD, BASE64_URL_SAFE_NO_PAD};
 use rstest::rstest;
 use secrecy::ExposeSecret;
 use serde_json::json;
@@ -30,14 +30,6 @@ fn token_body() -> serde_json::Value {
 		"token_type": "Bearer",
 		"issued_token_type": TOKEN_TYPE_ACCESS,
 		"expires_in": 3600,
-	})
-}
-
-fn token_body_without_expiry() -> serde_json::Value {
-	json!({
-		"access_token": "upstream-token",
-		"token_type": "Bearer",
-		"issued_token_type": TOKEN_TYPE_ACCESS,
 	})
 }
 
@@ -72,7 +64,7 @@ fn base_auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 		client_auth: None,
 		additional_params: BTreeMap::new(),
 		authorization_location: AuthorizationLocation::default(),
-		cache: TokenExchangeCache::default(),
+		cache: Some(InMemoryTokenCache::default()),
 	}
 }
 
@@ -86,16 +78,28 @@ fn auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 fn exchange_req(subject: &str, token_type: &str) -> ExchangeRequest {
 	ExchangeRequest {
 		subject_token: subject.to_string().into(),
-		subject_token_type: token_type.to_string(),
+		subject_token_type: token_type.parse().unwrap(),
 		..Default::default()
 	}
 }
 
-fn jwt_with_exp(exp: u64) -> String {
-	let header = base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(br#"{"alg":"RS256","typ":"JWT"}"#);
-	let body =
-		base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#).as_bytes());
+fn jwt_with_claims(claims: &serde_json::Value) -> String {
+	let header = BASE64_URL_SAFE_NO_PAD.encode(br#"{"alg":"RS256","typ":"JWT"}"#);
+	let body = BASE64_URL_SAFE_NO_PAD.encode(claims.to_string().as_bytes());
 	format!("{header}.{body}.sig")
+}
+
+fn claims_with_may_act(
+	subject_token: &str,
+	may_act: serde_json::Value,
+) -> crate::http::jwt::Claims {
+	let serde_json::Value::Object(inner) = json!({"may_act": may_act}) else {
+		unreachable!()
+	};
+	crate::http::jwt::Claims {
+		inner,
+		jwt: subject_token.to_string().into(),
+	}
 }
 
 fn backend_info() -> crate::http::auth::BackendInfo {
@@ -138,6 +142,46 @@ fn deserializes_minimal_config() {
 		SimpleBackendReference::InlineBackend(_)
 	));
 	assert!(a.token_endpoint_path.is_empty());
+	assert!(a.cache.is_some());
+}
+
+#[test]
+fn deserializes_local_cache_config() {
+	let a: OAuthTokenExchangeAuth = serde_json::from_str(
+		r#"{
+			"host": "localhost:8089",
+			"cache": {
+				"inMemory": {
+					"defaultTtl": "42s"
+				}
+			}
+		}"#,
+	)
+	.unwrap();
+
+	assert!(a.cache.is_some());
+
+	let cfg: TokenCacheConfig =
+		serde_json::from_value(json!({"inMemory": {"defaultTtl": "42s"}})).unwrap();
+	let in_memory = cfg.in_memory.expect("in-memory cache config");
+	assert_eq!(in_memory.default_ttl, Some(Duration::from_secs(42)));
+}
+
+#[test]
+fn local_cache_config_can_disable_storage() {
+	let a: OAuthTokenExchangeAuth = serde_json::from_str(
+		r#"{
+			"host": "localhost:8089",
+			"cache": {
+				"inMemory": {
+					"maxEntries": 0
+				}
+			}
+		}"#,
+	)
+	.unwrap();
+
+	assert!(a.cache.is_none());
 }
 
 #[tokio::test]
@@ -497,92 +541,13 @@ async fn maps_error_status_by_class(#[case] status: u16, #[case] expect_client_e
 	}
 }
 
-#[rstest]
-#[case::same_subject_hits_cache(TokenExchangeCache::default(), token_body(), "subj".to_string(), 1)]
-#[case::missing_expires_in_falls_back_to_default_ttl(
-	TokenExchangeCache::new(&TokenCacheConfig {
-		default_ttl: Duration::from_secs(120),
-		..Default::default()
-	}),
-	token_body_without_expiry(),
-	"subj".to_string(),
-	1
-)]
-#[case::disabled_cache_always_misses(
-	TokenExchangeCache::new(&TokenCacheConfig {
-		max_entries: 0,
-		..Default::default()
-	}),
-	token_body(),
-	"subj".to_string(),
-	2
-)]
-#[case::expired_subject_not_cached(
-	TokenExchangeCache::default(),
-	token_body(),
-	jwt_with_exp(
-		std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.unwrap()
-			.as_secs()
-			.saturating_sub(10),
-	),
-	2
-)]
-#[tokio::test]
-async fn caches_token_per_request(
-	#[case] cache: TokenExchangeCache,
-	#[case] response_body: serde_json::Value,
-	#[case] subject: String,
-	#[case] expected_requests: usize,
-) {
-	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(response_body)).await;
-	let a = OAuthTokenExchangeAuth {
-		cache,
-		..base_auth(endpoint(&mock))
-	};
-	let client = policy_client();
-
-	let t1 = fetch_token(&client, &a, exchange_req(&subject, TOKEN_TYPE_ACCESS))
-		.await
-		.unwrap();
-	let t2 = fetch_token(&client, &a, exchange_req(&subject, TOKEN_TYPE_ACCESS))
-		.await
-		.unwrap();
-
-	assert_eq!(t1.expose_secret(), t2.expose_secret());
-	assert_eq!(
-		mock.received_requests().await.unwrap().len(),
-		expected_requests
-	);
-}
-
-#[tokio::test]
-async fn caches_per_subject_token_type() {
-	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let a = auth(endpoint(&mock));
-	let client = policy_client();
-
-	fetch_token(&client, &a, exchange_req("subj", TOKEN_TYPE_ACCESS))
-		.await
-		.unwrap();
-	fetch_token(&client, &a, exchange_req("subj", TOKEN_TYPE_JWT))
-		.await
-		.unwrap();
-	fetch_token(&client, &a, exchange_req("subj", TOKEN_TYPE_ACCESS))
-		.await
-		.unwrap();
-
-	assert_eq!(mock.received_requests().await.unwrap().len(), 2);
-}
-
 #[tokio::test]
 async fn appends_additional_params() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
 	let a = auth(endpoint(&mock));
 	let req = ExchangeRequest {
 		subject_token: "subj".to_string().into(),
-		subject_token_type: TOKEN_TYPE_ACCESS.to_string(),
+		subject_token_type: OAuthTokenType::AccessToken,
 		actor: None,
 		extra_params: vec![
 			("vendor_id".into(), "v1".into()),
@@ -672,10 +637,35 @@ fn assert_load_err(auth: OAuthTokenExchangeAuth, expected: &str) {
 		actor_token: Some(ActorTokenSpec {
 			source: AuthorizationLocation::default(),
 			token_type: default_token_type(),
+			enforce_may_act: false,
 		}),
 		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"actor_token"
+)]
+#[case::enforce_may_act_non_jwt_actor_token(
+	OAuthTokenExchangeAuth {
+		actor_token: Some(ActorTokenSpec {
+			source: AuthorizationLocation::Header {
+				name: ::http::HeaderName::from_static("x-actor-token"),
+				prefix: None,
+			},
+			token_type: TOKEN_TYPE_ACCESS.to_string(),
+			enforce_may_act: true,
+		}),
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
+	},
+	"requires actor_token.token_type"
+)]
+#[case::unsupported_subject_token_type(
+	OAuthTokenExchangeAuth {
+		subject_token: TokenSpec {
+			token_type: "urn:ietf:params:oauth:token-type:saml2".into(),
+			..TokenSpec::default()
+		},
+		..base_auth(Arc::new(SimpleBackendReference::Invalid))
+	},
+	"unsupported subject_token.token_type"
 )]
 #[case::basic_without_secret(
 	OAuthTokenExchangeAuth {
@@ -757,6 +747,16 @@ fn accepts_supported_requested_token_types_from_proto() {
 	},
 	"unsupported requested_token_type"
 )]
+#[case::unsupported_subject_token_type(
+	proto::OAuthTokenExchange {
+		subject_token: Some(proto::o_auth_token_exchange::TokenSpec {
+			token_type: "urn:ietf:params:oauth:token-type:saml2".to_string(),
+			..Default::default()
+		}),
+		..Default::default()
+	},
+	"unsupported subject_token.token_type"
+)]
 #[case::non_slash_token_endpoint_path(
 	proto::OAuthTokenExchange {
 		token_endpoint_path: Some("noslash".to_string()),
@@ -801,6 +801,24 @@ fn accepts_supported_requested_token_types_from_proto() {
 	},
 	"actor_token.source"
 )]
+#[case::enforce_may_act_non_jwt_actor_token(
+	proto::OAuthTokenExchange {
+		actor_token: Some(proto::o_auth_token_exchange::ActorToken {
+			source: Some(proto::AuthorizationLocation {
+				kind: Some(proto::authorization_location::Kind::Header(
+					proto::authorization_location::Header {
+						name: "x-actor-token".to_string(),
+						prefix: None,
+					},
+				)),
+			}),
+			token_type: TOKEN_TYPE_ACCESS.to_string(),
+			enforce_may_act: true,
+		}),
+		..Default::default()
+	},
+	"requires actor_token.token_type"
+)]
 #[case::expression_output_location(
 	proto::OAuthTokenExchange {
 		authorization_location: Some(proto::AuthorizationLocation {
@@ -819,6 +837,16 @@ fn rejects_invalid_proto_config(#[case] proto: proto::OAuthTokenExchange, #[case
 
 #[test]
 fn disabled_cache_from_proto_disables_storage() {
+	let cfg = token_cache_config_from_proto(Some(proto::o_auth_token_exchange::TokenCache {
+		in_memory: Some(proto::o_auth_token_exchange::token_cache::InMemory {
+			max_entries: Some(0),
+			default_ttl: None,
+		}),
+	}))
+	.unwrap();
+
+	assert!(cfg.is_none());
+
 	let auth = OAuthTokenExchangeAuth::try_from(proto::OAuthTokenExchange {
 		cache: Some(proto::o_auth_token_exchange::TokenCache {
 			in_memory: Some(proto::o_auth_token_exchange::token_cache::InMemory {
@@ -830,27 +858,81 @@ fn disabled_cache_from_proto_disables_storage() {
 	})
 	.unwrap();
 
-	assert!(!auth.cache.enabled());
+	assert!(auth.cache.is_none());
+}
+
+#[test]
+fn cache_from_proto_defaults_to_in_memory_cache() {
+	let cfg = token_cache_config_from_proto(None).unwrap();
+
+	assert!(cfg.unwrap().in_memory.is_none());
 }
 
 #[test]
 fn in_memory_cache_from_proto_uses_default_ttl_and_capacity_defaults() {
-	let auth = OAuthTokenExchangeAuth::try_from(proto::OAuthTokenExchange {
-		cache: Some(proto::o_auth_token_exchange::TokenCache {
-			in_memory: Some(proto::o_auth_token_exchange::token_cache::InMemory {
-				max_entries: None,
-				default_ttl: Some(prost_types::Duration {
-					seconds: 42,
-					nanos: 0,
-				}),
+	let cfg = token_cache_config_from_proto(Some(proto::o_auth_token_exchange::TokenCache {
+		in_memory: Some(proto::o_auth_token_exchange::token_cache::InMemory {
+			max_entries: None,
+			default_ttl: Some(prost_types::Duration {
+				seconds: 42,
+				nanos: 0,
 			}),
 		}),
-		..Default::default()
-	})
+	}))
+	.unwrap()
 	.unwrap();
 
-	assert!(auth.cache.enabled());
-	assert_eq!(auth.cache.default_ttl(), Duration::from_secs(42));
+	let in_memory = cfg.in_memory.expect("in-memory cache config");
+	assert_eq!(in_memory.max_entries, None);
+	assert_eq!(in_memory.default_ttl, Some(Duration::from_secs(42)));
+}
+
+#[test]
+fn in_memory_cache_from_proto_uses_default_ttl_for_negative_default_ttl() {
+	let cfg = token_cache_config_from_proto(Some(proto::o_auth_token_exchange::TokenCache {
+		in_memory: Some(proto::o_auth_token_exchange::token_cache::InMemory {
+			max_entries: None,
+			default_ttl: Some(prost_types::Duration {
+				seconds: -1,
+				nanos: 0,
+			}),
+		}),
+	}))
+	.unwrap()
+	.unwrap();
+
+	let in_memory = cfg.in_memory.expect("in-memory cache config");
+	assert_eq!(in_memory.default_ttl, None);
+}
+
+#[test]
+fn in_memory_cache_from_proto_accepts_large_default_ttl() {
+	let cfg = token_cache_config_from_proto(Some(proto::o_auth_token_exchange::TokenCache {
+		in_memory: Some(proto::o_auth_token_exchange::token_cache::InMemory {
+			max_entries: None,
+			default_ttl: Some(prost_types::Duration {
+				seconds: i64::MAX,
+				nanos: 999_999_999,
+			}),
+		}),
+	}))
+	.unwrap()
+	.unwrap();
+
+	let in_memory = cfg.in_memory.expect("in-memory cache config");
+	assert_eq!(
+		in_memory.default_ttl,
+		Some(Duration::from_secs(i64::MAX as u64) + Duration::from_nanos(999_999_999))
+	);
+}
+
+#[rstest]
+#[case(TOKEN_TYPE_ACCESS, true)]
+#[case(TOKEN_TYPE_JWT, true)]
+#[case(TOKEN_TYPE_ID, true)]
+#[case("urn:ietf:params:oauth:token-type:saml2", false)]
+fn parse_oauth_token_type_cases(#[case] token_type: &str, #[case] expected: bool) {
+	assert_eq!(token_type.parse::<OAuthTokenType>().is_ok(), expected);
 }
 
 #[tokio::test]
@@ -859,8 +941,8 @@ async fn sends_actor_token() {
 	let a = auth(endpoint(&mock));
 	let req = ExchangeRequest {
 		subject_token: "subj".to_string().into(),
-		subject_token_type: TOKEN_TYPE_ACCESS.to_string(),
-		actor: Some(("actor-tok".to_string().into(), TOKEN_TYPE_JWT.to_string())),
+		subject_token_type: OAuthTokenType::AccessToken,
+		actor: Some(("actor-tok".to_string().into(), OAuthTokenType::Jwt)),
 		extra_params: vec![],
 	};
 
@@ -869,6 +951,143 @@ async fn sends_actor_token() {
 	let pairs = sent_form_params(&mock).await;
 	assert_eq!(pairs["actor_token"], "actor-tok");
 	assert_eq!(pairs["actor_token_type"], TOKEN_TYPE_JWT);
+}
+
+fn actor_token_with_header(enforce_may_act: bool) -> ActorTokenSpec {
+	ActorTokenSpec {
+		source: AuthorizationLocation::Header {
+			name: ::http::HeaderName::from_static("x-actor-token"),
+			prefix: None,
+		},
+		token_type: TOKEN_TYPE_JWT.to_string(),
+		enforce_may_act,
+	}
+}
+
+fn request_with_actor_header(subject: &str, actor: &str) -> crate::http::Request {
+	::http::Request::builder()
+		.method(::http::Method::GET)
+		.uri("http://upstream/")
+		.header(::http::header::AUTHORIZATION, format!("Bearer {subject}"))
+		.header("x-actor-token", actor)
+		.body(Body::empty())
+		.unwrap()
+}
+
+fn backend_auth_requiring_may_act(mock: &MockServer) -> crate::http::auth::BackendAuth {
+	let a = OAuthTokenExchangeAuth {
+		actor_token: Some(actor_token_with_header(true)),
+		..auth(endpoint(mock))
+	};
+	crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a))
+}
+
+#[test]
+fn actor_token_authorization_from_proto() {
+	let proto = proto::OAuthTokenExchange {
+		actor_token: Some(proto::o_auth_token_exchange::ActorToken {
+			source: Some(proto::AuthorizationLocation {
+				kind: Some(proto::authorization_location::Kind::Header(
+					proto::authorization_location::Header {
+						name: "x-actor-token".to_string(),
+						prefix: None,
+					},
+				)),
+			}),
+			enforce_may_act: true,
+			token_type: TOKEN_TYPE_JWT.to_string(),
+		}),
+		..Default::default()
+	};
+	let auth = OAuthTokenExchangeAuth::try_from(proto).unwrap();
+	assert!(auth.actor_token.unwrap().enforce_may_act);
+}
+
+#[rstest]
+#[case::exact_match(json!({"sub": "actor-a"}), "actor-a", true)]
+#[case::actor_in_allowed_list(json!({"sub": ["actor-a", "actor-b"]}), "actor-b", true)]
+#[case::actor_not_allowed(json!({"sub": "actor-a"}), "actor-b", false)]
+#[case::non_object_may_act_claim(json!("actor-a"), "actor-a", false)]
+#[tokio::test]
+async fn enforce_may_act_checks_validated_subject_claims(
+	#[case] may_act: serde_json::Value,
+	#[case] actor_sub: &str,
+	#[case] expect_authorized: bool,
+) {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
+	let backend_auth = backend_auth_requiring_may_act(&mock);
+
+	let subject = jwt_with_claims(&json!({"sub": "subject-a"}));
+	let actor = jwt_with_claims(&json!({"sub": actor_sub}));
+	let mut req = request_with_actor_header(&subject, &actor);
+	req
+		.extensions_mut()
+		.insert(claims_with_may_act(&subject, may_act));
+
+	let result =
+		crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req).await;
+	if expect_authorized {
+		result.unwrap();
+	} else {
+		assert!(matches!(
+			result.unwrap_err(),
+			ProxyError::AuthorizationFailed
+		));
+		assert!(mock.received_requests().await.unwrap().is_empty());
+	}
+}
+
+#[tokio::test]
+async fn enforce_may_act_ignores_validated_claims_for_a_different_subject_token() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
+	let backend_auth = backend_auth_requiring_may_act(&mock);
+
+	let subject = jwt_with_claims(&json!({"may_act": {"sub": "actor-a"}}));
+	let actor = jwt_with_claims(&json!({"sub": "actor-b"}));
+	let mut req = request_with_actor_header(&subject, &actor);
+	req.extensions_mut().insert(claims_with_may_act(
+		"some-other-subject",
+		json!({"sub": "actor-b"}),
+	));
+
+	let err = crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
+		.await
+		.unwrap_err();
+	assert!(matches!(err, ProxyError::AuthorizationFailed));
+	assert!(mock.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn enforce_may_act_falls_back_to_unvalidated_subject_token_without_jwt_policy() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
+	let backend_auth = backend_auth_requiring_may_act(&mock);
+
+	let subject = jwt_with_claims(&json!({"may_act": {"sub": "actor-a"}}));
+	let mut req = request_with_actor_header(&subject, &jwt_with_claims(&json!({"sub": "actor-a"})));
+
+	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
+		.await
+		.unwrap();
+}
+
+#[tokio::test]
+async fn rejects_na_token_type_as_non_bearer() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "delegated-token",
+		"token_type": "N_A",
+		"issued_token_type": TOKEN_TYPE_ACCESS,
+	})))
+	.await;
+	let a = auth(endpoint(&mock));
+
+	let err = fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("subj", TOKEN_TYPE_ACCESS),
+	)
+	.await
+	.unwrap_err();
+	assert!(err.to_string().contains("unsupported token_type: N_A"));
 }
 
 #[test]
@@ -1028,6 +1247,7 @@ async fn dispatch_removes_input_token_locations_before_inserting_output() {
 				prefix: None,
 			},
 			token_type: TOKEN_TYPE_JWT.to_string(),
+			enforce_may_act: false,
 		}),
 		authorization_location: AuthorizationLocation::Header {
 			name: ::http::HeaderName::from_static("x-upstream-auth"),

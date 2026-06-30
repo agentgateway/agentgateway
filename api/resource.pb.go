@@ -15082,7 +15082,9 @@ type OAuthTokenExchange_ActorToken struct {
 	// RFC 8693 §3 token type URN sent as actor_token_type.
 	// e.g. "urn:ietf:params:oauth:token-type:access_token"
 	// Empty defaults to access_token, and actor_token_type is still sent.
-	TokenType     string `protobuf:"bytes,2,opt,name=token_type,json=tokenType,proto3" json:"token_type,omitempty"`
+	TokenType string `protobuf:"bytes,2,opt,name=token_type,json=tokenType,proto3" json:"token_type,omitempty"`
+	// Enforce that the subject's `may_act` claim authorizes the actor before exchanging.
+	EnforceMayAct bool `protobuf:"varint,3,opt,name=enforce_may_act,json=enforceMayAct,proto3" json:"enforce_may_act,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -15129,6 +15131,13 @@ func (x *OAuthTokenExchange_ActorToken) GetTokenType() string {
 		return x.TokenType
 	}
 	return ""
+}
+
+func (x *OAuthTokenExchange_ActorToken) GetEnforceMayAct() bool {
+	if x != nil {
+		return x.EnforceMayAct
+	}
+	return false
 }
 
 type OAuthTokenExchange_TokenCache struct {
@@ -16450,7 +16459,7 @@ const file_resource_proto_rawDesc = "" +
 	"\bhostname\x18\x02 \x01(\tR\bhostnameB\x06\n" +
 	"\x04kind\"$\n" +
 	"\x04Alpn\x12\x1c\n" +
-	"\tprotocols\x18\x01 \x03(\tR\tprotocols\"\xf4\x0e\n" +
+	"\tprotocols\x18\x01 \x03(\tR\tprotocols\"\x9d\x0f\n" +
 	"\x12OAuthTokenExchange\x12R\n" +
 	"\x0etoken_endpoint\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\rtokenEndpoint\x123\n" +
 	"\x13token_endpoint_path\x18\a \x01(\tH\x00R\x11tokenEndpointPath\x88\x01\x01\x12V\n" +
@@ -16482,12 +16491,13 @@ const file_resource_proto_rawDesc = "" +
 	"\tTokenSpec\x12H\n" +
 	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\x12\x1d\n" +
 	"\n" +
-	"token_type\x18\x02 \x01(\tR\ttokenType\x1au\n" +
+	"token_type\x18\x02 \x01(\tR\ttokenType\x1a\x9d\x01\n" +
 	"\n" +
 	"ActorToken\x12H\n" +
 	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\x12\x1d\n" +
 	"\n" +
-	"token_type\x18\x02 \x01(\tR\ttokenType\x1aC\n" +
+	"token_type\x18\x02 \x01(\tR\ttokenType\x12&\n" +
+	"\x0fenforce_may_act\x18\x03 \x01(\bR\renforceMayAct\x1aC\n" +
 	"\x15AdditionalParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a\x80\x02\n" +

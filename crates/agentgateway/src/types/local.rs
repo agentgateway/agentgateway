@@ -1883,7 +1883,7 @@ where
 		.map(|auth| match auth {
 			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(mut auth)) => {
 				auth
-					.default_backend_tls_for_https_port()
+					.apply_local_defaults()
 					.map_err(serde::de::Error::custom)?;
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.

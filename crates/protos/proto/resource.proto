@@ -1775,10 +1775,14 @@ message OAuthTokenExchange {
     // be set explicitly so actor and subject are not accidentally the same
     // credential.
     AuthorizationLocation source = 1;
+
     // RFC 8693 §3 token type URN sent as actor_token_type.
     // e.g. "urn:ietf:params:oauth:token-type:access_token"
     // Empty defaults to access_token, and actor_token_type is still sent.
     string token_type = 2;
+
+    // Enforce that the subject's `may_act` claim authorizes the actor before exchanging.
+    bool enforce_may_act = 3;
   }
 
   enum GrantType {

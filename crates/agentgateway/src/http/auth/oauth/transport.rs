@@ -8,11 +8,13 @@ use serde::Deserialize;
 use tracing::debug;
 use url::form_urlencoded;
 
-use super::{ExchangeRequest, OAuthClientAuthMethod, OAuthGrantType, OAuthTokenExchangeAuth};
+use super::{
+	ExchangeRequest, OAuthClientAuthMethod, OAuthGrantType, OAuthTokenExchangeAuth, OAuthTokenType,
+};
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::oauth::{
 	GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE, encode_client_secret_basic,
-	format_token_endpoint_error_body, supported_oauth_token_type,
+	format_token_endpoint_error_body,
 };
 use crate::http::{self, Body};
 use crate::json;
@@ -70,7 +72,7 @@ struct TokenResponse {
 impl TokenResponse {
 	fn into_token(
 		self,
-		expected_issued_token_type: Option<&str>,
+		expected_issued_token_type: Option<OAuthTokenType>,
 	) -> Result<TokenEndpointResponse, FetchError> {
 		// Only bearer-style tokens are forwarded
 		let Some(token_type) = self.token_type.as_deref() else {
@@ -85,17 +87,20 @@ impl TokenResponse {
 		}
 
 		if let Some(issued) = &self.issued_token_type {
+			let issued: OAuthTokenType = issued.parse().map_err(|_| {
+				FetchError::Upstream(anyhow!(
+					"token exchange returned unusable issued_token_type: {issued}"
+				))
+			})?;
 			if let Some(expected) = expected_issued_token_type {
 				// Requested token types must match the response
 				if issued != expected {
 					return Err(FetchError::Upstream(anyhow!(
-						"token exchange returned issued_token_type {issued}, expected {expected}"
+						"token exchange returned issued_token_type {}, expected {}",
+						issued.as_str(),
+						expected.as_str()
 					)));
 				}
-			} else if !supported_oauth_token_type(issued) {
-				return Err(FetchError::Upstream(anyhow!(
-					"token exchange returned unusable issued_token_type: {issued}"
-				)));
 			}
 		}
 
@@ -199,11 +204,11 @@ fn build_token_request_form(
 			ser
 				.append_pair("grant_type", GRANT_TYPE_TOKEN_EXCHANGE)
 				.append_pair("subject_token", subject_token)
-				.append_pair("subject_token_type", &req.subject_token_type);
+				.append_pair("subject_token_type", req.subject_token_type.as_str());
 			if let Some((actor_token, actor_token_type)) = &req.actor {
 				ser
 					.append_pair("actor_token", actor_token.expose_secret())
-					.append_pair("actor_token_type", actor_token_type);
+					.append_pair("actor_token_type", actor_token_type.as_str());
 			}
 			if let Some(rtt) = &auth.requested_token_type {
 				ser.append_pair("requested_token_type", rtt);

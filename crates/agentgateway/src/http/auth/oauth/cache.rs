@@ -1,4 +1,5 @@
 use std::fmt;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -6,61 +7,42 @@ use quick_cache::sync::{Cache, EntryAction, EntryResult};
 use secrecy::{ExposeSecret, SecretString};
 use sha2::{Digest, Sha256};
 
-use super::ExchangeRequest;
 use super::transport::TokenEndpointResponse;
+use super::{ExchangeRequest, decode_unverified_jwt_claims};
 
-const DEFAULT_CACHE_CAPACITY: usize = 8192;
-const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(300);
+pub(super) const DEFAULT_CACHE_CAPACITY: usize = 8192;
+pub(super) const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(300);
 
 // Avoid caching tokens near expiry
 const CACHE_SAFETY_MARGIN: Duration = Duration::from_secs(15);
 
-#[derive(Clone, Debug)]
-pub struct TokenCacheConfig {
-	pub max_entries: usize,
-	pub default_ttl: Duration,
-}
-
-impl Default for TokenCacheConfig {
-	fn default() -> Self {
-		Self {
-			max_entries: DEFAULT_CACHE_CAPACITY,
-			default_ttl: DEFAULT_CACHE_TTL,
-		}
-	}
-}
-
 #[derive(Clone)]
-pub(super) struct TokenExchangeCache {
-	entries: Option<Arc<Cache<TokenCacheKey, CachedToken>>>,
+pub(super) struct InMemoryTokenCache {
+	entries: Arc<Cache<TokenCacheKey, CachedToken>>,
 	default_ttl: Duration,
 }
 
-impl TokenExchangeCache {
-	pub(super) fn new(cfg: &TokenCacheConfig) -> Self {
+impl InMemoryTokenCache {
+	pub(super) fn new(max_entries: usize, default_ttl: Duration) -> Self {
 		Self {
-			entries: (cfg.max_entries > 0).then(|| Arc::new(Cache::new(cfg.max_entries))),
-			default_ttl: cfg.default_ttl,
+			entries: Arc::new(Cache::new(max_entries)),
+			default_ttl,
 		}
 	}
 
-	pub(super) async fn get_or_insert_with<F, E>(
+	pub(super) async fn get_or_insert_with<F, Fut, E>(
 		&self,
 		req: &ExchangeRequest,
 		fetch: F,
 	) -> Result<TokenCacheResult, E>
 	where
-		F: AsyncFnOnce(&ExchangeRequest) -> Result<TokenEndpointResponse, E>,
+		F: FnOnce(&ExchangeRequest) -> Fut,
+		Fut: Future<Output = Result<TokenEndpointResponse, E>>,
 	{
-		let Some(entries) = self.entries.as_ref() else {
-			let TokenEndpointResponse { access_token, .. } = fetch(req).await?;
-			return Ok(TokenCacheResult::Miss(access_token));
-		};
-
 		let now = SystemTime::now();
-		let subject_token = req.subject_token.expose_secret();
 		let cache_key = TokenCacheKey::from(req);
-		let guard = match entries
+		let guard = match self
+			.entries
 			.entry_async(&cache_key, |_key, cached| {
 				if is_fresh(cached.expires_at, now) {
 					EntryAction::Retain(cached.access_token.clone())
@@ -75,10 +57,13 @@ impl TokenExchangeCache {
 			EntryResult::Removed(_, _) | EntryResult::Timeout => unreachable!(),
 		};
 
+		let subject_token = req.subject_token.expose_secret();
+
 		let TokenEndpointResponse {
 			access_token,
 			expires_in,
 		} = fetch(req).await?;
+
 		if let Some(expires_at) = cache_expiry(expires_in, subject_token, self.default_ttl) {
 			let _ = guard.insert(CachedToken {
 				access_token: access_token.clone(),
@@ -87,27 +72,17 @@ impl TokenExchangeCache {
 		}
 		Ok(TokenCacheResult::Miss(access_token))
 	}
-
-	#[cfg(test)]
-	pub(super) fn enabled(&self) -> bool {
-		self.entries.is_some()
-	}
-
-	#[cfg(test)]
-	pub(super) fn default_ttl(&self) -> Duration {
-		self.default_ttl
-	}
 }
 
-impl Default for TokenExchangeCache {
+impl Default for InMemoryTokenCache {
 	fn default() -> Self {
-		Self::new(&TokenCacheConfig::default())
+		Self::new(DEFAULT_CACHE_CAPACITY, DEFAULT_CACHE_TTL)
 	}
 }
 
-impl fmt::Debug for TokenExchangeCache {
+impl fmt::Debug for InMemoryTokenCache {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str("TokenExchangeCache")
+		f.write_str("InMemoryTokenCache")
 	}
 }
 
@@ -120,13 +95,13 @@ impl From<&ExchangeRequest> for TokenCacheKey {
 	fn from(req: &ExchangeRequest) -> Self {
 		let mut digest = CacheKeyDigest::new();
 		digest.field(req.subject_token.expose_secret().as_bytes());
-		digest.field(req.subject_token_type.as_bytes());
+		digest.field(req.subject_token_type.as_str().as_bytes());
 
 		match &req.actor {
 			Some((token, token_type)) => {
 				digest.field([1]);
 				digest.field(token.expose_secret().as_bytes());
-				digest.field(token_type.as_bytes());
+				digest.field(token_type.as_str().as_bytes());
 			},
 			None => digest.field([0]),
 		}
@@ -185,8 +160,8 @@ fn subject_token_exp(token: &str) -> Option<SystemTime> {
 	struct ExpClaim {
 		exp: Option<u64>,
 	}
-	let decoded = jsonwebtoken::dangerous::insecure_decode::<ExpClaim>(token).ok()?;
-	UNIX_EPOCH.checked_add(Duration::from_secs(decoded.claims.exp?))
+	let claims = decode_unverified_jwt_claims::<ExpClaim>(token)?;
+	UNIX_EPOCH.checked_add(Duration::from_secs(claims.exp?))
 }
 
 fn cache_expiry(
@@ -210,15 +185,158 @@ fn is_fresh(expires_at: SystemTime, now: SystemTime) -> bool {
 
 #[cfg(test)]
 mod tests {
+	use std::convert::Infallible;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
 	use base64::Engine;
 	use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+	use rstest::rstest;
 
 	use super::*;
+
+	struct CacheFetch {
+		req: ExchangeRequest,
+		access_token: &'static str,
+		expires_in: Option<u64>,
+	}
+
+	struct CacheScenario {
+		cache: InMemoryTokenCache,
+		fetches: Vec<CacheFetch>,
+		expected_tokens: Vec<&'static str>,
+		expected_calls: usize,
+	}
+
+	fn exchange_req(subject: &str, token_type: &str) -> ExchangeRequest {
+		ExchangeRequest {
+			subject_token: subject.to_string().into(),
+			subject_token_type: token_type.parse().unwrap(),
+			..Default::default()
+		}
+	}
 
 	fn jwt_with_exp(exp: u64) -> String {
 		let header = BASE64_URL_SAFE_NO_PAD.encode(br#"{"alg":"RS256","typ":"JWT"}"#);
 		let body = BASE64_URL_SAFE_NO_PAD.encode(format!(r#"{{"exp":{exp}}}"#).as_bytes());
 		format!("{header}.{body}.sig")
+	}
+
+	async fn fetch_cached(
+		cache: &InMemoryTokenCache,
+		req: &ExchangeRequest,
+		access_token: &str,
+		expires_in: Option<u64>,
+		calls: &Arc<AtomicUsize>,
+	) -> SecretString {
+		let access_token = access_token.to_string();
+		let calls = Arc::clone(calls);
+
+		cache
+			.get_or_insert_with(req, move |_| {
+				calls.fetch_add(1, Ordering::Relaxed);
+				std::future::ready(Ok::<_, Infallible>(TokenEndpointResponse {
+					access_token: access_token.into(),
+					expires_in,
+				}))
+			})
+			.await
+			.unwrap()
+			.into_token()
+	}
+
+	fn same_request_cached_case() -> CacheScenario {
+		let req = exchange_req("subj", "urn:ietf:params:oauth:token-type:access_token");
+		CacheScenario {
+			cache: InMemoryTokenCache::default(),
+			fetches: vec![
+				CacheFetch {
+					req: req.clone(),
+					access_token: "upstream-token",
+					expires_in: Some(3600),
+				},
+				CacheFetch {
+					req,
+					access_token: "other-token",
+					expires_in: Some(3600),
+				},
+			],
+			expected_tokens: vec!["upstream-token", "upstream-token"],
+			expected_calls: 1,
+		}
+	}
+
+	fn caches_per_subject_token_type_case() -> CacheScenario {
+		CacheScenario {
+			cache: InMemoryTokenCache::default(),
+			fetches: vec![
+				CacheFetch {
+					req: exchange_req("subj", "urn:ietf:params:oauth:token-type:access_token"),
+					access_token: "access-token",
+					expires_in: Some(3600),
+				},
+				CacheFetch {
+					req: exchange_req("subj", "urn:ietf:params:oauth:token-type:jwt"),
+					access_token: "jwt-token",
+					expires_in: Some(3600),
+				},
+				CacheFetch {
+					req: exchange_req("subj", "urn:ietf:params:oauth:token-type:access_token"),
+					access_token: "other-token",
+					expires_in: Some(3600),
+				},
+			],
+			expected_tokens: vec!["access-token", "jwt-token", "access-token"],
+			expected_calls: 2,
+		}
+	}
+
+	fn missing_expires_in_falls_back_to_default_ttl_case() -> CacheScenario {
+		let req = exchange_req("subj", "urn:ietf:params:oauth:token-type:access_token");
+		CacheScenario {
+			cache: InMemoryTokenCache::new(DEFAULT_CACHE_CAPACITY, Duration::from_secs(120)),
+			fetches: vec![
+				CacheFetch {
+					req: req.clone(),
+					access_token: "upstream-token",
+					expires_in: None,
+				},
+				CacheFetch {
+					req,
+					access_token: "other-token",
+					expires_in: None,
+				},
+			],
+			expected_tokens: vec!["upstream-token", "upstream-token"],
+			expected_calls: 1,
+		}
+	}
+
+	fn expired_subject_not_cached_case() -> CacheScenario {
+		let subject = jwt_with_exp(
+			SystemTime::now()
+				.duration_since(UNIX_EPOCH)
+				.unwrap()
+				.as_secs()
+				.saturating_sub(10),
+		);
+		let req = exchange_req(&subject, "urn:ietf:params:oauth:token-type:access_token");
+		CacheScenario {
+			cache: InMemoryTokenCache::default(),
+			fetches: vec![
+				CacheFetch {
+					req: req.clone(),
+					access_token: "first-token",
+					expires_in: Some(3600),
+				},
+				CacheFetch {
+					req,
+					access_token: "second-token",
+					expires_in: Some(3600),
+				},
+			],
+			expected_tokens: vec!["first-token", "second-token"],
+			expected_calls: 2,
+		}
 	}
 
 	#[test]
@@ -294,5 +412,35 @@ mod tests {
 			now + CACHE_SAFETY_MARGIN + Duration::from_secs(1),
 			now
 		));
+	}
+
+	#[rstest]
+	#[case::same_request_cached(same_request_cached_case())]
+	#[case::per_subject_token_type(caches_per_subject_token_type_case())]
+	#[case::missing_expires_in(missing_expires_in_falls_back_to_default_ttl_case())]
+	#[case::expired_subject(expired_subject_not_cached_case())]
+	#[tokio::test]
+	async fn cache_fetch_cases(#[case] scenario: CacheScenario) {
+		let calls = Arc::new(AtomicUsize::new(0));
+		let cache = scenario.cache;
+		let mut tokens = Vec::with_capacity(scenario.fetches.len());
+
+		for fetch in scenario.fetches {
+			tokens.push(
+				fetch_cached(
+					&cache,
+					&fetch.req,
+					fetch.access_token,
+					fetch.expires_in,
+					&calls,
+				)
+				.await
+				.expose_secret()
+				.to_string(),
+			);
+		}
+
+		assert_eq!(tokens, scenario.expected_tokens);
+		assert_eq!(calls.load(Ordering::Relaxed), scenario.expected_calls);
 	}
 }

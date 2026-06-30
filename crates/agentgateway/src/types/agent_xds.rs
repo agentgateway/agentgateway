@@ -1081,9 +1081,9 @@ fn backend_auth_from_proto(
 			};
 			BackendAuth::Azure(azure_auth)
 		},
-		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(t)) => {
-			BackendAuth::OAuthTokenExchange(Box::new(auth::oauth::from_proto_with_diagnostics(
-				t,
+		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
+			BackendAuth::OAuthTokenExchange(Box::new(auth::oauth::OAuthTokenExchangeAuth::from_proto(
+				s,
 				diagnostics,
 			)?))
 		},
