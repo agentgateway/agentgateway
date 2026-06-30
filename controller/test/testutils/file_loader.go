@@ -28,6 +28,10 @@ func LoadFromFiles(filename string, scheme *runtime.Scheme, validator *crd.Valid
 	return LoadFromFileWithTransform(filename, scheme, validator, nil)
 }
 
+func LoadFromBytes(contents []byte, scheme *runtime.Scheme, validator *crd.Validator) ([]client.Object, error) {
+	return LoadFromBytesWithTransform(contents, scheme, validator, nil)
+}
+
 func LoadFromFileWithTransform(
 	filename string,
 	scheme *runtime.Scheme,
@@ -67,21 +71,44 @@ func LoadFromFileWithTransform(
 		if err != nil {
 			return nil, err
 		}
-		for _, obj := range objs {
-			clientObj, ok := obj.(client.Object)
-			if !ok {
-				return nil, fmt.Errorf("cannot convert runtime.Object to client.Object: %+v", obj)
-			}
-
-			_, isGwc := clientObj.(*gwv1.GatewayClass)
-			if !isGwc && clientObj.GetNamespace() == "" {
-				// fill in default namespace
-				clientObj.SetNamespace(GetDefaultNamespace())
-			}
-			resources = append(resources, clientObj)
+		clientObjs, err := clientObjects(objs)
+		if err != nil {
+			return nil, err
 		}
+		resources = append(resources, clientObjs...)
 	}
 
+	return resources, nil
+}
+
+func LoadFromBytesWithTransform(
+	contents []byte,
+	scheme *runtime.Scheme,
+	validator *crd.Validator,
+	transformer FileContentTransformer,
+) ([]client.Object, error) {
+	objs, err := parseBytes(contents, scheme, validator, transformer)
+	if err != nil {
+		return nil, err
+	}
+	return clientObjects(objs)
+}
+
+func clientObjects(objs []runtime.Object) ([]client.Object, error) {
+	var resources []client.Object
+	for _, obj := range objs {
+		clientObj, ok := obj.(client.Object)
+		if !ok {
+			return nil, fmt.Errorf("cannot convert runtime.Object to client.Object: %+v", obj)
+		}
+
+		_, isGwc := clientObj.(*gwv1.GatewayClass)
+		if !isGwc && clientObj.GetNamespace() == "" {
+			// fill in default namespace
+			clientObj.SetNamespace(GetDefaultNamespace())
+		}
+		resources = append(resources, clientObj)
+	}
 	return resources, nil
 }
 
@@ -95,6 +122,16 @@ func parseFile(
 	if err != nil {
 		return nil, err
 	}
+	return parseBytes(file, scheme, validator, transformer)
+}
+
+func parseBytes(
+	contents []byte,
+	scheme *runtime.Scheme,
+	validator *crd.Validator,
+	transformer FileContentTransformer,
+) ([]runtime.Object, error) {
+	file := contents
 	if transformer != nil {
 		file = []byte(transformer(string(file)))
 	}
@@ -118,7 +155,6 @@ func parseFile(
 		var meta metaOnly
 		if err := yaml.Unmarshal(objYaml, &meta); err != nil {
 			slog.Warn("failed to parse resource metadata, skipping YAML document",
-				"filename", filename,
 				"data", truncateString(string(objYaml), 100),
 			)
 			continue
@@ -131,7 +167,6 @@ func parseFile(
 		obj, err := scheme.New(gvk)
 		if err != nil {
 			slog.Warn("unknown resource kind",
-				"filename", filename,
 				"gvk", gvk.String(),
 				"data", truncateString(string(objYaml), 100),
 			)
@@ -145,7 +180,6 @@ func parseFile(
 		if err := yaml.Unmarshal(objYaml, obj); err != nil {
 			slog.Warn("failed to parse resource YAML",
 				"error", err,
-				"filename", filename,
 				"gvk", gvk.String(),
 				"resource_id", obj.(client.Object).GetName()+"."+obj.(client.Object).GetNamespace(),
 				"data", truncateString(string(objYaml), 100),
@@ -156,7 +190,7 @@ func parseFile(
 		genericResources = append(genericResources, obj)
 	}
 
-	return genericResources, err
+	return genericResources, nil
 }
 
 func truncateString(str string, num int) string {

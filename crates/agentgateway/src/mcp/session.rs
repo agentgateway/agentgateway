@@ -64,10 +64,11 @@ impl Session {
 		Self::handle_error(req_id, res).await
 	}
 
-	/// send a message to upstream server(s), when using stateless mode. In stateless mode, every message
-	/// is wrapped in an InitializeRequest (except the actual InitializeRequest from the downstream).
-	/// This ensures servers that require an InitializeRequest behave correctly.
-	/// In the future, we may have a mode where we know the downstream is stateless as well, and can just forward as-is.
+	/// Send a downstream message to upstream server(s) in gateway stateless mode.
+	/// Every non-initialize message gets a gateway-generated InitializeRequest
+	/// first, because many legacy servers require initialize before any other
+	/// request. Once downstream stateless transport is supported, remove this
+	/// wrapper and forward the message as-is.
 	pub async fn stateless_send_and_initialize(
 		&mut self,
 		parts: Parts,

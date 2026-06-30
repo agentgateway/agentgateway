@@ -45,7 +45,7 @@ impl crate::store::RequestPolicyTrait for HTTPAuthorizationSet {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct NetworkAuthorizationSet(RuleSets);
 
 impl NetworkAuthorizationSet {

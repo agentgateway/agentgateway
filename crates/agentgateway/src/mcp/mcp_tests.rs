@@ -531,6 +531,48 @@ async fn streamable_http_validates_protocol_version_header() {
 	);
 }
 
+#[tokio::test]
+async fn pre_stateless_rejects_modern_requests_before_upstream() {
+	let (mock, captured) = mock_streamable_http_server_with_capture(true).await;
+	let (_bind, io) = setup_proxy(&mock, false, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	for body in [
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 7,
+			"method": "tools/call",
+			"params": {
+				"name": "echo",
+				"arguments": {},
+				"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}
+			}
+		}),
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 8,
+			"method": "tools/call",
+			"params": {"name": "echo", "arguments": {}}
+		}),
+	] {
+		let mut req = mcp_json_post(&client, &url, &body);
+		if body["id"] == 8 {
+			req = req.header("mcp-protocol-version", "2026-07-28");
+		}
+		let response = req.send().await.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+		let body: serde_json::Value = response.json().await.unwrap();
+		assert_eq!(body["error"]["code"], -32022);
+	}
+
+	assert_eq!(mock.init_count().await, 0);
+	assert!(
+		captured.lock().unwrap().is_empty(),
+		"modern requests must be rejected before any upstream POST"
+	);
+}
+
 fn mcp_json_post<'a>(
 	client: &'a reqwest::Client,
 	url: &'a str,

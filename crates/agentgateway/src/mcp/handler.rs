@@ -586,6 +586,7 @@ impl Relay {
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
 		let mut streams = Vec::new();
+		let mut unsupported_get_streams = 0;
 
 		let futs: Vec<_> = self
 			.upstreams
@@ -605,14 +606,19 @@ impl Relay {
 					streams.push((name, s));
 				},
 				Err(e) => {
+					let is_405 = if let UpstreamError::Http(ClientError::Status(ref r)) = e
+						&& r.status() == StatusCode::METHOD_NOT_ALLOWED
+					{
+						true
+					} else {
+						false
+					};
+					if is_405 && self.upstreams.is_multiplexing {
+						debug!("upstream '{}' does not support GET stream, skipping", name);
+						unsupported_get_streams += 1;
+						continue;
+					}
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
-						let is_405 = if let UpstreamError::Http(ClientError::Status(ref r)) = e
-							&& r.status() == StatusCode::METHOD_NOT_ALLOWED
-						{
-							true
-						} else {
-							false
-						};
 						if !is_405 {
 							// per spec, a 405 is a valid response to say a GET stream is not supported so avoid log spam.
 							warn!("upstream '{}' failed for GET stream, skipping: {}", name, e);
@@ -627,6 +633,9 @@ impl Relay {
 		}
 
 		if streams.is_empty() {
+			if unsupported_get_streams > 0 && unsupported_get_streams == self.upstreams.size() {
+				return Err(crate::proxy::ProxyError::MCP(mcp::Error::GetStreamNotSupported).into());
+			}
 			// FailClosed: unreachable — InitializeRequest would have failed with NoBackends.
 			// FailOpen: keep the SSE connection open so legacy SSE clients do not immediately
 			// reconnect in a tight loop after all upstream GET streams disappear.

@@ -1,6 +1,7 @@
 package curl
 
 import (
+	"crypto/tls"
 	"net/http"
 	"strings"
 	"time"
@@ -102,5 +103,13 @@ func WithHeaders(headers map[string]string) Option {
 func WithScheme(scheme string) Option {
 	return func(config *requestConfig) {
 		config.scheme = scheme
+	}
+}
+
+// WithTLSConfig returns the Option to configure the TLS parameters like client certificate and key
+// as well as root CAs used to validate the server certificate
+func WithTLSConfig(tls *tls.Config) Option {
+	return func(config *requestConfig) {
+		config.tlsConfig = tls
 	}
 }

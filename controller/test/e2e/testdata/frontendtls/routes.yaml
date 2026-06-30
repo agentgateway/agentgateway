@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontendtls-http-route
+  namespace: agentgateway-base
+spec:
+  hostnames:
+  - "*.example.com"
+  parentRefs:
+    - name: gateway
+      namespace: agentgateway-frontendtls
+  rules:
+  - backendRefs:
+    - name: backend
+      port: 80

@@ -74,7 +74,11 @@ impl Buffer {
 				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(resp)));
 			},
 		};
-		*req.body_mut() = buffered;
+		debug!(bytes = bytes.len(), "buffered request body");
+		*req.body_mut() = crate::http::Body::from(bytes);
+		req
+			.extensions_mut()
+			.insert(crate::transport::BufferLimit::new(limit));
 
 		Ok(())
 	}
@@ -110,7 +114,11 @@ impl Buffer {
 				return Err(crate::proxy::ProxyResponse::DirectResponse(Box::new(err)));
 			},
 		};
-		*resp.body_mut() = buffered;
+		debug!(bytes = bytes.len(), "buffered response body");
+		*resp.body_mut() = crate::http::Body::from(bytes);
+		resp
+			.extensions_mut()
+			.insert(crate::transport::BufferLimit::new(limit));
 
 		Ok(())
 	}

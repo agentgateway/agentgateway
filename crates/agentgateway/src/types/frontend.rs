@@ -42,6 +42,7 @@ pub enum HTTPHeaderCase {
 }
 
 #[apply(schema!)]
+#[serde_with::skip_serializing_none]
 #[cfg_attr(feature = "schema", schemars(rename = "FrontendHTTP"))]
 pub struct HTTP {
 	/// Maximum request or response body size buffered by the frontend.

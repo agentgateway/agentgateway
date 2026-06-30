@@ -101,6 +101,23 @@ func TestConsumeTraceAcceptsStructuredPolicyEventDetails(t *testing.T) {
 	}
 }
 
+func TestConsumeTraceAcceptsLongTraceEvents(t *testing.T) {
+	message := strings.Repeat("a", 8*1024*1024)
+	line := `{"eventEnd":1,"severity":"info","message":{"type":"event","message":"` + message + `"}}`
+
+	var got traceEnvelope
+	err := consumeTrace(strings.NewReader(line+"\n"), func(_ string, envelope traceEnvelope) error {
+		got = envelope
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Message.Message != message {
+		t.Fatalf("got message length %d, want %d", len(got.Message.Message), len(message))
+	}
+}
+
 func TestSummarizePolicyEventStringDetails(t *testing.T) {
 	line := `{"eventEnd":1,"severity":"info","message":{"type":"policyEvent","kind":"cors","details":"request has no Origin header"}}`
 
@@ -115,6 +132,14 @@ func TestSummarizePolicyEventStringDetails(t *testing.T) {
 
 	summary := summarizeEnvelope(got)
 	if summary != "cors: request has no Origin header" {
+		t.Fatalf("got summary %q", summary)
+	}
+}
+
+func TestSummarizeFrontendPolicySelection(t *testing.T) {
+	summary := summarizePolicySelection("listenerFrontend", []byte(`{"http":{},"tls":{}}`))
+
+	if summary != "listener frontend effective policies: http, tls" {
 		t.Fatalf("got summary %q", summary)
 	}
 }

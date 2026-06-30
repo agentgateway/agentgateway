@@ -3398,11 +3398,18 @@ async fn incoming_connect_tunnel_reenters_bind_flow() {
 #[tokio::test]
 async fn incoming_connect_tunnel_reenters_internal_bind() {
 	let mock = simple_mock().await;
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let outer_addr = listener.local_addr().unwrap();
+	drop(listener);
+	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let inner_addr = listener.local_addr().unwrap();
+	drop(listener);
+
 	let mut outer = simple_bind();
 	outer.key = strng::literal!("outer");
-	outer.address = "127.0.0.1:15009".parse().unwrap();
+	outer.address = outer_addr;
 	let mut inner = simple_bind();
-	inner.address = "127.0.0.1:18081".parse().unwrap();
+	inner.address = inner_addr;
 	// The inner bind is routing-only: it must not open a listener socket.
 	inner.mode = BindMode::Internal;
 	let t = setup_proxy_test("{}")
@@ -3411,19 +3418,22 @@ async fn incoming_connect_tunnel_reenters_internal_bind() {
 		.with_bind(outer)
 		.with_bind(inner)
 		.with_route(basic_route(*mock.address()))
-		.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, 15009);
+		.with_connect_mode_on_port(frontend::ConnectMode::Tunnel, outer_addr.port());
 
 	// The internal bind did not open a socket, so a direct connection to its port is refused.
-	let direct = TcpStream::connect("127.0.0.1:18081").await;
+	let direct = TcpStream::connect(inner_addr).await;
 	assert!(
 		direct.is_err(),
-		"internal bind must not open a socket, but a direct connection to 127.0.0.1:18081 succeeded",
+		"internal bind must not open a socket, but a direct connection to {inner_addr} succeeded",
 	);
 
 	let mut io = t.serve_tunnel(strng::literal!("outer"));
-	io.write_all(b"CONNECT httpbingo.org:18081 HTTP/1.1\r\nHost: httpbingo.org:18081\r\n\r\n")
-		.await
-		.unwrap();
+	let connect = format!(
+		"CONNECT httpbingo.org:{} HTTP/1.1\r\nHost: httpbingo.org:{}\r\n\r\n",
+		inner_addr.port(),
+		inner_addr.port()
+	);
+	io.write_all(connect.as_bytes()).await.unwrap();
 
 	let mut response = Vec::new();
 	loop {

@@ -354,6 +354,7 @@ async fn apply_to_request_uses_explicit_max_bytes_over_extension_limit() {
 		read_request_body_bytes(&mut req).await,
 		Bytes::from_static(b"payload")
 	);
+	assert_eq!(crate::http::buffer_limit(&req), 64);
 }
 
 #[tokio::test]
@@ -536,6 +537,7 @@ async fn apply_to_response_uses_explicit_max_bytes_over_extension_limit() {
 		read_response_body_bytes(&mut resp).await,
 		Bytes::from_static(b"payload")
 	);
+	assert_eq!(crate::http::response_buffer_limit(&resp), 64);
 }
 
 #[tokio::test]
