@@ -3298,13 +3298,6 @@
             "null"
           ]
         },
-        "additionalParams": {
-          "description": "Extra form parameters appended to the token request.\nValues are CEL expressions evaluated against the incoming request.",
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/Expression"
-          }
-        },
         "clientAuth": {
           "description": "Client authentication used when calling the token endpoint.\nWhen unset, no client authentication fields are sent.",
           "anyOf": [
@@ -3316,6 +3309,13 @@
             }
           ]
         },
+        "additionalParams": {
+          "description": "Extra form parameters appended to the token request.\nValues are CEL expressions evaluated against the incoming request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "authorizationLocation": {
           "description": "Where to place the exchanged token in the backend request. Defaults to the\nAuthorization header with a \"Bearer \" prefix. The CEL `expression` source is\nnot valid here (it cannot insert).",
           "$ref": "#/$defs/AuthorizationLocation",
@@ -3325,6 +3325,18 @@
               "prefix": "Bearer "
             }
           }
+        },
+        "cache": {
+          "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `inMemory.maxEntries` to 0 to disable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "writeOnly": true
         }
       },
       "unevaluatedProperties": false,
@@ -3412,7 +3424,7 @@
           }
         },
         "tokenType": {
-          "description": "RFC 8693 token type URN; empty defaults to access_token.",
+          "description": "RFC 8693 token type URN; when omitted defaults to access_token",
           "type": "string",
           "default": "urn:ietf:params:oauth:token-type:access_token"
         }
@@ -3427,9 +3439,14 @@
           "$ref": "#/$defs/AuthorizationLocation"
         },
         "tokenType": {
-          "description": "RFC 8693 actor token type URN; empty defaults to access_token and is still sent.",
+          "description": "RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent",
           "type": "string",
           "default": "urn:ietf:params:oauth:token-type:access_token"
+        },
+        "enforceMayAct": {
+          "description": "Enforce that the subject's `may_act` claim authorizes the actor before exchanging.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -3475,6 +3492,45 @@
           "const": "clientSecretPost"
         }
       ]
+    },
+    "TokenCacheConfig": {
+      "type": "object",
+      "properties": {
+        "inMemory": {
+          "description": "In-memory token response cache. When unset, default in-memory settings are used.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InMemoryTokenCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "InMemoryTokenCacheConfig": {
+      "type": "object",
+      "properties": {
+        "maxEntries": {
+          "description": "Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "defaultTtl": {
+          "description": "TTL used when the token endpoint omits `expires_in`. Defaults to 300s.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "HTTP": {
       "type": "object",

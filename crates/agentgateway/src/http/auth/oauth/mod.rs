@@ -1,14 +1,18 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use secrecy::{ExposeSecret, SecretString};
+use serde::de::DeserializeOwned;
+use serde_json::{Map, Value};
 use tracing::{debug, trace};
 
 use super::AuthorizationLocation;
 use crate::http::Request;
 use crate::http::jwt::Claims;
-use crate::http::oauth::{TOKEN_TYPE_ACCESS, supported_oauth_token_type};
+use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_JWT};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
@@ -24,7 +28,7 @@ use crate::{apply, cel, schema_enum, ser_redact};
 mod cache;
 mod transport;
 
-use cache::{TokenCacheConfig, TokenCacheResult, TokenExchangeCache};
+use cache::{InMemoryTokenCache, TokenCacheResult};
 pub(super) use transport::FetchError;
 
 #[apply(schema!)]
@@ -71,16 +75,14 @@ pub struct OAuthTokenExchangeAuth {
 	/// and a declared response type is expected to be access_token.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	requested_token_type: Option<String>,
-	/// Extra form parameters appended to the token request.
-	/// Values are CEL expressions evaluated against the incoming request.
-	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-	additional_params: BTreeMap<String, Arc<cel::Expression>>,
-
-	// ----- Authorization server client authentication -----
 	/// Client authentication used when calling the token endpoint.
 	/// When unset, no client authentication fields are sent.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	client_auth: Option<OAuthClientAuth>,
+	/// Extra form parameters appended to the token request.
+	/// Values are CEL expressions evaluated against the incoming request.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	additional_params: BTreeMap<String, Arc<cel::Expression>>,
 
 	// ----- Output and runtime behavior -----
 	/// Where to place the exchanged token in the backend request. Defaults to the
@@ -89,25 +91,46 @@ pub struct OAuthTokenExchangeAuth {
 	#[serde(default)]
 	authorization_location: AuthorizationLocation,
 
-	// Runtime cache configuration
-	#[serde(skip)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
-	cache: TokenExchangeCache,
+	/// Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s
+	/// TTL when the token endpoint omits `expires_in`. Set `inMemory.maxEntries` to 0 to disable.
+	#[serde(
+		default = "default_token_cache",
+		deserialize_with = "deserialize_token_cache",
+		skip_serializing
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<TokenCacheConfig>"))]
+	cache: Option<InMemoryTokenCache>,
 }
 
+/// Spec-defined form parameters that `additional_params` must not override.
+const RESERVED_FORM_PARAMS: &[&str] = &[
+	"grant_type",
+	"subject_token",
+	"subject_token_type",
+	"actor_token",
+	"actor_token_type",
+	"assertion",
+	"audience",
+	"resource",
+	"scope",
+	"requested_token_type",
+	"client_id",
+	"client_secret",
+	"client_assertion",
+	"client_assertion_type",
+];
+
 impl OAuthTokenExchangeAuth {
-	pub(crate) fn default_backend_tls_for_https_port(&mut self) -> anyhow::Result<()> {
-		if self
+	pub(crate) fn apply_local_defaults(&mut self) -> anyhow::Result<()> {
+		// Endpoints on port 443 default to backend TLS unless TLS was configured
+		if matches!(
+			self.target.as_ref(),
+			SimpleBackendReference::InlineBackend(crate::types::agent::Target::Hostname(_, 443))
+		) && !self
 			.policies
 			.iter()
 			.any(|p| matches!(p, BackendTrafficPolicy::BackendTLS(_)))
 		{
-			return Ok(());
-		}
-		if matches!(
-			self.target.as_ref(),
-			SimpleBackendReference::InlineBackend(crate::types::agent::Target::Hostname(_, 443))
-		) {
 			self.policies.push(BackendTrafficPolicy::BackendTLS(
 				crate::http::backendtls::LocalBackendTLS::default().try_into()?,
 			));
@@ -130,12 +153,17 @@ impl OAuthTokenExchangeAuth {
 				return Err("actor_token is only valid with the token-exchange grant".into());
 			}
 		}
+		if let Some(actor_token) = &self.actor_token {
+			actor_token.validate_load()?;
+		}
+		validate_oauth_token_type("subject_token.token_type", &self.subject_token.token_type)?;
 		if let Some(requested) = &self.requested_token_type {
 			validate_requested_token_type(requested)?;
 		}
 		if let Some(client_auth) = &self.client_auth {
 			client_auth.validate_load()?;
 		}
+
 		for key in self.additional_params.keys() {
 			if RESERVED_FORM_PARAMS
 				.iter()
@@ -146,6 +174,7 @@ impl OAuthTokenExchangeAuth {
 				));
 			}
 		}
+
 		if matches!(
 			self.authorization_location,
 			AuthorizationLocation::Expression { .. }
@@ -155,13 +184,89 @@ impl OAuthTokenExchangeAuth {
 		Ok(())
 	}
 
-	fn expected_issued_token_type(&self) -> Option<&str> {
+	pub(crate) fn from_proto(
+		t: proto::OAuthTokenExchange,
+		diagnostics: &mut Diagnostics,
+	) -> Result<Self, ProtoError> {
+		use proto::o_auth_token_exchange::GrantType;
+
+		let token_endpoint_path = t.token_endpoint_path.unwrap_or_default();
+
+		let grant_type = match GrantType::try_from(t.grant_type) {
+			Ok(GrantType::Unspecified | GrantType::TokenExchange) => OAuthGrantType::TokenExchange,
+			Ok(GrantType::JwtBearer) => OAuthGrantType::JwtBearer,
+			Err(_) => return Err(ProtoError::EnumParse("unknown oauth grant type".into())),
+		};
+
+		let subject_token = t
+			.subject_token
+			.map(|s| token_spec_from_proto(s, diagnostics))
+			.transpose()?
+			.unwrap_or_default();
+
+		let actor_token = t
+			.actor_token
+			.map(|s| actor_token_from_proto(s, diagnostics))
+			.transpose()?;
+
+		let requested_token_type = t
+			.requested_token_type
+			.and_then(|s| (!s.is_empty()).then_some(s));
+
+		let client_auth = t.client_auth.map(OAuthClientAuth::try_from).transpose()?;
+
+		let authorization_location =
+			optional_authorization_location(t.authorization_location.as_ref())?.unwrap_or_default();
+
+		let additional_params = t
+			.additional_params
+			.into_iter()
+			.map(|(k, v)| {
+				let expr = permissive_cel_expression_arc(
+					diagnostics,
+					format!("backendAuth.oauth.additionalParams.{k}"),
+					v,
+				);
+				(k, expr)
+			})
+			.collect::<BTreeMap<_, _>>();
+
+		let cache = token_cache_from_proto(t.cache)?;
+
+		let auth = Self {
+			target: Arc::new(backend_ref_from_proto(t.token_endpoint)),
+			// Inline connection policies are not supported from xDS;
+			// the backend resource carries its own policies there.
+			policies: Vec::new(),
+			token_endpoint_path,
+			grant_type,
+			subject_token,
+			actor_token,
+			audiences: t.audiences,
+			scopes: t.scopes,
+			resources: t.resources,
+			requested_token_type,
+			client_auth,
+			additional_params,
+			authorization_location,
+			cache,
+		};
+		auth.validate_load().map_err(ProtoError::Generic)?;
+		Ok(auth)
+	}
+
+	fn expected_issued_token_type(&self) -> Option<OAuthTokenType> {
 		match self.grant_type {
 			OAuthGrantType::TokenExchange => Some(
 				self
 					.requested_token_type
 					.as_deref()
-					.unwrap_or(TOKEN_TYPE_ACCESS),
+					.map(|token_type| {
+						token_type
+							.parse()
+							.expect("requested token type must be validated at load")
+					})
+					.unwrap_or_default(),
 			),
 			OAuthGrantType::JwtBearer => None,
 		}
@@ -198,13 +303,7 @@ impl OAuthTokenExchangeAuth {
 		let actor = self
 			.actor_token
 			.as_ref()
-			.map(|spec| -> Result<_, ProxyError> {
-				let token = extract_token(&spec.source, req).ok_or_else(|| {
-					debug!("oauth token exchange actor token missing");
-					ProxyError::InvalidRequest
-				})?;
-				Ok((SecretString::from(token), spec.token_type.clone()))
-			})
+			.map(|spec| actor_token_from_request(spec, req, &subject_token))
 			.transpose()?;
 		let extra_params = self.evaluate_additional_params(req).map_err(|e| {
 			debug!("oauth token exchange additional parameter evaluation failed: {e}");
@@ -213,7 +312,7 @@ impl OAuthTokenExchangeAuth {
 
 		Ok(ExchangeRequest {
 			subject_token: subject_token.into(),
-			subject_token_type: self.subject_token.token_type.clone(),
+			subject_token_type: self.subject_token.token_type(),
 			actor,
 			extra_params,
 		})
@@ -235,6 +334,7 @@ impl OAuthTokenExchangeAuth {
 		// "user configured this" and "downstream must not rewrite Authorization".
 		// Keep OAuth's old `true` behavior until those meanings are separated.
 		self.authorization_location.insert(req, access_token)?;
+
 		Ok(true)
 	}
 }
@@ -294,6 +394,7 @@ impl TryFrom<proto::o_auth_token_exchange::ClientAuth> for OAuthClientAuth {
 
 	fn try_from(c: proto::o_auth_token_exchange::ClientAuth) -> Result<Self, Self::Error> {
 		use proto::o_auth_token_exchange::client_auth::Method;
+
 		let method = match Method::try_from(c.method) {
 			Ok(Method::Unspecified | Method::ClientSecretBasic) => {
 				OAuthClientAuthMethod::ClientSecretBasic
@@ -335,13 +436,44 @@ pub enum OAuthGrantType {
 	JwtBearer,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+enum OAuthTokenType {
+	#[default]
+	AccessToken,
+	Jwt,
+	IdToken,
+}
+
+impl OAuthTokenType {
+	fn as_str(self) -> &'static str {
+		match self {
+			Self::AccessToken => TOKEN_TYPE_ACCESS,
+			Self::Jwt => TOKEN_TYPE_JWT,
+			Self::IdToken => TOKEN_TYPE_ID,
+		}
+	}
+}
+
+impl FromStr for OAuthTokenType {
+	type Err = ();
+
+	fn from_str(token_type: &str) -> Result<Self, Self::Err> {
+		match token_type {
+			TOKEN_TYPE_ACCESS => Ok(Self::AccessToken),
+			TOKEN_TYPE_JWT => Ok(Self::Jwt),
+			TOKEN_TYPE_ID => Ok(Self::IdToken),
+			_ => Err(()),
+		}
+	}
+}
+
 #[apply(schema!)]
 pub struct TokenSpec {
 	/// Where the token is read from in the incoming request. The CEL `expression`
 	/// source is permitted (extraction only).
 	#[serde(default)]
 	source: AuthorizationLocation,
-	/// RFC 8693 token type URN; empty defaults to access_token.
+	/// RFC 8693 token type URN; when omitted defaults to access_token
 	#[serde(default = "default_token_type")]
 	token_type: String,
 }
@@ -352,9 +484,31 @@ pub struct ActorTokenSpec {
 	/// `expression` source is permitted (extraction only). Unlike subject tokens,
 	/// actor tokens have no default source.
 	source: AuthorizationLocation,
-	/// RFC 8693 actor token type URN; empty defaults to access_token and is still sent.
+	/// RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent
 	#[serde(default = "default_token_type")]
 	token_type: String,
+	/// Enforce that the subject's `may_act` claim authorizes the actor before exchanging.
+	#[serde(default)]
+	enforce_may_act: bool,
+}
+
+impl ActorTokenSpec {
+	fn validate_load(&self) -> Result<(), String> {
+		let token_type = validate_oauth_token_type("actor_token.token_type", &self.token_type)?;
+		if self.enforce_may_act && token_type != OAuthTokenType::Jwt {
+			return Err(format!(
+				"actor_token.enforce_may_act requires actor_token.token_type {TOKEN_TYPE_JWT}"
+			));
+		}
+		Ok(())
+	}
+
+	fn token_type(&self) -> OAuthTokenType {
+		self
+			.token_type
+			.parse()
+			.expect("actor token type must be validated at load")
+	}
 }
 
 impl Default for TokenSpec {
@@ -370,51 +524,116 @@ fn default_token_type() -> String {
 	TOKEN_TYPE_ACCESS.to_string()
 }
 
-fn positive_duration_from_proto(
-	field: &str,
-	d: prost_types::Duration,
-) -> Result<Duration, ProtoError> {
-	if d.seconds < 0 || d.nanos < 0 {
-		return Err(ProtoError::Generic(format!("{field} must not be negative")));
+impl TokenSpec {
+	fn token_type(&self) -> OAuthTokenType {
+		self
+			.token_type
+			.parse()
+			.expect("subject token type must be validated at load")
 	}
-	if d.nanos >= 1_000_000_000 {
-		return Err(ProtoError::Generic(format!(
-			"{field} nanos must be less than 1000000000"
-		)));
+}
+
+#[derive(Default)]
+#[apply(schema!)]
+struct TokenCacheConfig {
+	/// In-memory token response cache. When unset, default in-memory settings are used.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	in_memory: Option<InMemoryTokenCacheConfig>,
+}
+
+#[derive(Default)]
+#[apply(schema!)]
+struct InMemoryTokenCacheConfig {
+	/// Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	max_entries: Option<usize>,
+	/// TTL used when the token endpoint omits `expires_in`. Defaults to 300s.
+	#[serde(
+		default,
+		with = "crate::serdes::serde_dur_option",
+		skip_serializing_if = "Option::is_none"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	default_ttl: Option<Duration>,
+}
+
+impl TokenCacheConfig {
+	fn in_memory(max_entries: Option<usize>, default_ttl: Option<Duration>) -> Option<Self> {
+		if matches!(max_entries, Some(0)) {
+			return None;
+		}
+		Some(Self {
+			in_memory: Some(InMemoryTokenCacheConfig {
+				max_entries,
+				default_ttl,
+			}),
+		})
 	}
-	let duration = Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64);
-	if duration.is_zero() {
-		return Err(ProtoError::Generic(format!(
-			"{field} must be greater than zero"
-		)));
+
+	fn into_cache(self) -> Option<InMemoryTokenCache> {
+		let in_memory = self.in_memory.unwrap_or_default();
+		let max_entries = match in_memory.max_entries {
+			Some(0) => return None,
+			Some(max_entries) => max_entries,
+			None => cache::DEFAULT_CACHE_CAPACITY,
+		};
+		let default_ttl = in_memory
+			.default_ttl
+			.filter(|d| !d.is_zero())
+			.unwrap_or(cache::DEFAULT_CACHE_TTL);
+		Some(InMemoryTokenCache::new(max_entries, default_ttl))
 	}
-	Ok(duration)
+}
+
+fn default_token_cache() -> Option<InMemoryTokenCache> {
+	Some(InMemoryTokenCache::default())
+}
+
+fn deserialize_token_cache<'de, D>(deserializer: D) -> Result<Option<InMemoryTokenCache>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	use serde::Deserialize;
+
+	let cache = Option::<TokenCacheConfig>::deserialize(deserializer)?;
+	Ok(cache.unwrap_or_default().into_cache())
+}
+
+fn token_cache_config_from_parts(
+	max_entries: Option<usize>,
+	default_ttl: Option<Duration>,
+) -> Option<TokenCacheConfig> {
+	TokenCacheConfig::in_memory(max_entries, default_ttl)
 }
 
 fn token_cache_config_from_proto(
 	cache: Option<proto::o_auth_token_exchange::TokenCache>,
-) -> Result<TokenCacheConfig, ProtoError> {
-	let defaults = TokenCacheConfig::default();
+) -> Result<Option<TokenCacheConfig>, ProtoError> {
 	let Some(in_memory) = cache.and_then(|c| c.in_memory) else {
-		return Ok(defaults);
+		return Ok(Some(TokenCacheConfig::default()));
 	};
 
-	Ok(TokenCacheConfig {
-		// max_entries == 0 disables the cache; unset falls back to the default capacity.
-		max_entries: in_memory
+	let default_ttl = in_memory
+		.default_ttl
+		.and_then(|d| Duration::try_from(d).ok());
+
+	Ok(token_cache_config_from_parts(
+		in_memory
 			.max_entries
-			.map_or(defaults.max_entries, |n| n as usize),
-		default_ttl: in_memory
-			.default_ttl
-			.map(|d| positive_duration_from_proto("cache.in_memory.default_ttl", d))
-			.transpose()?
-			.unwrap_or(defaults.default_ttl),
-	})
+			.map(|max_entries| max_entries as usize),
+		default_ttl,
+	))
+}
+
+fn token_cache_from_proto(
+	cache: Option<proto::o_auth_token_exchange::TokenCache>,
+) -> Result<Option<InMemoryTokenCache>, ProtoError> {
+	Ok(token_cache_config_from_proto(cache)?.and_then(TokenCacheConfig::into_cache))
 }
 
 fn token_spec_from_proto(
-	diagnostics: &mut Diagnostics,
 	spec: proto::o_auth_token_exchange::TokenSpec,
+	diagnostics: &mut Diagnostics,
 ) -> Result<TokenSpec, ProtoError> {
 	let token_type = if spec.token_type.is_empty() {
 		default_token_type()
@@ -433,8 +652,8 @@ fn token_spec_from_proto(
 }
 
 fn actor_token_from_proto(
-	diagnostics: &mut Diagnostics,
 	spec: proto::o_auth_token_exchange::ActorToken,
+	diagnostics: &mut Diagnostics,
 ) -> Result<ActorTokenSpec, ProtoError> {
 	// Unlike the subject token, the actor token has no default source: it must be
 	// explicit so actor and subject can't accidentally be the same credential.
@@ -456,6 +675,7 @@ fn actor_token_from_proto(
 			AuthorizationLocation::default(),
 		)?,
 		token_type,
+		enforce_may_act: spec.enforce_may_act,
 	})
 }
 
@@ -478,104 +698,22 @@ fn backend_ref_from_proto(target: Option<proto::BackendReference>) -> SimpleBack
 	}
 }
 
-pub(crate) fn from_proto_with_diagnostics(
-	t: proto::OAuthTokenExchange,
-	diagnostics: &mut Diagnostics,
-) -> Result<OAuthTokenExchangeAuth, ProtoError> {
-	use proto::o_auth_token_exchange::GrantType;
-	let opt = |s: String| (!s.is_empty()).then_some(s);
-
-	let grant_type = match GrantType::try_from(t.grant_type) {
-		Ok(GrantType::Unspecified | GrantType::TokenExchange) => OAuthGrantType::TokenExchange,
-		Ok(GrantType::JwtBearer) => OAuthGrantType::JwtBearer,
-		Err(_) => return Err(ProtoError::EnumParse("unknown oauth grant type".into())),
-	};
-	let requested_token_type = t.requested_token_type.and_then(opt);
-
-	let subject_token = t
-		.subject_token
-		.map(|s| token_spec_from_proto(diagnostics, s))
-		.transpose()?
-		.unwrap_or_default();
-	let actor_token = t
-		.actor_token
-		.map(|s| actor_token_from_proto(diagnostics, s))
-		.transpose()?;
-
-	let token_endpoint_path = t.token_endpoint_path.unwrap_or_default();
-
-	let additional_params = t
-		.additional_params
-		.into_iter()
-		.map(|(k, v)| {
-			let expr = permissive_cel_expression_arc(
-				diagnostics,
-				format!("backendAuth.oauth.additionalParams.{k}"),
-				v,
-			);
-			(k, expr)
-		})
-		.collect::<BTreeMap<_, _>>();
-
-	let cache_config = token_cache_config_from_proto(t.cache)?;
-
-	let auth = OAuthTokenExchangeAuth {
-		target: Arc::new(backend_ref_from_proto(t.token_endpoint)),
-		// Inline connection policies are not supported from xDS;
-		// the backend resource carries its own policies there.
-		policies: Vec::new(),
-		token_endpoint_path,
-		grant_type,
-		subject_token,
-		actor_token,
-		audiences: t.audiences,
-		scopes: t.scopes,
-		resources: t.resources,
-		requested_token_type,
-		client_auth: t.client_auth.map(OAuthClientAuth::try_from).transpose()?,
-		additional_params,
-		authorization_location: optional_authorization_location(t.authorization_location.as_ref())?
-			.unwrap_or_default(),
-		cache: TokenExchangeCache::new(&cache_config),
-	};
-	auth.validate_load().map_err(ProtoError::Generic)?;
-	Ok(auth)
-}
-
 impl TryFrom<proto::OAuthTokenExchange> for OAuthTokenExchangeAuth {
 	type Error = ProtoError;
 
 	fn try_from(t: proto::OAuthTokenExchange) -> Result<Self, Self::Error> {
-		from_proto_with_diagnostics(t, &mut Diagnostics::default())
+		Self::from_proto(t, &mut Diagnostics::default())
 	}
 }
 
-/// Spec-defined form parameters that `additional_params` must not override.
-const RESERVED_FORM_PARAMS: &[&str] = &[
-	"grant_type",
-	"subject_token",
-	"subject_token_type",
-	"actor_token",
-	"actor_token_type",
-	"assertion",
-	"audience",
-	"resource",
-	"scope",
-	"requested_token_type",
-	"client_id",
-	"client_secret",
-	"client_assertion",
-	"client_assertion_type",
-];
-
 /// Per-request inputs to a token exchange, assembled by the dispatch layer so the
 /// exchange itself stays request-free.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct ExchangeRequest {
 	subject_token: SecretString,
-	subject_token_type: String,
+	subject_token_type: OAuthTokenType,
 	/// RFC 8693 delegation actor token and its token type, when configured.
-	actor: Option<(SecretString, String)>,
+	actor: Option<(SecretString, OAuthTokenType)>,
 	extra_params: Vec<(String, String)>,
 }
 
@@ -617,15 +755,94 @@ fn extract_bearer_claims_token(source: &AuthorizationLocation, req: &Request) ->
 		.map(|claims| claims.jwt.expose_secret().to_string())
 }
 
-fn validate_requested_token_type(requested: &str) -> Result<(), String> {
-	if supported_oauth_token_type(requested) {
-		return Ok(());
+fn actor_token_from_request(
+	spec: &ActorTokenSpec,
+	req: &Request,
+	subject_token: &str,
+) -> Result<(SecretString, OAuthTokenType), ProxyError> {
+	let token = extract_token(&spec.source, req).ok_or_else(|| {
+		debug!("oauth token exchange actor token missing");
+		ProxyError::InvalidRequest
+	})?;
+	if spec.enforce_may_act && !may_act_authorizes(req, subject_token, &token) {
+		debug!("oauth token exchange actor is not authorized by the subject's may_act claim");
+		return Err(ProxyError::AuthorizationFailed);
 	}
-	Err(format!(
-		"unsupported requested_token_type {requested:?}; supported values are {TOKEN_TYPE_ACCESS}, {}, and {}",
-		crate::http::oauth::TOKEN_TYPE_JWT,
-		crate::http::oauth::TOKEN_TYPE_ID,
-	))
+	Ok((SecretString::from(token), spec.token_type()))
+}
+
+fn may_act_authorizes(req: &Request, subject_token: &str, actor_token: &str) -> bool {
+	let Some(may_act) = subject_may_act_claim(req, subject_token) else {
+		return false;
+	};
+	if may_act.is_empty() {
+		// vacuously true otherwise: `all()` over an empty map would authorize any actor.
+		return false;
+	}
+	let Some(actor_claims) = decode_unverified_jwt_claims::<Map<String, Value>>(actor_token) else {
+		return false;
+	};
+	may_act
+		.iter()
+		.all(|(k, expected)| claim_satisfies(actor_claims.get(k), expected))
+}
+
+fn subject_may_act_claim<'a>(
+	req: &'a Request,
+	subject_token: &str,
+) -> Option<Cow<'a, Map<String, Value>>> {
+	let validated_claims = req
+		.extensions()
+		.get::<Claims>()
+		.filter(|claims| claims.jwt.expose_secret() == subject_token);
+	if let Some(claims) = validated_claims {
+		return may_act_claim_from_value(claims.inner.get("may_act")).map(Cow::Borrowed);
+	}
+
+	#[derive(serde::Deserialize)]
+	struct SubjectMayActClaim {
+		may_act: Option<Value>,
+	}
+	let claims = decode_unverified_jwt_claims::<SubjectMayActClaim>(subject_token)?;
+	may_act_claim_from_value(claims.may_act.as_ref()).map(|may_act| Cow::Owned(may_act.clone()))
+}
+
+fn may_act_claim_from_value(value: Option<&Value>) -> Option<&Map<String, Value>> {
+	match value? {
+		Value::Object(may_act) => Some(may_act),
+		_ => {
+			debug!("oauth token exchange subject may_act claim must be an object");
+			None
+		},
+	}
+}
+
+// Decodes JWT-shaped tokens without signature or expiry validation. This is not
+// a trust boundary; callers use it only for best-effort local checks.
+fn decode_unverified_jwt_claims<T: DeserializeOwned>(token: &str) -> Option<T> {
+	jsonwebtoken::dangerous::insecure_decode::<T>(token)
+		.ok()
+		.map(|decoded| decoded.claims)
+}
+
+fn claim_satisfies(actor_value: Option<&Value>, expected: &Value) -> bool {
+	match expected {
+		Value::Array(allowed) => actor_value.is_some_and(|v| allowed.contains(v)),
+		_ => actor_value == Some(expected),
+	}
+}
+
+fn validate_oauth_token_type(field_name: &str, token_type: &str) -> Result<OAuthTokenType, String> {
+	token_type.parse().map_err(|_| {
+		format!(
+			"unsupported {field_name} {token_type:?}; supported values are {TOKEN_TYPE_ACCESS}, {}, and {}",
+			TOKEN_TYPE_JWT, TOKEN_TYPE_ID,
+		)
+	})
+}
+
+fn validate_requested_token_type(requested: &str) -> Result<OAuthTokenType, String> {
+	validate_oauth_token_type("requested_token_type", requested)
 }
 
 async fn fetch_token(
@@ -633,12 +850,21 @@ async fn fetch_token(
 	auth: &OAuthTokenExchangeAuth,
 	req: ExchangeRequest,
 ) -> Result<SecretString, FetchError> {
-	let result = auth
-		.cache
-		.get_or_insert_with(&req, async |req| {
-			transport::request_token(client, auth, req).await
-		})
-		.await?;
+	let result = match auth.cache.as_ref() {
+		Some(cache) => {
+			cache
+				.get_or_insert_with(&req, |req| {
+					let req = req.clone();
+					async move { transport::request_token(client, auth, &req).await }
+				})
+				.await?
+		},
+		None => {
+			let transport::TokenEndpointResponse { access_token, .. } =
+				transport::request_token(client, auth, &req).await?;
+			TokenCacheResult::Miss(access_token)
+		},
+	};
 
 	// TODO: export metrics
 	match &result {

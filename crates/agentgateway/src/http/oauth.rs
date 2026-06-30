@@ -10,9 +10,10 @@ use crate::schema;
 pub(crate) const GRANT_TYPE_TOKEN_EXCHANGE: &str =
 	"urn:ietf:params:oauth:grant-type:token-exchange";
 pub(crate) const GRANT_TYPE_JWT_BEARER: &str = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+
 pub(crate) const TOKEN_TYPE_ACCESS: &str = "urn:ietf:params:oauth:token-type:access_token";
-pub(crate) const TOKEN_TYPE_JWT: &str = "urn:ietf:params:oauth:token-type:jwt";
 pub(crate) const TOKEN_TYPE_ID: &str = "urn:ietf:params:oauth:token-type:id_token";
+pub(crate) const TOKEN_TYPE_JWT: &str = "urn:ietf:params:oauth:token-type:jwt";
 
 #[apply(schema!)]
 #[derive(Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -69,13 +70,6 @@ pub(crate) fn parse_token_endpoint_auth_methods(
 	}
 }
 
-pub(crate) fn supported_oauth_token_type(token_type: &str) -> bool {
-	matches!(
-		token_type,
-		TOKEN_TYPE_ACCESS | TOKEN_TYPE_JWT | TOKEN_TYPE_ID
-	)
-}
-
 /// build `base64(urlencode(client_id) + ":" + urlencode(client_secret))` credential
 pub(crate) fn encode_client_secret_basic(client_id: &str, client_secret: &SecretString) -> String {
 	use url::form_urlencoded::byte_serialize;
@@ -113,11 +107,7 @@ mod tests {
 	use base64::prelude::BASE64_STANDARD;
 	use rstest::rstest;
 
-	use super::{
-		TokenEndpointAuth, authorization_server_metadata_url, encode_client_secret_basic,
-		format_token_endpoint_error_body, parse_token_endpoint_auth_methods,
-		supported_oauth_token_type, *,
-	};
+	use super::*;
 
 	#[test]
 	fn authorization_server_metadata_url_supports_path_based_issuers() {
@@ -147,15 +137,6 @@ mod tests {
 		let actual = parse_token_endpoint_auth_methods(methods);
 		let expected = expected.map_err(str::to_string);
 		assert_eq!(actual, expected);
-	}
-
-	#[rstest]
-	#[case(TOKEN_TYPE_ACCESS, true)]
-	#[case(TOKEN_TYPE_JWT, true)]
-	#[case(TOKEN_TYPE_ID, true)]
-	#[case("urn:ietf:params:oauth:token-type:saml2", false)]
-	fn supported_oauth_token_type_cases(#[case] token_type: &str, #[case] expected: bool) {
-		assert_eq!(supported_oauth_token_type(token_type), expected);
 	}
 
 	#[test]
