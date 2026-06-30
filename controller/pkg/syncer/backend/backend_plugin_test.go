@@ -2,7 +2,6 @@ package agentgatewaybackend_test
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"testing"
 
@@ -828,7 +827,7 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 	for _, ref := range agentgatewaybackend.BuildAgwBackendReferences(backend) {
 		got = append(got, ref.ResourceName())
 	}
-	sort.Strings(got)
+	slices.Sort(got)
 
 	assert.Equal(t, got, []string{
 		"AgentgatewayBackend/test-ns/custom-backend/AgentgatewayBackend/test-ns/custom-backend/InferencePool/test-ns/llm-pool",

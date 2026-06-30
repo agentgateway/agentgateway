@@ -15,7 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -830,7 +830,7 @@ func summarizePolicySelection(phase string, raw json.RawMessage) string {
 		for key := range payload {
 			keys = append(keys, key)
 		}
-		sort.Strings(keys)
+		slices.Sort(keys)
 		if len(keys) == 0 {
 			return prefix + ": none"
 		}
