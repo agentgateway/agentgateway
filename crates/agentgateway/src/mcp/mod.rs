@@ -2,6 +2,7 @@ pub(crate) mod auth;
 pub(crate) mod guardrails;
 mod handler;
 mod mergestream;
+pub(crate) mod protocol;
 mod rbac;
 mod router;
 mod session;
@@ -17,7 +18,7 @@ use std::time::Duration;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
-use rmcp::model::RequestId;
+use rmcp::model::{ErrorCode, ErrorData, JsonRpcError, RequestId};
 pub use router::App;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -72,8 +73,14 @@ pub enum Error {
 	SessionIdRequired,
 	#[error("invalid session ID header")]
 	InvalidSessionIdHeader,
-	#[error("invalid MCP protocol version header")]
-	InvalidProtocolVersion,
+	#[error("unsupported MCP protocol version: {1}")]
+	UnsupportedVersion(Option<RequestId>, String),
+	#[error("MCP protocol version header/body mismatch")]
+	VersionMismatch(Option<RequestId>),
+	#[error("{1} header/body mismatch")]
+	HeaderBodyMismatch(Option<RequestId>, &'static str),
+	#[error("invalid MCP routing header: {1}")]
+	InvalidRoutingHeader(Option<RequestId>, String),
 	#[error("failed to start stdio server: {0}")]
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
@@ -97,6 +104,70 @@ pub enum Error {
 	OpenAPI(upstream::OpenAPIParseError),
 	#[error("no backends configured")]
 	NoBackends,
+}
+
+impl Error {
+	pub fn jsonrpc_error_body(&self) -> Option<String> {
+		let (id, error) = match self {
+			Error::SendError(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::INTERNAL_ERROR,
+					message: format!("failed to send message: {self}").into(),
+					data: None,
+				},
+			),
+			Error::Authorization(id, _, _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::INVALID_PARAMS,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
+			Error::UnsupportedVersion(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: protocol::UNSUPPORTED_PROTOCOL_VERSION,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::VersionMismatch(Some(id)) => (
+				id.clone(),
+				ErrorData {
+					code: protocol::HEADER_MISMATCH,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::HeaderBodyMismatch(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: protocol::HEADER_MISMATCH,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::InvalidRoutingHeader(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: protocol::HEADER_MISMATCH,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			_ => return None,
+		};
+
+		serde_json::to_string(&JsonRpcError {
+			jsonrpc: Default::default(),
+			id,
+			error,
+		})
+		.ok()
+	}
 }
 
 impl From<Error> for ProxyError {

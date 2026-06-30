@@ -775,6 +775,7 @@ impl Gateway {
 						};
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
+						downstream.ext_mut().insert(BufferLimit::new(buffer));
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
 					});
 
@@ -872,10 +873,12 @@ impl Gateway {
 		stream.set_transport_metrics(transport_metrics, transport_labels);
 
 		let def = frontend::HTTP::default();
+		let tunneled_buffer = stream.ext::<BufferLimit>().map(|b| b.0);
 		let buffer = policies
 			.http
 			.as_ref()
 			.map(|h| h.max_buffer_size)
+			.or(tunneled_buffer)
 			.unwrap_or(def.max_buffer_size);
 
 		let max_connection_duration = policies
