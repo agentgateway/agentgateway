@@ -15,7 +15,7 @@ linters:
     - copyloopvar
     - forbidigo
     - ginkgolinter
-    - gomodguard
+    - gomodguard_v2
     - gosec
     - importas
     - ineffassign
@@ -47,16 +47,55 @@ linters:
         settings:
           linters:
             enable:
-            - "*"
+            - conditions
+            - conflictingmarkers
+            - dependenttags
+            - duplicatemarkers
+            - forbiddenmarkers
+            - nofloats
+            - nophase
+            - nonullable
+            - noreferences
+            - notimestamp
+            - optionalorrequired
+            - jsontags
+            - statusoptional
+            - statussubresource
+            - uniquemarkers
             disable:
-            - commentstart
-            - integers
-            - maxlength
-            - nobools
-            - nomaps
-            - optionalfields
-            - ssatags
+            - "*"
           lintersConfig:
+            conflictingmarkers:
+              conflicts:
+              - name: "default_vs_required"
+                sets:
+                  - ["default", "kubebuilder:default"]
+                  - ["required", "kubebuilder:validation:Required", "k8s:required"]
+                description: "A field with a default value cannot be required"
+            dependenttags:
+              rules:
+                - identifier: "kubebuilder:default"
+                  dependsOn: ["optional"]
+                  type: All
+            forbiddenmarkers:
+              markers:
+                - identifier: "+kubebuilder:pruning:PreserveUnknownFields"
+                - identifier: "+kubebuilder:validation:XPreserveUnknownFields"
+                - identifier: "+kubebuilder:validation:items:XPreserveUnknownFields"
+                - identifier: "+kubebuilder:validation:EmbeddedResource"
+                - identifier: "+kubebuilder:validation:XEmbeddedResource"
+                - identifier: "+kubebuilder:validation:items:XEmbeddedResource"
+            namingconventions:
+              conventions:
+                - name: "placeholder_convention"
+                  violationMatcher: "^PLACEHOLDER_$"
+                  operation: Inform
+                  message: "Placeholder naming convention"
+            preferredmarkers:
+              markers:
+                - identifier: "PLACEHOLDER_PREFERRED_MARKER"
+                  equivalentIdentifiers:
+                    - identifier: "PLACEHOLDER_PREFERRED_MARKER"
             conditions:
               isFirstField: Ignore
               useProtobuf: Forbid

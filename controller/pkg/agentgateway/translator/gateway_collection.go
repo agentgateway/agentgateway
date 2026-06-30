@@ -234,11 +234,11 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 	return func(ctx krt.HandlerContext, obj *gwv1.Gateway) (*gwv1.GatewayStatus, []*GatewayListener) {
 		class := krt.FetchOne(ctx, cfg.GatewayClasses, krt.FilterKey(string(obj.Spec.GatewayClassName)))
 		if class == nil {
-			logger.Debug("gateway class not found, skipping", "gw_name", obj.GetName(), "gatewayClassName", obj.Spec.GatewayClassName)
+			logger.Debug("gateway class not found, skipping", "gw_name", obj.GetName(), "gateway_class_name", obj.Spec.GatewayClassName)
 			return nil, nil
 		}
 		if string(class.Controller) != cfg.ControllerName {
-			logger.Debug("skipping gateway not managed by our controller", "gw_name", obj.GetName(), "gatewayClassName", obj.Spec.GatewayClassName, "controllerName", class.Controller)
+			logger.Debug("skipping gateway not managed by our controller", "gw_name", obj.GetName(), "gateway_class_name", obj.Spec.GatewayClassName, "controller_name", class.Controller)
 			return nil, nil // ignore gateways not managed by our controller
 		}
 		rm := reports.NewReportMap()
@@ -469,11 +469,11 @@ func ListenerSetBuilder(
 	}
 	class := krt.FetchOne(ctx, gatewayClasses, krt.FilterKey(string(parentGwObj.Spec.GatewayClassName)))
 	if class == nil {
-		logger.Debug("gateway class not found, skipping", "gw_name", obj.GetName(), "gatewayClassName", parentGwObj.Spec.GatewayClassName)
+		logger.Debug("gateway class not found, skipping", "gw_name", obj.GetName(), "gateway_class_name", parentGwObj.Spec.GatewayClassName)
 		return nil, nil
 	}
 	if string(class.Controller) != controllerName {
-		logger.Debug("skipping gateway not managed by our controller", "gw_name", obj.GetName(), "gatewayClassName", parentGwObj.Spec.GatewayClassName, "controllerName", class.Controller)
+		logger.Debug("skipping gateway not managed by our controller", "gw_name", obj.GetName(), "gateway_class_name", parentGwObj.Spec.GatewayClassName, "controller_name", class.Controller)
 		return nil, nil // ignore gateways not managed by our controller
 	}
 
