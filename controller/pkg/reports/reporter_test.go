@@ -57,6 +57,32 @@ func TestBuildGatewayStatus(t *testing.T) {
 		assert.Equal(t, 4, len(status.Listeners[0].Conditions))
 	})
 
+	t.Run("preserve invalid parameters over accepted report condition", func(t *testing.T) {
+		gw := gw()
+		gw.Status.Conditions = append(gw.Status.Conditions, metav1.Condition{
+			Type:    string(gwv1.GatewayConditionAccepted),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(gwv1.GatewayReasonInvalidParameters),
+			Message: "bad params",
+		})
+		rm := reports.NewReportMap()
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionAccepted,
+			Status:  metav1.ConditionTrue,
+			Reason:  gwv1.GatewayReasonAccepted,
+			Message: reports.GatewayAcceptedMessage,
+		})
+
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+		accepted := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionAccepted))
+
+		assert.Equal(t, true, accepted != nil)
+		assert.Equal(t, metav1.ConditionFalse, accepted.Status)
+		assert.Equal(t, string(gwv1.GatewayReasonInvalidParameters), accepted.Reason)
+		assert.Equal(t, "bad params", accepted.Message)
+	})
+
 	t.Run("set negative gateway conditions from report and not add extra conditions", func(t *testing.T) {
 		gw := gw()
 		rm := reports.NewReportMap()
@@ -76,6 +102,41 @@ func TestBuildGatewayStatus(t *testing.T) {
 		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
 		assert.Equal(t, true, programmed != nil)
 		assert.Equal(t, metav1.ConditionFalse, programmed.Status)
+	})
+
+	t.Run("remove stale invalid condition", func(t *testing.T) {
+		gw := gw()
+		gw.Generation = 2
+		gw.Status.Conditions = append(gw.Status.Conditions, metav1.Condition{
+			Type:               string(gwv1.GatewayConditionAccepted),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: 1,
+			Reason:             string(gwv1.GatewayReasonInvalidParameters),
+			Message:            "bad params",
+		})
+		rm := reports.NewReportMap()
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionAccepted,
+			Status:  metav1.ConditionTrue,
+			Reason:  gwv1.GatewayReasonAccepted,
+			Message: reports.GatewayAcceptedMessage,
+		})
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+		accepted := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionAccepted))
+
+		assert.Equal(t, true, status != nil)
+		assert.Equal(t, true, accepted != nil)
+		assert.Equal(t, metav1.ConditionTrue, accepted.Status)
+		assert.Equal(t, int64(2), accepted.ObservedGeneration)
+		assert.Equal(t, string(gwv1.GatewayReasonAccepted), accepted.Reason)
+		assert.Equal(t, reports.GatewayAcceptedMessage, accepted.Message)
+
+		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
+		assert.Equal(t, true, programmed != nil)
+		assert.Equal(t, metav1.ConditionTrue, programmed.Status)
+		assert.Equal(t, int64(2), programmed.ObservedGeneration)
+		assert.Equal(t, string(gwv1.GatewayReasonProgrammed), programmed.Reason)
 	})
 
 	t.Run("set negative listener conditions from report and not add extra conditions", func(t *testing.T) {
