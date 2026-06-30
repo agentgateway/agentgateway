@@ -8,8 +8,7 @@ use arc_swap::ArcSwap;
 
 use crate::ModelCatalogSource;
 
-static DEFAULT_RUNTIME_MODELS_JSON: &str =
-	include_str!("../../../../controller/pkg/bedrock/runtime_models.json");
+static DEFAULT_RUNTIME_MODELS_JSON: &str = include_str!("bedrock_runtime_models.json");
 
 #[derive(serde::Deserialize)]
 struct WrappedRuntimeTable {
