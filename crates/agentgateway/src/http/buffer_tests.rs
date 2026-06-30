@@ -36,9 +36,31 @@ async fn read_request_body_bytes(req: &mut Request) -> Bytes {
 	body.collect().await.expect("collect succeeds").to_bytes()
 }
 
+async fn read_request_body_next_frame(req: &mut Request) -> Bytes {
+	let body = req.body_mut();
+	body
+		.frame()
+		.await
+		.expect("unexpected end of body")
+		.expect("frame succeeeds")
+		.into_data()
+		.expect("not a data frame")
+}
+
 async fn read_response_body_bytes(resp: &mut Response) -> Bytes {
 	let body = std::mem::replace(resp.body_mut(), crate::http::Body::empty());
 	body.collect().await.expect("collect succeeds").to_bytes()
+}
+
+async fn read_response_body_next_frame(resp: &mut Response) -> Bytes {
+	let body = resp.body_mut();
+	body
+		.frame()
+		.await
+		.expect("unexpected end of body")
+		.expect("frame succeeeds")
+		.into_data()
+		.expect("not a data frame")
 }
 
 fn enabled_request(max_bytes: usize) -> Buffer {
@@ -316,6 +338,25 @@ async fn apply_to_request_continue_streaming_handles_empty_body() {
 }
 
 #[tokio::test]
+async fn apply_to_request_streams_pull_frame_by_frame() {
+	let policy = continue_streaming_request(4);
+	let chunks: &[&'static [u8]] = &[b"hell", b"o wo", b"rld!"];
+	let mut req = request_with_body(streaming_body(chunks));
+
+	policy
+		.apply_to_request(&mut req)
+		.await
+		.expect("within-limit body streams through");
+
+	for &chunk in chunks {
+		assert_eq!(
+			read_request_body_next_frame(&mut req).await,
+			Bytes::from_static(chunk)
+		)
+	}
+}
+
+#[tokio::test]
 async fn apply_to_request_continue_streaming_preserves_trailers() {
 	let mut trailers = ::http::HeaderMap::new();
 	trailers.insert("x-test", "value".parse().unwrap());
@@ -585,6 +626,25 @@ async fn apply_to_response_ignores_request_max_bytes() {
 		read_response_body_bytes(&mut resp).await,
 		Bytes::from_static(b"hello"),
 	);
+}
+
+#[tokio::test]
+async fn apply_to_response_streams_pull_frame_by_frame() {
+	let policy = continue_streaming_request(4);
+	let chunks: &[&'static [u8]] = &[b"hello", b" wo", b"rld!"];
+	let mut res = response_with_body(streaming_body(chunks));
+
+	policy
+		.apply_to_response(&mut res)
+		.await
+		.expect("within-limit body streams through");
+
+	for &chunk in chunks {
+		assert_eq!(
+			read_response_body_next_frame(&mut res).await,
+			Bytes::from_static(chunk)
+		)
+	}
 }
 
 // --- Trait integration ------------------------------------------------------

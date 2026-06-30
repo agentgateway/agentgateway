@@ -160,7 +160,8 @@ enum BufferState {
 }
 
 pin_project! {
-	/// Buffers data up to `limit`, then streams the rest of the body.
+	/// Streams the body while doing the best effor to consider the limit
+	/// When accumulation crosses the limit, it will stream the frame
 	struct BufferUpToLimitBody {
 		#[pin]
 		inner: crate::http::Body,
@@ -237,18 +238,13 @@ impl HttpBody for BufferUpToLimitBody {
 			match frame.into_data().map_err(Frame::into_trailers) {
 				Ok(mut data) => {
 					let len = data.remaining();
-					let exceeds = this
-						.buffered
-						.checked_add(len)
-						.is_none_or(|next| next > *this.limit);
 					let b = data.copy_to_bytes(len);
 					if b.has_remaining() {
 						this.buffer.push(b);
 					}
-					if exceeds {
+					*this.buffered = this.buffered.saturating_add(len);
+					if *this.buffered >= *this.limit {
 						*this.state = BufferState::FlushThenStream;
-					} else {
-						*this.buffered += len;
 					}
 				},
 				Err(Ok(trailers)) => {
