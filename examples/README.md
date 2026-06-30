@@ -47,6 +47,10 @@ The `http` example shows how to use agentgateway to serve generic HTTP traffic.
 
 The `prompt-enrichment` example shows how to append or preprend prompts to agentgateway AI requests.
 
+### [iFlytek Spark / Astron MaaS](iflytek/README.md)
+
+The `iflytek` example shows how to route to iFlytek's OpenAI-compatible Spark and Astron MaaS endpoints using a host override on the built-in `openAI` provider.
+
 ### [Standalone EPP](standalone-epp/README.md)
 
 The `standalone-epp` example shows the v1 local config shape for running agentgateway as the sidecar proxy
