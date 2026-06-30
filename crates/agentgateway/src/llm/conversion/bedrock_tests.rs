@@ -1718,10 +1718,11 @@ fn test_messages_long_tool_name_round_trip_response() {
 	assert_eq!(tool_use_name, long_name);
 }
 mod provider_routing {
-	use crate::llm::bedrock::{BedrockEndpoint, BedrockProviderPreference, Provider};
-	use crate::llm::{InputFormat, RouteType};
-	use crate::llm::custom::ProviderFormat;
 	use agent_core::strng;
+
+	use crate::llm::bedrock::{BedrockEndpoint, BedrockProviderPreference, Provider};
+	use crate::llm::custom::ProviderFormat;
+	use crate::llm::{InputFormat, RouteType};
 
 	fn provider(pref: BedrockProviderPreference) -> Provider {
 		Provider {
@@ -1741,28 +1742,60 @@ mod provider_routing {
 		// so any model ID produces a deterministic result regardless of global catalog state.
 		let p_mantle = provider(BedrockProviderPreference::MantleOnly);
 		let p_runtime = provider(BedrockProviderPreference::RuntimeOnly);
-		assert_eq!(p_mantle.resolve_endpoint(RouteType::Messages, Some("any-model")), BedrockEndpoint::Mantle);
-		assert_eq!(p_runtime.resolve_endpoint(RouteType::Messages, Some("any-model")), BedrockEndpoint::Runtime);
+		assert_eq!(
+			p_mantle.resolve_endpoint(RouteType::Messages, Some("any-model")),
+			BedrockEndpoint::Mantle
+		);
+		assert_eq!(
+			p_runtime.resolve_endpoint(RouteType::Messages, Some("any-model")),
+			BedrockEndpoint::Runtime
+		);
 		// RuntimePreferred + model-table fallthrough is covered by bedrock_model_table::tests.
 	}
 
 	#[test]
 	fn mantle_endpoint_uses_correct_host_path_and_signing() {
 		let p = provider(BedrockProviderPreference::MantleOnly);
-		assert_eq!(p.get_host(RouteType::Messages, None).as_str(), "bedrock-mantle.us-east-1.api.aws");
-		assert_eq!(p.signing_service_name(RouteType::Messages, None), Some("bedrock-mantle"));
-		assert_eq!(p.get_path_for_route(RouteType::Messages,   false, "m").as_str(), "/anthropic/v1/messages");
-		assert_eq!(p.get_path_for_route(RouteType::Responses,  false, "m").as_str(), "/v1/responses");
-		assert_eq!(p.get_path_for_route(RouteType::Completions,false, "m").as_str(), "/v1/chat/completions");
+		assert_eq!(
+			p.get_host(RouteType::Messages, None).as_str(),
+			"bedrock-mantle.us-east-1.api.aws"
+		);
+		assert_eq!(
+			p.signing_service_name(RouteType::Messages, None),
+			Some("bedrock-mantle")
+		);
+		assert_eq!(
+			p.get_path_for_route(RouteType::Messages, false, "m")
+				.as_str(),
+			"/anthropic/v1/messages"
+		);
+		assert_eq!(
+			p.get_path_for_route(RouteType::Responses, false, "m")
+				.as_str(),
+			"/v1/responses"
+		);
+		assert_eq!(
+			p.get_path_for_route(RouteType::Completions, false, "m")
+				.as_str(),
+			"/v1/chat/completions"
+		);
 	}
 
 	#[test]
 	fn runtime_endpoint_uses_correct_host_path_and_signing() {
 		let p = provider(BedrockProviderPreference::RuntimeOnly);
-		assert_eq!(p.get_host(RouteType::Messages, None).as_str(), "bedrock-runtime.us-east-1.amazonaws.com");
+		assert_eq!(
+			p.get_host(RouteType::Messages, None).as_str(),
+			"bedrock-runtime.us-east-1.amazonaws.com"
+		);
 		assert_eq!(p.signing_service_name(RouteType::Messages, None), None);
 		assert_eq!(
-			p.get_path_for_route(RouteType::Messages, false, "anthropic.claude-3-5-haiku-20241022-v1:0").as_str(),
+			p.get_path_for_route(
+				RouteType::Messages,
+				false,
+				"anthropic.claude-3-5-haiku-20241022-v1:0"
+			)
+			.as_str(),
 			"/model/anthropic.claude-3-5-haiku-20241022-v1:0/converse"
 		);
 	}
@@ -1771,12 +1804,24 @@ mod provider_routing {
 	fn body_native_format_mantle_passthrough_runtime_converse() {
 		// Mantle: body stays in its native wire format.
 		let mantle = provider(BedrockProviderPreference::MantleOnly);
-		assert_eq!(mantle.body_native_format(InputFormat::Messages,   "any"), Some(ProviderFormat::Messages));
-		assert_eq!(mantle.body_native_format(InputFormat::Completions,"any"), Some(ProviderFormat::Completions));
-		assert_eq!(mantle.body_native_format(InputFormat::Responses,  "any"), Some(ProviderFormat::Responses));
+		assert_eq!(
+			mantle.body_native_format(InputFormat::Messages, "any"),
+			Some(ProviderFormat::Messages)
+		);
+		assert_eq!(
+			mantle.body_native_format(InputFormat::Completions, "any"),
+			Some(ProviderFormat::Completions)
+		);
+		assert_eq!(
+			mantle.body_native_format(InputFormat::Responses, "any"),
+			Some(ProviderFormat::Responses)
+		);
 
 		// Runtime + non-Anthropic model: convert to Converse (None = use default translation).
 		let runtime = provider(BedrockProviderPreference::RuntimeOnly);
-		assert_eq!(runtime.body_native_format(InputFormat::Messages, "amazon.titan-text-lite-v1"), None);
+		assert_eq!(
+			runtime.body_native_format(InputFormat::Messages, "amazon.titan-text-lite-v1"),
+			None
+		);
 	}
 }

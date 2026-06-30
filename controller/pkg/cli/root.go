@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/bedrock"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/config"
 	controllercmd "github.com/agentgateway/agentgateway/controller/pkg/cli/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/costs"
@@ -12,8 +13,6 @@ import (
 	proxycmd "github.com/agentgateway/agentgateway/controller/pkg/cli/proxy"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/trace"
 	cliversion "github.com/agentgateway/agentgateway/controller/pkg/cli/version"
-
-	"github.com/agentgateway/agentgateway/controller/pkg/cli/bedrock"
 )
 
 func NewRootCmd() *cobra.Command {
