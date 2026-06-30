@@ -53,8 +53,8 @@ pub enum Error {
 	BodyBuffer(String),
 	#[error("invalid body mutation: {0}")]
 	BodyMutation(String),
-	#[error("invalid ext_proc metadata: {0}")]
-	Metadata(String),
+	#[error("failed to convert metadata value: {0}")]
+	MetadataConversion(String),
 	#[error(transparent)]
 	InvalidHeaderName(#[from] http::header::InvalidHeaderName),
 	#[error(transparent)]
@@ -1780,20 +1780,9 @@ fn standard_ext_proc_request_attributes(
 			"request.protocol".to_string(),
 			prost_wkt_types::Value {
 				kind: Some(prost_wkt_types::value::Kind::StringValue(
-					http_version_string(req.version()).to_string(),
+					crate::http::version_str(&req.version()).to_string(),
 				)),
 			},
 		),
 	])
-}
-
-fn http_version_string(version: ::http::Version) -> &'static str {
-	match version {
-		::http::Version::HTTP_09 => "HTTP/0.9",
-		::http::Version::HTTP_10 => "HTTP/1.0",
-		::http::Version::HTTP_11 => "HTTP/1.1",
-		::http::Version::HTTP_2 => "HTTP/2",
-		::http::Version::HTTP_3 => "HTTP/3",
-		_ => "HTTP",
-	}
 }
