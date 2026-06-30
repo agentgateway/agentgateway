@@ -504,6 +504,10 @@ impl ExtProcInstance {
 			.map_err(|_| Error::RequestSend)
 	}
 
+	fn request_sender(&self) -> Result<Sender<ProcessingRequest>, Error> {
+		self.tx_req.clone().ok_or(Error::RequestSend)
+	}
+
 	fn protocol_config_for_headers(
 		&self,
 		protocol_config: ProtocolConfiguration,
@@ -543,10 +547,7 @@ impl ExtProcInstance {
 				Self::send_body_stream(
 					metadata_context.clone(),
 					body,
-					self
-						.tx_req
-						.clone()
-						.expect("ext_proc request sender must exist before sending buffered body"),
+					self.request_sender()?,
 					body_direction,
 					send_trailers,
 					first_message,
@@ -565,10 +566,7 @@ impl ExtProcInstance {
 					FirstExtProcMessage::take_for_send(first_message);
 				Self::send_partial_body(
 					metadata_context.clone(),
-					self
-						.tx_req
-						.clone()
-						.expect("ext_proc request sender must exist before sending partial body"),
+					self.request_sender()?,
 					body_direction,
 					body,
 					end_stream,
@@ -920,8 +918,7 @@ impl ExtProcInstance {
 			self.spawn_body_stream(
 				&metadata_context,
 				&mut pending_full_duplex_body,
-				tx.clone()
-					.expect("ext_proc request sender must exist before streaming request body"),
+				tx.clone().ok_or(Error::RequestSend)?,
 				BodyStreamDirection::Request,
 				send_request_trailers,
 				first_message,
@@ -1127,8 +1124,7 @@ impl ExtProcInstance {
 					self.spawn_body_stream(
 						&metadata_context,
 						&mut pending_full_duplex_body,
-						tx.clone()
-							.expect("ext_proc request sender must exist before continuing request body stream"),
+						tx.clone().ok_or(Error::RequestSend)?,
 						BodyStreamDirection::Request,
 						send_request_trailers,
 						first_message,
@@ -1429,8 +1425,7 @@ impl ExtProcInstance {
 			self.spawn_body_stream(
 				&metadata_context,
 				&mut pending_response_body,
-				tx.clone()
-					.expect("ext_proc request sender must exist before streaming response body"),
+				tx.clone().ok_or(Error::RequestSend)?,
 				BodyStreamDirection::Response,
 				send_response_trailers,
 				first_message,
@@ -1461,9 +1456,7 @@ impl ExtProcInstance {
 				self.spawn_body_stream(
 					&metadata_context,
 					&mut pending_response_body,
-					tx.clone().expect(
-						"ext_proc request sender must exist before starting fallback response body stream",
-					),
+					tx.clone().ok_or(Error::RequestSend)?,
 					BodyStreamDirection::Response,
 					send_response_trailers,
 					first_message,
@@ -1574,9 +1567,7 @@ impl ExtProcInstance {
 						self.spawn_body_stream(
 							&metadata_context,
 							&mut pending_response_body,
-							tx.clone().expect(
-								"ext_proc request sender must exist before continuing response body stream",
-							),
+							tx.clone().ok_or(Error::RequestSend)?,
 							BodyStreamDirection::Response,
 							send_response_trailers,
 							first_message,
