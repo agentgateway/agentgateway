@@ -160,7 +160,7 @@ enum BufferState {
 }
 
 pin_project! {
-	/// Streams the body while doing the best effor to consider the limit
+	/// Streams the body while doing the best effort to consider the limit
 	/// When accumulation crosses the limit, it will stream the frame
 	struct BufferUpToLimitBody {
 		#[pin]
@@ -181,6 +181,7 @@ impl BufferUpToLimitBody {
 			trailers: None,
 			state: BufferState::Buffering,
 			limit,
+			// Use buffered instead of bufflist.remaining since it iterates over the map
 			buffered: 0,
 		}
 	}
@@ -242,7 +243,7 @@ impl HttpBody for BufferUpToLimitBody {
 					if b.has_remaining() {
 						this.buffer.push(b);
 					}
-					*this.buffered = this.buffered.saturating_add(len);
+					*this.buffered += len;
 					if *this.buffered >= *this.limit {
 						*this.state = BufferState::FlushThenStream;
 					}
