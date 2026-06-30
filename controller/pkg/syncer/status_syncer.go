@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/slices"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/cache"
@@ -335,13 +336,9 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 				mergedAny = merged
 			}
 		case *gwv1.GatewayStatus:
-			// Preserve addresses unless the desired status explicitly sets them.
-			// Addresses are computed from the generated Service by the gateway reconciler and are not
-			// part of the agentgateway translation report.
 			curGw, ok := any(current).(*gwv1.Gateway)
 			if ok {
-				merged := *desired
-				merged.Addresses = mergeGatewayAddresses(curGw.Status.Addresses, desired.Addresses)
+				merged := mergeGatewayStatus(curGw.Status, *desired)
 				mergedAny = &merged
 			}
 		case *gwv1.HTTPRouteStatus:
@@ -485,7 +482,129 @@ func mergeRouteParentStatuses(ourControllerName string, existing []gwv1.RoutePar
 	return out
 }
 
+func mergeGatewayStatus(existing gwv1.GatewayStatus, desired gwv1.GatewayStatus) gwv1.GatewayStatus {
+	merged := desired
+	merged.Addresses = mergeGatewayAddresses(existing.Addresses, desired.Addresses)
+	merged.Conditions = mergeGatewayConditions(existing.Conditions, desired.Conditions)
+
+	return merged
+}
+
+func mergeGatewayConditions(existing []metav1.Condition, desired []metav1.Condition) []metav1.Condition {
+	out := append([]metav1.Condition(nil), desired...)
+	existingAccepted := meta.FindStatusCondition(existing, string(gwv1.GatewayConditionAccepted))
+	desiredAccepted := meta.FindStatusCondition(desired, string(gwv1.GatewayConditionAccepted))
+	selectedAccepted := selectGatewayAcceptedCondition(existingAccepted, desiredAccepted)
+
+	if selectedAccepted == nil {
+		return out
+	}
+
+	replaceStatusCondition(&out, *selectedAccepted)
+	if selectedAccepted == existingAccepted && isGatewayAcceptedInvalidParameters(existingAccepted) {
+		preserveInvalidGatewayProgrammedCondition(&out, existing, desired, *existingAccepted)
+	}
+
+	return out
+}
+
+func selectGatewayAcceptedCondition(existingAccepted, desiredAccepted *metav1.Condition) *metav1.Condition {
+	if isGatewayAcceptedInvalidParameters(existingAccepted) {
+		if desiredAccepted == nil {
+			return existingAccepted
+		}
+		existingAtLeastAsNew := existingAccepted.ObservedGeneration >= desiredAccepted.ObservedGeneration
+		if isGatewayAcceptedDefaultSuccess(desiredAccepted) && existingAtLeastAsNew {
+			return existingAccepted
+		}
+		if isGatewayAcceptedUnsupportedAddress(desiredAccepted) &&
+			desiredAccepted.ObservedGeneration <= existingAccepted.ObservedGeneration {
+			return existingAccepted
+		}
+	}
+
+	if isGatewayAcceptedDefaultSuccess(existingAccepted) && isGatewayAcceptedInvalidParameters(desiredAccepted) &&
+		desiredAccepted.ObservedGeneration <= existingAccepted.ObservedGeneration {
+		return existingAccepted
+	}
+
+	return desiredAccepted
+}
+
+func preserveInvalidGatewayProgrammedCondition(
+	out *[]metav1.Condition,
+	existing []metav1.Condition,
+	desired []metav1.Condition,
+	accepted metav1.Condition,
+) {
+	desiredProgrammed := meta.FindStatusCondition(desired, string(gwv1.GatewayConditionProgrammed))
+	if desiredProgrammed != nil && !isGatewayProgrammedDefaultSuccess(desiredProgrammed) {
+		return
+	}
+
+	existingProgrammed := meta.FindStatusCondition(existing, string(gwv1.GatewayConditionProgrammed))
+	if isGatewayProgrammedInvalid(existingProgrammed) {
+		replaceStatusCondition(out, *existingProgrammed)
+		return
+	}
+
+	meta.SetStatusCondition(out, metav1.Condition{
+		Type:               string(gwv1.GatewayConditionProgrammed),
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: accepted.ObservedGeneration,
+		Reason:             string(gwv1.GatewayReasonInvalid),
+		Message:            accepted.Message,
+	})
+}
+
+func replaceStatusCondition(conditions *[]metav1.Condition, condition metav1.Condition) {
+	for i := range *conditions {
+		if (*conditions)[i].Type == condition.Type {
+			(*conditions)[i] = condition
+			return
+		}
+	}
+	*conditions = append(*conditions, condition)
+}
+
+func isGatewayAcceptedDefaultSuccess(condition *metav1.Condition) bool {
+	return condition != nil &&
+		condition.Type == string(gwv1.GatewayConditionAccepted) &&
+		condition.Status == metav1.ConditionTrue &&
+		condition.Reason == string(gwv1.GatewayReasonAccepted)
+}
+
+func isGatewayAcceptedInvalidParameters(condition *metav1.Condition) bool {
+	return condition != nil &&
+		condition.Type == string(gwv1.GatewayConditionAccepted) &&
+		condition.Status == metav1.ConditionFalse &&
+		condition.Reason == string(gwv1.GatewayReasonInvalidParameters)
+}
+
+func isGatewayAcceptedUnsupportedAddress(condition *metav1.Condition) bool {
+	return condition != nil &&
+		condition.Type == string(gwv1.GatewayConditionAccepted) &&
+		condition.Status == metav1.ConditionFalse &&
+		condition.Reason == string(gwv1.GatewayReasonUnsupportedAddress)
+}
+
+func isGatewayProgrammedDefaultSuccess(condition *metav1.Condition) bool {
+	return condition != nil &&
+		condition.Type == string(gwv1.GatewayConditionProgrammed) &&
+		condition.Status == metav1.ConditionTrue &&
+		condition.Reason == string(gwv1.GatewayReasonProgrammed)
+}
+
+func isGatewayProgrammedInvalid(condition *metav1.Condition) bool {
+	return condition != nil &&
+		condition.Type == string(gwv1.GatewayConditionProgrammed) &&
+		condition.Status == metav1.ConditionFalse &&
+		condition.Reason == string(gwv1.GatewayReasonInvalid)
+}
+
 func mergeGatewayAddresses(existing []gwv1.GatewayStatusAddress, desired []gwv1.GatewayStatusAddress) []gwv1.GatewayStatusAddress {
+	// Addresses are computed from the generated Service by the gateway reconciler, so translated
+	// status only replaces them when it explicitly publishes addresses.
 	var out []gwv1.GatewayStatusAddress
 	if len(desired) > 0 {
 		out = append([]gwv1.GatewayStatusAddress(nil), desired...)

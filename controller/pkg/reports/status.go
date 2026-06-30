@@ -408,6 +408,14 @@ func addMissingGatewayConditions(gwReport *GatewayReport, gw *gwv1.Gateway) {
 			Reason:  gwv1.GatewayReasonInvalidParameters,
 			Message: existingAccepted.Message,
 		})
+		if cond := meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionProgrammed)); cond == nil {
+			gwReport.SetCondition(reporter.GatewayCondition{
+				Type:    gwv1.GatewayConditionProgrammed,
+				Status:  metav1.ConditionFalse,
+				Reason:  gwv1.GatewayReasonInvalid,
+				Message: existingAccepted.Message,
+			})
+		}
 	} else if meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionAccepted)) == nil {
 		gwReport.SetCondition(reporter.GatewayCondition{
 			Type:    gwv1.GatewayConditionAccepted,
