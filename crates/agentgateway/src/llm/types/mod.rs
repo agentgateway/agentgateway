@@ -7,6 +7,7 @@ pub mod messages;
 pub mod rerank;
 pub mod responses;
 pub mod vertex;
+pub mod vertex_gemini;
 
 use agent_core::prelude::Strng;
 use agent_core::strng;
@@ -72,6 +73,12 @@ pub trait RequestType: Send + Sync {
 
 	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
 		Err(AIError::UnsupportedConversion(strng::literal!("vertex")))
+	}
+
+	fn to_vertex_gemini(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
+		Err(AIError::UnsupportedConversion(strng::literal!(
+			"vertex_gemini"
+		)))
 	}
 }
 

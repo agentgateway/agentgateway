@@ -1,0 +1,32 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/image-file.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: Describe this image.
+        - type: image_url
+          image_url:
+            url: "gs://my-bucket/photo.png"
+---
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "Describe this image."
+        },
+        {
+          "fileData": {
+            "mimeType": "image/png",
+            "fileUri": "gs://my-bucket/photo.png"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/basic.json
+info:
+  model: replaceme
+  messages:
+    - role: system
+      content: You are a helpful assistant.
+    - role: user
+      content: What is the name of the LLM provider?
+---
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "What is the name of the LLM provider?"
+        }
+      ]
+    }
+  ],
+  "systemInstruction": {
+    "parts": [
+      {
+        "text": "You are a helpful assistant."
+      }
+    ]
+  }
+}
