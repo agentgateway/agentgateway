@@ -160,8 +160,9 @@ enum BufferState {
 }
 
 pin_project! {
-	/// Streams the body while doing the best effort to consider the limit
-	/// When accumulation crosses the limit, it will stream the frame
+	/// Buffers the body in memory up to `limit` bytes, then streams the rest unbounded by the limit.
+	/// The cap is approximate: we keep frames whole rather than split or fail, so it may
+	/// overshoot by up to one frame.
 	struct BufferUpToLimitBody {
 		#[pin]
 		inner: crate::http::Body,
