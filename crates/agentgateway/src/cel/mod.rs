@@ -109,6 +109,7 @@ pub fn register_custom_functions(definitions: &str) -> Result<(), Error> {
 flagset::flags! {
 	enum Attributes: u32 {
 		Source,
+		Destination,
 
 		Request,
 		RequestBody,
@@ -209,6 +210,7 @@ impl ContextBuilder {
 		clear: bool,
 	) -> Option<RequestSnapshot> {
 		if self.any_has(Attributes::Source)
+			|| self.any_has(Attributes::Destination)
 			|| self.any_has(Attributes::Request)
 			|| self.any_has(Attributes::Llm)
 			|| self.any_has(Attributes::Proxy)
@@ -377,6 +379,9 @@ fn attributes_for(expression: &cel::IdedExpr) -> FlagSet<Attributes> {
 			},
 			["source", ..] => {
 				attributes |= Attributes::Source;
+			},
+			["destination", ..] => {
+				attributes |= Attributes::Destination;
 			},
 			["backend", ..] => {
 				attributes |= Attributes::Backend;
