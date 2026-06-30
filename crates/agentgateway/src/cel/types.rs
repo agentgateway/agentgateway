@@ -1424,6 +1424,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			streaming,
 			params,
 			prompt,
+			bedrock_tool_names: _,
 		} = info;
 		LLMContext {
 			streaming,
