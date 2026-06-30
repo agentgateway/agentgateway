@@ -118,6 +118,16 @@
             "$ref": "#/$defs/ModelCatalogSource"
           }
         },
+        "bedrockRuntimeModelCatalog": {
+          "description": "Bedrock runtime model catalog overrides; entries are merged in order, with later entries taking precedence.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/ModelCatalogSource"
+          }
+        },
         "database": {
           "description": "Primary database used by local runtime features.",
           "anyOf": [
@@ -7051,10 +7061,22 @@
             "string",
             "null"
           ]
+        },
+        "providerPreference": {
+          "$ref": "#/$defs/BedrockProviderPreference",
+          "default": "RuntimePreferred"
         }
       },
       "required": [
         "region"
+      ]
+    },
+    "BedrockProviderPreference": {
+      "type": "string",
+      "enum": [
+        "RuntimePreferred",
+        "MantleOnly",
+        "RuntimeOnly"
       ]
     },
     "AzureProvider": {
@@ -9026,6 +9048,10 @@
             "string",
             "null"
           ]
+        },
+        "bedrockProviderPreference": {
+          "$ref": "#/$defs/BedrockProviderPreference",
+          "default": "RuntimePreferred"
         },
         "vertexRegion": {
           "type": [

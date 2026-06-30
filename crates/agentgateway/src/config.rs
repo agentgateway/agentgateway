@@ -344,6 +344,19 @@ pub fn parse_config(
 		})
 		.or(raw.model_catalog)
 		.unwrap_or_default();
+
+	let bedrock_runtime_model_catalog_sources =
+		parse::<String>("BEDROCK_RUNTIME_MODEL_CATALOG_PATHS")?
+			.map(|s| {
+				s.split(',')
+					.map(|p| PathBuf::from(p.trim()))
+					.filter(|p| !p.as_os_str().is_empty())
+					.map(|file| crate::ModelCatalogSource::File { file })
+					.collect::<Vec<_>>()
+			})
+			.or(raw.bedrock_runtime_model_catalog)
+			.unwrap_or_default();
+
 	let database = raw
 		.database
 		.clone()
@@ -511,6 +524,9 @@ pub fn parse_config(
 		dynamic_ca_cert_cache,
 		model_catalog: crate::ModelCatalogConfig {
 			sources: model_catalog_sources,
+		},
+		bedrock_runtime_model_catalog: crate::BedrockRuntimeModelCatalogConfig {
+			sources: bedrock_runtime_model_catalog_sources,
 		},
 		database,
 		session_encoder,

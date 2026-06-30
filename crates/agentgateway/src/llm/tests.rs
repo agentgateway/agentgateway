@@ -320,6 +320,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		};
@@ -354,6 +355,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		};
@@ -390,6 +392,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		};
@@ -417,6 +420,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		};
@@ -426,6 +430,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		};
@@ -482,6 +487,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		};
@@ -748,6 +754,7 @@ mod response {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		});
@@ -772,9 +779,22 @@ mod response {
 				AIProvider::Anthropic(anthropic::Provider { model: None }),
 				dummy_llm_req(InputFormat::Completions),
 			),
-			BEDROCK_TO_MESSAGES => (bedrock_provider, dummy_llm_req(InputFormat::Messages)),
-			BEDROCK_TO_COMPLETIONS => (bedrock_provider, dummy_llm_req(InputFormat::Completions)),
-			BEDROCK_TO_RESPONSES => (bedrock_provider, dummy_llm_req(InputFormat::Responses)),
+			BEDROCK_TO_MESSAGES => (bedrock_provider, {
+				let mut req = dummy_llm_req(InputFormat::Messages);
+				req.native_format = None;
+				req
+			}),
+			BEDROCK_TO_COMPLETIONS => (bedrock_provider, {
+				let mut req = dummy_llm_req(InputFormat::Completions);
+				req.native_format = None;
+				req
+			}),
+			BEDROCK_TO_RESPONSES => (bedrock_provider, {
+				// Runtime/Converse translation path: native_format None (Mantle would set Responses).
+				let mut req = dummy_llm_req(InputFormat::Responses);
+				req.native_format = None;
+				req
+			}),
 			BEDROCK_TO_DETECT => (bedrock_provider, dummy_llm_req(InputFormat::Detect)),
 			COMPLETIONS_TO_DETECT => (
 				AIProvider::OpenAI(openai::Provider { model: None }),
@@ -1343,6 +1363,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	});
@@ -1352,7 +1373,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	let req = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
-		native_format: Some(custom::ProviderFormat::Completions),
+		native_format: None,
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
 		provider: Default::default(),
@@ -1415,6 +1436,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	});
@@ -1440,7 +1462,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			LLMRequest {
 				input_tokens: None,
 				input_format: InputFormat::Completions,
-				native_format: Some(custom::ProviderFormat::Completions),
+				native_format: None,
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: "input-model".into(),
 				provider: Default::default(),
@@ -1643,11 +1665,12 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
-		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
+		"/proxy/anthropic/v1/messages",
 		Some("trace=repro"),
 	);
 }
@@ -1939,6 +1962,7 @@ fn bedrock_provider(model: &str) -> AIProvider {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	})

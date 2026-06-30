@@ -158,6 +158,10 @@ pub struct RawConfig {
 
 	/// Model cost catalog sources; entries are merged in order, with later entries taking precedence.
 	model_catalog: Option<Vec<ModelCatalogSource>>,
+
+	/// Bedrock runtime model catalog overrides; entries are merged in order, with later entries taking precedence.
+	bedrock_runtime_model_catalog: Option<Vec<ModelCatalogSource>>,
+
 	/// Primary database used by local runtime features.
 	database: Option<telemetry::log_store::Config>,
 
@@ -571,11 +575,18 @@ pub struct Config {
 	pub mcp: McpConfig,
 	pub dynamic_ca_cert_cache: DynamicCaCertCacheConfig,
 	pub model_catalog: ModelCatalogConfig,
+	pub bedrock_runtime_model_catalog: BedrockRuntimeModelCatalogConfig,
 }
 
 #[derive(serde::Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ModelCatalogConfig {
+	pub sources: Vec<ModelCatalogSource>,
+}
+
+#[derive(serde::Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BedrockRuntimeModelCatalogConfig {
 	pub sources: Vec<ModelCatalogSource>,
 }
 
