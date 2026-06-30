@@ -1975,6 +1975,28 @@ type ExtProc struct {
 	// How request and response phases are sent to ext_proc.
 	// +optional
 	ProcessingOptions *ProcessingOptions `json:"processingOptions,omitempty"`
+
+	// Metadata to send to the external processor in the
+	// `metadata_context.filter_metadata` field of the ProcessingRequest.
+	// Keyed by metadata namespace, then by key within that namespace; values are
+	// CEL expressions evaluated per request.
+	// +optional
+	// +kubebuilder:validation:MaxProperties=64
+	MetadataContext map[string]map[string]CELExpression `json:"metadataContext,omitempty"`
+
+	// Request attributes to send to the external processor in the request
+	// `attributes` field of the ProcessingRequest. Values are CEL expressions
+	// evaluated per request.
+	// +optional
+	// +kubebuilder:validation:MaxProperties=64
+	RequestAttributes map[string]CELExpression `json:"requestAttributes,omitempty"`
+
+	// Response attributes to send to the external processor in the response
+	// `attributes` field of the ProcessingRequest. Values are CEL expressions
+	// evaluated per response.
+	// +optional
+	// +kubebuilder:validation:MaxProperties=64
+	ResponseAttributes map[string]CELExpression `json:"responseAttributes,omitempty"`
 }
 
 type ExtProcConditional struct {

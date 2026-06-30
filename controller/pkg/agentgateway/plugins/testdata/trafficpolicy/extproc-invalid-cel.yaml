@@ -1,0 +1,74 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: extproc-invalid-cel
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    extProc:
+      backendRef:
+        name: extproc-svc
+        port: 4444
+      requestAttributes:
+        bad: foolen_{{jwt.sub}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: extproc-svc
+  namespace: default
+spec:
+  ports:
+    - port: 4444
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/extproc-invalid-cel:extproc:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: extproc-invalid-cel
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        extProc:
+          requestAttributes:
+            bad: foolen_{{jwt.sub}}
+          target:
+            port: 4444
+            service:
+              hostname: extproc-svc.default.svc.cluster.local
+              namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: extproc-invalid-cel
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'extProc requestAttributes "bad" is not a valid CEL expression: foolen_{{jwt.sub}}'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

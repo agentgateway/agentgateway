@@ -1286,15 +1286,15 @@ func processExtProcTraffic(
 	extProc *agentgateway.ExtProc,
 	policy types.NamespacedName,
 ) (*api.Policy_Traffic, error) {
-	var backendErr error
+	var errs []error
 	var be *api.BackendReference
 	if extProc.BackendRef == nil {
-		backendErr = fmt.Errorf("failed to build extProc: backendRef is required")
+		errs = append(errs, fmt.Errorf("failed to build extProc: backendRef is required"))
 	} else {
 		var err error
 		be, err = BuildBackendRef(ctx, *extProc.BackendRef, policy.Namespace)
 		if err != nil {
-			backendErr = fmt.Errorf("failed to build extProc: %v", err)
+			errs = append(errs, fmt.Errorf("failed to build extProc: %v", err))
 		}
 	}
 
@@ -1329,13 +1329,29 @@ func processExtProcTraffic(
 		}
 	}
 
+	spec.RequestAttributes = castCELMap(extProc.RequestAttributes, func(key string, expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("extProc requestAttributes %q is not a valid CEL expression: %s", key, expr))
+	})
+	spec.ResponseAttributes = castCELMap(extProc.ResponseAttributes, func(key string, expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("extProc responseAttributes %q is not a valid CEL expression: %s", key, expr))
+	})
+	if len(extProc.MetadataContext) > 0 {
+		spec.MetadataContext = make(map[string]*api.TrafficPolicySpec_ExtProc_NamespacedMetadataContext, len(extProc.MetadataContext))
+		for ns, ctx := range extProc.MetadataContext {
+			context := castCELMap(ctx, func(key string, expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("extProc metadataContext %q/%q is not a valid CEL expression: %s", ns, key, expr))
+			})
+			spec.MetadataContext[ns] = &api.TrafficPolicySpec_ExtProc_NamespacedMetadataContext{Context: context}
+		}
+	}
+
 	return &api.Policy_Traffic{
 		Traffic: &api.TrafficPolicySpec{
 			Kind: &api.TrafficPolicySpec_ExtProc_{
 				ExtProc: spec,
 			},
 		},
-	}, backendErr
+	}, errors.Join(errs...)
 }
 
 func toBodySendMode(mode agentgateway.BodySendMode) api.TrafficPolicySpec_ExtProc_BodySendMode {

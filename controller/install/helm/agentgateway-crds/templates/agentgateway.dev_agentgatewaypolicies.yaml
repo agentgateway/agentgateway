@@ -8261,6 +8261,22 @@ spec:
                                   - message: Must have port for Service reference
                                     rule: '(size(self.group) == 0 && self.kind ==
                                       ''Service'') ? has(self.port) : true'
+                                metadataContext:
+                                  additionalProperties:
+                                    additionalProperties:
+                                      description: A Common Expression Language (CEL)
+                                        expression.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                    type: object
+                                  description: |-
+                                    Metadata to send to the external processor in the
+                                    `metadata_context.filter_metadata` field of the ProcessingRequest.
+                                    Keyed by metadata namespace, then by key within that namespace; values are
+                                    CEL expressions evaluated per request.
+                                  maxProperties: 64
+                                  type: object
                                 processingOptions:
                                   description: How request and response phases are
                                     sent to ext_proc.
@@ -8334,6 +8350,32 @@ spec:
                                       - Send
                                       type: string
                                   type: object
+                                requestAttributes:
+                                  additionalProperties:
+                                    description: A Common Expression Language (CEL)
+                                      expression.
+                                    maxLength: 16384
+                                    minLength: 1
+                                    type: string
+                                  description: |-
+                                    Request attributes to send to the external processor in the request
+                                    `attributes` field of the ProcessingRequest. Values are CEL expressions
+                                    evaluated per request.
+                                  maxProperties: 64
+                                  type: object
+                                responseAttributes:
+                                  additionalProperties:
+                                    description: A Common Expression Language (CEL)
+                                      expression.
+                                    maxLength: 16384
+                                    minLength: 1
+                                    type: string
+                                  description: |-
+                                    Response attributes to send to the external processor in the response
+                                    `attributes` field of the ProcessingRequest. Values are CEL expressions
+                                    evaluated per response.
+                                  maxProperties: 64
+                                  type: object
                               type: object
                               x-kubernetes-validations:
                               - message: backendRef is required
@@ -8348,6 +8390,21 @@ spec:
                         - message: conditional entries without condition must be last
                           rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
                             !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      metadataContext:
+                        additionalProperties:
+                          additionalProperties:
+                            description: A Common Expression Language (CEL) expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
+                          type: object
+                        description: |-
+                          Metadata to send to the external processor in the
+                          `metadata_context.filter_metadata` field of the ProcessingRequest.
+                          Keyed by metadata namespace, then by key within that namespace; values are
+                          CEL expressions evaluated per request.
+                        maxProperties: 64
+                        type: object
                       processingOptions:
                         description: How request and response phases are sent to ext_proc.
                         properties:
@@ -8420,10 +8477,34 @@ spec:
                             - Send
                             type: string
                         type: object
+                      requestAttributes:
+                        additionalProperties:
+                          description: A Common Expression Language (CEL) expression.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        description: |-
+                          Request attributes to send to the external processor in the request
+                          `attributes` field of the ProcessingRequest. Values are CEL expressions
+                          evaluated per request.
+                        maxProperties: 64
+                        type: object
+                      responseAttributes:
+                        additionalProperties:
+                          description: A Common Expression Language (CEL) expression.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        description: |-
+                          Response attributes to send to the external processor in the response
+                          `attributes` field of the ProcessingRequest. Values are CEL expressions
+                          evaluated per response.
+                        maxProperties: 64
+                        type: object
                     type: object
                     x-kubernetes-validations:
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.processingOptions)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.metadataContext),has(self.processingOptions),has(self.requestAttributes),has(self.responseAttributes)].filter(x,x==true).size()
                         == 0 : true'
                     - message: 'backendRef: Required value'
                       rule: 'has(self.conditional) ? true : has(self.backendRef)'
