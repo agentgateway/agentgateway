@@ -669,6 +669,7 @@ pub mod from_completions {
 			}
 		}
 
+		super::helpers::ensure_tool_config_for_history(&mut bedrock_request);
 		bedrock_request
 	}
 
@@ -1403,7 +1404,7 @@ pub mod from_messages {
 			Some(metadata)
 		};
 
-		Ok(bedrock::ConverseRequest {
+		let mut bedrock_request = bedrock::ConverseRequest {
 			model_id: req.model,
 			messages,
 			system: system_content,
@@ -1416,7 +1417,9 @@ pub mod from_messages {
 			additional_model_response_field_paths: None,
 			request_metadata: metadata,
 			performance_config: None,
-		})
+		};
+		super::helpers::ensure_tool_config_for_history(&mut bedrock_request);
+		Ok(bedrock_request)
 	}
 
 	fn messages_output_format_to_bedrock_output_config(
@@ -2207,6 +2210,7 @@ pub mod from_responses {
 				.and_then(|tc| tc.tool_choice.as_ref())
 		);
 
+		super::helpers::ensure_tool_config_for_history(&mut bedrock_request);
 		bedrock_request
 	}
 
@@ -2735,6 +2739,49 @@ mod helpers {
 			.collect()
 	});
 	use crate::llm::types::bedrock;
+
+	/// Bedrock's Converse API rejects any request whose messages contain `toolUse` or
+	/// `toolResult` content blocks unless a `toolConfig` is also present — even on a
+	/// follow-up or summary turn that legitimately omits `tools` (which the OpenAI and
+	/// Anthropic Messages APIs both allow). When a translated request carries tool history
+	/// but no `toolConfig`, reconstruct a minimal one from the tool names referenced in the
+	/// history so Bedrock accepts the request instead of returning a 400.
+	pub fn ensure_tool_config_for_history(req: &mut bedrock::ConverseRequest) {
+		if req.tool_config.is_some() {
+			return;
+		}
+		let mut seen = std::collections::BTreeSet::new();
+		let mut tools = Vec::new();
+		let mut has_tool_blocks = false;
+		for msg in &req.messages {
+			for block in &msg.content {
+				match block {
+					bedrock::ContentBlock::ToolUse(tool_use) => {
+						has_tool_blocks = true;
+						if seen.insert(tool_use.name.clone()) {
+							tools.push(bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
+								name: tool_use.name.clone(),
+								description: None,
+								// The original schema is unavailable on a tools-less turn; a permissive
+								// object schema is enough for Bedrock to validate the tool history.
+								input_schema: Some(bedrock::ToolInputSchema::Json(
+									serde_json::json!({ "type": "object" }),
+								)),
+							}));
+						}
+					},
+					bedrock::ContentBlock::ToolResult(_) => has_tool_blocks = true,
+					_ => {},
+				}
+			}
+		}
+		if has_tool_blocks && !tools.is_empty() {
+			req.tool_config = Some(bedrock::ToolConfiguration {
+				tools,
+				tool_choice: None,
+			});
+		}
+	}
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {
