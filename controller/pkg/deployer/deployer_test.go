@@ -231,6 +231,16 @@ func TestGatewayAndListenerSetPortModifications(t *testing.T) {
 		assert.Equal(t, true, has3000)
 	})
 
+	t.Run("GetPortsValues skips internal ports", func(t *testing.T) {
+		// 8080 is internal (routing-only): it must not appear as a Service/container port.
+		gw := createGatewayForDeployer(80, 8080)
+		gw.InternalPorts = smallset.New[int32](8080)
+		ports := deployer.GetPortsValues(gw, 0)
+
+		assert.Equal(t, 1, len(ports))
+		assert.Equal(t, int32(80), *ports[0].Port)
+	})
+
 	t.Run("GetPortsValues skips reserved ports", func(t *testing.T) {
 		// Include a reserved port (15020) alongside normal ports
 		gw := createGatewayForDeployer(8080, 15020, 9090)

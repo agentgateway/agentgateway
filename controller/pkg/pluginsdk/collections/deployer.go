@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -78,10 +79,73 @@ func GatewaysForDeployerTransformationFunc(
 			},
 			ControllerName:  string(gwClass.Spec.ControllerName),
 			Ports:           smallset.New(ports.UnsortedList()...),
+			InternalPorts:   computeInternalPorts(gw, lsets),
 			MeshTrustDomain: td,
 		}
 		return ir
 	}
+}
+
+// computeInternalPorts returns the ports whose bind is internal, mirroring the bind-mode
+// decision in the syncer: a port is internal only if every contributing listener (across
+// the Gateway and its ListenerSets) agrees. Disagreement leaves the port standard (and is
+// surfaced as Accepted=False during translation). Invalid annotations are ignored here;
+// translation reports them.
+func computeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.Set[int32] {
+	sawInternal := sets.New[int32]()
+	sawStandard := sets.New[int32]()
+
+	gwInternal, _ := annotations.ParseInternalPorts(
+		gw.GetAnnotations()[annotations.InternalPorts],
+		func(p int32) bool {
+			for _, l := range gw.Spec.Listeners {
+				if int32(l.Port) == p {
+					return true
+				}
+			}
+			return false
+		},
+	)
+	for _, l := range gw.Spec.Listeners {
+		if gwInternal.Has(l.Port) {
+			sawInternal.Insert(l.Port)
+		} else {
+			sawStandard.Insert(l.Port)
+		}
+	}
+
+	for _, ls := range lsets {
+		lsInternal, _ := annotations.ParseInternalPorts(
+			ls.GetAnnotations()[annotations.InternalPorts],
+			func(p int32) bool {
+				for _, l := range ls.Spec.Listeners {
+					if port, err := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port); err == nil && int32(port) == p {
+						return true
+					}
+				}
+				return false
+			},
+		)
+		for _, l := range ls.Spec.Listeners {
+			port, err := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port)
+			if err != nil {
+				continue
+			}
+			if lsInternal.Has(port) {
+				sawInternal.Insert(port)
+			} else {
+				sawStandard.Insert(port)
+			}
+		}
+	}
+
+	internal := []int32{}
+	for p := range sawInternal {
+		if !sawStandard.Contains(p) {
+			internal = append(internal, p)
+		}
+	}
+	return smallset.New(internal...)
 }
 
 type GatewayForDeployer struct {
@@ -90,6 +154,10 @@ type GatewayForDeployer struct {
 	ControllerName string
 	// All ports from all listeners
 	Ports smallset.Set[int32]
+	// InternalPorts are ports whose bind is internal (routing-only). They are excluded
+	// from the generated Service and container ports. Derived from the
+	// agentgateway.dev/internal-ports annotation on the Gateway and its ListenerSets.
+	InternalPorts smallset.Set[int32]
 	// MeshTrustDomain changes should trigger reconciliation
 	// this field isn't read outside of Equals for a trigger
 	MeshTrustDomain string
@@ -146,5 +214,6 @@ func (c GatewayForDeployer) Equals(in GatewayForDeployer) bool {
 	return c.ObjectSource.Equals(in.ObjectSource) &&
 		c.ControllerName == in.ControllerName &&
 		c.MeshTrustDomain == in.MeshTrustDomain &&
-		slices.Equal(c.Ports.List(), in.Ports.List())
+		slices.Equal(c.Ports.List(), in.Ports.List()) &&
+		slices.Equal(c.InternalPorts.List(), in.InternalPorts.List())
 }

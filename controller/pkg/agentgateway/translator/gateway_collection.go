@@ -20,6 +20,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
@@ -264,6 +265,20 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			return rm.BuildGWStatus(context.Background(), *obj, 0), nil
 		}
 
+		// Ports whose bind should be internal, from the gateway's internal-ports annotation.
+		// May only reference this gateway's own listener ports.
+		internalPorts, internalErrs := annotations.ParseInternalPorts(
+			obj.GetAnnotations()[annotations.InternalPorts],
+			func(p int32) bool {
+				for _, l := range kgw.Listeners {
+					if int32(l.Port) == p {
+						return true
+					}
+				}
+				return false
+			},
+		)
+
 		for i, l := range kgw.Listeners {
 			// Attached Routes count starts at 0 and gets updated later in the status syncer
 			// when the real count is available after route processing
@@ -301,6 +316,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Port:                   l.Port,
 				Protocol:               l.Protocol,
 				TLSPassthrough:         l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModePassthrough,
+				Internal:               internalPorts.Has(l.Port),
 			}
 
 			res := &GatewayListener{
@@ -323,6 +339,14 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Reason: gwv1.GatewayReasonAccepted,
 			})
 			result = append(result, res)
+		}
+		if len(internalErrs) > 0 {
+			gwReporter.SetCondition(reporter.GatewayCondition{
+				Type:    gwv1.GatewayConditionAccepted,
+				Status:  metav1.ConditionFalse,
+				Reason:  gwv1.GatewayReasonInvalid,
+				Message: "invalid " + annotations.InternalPorts + " annotation: " + strings.Join(internalErrs, "; "),
+			})
 		}
 		listenersFromSets := krt.Fetch(ctx, cfg.ListenerSets, krt.FilterIndex(cfg.listenerIndex, config.NamespacedName(obj)))
 		// Sort by listener precedence
@@ -358,6 +382,14 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			})
 		}
 		validateListenerConflicts(result)
+		if ports := internalPortDisagreements(result); len(ports) > 0 {
+			gwReporter.SetCondition(reporter.GatewayCondition{
+				Type:    gwv1.GatewayConditionAccepted,
+				Status:  metav1.ConditionFalse,
+				Reason:  gwv1.GatewayReasonInvalid,
+				Message: fmt.Sprintf("conflicting %s annotation: port(s) %v are marked internal by some listeners but standard by others", annotations.InternalPorts, ports),
+			})
+		}
 		uniqueListenerSets := sets.New[utils.TypedNamespacedName]()
 		for _, ls := range result {
 			if !(ls.Valid && ls.Conflict == "" && ls.ParentObject.Kind == wellknown.ListenerSetGVK.Kind) {
@@ -383,6 +415,33 @@ const (
 	ListenerConflictHostname = "hostname"
 	ListenerConflictProtocol = "protocol"
 )
+
+// internalPortDisagreements returns the sorted set of ports for which non-conflicting
+// listeners disagree on internal vs standard bind mode. A bind is per-port and shared,
+// so such a port cannot be resolved to a single mode and must be reported as invalid.
+func internalPortDisagreements(listeners []*GatewayListener) []int32 {
+	var sawInternal, sawStandard sets.Set[gwv1.PortNumber]
+	sawInternal = sets.New[gwv1.PortNumber]()
+	sawStandard = sets.New[gwv1.PortNumber]()
+	for _, l := range listeners {
+		if l.Conflict != "" {
+			continue
+		}
+		if l.ParentInfo.Internal {
+			sawInternal.Insert(l.ParentInfo.Port)
+		} else {
+			sawStandard.Insert(l.ParentInfo.Port)
+		}
+	}
+	var conflicting []int32
+	for port := range sawInternal {
+		if sawStandard.Contains(port) {
+			conflicting = append(conflicting, int32(port))
+		}
+	}
+	slices.Sort(conflicting)
+	return conflicting
+}
 
 func validateListenerConflicts(listeners []*GatewayListener) {
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
@@ -484,6 +543,20 @@ func ListenerSetBuilder(
 		return status, nil
 	}
 
+	// Ports whose bind should be internal, from the ListenerSet's internal-ports
+	// annotation. May only reference this ListenerSet's own listener ports.
+	internalPorts, internalErrs := annotations.ParseInternalPorts(
+		obj.GetAnnotations()[annotations.InternalPorts],
+		func(p int32) bool {
+			for _, l := range ls.Listeners {
+				if port, err := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port); err == nil && int32(port) == p {
+					return true
+				}
+			}
+			return false
+		},
+	)
+
 	for i, l := range ls.Listeners {
 		port, portErr := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port)
 		l.Port = port
@@ -510,6 +583,7 @@ func ListenerSetBuilder(
 			Port:             l.Port,
 			Protocol:         l.Protocol,
 			TLSPassthrough:   l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModePassthrough,
+			Internal:         internalPorts.Has(l.Port),
 		}
 
 		res := ListenerSet{
@@ -521,6 +595,16 @@ func ListenerSetBuilder(
 			ParentInfo:    pri,
 		}
 		result = append(result, res)
+	}
+
+	if len(internalErrs) > 0 {
+		status.Conditions = SetConditions(obj.Generation, status.Conditions, map[string]*Condition{
+			string(gwv1.GatewayConditionAccepted): {
+				Reason:  string(gwv1.GatewayReasonInvalid),
+				Status:  metav1.ConditionFalse,
+				Message: "invalid " + annotations.InternalPorts + " annotation: " + strings.Join(internalErrs, "; "),
+			},
+		})
 	}
 
 	reportListenerSetStatus(obj, status)

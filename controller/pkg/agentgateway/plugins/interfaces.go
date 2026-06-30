@@ -101,6 +101,10 @@ type ParentInfo struct {
 	Port           gwv1.PortNumber
 	Protocol       gwv1.ProtocolType
 	TLSPassthrough bool
+	// Internal marks this listener's bind as internal (routing-only): no OS listener
+	// socket, no Service port, no container port. Sourced from the agentgateway.dev/internal-ports
+	// annotation on the listener's parent Gateway or ListenerSet.
+	Internal bool
 }
 
 func (g ParentInfo) Equals(other ParentInfo) bool {
@@ -114,6 +118,7 @@ func (g ParentInfo) Equals(other ParentInfo) bool {
 		g.Port == other.Port &&
 		g.Protocol == other.Protocol &&
 		g.TLSPassthrough == other.TLSPassthrough &&
+		g.Internal == other.Internal &&
 		g.CreationTimestamp == other.CreationTimestamp &&
 		slices.EqualFunc(g.AllowedKinds, other.AllowedKinds, func(a, b gwv1.RouteGroupKind) bool {
 			return a.Kind == b.Kind && ptr.Equal(a.Group, b.Group)
