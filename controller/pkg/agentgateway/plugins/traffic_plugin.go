@@ -1924,7 +1924,9 @@ func attachmentName(target *api.PolicyTarget) string {
 			b += "/" + *v.Gateway.Listener
 		}
 		if v.Gateway.Port != nil {
-			b += "/" + strconv.Itoa(int(*v.Gateway.Port))
+			// Use a "port=" marker (the "=" is invalid in a SectionName) so a numeric
+			// listener name (e.g. "443") can't produce the same key suffix as a port.
+			b += "/port=" + strconv.Itoa(int(*v.Gateway.Port))
 		}
 		return b
 	case *api.PolicyTarget_Route:
