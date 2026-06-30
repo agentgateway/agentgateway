@@ -202,7 +202,7 @@ fn merge_dynamic_metadata(
 
 	for (key, value) in &metadata.fields {
 		let json_val = envoy_proto_common::prost_value_to_json(value)
-			.map_err(|e| Error::MetadataConversion(format!("failed to convert key '{}': {}", key, e)))?;
+			.map_err(|e| Error::Metadata(format!("failed to convert key '{}': {}", key, e)))?;
 		dynamic_metadata.0.insert(key.clone(), json_val);
 	}
 

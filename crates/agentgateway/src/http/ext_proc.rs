@@ -53,10 +53,8 @@ pub enum Error {
 	BodyBuffer(String),
 	#[error("invalid body mutation: {0}")]
 	BodyMutation(String),
-	#[error("failed to evaluate gRPC initial metadata: {0}")]
-	MetadataEvaluation(String),
-	#[error("failed to convert metadata value: {0}")]
-	MetadataConversion(String),
+	#[error("invalid ext_proc metadata: {0}")]
+	Metadata(String),
 	#[error(transparent)]
 	InvalidHeaderName(#[from] http::header::InvalidHeaderName),
 	#[error(transparent)]
@@ -431,10 +429,7 @@ impl ExtProcInstance {
 		}
 	}
 
-	fn ensure_stream_started(
-		&mut self,
-		exec: &Executor<'_>,
-	) -> Result<(), Error> {
+	fn ensure_stream_started(&mut self, exec: &Executor<'_>) -> Result<(), Error> {
 		if self.tx_req.is_some() {
 			return Ok(());
 		}
@@ -1753,7 +1748,7 @@ fn standard_ext_proc_request_attributes(
 			"source.address".to_string(),
 			prost_wkt_types::Value {
 				kind: Some(prost_wkt_types::value::Kind::StringValue(
-					tcp.peer_addr.to_string(),
+					tcp.peer_addr.ip().to_string(),
 				)),
 			},
 		),
@@ -1769,7 +1764,7 @@ fn standard_ext_proc_request_attributes(
 			"destination.address".to_string(),
 			prost_wkt_types::Value {
 				kind: Some(prost_wkt_types::value::Kind::StringValue(
-					tcp.local_addr.to_string(),
+					tcp.local_addr.ip().to_string(),
 				)),
 			},
 		),

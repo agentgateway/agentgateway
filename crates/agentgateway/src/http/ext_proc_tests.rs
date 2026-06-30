@@ -4821,7 +4821,7 @@ mod metadata_context_and_attributes {
 			.expect("envoy ext_proc namespace");
 
 		match &ext_proc.fields.get("source.address").unwrap().kind {
-			Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "192.168.0.1:12345"),
+			Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "192.168.0.1"),
 			invalid => panic!("expected source.address string, got {invalid:?}"),
 		}
 		match &ext_proc.fields.get("source.port").unwrap().kind {
@@ -4829,7 +4829,7 @@ mod metadata_context_and_attributes {
 			invalid => panic!("expected source.port number, got {invalid:?}"),
 		}
 		match &ext_proc.fields.get("destination.address").unwrap().kind {
-			Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "10.0.0.1:8080"),
+			Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "10.0.0.1"),
 			invalid => panic!("expected destination.address string, got {invalid:?}"),
 		}
 		match &ext_proc.fields.get("destination.port").unwrap().kind {
