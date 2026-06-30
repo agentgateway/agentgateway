@@ -1886,6 +1886,10 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub source: Option<SourceContext>,
 
+	/// `destination` contains attributes about the downstream request destination at agentgateway.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub destination: Option<DestinationContext>,
+
 	/// `mcp` contains attributes about the MCP request.
 	/// Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.
 	/// Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.
@@ -1990,6 +1994,7 @@ impl ExecutorSerde {
 
 		// Set all the ExtensionOrDirect fields
 		exec.source = ExtensionOrDirect::Direct(self.source.as_ref());
+		exec.destination = ExtensionOrDirect::Direct(self.destination.as_ref());
 		exec.jwt = ExtensionOrDirect::Direct(self.jwt.as_ref());
 		exec.api_key = ExtensionOrDirect::Direct(self.api_key.as_ref());
 		exec.basic_auth = ExtensionOrDirect::Direct(self.basic_auth.as_ref());
@@ -2083,6 +2088,10 @@ pub fn full_example_executor() -> ExecutorSerde {
 				http::HeaderName::from_static("x-custom-header"),
 				http::HeaderValue::from_static("custom-value"),
 			)]),
+		}),
+		destination: Some(DestinationContext {
+			address: "10.0.0.1".parse().unwrap(),
+			port: 8080,
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![
