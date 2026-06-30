@@ -434,6 +434,8 @@ impl ExtProcInstance {
 			return Ok(());
 		}
 
+		// Delay stream creation until we have a request/response executor so
+		// metadata_context CEL can be resolved into gRPC initial metadata.
 		let grpc_initial_metadata = build_grpc_initial_metadata(exec, self.metadata_context.as_ref());
 		let Some(mut client) = self.client.take() else {
 			return Err(Error::RequestSend);
@@ -476,6 +478,8 @@ impl ExtProcInstance {
 						let _ = tx_resp_for_request.send(item).await;
 					},
 					Some(processing_response::Response::ImmediateResponse(_)) => {
+						// Immediate responses can terminate either the request-side or
+						// response-side flow, so fan them out to both waiters.
 						let _ = tx_resp_for_request.send(item.clone()).await;
 						let _ = tx_resp_for_response.send(item).await;
 					},
@@ -1634,6 +1638,8 @@ fn build_processing_metadata_context(
 ) -> Option<HashMap<String, prost_wkt_types::Struct>> {
 	metadata_context.map(|meta| {
 		meta
+			// The reserved namespace is transported as gRPC initial metadata
+			// instead of regular ext_proc metadata_context.
 			.iter()
 			.filter(|(namespace, _)| namespace.as_str() != EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE)
 			.filter_map(|(namespace, expressions)| {
@@ -1659,6 +1665,8 @@ fn build_request_attributes(
 		.unwrap_or_default();
 
 	if let Some(tcp) = req.extensions().get::<TCPConnectionInfo>() {
+		// When these well-known keys are requested, source them from the live
+		// connection/request state rather than whatever CEL happened to evaluate.
 		for (key, value) in standard_ext_proc_request_attributes(req, tcp) {
 			if attributes.contains_key(&key) {
 				fields.insert(key, value);
@@ -1687,6 +1695,8 @@ fn build_grpc_initial_metadata(
 		return metadata;
 	};
 
+	// CEL values in the reserved namespace are copied into the outbound gRPC
+	// stream-open metadata, skipping entries that cannot be represented there.
 	for (key, expr) in expressions {
 		let value = match eval_expression(exec, expr) {
 			Ok(value) => value,
