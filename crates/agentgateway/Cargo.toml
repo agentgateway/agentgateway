@@ -93,7 +93,6 @@ opentelemetry_sdk.workspace = true
 parking_lot.workspace = true
 pem.workspace = true
 percent-encoding.workspace = true
-phonenumber.workspace = true
 pin-project-lite.workspace = true
 ppp.workspace = true
 prometheus-client.workspace = true
@@ -106,6 +105,7 @@ quick_cache.workspace = true
 libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
+rlibphonenumber.workspace = true
 
 rmcp = { version = "1.5", features = [
     "client",

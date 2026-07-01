@@ -134,7 +134,6 @@ opentelemetry_sdk = { version = "0.32", features = ["rt-tokio", "logs"] }
 parking_lot = "0.12"
 pem = "3.0.6"
 percent-encoding = "2.3"
-phonenumber = "0.3"
 pin-project-lite = "0.2"
 pingora-pool = "0.8"
 ppp = "2.3"
@@ -162,6 +161,7 @@ reqwest = { version = "0.13", default-features = false, features = [
     "charset",
     "rustls",
 ] }
+rlibphonenumber = "2.2"
 rstest = "0.26"
 rust_decimal = { version = "1", default-features = false }
 mimalloc = { version = "0.1", features = ["v3", "no_thp"] }
