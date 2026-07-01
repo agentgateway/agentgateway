@@ -15,9 +15,11 @@ pub async fn apply_to_request(_: &A2aPolicy, req: &mut Request<Body>) -> Request
 }
 
 async fn classify_request(req: &mut Request<Body>) -> RequestType {
-	// Possible options are POST a JSON-RPC message or GET /.well-known/agent.json
+	// Possible options are POST a JSON-RPC or HTTP+JSON A2A message, or GET /.well-known/agent.json
 	// For agent card, we will process only on the response
-	match (req.method(), req.uri().path()) {
+	let method = req.method().clone();
+	let path = req.uri().path().to_string();
+	match (method, path.as_str()) {
 		// agent-card.json: v0.3.0+
 		// agent.json: older versions
 		(m, path)
@@ -34,9 +36,9 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 			let uri = crate::http::x_headers::apply_forwarded_scheme(uri, req.headers());
 			RequestType::AgentCard(uri)
 		},
-		(m, _) if m == http::Method::POST => {
+		(http::Method::POST, path) => {
 			let method = match crate::http::classify_content_type(req.headers()) {
-				crate::http::WellKnownContentTypes::Json => match inspect_method(req).await {
+				crate::http::WellKnownContentTypes::Json => match inspect_method(req, path).await {
 					Ok(method) => method,
 					Err(e) => {
 						warn!("failed to read a2a request: {e}");
@@ -49,6 +51,16 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 				},
 			};
 			RequestType::Call(method)
+		},
+		// The remaining REST operations are reads and deletes. They carry no body to
+		// inspect, so the operation is fully determined by the method and path.
+		(m, path) if m == http::Method::GET || m == http::Method::DELETE => {
+			match rest_method_from_path(&m, path) {
+				Some(method) => RequestType::Call(Strng::from(method)),
+				// Not an A2A operation we recognize; leave it unclassified rather than
+				// tagging unrelated traffic as A2A.
+				None => RequestType::Unknown,
+			}
 		},
 		_ => RequestType::Unknown,
 	}
@@ -198,11 +210,111 @@ async fn inspect_call_response(resp: &mut Response) -> Option<ResponseInfo> {
 
 #[derive(Deserialize)]
 struct JsonRpcMethod {
-	method: Strng,
+	method: Option<Strng>,
 }
 
-async fn inspect_method(req: &mut Request<Body>) -> anyhow::Result<Strng> {
-	Ok(json::inspect_body::<JsonRpcMethod>(req).await?.method)
+/// Determine the A2A method for a POST request.
+///
+/// A2A defines multiple wire formats for the same operations:
+///   - JSON-RPC: `{"jsonrpc": "2.0", "method": "SendMessage", "params": {...}}`
+///   - HTTP+JSON (REST): `{"message": {...}, "configuration": {...}}` POSTed to
+///     a method-specific path such as `/message:send` or `/tasks/{id}:cancel`.
+///
+/// The REST binding has no `method` field in the body — the method is
+/// conveyed by the URL path instead — so JSON-RPC's plain `body.method`
+/// extraction alone misclassifies every REST call as `unknown`.
+async fn inspect_method(req: &mut Request<Body>, path: &str) -> anyhow::Result<Strng> {
+	let body = json::inspect_body::<JsonRpcMethod>(req).await?;
+	// JSON-RPC carries the method verbatim. This is deliberately passed through
+	// unchanged so both the v0.3 (`message/send`) and v1.0 (`SendMessage`) spellings
+	// are reported as the client sent them.
+	if let Some(method) = body.method {
+		return Ok(method);
+	}
+	if let Some(method) = rest_method_from_path(&http::Method::POST, path) {
+		return Ok(Strng::from(method));
+	}
+	Ok(Strng::from("unknown"))
+}
+
+/// Map an A2A HTTP+JSON (REST) request to its canonical A2A method name.
+///
+/// The REST binding conveys the operation in the request line rather than the
+/// body (A2A v1.0 §11.3 "URL Patterns and HTTP Methods"), so the method is
+/// derived from the HTTP method plus the trailing path segments:
+///
+/// | Request                                                  | Method                            |
+/// |----------------------------------------------------------|-----------------------------------|
+/// | `POST   /message:send`                                     | `SendMessage`                     |
+/// | `POST   /message:stream`                                   | `SendStreamingMessage`            |
+/// | `GET    /tasks/{id}`                                       | `GetTask`                         |
+/// | `GET    /tasks`                                            | `ListTasks`                       |
+/// | `POST   /tasks/{id}:cancel`                                | `CancelTask`                      |
+/// | `POST   /tasks/{id}:subscribe`                             | `SubscribeToTask`                 |
+/// | `POST   /tasks/{id}/pushNotificationConfigs`               | `CreateTaskPushNotificationConfig`|
+/// | `GET    /tasks/{id}/pushNotificationConfigs/{configId}`    | `GetTaskPushNotificationConfig`   |
+/// | `GET    /tasks/{id}/pushNotificationConfigs`               | `ListTaskPushNotificationConfigs` |
+/// | `DELETE /tasks/{id}/pushNotificationConfigs/{configId}`    | `DeleteTaskPushNotificationConfig`|
+/// | `GET    /extendedAgentCard`                                | `GetExtendedAgentCard`            |
+///
+/// The returned names are the canonical method names from the spec's method
+/// mapping reference (§5.3), which are shared with the JSON-RPC and gRPC
+/// bindings. Reporting those keeps `a2a.method` comparable across bindings
+/// rather than inventing a REST-only spelling.
+///
+/// Matching is done on trailing segments because the gateway may host the agent
+/// under an arbitrary prefix (e.g. `/a2a/{agent}/tasks/{id}`), and `{id}` /
+/// `{configId}` are opaque and unbounded.
+fn rest_method_from_path(method: &http::Method, path: &str) -> Option<&'static str> {
+	let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+	// Segment counted from the end; 0 is the last segment.
+	let seg = |n: usize| -> Option<&str> {
+		segments
+			.len()
+			.checked_sub(n + 1)
+			.and_then(|i| segments.get(i).copied())
+	};
+	let last = seg(0)?;
+
+	if *method == http::Method::POST {
+		// The custom verb binds to the final segment with a `:` suffix. `{id}` is
+		// opaque, so match on the suffix rather than the whole segment.
+		match last.split_once(':') {
+			Some(("message", "send")) => Some("SendMessage"),
+			Some(("message", "stream")) => Some("SendStreamingMessage"),
+			Some((_, "cancel")) if seg(1) == Some("tasks") => Some("CancelTask"),
+			Some((_, "subscribe")) if seg(1) == Some("tasks") => Some("SubscribeToTask"),
+			Some(_) => None,
+			// Slash-style streaming path, accepted for compatibility with clients that
+			// predate the `:stream` custom-verb spelling.
+			None if last == "stream" && seg(1) == Some("message") => Some("SendStreamingMessage"),
+			None if last == "pushNotificationConfigs" && seg(1).is_some() && seg(2) == Some("tasks") => {
+				Some("CreateTaskPushNotificationConfig")
+			},
+			None => None,
+		}
+	} else if *method == http::Method::GET {
+		if last == "extendedAgentCard" {
+			Some("GetExtendedAgentCard")
+		} else if last == "pushNotificationConfigs" && seg(1).is_some() && seg(2) == Some("tasks") {
+			Some("ListTaskPushNotificationConfigs")
+		} else if seg(1) == Some("pushNotificationConfigs") && seg(3) == Some("tasks") {
+			Some("GetTaskPushNotificationConfig")
+		} else if seg(1) == Some("tasks") {
+			Some("GetTask")
+		} else if last == "tasks" {
+			Some("ListTasks")
+		} else {
+			None
+		}
+	} else if *method == http::Method::DELETE
+		&& seg(1) == Some("pushNotificationConfigs")
+		&& seg(3) == Some("tasks")
+	{
+		Some("DeleteTaskPushNotificationConfig")
+	} else {
+		None
+	}
 }
 
 fn build_agent_path(uri: Uri) -> String {

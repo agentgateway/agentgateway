@@ -81,6 +81,216 @@ async fn test_classify_request_extracts_method_and_preserves_body() {
 }
 
 #[tokio::test]
+async fn test_classify_request_extracts_rest_send_method_and_preserves_body() {
+	for content_type in ["application/json", "application/a2a+json"] {
+		let payload = json!({
+			"message": {
+				"messageId": "msg-123",
+				"role": "ROLE_USER",
+				"parts": [{ "text": "hello" }],
+			},
+			"configuration": { "returnImmediately": true },
+		});
+		let body = serde_json::to_vec(&payload).unwrap();
+		let mut req = ::http::Request::builder()
+			.method(Method::POST)
+			.uri("https://example.com/a2a/reviewer/message:send")
+			.header(header::CONTENT_TYPE, content_type)
+			.body(http::Body::from(body.clone()))
+			.unwrap();
+
+		let ty = classify_request(&mut req).await;
+
+		match ty {
+			RequestType::Call(method) => assert_eq!(method.as_str(), "SendMessage"),
+			other => panic!("expected call request, got {other:?}"),
+		}
+		assert_eq!(http::read_req_body(req).await.unwrap(), body);
+	}
+}
+
+#[test]
+fn test_rest_method_from_path_covers_spec_surface() {
+	// A2A v1.0 §11.3 "URL Patterns and HTTP Methods", reported using the canonical
+	// method names from the §5.3 method mapping reference.
+	let cases = vec![
+		(Method::POST, "/message:send", Some("SendMessage")),
+		(
+			Method::POST,
+			"/message:stream",
+			Some("SendStreamingMessage"),
+		),
+		(Method::GET, "/tasks/task-123", Some("GetTask")),
+		(Method::GET, "/tasks", Some("ListTasks")),
+		(Method::POST, "/tasks/task-123:cancel", Some("CancelTask")),
+		(
+			Method::POST,
+			"/tasks/task-123:subscribe",
+			Some("SubscribeToTask"),
+		),
+		(
+			Method::POST,
+			"/tasks/task-123/pushNotificationConfigs",
+			Some("CreateTaskPushNotificationConfig"),
+		),
+		(
+			Method::GET,
+			"/tasks/task-123/pushNotificationConfigs/cfg-1",
+			Some("GetTaskPushNotificationConfig"),
+		),
+		(
+			Method::GET,
+			"/tasks/task-123/pushNotificationConfigs",
+			Some("ListTaskPushNotificationConfigs"),
+		),
+		(
+			Method::DELETE,
+			"/tasks/task-123/pushNotificationConfigs/cfg-1",
+			Some("DeleteTaskPushNotificationConfig"),
+		),
+		(
+			Method::GET,
+			"/extendedAgentCard",
+			Some("GetExtendedAgentCard"),
+		),
+		// The gateway may host the agent under an arbitrary prefix.
+		(
+			Method::POST,
+			"/a2a/reviewer/message:send",
+			Some("SendMessage"),
+		),
+		(Method::GET, "/a2a/reviewer/tasks/task-123", Some("GetTask")),
+		(
+			Method::DELETE,
+			"/a2a/reviewer/tasks/task-123/pushNotificationConfigs/cfg-1",
+			Some("DeleteTaskPushNotificationConfig"),
+		),
+		// Slash-style streaming path kept for backwards compatibility.
+		(
+			Method::POST,
+			"/message/stream",
+			Some("SendStreamingMessage"),
+		),
+		// Task ids are opaque and may themselves look like a collection name.
+		(Method::GET, "/tasks/tasks", Some("GetTask")),
+		// Negative cases: not A2A operations.
+		(Method::GET, "/", None),
+		(Method::GET, "/healthz", None),
+		(Method::POST, "/message:explode", None),
+		(Method::POST, "/tasks/task-123:explode", None),
+		(Method::POST, "/tasks", None),
+		(Method::DELETE, "/tasks/task-123", None),
+		// Custom verbs are only defined on POST, and task ids are opaque strings that
+		// may themselves contain a colon, so a colon in a GET path is part of the id.
+		(Method::GET, "/tasks/task-123:cancel", Some("GetTask")),
+		// `pushNotificationConfigs` must hang off a task.
+		(Method::POST, "/pushNotificationConfigs", None),
+		(Method::GET, "/pushNotificationConfigs", None),
+	];
+
+	for (method, path, expected) in cases {
+		assert_eq!(
+			rest_method_from_path(&method, path),
+			expected,
+			"unexpected classification for {method} {path}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn test_classify_request_classifies_rest_get_task_without_body() {
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("https://example.com/a2a/reviewer/tasks/task-123")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let ty = classify_request(&mut req).await;
+
+	match ty {
+		RequestType::Call(method) => assert_eq!(method.as_str(), "GetTask"),
+		other => panic!("expected call request, got {other:?}"),
+	}
+}
+
+#[tokio::test]
+async fn test_classify_request_classifies_rest_delete_push_notification_config() {
+	let mut req = ::http::Request::builder()
+		.method(Method::DELETE)
+		.uri("https://example.com/tasks/task-123/pushNotificationConfigs/cfg-1")
+		.body(http::Body::empty())
+		.unwrap();
+
+	let ty = classify_request(&mut req).await;
+
+	match ty {
+		RequestType::Call(method) => {
+			assert_eq!(method.as_str(), "DeleteTaskPushNotificationConfig")
+		},
+		other => panic!("expected call request, got {other:?}"),
+	}
+}
+
+#[tokio::test]
+async fn test_classify_request_classifies_rest_cancel_without_message_field() {
+	// `tasks/{id}:cancel` has no `message` in the body, so the classification has to
+	// come from the path alone.
+	let body = serde_json::to_vec(&json!({})).unwrap();
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("https://example.com/a2a/reviewer/tasks/task-123:cancel")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(body.clone()))
+		.unwrap();
+
+	let ty = classify_request(&mut req).await;
+
+	match ty {
+		RequestType::Call(method) => assert_eq!(method.as_str(), "CancelTask"),
+		other => panic!("expected call request, got {other:?}"),
+	}
+	assert_eq!(http::read_req_body(req).await.unwrap(), body);
+}
+
+#[tokio::test]
+async fn test_classify_request_leaves_unrelated_get_unclassified() {
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.uri("https://example.com/healthz")
+		.body(http::Body::empty())
+		.unwrap();
+
+	match classify_request(&mut req).await {
+		RequestType::Unknown => {},
+		other => panic!("expected unknown request, got {other:?}"),
+	}
+}
+
+#[tokio::test]
+async fn test_classify_request_prefers_jsonrpc_method_over_path() {
+	// A JSON-RPC call posted to a REST-looking path must still report the method the
+	// client actually sent.
+	let payload = json!({
+		"jsonrpc": "2.0",
+		"id": "1",
+		"method": "SendMessage",
+		"params": { "message": { "messageId": "msg-1" } },
+	});
+	let body = serde_json::to_vec(&payload).unwrap();
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("https://example.com/tasks/task-123:cancel")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(body))
+		.unwrap();
+
+	match classify_request(&mut req).await {
+		RequestType::Call(method) => assert_eq!(method.as_str(), "SendMessage"),
+		other => panic!("expected call request, got {other:?}"),
+	}
+}
+
+#[tokio::test]
 async fn test_classify_request_uses_original_url_for_agent_card() {
 	let original: Uri = "https://example.com/api/.well-known/agent-card.json"
 		.parse()
