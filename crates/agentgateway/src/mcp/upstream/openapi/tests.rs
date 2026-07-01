@@ -1238,6 +1238,68 @@ async fn test_headers_not_in_schema_are_ignored() {
 	assert_eq!(result.unwrap(), expected_response);
 }
 
+// Build an IncomingRequestContext from inbound headers. Origin-form URI (no authority) so apply()
+// forwards headers without rewriting the upstream host.
+fn ctx_with_inbound_headers(headers: &[(&str, &str)]) -> IncomingRequestContext {
+	let mut builder = ::http::Request::builder().uri("/mcp");
+	for (k, v) in headers {
+		builder = builder.header(*k, *v);
+	}
+	let parts = builder.body(()).unwrap().into_parts().0;
+	IncomingRequestContext::new(&parts)
+}
+
+#[tokio::test]
+async fn test_inbound_mcp_param_header_rejected_for_rest_upstream() {
+	let (server, handler) = setup().await;
+
+	// OpenAPI tools declare no x-mcp-header, so an inbound Mcp-Param-* is always unexpected: the
+	// terminal gateway rejects (-32020) rather than forwarding it to the REST upstream.
+	Mock::given(method("GET"))
+		.and(path("/users/should-not-run"))
+		.respond_with(ResponseTemplate::new(200))
+		.expect(0)
+		.mount(&server)
+		.await;
+
+	let ctx = ctx_with_inbound_headers(&[("mcp-param-region", "us-west1")]);
+	let args = json!({ "path": { "user_id": "should-not-run" } });
+	let err = handler
+		.call_tool("get_user", Some(args.as_object().unwrap().clone()), &ctx)
+		.await
+		.expect_err("unexpected Mcp-Param-* must be rejected");
+	assert!(
+		matches!(err, UpstreamError::InvalidRoutingHeader(_)),
+		"expected InvalidRoutingHeader, got {err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_ordinary_inbound_headers_forwarded_to_rest_upstream() {
+	let (server, handler) = setup().await;
+
+	let user_id = "passthrough";
+	let expected_response = json!({ "id": user_id });
+
+	// The reject is scoped to Mcp-Param-*: ordinary inbound headers still pass through to the upstream.
+	Mock::given(method("GET"))
+		.and(path(format!("/users/{user_id}")))
+		.and(header("x-trace", "keep"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+		.expect(1)
+		.mount(&server)
+		.await;
+
+	let ctx = ctx_with_inbound_headers(&[("x-trace", "keep")]);
+	let args = json!({ "path": { "user_id": user_id } });
+	let result = handler
+		.call_tool("get_user", Some(args.as_object().unwrap().clone()), &ctx)
+		.await;
+
+	assert!(result.is_ok(), "Request should succeed: {:?}", result.err());
+	assert_eq!(result.unwrap(), expected_response);
+}
+
 #[tokio::test]
 async fn test_call_tool_structured_content_fallback() {
 	// Test that CallToolResult has both content and structured_content populated

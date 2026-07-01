@@ -13,6 +13,7 @@ use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind
 use percent_encoding::{AsciiSet, utf8_percent_encode};
 use regex::{Captures, Regex, Replacer};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
+use rmcp::transport::common::http_header::HEADER_MCP_PARAM_PREFIX;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, warn};
@@ -21,7 +22,7 @@ use crate::client::ResolvedDestination;
 use crate::http::sessionpersistence;
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError, is_mcp_param_header};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -863,6 +864,14 @@ impl Handler {
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
 
 		ctx.apply(&mut request)?;
+
+		// The gateway is the terminal MCP server for an OpenAPI-backed tool: OpenAPI tools declare no
+		// x-mcp-header, so any inbound Mcp-Param-* is unexpected. Reject per SEP-2243 server validation
+		// (-32020) before schema headers are applied, so it cannot leak to the REST backend or shadow a
+		// schema-derived header of the same name.
+		if request.headers().keys().any(is_mcp_param_header) {
+			return Err(UpstreamError::InvalidRoutingHeader(HEADER_MCP_PARAM_PREFIX));
+		}
 
 		// First header set wins including headers set by ctx.apply or the gateway
 		for (key, value) in &header_params {
