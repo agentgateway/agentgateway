@@ -14,7 +14,6 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 use crate::http::jwt;
-use crate::proxy::ProxyError;
 use crate::serdes::FileInlineOrRemote;
 use crate::test_helpers::proxymock::setup_proxy_test;
 use crate::{client, test_helpers};
@@ -611,25 +610,18 @@ async fn token_exchange_bounds_transport_failures() {
 }
 
 #[tokio::test]
-async fn callback_rejects_invalid_transaction_state() {
+async fn callback_recovers_from_invalid_transaction_state() {
 	let cases = [
-		(
-			"missing transaction",
-			None,
-			"tx-1",
-			"test-state",
-			Error::MissingTransaction,
-		),
+		("missing transaction", None, "tx-1", "test-state"),
 		(
 			"csrf mismatch",
 			Some(("expected-state", TEST_NONCE, "/protected")),
 			"tx-1",
 			"wrong-state",
-			Error::CsrfMismatch,
 		),
 	];
 
-	for (name, transaction, transaction_id, callback_csrf_state, expected_error) in cases {
+	for (name, transaction, transaction_id, callback_csrf_state) in cases {
 		let policy = test_policy();
 		let callback_state = encoded_callback_state(transaction_id, callback_csrf_state);
 		let uri =
@@ -653,21 +645,41 @@ async fn callback_rejects_invalid_transaction_state() {
 			);
 		}
 
-		let err = test_helpers::test_policy(&policy, &mut req)
+		let response = test_helpers::test_policy(&policy, &mut req)
 			.await
-			.expect_err(name)
-			.downcast();
-		match expected_error {
-			Error::MissingTransaction => assert!(
-				matches!(err, ProxyError::OidcFailure(Error::MissingTransaction)),
-				"{name}"
-			),
-			Error::CsrfMismatch => assert!(
-				matches!(err, ProxyError::OidcFailure(Error::CsrfMismatch)),
-				"{name}"
-			),
-			_ => unreachable!("unexpected test error"),
-		}
+			.expect(name)
+			.direct_response
+			.expect("login redirect");
+		assert_eq!(response.status(), ::http::StatusCode::FOUND, "{name}");
+		let location = response
+			.headers()
+			.get(header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location utf8");
+		assert!(
+			location.starts_with("https://issuer.example.com/authorize?"),
+			"{name}"
+		);
+		let transaction_cookie_name = policy.session.transaction_cookie_name(transaction_id);
+		let set_cookies = response
+			.headers()
+			.get_all(header::SET_COOKIE)
+			.iter()
+			.filter_map(|value| value.to_str().ok())
+			.collect::<Vec<_>>();
+		assert!(
+			set_cookies
+				.iter()
+				.any(|cookie| cookie.starts_with(&format!("{transaction_cookie_name}=;"))),
+			"{name}: stale transaction cookie should be cleared"
+		);
+		assert!(
+			set_cookies
+				.iter()
+				.any(|cookie| cookie.starts_with(&format!("{}.", policy.session.transaction_cookie_prefix))),
+			"{name}: fresh transaction cookie should be set"
+		);
 	}
 }
 
