@@ -35,7 +35,7 @@ use crate::types::agent::{
 	BackendTarget, BackendTrafficPolicy, PolicyInheritance, PolicyTarget, SimpleBackendReference,
 	Target, TargetedPolicy,
 };
-use crate::types::discovery::NamespacedHostname;
+use crate::types::discovery::{AppProtocol, NamespacedHostname};
 use crate::*;
 
 // Processing-option decoding and default behavior.
@@ -2265,6 +2265,10 @@ async fn named_backend(body: &'static str) -> MockServer {
 }
 
 fn configure_standalone_service(t: &TestBind) {
+	configure_standalone_service_with_app_protocol(t, None);
+}
+
+fn configure_standalone_service_with_app_protocol(t: &TestBind, app_protocol: Option<AppProtocol>) {
 	use crate::types::discovery::{NetworkAddress, Service};
 
 	let service = Service {
@@ -2276,6 +2280,9 @@ fn configure_standalone_service(t: &TestBind) {
 			address: "127.0.0.1".parse().unwrap(),
 		}],
 		ports: HashMap::from([(STANDALONE_SERVICE_PORT, STANDALONE_SERVICE_PORT)]),
+		app_protocols: app_protocol
+			.map(|app_protocol| HashMap::from([(STANDALONE_SERVICE_PORT, app_protocol)]))
+			.unwrap_or_default(),
 		..Default::default()
 	};
 
@@ -2405,6 +2412,67 @@ mod standalone_inference_routing {
 				.len(),
 			1,
 			"EPP-selected endpoint should receive traffic",
+		);
+	}
+
+	#[tokio::test]
+	async fn standalone_inference_routing_h2c_service_uses_http2_upstream_for_grpc() {
+		let backend = simple_mock().await;
+		let backend_addr = *backend.address();
+		let request_headers_seen = Arc::new(AtomicUsize::new(0));
+		let ext_proc = ExtProcMock::new({
+			let request_headers_seen = request_headers_seen.clone();
+			move || StandaloneInferenceRouter::new(Some(backend_addr), request_headers_seen.clone())
+		})
+		.spawn()
+		.await;
+
+		let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
+		configure_standalone_service_with_app_protocol(&t, Some(AppProtocol::Http2));
+		t.attach_route(json!({
+			"name": "standalone-epp-grpc",
+			"backends": [
+				{
+					"service": {
+						"name": STANDALONE_SERVICE_REF,
+						"port": STANDALONE_SERVICE_PORT,
+					},
+					"policies": {
+						"inferenceRouting": {
+							"endpointPicker": {
+								"host": ext_proc.address.to_string(),
+							},
+							"destinationMode": "passthrough",
+						},
+					},
+				}
+			],
+		}))
+		.await;
+		let io = t.serve_http2(BIND_KEY);
+
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::POST,
+			"http://lo/inference.GRPC/Generate",
+		)
+		.version(::http::Version::HTTP_2)
+		.header(::http::header::CONTENT_TYPE, "application/grpc")
+		.body(Body::from(vec![0, 0, 0, 0, 0]))
+		.send(io)
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 200);
+
+		let upstream = read_body(res.into_body()).await;
+		assert_eq!(upstream.version, ::http::Version::HTTP_2);
+		assert_eq!(
+			upstream.headers.get(::http::header::CONTENT_TYPE).unwrap(),
+			"application/grpc",
+		);
+		assert_eq!(
+			request_headers_seen.load(Ordering::SeqCst),
+			1,
+			"gRPC inference routing should consult EPP before the HTTP/2 upstream call",
 		);
 	}
 
