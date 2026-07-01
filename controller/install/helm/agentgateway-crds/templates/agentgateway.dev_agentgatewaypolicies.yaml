@@ -10207,12 +10207,16 @@ spec:
                 || has(self.frontend.tls) || has(self.frontend.http) || has(self.frontend.proxyProtocol)
                 || has(self.frontend.connect)) && has(self.targetSelectors) ? self.targetSelectors.all(t,
                 !has(t.sectionName)) : true'
-            - message: port may only be set on frontend policies
+            - message: port may only be set on frontend-only policies (not traffic
+                or backend)
               rule: 'has(self.targetRefs) && self.targetRefs.exists(t, has(t.port))
-                ? has(self.frontend) : true'
-            - message: port may only be set on frontend policies
+                ? (has(self.frontend) && !has(self.traffic) && !has(self.backend))
+                : true'
+            - message: port may only be set on frontend-only policies (not traffic
+                or backend)
               rule: 'has(self.targetSelectors) && self.targetSelectors.exists(t, has(t.port))
-                ? has(self.frontend) : true'
+                ? (has(self.frontend) && !has(self.traffic) && !has(self.backend))
+                : true'
             - message: the 'traffic' field can only target a Gateway, ListenerSet,
                 GRPCRoute, HTTPRoute, or InferencePool
               rule: 'has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t,

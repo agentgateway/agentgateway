@@ -8,7 +8,11 @@ import (
 	"testing"
 
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/test/util/tmpl"
 	"sigs.k8s.io/yaml"
+
+	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 )
 
 // frontendConnectionFields are the Frontend policy fields resolved at the bind
@@ -59,6 +63,54 @@ func TestFrontendFieldsAreClassified(t *testing.T) {
 			t.Errorf("Frontend field %q is not classified; add it to frontendConnectionFields or "+
 				"frontendObservabilityFields and update the AgentgatewayPolicySpec CEL rules accordingly", name)
 		}
+	}
+}
+
+// TestFrontendConnectionFieldTargeting exercises the CEL rules that decide which
+// frontend policies may target a listener (sectionName). Every field in
+// frontendConnectionFields is resolved at the bind (gateway-or-port) level, so it
+// must accept a `port` target but reject a listener (sectionName). It drives off
+// frontendConnectionFields directly, and requires a minimal valid body for every
+// entry, so a newly added connection field cannot be left unexercised.
+func TestFrontendConnectionFieldTargeting(t *testing.T) {
+	// Minimal valid body for each connection/L4 frontend field.
+	bodies := map[string]string{
+		"tcp":                  "tcp:\n  keepalive:\n    retries: 5",
+		"networkAuthorization": "networkAuthorization:\n  policy:\n    matchExpressions:\n    - \"true\"",
+		"tls":                  "tls:\n  handshakeTimeout: 15s",
+		"http":                 "http:\n  http1MaxHeaders: 100",
+		"proxyProtocol":        "proxyProtocol: {}",
+		"connect":              "connect:\n  mode: Tunnel",
+	}
+	tm := `apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: t
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: t1
+    {{if .port}}port: 8080{{else}}sectionName: https{{end}}
+  frontend:
+    {{.body|nindent 4}}
+`
+	v := apitests.NewAgentgatewayValidator(t)
+	for name := range frontendConnectionFields {
+		body, ok := bodies[name]
+		if !ok {
+			t.Fatalf("connection field %q has no test body; add a minimal valid body to exercise its port/listener targeting", name)
+		}
+		t.Run(name, func(t *testing.T) {
+			// port targeting is allowed.
+			res := tmpl.EvaluateOrFail(t, tm, map[string]any{"body": body, "port": true})
+			assert.NoError(t, v.ValidateCustomResourceYAML(res, nil))
+			// listener (sectionName) targeting is rejected.
+			res = tmpl.EvaluateOrFail(t, tm, map[string]any{"body": body, "port": false})
+			if err := v.ValidateCustomResourceYAML(res, nil); err == nil {
+				t.Fatalf("expected listener targeting of frontend.%s to be rejected", name)
+			}
+		})
 	}
 }
 
