@@ -506,6 +506,21 @@ impl Session {
 						let name = ctr.params.name.clone();
 						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
 						span.rename_span(format!("{method} {service_name}"));
+						// SEP-2243: snapshot pre-guardrail (authorize_with_ctx mutates ctr.params in place).
+						// Only a modern client that sent an Mcp-Param-* header needs validation, so nothing
+						// is cloned otherwise.
+						let modern = crate::mcp::streamablehttp::protocol_version_header(ctx.headers(), None)?
+							.is_some_and(|v| v.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str());
+						let routing_snapshot = modern
+							.then(|| crate::mcp::param_validation::mcp_param_headers(ctx.headers()))
+							.filter(|param_headers| !param_headers.is_empty())
+							.map(
+								|param_headers| crate::mcp::param_validation::RoutingHeaderSnapshot {
+									arguments: ctr.params.arguments.clone(),
+									meta: ctr.extensions.get::<rmcp::model::Meta>().cloned(),
+									param_headers,
+								},
+							);
 						let call_arguments = ctr.params.arguments.clone();
 						log.non_atomic_mutate(|l| {
 							l.set_tool(service_name.to_string(), tool.to_string());
@@ -524,6 +539,15 @@ impl Session {
 							)),
 							"tool",
 							&name,
+						))
+						.await?;
+						// SEP-2243: after authorization, so an unauthorized call triggers no upstream fetch.
+						Box::pin(self.relay.validate_routing_headers(
+							&ctx,
+							service_name,
+							tool,
+							routing_snapshot,
+							&r.id,
 						))
 						.await?;
 						Box::pin(

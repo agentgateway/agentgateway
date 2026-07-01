@@ -2,6 +2,7 @@ pub(crate) mod auth;
 pub(crate) mod guardrails;
 mod handler;
 mod mergestream;
+mod param_validation;
 mod rbac;
 mod router;
 mod session;

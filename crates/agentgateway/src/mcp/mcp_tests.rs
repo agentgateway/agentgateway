@@ -4268,6 +4268,282 @@ async fn mcp_guardrails_header_mutation_reaches_upstream() {
 	);
 }
 
+// SEP-2243: an inbound Mcp-Param-* must never be forwarded to any upstream call.
+// A legacy call carrying Mcp-Param-* succeeds without deep validation, but the
+// header is stripped instead of proxied.
+#[tokio::test]
+async fn inbound_custom_param_header_not_forwarded_upstream() {
+	let (mock_a, captured_a) = mock_streamable_http_server_with_capture(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend("mcp", vec![("a", mock_a.addr, false)], false)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/call",
+		"params": {"name": "a_echo", "arguments": {"hi": "world"}}
+	});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-param-region", "us-west1")
+		.send()
+		.await
+		.unwrap();
+	assert!(response.status().is_success(), "legacy call should succeed");
+
+	let captured = captured_a.lock().unwrap().clone();
+	assert!(
+		captured.iter().any(|h| h.get("mcp-method").is_some()),
+		"sanity: the gateway forwarded a POST upstream"
+	);
+	assert!(
+		captured.iter().all(|h| h.get("mcp-param-region").is_none()),
+		"inbound Mcp-Param-* must never be forwarded upstream"
+	);
+}
+
+/// Modern streamable-HTTP upstream exposing one tool whose `region` param carries an
+/// `x-mcp-header: Region` annotation. `tools/list` rejects a request missing
+/// `params._meta.protocolVersion` (400), so a passing call proves the gateway's
+/// schema fetch carries the client `_meta` to the modern stateless upstream.
+async fn mock_xmcp_header_server() -> (MockServer, Arc<std::sync::atomic::AtomicUsize>) {
+	agent_core::telemetry::testing::setup_test_logging();
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let init_counter = std::sync::Arc::new(tokio::sync::Mutex::new(0_i32));
+	let tool_calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+	let tool_calls_c = tool_calls.clone();
+	let router = axum::Router::new().route(
+		"/mcp",
+		axum::routing::post(move |body: axum::Json<serde_json::Value>| async move {
+			let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
+			let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
+			let result = match method {
+				"server/discover" => serde_json::json!({
+					"resultType": "complete",
+					"supportedVersions": ["2026-07-28"],
+					"capabilities": {"tools": {}},
+					"serverInfo": {"name": "xmcp-mock", "version": "0.0.1"}
+				}),
+				"tools/list" => {
+					let has_pv = body
+						.get("params")
+						.and_then(|p| p.get("_meta"))
+						.and_then(|m| m.get("io.modelcontextprotocol/protocolVersion"))
+						.is_some();
+					if !has_pv {
+						return axum::Json(serde_json::json!({
+							"jsonrpc": "2.0", "id": id,
+							"error": {"code": -32020, "message": "missing _meta.protocolVersion"}
+						}));
+					}
+					serde_json::json!({
+						"resultType": "complete",
+						"tools": [{
+							"name": "route",
+							"description": "routes by region",
+							"inputSchema": {
+								"type": "object",
+								"properties": {"region": {"type": "string", "x-mcp-header": "Region"}}
+							}
+						}]
+					})
+				},
+				"tools/call" => {
+					tool_calls_c.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+					serde_json::json!({
+						"resultType": "complete",
+						"content": [{"type": "text", "text": "ok"}],
+						"isError": false
+					})
+				},
+				_ => {
+					return axum::Json(serde_json::json!({
+						"jsonrpc": "2.0", "id": id,
+						"error": {"code": -32601, "message": method}
+					}));
+				},
+			};
+			axum::Json(serde_json::json!({"jsonrpc": "2.0", "id": id, "result": result}))
+		}),
+	);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	(
+		MockServer {
+			addr,
+			init_counter,
+			_cancel: tx,
+		},
+		tool_calls,
+	)
+}
+
+// SEP-2243: a modern tools/call whose Mcp-Param-* matches the body arg is forwarded.
+// A mismatch is rejected with HEADER_MISMATCH (-32020) before reaching the upstream.
+// The fixture also rejects tools/list without _meta, which proves the schema fetch
+// carries the client _meta.
+#[tokio::test]
+async fn modern_tool_call_validates_custom_param_header() {
+	let (mock, _tool_calls) = mock_xmcp_header_server().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend("mcp", vec![("a", mock.addr, false)], false)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let call = |region_arg: &str, region_header: &str, id: i64| {
+		let body = serde_json::json!({
+			"jsonrpc": "2.0", "id": id, "method": "tools/call",
+			"params": {
+				"name": "route",
+				"arguments": {"region": region_arg},
+				"_meta": {
+					"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+					"io.modelcontextprotocol/clientInfo": {"name": "c", "version": "0.0.1"},
+					"io.modelcontextprotocol/clientCapabilities": {}
+				}
+			}
+		});
+		mcp_json_post(&client, &url, &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", "tools/call")
+			.header("mcp-name", "route")
+			.header("mcp-param-Region", region_header.to_string())
+			.send()
+	};
+
+	// Matching header and argument: forwarded, upstream returns ok.
+	let ok = call("us-west1", "us-west1", 1).await.unwrap();
+	assert!(ok.status().is_success());
+	let ok_body = ok.text().await.unwrap();
+	assert!(
+		ok_body.contains("\"text\":\"ok\""),
+		"expected upstream success, got {ok_body}"
+	);
+
+	// Mismatched header and body argument: rejected with HEADER_MISMATCH, never forwarded.
+	let bad = call("us-west1", "us-east1", 2).await.unwrap();
+	let bad_body = bad.text().await.unwrap();
+	assert!(
+		bad_body.contains("-32020"),
+		"expected HEADER_MISMATCH, got {bad_body}"
+	);
+}
+
+// SEP-2243 (regression): a guardrail that rewrites an inbound Mcp-Param-* must not mask a client
+// header/body mismatch. Validation runs against the snapshot captured before guardrails, so the
+// client's original mismatch is still rejected even though the guardrail "fixed" the live header
+// to match the body. Without the pre-guardrail snapshot this call would be forwarded.
+#[tokio::test]
+async fn guardrail_header_mutation_cannot_mask_param_mismatch() {
+	use std::sync::atomic::{AtomicBool, Ordering};
+
+	use crate::test_helpers::extmcpmock::{closure_mock, pass_request_with, pass_response};
+
+	// Prove the masking path actually ran: the guardrail saw the tools/call carrying the client's
+	// original bad header, and rewrote it to match the body. Without these, a guardrail that silently
+	// stopped running would leave the -32020 assertion trivially green.
+	let saw_tools_call = Arc::new(AtomicBool::new(false));
+	let saw_client_header = Arc::new(AtomicBool::new(false));
+	let guardrail = {
+		let (tc, ch) = (saw_tools_call.clone(), saw_client_header.clone());
+		closure_mock(
+			move |req| {
+				if req.method == "tools/call" {
+					tc.store(true, Ordering::SeqCst);
+					if req.headers.iter().any(|h| {
+						h.key.eq_ignore_ascii_case("mcp-param-region")
+							&& String::from_utf8_lossy(&h.value) == "us-east1"
+					}) {
+						ch.store(true, Ordering::SeqCst);
+					}
+				}
+				// Rewrite the client's routing header to match the body, hiding the mismatch.
+				pass_request_with(
+					vec![("mcp-param-Region", "us-west1")],
+					Vec::<&str>::new(),
+					None,
+				)
+			},
+			|_| pass_response(),
+		)
+		.spawn()
+		.await
+	};
+
+	let (mock, tool_calls) = mock_xmcp_header_server().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies(
+			"mcp",
+			vec![("a", mock.addr, false)],
+			false,
+			vec![guardrails_test_support::policy(guardrail.address)],
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	// Body says us-west1; the client's routing header says us-east1 — a real mismatch. The guardrail
+	// then rewrites the header to us-west1, which would pass if validation read the live headers.
+	let body = serde_json::json!({
+		"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+		"params": {
+			"name": "route",
+			"arguments": {"region": "us-west1"},
+			"_meta": {
+				"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+				"io.modelcontextprotocol/clientInfo": {"name": "c", "version": "0.0.1"},
+				"io.modelcontextprotocol/clientCapabilities": {}
+			}
+		}
+	});
+	let resp = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/call")
+		.header("mcp-name", "route")
+		.header("mcp-param-Region", "us-east1")
+		.send()
+		.await
+		.unwrap();
+	let text = resp.text().await.unwrap();
+
+	assert!(
+		saw_tools_call.load(Ordering::SeqCst),
+		"guardrail must have run for the tools/call"
+	);
+	assert!(
+		saw_client_header.load(Ordering::SeqCst),
+		"guardrail must have seen the client's original Mcp-Param-Region (us-east1)"
+	);
+	assert!(
+		text.contains("-32020"),
+		"guardrail rewrite must not mask the client's Mcp-Param-* mismatch, got {text}"
+	);
+	assert_eq!(
+		tool_calls.load(Ordering::SeqCst),
+		0,
+		"upstream tool call must not be forwarded after the mismatch is rejected"
+	);
+}
+
 #[tokio::test]
 async fn mcp_guardrails_request_headers_visible_to_policy_server() {
 	use std::sync::Mutex as StdMutex;

@@ -53,8 +53,14 @@ impl IncomingRequestContext {
 			authority: parts.uri.authority().cloned(),
 		}
 	}
+	pub fn headers(&self) -> &http::HeaderMap {
+		&self.headers
+	}
 	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
 		&mut self.headers
+	}
+	pub fn extensions(&self) -> &::http::Extensions {
+		&self.ext
 	}
 	pub fn extensions_mut(&mut self) -> &mut ::http::Extensions {
 		&mut self.ext
@@ -81,6 +87,10 @@ impl IncomingRequestContext {
 			if k == http::header::CONTENT_ENCODING
 				|| k == http::header::CONTENT_LENGTH
 				|| k.as_str().eq_ignore_ascii_case(HEADER_SESSION_ID)
+				// SEP-2243: never forward an inbound Mcp-Param-* verbatim. The gateway
+				// recomputes routing headers per upstream; forwarding the client's copy
+				// onto tool calls or the internal tools/list schema fetch would leak it.
+				|| crate::mcp::param_validation::is_mcp_param_header(k)
 			{
 				continue;
 			}

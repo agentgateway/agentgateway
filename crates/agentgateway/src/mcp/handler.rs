@@ -350,6 +350,18 @@ impl Relay {
 								cel,
 							)
 						})
+						// SEP-2243 clients derive routing headers from x-mcp-header mappings, so tools/list
+						// must not advertise tools with invalid ones. A direct call is validated only if it
+						// carries an Mcp-Param-* header.
+						.filter(
+							|t| match crate::mcp::param_validation::x_mcp_header_params(&t.input_schema) {
+								Ok(_) => true,
+								Err(e) => {
+									warn!(server = %server_name, tool = %t.name, "excluding tool from tools/list: {e}");
+									false
+								},
+							},
+						)
 						// Rename to handle multiplexing
 						.map(|mut t| {
 							t.name = Cow::Owned(resource_name(
@@ -372,6 +384,124 @@ impl Relay {
 				.into(),
 			)
 		})
+	}
+
+	/// SEP-2243: validate a modern `tools/call`'s inbound `Mcp-Param-*` routing headers against the
+	/// resolved tool schema and the pre-guardrail client arguments, rejecting a mismatch as
+	/// `HEADER_MISMATCH`.
+	///
+	/// A no-op unless `snapshot` is `Some` (a modern client) *and* it captured an `Mcp-Param-*`
+	/// header: with none inbound there is nothing to validate and no forgery is possible, so the
+	/// common call skips the schema fetch entirely. Validates the client's pre-guardrail headers, so
+	/// a policy header mutation cannot mask a mismatch. Call after authorization so an unauthorized
+	/// call triggers no upstream fetch.
+	pub(crate) async fn validate_routing_headers(
+		&self,
+		ctx: &IncomingRequestContext,
+		service_name: &str,
+		tool: &str,
+		snapshot: Option<crate::mcp::param_validation::RoutingHeaderSnapshot>,
+		id: &RequestId,
+	) -> Result<(), UpstreamError> {
+		let Some(snapshot) = snapshot else {
+			return Ok(());
+		};
+		if snapshot.param_headers.is_empty() {
+			return Ok(());
+		}
+		let Some(schema) = self
+			.fetch_tool_input_schema(ctx, service_name, tool, snapshot.meta)
+			.await?
+		else {
+			return Ok(());
+		};
+		crate::mcp::param_validation::validate_tool_call_headers(
+			&schema,
+			snapshot.arguments.as_ref(),
+			&snapshot.param_headers,
+			&Some(id.clone()),
+		)
+		.map_err(|e| UpstreamError::Proxy(e.into()))
+	}
+
+	/// Fetch a resolved tool's raw `inputSchema` via `tools/list` on the target.
+	///
+	/// Costs one `tools/list` round trip per modern `tools/call` that sends `Mcp-Param-*`. There is
+	/// no OSS tool-schema cache, and modern stateless sessions are per-request, so a session cache
+	/// would not help; a shared TTL cache is a separate follow-up. Correctness does not depend on it.
+	///
+	/// `meta` replays the client's `_meta` (protocolVersion/clientInfo/clientCapabilities) onto the
+	/// synthetic `tools/list` so a modern stateless upstream, which requires it on every request
+	/// (SEP-2575), accepts the lookup. On upstream failure this defers to `schema_lookup_failure`.
+	pub(crate) async fn fetch_tool_input_schema(
+		&self,
+		ctx: &IncomingRequestContext,
+		service_name: &str,
+		tool: &str,
+		meta: Option<rmcp::model::Meta>,
+	) -> Result<Option<Arc<serde_json::Map<String, serde_json::Value>>>, UpstreamError> {
+		let upstream = self
+			.upstreams
+			.get(service_name)
+			.map_err(|_| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+		let mut list_req = rmcp::model::ListToolsRequest {
+			method: Default::default(),
+			params: None,
+			extensions: Default::default(),
+		};
+		if let Some(meta) = meta {
+			list_req.extensions.insert(meta);
+		}
+		let request = JsonRpcRequest {
+			jsonrpc: Default::default(),
+			id: RequestId::Number(0),
+			request: ClientRequest::ListToolsRequest(list_req),
+		};
+		let stream = match upstream.generic_stream(request, ctx).await {
+			Ok(stream) => stream,
+			Err(e) => return self.schema_lookup_failure(service_name, e),
+		};
+		use futures_util::StreamExt;
+		let mut stream = std::pin::pin!(stream);
+		while let Some(message) = stream.next().await {
+			match message {
+				Ok(ServerJsonRpcMessage::Response(response)) => {
+					return match response.result {
+						ServerResult::ListToolsResult(result) => Ok(
+							result
+								.tools
+								.into_iter()
+								.find(|t| t.name.as_ref() == tool)
+								.map(|t| t.input_schema),
+						),
+						other => self.schema_lookup_failure(
+							service_name,
+							UpstreamError::InvalidRequest(format!(
+								"unexpected response to list_tools request: {other:?}"
+							)),
+						),
+					};
+				},
+				Ok(_) => {},
+				Err(e) => return self.schema_lookup_failure(service_name, e.into()),
+			}
+		}
+		self.schema_lookup_failure(service_name, UpstreamError::Recv)
+	}
+
+	/// Resolve a tool-schema-lookup failure per the upstream failure mode: FailOpen logs and skips
+	/// validation (`Ok(None)`), FailClosed propagates the error.
+	fn schema_lookup_failure(
+		&self,
+		service_name: &str,
+		err: UpstreamError,
+	) -> Result<Option<Arc<serde_json::Map<String, serde_json::Value>>>, UpstreamError> {
+		if self.upstreams.failure_mode == FailureMode::FailOpen {
+			warn!("upstream '{service_name}' tool schema lookup failed, skipping validation: {err}");
+			Ok(None)
+		} else {
+			Err(err)
+		}
 	}
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
@@ -825,7 +955,7 @@ impl Relay {
 			// Unlike GET fanout, ordinary request fanout does not have a transport-level
 			// "stay connected" fallback, and most MCP methods do not have a safe generic
 			// synthetic success response. By the time we get here, every initialized
-			// upstream has failed this request, so we surface that as an error even in
+			// upstream has failed this request, so we return an error even in
 			// FailOpen rather than inventing a method-specific response.
 			return Err(UpstreamError::InvalidRequest(
 				"no upstreams available".to_string(),
@@ -995,8 +1125,9 @@ fn messages_to_response(
 }
 
 fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
+	// Read the extension in place; `as_request()` would clone method/uri/headers/extensions just
+	// to inspect one typed extension, and this runs on response/SSE paths.
 	ctx
-		.as_request()
 		.extensions()
 		.get::<RequestProtocol>()
 		.is_some_and(RequestProtocol::is_modern)
