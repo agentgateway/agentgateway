@@ -1489,3 +1489,125 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 		"{err}"
 	);
 }
+
+#[tokio::test]
+async fn test_oauth_token_exchange_reports_validation_errors_from_local_config() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauth:
+              host: 127.0.0.1:9000
+              clientAuth:
+                clientId: gateway-client
+"#,
+	)
+	.await
+	.expect_err("missing client secret should fail at config load");
+
+	assert!(
+		err.to_string().contains("client_secret"),
+		"returned unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_oauth_token_exchange_defaults_backend_tls_for_port_443_local_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauth:
+              host: login.microsoftonline.com:443
+"#,
+	)
+	.await
+	.expect("oauth token exchange should normalize");
+
+	let route = &normalized.listener_routes[0].1[0];
+	let auth = route.backends[0]
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			BackendTrafficPolicy::BackendAuth(auth) => Some(auth),
+			_ => None,
+		})
+		.expect("backend auth policy");
+	let value = serde_json::to_value(auth).expect("serialized backend auth");
+	let policies = value
+		.get("oauth")
+		.and_then(|oauth| oauth.get("policies"))
+		.and_then(|policies| policies.as_array())
+		.expect("oauth policies");
+
+	assert!(
+		policies
+			.iter()
+			.any(|policy| policy.get("backendTLS").is_some()),
+		"expected default backendTLS in oauth policies: {value}"
+	);
+}
+
+#[tokio::test]
+async fn test_oauth_token_exchange_does_not_duplicate_explicit_backend_tls_local_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauth:
+              host: login.microsoftonline.com:443
+              policies:
+                backendTLS:
+                  insecure: true
+"#,
+	)
+	.await
+	.expect("oauth token exchange should normalize");
+
+	let route = &normalized.listener_routes[0].1[0];
+	let auth = route.backends[0]
+		.inline_policies
+		.iter()
+		.find_map(|policy| match policy {
+			BackendTrafficPolicy::BackendAuth(auth) => Some(auth),
+			_ => None,
+		})
+		.expect("backend auth policy");
+	let value = serde_json::to_value(auth).expect("serialized backend auth");
+	let tls_policies: Vec<_> = value
+		.get("oauth")
+		.and_then(|oauth| oauth.get("policies"))
+		.and_then(|policies| policies.as_array())
+		.expect("oauth policies")
+		.iter()
+		.filter_map(|policy| policy.get("backendTLS"))
+		.collect();
+
+	assert_eq!(
+		tls_policies.len(),
+		1,
+		"expected one backendTLS policy: {value}"
+	);
+	assert_eq!(
+		tls_policies[0].get("insecure"),
+		Some(&serde_json::json!(true))
+	);
+}
