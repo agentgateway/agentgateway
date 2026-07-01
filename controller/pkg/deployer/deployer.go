@@ -23,6 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
@@ -195,9 +197,10 @@ func (d *Deployer) RenderManifest(ns, name string, vals map[string]any) ([]byte,
 //
 //	a pointer to an InferencePool (https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/api/v1alpha2/inferencepool_types.go#L30)
 func (d *Deployer) GetObjsToDeploy(ctx context.Context, obj client.Object) ([]client.Object, error) {
+	objectGVK := d.objectGVK(obj)
 	vals, err := d.helmValues.GetValues(ctx, obj)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get helm values for object %s %s/%s: %w", obj.GetObjectKind().GroupVersionKind().String(), obj.GetNamespace(), obj.GetName(), err)
+		return nil, fmt.Errorf("failed to get helm values for object %s %s/%s: %w", objectGVK.String(), obj.GetNamespace(), obj.GetName(), err)
 	}
 	if vals == nil {
 		return nil, nil
@@ -205,7 +208,7 @@ func (d *Deployer) GetObjsToDeploy(ctx context.Context, obj client.Object) ([]cl
 	logger.Debug("got deployer helm values",
 		"name", obj.GetName(),
 		"namespace", obj.GetNamespace(),
-		"gvk", obj.GetObjectKind().GroupVersionKind().String(),
+		"gvk", objectGVK.String(),
 		"values", vals,
 	)
 
@@ -225,6 +228,33 @@ func (d *Deployer) GetObjsToDeploy(ctx context.Context, obj client.Object) ([]cl
 	}
 
 	return objs, nil
+}
+
+// objectGVK returns the object's runtime GVK, falling back to known deployer
+// input types or an unambiguous scheme lookup when TypeMeta is not populated.
+func (d *Deployer) objectGVK(obj client.Object) schema.GroupVersionKind {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	if !gvk.Empty() {
+		return gvk
+	}
+
+	switch obj.(type) {
+	case *gwv1.Gateway:
+		return wellknown.GatewayGVK
+	case *inf.InferencePool:
+		return wellknown.InferencePoolGVK
+	}
+
+	if d.scheme == nil {
+		return gvk
+	}
+
+	gvks, _, err := d.scheme.ObjectKinds(obj)
+	if err != nil || len(gvks) != 1 {
+		return gvk
+	}
+
+	return gvks[0]
 }
 
 // Deprecated: use SetNamespaceAndOwnerWithGVK

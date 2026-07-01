@@ -3,6 +3,7 @@ package deployer_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"istio.io/istio/pkg/config/schema/gvk"
@@ -18,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicclient "k8s.io/client-go/dynamic"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -38,6 +40,45 @@ type dynamicOverrideClient struct {
 
 func (c dynamicOverrideClient) Dynamic() dynamicclient.Interface {
 	return c.dynamicClient
+}
+
+type failingHelmValuesGenerator struct {
+	err error
+}
+
+func (g failingHelmValuesGenerator) GetValues(context.Context, client.Object) (map[string]any, error) {
+	return nil, g.err
+}
+
+func (g failingHelmValuesGenerator) GetCacheSyncHandlers() []cache.InformerSynced {
+	return nil
+}
+
+func TestGetObjsToDeploy_FormatsGatewayGVKFromKnownType(t *testing.T) {
+	expectedErr := errors.New("bad params")
+	d := deployer.NewDeployerWithMultipleCharts(
+		wellknown.DefaultAgwControllerName,
+		wellknown.DefaultAgwClassName,
+		nil,
+		fake.NewClient(t),
+		nil,
+		failingHelmValuesGenerator{err: expectedErr},
+		deployer.GatewayReleaseNameAndNamespace,
+	)
+	gw := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "default"},
+	}
+
+	_, err := d.GetObjsToDeploy(context.Background(), gw)
+	if err == nil {
+		t.Fatal("expected GetObjsToDeploy to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to get helm values for object gateway.networking.k8s.io/v1, Kind=Gateway default/gw") {
+		t.Fatalf("expected error to contain formatted Gateway GVK, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), expectedErr.Error()) {
+		t.Fatalf("expected error to contain %q, got %q", expectedErr.Error(), err.Error())
+	}
 }
 
 func TestDeployObjs(t *testing.T) {
