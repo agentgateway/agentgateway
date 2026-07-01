@@ -21,6 +21,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 		streaming: true,
 		params: Default::default(),
 		prompt: None,
+		bedrock_tool_names: None,
 	}
 }
 
@@ -324,8 +325,10 @@ mod requests {
 			assume_role_cache: Default::default(),
 		};
 
-		let bedrock =
-			|i| conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None);
+		let bedrock = |i| {
+			conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None)
+				.map(|r| r.body)
+		};
 		let anthropic = |i| conversion::messages::from_completions::translate(&i);
 
 		for (name, providers) in COMPLETION_REQUESTS {
@@ -363,8 +366,9 @@ mod requests {
 			project_id: strng::new("test-project-123"),
 		};
 
-		let bedrock_request =
-			|i| conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None);
+		let bedrock_request = |i| {
+			conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None).map(|r| r.body)
+		};
 		let vertex_request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
 			let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
 			vertex_provider.prepare_anthropic_message_body(anthropic_body)
@@ -400,6 +404,7 @@ mod requests {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, test, |req| {
 						conversion::bedrock::from_responses::translate(&req, &bedrock_provider, None, None)
+							.map(|r| r.body)
 					}),
 					GEMINI => test_request(GEMINI, test, |req| {
 						conversion::openai_compat::from_responses::translate(&req)
@@ -806,6 +811,7 @@ mod response {
 			streaming: false,
 			params: Default::default(),
 			prompt: None,
+			bedrock_tool_names: None,
 		}
 	}
 
@@ -1359,6 +1365,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		streaming: true,
 		params: Default::default(),
 		prompt: None,
+		bedrock_tool_names: None,
 	};
 
 	let body = Body::from(error_json.as_bytes().to_vec());
@@ -1447,6 +1454,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 				streaming: true,
 				params: Default::default(),
 				prompt: None,
+				bedrock_tool_names: None,
 			},
 			LLMResponsePolicies::default(),
 			None,
@@ -1547,6 +1555,7 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 		streaming: false,
 		params: Default::default(),
 		prompt: None,
+		bedrock_tool_names: None,
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://proxy.example.com/v1/chat/completions?trace=repro",
@@ -1580,6 +1589,7 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 		streaming: false,
 		params: Default::default(),
 		prompt: None,
+		bedrock_tool_names: None,
 	}
 }
 
@@ -1709,6 +1719,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			bedrock_tool_names: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1722,6 +1733,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
 		true,
+		None,
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1755,6 +1767,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			bedrock_tool_names: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1768,6 +1781,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
 		false,
+		None,
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1797,6 +1811,7 @@ async fn messages_passthrough_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			bedrock_tool_names: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1837,6 +1852,7 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			bedrock_tool_names: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1872,6 +1888,7 @@ async fn responses_passthrough_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			bedrock_tool_names: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1908,6 +1925,7 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			bedrock_tool_names: None,
 		},
 		response: LLMResponse::default(),
 	};
