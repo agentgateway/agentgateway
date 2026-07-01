@@ -93,6 +93,7 @@ fn build_test_request() -> crate::http::Request {
 		cached_input_tokens: None,
 		prompt: None,
 		completion: Some(vec!["Hello world".to_string()]),
+		tool_calls: None,
 		params: llm::LLMRequestParams::default(),
 		cost: None,
 		cost_rates: None,

@@ -23,10 +23,10 @@ pub fn passthrough_stream(
 	b: Body,
 	buffer_limit: usize,
 	mut log: AmendOnDrop,
-	include_completion_in_log: bool,
+	log_content: crate::llm::LogContentFields,
 ) -> Body {
 	let mut saw_token = false;
-	let mut completion = include_completion_in_log.then(String::new);
+	let mut completion = log_content.completion.then(String::new);
 	parse::sse::json_passthrough::<StreamResponse>(b, buffer_limit, move |event| {
 		let Some(Ok(event)) = event else {
 			// Stream ended ([DONE]): flush completion if not already set via ResponseCompleted

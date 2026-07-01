@@ -2436,9 +2436,15 @@ async fn make_backend_call(
 	dtrace::trace(|trace| trace.backend_call_started(&call.target));
 	let upstream = inputs.upstream.clone();
 	let llm_response_log = log.as_ref().map(|l| l.llm_response.clone());
-	let include_completion_in_log = log
+	let log_content = log
 		.as_ref()
-		.map(|l| l.cel.cel_context.needs_llm_completion())
+		.map(|l| {
+			let has_tracer = l.tracer.is_some();
+			llm::LogContentFields {
+				completion: has_tracer || l.cel.cel_context.needs_llm_completion(),
+				tool_calls: has_tracer || l.cel.cel_context.needs_llm_tool_calls(),
+			}
+		})
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
 
@@ -2513,7 +2519,7 @@ async fn make_backend_call(
 					llm_response_policies,
 					log.as_ref().expect("must be set").request_snapshot.clone(),
 					llm_response_log.expect("must be set"),
-					include_completion_in_log,
+					log_content,
 					Some(&inputs.model_catalog),
 					resp,
 				)

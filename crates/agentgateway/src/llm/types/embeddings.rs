@@ -115,7 +115,7 @@ impl RequestType for Request {
 }
 
 impl crate::llm::types::ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::llm::LLMResponse {
+	fn to_llm_response(&self, _log_content: crate::llm::LogContentFields) -> crate::llm::LLMResponse {
 		crate::llm::LLMResponse {
 			input_tokens: Some(self.usage.prompt_tokens as u64),
 			input_image_tokens: None,
