@@ -13,7 +13,7 @@ spec:
       request: {}
       response:
         maxBytes: 5Mi
-        onOverflow: "ContinueStreaming"
+        failureMode: "FailOpen"
 ---
 # Output
 output:
@@ -36,8 +36,8 @@ output:
         buffer:
           request: {}
           response:
+            failureMode: FAIL_OPEN
             maxBytes: 5242880
-            onOverflow: CONTINUE_STREAMING
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy

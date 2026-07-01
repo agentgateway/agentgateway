@@ -1433,49 +1433,49 @@ func (TrafficPolicySpec_HostRewrite_Mode) EnumDescriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{52, 13, 0}
 }
 
-type TrafficPolicySpec_Buffer_OverflowAction int32
+type TrafficPolicySpec_Buffer_FailureMode int32
 
 const (
-	TrafficPolicySpec_Buffer_RETURN_ERROR       TrafficPolicySpec_Buffer_OverflowAction = 0
-	TrafficPolicySpec_Buffer_CONTINUE_STREAMING TrafficPolicySpec_Buffer_OverflowAction = 1
+	TrafficPolicySpec_Buffer_FAIL_CLOSED TrafficPolicySpec_Buffer_FailureMode = 0
+	TrafficPolicySpec_Buffer_FAIL_OPEN   TrafficPolicySpec_Buffer_FailureMode = 1
 )
 
-// Enum value maps for TrafficPolicySpec_Buffer_OverflowAction.
+// Enum value maps for TrafficPolicySpec_Buffer_FailureMode.
 var (
-	TrafficPolicySpec_Buffer_OverflowAction_name = map[int32]string{
-		0: "RETURN_ERROR",
-		1: "CONTINUE_STREAMING",
+	TrafficPolicySpec_Buffer_FailureMode_name = map[int32]string{
+		0: "FAIL_CLOSED",
+		1: "FAIL_OPEN",
 	}
-	TrafficPolicySpec_Buffer_OverflowAction_value = map[string]int32{
-		"RETURN_ERROR":       0,
-		"CONTINUE_STREAMING": 1,
+	TrafficPolicySpec_Buffer_FailureMode_value = map[string]int32{
+		"FAIL_CLOSED": 0,
+		"FAIL_OPEN":   1,
 	}
 )
 
-func (x TrafficPolicySpec_Buffer_OverflowAction) Enum() *TrafficPolicySpec_Buffer_OverflowAction {
-	p := new(TrafficPolicySpec_Buffer_OverflowAction)
+func (x TrafficPolicySpec_Buffer_FailureMode) Enum() *TrafficPolicySpec_Buffer_FailureMode {
+	p := new(TrafficPolicySpec_Buffer_FailureMode)
 	*p = x
 	return p
 }
 
-func (x TrafficPolicySpec_Buffer_OverflowAction) String() string {
+func (x TrafficPolicySpec_Buffer_FailureMode) String() string {
 	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
 }
 
-func (TrafficPolicySpec_Buffer_OverflowAction) Descriptor() protoreflect.EnumDescriptor {
+func (TrafficPolicySpec_Buffer_FailureMode) Descriptor() protoreflect.EnumDescriptor {
 	return file_resource_proto_enumTypes[28].Descriptor()
 }
 
-func (TrafficPolicySpec_Buffer_OverflowAction) Type() protoreflect.EnumType {
+func (TrafficPolicySpec_Buffer_FailureMode) Type() protoreflect.EnumType {
 	return &file_resource_proto_enumTypes[28]
 }
 
-func (x TrafficPolicySpec_Buffer_OverflowAction) Number() protoreflect.EnumNumber {
+func (x TrafficPolicySpec_Buffer_FailureMode) Number() protoreflect.EnumNumber {
 	return protoreflect.EnumNumber(x)
 }
 
-// Deprecated: Use TrafficPolicySpec_Buffer_OverflowAction.Descriptor instead.
-func (TrafficPolicySpec_Buffer_OverflowAction) EnumDescriptor() ([]byte, []int) {
+// Deprecated: Use TrafficPolicySpec_Buffer_FailureMode.Descriptor instead.
+func (TrafficPolicySpec_Buffer_FailureMode) EnumDescriptor() ([]byte, []int) {
 	return file_resource_proto_rawDescGZIP(), []int{52, 14, 0}
 }
 
@@ -11666,9 +11666,9 @@ func (x *TrafficPolicySpec_ExtProc_ProcessingOptions) GetAllowModeOverride() boo
 }
 
 type TrafficPolicySpec_Buffer_BufferBody struct {
-	state         protoimpl.MessageState                  `protogen:"open.v1"`
-	MaxBytes      *uint32                                 `protobuf:"varint,1,opt,name=max_bytes,json=maxBytes,proto3,oneof" json:"max_bytes,omitempty"`
-	OnOverflow    TrafficPolicySpec_Buffer_OverflowAction `protobuf:"varint,2,opt,name=on_overflow,json=onOverflow,proto3,enum=agentgateway.dev.resource.TrafficPolicySpec_Buffer_OverflowAction" json:"on_overflow,omitempty"`
+	state         protoimpl.MessageState               `protogen:"open.v1"`
+	MaxBytes      *uint32                              `protobuf:"varint,1,opt,name=max_bytes,json=maxBytes,proto3,oneof" json:"max_bytes,omitempty"`
+	FailureMode   TrafficPolicySpec_Buffer_FailureMode `protobuf:"varint,2,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.TrafficPolicySpec_Buffer_FailureMode" json:"failure_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11710,11 +11710,11 @@ func (x *TrafficPolicySpec_Buffer_BufferBody) GetMaxBytes() uint32 {
 	return 0
 }
 
-func (x *TrafficPolicySpec_Buffer_BufferBody) GetOnOverflow() TrafficPolicySpec_Buffer_OverflowAction {
+func (x *TrafficPolicySpec_Buffer_BufferBody) GetFailureMode() TrafficPolicySpec_Buffer_FailureMode {
 	if x != nil {
-		return x.OnOverflow
+		return x.FailureMode
 	}
-	return TrafficPolicySpec_Buffer_RETURN_ERROR
+	return TrafficPolicySpec_Buffer_FAIL_CLOSED
 }
 
 type BackendPolicySpec_Ai struct {
@@ -15335,7 +15335,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x03(\v2;.agentgateway.dev.resource.FrontendPolicySpec.Metrics.FieldR\x03addB\x06\n" +
 	"\x04kind\"?\n" +
 	"\x14JWTValidationOptions\x12'\n" +
-	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xbdP\n" +
+	"\x0frequired_claims\x18\x01 \x03(\tR\x0erequiredClaims\"\xafP\n" +
 	"\x11TrafficPolicySpec\x12N\n" +
 	"\x05phase\x18\x01 \x01(\x0e28.agentgateway.dev.resource.TrafficPolicySpec.PolicyPhaseR\x05phase\x12>\n" +
 	"\atimeout\x18\x02 \x01(\v2\".agentgateway.dev.resource.TimeoutH\x00R\atimeout\x128\n" +
@@ -15564,20 +15564,19 @@ const file_resource_proto_rawDesc = "" +
 	"\x04mode\x18\x01 \x01(\x0e2=.agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.ModeR\x04mode\"\x1a\n" +
 	"\x04Mode\x12\b\n" +
 	"\x04NONE\x10\x00\x12\b\n" +
-	"\x04AUTO\x10\x01\x1a\xc1\x03\n" +
+	"\x04AUTO\x10\x01\x1a\xb3\x03\n" +
 	"\x06Buffer\x12]\n" +
 	"\arequest\x18\x01 \x01(\v2>.agentgateway.dev.resource.TrafficPolicySpec.Buffer.BufferBodyH\x00R\arequest\x88\x01\x01\x12_\n" +
-	"\bresponse\x18\x02 \x01(\v2>.agentgateway.dev.resource.TrafficPolicySpec.Buffer.BufferBodyH\x01R\bresponse\x88\x01\x01\x1a\xa1\x01\n" +
+	"\bresponse\x18\x02 \x01(\v2>.agentgateway.dev.resource.TrafficPolicySpec.Buffer.BufferBodyH\x01R\bresponse\x88\x01\x01\x1a\xa0\x01\n" +
 	"\n" +
 	"BufferBody\x12 \n" +
-	"\tmax_bytes\x18\x01 \x01(\rH\x00R\bmaxBytes\x88\x01\x01\x12c\n" +
-	"\von_overflow\x18\x02 \x01(\x0e2B.agentgateway.dev.resource.TrafficPolicySpec.Buffer.OverflowActionR\n" +
-	"onOverflowB\f\n" +
+	"\tmax_bytes\x18\x01 \x01(\rH\x00R\bmaxBytes\x88\x01\x01\x12b\n" +
+	"\ffailure_mode\x18\x02 \x01(\x0e2?.agentgateway.dev.resource.TrafficPolicySpec.Buffer.FailureModeR\vfailureModeB\f\n" +
 	"\n" +
-	"_max_bytes\":\n" +
-	"\x0eOverflowAction\x12\x10\n" +
-	"\fRETURN_ERROR\x10\x00\x12\x16\n" +
-	"\x12CONTINUE_STREAMING\x10\x01B\n" +
+	"_max_bytes\"-\n" +
+	"\vFailureMode\x12\x0f\n" +
+	"\vFAIL_CLOSED\x10\x00\x12\r\n" +
+	"\tFAIL_OPEN\x10\x01B\n" +
 	"\n" +
 	"\b_requestB\v\n" +
 	"\t_response\"%\n" +
@@ -16082,7 +16081,7 @@ var file_resource_proto_goTypes = []any{
 	(TrafficPolicySpec_ExtProc_BodySendMode)(0),                 // 25: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.BodySendMode
 	(TrafficPolicySpec_ExtProc_HeaderTrailerSendMode)(0),        // 26: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
 	(TrafficPolicySpec_HostRewrite_Mode)(0),                     // 27: agentgateway.dev.resource.TrafficPolicySpec.HostRewrite.Mode
-	(TrafficPolicySpec_Buffer_OverflowAction)(0),                // 28: agentgateway.dev.resource.TrafficPolicySpec.Buffer.OverflowAction
+	(TrafficPolicySpec_Buffer_FailureMode)(0),                   // 28: agentgateway.dev.resource.TrafficPolicySpec.Buffer.FailureMode
 	(BackendPolicySpec_Ai_BuiltinRegexRule)(0),                  // 29: agentgateway.dev.resource.BackendPolicySpec.Ai.BuiltinRegexRule
 	(BackendPolicySpec_Ai_ActionKind)(0),                        // 30: agentgateway.dev.resource.BackendPolicySpec.Ai.ActionKind
 	(BackendPolicySpec_Ai_RouteType)(0),                         // 31: agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
@@ -16527,7 +16526,7 @@ var file_resource_proto_depIdxs = []int32{
 	26,  // 233: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.request_trailer_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
 	26,  // 234: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.ProcessingOptions.response_trailer_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.HeaderTrailerSendMode
 	173, // 235: agentgateway.dev.resource.TrafficPolicySpec.ExtProc.MetadataContextEntry.value:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExtProc.NamespacedMetadataContext
-	28,  // 236: agentgateway.dev.resource.TrafficPolicySpec.Buffer.BufferBody.on_overflow:type_name -> agentgateway.dev.resource.TrafficPolicySpec.Buffer.OverflowAction
+	28,  // 236: agentgateway.dev.resource.TrafficPolicySpec.Buffer.BufferBody.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.Buffer.FailureMode
 	202, // 237: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_guard:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard
 	204, // 238: agentgateway.dev.resource.BackendPolicySpec.Ai.defaults:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
 	205, // 239: agentgateway.dev.resource.BackendPolicySpec.Ai.overrides:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry

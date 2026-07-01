@@ -1095,14 +1095,14 @@ message TrafficPolicySpec {
   PolicyPhase phase = 1;
 
   message Buffer {
-    enum OverflowAction {
-      RETURN_ERROR = 0;
-      CONTINUE_STREAMING = 1;
+    enum FailureMode {
+      FAIL_CLOSED = 0;
+      FAIL_OPEN = 1;
     }
 
     message BufferBody {
       optional uint32 max_bytes = 1;
-      OverflowAction on_overflow = 2;
+      FailureMode failure_mode = 2;
     }
 
     optional BufferBody request = 1;

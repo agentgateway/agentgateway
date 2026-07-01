@@ -1,11 +1,3 @@
-use std::pin::Pin;
-use std::task::{Context, Poll};
-
-use bytes::{Buf, Bytes};
-use http_body::{Body as HttpBody, Frame, SizeHint};
-use pin_project_lite::pin_project;
-
-use crate::http::buflist::BufList;
 use crate::*;
 
 #[cfg(test)]
@@ -14,12 +6,12 @@ mod buffer_tests;
 
 #[apply(schema!)]
 #[derive(Default, Copy, PartialEq, Eq)]
-pub enum OverflowAction {
-	// Return error if body is larger than maxbytes
+pub enum FailureMode {
+	// Return error if body is larger than maxBytes.
 	#[default]
-	ReturnError,
-	// Continues streaming if body is larger than maxbytes
-	ContinueStreaming,
+	FailClosed,
+	// Continue streaming if body is larger than maxBytes.
+	FailOpen,
 }
 
 #[apply(schema!)]
@@ -29,7 +21,7 @@ pub struct BufferBody {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub max_bytes: Option<usize>,
 	#[serde(default)]
-	pub on_overflow: OverflowAction,
+	pub failure_mode: FailureMode,
 }
 
 #[apply(schema!)]
@@ -43,7 +35,7 @@ pub struct Buffer {
 }
 
 impl Buffer {
-	/// Drains the request body into memory and replaces it with a `Body::from(Bytes)` wrapper.
+	/// Applies request body buffering before forwarding.
 	/// No-op when buffering is disabled or for upgrade requests (whose "body" only exists
 	/// post-handshake as the upgraded byte stream).
 	pub async fn apply_to_request(
@@ -63,7 +55,7 @@ impl Buffer {
 			.max_bytes
 			.unwrap_or_else(|| crate::http::buffer_limit(req));
 		let body = std::mem::replace(req.body_mut(), crate::http::Body::empty());
-		let buffered = match buffer_body(body, limit, request.on_overflow).await {
+		let buffered = match buffer_body(body, limit, request.failure_mode).await {
 			Ok(b) => b,
 			Err(e) => {
 				warn!(limit, error = %e, "failed to buffer request body");
@@ -81,7 +73,7 @@ impl Buffer {
 		Ok(())
 	}
 
-	/// Drains the response body into memory and replaces it with a `Body::from(Bytes)` wrapper.
+	/// Applies response body buffering before sending it to the client.
 	/// No-op when buffering is disabled or for protocol-switching (101) responses whose
 	/// "body" is the upgraded byte stream.
 	pub async fn apply_to_response(
@@ -101,7 +93,7 @@ impl Buffer {
 			.max_bytes
 			.unwrap_or_else(|| crate::http::response_buffer_limit(resp));
 		let body = std::mem::replace(resp.body_mut(), crate::http::Body::empty());
-		let buffered = match buffer_body(body, limit, response.on_overflow).await {
+		let buffered = match buffer_body(body, limit, response.failure_mode).await {
 			Ok(b) => b,
 			Err(e) => {
 				warn!(limit, error = %e, "failed to buffer response body");
@@ -123,156 +115,28 @@ impl Buffer {
 
 // Buffers `body` up to `limit`, picking what to do on overflow.
 //
-// `ReturnError` drains the whole body now and fails (so the caller can send a 413/502) if it's  bigger than `limit`.
-// `ContinueStreaming` buffers up to `limit` and streams the rest.
+// `FailClosed` drains the whole body now and fails (so the caller can send a 413/502) if it's bigger than `limit`.
+// `FailOpen` buffers up to `limit` and streams the rest.
 async fn buffer_body(
 	body: crate::http::Body,
 	limit: usize,
-	on_overflow: OverflowAction,
-) -> Result<crate::http::Body, axum_core::Error> {
-	match on_overflow {
-		OverflowAction::ReturnError => {
+	failure_mode: FailureMode,
+) -> anyhow::Result<crate::http::Body> {
+	match failure_mode {
+		FailureMode::FailClosed => {
 			let b = crate::http::read_body_with_limit(body, limit).await?;
 			debug!(b = b.len(), "buffered body");
 			Ok(crate::http::Body::from(b))
 		},
-		OverflowAction::ContinueStreaming => {
+		FailureMode::FailOpen => {
 			debug!(limit, "buffering up to limit, then streaming the rest");
-			Ok(crate::http::Body::new(BufferUpToLimitBody::new(
-				body, limit,
-			)))
+			if limit == 0 {
+				return Ok(body);
+			}
+			let mut body = body;
+			let _ = crate::http::inspect_body_with_limit(&mut body, limit).await?;
+			Ok(body)
 		},
-	}
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum BufferState {
-	/// Accumulating data; frames are withheld from the caller.
-	Buffering,
-	/// Limit exceeded: flush what we buffered, then stream the rest.
-	FlushThenStream,
-	/// Passing the rest of the body through unchanged.
-	Streaming,
-	/// Data is done; trailers still need to be replayed.
-	EmitTrailers,
-	/// Fully consumed.
-	Done,
-}
-
-pin_project! {
-	/// Buffers the body in memory up to `limit` bytes, then streams the rest unbounded by the limit.
-	/// The cap is approximate: we keep frames whole rather than split or fail, so it may
-	/// overshoot by up to one frame.
-	struct BufferUpToLimitBody {
-		#[pin]
-		inner: crate::http::Body,
-		buffer: BufList,
-		trailers: Option<::http::HeaderMap>,
-		state: BufferState,
-		limit: usize,
-		buffered: usize,
-	}
-}
-
-impl BufferUpToLimitBody {
-	fn new(inner: crate::http::Body, limit: usize) -> Self {
-		Self {
-			inner,
-			buffer: BufList::default(),
-			trailers: None,
-			state: BufferState::Buffering,
-			limit,
-			// Use buffered instead of bufflist.remaining since it iterates over the map
-			buffered: 0,
-		}
-	}
-}
-
-impl HttpBody for BufferUpToLimitBody {
-	type Data = Bytes;
-	type Error = axum_core::Error;
-
-	fn poll_frame(
-		self: Pin<&mut Self>,
-		cx: &mut Context<'_>,
-	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-		let mut this = self.project();
-		loop {
-			match *this.state {
-				BufferState::Done => return Poll::Ready(None),
-				BufferState::EmitTrailers => {
-					*this.state = BufferState::Done;
-					if let Some(trailers) = this.trailers.take() {
-						return Poll::Ready(Some(Ok(Frame::trailers(trailers))));
-					}
-					return Poll::Ready(None);
-				},
-				BufferState::FlushThenStream => {
-					*this.state = BufferState::Streaming;
-					let len = this.buffer.remaining();
-					let b = this.buffer.copy_to_bytes(len);
-					if b.has_remaining() {
-						return Poll::Ready(Some(Ok(Frame::data(b))));
-					}
-				},
-				BufferState::Streaming => return this.inner.as_mut().poll_frame(cx),
-				BufferState::Buffering => {},
-			}
-
-			let frame = match futures::ready!(this.inner.as_mut().poll_frame(cx)) {
-				Some(Ok(frame)) => frame,
-				Some(Err(error)) => {
-					*this.state = BufferState::Done;
-					return Poll::Ready(Some(Err(error)));
-				},
-				None => {
-					let len = this.buffer.remaining();
-					let b = this.buffer.copy_to_bytes(len);
-					*this.state = if this.trailers.is_some() {
-						BufferState::EmitTrailers
-					} else {
-						BufferState::Done
-					};
-					return Poll::Ready(Some(Ok(Frame::data(b))));
-				},
-			};
-
-			match frame.into_data().map_err(Frame::into_trailers) {
-				Ok(mut data) => {
-					let len = data.remaining();
-					let b = data.copy_to_bytes(len);
-					if b.has_remaining() {
-						this.buffer.push(b);
-					}
-					*this.buffered += len;
-					if *this.buffered >= *this.limit {
-						*this.state = BufferState::FlushThenStream;
-					}
-				},
-				Err(Ok(trailers)) => {
-					*this.trailers = Some(trailers);
-				},
-				Err(Err(_unknown)) => {
-					tracing::warn!("An unknown body frame has been buffered");
-					*this.state = BufferState::Done;
-					return Poll::Ready(None);
-				},
-			}
-		}
-	}
-
-	fn is_end_stream(&self) -> bool {
-		self.state == BufferState::Done
-	}
-
-	fn size_hint(&self) -> SizeHint {
-		let mut hint = self.inner.size_hint();
-		let buffered = self.buffer.remaining() as u64;
-		hint.set_lower(hint.lower().saturating_add(buffered));
-		if let Some(upper) = hint.upper() {
-			hint.set_upper(upper.saturating_add(buffered));
-		}
-		hint
 	}
 }
 

@@ -905,7 +905,7 @@ spec:
     buffer:
       request:
         maxBytes: 10Mi
-        onOverflow: "ReturnError"
+        failureMode: "FailClosed"
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -920,7 +920,7 @@ spec:
     buffer:
       response:
         maxBytes: 5Mi
-        onOverflow: "ContinueStreaming"
+        failureMode: "FailOpen"
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

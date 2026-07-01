@@ -567,11 +567,11 @@ func translateTrafficPolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
-func bufferBodyOnOverflow(mode agentgateway.OverflowAction) api.TrafficPolicySpec_Buffer_OverflowAction {
-	if mode == agentgateway.ContinueStreaming {
-		return api.TrafficPolicySpec_Buffer_CONTINUE_STREAMING
+func bufferBodyFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_Buffer_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.TrafficPolicySpec_Buffer_FAIL_OPEN
 	}
-	return api.TrafficPolicySpec_Buffer_RETURN_ERROR
+	return api.TrafficPolicySpec_Buffer_FAIL_CLOSED
 }
 
 func translateBufferBody(b *agentgateway.BufferBody) *api.TrafficPolicySpec_Buffer_BufferBody {
@@ -580,7 +580,7 @@ func translateBufferBody(b *agentgateway.BufferBody) *api.TrafficPolicySpec_Buff
 		if v := b.MaxBytes; v != nil {
 			bBody.MaxBytes = quantityUint32(v)
 		}
-		bBody.OnOverflow = bufferBodyOnOverflow(b.OnOverflow)
+		bBody.FailureMode = bufferBodyFailureMode(b.FailureMode)
 		return bBody
 	}
 

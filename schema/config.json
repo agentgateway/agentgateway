@@ -6110,18 +6110,18 @@
           "format": "uint",
           "minimum": 0
         },
-        "onOverflow": {
-          "$ref": "#/$defs/OverflowAction",
-          "default": "returnError"
+        "failureMode": {
+          "$ref": "#/$defs/FailureMode2",
+          "default": "failClosed"
         }
       },
       "additionalProperties": false
     },
-    "OverflowAction": {
+    "FailureMode2": {
       "type": "string",
       "enum": [
-        "returnError",
-        "continueStreaming"
+        "failClosed",
+        "failOpen"
       ]
     },
     "TimeoutPolicy": {

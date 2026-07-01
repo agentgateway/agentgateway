@@ -134,7 +134,7 @@ spec:
   traffic:
     buffer: {}
 ---
-_err: 'onOverflow: Unsupported value'
+_err: 'failureMode: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -147,7 +147,7 @@ spec:
   traffic:
     buffer: 
       request:
-        onOverflow: "Resend"
+        failureMode: "Resend"
 ---
 _err: 'http.maxBufferSize'
 apiVersion: agentgateway.dev/v1alpha1

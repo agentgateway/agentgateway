@@ -87,7 +87,7 @@ fn continue_streaming_request(max_bytes: usize) -> Buffer {
 	Buffer {
 		request: Some(BufferBody {
 			max_bytes: Some(max_bytes),
-			on_overflow: OverflowAction::ContinueStreaming,
+			failure_mode: FailureMode::FailOpen,
 		}),
 		response: None,
 	}
@@ -98,7 +98,7 @@ fn continue_streaming_response(max_bytes: usize) -> Buffer {
 		request: None,
 		response: Some(BufferBody {
 			max_bytes: Some(max_bytes),
-			on_overflow: OverflowAction::ContinueStreaming,
+			failure_mode: FailureMode::FailOpen,
 		}),
 	}
 }

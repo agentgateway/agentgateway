@@ -6992,6 +6992,14 @@ spec:
                       request:
                         description: Request body buffering settings.
                         properties:
+                          failureMode:
+                            description: |-
+                              Behavior when the request or response body exceeds the buffer limit.
+                              If unset, defaults to FailClosed, returning 413 for oversized requests and 502 for oversized responses.
+                            enum:
+                            - FailClosed
+                            - FailOpen
+                            type: string
                           maxBytes:
                             anyOf:
                             - type: integer
@@ -7008,18 +7016,18 @@ spec:
                                 uint32
                               rule: (self >= 1 && self <= 4294967295) || self.size()
                                 > 0
-                          onOverflow:
-                            description: |-
-                              Action to perform when request/response body overflows the buffer
-                              If unset, defaults to Error, returns error 413 if request body is too large and 502 if response body is too large
-                            enum:
-                            - ContinueStreaming
-                            - ReturnError
-                            type: string
                         type: object
                       response:
                         description: Response body buffering settings.
                         properties:
+                          failureMode:
+                            description: |-
+                              Behavior when the request or response body exceeds the buffer limit.
+                              If unset, defaults to FailClosed, returning 413 for oversized requests and 502 for oversized responses.
+                            enum:
+                            - FailClosed
+                            - FailOpen
+                            type: string
                           maxBytes:
                             anyOf:
                             - type: integer
@@ -7036,14 +7044,6 @@ spec:
                                 uint32
                               rule: (self >= 1 && self <= 4294967295) || self.size()
                                 > 0
-                          onOverflow:
-                            description: |-
-                              Action to perform when request/response body overflows the buffer
-                              If unset, defaults to Error, returns error 413 if request body is too large and 502 if response body is too large
-                            enum:
-                            - ContinueStreaming
-                            - ReturnError
-                            type: string
                         type: object
                     type: object
                     x-kubernetes-validations:
