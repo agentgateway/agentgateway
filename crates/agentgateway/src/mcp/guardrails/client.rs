@@ -27,7 +27,7 @@ fn with_default_timeout<T>(msg: T) -> tonic::Request<T> {
 	let mut req = tonic::Request::new(msg);
 	req
 		.extensions_mut()
-		.insert(BackendRequestTimeout(Duration::from_millis(5000)));
+		.insert(BackendRequestTimeout(Duration::from_secs(10)));
 	req
 }
 

@@ -20,7 +20,7 @@ use crate::*;
 fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
 	req
 		.extensions_mut()
-		.insert(BackendRequestTimeout(Duration::from_millis(5000)));
+		.insert(BackendRequestTimeout(Duration::from_secs(10)));
 	req
 }
 
