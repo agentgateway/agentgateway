@@ -103,6 +103,22 @@ impl Process {
 			.map_err(|_| UpstreamError::Send)?;
 		Ok(())
 	}
+
+	pub async fn send_client_message(
+		&self,
+		msg: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		if !self.is_alive() {
+			return Err(UpstreamError::Send);
+		}
+		self
+			.sender
+			.send((msg, ctx.clone()))
+			.await
+			.map_err(|_| UpstreamError::Send)?;
+		Ok(())
+	}
 }
 
 impl Process {
