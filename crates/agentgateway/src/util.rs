@@ -78,7 +78,7 @@ pub fn watch_files_with_options(
 
 	let paths = paths
 		.iter()
-		.map(absolute)
+		.map(|path| normalize_watch_path(path))
 		.collect::<std::io::Result<Vec<_>>>()?;
 	if paths.is_empty() {
 		bail!("no files supplied to watch");
@@ -162,7 +162,7 @@ pub fn watch_files_with_options(
 
 fn watch_targets_for_path(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
 	let mut targets = vec![path.to_path_buf()];
-	if requires_parent_watch(path)? {
+	if should_watch_parent(path)? {
 		let parent = path.parent().ok_or_else(|| {
 			anyhow!(
 				"failed to get the parent of watched file {}",
@@ -174,7 +174,7 @@ fn watch_targets_for_path(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
 	Ok(targets)
 }
 
-fn requires_parent_watch(path: &Path) -> anyhow::Result<bool> {
+fn should_watch_parent(path: &Path) -> anyhow::Result<bool> {
 	let meta = match fs_err::symlink_metadata(path) {
 		Ok(meta) => meta,
 		Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
@@ -215,6 +215,27 @@ fn has_kubernetes_projection_component(path: &Path) -> bool {
 			.to_str()
 			.is_some_and(|name| name == "..data" || name.starts_with("..20"))
 	})
+}
+
+fn normalize_watch_path(path: &Path) -> std::io::Result<PathBuf> {
+	match fs_err::symlink_metadata(path) {
+		Ok(meta) if meta.file_type().is_symlink() => absolute(path),
+		Ok(_) => fs_err::canonicalize(path),
+		Err(e) if e.kind() == ErrorKind::NotFound => {
+			let absolute_path = absolute(path)?;
+			let Some(parent) = absolute_path.parent() else {
+				return Ok(absolute_path);
+			};
+			let Some(file_name) = absolute_path.file_name() else {
+				return Ok(absolute_path);
+			};
+			match fs_err::canonicalize(parent) {
+				Ok(parent) => Ok(parent.join(file_name)),
+				Err(_) => Ok(absolute_path),
+			}
+		},
+		Err(e) => Err(e),
+	}
 }
 
 fn notify_error_reason(e: &notify::Error) -> String {
@@ -290,7 +311,14 @@ fn should_reload(
 	previous_targets: &[Option<PathBuf>],
 	current_targets: &[Option<PathBuf>],
 ) -> bool {
-	if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+	if matches!(
+		event.kind,
+		EventKind::Modify(_)
+			| EventKind::Create(_)
+			| EventKind::Access(notify::event::AccessKind::Close(
+				notify::event::AccessMode::Write
+			))
+	) {
 		return event.paths.iter().any(|path| {
 			abspaths.iter().any(|abspath| abspath == path)
 				|| current_targets
@@ -325,6 +353,11 @@ mod tests {
 
 	fn open(path: &str) -> notify::Event {
 		notify::Event::new(EventKind::Access(AccessKind::Open(AccessMode::Any)))
+			.add_path(PathBuf::from(path))
+	}
+
+	fn close_write(path: &str) -> notify::Event {
+		notify::Event::new(EventKind::Access(AccessKind::Close(AccessMode::Write)))
 			.add_path(PathBuf::from(path))
 	}
 
@@ -407,6 +440,19 @@ mod tests {
 		assert!(should_reload(
 			&event,
 			&[file],
+			&[Some(target.clone())],
+			&[Some(target)]
+		));
+	}
+
+	#[test]
+	fn reloads_on_access_close_write_events() {
+		let file = PathBuf::from("/cfg/price.json");
+		let target = file.clone();
+		let event = close_write("/cfg/price.json");
+		assert!(should_reload(
+			&event,
+			std::slice::from_ref(&file),
 			&[Some(target.clone())],
 			&[Some(target)]
 		));
