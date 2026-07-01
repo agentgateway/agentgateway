@@ -129,7 +129,8 @@ impl Error {
 				},
 			),
 			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
-			Error::UnsupportedVersion(Some(id), _) => (
+			Error::UnsupportedVersion(Some(id), _)
+			| Error::UnsupportedVersionForInitialize(Some(id), _) => (
 				id.clone(),
 				ErrorData {
 					code: ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,

@@ -2,11 +2,11 @@
 
 ## Version Negotiation
 
-Agentgatewaty handles traffic from a single downstream client to N upstream servers.
+Agentgateway handles traffic from a single downstream client to N upstream servers.
 We call this "multiplexing" if N>1.
 
 Version negotiation is how we handle the disparate protocol versions between the clients and servers, and Agentgateway itself.
-This is particular important for 2026-07-28+, which has a very different protocol than the other versions (which are all much more incremental differences).
+This is particularly important for 2026-07-28+, which has a very different protocol than the other versions (which are all much more incremental differences).
 We will call "Old" before 2026-07-28 and "New" after.
 
 **Assumptions**:
@@ -59,8 +59,8 @@ This means we could return a session, or not, when dealing with new servers -- i
 > A new server cannot use sessions.
 > However, they may have session-like behavior; to use the new spec with a server like this implies modifying the tools
 > exposed to take correlation IDs.
-> This tool change is a change non-dependant on protocol version.
-> Therefor, we do not need any special handling of "Session-ful servers on the new protocol"
+> This tool change is a change non-dependent on protocol version.
+> Therefore, we do not need any special handling of "Session-ful servers on the new protocol"
 
 The key decision here is whether we stick to an older protocol version for the server side hop, or attempt
 to upgrade it for the client.

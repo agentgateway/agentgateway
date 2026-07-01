@@ -666,6 +666,44 @@ async fn streamable_http_validates_protocol_version_header() {
 		.unwrap();
 	assert_eq!(mismatch.status(), reqwest::StatusCode::BAD_REQUEST);
 
+	let modern_init_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 3,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2026-07-28",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test client",
+				"version": "0.0.1"
+			}
+		}
+	});
+	let unsupported_initialize = mcp_json_post(&client, &url, &modern_init_body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		unsupported_initialize.status(),
+		reqwest::StatusCode::BAD_REQUEST
+	);
+	let unsupported_initialize_body = unsupported_initialize
+		.json::<serde_json::Value>()
+		.await
+		.unwrap();
+	assert_eq!(
+		unsupported_initialize_body,
+		serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 3,
+			"error": {
+				"code": -32022,
+				"message": "unsupported MCP protocol version for initialize: 2026-07-28"
+			}
+		})
+	);
+
 	let init = mcp_json_post(&client, &url, &init_body)
 		.header("mcp-protocol-version", "2025-06-18")
 		.send()
