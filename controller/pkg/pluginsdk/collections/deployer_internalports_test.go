@@ -84,10 +84,10 @@ func TestComputeInternalPorts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := slices.Sort(computeInternalPorts(tt.gw, tt.lsets).List())
+			got := slices.Sort(ComputeInternalPorts(tt.gw, tt.lsets).List())
 			want := slices.Sort(tt.want)
 			if !slices.Equal(got, want) {
-				t.Fatalf("computeInternalPorts = %v, want %v", got, want)
+				t.Fatalf("ComputeInternalPorts = %v, want %v", got, want)
 			}
 		})
 	}

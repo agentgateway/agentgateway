@@ -79,19 +79,19 @@ func GatewaysForDeployerTransformationFunc(
 			},
 			ControllerName:  string(gwClass.Spec.ControllerName),
 			Ports:           smallset.New(ports.UnsortedList()...),
-			InternalPorts:   computeInternalPorts(gw, lsets),
+			InternalPorts:   ComputeInternalPorts(gw, lsets),
 			MeshTrustDomain: td,
 		}
 		return ir
 	}
 }
 
-// computeInternalPorts returns the ports whose bind is internal, mirroring the bind-mode
+// ComputeInternalPorts returns the ports whose bind is internal, mirroring the bind-mode
 // decision in the syncer: a port is internal only if every contributing listener (across
 // the Gateway and its ListenerSets) agrees. Disagreement leaves the port standard (and is
 // surfaced as Accepted=False during translation). Invalid annotations are ignored here;
 // translation reports them.
-func computeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.Set[int32] {
+func ComputeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.Set[int32] {
 	sawInternal := sets.New[int32]()
 	sawStandard := sets.New[int32]()
 
