@@ -1922,6 +1922,24 @@ impl AIProvider {
 		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
 			return Err(AIError::RequestTooLarge);
 		};
+
+		if self.override_model().is_none()
+			&& types::detect::extract_model_from_path(parts.uri.path()).is_none()
+			&& !policies.is_some_and(Policy::has_request_body_mutations)
+		{
+			let mut req: T = serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+			let model = req.model();
+			let Some(model_value) = model.as_deref() else {
+				return Err(AIError::MissingField("model not specified".into()));
+			};
+			if let Some(p) = policies
+				&& let Some(aliased) = p.resolve_model_alias(model_value)
+			{
+				*model = Some(aliased.to_string());
+			}
+			return Ok((parts, req));
+		}
+
 		let mut request: serde_json::Value =
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
 		self.set_provider_request_model(&parts, &mut request)?;
@@ -1949,7 +1967,7 @@ impl AIProvider {
 				"model".to_string(),
 				serde_json::Value::String(provider_model.to_string()),
 			);
-		} else if !obj.contains_key("model")
+		} else if !matches!(obj.get("model"), Some(serde_json::Value::String(_)))
 			&& let Some(path_model) = types::detect::extract_model_from_path(parts.uri.path())
 		{
 			obj.insert(
@@ -1968,11 +1986,10 @@ impl AIProvider {
 		let Some(obj) = req.as_object_mut() else {
 			return Err(AIError::MissingField("request must be an object".into()));
 		};
-		if !obj.contains_key("model") {
+		let Some(model) = obj.get("model").and_then(serde_json::Value::as_str) else {
 			return Err(AIError::MissingField("model not specified".into()));
-		}
+		};
 		if let Some(p) = policies
-			&& let Some(model) = obj.get("model").and_then(serde_json::Value::as_str)
 			&& let Some(aliased) = p.resolve_model_alias(model)
 		{
 			obj.insert(
