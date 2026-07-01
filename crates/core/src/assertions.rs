@@ -13,9 +13,20 @@ pub struct SizeAtMost<const MAX: usize>;
 impl<const MAX: usize> SizeAtMost<MAX> {
 	#[inline(always)]
 	pub fn check<T>(t: T) -> T {
+		#[cfg(not(feature = "assert_size_runtime"))]
 		const {
-			assert!(std::mem::size_of::<T>() <= MAX);
+			assert!(
+				std::mem::size_of::<T>() <= MAX,
+				"type size exceeds assert_size limit"
+			);
 		}
+		#[cfg(feature = "assert_size_runtime")]
+		assert!(
+			std::mem::size_of::<T>() <= MAX,
+			"type size {} exceeds maximum {}",
+			std::mem::size_of::<T>(),
+			MAX
+		);
 		t
 	}
 }

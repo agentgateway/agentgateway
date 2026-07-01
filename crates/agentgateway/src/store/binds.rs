@@ -237,6 +237,7 @@ pub struct BackendPolicies {
 	pub llm_provider: Option<Arc<llm::NamedAIProvider>>,
 	pub llm: Option<Arc<llm::Policy>>,
 	pub inference_routing: Option<InferenceRouting>,
+	pub authorization: BackendPolicy<HTTPAuthorizationSet>,
 	pub ext_authz: BackendPolicy<ext_authz::ExtAuthz>,
 
 	pub mcp_authorization: Option<McpAuthorizationSet>,
@@ -272,6 +273,17 @@ impl BackendPolicies {
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
+			authorization: match (
+				self.authorization.into_arc(),
+				other.authorization.into_arc(),
+			) {
+				(Some(left), Some(right)) => BackendPolicy::from_arc(Arc::new(
+					Arc::unwrap_or_clone(left).merge(Arc::unwrap_or_clone(right)),
+				)),
+				(Some(left), None) => BackendPolicy::from_arc(left),
+				(None, Some(right)) => BackendPolicy::from_arc(right),
+				(None, None) => BackendPolicy::default(),
+			},
 			// TODO: is this right??
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
@@ -310,6 +322,7 @@ impl BackendPolicies {
 	}
 
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		self.authorization.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
 		if let Some(llm) = self.llm.as_ref() {
@@ -1118,10 +1131,14 @@ impl Store {
 			.flat_map(|p| p.iter())
 			.chain(rules);
 
+		let mut authz = Vec::new();
 		let mut mcp_authz = Vec::new();
 		let mut pol = BackendPolicies::default();
 		for rule in rules {
 			match &rule {
+				BackendTrafficPolicy::Authorization(p) => {
+					authz.push(p.clone().0);
+				},
 				BackendTrafficPolicy::A2a(p) => {
 					pol.a2a.get_or_insert_with(|| p.clone());
 				},
@@ -1188,6 +1205,11 @@ impl Store {
 					pol.mcp_guardrails.get_or_insert_with(|| p.clone());
 				},
 			}
+		}
+		if !authz.is_empty() {
+			pol.authorization = BackendPolicy::from_arc(Arc::new(HTTPAuthorizationSet::new(
+				crate::http::authorization::RuleSets::from_arcs(authz),
+			)));
 		}
 		if !mcp_authz.is_empty() {
 			pol.mcp_authorization = Some(McpAuthorizationSet::new(mcp_authz.into()));

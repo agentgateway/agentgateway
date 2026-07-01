@@ -1385,6 +1385,7 @@ impl LocalBackend {
 					request_redirect: None,
 					health: None,
 					ext_authz: None,
+					authorization: None,
 				}
 				.translate(resources)
 				.await?
@@ -2052,6 +2053,9 @@ pub struct LocalBackendPolicies {
 	/// Authorize incoming requests by calling an external authorization service after this backend is selected.
 	#[serde(default)]
 	pub ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Authorize incoming requests after this backend is selected.
+	#[serde(default)]
+	pub authorization: Option<Authorization>,
 
 	/// Authorization rules for MCP requests.
 	#[serde(default)]
@@ -2125,6 +2129,7 @@ impl LocalBackendPolicies {
 			request_redirect,
 			health,
 			ext_authz,
+			authorization,
 		} = self;
 		let mut pols = vec![];
 		if let Some(p) = tcp {
@@ -2175,6 +2180,9 @@ impl LocalBackendPolicies {
 			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
 				p.with_configured_cache_store(),
 			)))
+		}
+		if let Some(p) = authorization {
+			pols.push(BackendTrafficPolicy::Authorization(p))
 		}
 		if let Some(mut p) = ai {
 			p.compile_model_alias_patterns();
@@ -2489,6 +2497,7 @@ async fn convert(
 			Backend::Opaque(n, _)
 			| Backend::MCP(n, _)
 			| Backend::AI(n, _)
+			| Backend::LLMRouter(n, _)
 			| Backend::Aws(n, _)
 			| Backend::Dynamic(n, _)
 			| Backend::Internal(n, _) => n == &name,
@@ -2646,7 +2655,6 @@ struct ResolvedLLMModelTarget {
 	name: String,
 	provider: NamedAIProvider,
 	inline_policies: Vec<BackendTrafficPolicy>,
-	authorization: Option<Authorization>,
 }
 
 struct LocalLLMModelRegistry {
@@ -2829,17 +2837,6 @@ impl ResolvedLLMModelRegistry {
 			}
 		}
 		bail!("virtual model target {target} does not match any llm.models entry")
-	}
-
-	fn resolve_failover_target(&self, target: &str) -> anyhow::Result<ResolvedLLMModelTarget> {
-		let resolved = self.resolve(target)?;
-		if resolved.authorization.is_some() {
-			// Technically this is possible but would require us to move authorization down into post-LB.
-			bail!(
-				"virtual model target {target} has authorization; failover virtual models cannot target authorized models"
-			);
-		}
-		Ok(resolved)
 	}
 }
 
@@ -3261,6 +3258,9 @@ async fn convert_llm_config(
 				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
 			)?));
 		}
+		if let Some(authorization) = model_config.authorization.clone() {
+			pols.push(BackendTrafficPolicy::Authorization(authorization));
+		}
 		let prompt_guard =
 			merge_prompt_guards(shared_prompt_guard.clone(), model_config.guardrails.clone());
 		pols.push(BackendTrafficPolicy::AI(Arc::new(llm::Policy {
@@ -3284,16 +3284,8 @@ async fn convert_llm_config(
 			name: model_config.name.clone(),
 			provider: resolved_provider,
 			inline_policies: resolved_inline_policies,
-			authorization: model_config.authorization.clone(),
 		});
 
-		let mut model_route_inline_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
-			routes: llm_routes.into_iter().collect(),
-			..Default::default()
-		}))];
-		if let Some(p) = model_config.authorization.clone() {
-			model_route_inline_policies.push(TrafficPolicy::Authorization(p));
-		}
 		router_models.push(llm::model_router::ModelRoute {
 			name: model_config.name.clone(),
 			visibility: model_config.visibility,
@@ -3303,7 +3295,13 @@ async fn convert_llm_config(
 				.map(|m| m.headers.clone())
 				.collect(),
 			backend_key,
-			route_policies: model_route_inline_policies,
+			policies: llm::model_router::ModelRoutePolicies {
+				llm: Arc::new(crate::llm::Policy {
+					routes: llm_routes.into_iter().collect(),
+					..Default::default()
+				}),
+				authorization: model_config.authorization.clone(),
+			},
 			backend_policies: vec![],
 		});
 	}
@@ -3311,10 +3309,10 @@ async fn convert_llm_config(
 	let virtual_models = llm_registry.into_virtual_models();
 	let mut router_virtual_models = Vec::new();
 	for (idx, virtual_model) in virtual_models.into_iter().enumerate() {
-		let route_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
+		let llm_policy = Arc::new(crate::llm::Policy {
 			routes: llm_route_types(None).into_iter().collect(),
 			..Default::default()
-		}))];
+		});
 		let routing = match virtual_model.routing_strategy()? {
 			LocalLLMVirtualRoutingStrategy::Conditional(conditional) => {
 				for target in &conditional.targets {
@@ -3356,7 +3354,7 @@ async fn convert_llm_config(
 					.map(|(_, targets)| {
 						targets
 							.map(|target| {
-								let resolved = resolved_models.resolve_failover_target(&target.model)?;
+								let resolved = resolved_models.resolve(&target.model)?;
 								let mut provider = resolved.provider.clone();
 								provider.name = strng::new(&target.model);
 								ensure_ai_provider_model(&mut provider.provider, &target.model);
@@ -3383,10 +3381,23 @@ async fn convert_llm_config(
 		};
 		router_virtual_models.push(llm::model_router::VirtualModelRoute {
 			name: virtual_model.name,
-			route_policies,
+			llm_policy,
 			routing,
 		});
 	}
+
+	let router_backend_key = strng::new("llm:router");
+	all_backends.push(BackendWithPolicies {
+		backend: Backend::LLMRouter(
+			local_name(router_backend_key.clone()),
+			Arc::new(llm::model_router::ModelRouter::new(
+				router_models,
+				router_virtual_models,
+				startup_timestamp,
+			)),
+		),
+		inline_policies: vec![],
+	});
 
 	routes.push(Route {
 		key: strng::new("llm:request"),
@@ -3405,12 +3416,12 @@ async fn convert_llm_config(
 			headers: vec![],
 			query: vec![],
 		}],
-		backends: vec![],
-		llm_router: Some(Arc::new(llm::model_router::ModelRouter::new(
-			router_models,
-			router_virtual_models,
-			startup_timestamp,
-		))),
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			target: BackendReference::Backend(strng::format!("/{router_backend_key}")).into(),
+			inline_policies: vec![],
+		}],
+		llm_router: None,
 		inline_policies: vec![],
 	});
 

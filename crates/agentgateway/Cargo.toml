@@ -17,6 +17,7 @@ tls-openssl = ["dep:openssl", "dep:rustls-openssl"]
 ui = []
 schema = ["schemars"]
 internal_benches = ["divan"]
+assert_size_runtime = ["agent-core/assert_size_runtime"]
 
 [dependencies]
 agent-core.workspace = true

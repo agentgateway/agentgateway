@@ -18,140 +18,10 @@ binds:
         protocol: HTTP
 listener_routes:
   - - llm
-    - - key: "llm:request"
-        llmRouter:
-          models:
-            - name: llama-3.1-8b-instant
-              visibility: public
-              headerMatches: []
-              backendKey: "llm:model:llama-3.1-8b-instant:0"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-            - name: fireworks-llama
-              visibility: public
-              headerMatches: []
-              backendKey: "llm:model:fireworks-llama:1"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-            - name: claude-3-haiku
-              visibility: public
-              headerMatches:
-                - - name: x-org
-                    value:
-                      exact: engineering
-              backendKey: "llm:model:claude-3-haiku:2"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-            - name: gpt-3.5-turbo
-              visibility: public
-              headerMatches: []
-              backendKey: "llm:model:gpt-3.5-turbo:3"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-            - name: gpt-7-max
-              visibility: public
-              headerMatches: []
-              backendKey: "llm:model:gpt-7-max:4"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-            - name: "*"
-              visibility: public
-              headerMatches: []
-              backendKey: "llm:model:*:5"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-          virtualModels: []
-          created: 0
+    - - backends:
+          - backend: "/llm:router"
+            weight: 1
+        key: "llm:request"
         matches:
           - path:
               pathPrefix: /
@@ -527,6 +397,149 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 400
+  - backend:
+      llmRouter:
+        name: "llm:router"
+        namespace: ""
+        target:
+          models:
+            - name: llama-3.1-8b-instant
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:llama-3.1-8b-instant:0"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+            - name: fireworks-llama
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:fireworks-llama:1"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+            - name: claude-3-haiku
+              visibility: public
+              headerMatches:
+                - - name: x-org
+                    value:
+                      exact: engineering
+              backendKey: "llm:model:claude-3-haiku:2"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+            - name: gpt-3.5-turbo
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:gpt-3.5-turbo:3"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+            - name: gpt-7-max
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:gpt-7-max:4"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+            - name: "*"
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:*:5"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+          virtualModels: []
+          created: 0
 route_groups: []
 workloads: []
 services: []

@@ -291,6 +291,7 @@ async fn apply_backend_policies(
 		mcp_guardrails: _,
 		// Applied elsewhere
 		inference_routing: _,
+		authorization,
 		ext_authz,
 		request_header_modifier,
 		response_header_modifier,
@@ -312,6 +313,10 @@ async fn apply_backend_policies(
 		.as_ref()
 		.unwrap_or(&dh)
 		.apply(req, backend_call.http_version_override);
+
+	let _ = authorization
+		.apply("backend authorization", &client, log, req, rp.headers())
+		.await?;
 
 	// Ext auth has no response-side
 	let _ = ext_authz
@@ -818,42 +823,11 @@ impl HTTPProxy {
 
 		debug!(bind=%bind_name, listener=%selected_listener.key, route=%selected_route.key, "selected route");
 
-		let selected_llm_backend = if let Some(router) = &selected_route.llm_router {
-			match router.resolve(&mut req).await {
-				model_router::ResolveResult::DirectResponse(resp) => {
-					return Err(ProxyResponse::DirectResponse(Box::new(resp))).snapshot_on_err(log, &mut req);
-				},
-				model_router::ResolveResult::Backend(backend) => Some(backend),
-			}
-		} else {
-			None
-		};
-
-		let mut route_inline_policy_storage;
-		let route_inlines = if let Some(selected_llm_backend) = &selected_llm_backend {
-			// LLM routing may add route policies to the final selected route. Clone the
-			// inline policy lists so we can append those policies without mutating config.
-			route_inline_policy_storage = selected_route_chain
-				.routes
-				.iter()
-				.map(|route| route.inline_policies.clone())
-				.collect::<Vec<_>>();
-			if let Some(inline_policies) = route_inline_policy_storage.last_mut() {
-				inline_policies.extend(selected_llm_backend.route_policies.clone());
-			}
-			route_inline_policy_storage
-				.iter()
-				.map(Vec::as_slice)
-				.collect::<Vec<_>>()
-		} else {
-			// Most requests do not use LLM routing, so borrow the existing inline policy
-			// lists directly and avoid cloning policy config.
-			selected_route_chain
-				.routes
-				.iter()
-				.map(|route| route.inline_policies.as_slice())
-				.collect()
-		};
+		let route_inlines = selected_route_chain
+			.routes
+			.iter()
+			.map(|route| route.inline_policies.as_slice())
+			.collect();
 		let route_path = RoutePath {
 			listener: &selected_listener.name,
 			service: selected_route_chain
@@ -903,9 +877,8 @@ impl HTTPProxy {
 		.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "route policies", &req);
 
-		let selected_backend_ref = selected_llm_backend
-			.map(|selected| selected.backend)
-			.or(selected_route_chain.backend)
+		let selected_backend_ref = selected_route_chain
+			.backend
 			.ok_or(ProxyError::NoValidBackends)
 			.snapshot_on_err(log, &mut req)?;
 		let selected_backend =
@@ -928,6 +901,10 @@ impl HTTPProxy {
 			let connect_upgrade = connect_upgrade
 				.ok_or_else(|| ProxyError::ProcessingString("CONNECT missing upgrade".to_string()))
 				.snapshot_on_err(log, &mut req)?;
+			if matches!(&selected_backend.backend.backend, Backend::LLMRouter(_, _)) {
+				return Err(ProxyResponse::Error(ProxyError::InvalidBackendType))
+					.snapshot_on_err(log, &mut req);
+			}
 			return self
 				.connect_tunnel(
 					log,
@@ -1009,6 +986,7 @@ impl HTTPProxy {
 						llm_request_policies,
 						&selected_backend,
 						backend_policies,
+						Some(route_path.clone()),
 						response_policies,
 						req,
 					)
@@ -1045,6 +1023,7 @@ impl HTTPProxy {
 					llm_request_policies.clone(),
 					&selected_backend,
 					backend_policies.clone(),
+					Some(route_path.clone()),
 					response_policies,
 					req,
 				)
@@ -1304,6 +1283,7 @@ impl HTTPProxy {
 		route_policies: Arc<store::LLMRequestPolicies>,
 		selected_backend: &RouteBackend,
 		backend_policies: Arc<BackendPolicies>,
+		route_path: Option<RoutePath<'_>>,
 		response_policies: &mut ResponsePolicies,
 		mut req: Request,
 	) -> Result<Response, SnapshottedProxyResponse> {
@@ -1328,6 +1308,7 @@ impl HTTPProxy {
 			route_policies.clone(),
 			&selected_backend.backend.backend,
 			backend_policies,
+			route_path,
 			MustSnapshot::new(&mut req_opt),
 			Some(log),
 			response_policies,
@@ -1936,10 +1917,39 @@ async fn make_backend_call(
 	route_policies: Arc<store::LLMRequestPolicies>,
 	backend: &Backend,
 	base_policies: Arc<BackendPolicies>,
+	route_path: Option<RoutePath<'_>>,
 	mut req: MustSnapshot<'_>,
 	mut log: Option<&mut RequestLog>,
 	response_policies: &mut ResponsePolicies,
 ) -> Result<Response, ProxyResponse> {
+	if let Backend::LLMRouter(_, router) = backend {
+		let resolved = match router.resolve(&mut req).await {
+			model_router::ResolveResult::DirectResponse(resp) => return Ok(resp),
+			model_router::ResolveResult::Backend(resolved) => resolved,
+		};
+		let selected_backend = resolve_backend(resolved.backend, inputs.as_ref())?;
+		let concrete_policies = get_backend_policies(
+			inputs.as_ref(),
+			&selected_backend.backend,
+			&selected_backend.inline_policies,
+			route_path.clone(),
+		);
+		let route_policies = route_policies.merge_backend_policies(Some(resolved.llm_policy));
+		let policies = Arc::new(base_policies.as_ref().clone().merge(concrete_policies));
+		let backend = selected_backend.backend.backend;
+		return Box::pin(make_backend_call(
+			inputs,
+			route_policies,
+			&backend,
+			policies,
+			route_path,
+			req,
+			log,
+			response_policies,
+		))
+		.await;
+	}
+
 	let policy_client = PolicyClient::new(inputs.clone());
 	let hbone_source = req
 		.extensions()
@@ -2159,6 +2169,7 @@ async fn make_backend_call(
 			.await;
 			return res.map_err(ProxyResponse::from);
 		},
+		Backend::LLMRouter(_, _) => unreachable!("LLMRouter is resolved before backend calls"),
 		Backend::Invalid => return Err(ProxyResponse::from(ProxyError::BackendDoesNotExist)),
 	};
 	log.add(|l| l.health_policy = backend_call.backend_policies.health.clone());
@@ -2598,9 +2609,11 @@ fn build_connect_backend_call(
 			policies,
 		)),
 		Backend::Invalid => Err(ProxyError::BackendDoesNotExist),
-		Backend::AI(_, _) | Backend::MCP(_, _) | Backend::Aws(_, _) | Backend::Internal(_, _) => {
-			Err(ProxyError::InvalidBackendType)
-		},
+		Backend::AI(_, _)
+		| Backend::LLMRouter(_, _)
+		| Backend::MCP(_, _)
+		| Backend::Aws(_, _)
+		| Backend::Internal(_, _) => Err(ProxyError::InvalidBackendType),
 	}
 }
 
@@ -4003,6 +4016,7 @@ impl PolicyClient {
 					Arc::new(LLMRequestPolicies::default()),
 					&backend,
 					pols.into(),
+					None,
 					MustSnapshot::new(&mut req),
 					// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
 					// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM

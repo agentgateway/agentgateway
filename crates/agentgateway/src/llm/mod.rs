@@ -995,21 +995,17 @@ impl AIProvider {
 			.read_body_and_default_model::<types::count_tokens::Request>(policies, req, log)
 			.await?;
 
-		let request_model = req.model.as_deref();
-		let effective_model = request_model
-			.and_then(|model| policies.and_then(|p| p.resolve_model_alias(model)))
-			.map(|model| model.as_str())
-			.or(request_model);
-
 		// Some Anthropic-compatible clients (e.g. Claude Code) always call
 		// `/v1/messages/count_tokens`. For providers/models without a native
 		// count-tokens endpoint, we must still answer this route, so we fall
 		// back to local token estimation using the normalized messages payload.
-		let use_local =
-			!self.supports_format(custom::ProviderFormat::AnthropicTokenCount, effective_model);
+		let use_local = !self.supports_format(
+			custom::ProviderFormat::AnthropicTokenCount,
+			req.model.as_deref(),
+		);
 		if use_local {
 			let messages = req.get_messages();
-			let model = effective_model.unwrap_or_default();
+			let model = req.model.as_deref().unwrap_or_default();
 			let count = num_tokens_from_messages(model, &messages)?;
 			let body = serde_json::to_vec(&types::count_tokens::Response {
 				input_tokens: count,
@@ -1094,16 +1090,6 @@ impl AIProvider {
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<RequestResult, AIError> {
-		if let Some(p) = policies {
-			// Apply model alias resolution
-			if req.supports_model()
-				&& let Some(model) = req.model()
-				&& let Some(aliased) = p.resolve_model_alias(model.as_str())
-			{
-				*model = aliased.to_string();
-			}
-		}
-
 		let request_model = if req.supports_model() {
 			req.model().as_deref().map(str::to_string)
 		} else {
@@ -1936,22 +1922,82 @@ impl AIProvider {
 		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
 			return Err(AIError::RequestTooLarge);
 		};
-		let mut req: T = if let Some(p) = policies {
-			p.unmarshal_request(&bytes, log)?
-		} else {
-			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?
-		};
 
-		if let Some(provider_model) = &self.override_model() {
-			*req.model() = Some(provider_model.to_string());
-		} else if req.model().is_none() {
-			if let Some(path_model) = types::detect::extract_model_from_path(parts.uri.path()) {
-				*req.model() = Some(path_model.to_string());
-			} else {
+		if self.override_model().is_none()
+			&& types::detect::extract_model_from_path(parts.uri.path()).is_none()
+			&& !policies.is_some_and(Policy::has_request_body_mutations)
+		{
+			let mut req: T = serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+			let model = req.model();
+			let Some(model_value) = model.as_deref() else {
 				return Err(AIError::MissingField("model not specified".into()));
+			};
+			if let Some(p) = policies
+				&& let Some(aliased) = p.resolve_model_alias(model_value)
+			{
+				*model = Some(aliased.to_string());
 			}
+			return Ok((parts, req));
 		}
+
+		let mut request: serde_json::Value =
+			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+		self.set_provider_request_model(&parts, &mut request)?;
+		let mut request = if let Some(p) = policies {
+			p.apply_request_body_mutations(request, log)?
+		} else {
+			request
+		};
+		self.finalize_request_model(policies, &mut request)?;
+		let req: T = serde_json::from_value(request).map_err(AIError::RequestParsing)?;
+
 		Ok((parts, req))
+	}
+
+	fn set_provider_request_model(
+		&self,
+		parts: &Parts,
+		req: &mut serde_json::Value,
+	) -> Result<(), AIError> {
+		let Some(obj) = req.as_object_mut() else {
+			return Err(AIError::MissingField("request must be an object".into()));
+		};
+		if let Some(provider_model) = &self.override_model() {
+			obj.insert(
+				"model".to_string(),
+				serde_json::Value::String(provider_model.to_string()),
+			);
+		} else if !matches!(obj.get("model"), Some(serde_json::Value::String(_)))
+			&& let Some(path_model) = types::detect::extract_model_from_path(parts.uri.path())
+		{
+			obj.insert(
+				"model".to_string(),
+				serde_json::Value::String(path_model.to_string()),
+			);
+		}
+		Ok(())
+	}
+
+	fn finalize_request_model(
+		&self,
+		policies: Option<&Policy>,
+		req: &mut serde_json::Value,
+	) -> Result<(), AIError> {
+		let Some(obj) = req.as_object_mut() else {
+			return Err(AIError::MissingField("request must be an object".into()));
+		};
+		let Some(model) = obj.get("model").and_then(serde_json::Value::as_str) else {
+			return Err(AIError::MissingField("model not specified".into()));
+		};
+		if let Some(p) = policies
+			&& let Some(aliased) = p.resolve_model_alias(model)
+		{
+			obj.insert(
+				"model".to_string(),
+				serde_json::Value::String(aliased.to_string()),
+			);
+		}
+		Ok(())
 	}
 
 	fn process_error(
