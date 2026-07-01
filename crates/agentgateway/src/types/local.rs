@@ -355,7 +355,7 @@ pub struct LocalLLMProviderDefaults {
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<BackendAuth>,
+	auth: Option<LocalBackendAuth>,
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
 	#[serde(default)]
@@ -669,7 +669,7 @@ pub struct LocalLLMModels {
 	/// auth configures authentication when connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<BackendAuth>,
+	auth: Option<LocalBackendAuth>,
 	/// health configures outlier detection for this model backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -1808,19 +1808,39 @@ where
 		.map_err(serde::de::Error::custom)
 }
 
-pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D::Error>
+pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<LocalBackendAuth>, D::Error>
 where
 	D: Deserializer<'de>,
 {
 	Option::<BackendAuthCompat>::deserialize(deserializer).map(|auth| {
 		auth.map(|auth| match auth {
-			BackendAuthCompat::Full(auth) => auth,
-			BackendAuthCompat::PlainKey { key } => BackendAuth::Key {
-				value: key,
-				location: None,
+			BackendAuthCompat::PlainKey { key } => LocalBackendAuth {
+				auth: Some(BackendAuth::Key {
+					value: key,
+					location: None,
+				}),
+				headers: Vec::new(),
+			},
+			BackendAuthCompat::FullWithHeaders { auth, headers } => LocalBackendAuth {
+				auth: Some(auth),
+				headers,
+			},
+			BackendAuthCompat::HeadersOnly { headers } => LocalBackendAuth {
+				auth: None,
+				headers,
+			},
+			BackendAuthCompat::Full(auth) => LocalBackendAuth {
+				auth: Some(auth),
+				headers: Vec::new(),
 			},
 		})
 	})
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LocalBackendAuth {
+	pub auth: Option<BackendAuth>,
+	pub headers: Vec<crate::http::auth::BackendAuthHeader>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -1831,6 +1851,14 @@ enum BackendAuthCompat {
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
 		#[serde(deserialize_with = "deser_key_from_file")]
 		key: SecretString,
+	},
+	FullWithHeaders {
+		#[serde(flatten)]
+		auth: BackendAuth,
+		headers: Vec<crate::http::auth::BackendAuthHeader>,
+	},
+	HeadersOnly {
+		headers: Vec<crate::http::auth::BackendAuthHeader>,
 	},
 	Full(BackendAuth),
 }
@@ -1938,7 +1966,7 @@ pub struct SimpleLocalBackendPolicies {
 	/// Authentication credentials sent to this backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	pub backend_auth: Option<BackendAuth>,
+	pub backend_auth: Option<LocalBackendAuth>,
 
 	/// HTTP protocol settings for this backend.
 	#[serde(default)]
@@ -2098,7 +2126,10 @@ impl LocalBackendPolicies {
 			pols.push(BackendTrafficPolicy::BackendTLS(p.try_into()?))
 		}
 		if let Some(p) = backend_auth {
-			pols.push(BackendTrafficPolicy::BackendAuth(p))
+			pols.push(BackendTrafficPolicy::BackendAuth {
+				auth: p.auth,
+				headers: p.headers,
+			})
 		}
 		if let Some(p) = ext_authz {
 			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
@@ -2236,7 +2267,7 @@ pub struct FilterOrPolicy {
 	/// Authentication credentials sent to the backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	backend_auth: Option<BackendAuth>,
+	backend_auth: Option<LocalBackendAuth>,
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
@@ -3137,7 +3168,7 @@ async fn convert_llm_config(
 				value: key.0.clone(),
 				location: None,
 			};
-			pols.push(BackendTrafficPolicy::BackendAuth(backend_auth));
+			pols.push(BackendTrafficPolicy::backend_auth(backend_auth));
 		}
 
 		// Create AI backend
@@ -3165,7 +3196,10 @@ async fn convert_llm_config(
 			pols.push(BackendTrafficPolicy::BackendTLS(p.try_into()?));
 		}
 		if let Some(p) = model_config.auth.clone() {
-			pols.push(BackendTrafficPolicy::BackendAuth(p));
+			pols.push(BackendTrafficPolicy::BackendAuth {
+				auth: p.auth,
+				headers: p.headers,
+			});
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
 			pols.push(BackendTrafficPolicy::Tunnel(p));
@@ -3928,7 +3962,10 @@ pub(crate) async fn split_policies(
 		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
 	if let Some(p) = backend_auth {
-		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
+		backend_policies.push(BackendTrafficPolicy::BackendAuth {
+			auth: p.auth,
+			headers: p.headers,
+		})
 	}
 
 	// Route policies

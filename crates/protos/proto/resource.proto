@@ -345,6 +345,14 @@ message BackendAuthPolicy {
     Azure azure = 5;
     OAuthTokenExchange oauth_token_exchange = 6;
   }
+
+  repeated BackendAuthHeader headers = 7;
+}
+
+message BackendAuthHeader {
+  string header_name = 1;
+  optional string prefix = 2;
+  string value = 3;
 }
 
 message AuthorizationLocation {
