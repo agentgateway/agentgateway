@@ -14108,6 +14108,7 @@ type AIBackend_Bedrock struct {
 	Region              string                 `protobuf:"bytes,2,opt,name=region,proto3" json:"region,omitempty"`
 	GuardrailIdentifier *string                `protobuf:"bytes,3,opt,name=guardrail_identifier,json=guardrailIdentifier,proto3,oneof" json:"guardrail_identifier,omitempty"`
 	GuardrailVersion    *string                `protobuf:"bytes,4,opt,name=guardrail_version,json=guardrailVersion,proto3,oneof" json:"guardrail_version,omitempty"`
+	ProviderPreference  *string                `protobuf:"bytes,5,opt,name=provider_preference,json=providerPreference,proto3,oneof" json:"provider_preference,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -14166,6 +14167,13 @@ func (x *AIBackend_Bedrock) GetGuardrailIdentifier() string {
 func (x *AIBackend_Bedrock) GetGuardrailVersion() string {
 	if x != nil && x.GuardrailVersion != nil {
 		return *x.GuardrailVersion
+	}
+	return ""
+}
+
+func (x *AIBackend_Bedrock) GetProviderPreference() string {
+	if x != nil && x.ProviderPreference != nil {
+		return *x.ProviderPreference
 	}
 	return ""
 }
@@ -15886,7 +15894,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x11agent_runtime_arn\x18\x01 \x01(\tR\x0fagentRuntimeArn\x12!\n" +
 	"\tqualifier\x18\x02 \x01(\tH\x00R\tqualifier\x88\x01\x01B\f\n" +
 	"\n" +
-	"_qualifier\"\xcf\x15\n" +
+	"_qualifier\"\x9d\x16\n" +
 	"\tAIBackend\x12[\n" +
 	"\x0fprovider_groups\x18\x01 \x03(\v22.agentgateway.dev.resource.AIBackend.ProviderGroupR\x0eproviderGroups\x1a6\n" +
 	"\fHostOverride\x12\x12\n" +
@@ -15906,15 +15914,17 @@ const file_resource_proto_rawDesc = "" +
 	"\x06_model\x1a0\n" +
 	"\tAnthropic\x12\x19\n" +
 	"\x05model\x18\x01 \x01(\tH\x00R\x05model\x88\x01\x01B\b\n" +
-	"\x06_model\x1a\xdf\x01\n" +
+	"\x06_model\x1a\xad\x02\n" +
 	"\aBedrock\x12\x19\n" +
 	"\x05model\x18\x01 \x01(\tH\x00R\x05model\x88\x01\x01\x12\x16\n" +
 	"\x06region\x18\x02 \x01(\tR\x06region\x126\n" +
 	"\x14guardrail_identifier\x18\x03 \x01(\tH\x01R\x13guardrailIdentifier\x88\x01\x01\x120\n" +
-	"\x11guardrail_version\x18\x04 \x01(\tH\x02R\x10guardrailVersion\x88\x01\x01B\b\n" +
+	"\x11guardrail_version\x18\x04 \x01(\tH\x02R\x10guardrailVersion\x88\x01\x01\x124\n" +
+	"\x13provider_preference\x18\x05 \x01(\tH\x03R\x12providerPreference\x88\x01\x01B\b\n" +
 	"\x06_modelB\x17\n" +
 	"\x15_guardrail_identifierB\x14\n" +
-	"\x12_guardrail_version\x1a\xb5\x01\n" +
+	"\x12_guardrail_versionB\x16\n" +
+	"\x14_provider_preference\x1a\xb5\x01\n" +
 	"\vAzureOpenAI\x12\x19\n" +
 	"\x05model\x18\x01 \x01(\tH\x00R\x05model\x88\x01\x01\x12\x12\n" +
 	"\x04host\x18\x02 \x01(\tR\x04host\x12$\n" +

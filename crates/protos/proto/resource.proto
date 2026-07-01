@@ -1603,6 +1603,7 @@ message AIBackend {
     string region = 2;
     optional string guardrail_identifier = 3;
     optional string guardrail_version = 4;
+    optional string provider_preference = 5;
   }
   message AzureOpenAI {
     optional string model = 1;

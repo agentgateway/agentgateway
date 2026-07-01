@@ -9,6 +9,48 @@ pub struct AwsRegion {
 	pub region: String,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub enum BedrockProviderPreference {
+	#[default]
+	RuntimePreferred,
+	MantleOnly,
+	RuntimeOnly,
+}
+
+impl std::str::FromStr for BedrockProviderPreference {
+	type Err = ();
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"RuntimePreferred" | "Runtime" => Ok(Self::RuntimePreferred),
+			"MantleOnly" => Ok(Self::MantleOnly),
+			"RuntimeOnly" => Ok(Self::RuntimeOnly),
+			_ => Err(()),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BedrockEndpoint {
+	Runtime,
+	Mantle,
+}
+
+// TODO: find a better place for this
+const MANTLE_SIGNING_SERVICE_NAME: &str = "bedrock-mantle";
+
+const CRIS_GEO_PREFIXES: [&str; 4] = ["us-gov.", "us.", "eu.", "apac."];
+fn strip_cris_prefix(model: &str) -> &str {
+	for prefix in CRIS_GEO_PREFIXES {
+		if let Some(stripped) = model.strip_prefix(prefix) {
+			return stripped;
+		}
+	}
+	model
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -21,6 +63,8 @@ pub struct Provider {
 	pub guardrail_identifier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub guardrail_version: Option<Strng>,
+	#[serde(default)]
+	pub provider_preference: BedrockProviderPreference,
 	/// Per-provider AWS source credential cache, shared across requests via Arc.
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
@@ -46,12 +90,115 @@ impl Provider {
 		model.contains("anthropic.claude")
 	}
 
+	fn use_native_format(&self, request_model: Option<&str>) -> bool {
+		matches!(
+			self.provider_preference,
+			BedrockProviderPreference::RuntimeOnly
+		) && self.is_anthropic_model(request_model)
+	}
+
+	pub fn resolve_endpoint(
+		&self,
+		route_type: super::RouteType,
+		model_id: Option<&str>,
+	) -> BedrockEndpoint {
+		use BedrockProviderPreference::*;
+
+		match self.provider_preference {
+			RuntimeOnly => return BedrockEndpoint::Runtime,
+			MantleOnly => return BedrockEndpoint::Mantle,
+			_ => {},
+		}
+
+		use super::RouteType as RT;
+		match route_type {
+			RT::Embeddings | RT::AnthropicTokenCount | RT::Rerank | RT::Realtime => {
+				BedrockEndpoint::Runtime
+			},
+			RT::Models => BedrockEndpoint::Mantle,
+			// these can be both mantle or not but not really sure for
+			RT::Detect | RT::Passthrough => BedrockEndpoint::Runtime,
+
+			RT::Completions | RT::Messages | RT::Responses => {
+				if model_id
+					.is_some_and(|m| super::bedrock_model_table::is_mantle_only(strip_cris_prefix(m)))
+				{
+					BedrockEndpoint::Mantle
+				} else {
+					BedrockEndpoint::Runtime
+				}
+			},
+		}
+	}
+
+	// Mantle overrides the signing name which for aws auth currently defaults to bedrock
+	pub fn signing_service_name(
+		&self,
+		route_type: super::RouteType,
+		model_id: Option<&str>,
+	) -> Option<&'static str> {
+		match self.resolve_endpoint(route_type, model_id) {
+			BedrockEndpoint::Mantle => Some(MANTLE_SIGNING_SERVICE_NAME),
+			BedrockEndpoint::Runtime => None,
+		}
+	}
+
+	pub fn routes_to_mantle(&self, input_format: super::InputFormat, model_id: Option<&str>) -> bool {
+		let route_type = match input_format {
+			super::InputFormat::Completions => super::RouteType::Completions,
+			super::InputFormat::Messages => super::RouteType::Messages,
+			super::InputFormat::Responses => super::RouteType::Responses,
+			_ => return false,
+		};
+		matches!(
+			self.resolve_endpoint(route_type, model_id),
+			BedrockEndpoint::Mantle
+		)
+	}
+
+	pub fn body_native_format(
+		&self,
+		input_format: super::InputFormat,
+		request_model: &str,
+	) -> Option<super::custom::ProviderFormat> {
+		use super::custom::ProviderFormat;
+		let route_type = match input_format {
+			super::InputFormat::Completions => super::RouteType::Completions,
+			super::InputFormat::Messages => super::RouteType::Messages,
+			super::InputFormat::Responses => super::RouteType::Responses,
+			_ => return None,
+		};
+		match self.resolve_endpoint(route_type, Some(request_model)) {
+			BedrockEndpoint::Mantle => Some(match input_format {
+				super::InputFormat::Completions => ProviderFormat::Completions,
+				super::InputFormat::Messages => ProviderFormat::Messages,
+				super::InputFormat::Responses => ProviderFormat::Responses,
+				_ => unreachable!("route_type derived only from the three formats above"),
+			}),
+			BedrockEndpoint::Runtime => self
+				.use_native_format(Some(request_model))
+				.then_some(ProviderFormat::Messages),
+		}
+	}
+
 	pub fn get_path_for_route(
 		&self,
 		route_type: super::RouteType,
 		streaming: bool,
 		model: &str,
 	) -> Strng {
+		if matches!(
+			self.resolve_endpoint(route_type, Some(model)),
+			BedrockEndpoint::Mantle
+		) {
+			return match route_type {
+				super::RouteType::Responses => strng::literal!("/v1/responses"),
+				super::RouteType::Messages => strng::literal!("/anthropic/v1/messages"),
+				super::RouteType::Models => strng::literal!("/v1/models"),
+				_ => strng::literal!("/v1/chat/completions"),
+			};
+		}
+
 		let model = self.model.as_deref().unwrap_or(model);
 		const MODEL_SEGMENT: &percent_encoding::AsciiSet =
 			&percent_encoding::CONTROLS.add(b'/').add(b'%');
@@ -59,19 +206,21 @@ impl Provider {
 		match route_type {
 			super::RouteType::AnthropicTokenCount => strng::format!("/model/{model}/count-tokens"),
 			super::RouteType::Embeddings => strng::format!("/model/{model}/invoke"),
-			// Rerank uses the agent-runtime Rerank action (model goes in the body as an ARN).
 			super::RouteType::Rerank => strng::literal!("/rerank"),
 			_ if streaming => strng::format!("/model/{model}/converse-stream"),
 			_ => strng::format!("/model/{model}/converse"),
 		}
 	}
 
-	pub fn get_host(&self, route_type: super::RouteType) -> Strng {
-		match route_type {
-			super::RouteType::Rerank => {
-				strng::format!("bedrock-agent-runtime.{}.amazonaws.com", self.region)
+	pub fn get_host(&self, route_type: super::RouteType, model_id: Option<&str>) -> Strng {
+		if matches!(route_type, super::RouteType::Rerank) {
+			return strng::format!("bedrock-agent-runtime.{}.amazonaws.com", self.region);
+		}
+		match self.resolve_endpoint(route_type, model_id) {
+			BedrockEndpoint::Mantle => strng::format!("bedrock-mantle.{}.api.aws", self.region),
+			BedrockEndpoint::Runtime => {
+				strng::format!("bedrock-runtime.{}.amazonaws.com", self.region)
 			},
-			_ => strng::format!("bedrock-runtime.{}.amazonaws.com", self.region),
 		}
 	}
 }

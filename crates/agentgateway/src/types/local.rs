@@ -763,8 +763,11 @@ pub struct LocalLLMParams {
 	/// If unset this will be automatically detected from the environment.
 	#[serde(default)]
 	api_key: Option<SecretFromFile>,
-	// For Bedorkc: The AWS region to use
+	// For Bedrock: The AWS region to use
 	aws_region: Option<Strng>,
+	// For Bedrock: which endpoint to prefer when a route is supported by both Runtime and Mantle.
+	#[serde(default)]
+	bedrock_provider_preference: crate::llm::bedrock::BedrockProviderPreference,
 	// For Vertex: The Google region to use
 	vertex_region: Option<Strng>,
 	// For Vertex: The Google project ID to use
@@ -815,6 +818,7 @@ impl LocalLLMModels {
 			path_override: None,
 			path_prefix: None,
 			tokenize: false,
+			bedrock_provider_preference: _,
 		} = std::mem::take(&mut self.params)
 		else {
 			bail!(
@@ -3113,6 +3117,7 @@ async fn convert_llm_config(
 				region: p.aws_region.context("bedrock requires aws_region")?,
 				guardrail_identifier: None,
 				guardrail_version: None,
+				provider_preference: p.bedrock_provider_preference,
 				source_credentials_cache: Default::default(),
 				assume_role_cache: Default::default(),
 			}),

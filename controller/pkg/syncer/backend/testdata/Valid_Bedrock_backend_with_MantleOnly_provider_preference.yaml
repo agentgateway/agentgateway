@@ -1,0 +1,12 @@
+ai:
+  providerGroups:
+  - providers:
+    - bedrock:
+        model: anthropic.claude-3-5-sonnet-20241022-v2:0
+        providerPreference: MantleOnly
+        region: us-east-1
+      name: backend
+key: test-ns/bedrock-mantle-only
+name:
+  name: bedrock-mantle-only
+  namespace: test-ns

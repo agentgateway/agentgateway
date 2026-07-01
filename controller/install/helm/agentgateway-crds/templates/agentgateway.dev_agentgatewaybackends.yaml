@@ -226,6 +226,16 @@ spec:
                                     maxLength: 256
                                     minLength: 1
                                     type: string
+                                  providerPreference:
+                                    description: |-
+                                      `providerPreference` controls which Bedrock API endpoint is used. Defaults to `RuntimePreferred`,
+                                      which automatically routes Mantle-only models (e.g. Claude Mythos, GPT-5.x) to the Mantle
+                                      endpoint via an internal model table. Use `MantleOnly` or `RuntimeOnly` as hard overrides.
+                                    enum:
+                                    - MantleOnly
+                                    - RuntimeOnly
+                                    - RuntimePreferred
+                                    type: string
                                   region:
                                     default: us-east-1
                                     description: |-
@@ -6043,6 +6053,16 @@ spec:
                               If unset, the model name is taken from the request.
                             maxLength: 256
                             minLength: 1
+                            type: string
+                          providerPreference:
+                            description: |-
+                              `providerPreference` controls which Bedrock API endpoint is used. Defaults to `RuntimePreferred`,
+                              which automatically routes Mantle-only models (e.g. Claude Mythos, GPT-5.x) to the Mantle
+                              endpoint via an internal model table. Use `MantleOnly` or `RuntimeOnly` as hard overrides.
+                            enum:
+                            - MantleOnly
+                            - RuntimeOnly
+                            - RuntimePreferred
                             type: string
                           region:
                             default: us-east-1

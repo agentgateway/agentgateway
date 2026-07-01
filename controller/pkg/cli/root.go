@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/bedrock"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/config"
 	controllercmd "github.com/agentgateway/agentgateway/controller/pkg/cli/controller"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/costs"
@@ -25,6 +26,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(proxycmd.Command())
 	rootCmd.AddCommand(controllercmd.Command())
 	rootCmd.AddCommand(costs.Command())
+	rootCmd.AddCommand(bedrock.Command())
 
 	rootCmd.AddCommand(flag.BuildCobra(config.Command))
 	rootCmd.AddCommand(flag.BuildCobra(trace.Command))

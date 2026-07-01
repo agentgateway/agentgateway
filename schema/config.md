@@ -13,6 +13,11 @@
 |`config.modelCatalog[].inline`|string||
 |`config.modelCatalog[].inline`|object||
 |`config.modelCatalog[].inline.providers`|object||
+|`config.bedrockRuntimeModelCatalog`|[]object|Bedrock runtime model catalog overrides; entries are merged in order, with later entries taking precedence.|
+|`config.bedrockRuntimeModelCatalog[].file`|string||
+|`config.bedrockRuntimeModelCatalog[].inline`|string||
+|`config.bedrockRuntimeModelCatalog[].inline`|object||
+|`config.bedrockRuntimeModelCatalog[].inline.providers`|object||
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string||
 |`config.caAddress`|string||
@@ -2600,6 +2605,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.bedrock.providerPreference`|enum|Possible values: `RuntimePreferred`, `MantleOnly`, `RuntimeOnly`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -3983,6 +3989,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.providerPreference`|enum|Possible values: `RuntimePreferred`, `MantleOnly`, `RuntimeOnly`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -10351,6 +10358,7 @@
 |`backends[].ai.provider.bedrock.region`|string||
 |`backends[].ai.provider.bedrock.guardrailIdentifier`|string||
 |`backends[].ai.provider.bedrock.guardrailVersion`|string||
+|`backends[].ai.provider.bedrock.providerPreference`|enum|Possible values: `RuntimePreferred`, `MantleOnly`, `RuntimeOnly`.|
 |`backends[].ai.provider.azure`|object||
 |`backends[].ai.provider.azure.model`|string||
 |`backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -11734,6 +11742,7 @@
 |`backends[].ai.groups[].providers[].provider.bedrock.region`|string||
 |`backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string||
 |`backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string||
+|`backends[].ai.groups[].providers[].provider.bedrock.providerPreference`|enum|Possible values: `RuntimePreferred`, `MantleOnly`, `RuntimeOnly`.|
 |`backends[].ai.groups[].providers[].provider.azure`|object||
 |`backends[].ai.groups[].providers[].provider.azure.model`|string||
 |`backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -16954,6 +16963,7 @@
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.region`|string||
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string||
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.guardrailVersion`|string||
+|`routeGroups[].routes[].backends[].ai.provider.bedrock.providerPreference`|enum|Possible values: `RuntimePreferred`, `MantleOnly`, `RuntimeOnly`.|
 |`routeGroups[].routes[].backends[].ai.provider.azure`|object||
 |`routeGroups[].routes[].backends[].ai.provider.azure.model`|string||
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -18337,6 +18347,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.providerPreference`|enum|Possible values: `RuntimePreferred`, `MantleOnly`, `RuntimeOnly`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -21074,6 +21085,7 @@
 |`llm.providers[].params.apiKey`|object|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
 |`llm.providers[].params.apiKey.file`|string||
 |`llm.providers[].params.awsRegion`|string||
+|`llm.providers[].params.bedrockProviderPreference`|enum|Possible values: `RuntimePreferred`, `MantleOnly`, `RuntimeOnly`.|
 |`llm.providers[].params.vertexRegion`|string||
 |`llm.providers[].params.vertexProject`|string||
 |`llm.providers[].params.azureResourceName`|string|For Azure: the resource name of the deployment|
@@ -21222,6 +21234,7 @@
 |`llm.models[].params.apiKey`|object|An API key to attach to the request.<br>If unset this will be automatically detected from the environment.|
 |`llm.models[].params.apiKey.file`|string||
 |`llm.models[].params.awsRegion`|string||
+|`llm.models[].params.bedrockProviderPreference`|enum|Possible values: `RuntimePreferred`, `MantleOnly`, `RuntimeOnly`.|
 |`llm.models[].params.vertexRegion`|string||
 |`llm.models[].params.vertexProject`|string||
 |`llm.models[].params.azureResourceName`|string|For Azure: the resource name of the deployment|

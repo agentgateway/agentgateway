@@ -553,6 +553,65 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid Bedrock backend with RuntimeOnly provider preference",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bedrock-runtime-only",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Bedrock: &agentgateway.BedrockConfig{
+								Model:              new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region:             "us-east-1",
+								ProviderPreference: agentgateway.BedrockProviderPreferenceRuntimeOnly,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid Bedrock backend with MantleOnly provider preference",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bedrock-mantle-only",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Bedrock: &agentgateway.BedrockConfig{
+								Model:              new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region:             "us-east-1",
+								ProviderPreference: agentgateway.BedrockProviderPreferenceMantleOnly,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Valid Bedrock backend with default provider preference",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bedrock-default-pref",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							Bedrock: &agentgateway.BedrockConfig{
+								Model:  new("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+								Region: "us-east-1",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "OpenAI backend with secret reference auth",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{

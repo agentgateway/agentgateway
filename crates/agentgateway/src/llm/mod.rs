@@ -28,6 +28,7 @@ use crate::*;
 pub mod anthropic;
 pub mod azure;
 pub mod bedrock;
+pub mod bedrock_model_table;
 pub mod copilot;
 pub mod custom;
 pub mod gemini;
@@ -504,7 +505,7 @@ impl AIProvider {
 			AIProvider::Gemini(_) => Target::Hostname(gemini::DEFAULT_HOST, 443),
 			AIProvider::Anthropic(_) => Target::Hostname(anthropic::DEFAULT_HOST, 443),
 			AIProvider::Vertex(p) => Target::Hostname(p.get_host(route_type), 443),
-			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type), 443),
+			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type, None), 443),
 			AIProvider::Azure(p) => Target::Hostname(p.get_host(), 443),
 			AIProvider::Custom(_) => return None,
 		})
@@ -528,7 +529,8 @@ impl AIProvider {
 			self.set_default_path(req, route_type, llm_request, path_prefix, has_host_override)?;
 		}
 		if !has_host_override {
-			self.set_default_authority(req, route_type)?;
+			let model_id = llm_request.map(|l| l.request_model.as_str());
+			self.set_default_authority(req, route_type, model_id)?;
 		}
 		self.set_required_fields(req, route_type, llm_request)?;
 		Ok(())
@@ -723,6 +725,7 @@ impl AIProvider {
 		&self,
 		req: &mut Request,
 		route_type: RouteType,
+		model_id: Option<&str>,
 	) -> anyhow::Result<()> {
 		let authority = match self {
 			AIProvider::OpenAI(_) => Authority::from_static(openai::DEFAULT_HOST_STR),
@@ -733,15 +736,25 @@ impl AIProvider {
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
-				// Store the region in request extensions so AWS signing can use it.
+				// Store the region and signing name for late auth (bedrock vs bedrock-mantle)
+				let signing_service = provider.signing_service_name(route_type, model_id);
 				return http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.authority = Some(Authority::from_str(&provider.get_host(route_type))?);
+						uri.authority = Some(Authority::from_str(
+							&provider.get_host(route_type, model_id),
+						)?);
 						Ok(())
 					})?;
 					req.extensions.insert(bedrock::AwsRegion {
 						region: provider.region.as_str().to_string(),
 					});
+					if let Some(service) = signing_service {
+						req
+							.extensions
+							.insert(crate::http::auth::aws::DefaultAwsServiceName(
+								service.to_string(),
+							));
+					}
 					Ok(())
 				});
 			},
@@ -1109,7 +1122,7 @@ impl AIProvider {
 		} else {
 			None
 		};
-		let native_format = if original_format == InputFormat::Detect {
+		let mut native_format = if original_format == InputFormat::Detect {
 			None
 		} else {
 			self
@@ -1146,6 +1159,14 @@ impl AIProvider {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
 		llm_info.native_format = native_format;
+		if let AIProvider::Bedrock(p) = self
+			&& llm_info.native_format.is_none()
+		{
+			llm_info.native_format = p.body_native_format(original_format, &llm_info.request_model);
+		}
+		// Keep the local copy in sync so the request-body translation below dispatches on it.
+		native_format = llm_info.native_format;
+
 		llm_info.cache_convention = cache_convention_for(self, native_format, &llm_info.request_model);
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
@@ -1235,11 +1256,22 @@ impl AIProvider {
 					}
 				},
 				AIProvider::Anthropic(_) => req.to_anthropic()?,
-				AIProvider::Bedrock(p) => req.to_bedrock(
-					p,
-					Some(&parts.headers),
-					policies.and_then(|p| p.prompt_caching.as_ref()),
-				)?,
+				AIProvider::Bedrock(p) => {
+					match native_format {
+						// Mantle Chat Completions / Responses: OpenAI-native body (no Converse translation).
+						Some(custom::ProviderFormat::Completions) | Some(custom::ProviderFormat::Responses) => {
+							req.to_openai()?
+						},
+						// Mantle Messages or Runtime InvokeModel: native Anthropic Messages body.
+						Some(custom::ProviderFormat::Messages) => req.to_anthropic()?,
+						// Runtime Converse (default): translate to the Bedrock Converse format.
+						_ => req.to_bedrock(
+							p,
+							Some(&parts.headers),
+							policies.and_then(|p| p.prompt_caching.as_ref()),
+						)?,
+					}
+				},
 			}
 		};
 
@@ -1591,12 +1623,12 @@ impl AIProvider {
 		req: &LLMRequest,
 		bytes: &Bytes,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		match (self, req.input_format) {
-			(_, InputFormat::Detect) => Ok(Box::new(
+		match (self, req.input_format, req.native_format) {
+			(_, InputFormat::Detect, _) => Ok(Box::new(
 				serde_json::from_slice::<types::detect::Response>(bytes)
 					.unwrap_or_else(|_| types::detect::Response::new_raw(bytes.clone())),
 			)),
-			(AIProvider::Custom(_), _) => Self::process_custom_success(req, bytes),
+			(AIProvider::Custom(_), _, _) => Self::process_custom_success(req, bytes),
 			// Completions with OpenAI: just passthrough
 			(
 				AIProvider::OpenAI(_)
@@ -1604,14 +1636,16 @@ impl AIProvider {
 				| AIProvider::Gemini(_)
 				| AIProvider::Azure(_),
 				InputFormat::Completions,
+				_,
 			) => Self::parse_completions_response(bytes),
 			// Responses with OpenAI/Azure: just passthrough
 			(
 				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Azure(_),
 				InputFormat::Responses,
+				_,
 			) => Self::parse_responses_response(bytes),
 			// Vertex messages: passthrough only for Anthropic models, otherwise translate from completions
-			(AIProvider::Vertex(p), InputFormat::Messages) => {
+			(AIProvider::Vertex(p), InputFormat::Messages, _) => {
 				if p.is_anthropic_model(Some(&req.request_model)) {
 					Ok(Box::new(
 						serde_json::from_slice::<types::messages::Response>(bytes)
@@ -1622,10 +1656,10 @@ impl AIProvider {
 				}
 			},
 			// Anthropic messages: passthrough
-			(AIProvider::Anthropic(_), InputFormat::Messages) => Self::parse_messages_response(bytes),
+			(AIProvider::Anthropic(_), InputFormat::Messages, _) => Self::parse_messages_response(bytes),
 			// Azure messages: Foundry+Claude uses Anthropic-native passthrough;
 			// all other Azure (OpenAI resource or GPT models) translate from chat completions.
-			(AIProvider::Azure(p), InputFormat::Messages) => {
+			(AIProvider::Azure(p), InputFormat::Messages, _) => {
 				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
 					&& p.is_anthropic_model(Some(&req.request_model))
 				{
@@ -1638,21 +1672,38 @@ impl AIProvider {
 			(
 				AIProvider::OpenAI(_) | AIProvider::Copilot(_) | AIProvider::Gemini(_),
 				InputFormat::Messages,
+				_,
 			) => conversion::completions::from_messages::translate_response(bytes),
 			// Supported paths with conversion...
-			(AIProvider::Anthropic(_), InputFormat::Completions) => {
+			(AIProvider::Anthropic(_), InputFormat::Completions, _) => {
 				conversion::messages::from_completions::translate_response(bytes)
 			},
-			(AIProvider::Bedrock(_), InputFormat::Completions) => {
+			(
+				AIProvider::Bedrock(_),
+				InputFormat::Completions,
+				Some(custom::ProviderFormat::Completions),
+			) => Self::parse_completions_response(bytes),
+			(
+				AIProvider::Bedrock(_),
+				InputFormat::Completions,
+				Some(custom::ProviderFormat::Messages),
+			) => conversion::messages::from_completions::translate_response(bytes),
+			(AIProvider::Bedrock(_), InputFormat::Completions, _) => {
 				conversion::bedrock::from_completions::translate_response(bytes, &req.request_model)
 			},
-			(AIProvider::Bedrock(_), InputFormat::Messages) => {
+			(AIProvider::Bedrock(_), InputFormat::Messages, Some(custom::ProviderFormat::Messages)) => {
+				Self::parse_messages_response(bytes)
+			},
+			(AIProvider::Bedrock(_), InputFormat::Messages, _) => {
 				conversion::bedrock::from_messages::translate_response(bytes, &req.request_model)
 			},
-			(AIProvider::Bedrock(_), InputFormat::Responses) => {
+			(AIProvider::Bedrock(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
+				Self::parse_responses_response(bytes)
+			},
+			(AIProvider::Bedrock(_), InputFormat::Responses, _) => {
 				conversion::bedrock::from_responses::translate_response(bytes, &req.request_model)
 			},
-			(AIProvider::Vertex(p), InputFormat::Completions) => {
+			(AIProvider::Vertex(p), InputFormat::Completions, _) => {
 				if p.is_anthropic_model(Some(&req.request_model)) {
 					conversion::messages::from_completions::translate_response(bytes)
 				} else {
@@ -1662,22 +1713,22 @@ impl AIProvider {
 					))
 				}
 			},
-			(AIProvider::Gemini(_), InputFormat::Responses) => {
+			(AIProvider::Gemini(_), InputFormat::Responses, _) => {
 				conversion::openai_compat::to_responses::translate_response(bytes, &req.request_model)
 			},
-			(_, InputFormat::Responses) => Err(AIError::UnsupportedConversion(strng::literal!(
+			(_, InputFormat::Responses, _) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"this provider does not support Responses"
 			))),
-			(_, InputFormat::Realtime) => Err(AIError::UnsupportedConversion(strng::literal!(
+			(_, InputFormat::Realtime, _) => Err(AIError::UnsupportedConversion(strng::literal!(
 				"realtime does not use this codepath"
 			))),
-			(_, InputFormat::CountTokens) => {
+			(_, InputFormat::CountTokens, _) => {
 				unreachable!("CountTokens should be handled by process_count_tokens_response")
 			},
-			(_, InputFormat::Embeddings) => {
+			(_, InputFormat::Embeddings, _) => {
 				unreachable!("Embeddings should be handled by process_embeddings_response")
 			},
-			(_, InputFormat::Rerank) => {
+			(_, InputFormat::Rerank, _) => {
 				unreachable!("Rerank should be handled by process_rerank_response")
 			},
 		}
@@ -1867,10 +1918,25 @@ impl AIProvider {
 			(AIProvider::Anthropic(_), InputFormat::Completions, _) => {
 				resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger))
 			},
+			(
+				AIProvider::Bedrock(_),
+				InputFormat::Completions,
+				Some(custom::ProviderFormat::Completions),
+			) => conversion::completions::passthrough_stream(logger, include_completion_in_log, resp),
+			(
+				AIProvider::Bedrock(_),
+				InputFormat::Completions,
+				Some(custom::ProviderFormat::Messages),
+			) => resp.map(|b| conversion::messages::from_completions::translate_stream(b, buffer, logger)),
 			(AIProvider::Bedrock(_), InputFormat::Completions, _) => {
 				let msg = conversion::bedrock::message_id(&resp);
 				resp.map(move |b| {
 					conversion::bedrock::from_completions::translate_stream(b, buffer, logger, &model, &msg)
+				})
+			},
+			(AIProvider::Bedrock(_), InputFormat::Messages, Some(custom::ProviderFormat::Messages)) => {
+				resp.map(|b| {
+					conversion::messages::passthrough_stream(b, buffer, logger, include_completion_in_log)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Messages, _) => {
@@ -1884,6 +1950,12 @@ impl AIProvider {
 						&msg,
 						include_completion_in_log,
 					)
+				})
+			},
+			// Mantle returns OpenAI-native Responses stream: passthrough.
+			(AIProvider::Bedrock(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
+				resp.map(|b| {
+					conversion::responses::passthrough_stream(b, buffer, logger, include_completion_in_log)
 				})
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses, _) => {
@@ -2039,11 +2111,28 @@ impl AIProvider {
 			(AIProvider::Anthropic(_), InputFormat::Completions, _) => {
 				conversion::messages::from_completions::translate_error(bytes)
 			},
+			(
+				AIProvider::Bedrock(_),
+				InputFormat::Completions,
+				Some(custom::ProviderFormat::Completions),
+			) => Ok(bytes.clone()),
+			(
+				AIProvider::Bedrock(_),
+				InputFormat::Completions,
+				Some(custom::ProviderFormat::Messages),
+			) => conversion::messages::from_completions::translate_error(bytes),
 			(AIProvider::Bedrock(_), InputFormat::Completions, _) => {
 				conversion::bedrock::from_completions::translate_error(bytes)
 			},
+			(AIProvider::Bedrock(_), InputFormat::Messages, Some(custom::ProviderFormat::Messages)) => {
+				conversion::messages::translate_anthropic_error(bytes, status)
+			},
 			(AIProvider::Bedrock(_), InputFormat::Messages, _) => {
 				conversion::bedrock::from_messages::translate_error(bytes)
+			},
+			// Mantle returns OpenAI-native Responses errors: passthrough.
+			(AIProvider::Bedrock(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
+				Ok(bytes.clone())
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses, _) => {
 				conversion::bedrock::from_responses::translate_error(bytes)
