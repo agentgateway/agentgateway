@@ -231,6 +231,21 @@ impl EndpointSet<Endpoint> {
 		Some((c.endpoint, handle, c.workload))
 	}
 
+	pub fn has_available_endpoint(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc: &Service,
+		svc_port: u16,
+	) -> bool {
+		let Some(target_port) = svc.ports.get(&svc_port).copied() else {
+			return false;
+		};
+		self
+			.select_p2c(workloads, svc, svc_port, target_port)
+			.or_else(|| self.select_fallback(workloads, svc_port, target_port))
+			.is_some()
+	}
+
 	/// Explicit destination bypasses bucketing and health — search every endpoint
 	/// (active + rejected) so an evicted-but-explicitly-targeted backend is still reachable.
 	fn select_override(&self, workloads: &store::WorkloadStore, o: SocketAddr) -> Option<Candidate> {
@@ -564,6 +579,43 @@ impl<T: Clone + Sync + Send + 'static> EndpointSet<T> {
 
 	pub fn start_request(&self, key: Strng, info: &Arc<EndpointInfo>) -> ActiveHandle {
 		info.start_request(key, self.tx_eviction.clone(), self.eviction_worker.clone())
+	}
+
+	pub fn select_matching(
+		&self,
+		mut eligible: impl FnMut(&T) -> bool,
+	) -> Option<(Arc<T>, ActiveHandle)> {
+		let mut rng = rand::rng();
+		for active_phase in [true, false] {
+			for bucket in self.buckets.iter() {
+				let group = bucket.load_full();
+				let map = if active_phase {
+					&group.active
+				} else {
+					&group.rejected
+				};
+				let candidates = map
+					.iter()
+					.filter(|(_, ewi)| eligible(ewi.endpoint.as_ref()))
+					.collect_vec();
+				if candidates.is_empty() {
+					continue;
+				}
+				let len = candidates.len();
+				let a = rng.random_range(0..len);
+				let b = rng.random_range(0..len);
+				let (key, ewi) = [a, b]
+					.into_iter()
+					.map(|idx| candidates[idx])
+					.max_by(|(_, a), (_, b)| a.info.score().total_cmp(&b.info.score()))
+					.expect("candidates is non-empty");
+				return Some((
+					ewi.endpoint.clone(),
+					self.start_request(key.clone(), &ewi.info),
+				));
+			}
+		}
+		None
 	}
 
 	fn find_bucket(&self, key: &EndpointKey) -> Option<Arc<EndpointGroup<T>>> {
