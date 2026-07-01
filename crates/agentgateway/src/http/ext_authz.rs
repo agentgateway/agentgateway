@@ -844,7 +844,7 @@ impl ExtAuthz {
 		// Set the default request timeout. This can be overridden by a timeout on the Backend object itself.
 		check_req
 			.extensions_mut()
-			.insert(BackendRequestTimeout(Duration::from_millis(200)));
+			.insert(BackendRequestTimeout(Duration::from_secs(2)));
 		let scope = dtrace::start_scope("ext_authz");
 		let resp = client
 			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz)
