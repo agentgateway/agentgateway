@@ -11,7 +11,7 @@ pub(crate) use client::McpHttpClient;
 pub use openapi::ParseError as OpenAPIParseError;
 use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
-use rmcp::transport::common::http_header::HEADER_SESSION_ID;
+use rmcp::transport::common::http_header::{HEADER_MCP_PARAM_PREFIX, HEADER_SESSION_ID};
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -23,6 +23,15 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
+
+/// SEP-2243 `Mcp-Param-*` routing header. `HeaderName::as_str()` is always lowercase, so match the
+/// canonical rmcp prefix case-insensitively.
+fn is_mcp_param_header(name: &http::HeaderName) -> bool {
+	name
+		.as_str()
+		.get(..HEADER_MCP_PARAM_PREFIX.len())
+		.is_some_and(|p| p.eq_ignore_ascii_case(HEADER_MCP_PARAM_PREFIX))
+}
 
 #[derive(Debug, Clone)]
 pub struct IncomingRequestContext {
@@ -56,6 +65,9 @@ impl IncomingRequestContext {
 	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
 		&mut self.headers
 	}
+	pub fn extensions(&self) -> &::http::Extensions {
+		&self.ext
+	}
 	pub fn extensions_mut(&mut self) -> &mut ::http::Extensions {
 		&mut self.ext
 	}
@@ -82,6 +94,13 @@ impl IncomingRequestContext {
 				|| k == http::header::CONTENT_LENGTH
 				|| k.as_str().eq_ignore_ascii_case(HEADER_SESSION_ID)
 			{
+				continue;
+			}
+			// SEP-2243 intermediary MUST-forward: send the client's Mcp-Param-* routing headers to the MCP
+			// upstream unchanged, appending so repeated values survive (insert-if-absent below would
+			// collapse them to the first). OpenAPI upstreams are not MCP servers and strip these after apply().
+			if is_mcp_param_header(k) {
+				req.headers_mut().append(k.clone(), v.clone());
 				continue;
 			}
 			if !req.headers().contains_key(k) {
@@ -118,6 +137,8 @@ pub enum UpstreamError {
 	McpGuardrails(rmcp::ErrorData),
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
+	#[error("unexpected MCP routing header: {0}")]
+	InvalidRoutingHeader(&'static str),
 	#[error("unsupported method: {0}")]
 	InvalidMethod(String),
 	#[error("stdio upstream error: {0}")]
@@ -537,5 +558,25 @@ mod tests {
 		ctx.apply(&mut req).unwrap();
 		assert_eq!(req.headers().get("authorization").unwrap(), "Bearer token");
 		assert_eq!(req.headers().get("x-request-id").unwrap(), "req-1");
+	}
+
+	#[test]
+	fn apply_forwards_duplicate_mcp_param_headers() {
+		// SEP-2243 intermediary MUST-forward: both values of a repeated routing header must reach the
+		// upstream so it can apply its own header/body validation; collapsing to the first would hide
+		// an ambiguous request from the server.
+		let ctx = ctx_with_headers(&[
+			("mcp-param-region", "us-west1"),
+			("mcp-param-region", "us-east1"),
+		]);
+		let mut req = empty_upstream_req();
+		ctx.apply(&mut req).unwrap();
+		let forwarded: Vec<_> = req
+			.headers()
+			.get_all("mcp-param-region")
+			.iter()
+			.map(|v| v.to_str().unwrap())
+			.collect();
+		assert_eq!(forwarded, vec!["us-west1", "us-east1"]);
 	}
 }

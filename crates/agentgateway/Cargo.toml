@@ -107,10 +107,11 @@ libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
-rmcp = { version = "1.5", features = [
+rmcp = { version = "2.0", features = [
     "client",
     "server",
     "base64",
+    "server-side-http",
     "transport-child-process",
 ] }
 rust_decimal.workspace = true
@@ -189,7 +190,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "1.5", features = [
+rmcp = { version = "2.0", features = [
     "client",
     "server",
     "base64",

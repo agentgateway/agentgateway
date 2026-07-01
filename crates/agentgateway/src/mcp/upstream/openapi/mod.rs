@@ -13,6 +13,7 @@ use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind
 use percent_encoding::{AsciiSet, utf8_percent_encode};
 use regex::{Captures, Regex, Replacer};
 use rmcp::model::{ClientRequest, JsonObject, JsonRpcRequest, Tool};
+use rmcp::transport::common::http_header::HEADER_MCP_PARAM_PREFIX;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::{debug, warn};
@@ -21,7 +22,7 @@ use crate::client::ResolvedDestination;
 use crate::http::sessionpersistence;
 use crate::mcp::mergestream;
 use crate::mcp::mergestream::Messages;
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
+use crate::mcp::upstream::{IncomingRequestContext, UpstreamError, is_mcp_param_header};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct UpstreamOpenAPICall {
@@ -657,36 +658,40 @@ impl Handler {
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
 				id,
 				ListPromptsResult {
-					meta: None,
-					next_cursor: None,
-					prompts: vec![],
-				},
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
 			),
 			ClientRequest::ListResourcesRequest(_) => Messages::from_result(
 				id,
 				ListResourcesResult {
-					meta: None,
-					next_cursor: None,
-					resources: vec![],
-				},
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
 			),
 			ClientRequest::ListResourceTemplatesRequest(_) => Messages::from_result(
 				id,
 				ListResourceTemplatesResult {
-					meta: None,
-					next_cursor: None,
-					resource_templates: vec![],
-				},
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
+			),
+			ClientRequest::DiscoverRequest(_) => Messages::from_result(
+				id,
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::builder().enable_tools().build(),
+				)
+				.with_cache(0, CacheScope::Private),
 			),
 			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
-			ClientRequest::GetTaskInfoRequest(_) => Messages::from_result(
-				id,
-				GetTaskResult {
-					task: Task::default(),
-					meta: None,
-				},
-			),
-			ClientRequest::GetTaskResultRequest(_) => {
+			ClientRequest::GetTaskRequest(_) => {
+				Messages::from_result(id, GetTaskResult::new(Task::default()))
+			},
+			ClientRequest::GetTaskPayloadRequest(_) => {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
 			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
@@ -694,6 +699,10 @@ impl Handler {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
 			ClientRequest::PingRequest(_) => Messages::from_result(id, ServerResult::empty(())),
+			ClientRequest::SubscriptionsListenRequest(_) => {
+				let subscription_id = id.clone();
+				Messages::from_result(id, SubscriptionsListenResult::new(subscription_id))
+			},
 			ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)
@@ -713,17 +722,18 @@ impl Handler {
 				let serialized_content = serde_json::to_string(&res)
 					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
 
-				let mut result = CallToolResult::success(vec![Content::text(serialized_content)]);
+				let mut result = CallToolResult::success(vec![ContentBlock::text(serialized_content)]);
 				result.structured_content = Some(res);
 				Messages::from_result(id, result)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,
 				ListToolsResult {
-					meta: None,
-					next_cursor: None,
 					tools: self.tools(),
-				},
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
 			),
 		};
 		Ok(res)
@@ -854,6 +864,14 @@ impl Handler {
 			.map_err(|e| anyhow::anyhow!("Failed to build request: {}", e))?;
 
 		ctx.apply(&mut request)?;
+
+		// The gateway is the terminal MCP server for an OpenAPI-backed tool: OpenAPI tools declare no
+		// x-mcp-header, so any inbound Mcp-Param-* is unexpected. Reject per SEP-2243 server validation
+		// (-32020) before schema headers are applied, so it cannot leak to the REST backend or shadow a
+		// schema-derived header of the same name.
+		if request.headers().keys().any(is_mcp_param_header) {
+			return Err(UpstreamError::InvalidRoutingHeader(HEADER_MCP_PARAM_PREFIX));
+		}
 
 		// First header set wins including headers set by ctx.apply or the gateway
 		for (key, value) in &header_params {
