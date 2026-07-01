@@ -1,0 +1,39 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/completions/stream_terminal_text.json
+---
+event: event
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"test-model","object":"response","output":[],"status":"in_progress"}}
+
+event: event
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: event
+data: {"type":"response.content_part.added","sequence_number":3,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":""}}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"delta":""}
+
+event: event
+data: {"type":"response.output_text.delta","sequence_number":5,"item_id":"","output_index":0,"content_index":0,"delta":"4"}
+
+event: event
+data: {"type":"response.output_text.done","sequence_number":6,"item_id":"","output_index":0,"content_index":0,"text":"4"}
+
+event: event
+data: {"type":"response.content_part.done","sequence_number":7,"item_id":"","output_index":0,"content_index":0,"part":{"type":"output_text","annotations":[],"logprobs":null,"text":"4"}}
+
+event: event
+data: {"type":"response.output_item.done","sequence_number":8,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"4"}],"id":"","role":"assistant","status":"completed"}}
+
+event: event
+data: {"type":"response.completed","sequence_number":9,"response":{"created_at":123,"id":"","model":"test-model","object":"response","output":[{"type":"message","content":[{"type":"output_text","annotations":[],"logprobs":null,"text":"4"}],"id":"","role":"assistant","status":"completed"}],"status":"completed","usage":{"input_tokens":8,"input_tokens_details":{"cached_tokens":0},"output_tokens":1,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":9}}}
+
+
+
+{
+  "input_tokens": 8,
+  "output_tokens": 1,
+  "total_tokens": 9,
+  "provider_model": "test-model"
+}

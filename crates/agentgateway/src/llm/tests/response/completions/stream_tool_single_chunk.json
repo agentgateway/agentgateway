@@ -1,0 +1,4 @@
+data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"function":{"arguments":"{\"cmd\":\"echo \\\"Hello, World!\\\" \\u003e greeting.sh && chmod +x greeting.sh && ./greeting.sh\",\"workdir\":\"/tmp/tmp.0PpRrcOVsJ\"}","name":"exec_command"},"id":"function-call-14340045308038776752","type":"function"}]},"finish_reason":"tool_calls","index":0}],"created":1782173193,"id":"Cc45au33H7HW1MkP-Z2tiA4","model":"gemini-2.5-flash-lite","object":"chat.completion.chunk","usage":{"completion_tokens":53,"prompt_tokens":4821,"total_tokens":4874}}
+
+data: [DONE]
+

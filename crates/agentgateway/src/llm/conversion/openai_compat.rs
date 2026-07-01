@@ -510,6 +510,7 @@ pub mod to_responses {
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let message_item_id = format!("msg_{:016x}", rand::rng().random::<u64>());
 		let model_holder: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+		let mut text_buffer = String::new();
 
 		let mut next_output_index: u32 = 1;
 		let mut tool_calls: HashMap<u32, (String, String, String, u32)> = HashMap::new();
@@ -534,6 +535,7 @@ pub mod to_responses {
 								&mut pending_usage,
 								&message_item_id,
 								&sent_content_part,
+								&text_buffer,
 								&log,
 								&response_id,
 								&model_holder.borrow(),
@@ -615,6 +617,8 @@ pub mod to_responses {
 									});
 								}
 
+								text_buffer.push_str(content);
+
 								sequence_number += 1;
 								events.push((
 									"event",
@@ -642,6 +646,9 @@ pub mod to_responses {
 										(item_id, String::new(), String::new(), output_index)
 									});
 
+									if let Some(id) = &tc.id {
+										entry.0 = id.clone();
+									}
 									if let Some(function) = &tc.function {
 										if let Some(name) = &function.name {
 											entry.1 = name.clone();
@@ -712,6 +719,7 @@ pub mod to_responses {
 								&mut pending_usage,
 								&message_item_id,
 								&sent_content_part,
+								&text_buffer,
 								&log,
 								&response_id,
 								&model_holder.borrow(),
@@ -741,15 +749,17 @@ pub mod to_responses {
 		pending_usage: &mut Option<completions::Usage>,
 		message_item_id: &str,
 		sent_content_part: &bool,
+		text_buffer: &str,
 		log: &AmendOnDrop,
 		response_id: &str,
 		model: &str,
 	) {
 		use responses::{
 			AssistantRole, ErrorObject, FunctionToolCall, IncompleteDetails, InputTokenDetails,
-			OutputContent, OutputItem, OutputMessage, OutputStatus, OutputTextContent,
-			OutputTokenDetails, ResponseContentPartDoneEvent, ResponseFunctionCallArgumentsDoneEvent,
-			ResponseOutputItemDoneEvent, ResponseStreamEvent, ResponseUsage,
+			OutputContent, OutputItem, OutputMessage, OutputMessageContent, OutputStatus,
+			OutputTextContent, OutputTokenDetails, ResponseContentPartDoneEvent,
+			ResponseFunctionCallArgumentsDoneEvent, ResponseOutputItemDoneEvent, ResponseStreamEvent,
+			ResponseTextDoneEvent, ResponseUsage,
 		};
 
 		let stop_reason = pending_stop_reason.take();
@@ -757,6 +767,7 @@ pub mod to_responses {
 
 		let mut sorted_tools: Vec<_> = tool_calls.drain().collect();
 		sorted_tools.sort_by_key(|(_, (_, _, _, output_index))| *output_index);
+		let mut response_output = Vec::new();
 
 		for (_, (item_id, name, buffer, output_index)) in sorted_tools {
 			*sequence_number += 1;
@@ -773,25 +784,41 @@ pub mod to_responses {
 				),
 			));
 
+			let item = OutputItem::FunctionCall(FunctionToolCall {
+				arguments: buffer,
+				call_id: item_id.clone(),
+				namespace: None,
+				name,
+				id: Some(item_id),
+				status: Some(OutputStatus::Completed),
+			});
+			response_output.push(item.clone());
+
 			*sequence_number += 1;
 			events.push((
 				"event",
 				ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
 					sequence_number: *sequence_number,
 					output_index,
-					item: OutputItem::FunctionCall(FunctionToolCall {
-						arguments: buffer,
-						call_id: item_id.clone(),
-						namespace: None,
-						name,
-						id: Some(item_id),
-						status: Some(OutputStatus::Completed),
-					}),
+					item,
 				}),
 			));
 		}
 
 		if *sent_content_part {
+			*sequence_number += 1;
+			events.push((
+				"event",
+				ResponseStreamEvent::ResponseOutputTextDone(ResponseTextDoneEvent {
+					sequence_number: *sequence_number,
+					item_id: message_item_id.to_string(),
+					output_index: 0,
+					content_index: 0,
+					text: text_buffer.to_string(),
+					logprobs: None,
+				}),
+			));
+
 			*sequence_number += 1;
 			events.push((
 				"event",
@@ -803,11 +830,28 @@ pub mod to_responses {
 					part: OutputContent::OutputText(OutputTextContent {
 						annotations: Vec::new(),
 						logprobs: None,
-						text: String::new(),
+						text: text_buffer.to_string(),
 					}),
 				}),
 			));
 		}
+
+		let message_content = if *sent_content_part {
+			vec![OutputMessageContent::OutputText(OutputTextContent {
+				annotations: Vec::new(),
+				logprobs: None,
+				text: text_buffer.to_string(),
+			})]
+		} else {
+			Vec::new()
+		};
+		let message_item = OutputItem::Message(OutputMessage {
+			content: message_content,
+			id: message_item_id.to_string(),
+			role: AssistantRole::Assistant,
+			phase: None,
+			status: OutputStatus::Completed,
+		});
 
 		*sequence_number += 1;
 		events.push((
@@ -815,13 +859,7 @@ pub mod to_responses {
 			ResponseStreamEvent::ResponseOutputItemDone(ResponseOutputItemDoneEvent {
 				sequence_number: *sequence_number,
 				output_index: 0,
-				item: OutputItem::Message(OutputMessage {
-					content: Vec::new(),
-					id: message_item_id.to_string(),
-					role: AssistantRole::Assistant,
-					phase: None,
-					status: OutputStatus::Completed,
-				}),
+				item: message_item.clone(),
 			}),
 		));
 
@@ -865,7 +903,7 @@ pub mod to_responses {
 			types::responses::ResponseBuilder::new(response_id.to_string(), model.to_string());
 
 		*sequence_number += 1;
-		let done_event = match stop_reason {
+		let mut done_event = match stop_reason {
 			Some(completions::FinishReason::Stop)
 			| Some(completions::FinishReason::ToolCalls)
 			| Some(completions::FinishReason::FunctionCall)
@@ -886,6 +924,18 @@ pub mod to_responses {
 				},
 			),
 		};
+
+		if *sent_content_part {
+			response_output.insert(0, message_item);
+		}
+		if !response_output.is_empty() {
+			match &mut done_event {
+				ResponseStreamEvent::ResponseCompleted(e) => e.response.output = response_output,
+				ResponseStreamEvent::ResponseIncomplete(e) => e.response.output = response_output,
+				ResponseStreamEvent::ResponseFailed(e) => e.response.output = response_output,
+				_ => {},
+			}
+		}
 
 		events.push(("event", done_event));
 	}

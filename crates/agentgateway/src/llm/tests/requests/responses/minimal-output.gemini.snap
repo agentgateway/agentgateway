@@ -1,0 +1,31 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/responses/minimal-output.json
+info:
+  model: gpt-5.5
+  input:
+    - content:
+        - text: hello
+          type: output_text
+      role: assistant
+      type: message
+    - content:
+        - text: what did you say to me last?
+          type: input_text
+      role: user
+      type: message
+---
+{
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "hello"
+    },
+    {
+      "role": "user",
+      "content": "what did you say to me last?"
+    }
+  ],
+  "model": "gpt-5.5",
+  "stream": false
+}
