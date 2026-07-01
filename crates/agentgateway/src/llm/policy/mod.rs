@@ -149,6 +149,16 @@ pub struct Policy {
 	pub routes: SortedRoutes,
 }
 
+impl crate::store::HasExpressions for Policy {
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self
+			.transformations
+			.iter()
+			.flatten()
+			.map(|(_, expr)| expr.as_ref())
+	}
+}
+
 /// Wildcard pattern converted to regex for model name matching.
 /// Stores the compiled regex and original pattern length for specificity sorting.
 #[apply(schema!)]
