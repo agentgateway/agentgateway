@@ -184,9 +184,7 @@ where
 	Ok(res)
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct RuleSets(Vec<Arc<RuleSet>>);
 
 impl From<Vec<RuleSet>> for RuleSets {

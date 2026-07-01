@@ -1751,10 +1751,8 @@ pub enum SimpleLocalBackend {
 	Invalid,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[allow(dead_code)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
 enum SimpleLocalBackendSerde {
 	/// Service reference. Service must be defined in the top level services list.
 	Service { name: NamespacedHostname, port: u16 },

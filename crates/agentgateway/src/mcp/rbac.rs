@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ::cel::Value;
 use ::cel::objects::{KeyRef, MapValue};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use vector_map::VecMap;
 
 use crate::cel::ContextBuilder;
@@ -57,9 +57,8 @@ impl McpAuthorizationSet {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Eq, PartialEq)]
 pub enum ResourceType {
 	/// The tool being accessed
 	Tool(ResourceId),
@@ -92,9 +91,8 @@ impl cel::DynamicType for ResourceType {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, ::cel::DynamicType)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Eq, PartialEq, ::cel::DynamicType)]
 pub struct ResourceId {
 	#[serde(default)]
 	/// The target of the resource

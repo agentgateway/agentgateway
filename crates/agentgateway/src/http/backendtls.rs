@@ -10,7 +10,7 @@ use rustls_pki_types::{CertificateDer, ServerName};
 use serde::Serializer;
 use tracing::trace;
 
-use crate::serdes::schema_ser;
+use crate::serdes::{schema_de, schema_ser};
 use crate::transport::tls;
 use crate::types::agent::{parse_cert, parse_key};
 use crate::{apply, transport};
@@ -175,9 +175,8 @@ fn is_false(value: &bool) -> bool {
 static SYSTEM_ROOT: Lazy<rustls_native_certs::CertificateResult> =
 	Lazy::new(rustls_native_certs::load_native_certs);
 
-#[derive(Debug, Clone, Default, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[apply(schema_de!)]
+#[derive(Default)]
 pub struct LocalBackendTLS {
 	/// Client certificate file to present to the backend.
 	cert: Option<PathBuf>,

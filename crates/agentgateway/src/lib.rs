@@ -63,9 +63,8 @@ pub struct NestedRawConfig {
 	config: Option<RawConfig>,
 }
 
-#[derive(serde::Deserialize, Clone, Debug, Default)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
+#[derive(Default)]
 pub struct RawStandardAttributes {
 	/// CEL expression used to populate the `agentgateway.user` request log attribute.
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
@@ -127,9 +126,8 @@ impl DnsLookupFamily {
 	}
 }
 
-#[derive(serde::Deserialize, Default, Clone, Debug)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
+#[derive(Default)]
 pub struct RawDnsConfig {
 	/// Controls which IP address families the DNS resolver will query for
 	/// upstream connections.
@@ -143,9 +141,8 @@ pub struct RawDnsConfig {
 	edns0: Option<bool>,
 }
 
-#[derive(serde::Deserialize, Default, Clone, Debug)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
+#[derive(Default)]
 // RawConfig represents the inputs a user can pass in. Config represents the internal representation of this.
 pub struct RawConfig {
 	enable_ipv6: Option<bool>,

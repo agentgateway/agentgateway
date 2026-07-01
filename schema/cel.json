@@ -613,6 +613,7 @@
               "format": "double"
             }
           },
+          "additionalProperties": false,
           "required": [
             "total",
             "input",
@@ -680,7 +681,8 @@
               ],
               "format": "double"
             }
-          }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false,
@@ -898,6 +900,7 @@
               "description": "The terminal JSON-RPC error payload, if available."
             }
           },
+          "additionalProperties": false,
           "required": [
             "target",
             "name"
@@ -919,7 +922,8 @@
               "type": "string",
               "default": ""
             }
-          }
+          },
+          "additionalProperties": false
         },
         "resource": {
           "type": [
@@ -937,9 +941,11 @@
               "type": "string",
               "default": ""
             }
-          }
+          },
+          "additionalProperties": false
         }
-      }
+      },
+      "additionalProperties": false
     },
     "backend": {
       "description": "`backend` contains information about the backend being used.",

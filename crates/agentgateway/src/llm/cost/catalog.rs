@@ -5,6 +5,8 @@ use std::str::FromStr;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use crate::{apply, schema};
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -63,9 +65,8 @@ pub struct Provider {
 	pub models: BTreeMap<String, Model>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[apply(schema!)]
+#[derive(PartialEq, Eq, Default)]
 pub struct Model {
 	#[serde(default, skip_serializing_if = "Rates::is_empty")]
 	pub rates: Rates,
@@ -73,9 +74,8 @@ pub struct Model {
 	pub tiers: Vec<Tier>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[apply(schema!)]
+#[derive(PartialEq, Eq, Default)]
 pub struct Rates {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub input: Option<Money>,
@@ -112,9 +112,8 @@ impl Rates {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[apply(schema!)]
+#[derive(PartialEq, Eq)]
 pub struct Tier {
 	pub context_over: u64,
 	pub rates: Rates,

@@ -29,6 +29,7 @@
       "items": true
     }
   },
+  "additionalProperties": false,
   "required": [
     "workloads",
     "services",
@@ -64,6 +65,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "address",
@@ -148,6 +150,7 @@
           "$ref": "#/$defs/ListenerProtocol"
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "gatewayName",
@@ -280,6 +283,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "gatewayName",
@@ -358,6 +362,7 @@
           "items": true
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "name",
@@ -560,6 +565,7 @@
       "required": [
         "weight"
       ],
+      "unevaluatedProperties": false,
       "oneOf": [
         {
           "type": "object",
@@ -577,6 +583,7 @@
                   "maximum": 65535
                 }
               },
+              "additionalProperties": false,
               "required": [
                 "name",
                 "port"
@@ -677,6 +684,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "name",
@@ -700,6 +708,7 @@
           "items": true
         }
       },
+      "additionalProperties": false,
       "required": [
         "weight",
         "backend"
@@ -796,6 +805,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "httpMesh",
         "tcpMesh",

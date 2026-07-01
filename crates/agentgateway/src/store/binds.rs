@@ -1696,18 +1696,14 @@ impl Store {
 pub struct StoreUpdater {
 	state: Arc<RwLock<Store>>,
 }
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct RoutesDump {
 	pub http_mesh: HashMap<NamespacedHostname, RouteSet>,
 	pub tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
 	pub route_groups: HashMap<RouteGroupKey, RouteSet>,
 }
 
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct DumpListener {
 	#[serde(flatten)]
 	pub listener: Listener,
@@ -1717,17 +1713,14 @@ pub struct DumpListener {
 	pub tcp_routes: Option<Arc<TCPRouteSet>>,
 }
 
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct DumpBind {
 	#[serde(flatten)]
 	pub bind: Arc<Bind>,
 	pub listeners: BTreeMap<ListenerKey, DumpListener>,
 }
 
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub struct Dump {
 	pub binds: Vec<DumpBind>,
 	pub routes: RoutesDump,

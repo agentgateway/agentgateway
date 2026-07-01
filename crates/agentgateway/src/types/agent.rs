@@ -38,9 +38,7 @@ use crate::types::local::{InternalBackend, SimpleLocalBackend};
 use crate::types::{agent, backend, frontend};
 use crate::*;
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct Bind {
 	pub key: BindKey,
 	pub address: SocketAddr,
@@ -63,9 +61,8 @@ impl Bind {
 
 pub type BindKey = Strng;
 
-#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
+#[derive(Eq, PartialEq)]
 pub struct Listener {
 	pub key: ListenerKey,
 	// User facing name
@@ -703,9 +700,7 @@ pub enum TransportProtocol {
 
 pub type ListenerKey = Strng;
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct Route {
 	// Internal name
 	pub key: RouteKey,
@@ -992,9 +987,7 @@ impl BackendTargetRef<'_> {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct TCPRoute {
 	// Internal name
 	pub key: RouteKey,
@@ -1014,9 +1007,7 @@ pub struct TCPRoute {
 	pub backends: Vec<TCPRouteBackendReference>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct TCPRouteBackendReference {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
@@ -1145,9 +1136,7 @@ pub enum PathRedirect {
 	Prefix(Strng),
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub enum RouteBackendTarget {
 	Service { name: NamespacedHostname, port: u16 },
 	Backend(BackendKey),
@@ -1179,9 +1168,7 @@ impl RouteBackendTarget {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct RouteBackendReference {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
@@ -1517,9 +1504,7 @@ pub struct BackendInfo {
 	pub backend_name: Strng,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub struct McpBackend {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
@@ -1542,9 +1527,7 @@ impl McpBackend {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub struct McpTarget {
 	pub name: McpTargetName,
 	#[serde(flatten)]
@@ -1578,9 +1561,7 @@ pub fn validate_mcp_target_name(name: &str) -> Result<(), String> {
 	Ok(())
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub enum McpTargetSpec {
 	#[serde(rename = "sse")]
 	Sse(SseTargetSpec),
@@ -1611,25 +1592,19 @@ impl McpTargetSpec {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub struct SseTargetSpec {
 	pub backend: SimpleBackendReference,
 	pub path: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub struct StreamableHTTPTargetSpec {
 	pub backend: SimpleBackendReference,
 	pub path: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub struct OpenAPITarget {
 	pub backend: SimpleBackendReference,
 	#[serde(skip_serializing)]

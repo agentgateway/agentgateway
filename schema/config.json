@@ -7000,7 +7000,8 @@
             "null"
           ]
         }
-      }
+      },
+      "additionalProperties": false
     },
     "VertexProvider": {
       "type": "object",
@@ -7064,6 +7065,7 @@
           ]
         }
       },
+      "additionalProperties": false,
       "required": [
         "region"
       ]

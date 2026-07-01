@@ -20,18 +20,15 @@ use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::{ErrorCode, ErrorData, JsonRpcError, RequestId};
 pub use router::App;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[cfg(feature = "schema")]
-use crate::JsonSchema;
 use crate::http::SendDirectResponse;
 use crate::proxy::ProxyError;
+use crate::{apply, schema};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "schema", schemars(rename = "McpBackendFailureMode"))]
-#[serde(rename_all = "camelCase")]
 pub enum FailureMode {
 	/// Fail the entire session if any target fails to initialize or any
 	/// upstream fails during a fanout. This is the default and matches
@@ -222,10 +219,9 @@ impl Display for MCPOperation {
 	}
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Debug, PartialEq, ::cel::DynamicType)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
+#[derive(Default, PartialEq, ::cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct MCPTool {
 	/// The target handling the tool call after multiplexing resolution.
 	pub target: String,
@@ -242,10 +238,9 @@ pub struct MCPTool {
 	pub error: Option<serde_json::Value>,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Debug, PartialEq, ::cel::DynamicType)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
+#[derive(Default, PartialEq, ::cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct MCPInfo {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub method_name: Option<String>,
