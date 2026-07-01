@@ -17,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
@@ -57,7 +56,7 @@ type AgentGwStatusSyncer struct {
 	gateways           StatusSyncer[*gwv1.Gateway, *gwv1.GatewayStatus]
 	httpRoutes         StatusSyncer[*gwv1.HTTPRoute, *gwv1.HTTPRouteStatus]
 	grpcRoutes         StatusSyncer[*gwv1.GRPCRoute, *gwv1.GRPCRouteStatus]
-	tcpRoutes          StatusSyncer[*gwv1a2.TCPRoute, *gwv1a2.TCPRouteStatus]
+	tcpRoutes          StatusSyncer[*gwv1.TCPRoute, *gwv1.TCPRouteStatus]
 	tlsRoutes          StatusSyncer[*gwv1.TLSRoute, *gwv1.TLSRouteStatus]
 	backendTLSPolicies StatusSyncer[*gwv1.BackendTLSPolicy, gwv1.PolicyStatus]
 	inferencePools     StatusSyncer[*inf.InferencePool, inf.InferencePoolStatus]
@@ -140,12 +139,12 @@ func NewAgwStatusSyncer(
 				}
 			},
 		},
-		tcpRoutes: StatusSyncer[*gwv1a2.TCPRoute, *gwv1a2.TCPRouteStatus]{
+		tcpRoutes: StatusSyncer[*gwv1.TCPRoute, *gwv1.TCPRouteStatus]{
 			Name:           "tcpRoute",
 			ControllerName: controllerName,
-			Client:         kclient.NewFilteredDelayed[*gwv1a2.TCPRoute](client, wellknown.TCPRouteGVR, f),
-			Build: func(om metav1.ObjectMeta, s *gwv1a2.TCPRouteStatus) *gwv1a2.TCPRoute {
-				return &gwv1a2.TCPRoute{
+			Client:         kclient.NewFilteredDelayed[*gwv1.TCPRoute](client, wellknown.TCPRouteGVR, f),
+			Build: func(om metav1.ObjectMeta, s *gwv1.TCPRouteStatus) *gwv1.TCPRoute {
+				return &gwv1.TCPRoute{
 					ObjectMeta: om,
 					Status:     *s,
 				}
@@ -363,8 +362,8 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 				merged.Parents = mergeRouteParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)
 				mergedAny = &merged
 			}
-		case *gwv1a2.TCPRouteStatus:
-			cur, ok := any(current).(*gwv1a2.TCPRoute)
+		case *gwv1.TCPRouteStatus:
+			cur, ok := any(current).(*gwv1.TCPRoute)
 			if ok {
 				merged := *desired
 				merged.Parents = mergeRouteParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)

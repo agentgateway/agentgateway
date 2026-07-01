@@ -7,7 +7,6 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/ptr"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -100,7 +99,7 @@ func GetStatus[I, IS any](spec I) IS {
 		return any(t.Status).(IS)
 	case *gwv1.GRPCRoute:
 		return any(t.Status).(IS)
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		return any(t.Status).(IS)
 	case *gwv1.TLSRoute:
 		return any(t.Status).(IS)

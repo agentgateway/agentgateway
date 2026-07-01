@@ -13,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -266,7 +265,7 @@ func (r *ReportMap) BuildRouteStatusWithParentRefDefaulting(
 		if len(parentRefs) == 0 {
 			parentRefs = append(parentRefs, routeReport.parentRefs()...)
 		}
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		existingStatus = route.Status.RouteStatus
 		parentRefs = append(parentRefs, route.Spec.ParentRefs...)
 		if len(parentRefs) == 0 {
