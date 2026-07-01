@@ -1,0 +1,10 @@
+# inference-perf/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "inference-perf.fullname" . }}-config
+  labels:
+    {{- include "inference-perf.labels" . | nindent 4 }}
+data:
+  config.yml: |
+    {{- toYaml .Values.config | nindent 4 }}

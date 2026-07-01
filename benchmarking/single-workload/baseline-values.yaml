@@ -1,0 +1,8 @@
+# Overrides for the baseline benchmark target (direct k8s service, no gateway).
+# Base values are defined in benchmarking/values.yaml.
+config:
+  server:
+    base_url: ""
+    model_name: meta-llama/Llama-3.1-8B-Instruct
+  tokenizer:
+    pretrained_model_name_or_path: gpt2
