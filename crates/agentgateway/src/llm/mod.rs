@@ -1967,10 +1967,26 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<(Parts, T), AIError> {
 		let buffer = http::buffer_limit(&hreq);
-		let (parts, body) = hreq.into_parts();
-		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
-			return Err(AIError::RequestTooLarge);
-		};
+		let (mut parts, body) = hreq.into_parts();
+		// Decode Content-Encoding (gzip/deflate/br/zstd) before parsing the body as
+		// JSON. Clients such as the Claude Code harness gzip-compress request bodies
+		// above a size threshold; without decoding, the reader would hand the
+		// compressed bytes straight to serde_json and fail with a misleading
+		// "LLM request body must be valid JSON" 400, even for tiny payloads. This
+		// mirrors the response path, which already decompresses via the same helper.
+		let ce = parts.headers.typed_get::<ContentEncoding>();
+		let (encoding, bytes) =
+			match http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer).await {
+				Ok(v) => v,
+				Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
+				Err(e) => return Err(map_compression_error(e, &parts.headers)),
+			};
+		// Strip encoding headers now that the body is plaintext so downstream
+		// translation/marshalling and upstream forwarding see a consistent body.
+		if encoding.is_some() {
+			parts.headers.remove(header::CONTENT_ENCODING);
+			parts.headers.remove(header::TRANSFER_ENCODING);
+		}
 
 		if self.override_model().is_none()
 			&& types::detect::extract_model_from_path(parts.uri.path()).is_none()
