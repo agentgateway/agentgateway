@@ -33,21 +33,34 @@ fn test_authorization_location_expression_extracts_from_cel() {
 		.header("x-token", "from-cel")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let location = AuthorizationLocation::Expression {
-		expression: std::sync::Arc::new(
-			crate::cel::Expression::new_strict(r#"request.headers["x-token"]"#).unwrap(),
-		),
-	};
+	let location = AuthorizationLocation::Expression(std::sync::Arc::new(
+		crate::cel::Expression::new_strict(r#"request.headers["x-token"]"#).unwrap(),
+	));
 
 	assert_eq!(location.extract(&req).as_deref(), Some("from-cel"));
 }
 
 #[test]
+fn test_authorization_location_expression_deserializes_flat_expression() {
+	let location: AuthorizationLocation =
+		crate::serdes::yamlviajson::from_str(r#"expression: 'request.headers["authorization"]'"#)
+			.expect("expression location should deserialize");
+
+	let expression = location
+		.expression()
+		.expect("location should contain an expression");
+	assert_eq!(
+		expression.original_expression,
+		r#"request.headers["authorization"]"#
+	);
+}
+
+#[test]
 fn test_authorization_location_expression_cannot_insert() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
-	let location = AuthorizationLocation::Expression {
-		expression: std::sync::Arc::new(crate::cel::Expression::new_strict(r#""token""#).unwrap()),
-	};
+	let location = AuthorizationLocation::Expression(std::sync::Arc::new(
+		crate::cel::Expression::new_strict(r#""token""#).unwrap(),
+	));
 
 	let err = location.insert(&mut req, "token").unwrap_err();
 	assert!(

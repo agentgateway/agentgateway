@@ -2894,21 +2894,11 @@
           "additionalProperties": false
         },
         {
-          "description": "Read the credential from a CEL expression evaluated against the incoming request.",
+          "description": "Read the credential from a CEL expression evaluated against the incoming request.\nCEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
           "type": "object",
           "properties": {
             "expression": {
-              "type": "object",
-              "properties": {
-                "expression": {
-                  "description": "CEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
-                  "$ref": "#/$defs/Expression"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "expression"
-              ]
+              "$ref": "#/$defs/Expression"
             }
           },
           "required": [

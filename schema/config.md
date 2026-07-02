@@ -223,8 +223,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -236,8 +235,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -331,8 +329,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
@@ -401,8 +398,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -414,8 +410,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -521,8 +516,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -534,8 +528,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -641,8 +634,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -654,8 +646,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -759,8 +750,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -772,8 +762,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -912,8 +901,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -925,8 +913,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1032,8 +1019,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -1045,8 +1031,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1150,8 +1135,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -1163,8 +1147,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1287,8 +1270,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.backendAuth.key.value.file`|string||
@@ -1300,8 +1282,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1404,8 +1385,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
@@ -1417,8 +1397,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1534,8 +1513,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -1547,8 +1525,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1628,8 +1605,7 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.jwtAuth.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.jwtAuth.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim when set.|
@@ -1673,8 +1649,7 @@
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.basicAuth.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.apiKey`|object|Authenticate incoming requests with API keys.|
 |`binds[].listeners[].routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
@@ -1689,8 +1664,7 @@
 |`binds[].listeners[].routes[].policies.apiKey.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -1739,8 +1713,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -1752,8 +1725,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -1882,8 +1854,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -1895,8 +1866,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2028,8 +1998,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -2041,8 +2010,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2161,8 +2129,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -2174,8 +2141,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2368,8 +2334,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
@@ -2381,8 +2346,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2496,8 +2460,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -2509,8 +2472,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2658,8 +2620,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.value.file`|string||
@@ -2671,8 +2632,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2801,8 +2761,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -2814,8 +2773,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -2956,8 +2914,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -2969,8 +2926,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3112,8 +3068,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -3125,8 +3080,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3232,8 +3186,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -3245,8 +3198,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3352,8 +3304,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -3365,8 +3316,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3470,8 +3420,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -3483,8 +3432,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3623,8 +3571,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -3636,8 +3583,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3743,8 +3689,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -3756,8 +3701,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -3861,8 +3805,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -3874,8 +3817,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4046,8 +3988,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
@@ -4059,8 +4000,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4189,8 +4129,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -4202,8 +4141,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4344,8 +4282,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -4357,8 +4294,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4500,8 +4436,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -4513,8 +4448,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4620,8 +4554,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -4633,8 +4566,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4740,8 +4672,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -4753,8 +4684,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -4858,8 +4788,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -4871,8 +4800,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5011,8 +4939,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -5024,8 +4951,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5131,8 +5057,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -5144,8 +5069,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5249,8 +5173,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -5262,8 +5185,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5404,8 +5326,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.value.file`|string||
@@ -5417,8 +5338,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5547,8 +5467,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -5560,8 +5479,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5702,8 +5620,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -5715,8 +5632,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5858,8 +5774,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -5871,8 +5786,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -5978,8 +5892,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -5991,8 +5904,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6098,8 +6010,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -6111,8 +6022,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6216,8 +6126,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -6229,8 +6138,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6369,8 +6277,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -6382,8 +6289,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6489,8 +6395,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -6502,8 +6407,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6607,8 +6511,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -6620,8 +6523,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6782,8 +6684,7 @@
 |`binds[].listeners[].policies.jwtAuth.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.jwtAuth.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.jwtAuth.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`binds[].listeners[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`binds[].listeners[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim when set.|
@@ -6852,8 +6753,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -6865,8 +6765,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -6995,8 +6894,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -7008,8 +6906,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7141,8 +7038,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -7154,8 +7050,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7274,8 +7169,7 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -7287,8 +7181,7 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7409,8 +7302,7 @@
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.basicAuth.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.basicAuth.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.basicAuth.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.basicAuth.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].listeners[].policies.apiKey`|object|Authenticate incoming requests with API keys.|
 |`binds[].listeners[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`binds[].listeners[].policies.apiKey.keys[].key`|string|API key value to accept.|
@@ -7425,8 +7317,7 @@
 |`binds[].listeners[].policies.apiKey.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`binds[].listeners[].policies.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`binds[].listeners[].policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`binds[].listeners[].policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`binds[].tunnelProtocol`|enum|Possible values: `direct`, `hboneWaypoint`, `hboneGateway`, `proxy`, `connect`.|
 |`binds[].mode`|enum|Whether the bind opens an OS listener socket. Defaults to `standard` (binds the port).<br>Set to `internal` to create a routing-only bind that does not bind a socket.<br>Possible values: `standard`, `internal`.|
 |`frontendPolicies`|object||
@@ -7522,8 +7413,7 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.value.file`|string||
@@ -7535,8 +7425,7 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7656,8 +7545,7 @@
 |`frontendPolicies.logging.otlp.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`frontendPolicies.logging.otlp.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`frontendPolicies.logging.otlp.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.key.value.file`|string||
@@ -7669,8 +7557,7 @@
 |`frontendPolicies.logging.otlp.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`frontendPolicies.logging.otlp.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`frontendPolicies.logging.otlp.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -7782,8 +7669,7 @@
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`frontendPolicies.tracing.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`frontendPolicies.tracing.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`frontendPolicies.tracing.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`frontendPolicies.tracing.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`frontendPolicies.tracing.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`frontendPolicies.tracing.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`frontendPolicies.tracing.policies.backendAuth.key.value.file`|string||
@@ -7795,8 +7681,7 @@
 |`frontendPolicies.tracing.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`frontendPolicies.tracing.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`frontendPolicies.tracing.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`frontendPolicies.tracing.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`frontendPolicies.tracing.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`frontendPolicies.tracing.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`frontendPolicies.tracing.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`frontendPolicies.tracing.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`frontendPolicies.tracing.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8000,8 +7885,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -8013,8 +7897,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8108,8 +7991,7 @@
 |`policies[].policy.mcpAuthentication.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.mcpAuthentication.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.mcpAuthentication.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.mcpAuthentication.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.mcpAuthentication.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
@@ -8178,8 +8060,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -8191,8 +8072,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8298,8 +8178,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -8311,8 +8190,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8418,8 +8296,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -8431,8 +8308,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8536,8 +8412,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -8549,8 +8424,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8689,8 +8563,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -8702,8 +8575,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8809,8 +8681,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -8822,8 +8693,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -8927,8 +8797,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -8940,8 +8809,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9064,8 +8932,7 @@
 |`policies[].policy.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.backendAuth.key.value.file`|string||
@@ -9077,8 +8944,7 @@
 |`policies[].policy.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9181,8 +9047,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
@@ -9194,8 +9059,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9311,8 +9175,7 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -9324,8 +9187,7 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9405,8 +9267,7 @@
 |`policies[].policy.jwtAuth.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.jwtAuth.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.jwtAuth.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`policies[].policy.jwtAuth.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`policies[].policy.jwtAuth.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim when set.|
@@ -9450,8 +9311,7 @@
 |`policies[].policy.basicAuth.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.basicAuth.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.basicAuth.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.basicAuth.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.basicAuth.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.basicAuth.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.apiKey`|object|Authenticate incoming requests with API keys.|
 |`policies[].policy.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`policies[].policy.apiKey.keys[].key`|string|API key value to accept.|
@@ -9466,8 +9326,7 @@
 |`policies[].policy.apiKey.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`policies[].policy.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`policies[].policy.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -9516,8 +9375,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -9529,8 +9387,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9659,8 +9516,7 @@
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -9672,8 +9528,7 @@
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9805,8 +9660,7 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -9818,8 +9672,7 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -9938,8 +9791,7 @@
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.extProc.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.extProc.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.extProc.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.extProc.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extProc.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`policies[].policy.extProc.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`policies[].policy.extProc.policies.backendAuth.key.value.file`|string||
@@ -9951,8 +9803,7 @@
 |`policies[].policy.extProc.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`policies[].policy.extProc.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`policies[].policy.extProc.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`policies[].policy.extProc.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`policies[].policy.extProc.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`policies[].policy.extProc.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`policies[].policy.extProc.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`policies[].policy.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`policies[].policy.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10142,8 +9993,7 @@
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].mcp.targets[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].mcp.targets[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
@@ -10155,8 +10005,7 @@
 |`backends[].mcp.targets[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].mcp.targets[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].mcp.targets[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].mcp.targets[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].mcp.targets[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].mcp.targets[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].mcp.targets[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10270,8 +10119,7 @@
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -10283,8 +10131,7 @@
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10432,8 +10279,7 @@
 |`backends[].ai.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.backendAuth.key.value.file`|string||
@@ -10445,8 +10291,7 @@
 |`backends[].ai.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10575,8 +10420,7 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -10588,8 +10432,7 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10730,8 +10573,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -10743,8 +10585,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -10886,8 +10727,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -10899,8 +10739,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11006,8 +10845,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -11019,8 +10857,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11126,8 +10963,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -11139,8 +10975,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11244,8 +11079,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -11257,8 +11091,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11397,8 +11230,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -11410,8 +11242,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11517,8 +11348,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -11530,8 +11360,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11635,8 +11464,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -11648,8 +11476,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11820,8 +11647,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
@@ -11833,8 +11659,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -11963,8 +11788,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -11976,8 +11800,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12118,8 +11941,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -12131,8 +11953,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12274,8 +12095,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -12287,8 +12107,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12394,8 +12213,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -12407,8 +12225,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12514,8 +12331,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -12527,8 +12343,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12632,8 +12447,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -12645,8 +12459,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12785,8 +12598,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -12798,8 +12610,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -12905,8 +12716,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -12918,8 +12728,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13023,8 +12832,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -13036,8 +12844,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13176,8 +12983,7 @@
 |`backends[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.backendAuth.key.value.file`|string||
@@ -13189,8 +12995,7 @@
 |`backends[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13319,8 +13124,7 @@
 |`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -13332,8 +13136,7 @@
 |`backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13474,8 +13277,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -13487,8 +13289,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13630,8 +13431,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -13643,8 +13443,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13750,8 +13549,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -13763,8 +13561,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13870,8 +13667,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -13883,8 +13679,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -13988,8 +13783,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -14001,8 +13795,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14141,8 +13934,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -14154,8 +13946,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14261,8 +14052,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -14274,8 +14064,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14379,8 +14168,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -14392,8 +14180,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14615,8 +14402,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -14628,8 +14414,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14723,8 +14508,7 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
@@ -14793,8 +14577,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -14806,8 +14589,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -14913,8 +14695,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -14926,8 +14707,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15033,8 +14813,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -15046,8 +14825,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15151,8 +14929,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -15164,8 +14941,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15304,8 +15080,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -15317,8 +15092,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15424,8 +15198,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -15437,8 +15210,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15542,8 +15314,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -15555,8 +15326,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15679,8 +15449,7 @@
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.backendAuth.key.value.file`|string||
@@ -15692,8 +15461,7 @@
 |`routeGroups[].routes[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15796,8 +15564,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
@@ -15809,8 +15576,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -15926,8 +15692,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -15939,8 +15704,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16020,8 +15784,7 @@
 |`routeGroups[].routes[].policies.jwtAuth.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.jwtAuth.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.jwtAuth.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim when set.|
@@ -16065,8 +15828,7 @@
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.basicAuth.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.basicAuth.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.basicAuth.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.basicAuth.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.apiKey`|object|Authenticate incoming requests with API keys.|
 |`routeGroups[].routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`routeGroups[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
@@ -16081,8 +15843,7 @@
 |`routeGroups[].routes[].policies.apiKey.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`routeGroups[].routes[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -16131,8 +15892,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -16144,8 +15904,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16274,8 +16033,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -16287,8 +16045,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16420,8 +16177,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -16433,8 +16189,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16553,8 +16308,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -16566,8 +16320,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16760,8 +16513,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.value.file`|string||
@@ -16773,8 +16525,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -16888,8 +16639,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -16901,8 +16651,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17050,8 +16799,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.value.file`|string||
@@ -17063,8 +16811,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17193,8 +16940,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -17206,8 +16952,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17348,8 +17093,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -17361,8 +17105,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17504,8 +17247,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -17517,8 +17259,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17624,8 +17365,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -17637,8 +17377,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17744,8 +17483,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -17757,8 +17495,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -17862,8 +17599,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -17875,8 +17611,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18015,8 +17750,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -18028,8 +17762,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18135,8 +17868,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -18148,8 +17880,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18253,8 +17984,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -18266,8 +17996,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18438,8 +18167,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.value.file`|string||
@@ -18451,8 +18179,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18581,8 +18308,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -18594,8 +18320,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18736,8 +18461,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -18749,8 +18473,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -18892,8 +18615,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -18905,8 +18627,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19012,8 +18733,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -19025,8 +18745,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19132,8 +18851,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -19145,8 +18863,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19250,8 +18967,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -19263,8 +18979,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19403,8 +19118,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -19416,8 +19130,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19523,8 +19236,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -19536,8 +19248,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19641,8 +19352,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -19654,8 +19364,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19796,8 +19505,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.value.file`|string||
@@ -19809,8 +19517,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -19939,8 +19646,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -19952,8 +19658,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -20094,8 +19799,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -20107,8 +19811,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -20250,8 +19953,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -20263,8 +19965,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -20370,8 +20071,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -20383,8 +20083,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -20490,8 +20189,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -20503,8 +20201,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -20608,8 +20305,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -20621,8 +20317,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -20761,8 +20456,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -20774,8 +20468,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -20881,8 +20574,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -20894,8 +20586,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -20999,8 +20690,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -21012,8 +20702,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -21190,8 +20879,7 @@
 |`llm.providers[].defaults.auth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.providers[].defaults.auth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.providers[].defaults.auth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.providers[].defaults.auth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.providers[].defaults.auth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.providers[].defaults.auth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.providers[].defaults.auth.key`|object|Send a configured secret value to the backend.|
 |`llm.providers[].defaults.auth.key.value`|object|Secret value to send to the backend.|
 |`llm.providers[].defaults.auth.key.value.file`|string||
@@ -21203,8 +20891,7 @@
 |`llm.providers[].defaults.auth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.providers[].defaults.auth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.providers[].defaults.auth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.providers[].defaults.auth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.providers[].defaults.auth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.providers[].defaults.auth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.providers[].defaults.auth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.providers[].defaults.auth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.providers[].defaults.auth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -21343,8 +21030,7 @@
 |`llm.models[].auth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].auth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].auth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].auth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].auth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].auth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].auth.key`|object|Send a configured secret value to the backend.|
 |`llm.models[].auth.key.value`|object|Secret value to send to the backend.|
 |`llm.models[].auth.key.value.file`|string||
@@ -21356,8 +21042,7 @@
 |`llm.models[].auth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].auth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].auth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].auth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].auth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].auth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].auth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.models[].auth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].auth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -21477,8 +21162,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -21490,8 +21174,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -21597,8 +21280,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -21610,8 +21292,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -21717,8 +21398,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -21730,8 +21410,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -21835,8 +21514,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -21848,8 +21526,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -21988,8 +21665,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -22001,8 +21677,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -22108,8 +21783,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -22121,8 +21795,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -22226,8 +21899,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -22239,8 +21911,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -22369,8 +22040,7 @@
 |`llm.policies.jwtAuth.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.jwtAuth.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.jwtAuth.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`llm.policies.jwtAuth.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`llm.policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim when set.|
@@ -22439,8 +22109,7 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -22452,8 +22121,7 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -22582,8 +22250,7 @@
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -22595,8 +22262,7 @@
 |`llm.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -22728,8 +22394,7 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -22741,8 +22406,7 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -22861,8 +22525,7 @@
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.extProc.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.extProc.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.extProc.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.extProc.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -22874,8 +22537,7 @@
 |`llm.policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.extProc.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.extProc.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.extProc.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.extProc.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.extProc.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.extProc.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -22996,8 +22658,7 @@
 |`llm.policies.basicAuth.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.basicAuth.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.basicAuth.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.basicAuth.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.basicAuth.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.basicAuth.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.apiKey`|object|Authenticate incoming requests with API keys.|
 |`llm.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`llm.policies.apiKey.keys[].key`|string|API key value to accept.|
@@ -23012,8 +22673,7 @@
 |`llm.policies.apiKey.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails`|object|Guardrails to apply to every configured model.|
 |`llm.policies.guardrails.streaming`|enum|Apply prompt guards to streaming responses and realtime websocket messages.<br>Possible values: `Disabled`, `Enabled`.|
 |`llm.policies.guardrails.request`|[]object|Guards applied to client requests before they reach the LLM.|
@@ -23077,8 +22737,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -23090,8 +22749,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -23197,8 +22855,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -23210,8 +22867,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -23317,8 +22973,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -23330,8 +22985,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -23435,8 +23089,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -23448,8 +23101,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -23588,8 +23240,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -23601,8 +23252,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -23708,8 +23358,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -23721,8 +23370,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -23826,8 +23474,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -23839,8 +23486,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -23968,8 +23614,7 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -23981,8 +23626,7 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -24119,8 +23763,7 @@
 |`mcp.targets[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.targets[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.targets[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.targets[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.targets[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.targets[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.targets[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.targets[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.targets[].policies.backendAuth.key.value.file`|string||
@@ -24132,8 +23775,7 @@
 |`mcp.targets[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.targets[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.targets[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.targets[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.targets[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.targets[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.targets[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.targets[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.targets[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -24247,8 +23889,7 @@
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -24260,8 +23901,7 @@
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -24438,8 +24078,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
@@ -24451,8 +24090,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -24546,8 +24184,7 @@
 |`mcp.policies.mcpAuthentication.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.mcpAuthentication.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.mcpAuthentication.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.mcpAuthentication.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.mcpAuthentication.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.mcpAuthentication.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
@@ -24616,8 +24253,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.value.file`|string||
@@ -24629,8 +24265,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -24736,8 +24371,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -24749,8 +24383,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -24856,8 +24489,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -24869,8 +24501,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -24974,8 +24605,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -24987,8 +24617,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -25127,8 +24756,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.value.file`|string||
@@ -25140,8 +24768,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -25247,8 +24874,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.value.file`|string||
@@ -25260,8 +24886,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -25365,8 +24990,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.value.file`|string||
@@ -25378,8 +25002,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -25502,8 +25125,7 @@
 |`mcp.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.backendAuth.key.value.file`|string||
@@ -25515,8 +25137,7 @@
 |`mcp.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -25619,8 +25240,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.value.file`|string||
@@ -25632,8 +25252,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -25749,8 +25368,7 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.value.file`|string||
@@ -25762,8 +25380,7 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -25843,8 +25460,7 @@
 |`mcp.policies.jwtAuth.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.jwtAuth.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.jwtAuth.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.jwtAuth.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.jwtAuth.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.jwtAuth.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.jwtAuth.providers`|[]object|Trusted issuers and their signing keys.|
 |`mcp.policies.jwtAuth.providers[].issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
 |`mcp.policies.jwtAuth.providers[].audiences`|[]string|Accepted token audiences, matched against the JWT `aud` claim when set.|
@@ -25888,8 +25504,7 @@
 |`mcp.policies.basicAuth.authorizationLocation.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.basicAuth.authorizationLocation.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.basicAuth.authorizationLocation.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.basicAuth.authorizationLocation.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.basicAuth.authorizationLocation.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.basicAuth.authorizationLocation.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.apiKey`|object|Authenticate incoming requests with API keys.|
 |`mcp.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`mcp.policies.apiKey.keys[].key`|string|API key value to accept.|
@@ -25904,8 +25519,7 @@
 |`mcp.policies.apiKey.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.apiKey.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.apiKey.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.apiKey.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.apiKey.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`mcp.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
 |`mcp.policies.extAuthz.conditional[].service`|object|Service reference. Service must be defined in the top level services list.|
@@ -25954,8 +25568,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.value.file`|string||
@@ -25967,8 +25580,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -26097,8 +25709,7 @@
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.extAuthz.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extAuthz.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.extAuthz.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.extAuthz.policies.backendAuth.key.value.file`|string||
@@ -26110,8 +25721,7 @@
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.extAuthz.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.extAuthz.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.extAuthz.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.extAuthz.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extAuthz.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extAuthz.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -26243,8 +25853,7 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.value.file`|string||
@@ -26256,8 +25865,7 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
@@ -26376,8 +25984,7 @@
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.extProc.policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.extProc.policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.extProc.policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.extProc.policies.backendAuth.passthrough.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extProc.policies.backendAuth.key`|object|Send a configured secret value to the backend.|
 |`mcp.policies.extProc.policies.backendAuth.key.value`|object|Secret value to send to the backend.|
 |`mcp.policies.extProc.policies.backendAuth.key.value.file`|string||
@@ -26389,8 +25996,7 @@
 |`mcp.policies.extProc.policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
 |`mcp.policies.extProc.policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
 |`mcp.policies.extProc.policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.policies.extProc.policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.policies.extProc.policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
+|`mcp.policies.extProc.policies.backendAuth.key.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`mcp.policies.extProc.policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
 |`mcp.policies.extProc.policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
 |`mcp.policies.extProc.policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|

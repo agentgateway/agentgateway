@@ -2602,9 +2602,9 @@ fn authorization_location(
 		Some(Kind::Cookie(cookie)) => Ok(http::auth::AuthorizationLocation::Cookie {
 			name: cookie.name.clone().into(),
 		}),
-		Some(Kind::Expression(expression)) => Ok(http::auth::AuthorizationLocation::Expression {
-			expression: permissive_cel_expression_arc(diagnostics, context, expression),
-		}),
+		Some(Kind::Expression(expression)) => Ok(http::auth::AuthorizationLocation::Expression(
+			permissive_cel_expression_arc(diagnostics, context, expression),
+		)),
 		None => Ok(default),
 	}
 }
