@@ -780,6 +780,7 @@ fn convert_backend_ai_policy(
 							guardrail_identifier: strng::new(&bg.identifier),
 							guardrail_version: strng::new(&bg.version),
 							region: strng::new(&bg.region),
+							detect_only: bg.detect_only,
 							policies: pols,
 						})
 					},
@@ -857,6 +858,7 @@ fn convert_backend_ai_policy(
 						guardrail_identifier: strng::new(&bg.identifier),
 						guardrail_version: strng::new(&bg.version),
 						region: strng::new(&bg.region),
+						detect_only: bg.detect_only,
 						policies: pols,
 					})
 				},

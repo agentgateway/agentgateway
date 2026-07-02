@@ -281,6 +281,12 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    detectOnly:
+                                      description: |-
+                                        DetectOnly runs the guardrail in observe mode: it is invoked and its
+                                        assessment is recorded, but the request/response is never blocked or
+                                        masked. Defaults to false (enforce).
+                                      type: boolean
                                     identifier:
                                       description: Identifier of the Guardrail policy
                                         to use for the backend.
@@ -2495,6 +2501,12 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    detectOnly:
+                                      description: |-
+                                        DetectOnly runs the guardrail in observe mode: it is invoked and its
+                                        assessment is recorded, but the request/response is never blocked or
+                                        masked. Defaults to false (enforce).
+                                      type: boolean
                                     identifier:
                                       description: Identifier of the Guardrail policy
                                         to use for the backend.

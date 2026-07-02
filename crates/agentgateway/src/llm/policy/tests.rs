@@ -595,6 +595,83 @@ mod bedrock_guardrails_tests {
 		assert!(!response.is_blocked());
 		assert!(response.is_anonymized());
 	}
+
+	#[test]
+	fn test_would_action_blocked() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"assessments": [{
+				"contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] }
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "BLOCKED");
+	}
+
+	#[test]
+	fn test_would_action_anonymized() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "redacted {NAME}"}],
+			"assessments": [{
+				"sensitiveInformationPolicy": { "piiEntities": [{ "action": "ANONYMIZED", "type": "NAME" }] }
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "ANONYMIZED");
+	}
+
+	#[test]
+	fn test_would_action_none() {
+		// Detect-only mode: AWS returns the detection with per-filter action NONE
+		// and a top-level action of NONE, so the gateway would take no action.
+		let json = json!({
+			"action": "NONE",
+			"assessments": [{
+				"contentPolicy": {
+					"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "NONE");
+		assert!(!response.is_blocked());
+		assert!(!response.is_anonymized());
+	}
+
+	#[test]
+	fn test_detect_only_log_redacts_matched_pii() {
+		// The raw matched PII string lives in `match`; detect-only logging must
+		// strip it while keeping the structural metadata (type/action/detected).
+		let json = json!({
+			"action": "NONE",
+			"assessments": [{
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{
+						"action": "NONE",
+						"type": "EMAIL",
+						"detected": true,
+						"match": "jane.doe@example.com"
+					}]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		let redacted = serde_json::to_string(&response.redacted_assessments()).unwrap();
+		// The matched secret must be gone...
+		assert!(
+			!redacted.contains("jane.doe@example.com"),
+			"matched PII leaked into the redacted assessment: {redacted}"
+		);
+		assert!(
+			!redacted.contains("\"match\""),
+			"the `match` key must be removed"
+		);
+		// ...but the useful metadata must survive.
+		assert!(redacted.contains("EMAIL"));
+		assert!(redacted.contains("detected"));
+		assert!(redacted.contains("piiEntities"));
+	}
 }
 
 // ============================================================================
@@ -1330,6 +1407,7 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
+		detect_only: false,
 		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
 			AwsAuth::ExplicitConfig {
 				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
@@ -1367,6 +1445,7 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-west-2"),
+		detect_only: false,
 		policies: vec![],
 	};
 

@@ -254,6 +254,7 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 		Identifier: guardrails.GuardrailIdentifier,
 		Version:    guardrails.GuardrailVersion,
 		Region:     guardrails.Region,
+		DetectOnly: guardrails.DetectOnly,
 	}
 
 	if guardrails.Policies != nil {

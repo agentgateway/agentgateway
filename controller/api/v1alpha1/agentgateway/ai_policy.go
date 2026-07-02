@@ -191,6 +191,12 @@ type BedrockGuardrails struct {
 	// +required
 	Region ShortString `json:"region"`
 
+	// DetectOnly runs the guardrail in observe mode: it is invoked and its
+	// assessment is recorded, but the request/response is never blocked or
+	// masked. Defaults to false (enforce).
+	// +optional
+	DetectOnly bool `json:"detectOnly,omitempty"`
+
 	// Policies for communicating with AWS Bedrock Guardrails.
 	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional

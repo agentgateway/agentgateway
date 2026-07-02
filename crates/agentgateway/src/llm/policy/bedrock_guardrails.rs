@@ -89,6 +89,73 @@ impl ApplyGuardrailResponse {
 		self.outputs.iter().map(|o| o.text.clone()).collect()
 	}
 
+	/// The decision the guardrail would have enforced, as a stable string:
+	/// `BLOCKED`, `ANONYMIZED`, or `NONE`. Used for detect-only logging/metrics.
+	pub fn would_action(&self) -> &'static str {
+		if self.is_blocked() {
+			"BLOCKED"
+		} else if self.is_anonymized() {
+			"ANONYMIZED"
+		} else {
+			"NONE"
+		}
+	}
+
+	/// Emit a structured, ingestible record of a detect-only evaluation. The
+	/// `assessments` array carries the per-filter findings (category, confidence,
+	/// `detected`) as AWS returns them, with content-bearing fields redacted (see
+	/// `redacted_assessments`). Downstream log pipelines (e.g. a CloudWatch
+	/// subscription into a data lake) can parse the metadata. No prompt or
+	/// completion text and no matched sensitive strings are logged.
+	pub fn log_detect_only(
+		&self,
+		guardrail_id: &str,
+		guardrail_version: &str,
+		source: GuardrailSource,
+	) {
+		let assessments = serde_json::to_string(&self.redacted_assessments()).unwrap_or_default();
+		tracing::info!(
+			target: "agentgateway::guardrail::detect",
+			guardrail_id = %guardrail_id,
+			guardrail_version = %guardrail_version,
+			source = ?source,
+			would_action = %self.would_action(),
+			assessments = %assessments,
+			"bedrock guardrail detect-only evaluation"
+		);
+	}
+
+	/// Assessments with content-bearing fields stripped, safe to log.
+	///
+	/// Bedrock guardrail assessments echo the matched content in several places:
+	/// `sensitiveInformationPolicy.piiEntities[].match` and `...regexes[].match`
+	/// carry the raw matched PII, and word-policy matches echo the matched word in
+	/// `match`. Logging these verbatim would leak the very sensitive data the
+	/// guardrail exists to catch, even though the prompt/completion itself is not
+	/// logged. This removes any object key named `match` (case-insensitive) at any
+	/// depth, leaving the structural metadata (type, action, confidence, detected)
+	/// that detect-only mode is meant to surface.
+	pub(crate) fn redacted_assessments(&self) -> Vec<serde_json::Value> {
+		self.assessments.iter().map(Self::redact_value).collect()
+	}
+
+	/// Recursively drop content-bearing keys from a guardrail assessment value.
+	fn redact_value(value: &serde_json::Value) -> serde_json::Value {
+		match value {
+			serde_json::Value::Object(map) => serde_json::Value::Object(
+				map
+					.iter()
+					.filter(|(k, _)| !k.eq_ignore_ascii_case("match"))
+					.map(|(k, v)| (k.clone(), Self::redact_value(v)))
+					.collect(),
+			),
+			serde_json::Value::Array(arr) => {
+				serde_json::Value::Array(arr.iter().map(Self::redact_value).collect())
+			},
+			other => other.clone(),
+		}
+	}
+
 	/// Check if any assessment contains a BLOCKED action
 	fn has_blocked_assessment(&self) -> bool {
 		self.assessments.iter().any(Self::value_contains_blocked)
