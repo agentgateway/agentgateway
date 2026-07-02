@@ -528,6 +528,11 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			guardrailIdentifier = &llm.Bedrock.Guardrail.GuardrailIdentifier
 			guardrailVersion = &llm.Bedrock.Guardrail.GuardrailVersion
 		}
+		var providerPreference *string
+		if llm.Bedrock.ProviderPreference != "" {
+			pp := string(llm.Bedrock.ProviderPreference)
+			providerPreference = &pp
+		}
 
 		provider.Provider = &api.AIBackend_Provider_Bedrock{
 			Bedrock: &api.AIBackend_Bedrock{
@@ -535,6 +540,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 				Region:              region,
 				GuardrailIdentifier: guardrailIdentifier,
 				GuardrailVersion:    guardrailVersion,
+				ProviderPreference:  providerPreference,
 			},
 		}
 	} else if llm.Custom != nil {

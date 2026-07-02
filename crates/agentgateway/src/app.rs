@@ -93,6 +93,9 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	state_manager::start_self_workload_resolution(&config, stores.clone(), &ready);
 
 	let model_catalog = crate::llm::cost::ModelCatalog::new(config.model_catalog.sources.clone())?;
+	crate::llm::bedrock_model_table::initialize(
+		config.bedrock_runtime_model_catalog.sources.clone(),
+	)?;
 
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
