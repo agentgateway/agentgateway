@@ -931,7 +931,6 @@ pub mod from_completions {
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		let model = model.to_string();
 		let message_id = message_id.to_string();
-		let tool_name_map = tool_name_map;
 		let body = parse::aws_sse::transform(b, buffer_limit, move |f| {
 			let res = bedrock::ConverseStreamOutput::deserialize(f).ok()?;
 			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
@@ -1688,7 +1687,6 @@ pub mod from_messages {
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut completion = include_completion_in_log.then(String::new);
 		let model = model.to_string();
-		let tool_name_map = tool_name_map;
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
 				Ok(e) => e,
@@ -2050,7 +2048,7 @@ pub mod from_responses {
 					ToolChoiceParam::Mode(ToolChoiceOptions::None) => None,
 					ToolChoiceParam::Function(ToolChoiceFunction { name }) => {
 						Some(bedrock::ToolChoice::Tool {
-							name: tool_name_map.register(&name),
+							name: tool_name_map.register(name),
 						})
 					},
 					ToolChoiceParam::Hosted(_) => {
@@ -2561,7 +2559,6 @@ pub mod from_responses {
 		// Track message item ID for text content
 		let message_item_id = format!("msg_{:016x}", rand::rng().random::<u64>());
 		let model = model.to_string();
-		let tool_name_map = tool_name_map;
 
 		let response_builder = crate::llm::types::responses::ResponseBuilder::new(response_id, model);
 

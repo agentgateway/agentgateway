@@ -1665,21 +1665,21 @@ impl AIProvider {
 				conversion::bedrock::from_completions::translate_response(
 					bytes,
 					&req.request_model,
-					bedrock_tool_name_map(&req),
+					bedrock_tool_name_map(req),
 				)
 			},
 			(AIProvider::Bedrock(_), InputFormat::Messages) => {
 				conversion::bedrock::from_messages::translate_response(
 					bytes,
 					&req.request_model,
-					bedrock_tool_name_map(&req),
+					bedrock_tool_name_map(req),
 				)
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses) => {
 				conversion::bedrock::from_responses::translate_response(
 					bytes,
 					&req.request_model,
-					bedrock_tool_name_map(&req),
+					bedrock_tool_name_map(req),
 				)
 			},
 			(AIProvider::Vertex(p), InputFormat::Completions) => {
