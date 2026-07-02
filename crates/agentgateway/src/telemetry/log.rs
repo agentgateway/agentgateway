@@ -1037,10 +1037,18 @@ pub struct RequestLog {
 
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
+		let status = self
+			.log
+			.as_ref()
+			.and_then(|log| log.status.map(|status| status.as_u16()));
 		if let Some(debug_tracer) = &self.debug_tracer {
-			debug_tracer.request_completed();
+			let error = self.log.as_ref().and_then(|log| log.error.clone());
+			debug_tracer.request_completed(status, error);
 		} else {
-			dtrace::trace(|t| t.request_completed());
+			dtrace::trace(|t| {
+				let error = self.log.as_ref().and_then(|log| log.error.clone());
+				t.request_completed(status, error);
+			});
 		}
 		let debug_tracer = self.debug_tracer.clone();
 		dtrace::with_trace(debug_tracer, || {
