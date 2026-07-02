@@ -12198,6 +12198,7 @@ spec:
                             description: Identity provider to use for authentication.
                             enum:
                             - Auth0
+                            - Descope
                             - Keycloak
                             - Okta
                             type: string
