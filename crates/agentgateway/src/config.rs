@@ -13,6 +13,7 @@ use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields, OrderedStringMap};
 use crate::telemetry::trc;
 use crate::types::discovery::{Identity, WaypointIdentity};
+use crate::util::ErrorContext;
 use crate::{
 	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingFields,
 	RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
@@ -32,9 +33,9 @@ pub fn parse_config(
 	contents: String,
 	local_config_source: Option<ConfigSource>,
 ) -> anyhow::Result<Config> {
-	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents)?;
+	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
-	cel::register_custom_functions(&raw.custom_functions)?;
+	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
 
 	let ipv6_enabled = parse::<bool>("IPV6_ENABLED")?
 		.or(raw.enable_ipv6)
@@ -60,7 +61,7 @@ pub fn parse_config(
 
 	let dns = raw.dns.unwrap_or_default();
 	let dns_lookup_family = match env::var("DNS_LOOKUP_FAMILY") {
-		Ok(val) => Some(DnsLookupFamily::from_env_str(&val)?),
+		Ok(val) => Some(DnsLookupFamily::from_env_str(&val).ctx("invalid DNS_LOOKUP_FAMILY")?),
 		Err(_) => None,
 	}
 	.or(dns.lookup_family)
@@ -80,7 +81,8 @@ pub fn parse_config(
 		.or(raw.cluster_id.clone())
 		.unwrap_or("Kubernetes".to_string());
 	let xds = {
-		let address = validate_uri(empty_to_none(parse("XDS_ADDRESS")?).or(raw.xds_address))?;
+		let address = validate_uri(empty_to_none(parse("XDS_ADDRESS")?).or(raw.xds_address))
+			.ctx("invalid XDS_ADDRESS/config.xdsAddress")?;
 		// if local_config.is_none() && address.is_none() {
 		// 	anyhow::bail!("file or XDS configuration is required")
 		// }
@@ -88,10 +90,10 @@ pub fn parse_config(
 			(
 				parse("NAMESPACE")?
 					.or(raw.namespace.clone())
-					.context("NAMESPACE is required")?,
+					.ctx("NAMESPACE/config.namespace is required when XDS is configured")?,
 				parse("GATEWAY")?
 					.or(raw.gateway)
-					.context("GATEWAY is required")?,
+					.ctx("GATEWAY/config.gateway is required when XDS is configured")?,
 			)
 		} else {
 			("default".to_string(), "default".to_string())
@@ -115,7 +117,7 @@ pub fn parse_config(
 				crate::control::AuthSource::Token(PathBuf::from(p), cluster.clone())
 			},
 			Some(p) => {
-				anyhow::bail!("auth token {p} not found")
+				anyhow::bail!("invalid XDS_AUTH_TOKEN/config.xdsAuthToken: file {p} not found")
 			},
 		};
 		let xds_cert = parse_default(
@@ -147,17 +149,18 @@ pub fn parse_config(
 	} else {
 		None
 	};
-	let ca_address = validate_uri(empty_to_none(parse("CA_ADDRESS")?).or(raw.ca_address))?;
+	let ca_address = validate_uri(empty_to_none(parse("CA_ADDRESS")?).or(raw.ca_address))
+		.ctx("invalid CA_ADDRESS/config.caAddress")?;
 	let ca = if let Some(addr) = ca_address {
 		let td = parse("TRUST_DOMAIN")?
 			.or(raw.trust_domain)
 			.unwrap_or("cluster.local".to_string());
 		let ns = parse("NAMESPACE")?
 			.or(raw.namespace)
-			.context("NAMESPACE is required")?;
+			.ctx("NAMESPACE/config.namespace is required when CA is configured")?;
 		let sa = parse("SERVICE_ACCOUNT")?
 			.or(raw.service_account)
-			.context("SERVICE_ACCOUNT is required")?;
+			.ctx("SERVICE_ACCOUNT/config.serviceAccount is required when CA is configured")?;
 		let tok = parse("CA_AUTH_TOKEN")?.or(raw.ca_auth_token);
 		let auth = match tok {
 			None => {
@@ -176,7 +179,7 @@ pub fn parse_config(
 				crate::control::AuthSource::Token(PathBuf::from(p), cluster.clone())
 			},
 			Some(p) => {
-				anyhow::bail!("auth token {p} not found")
+				anyhow::bail!("invalid CA_AUTH_TOKEN/config.caAuthToken: file {p} not found")
 			},
 		};
 		let ca_headers = parse_headers("CA_HEADER_");
@@ -217,7 +220,7 @@ pub fn parse_config(
 			},
 			auth,
 			ca_cert: ca_root_cert,
-			ca_headers: ca_headers?,
+			ca_headers: ca_headers.ctx("invalid CA_HEADER_*")?,
 			allowed_trust_domains: allowed_trust_domains.into(),
 			skip_validate_trust_domain,
 		})
@@ -279,7 +282,7 @@ pub fn parse_config(
 		.unwrap_or_default();
 	let termination_max_deadline =
 		parse_duration("CONNECTION_TERMINATION_DEADLINE")?.or(raw.connection_termination_deadline);
-	let tracing_env = resolve_tracing_env_overrides()?;
+	let tracing_env = resolve_tracing_env_overrides().ctx("invalid tracing environment overrides")?;
 
 	let mut otlp_headers = raw
 		.tracing
@@ -299,19 +302,22 @@ pub fn parse_config(
 	let admin_addr = parse::<String>("ADMIN_ADDR")?
 		.or(raw.admin_addr)
 		.map(|addr| Address::new(ipv6_localhost_enabled, &addr))
-		.transpose()?
+		.transpose()
+		.ctx("invalid ADMIN_ADDR/config.adminAddr")?
 		.unwrap_or(Address::Localhost(ipv6_localhost_enabled, 15000));
 	// Parse stats_addr from environment variable or config file
 	let stats_addr = parse::<String>("STATS_ADDR")?
 		.or(raw.stats_addr)
 		.map(|addr| Address::new(ipv6_localhost_enabled, &addr))
-		.transpose()?
+		.transpose()
+		.ctx("invalid STATS_ADDR/config.statsAddr")?
 		.unwrap_or(Address::SocketAddr(SocketAddr::new(bind_wildcard, 15020)));
 	// Parse readiness_addr from environment variable or config file
 	let readiness_addr = parse::<String>("READINESS_ADDR")?
 		.or(raw.readiness_addr)
 		.map(|addr| Address::new(ipv6_localhost_enabled, &addr))
-		.transpose()?
+		.transpose()
+		.ctx("invalid READINESS_ADDR/config.readinessAddr")?
 		.unwrap_or(Address::SocketAddr(SocketAddr::new(bind_wildcard, 15021)));
 
 	let threading_mode = if parse::<String>("THREADING_MODE")?.as_deref() == Some("thread_per_core") {
@@ -321,18 +327,27 @@ pub fn parse_config(
 	};
 
 	let session_encoder = if let Some(key) = parse::<String>("SESSION_KEY")? {
-		crate::http::sessionpersistence::Encoder::aes(key.trim())?
+		crate::http::sessionpersistence::Encoder::aes(key.trim())
+			.ctx("invalid session persistence key SESSION_KEY")?
 	} else {
 		match raw.session.as_ref() {
 			None => crate::http::sessionpersistence::Encoder::base64(),
-			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
+			Some(session) => {
+				let key = session.key.expose_secret();
+				crate::http::sessionpersistence::Encoder::aes(key)
+					.ctx("invalid session persistence key config.session.key")?
+			},
 		}
 	};
 	// Browser OIDC cookie crypto is core gateway runtime config, not per-policy input.
 	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
-		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
+		.map(|key| {
+			crate::http::sessionpersistence::Encoder::aes(key.trim())
+				.ctx("invalid OIDC session cookie key OIDC_COOKIE_SECRET")
+		})
 		.transpose()?;
-	let dynamic_ca_cert_cache = parse_dynamic_ca_cert_cache_config()?;
+	let dynamic_ca_cert_cache =
+		parse_dynamic_ca_cert_cache_config().ctx("invalid dynamic CA cert cache config")?;
 
 	let model_catalog_sources = parse::<String>("MODEL_CATALOG_PATHS")?
 		.map(|s| {
@@ -359,14 +374,15 @@ pub fn parse_config(
 		self_addr,
 		xds,
 		ca,
-		num_worker_threads: parse_worker_threads(raw.worker_threads)?,
+		num_worker_threads: parse_worker_threads(raw.worker_threads)
+			.ctx("invalid WORKER_THREADS/config.workerThreads")?,
 		termination_min_deadline,
 		threading_mode,
 		backend: raw.backend,
 		admin_runtime_handle: None,
 		termination_max_deadline: match termination_max_deadline {
-			Some(period) => period,
-			None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
+				Some(period) => period,
+				None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
 				// We want our drain period to be less than Kubernetes, so we can use the last few seconds
 				// to abruptly terminate anything remaining before Kubernetes SIGKILLs us.
 				// We could just take the SIGKILL, but it is even more abrupt (TCP RST vs RST_STREAM/TLS close, etc)
@@ -388,13 +404,14 @@ pub fn parse_config(
 			.tracing
 			.clone()
 			.map(|t| {
-				let (otlp_endpoint, otlp_path) = normalize_tracing_endpoint(
-					tracing_env.endpoint.clone().or(t.otlp_endpoint.clone()),
-					t.path.clone(),
-				)?;
-				let endpoint = otlp_endpoint.context(
-					"config.tracing requires otlpEndpoint or one of OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, or OTEL_EXPORTER_OTLP_ENDPOINT",
-				)?;
+					let (otlp_endpoint, otlp_path) = normalize_tracing_endpoint(
+						tracing_env.endpoint.clone().or(t.otlp_endpoint.clone()),
+						t.path.clone(),
+					)
+					.ctx("invalid config.tracing.otlpEndpoint/config.tracing.path")?;
+					let endpoint = otlp_endpoint.ctx(
+						"config.tracing requires otlpEndpoint or one of OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, or OTEL_EXPORTER_OTLP_ENDPOINT",
+					)?;
 				Ok::<_, anyhow::Error>(trc::DeprecatedConfig {
 					endpoint: Some(endpoint),
 					headers: otlp_headers.clone(),
@@ -408,33 +425,44 @@ pub fn parse_config(
 								remove: Arc::new(fields.remove.into_iter().collect()),
 								add: Arc::new(
 									fields
-										.add
-										.iter()
-										.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-										.collect::<Result<_, _>>()?,
+											.add
+											.iter()
+											.map(|(k, v)| {
+												cel::Expression::new_strict(v)
+													.ctx(format!("invalid config.tracing.fields.add.{k}"))
+													.map(|v| (k.clone(), Arc::new(v)))
+											})
+											.collect::<Result<_, _>>()?,
 								),
 							})
 						})
 						.transpose()?
 						.unwrap_or_default(),
 					random_sampling: t
-						.random_sampling
-						.as_ref()
-						.map(|c| c.0.as_str())
-						.map(cel::Expression::new_strict)
-						.transpose()?
-						.map(Arc::new),
+							.random_sampling
+							.as_ref()
+							.map(|c| c.0.as_str())
+							.map(|expression| {
+								cel::Expression::new_strict(expression)
+									.ctx("invalid config.tracing.randomSampling")
+							})
+							.transpose()?
+							.map(Arc::new),
 					client_sampling: t
-						.client_sampling
-						.as_ref()
-						.map(|c| c.0.as_str())
-						.map(cel::Expression::new_strict)
-						.transpose()?
-						.map(Arc::new),
+							.client_sampling
+							.as_ref()
+							.map(|c| c.0.as_str())
+							.map(|expression| {
+								cel::Expression::new_strict(expression)
+									.ctx("invalid config.tracing.clientSampling")
+							})
+							.transpose()?
+							.map(Arc::new),
 					path: otlp_path.unwrap_or_else(|| "/v1/traces".to_string()),
 				})
 			})
-			.transpose()?,
+			.transpose()
+			.ctx("invalid config.tracing")?,
 		metrics: telemetry::log::MetricsConfig {
 			excluded_metrics: raw
 				.metrics
@@ -453,24 +481,31 @@ pub fn parse_config(
 					Ok::<_, anyhow::Error>(MetricFields {
 						add: Arc::new(
 							fields
-								.add
-								.iter()
-								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-								.collect::<Result<_, _>>()?,
+									.add
+									.iter()
+									.map(|(k, v)| {
+										cel::Expression::new_strict(v)
+											.ctx(format!("invalid config.metrics.fields.add.{k}"))
+											.map(|v| (k.clone(), Arc::new(v)))
+									})
+									.collect::<Result<_, _>>()?,
 						),
 					})
 				})
-				.transpose()?
+				.transpose()
+				.ctx("invalid config.metrics.fields")?
 				.unwrap_or_default(),
 		},
 		logging: telemetry::log::Config {
 			filter: raw
-				.logging
-				.as_ref()
-				.and_then(|l| l.filter.as_ref())
-				.map(cel::Expression::new_strict)
-				.transpose()?
-				.map(Arc::new),
+					.logging
+					.as_ref()
+					.and_then(|l| l.filter.as_ref())
+					.map(|expression| {
+						cel::Expression::new_strict(expression).ctx("invalid config.logging.filter")
+					})
+					.transpose()?
+					.map(Arc::new),
 			level: match raw.logging.as_ref().and_then(|l| l.level.as_ref()) {
 				None => "".to_string(),
 				Some(RawLoggingLevel::Single(level)) => level.to_string(),
@@ -482,12 +517,14 @@ pub fn parse_config(
 				.and_then(|l| l.format.clone())
 				.unwrap_or_default(),
 			database: database.clone(),
-			fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))?,
-			database_fields: if database.is_some() {
-				database_logging_fields(raw.standard_attributes.as_ref())?
-			} else {
-				Default::default()
-			},
+				fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))
+					.ctx("invalid config.logging.fields")?,
+				database_fields: if database.is_some() {
+					database_logging_fields(raw.standard_attributes.as_ref())
+						.ctx("invalid config.standardAttributes")?
+				} else {
+					Default::default()
+				},
 		},
 		dns: client::Config {
 			resolver_cfg,
@@ -515,29 +552,30 @@ pub fn parse_config(
 		database,
 		session_encoder,
 		oidc_cookie_encoder,
-		hbone: Arc::new(agent_hbone::Config {
-			// window size: per-stream limit
-			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?
-				.or(raw.hbone.as_ref().and_then(|h| h.window_size))
-				.unwrap_or(4u32 * 1024 * 1024),
+			hbone: Arc::new(agent_hbone::Config {
+				// window size: per-stream limit
+				window_size: parse("HTTP2_STREAM_WINDOW_SIZE")
+					.ctx("invalid HTTP2_STREAM_WINDOW_SIZE")?
+					.or(raw.hbone.as_ref().and_then(|h| h.window_size))
+					.unwrap_or(4u32 * 1024 * 1024),
 			// connection window size: per connection.
 			// Setting this to the same value as window_size can introduce deadlocks in some applications
 			// where clients do not read data on streamA until they receive data on streamB.
 			// If streamA consumes the entire connection window, we enter a deadlock.
 			// A 4x limit should be appropriate without introducing too much potential buffering.
-			connection_window_size: parse("HTTP2_CONNECTION_WINDOW_SIZE")?
-				.or(raw.hbone.as_ref().and_then(|h| h.connection_window_size))
-				.unwrap_or(16u32 * 1024 * 1024),
-			frame_size: parse("HTTP2_FRAME_SIZE")?
-				.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
-				.unwrap_or(1024u32 * 1024),
-			pool_max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
-				.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
-				.unwrap_or(100u16),
-			pool_unused_release_timeout: parse_duration("POOL_UNUSED_RELEASE_TIMEOUT")?
-				.or(
-					raw
-						.hbone
+				connection_window_size: parse("HTTP2_CONNECTION_WINDOW_SIZE")?
+					.or(raw.hbone.as_ref().and_then(|h| h.connection_window_size))
+					.unwrap_or(16u32 * 1024 * 1024),
+				frame_size: parse("HTTP2_FRAME_SIZE")?
+					.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
+					.unwrap_or(1024u32 * 1024),
+				pool_max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
+					.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
+					.unwrap_or(100u16),
+				pool_unused_release_timeout: parse_duration("POOL_UNUSED_RELEASE_TIMEOUT")?
+					.or(
+						raw
+							.hbone
 						.as_ref()
 						.and_then(|h| h.pool_unused_release_timeout),
 				)
@@ -557,7 +595,11 @@ fn logging_fields(fields: Option<RawLoggingFields>) -> anyhow::Result<LoggingFie
 			fields
 				.add
 				.iter()
-				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.map(|(k, v)| {
+					cel::Expression::new_strict(v)
+						.ctx(format!("invalid expression for field {k}"))
+						.map(|v| (k.clone(), Arc::new(v)))
+				})
 				.collect::<Result<_, _>>()?,
 		),
 	})
@@ -586,7 +628,11 @@ fn database_logging_fields(
 		add: Arc::new(
 			add
 				.iter()
-				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.map(|(k, v)| {
+					cel::Expression::new_strict(v)
+						.ctx(format!("invalid expression for field {k}"))
+						.map(|v| (k.clone(), Arc::new(v)))
+				})
 				.collect::<Result<OrderedStringMap<_>, _>>()?,
 		),
 	})
@@ -644,7 +690,7 @@ fn validate_uri(uri_str: Option<String>) -> anyhow::Result<Option<String>> {
 	let Some(uri_str) = uri_str else {
 		return Ok(uri_str);
 	};
-	let uri = http::Uri::try_from(&uri_str)?;
+	let uri = http::Uri::try_from(&uri_str).ctx(format!("invalid URI {uri_str}"))?;
 	if uri.scheme().is_none() {
 		return Ok(Some("https://".to_owned() + &uri_str));
 	}
@@ -770,7 +816,9 @@ fn normalize_tracing_endpoint(
 		return Ok((None, path));
 	};
 
-	let uri: http::Uri = endpoint.parse()?;
+	let uri: http::Uri = endpoint
+		.parse()
+		.ctx(format!("invalid tracing endpoint URI {endpoint}"))?;
 	let endpoint = match (uri.scheme_str(), uri.authority()) {
 		(Some(scheme), Some(authority)) => format!("{scheme}://{authority}"),
 		_ => endpoint,
