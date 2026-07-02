@@ -12,6 +12,7 @@ import (
 	proxycmd "github.com/agentgateway/agentgateway/controller/pkg/cli/proxy"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/trace"
 	cliversion "github.com/agentgateway/agentgateway/controller/pkg/cli/version"
+	"github.com/agentgateway/agentgateway/controller/pkg/cli/virtualkey"
 )
 
 func NewRootCmd() *cobra.Command {
@@ -25,6 +26,7 @@ func NewRootCmd() *cobra.Command {
 	rootCmd.AddCommand(proxycmd.Command())
 	rootCmd.AddCommand(controllercmd.Command())
 	rootCmd.AddCommand(costs.Command())
+	rootCmd.AddCommand(flag.BuildCobra(virtualkey.Command))
 
 	rootCmd.AddCommand(flag.BuildCobra(config.Command))
 	rootCmd.AddCommand(flag.BuildCobra(trace.Command))

@@ -1,0 +1,5 @@
+entry,key,id,metadata.group,metadata.tier,metadata.owner,metadata.created_at
+alice,k-live-alice-001,vk-sales-alice,sales,premium,alice,2026-06-12T00:00:00Z
+bob,k-live-bob-001,vk-sales-bob,sales,standard,bob,2026-06-12T00:00:00Z
+raw-compatible,k-legacy-import,,support,legacy,,2026-06-12T00:00:00Z
+charlie,,vk-sales-charlie,sales,premium,charlie,2026-06-12T00:00:00Z

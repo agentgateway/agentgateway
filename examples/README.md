@@ -51,3 +51,7 @@ The `prompt-enrichment` example shows how to append or preprend prompts to agent
 
 The `standalone-epp` example shows the v1 local config shape for running agentgateway as the sidecar proxy
 next to a standalone EPP deployment on Kubernetes.
+
+### [Virtual Key Import](virtualkey-import/README.md)
+
+The `virtualkey-import` example shows how to generate or import virtual API keys with `agctl`.
