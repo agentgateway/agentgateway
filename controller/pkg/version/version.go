@@ -18,10 +18,10 @@ var (
 	GitVersion string
 	// ref is the version of the agentgateway controller.
 	// Constructed from the build info during init
-	ref *version
+	ref *VersionInfo
 )
 
-type version struct {
+type VersionInfo struct {
 	Controller string `json:"version"`
 	Commit     string `json:"commit"`
 	Date       string `json:"buildDate"`
@@ -51,7 +51,7 @@ func init() {
 		v = UndefinedVersion
 		GitVersion = info.Main.Version
 	}
-	ref = &version{
+	ref = &VersionInfo{
 		Controller: v,
 		OS:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
@@ -64,4 +64,9 @@ func init() {
 			ref.Date = setting.Value
 		}
 	}
+}
+
+// Info returns the build info of the controller.
+func Info() *VersionInfo {
+	return ref
 }
