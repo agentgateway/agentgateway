@@ -556,7 +556,22 @@ pub(super) async fn entra_token(
 	auth: &McpAuthentication,
 	client: PolicyClient,
 ) -> Result<Response, ProxyError> {
+	if req.method() == Method::OPTIONS {
+		return entra_token_preflight();
+	}
+	if req.method() != Method::POST {
+		let mut resp = Response::builder()
+			.status(StatusCode::METHOD_NOT_ALLOWED)
+			.header(::http::header::ALLOW, "POST, OPTIONS")
+			.body(axum::body::Body::empty())?;
+		entra_token_cors_headers(resp.headers_mut());
+		return Ok(resp);
+	}
+
 	let endpoints = entra_endpoints(&auth.issuer).map_err(ProxyError::ProcessingString)?;
+	// Clients using client_secret_basic carry their credentials in the Authorization header;
+	// forward it and don't inject a second credential.
+	let authorization = req.headers().get(::http::header::AUTHORIZATION).cloned();
 	let limit = crate::http::buffer_limit(req);
 	let body = std::mem::take(req.body_mut());
 	let bytes = crate::http::read_body_with_limit(body, limit)
@@ -564,27 +579,40 @@ pub(super) async fn entra_token(
 		.map_err(ProxyError::Body)?;
 
 	let (mut form, has_client_secret) = strip_resource_param(&bytes);
-	if !has_client_secret && let Some(secret) = &auth.client_secret {
+	if authorization.is_none()
+		&& !has_client_secret
+		&& let Some(secret) = &auth.client_secret
+	{
 		form = url::form_urlencoded::Serializer::new(form)
 			.append_pair("client_secret", secret.expose_secret())
 			.finish();
 	}
 
-	let ureq = ::http::Request::builder()
+	let mut builder = ::http::Request::builder()
 		.uri(endpoints.token_endpoint)
 		.method(Method::POST)
 		.header(
 			::http::header::CONTENT_TYPE,
 			"application/x-www-form-urlencoded",
-		)
-		.body(Body::from(form))?;
+		);
+	if let Some(authorization) = authorization {
+		builder = builder.header(::http::header::AUTHORIZATION, authorization);
+	}
+	let ureq = builder.body(Body::from(form))?;
 	let mut upstream = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
 		.simple_call(ureq)
 		.await?;
 
 	// Add CORS headers for browser-based MCP clients (same as client_registration)
-	let headers = upstream.headers_mut();
+	entra_token_cors_headers(upstream.headers_mut());
+
+	Ok(upstream)
+}
+
+/// CORS headers for the proxied Entra token endpoint. `authorization` is allowed so that
+/// browser-based clients authenticating with client_secret_basic pass preflight.
+fn entra_token_cors_headers(headers: &mut ::http::HeaderMap) {
 	headers.insert("access-control-allow-origin", "*".parse().unwrap());
 	headers.insert(
 		"access-control-allow-methods",
@@ -592,10 +620,18 @@ pub(super) async fn entra_token(
 	);
 	headers.insert(
 		"access-control-allow-headers",
-		"content-type".parse().unwrap(),
+		"content-type, authorization".parse().unwrap(),
 	);
+}
 
-	Ok(upstream)
+/// Answer a CORS preflight for the proxied Entra token endpoint locally instead of
+/// forwarding it to Entra.
+fn entra_token_preflight() -> Result<Response, ProxyError> {
+	let mut resp = Response::builder()
+		.status(StatusCode::NO_CONTENT)
+		.body(axum::body::Body::empty())?;
+	entra_token_cors_headers(resp.headers_mut());
+	Ok(resp)
 }
 
 /// Re-encode a form/query string without any `resource` parameters, reporting whether a
@@ -987,6 +1023,56 @@ mod tests {
 				.get(::http::header::LOCATION)
 				.expect("location header"),
 			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/authorize"
+		);
+	}
+
+	#[tokio::test]
+	async fn entra_token_answers_cors_preflight_locally() {
+		let client = crate::test_helpers::policy_client();
+		let mut req = ::http::Request::builder()
+			.method(Method::OPTIONS)
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = entra_token(&mut req, &entra_auth(), client)
+			.await
+			.expect("preflight should be answered");
+
+		assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+		assert_eq!(
+			resp
+				.headers()
+				.get("access-control-allow-headers")
+				.expect("allow-headers"),
+			"content-type, authorization"
+		);
+		assert_eq!(
+			resp
+				.headers()
+				.get("access-control-allow-methods")
+				.expect("allow-methods"),
+			"POST, OPTIONS"
+		);
+	}
+
+	#[tokio::test]
+	async fn entra_token_rejects_non_post_methods() {
+		let client = crate::test_helpers::policy_client();
+		let mut req = ::http::Request::builder()
+			.method(Method::GET)
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = entra_token(&mut req, &entra_auth(), client)
+			.await
+			.expect("non-POST should get a response");
+
+		assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+		assert_eq!(
+			resp.headers().get(::http::header::ALLOW).expect("allow"),
+			"POST, OPTIONS"
 		);
 	}
 
