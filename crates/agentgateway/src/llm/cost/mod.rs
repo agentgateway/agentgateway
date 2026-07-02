@@ -646,7 +646,7 @@ mod tests {
 				streaming: false,
 				params: Default::default(),
 				prompt: None,
-				bedrock_tool_names: None,
+				provider_state: None,
 			},
 			response: LLMResponse {
 				input_tokens: Some(1_000_000),

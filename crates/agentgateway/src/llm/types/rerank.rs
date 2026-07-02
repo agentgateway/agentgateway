@@ -115,7 +115,7 @@ impl RequestType for Request {
 			streaming: false,
 			params: LLMRequestParams::default(),
 			prompt: Default::default(),
-			bedrock_tool_names: None,
+			provider_state: None,
 		})
 	}
 

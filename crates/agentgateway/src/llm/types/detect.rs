@@ -104,7 +104,7 @@ impl RequestType for Request {
 				dimensions: self.lookup(lookups::DIMENSIONS, |v| v.as_u64()),
 			},
 			prompt: Default::default(),
-			bedrock_tool_names: None,
+			provider_state: None,
 		})
 	}
 
@@ -203,7 +203,7 @@ mod tests {
 			streaming: false,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		}
 	}
 

@@ -21,7 +21,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 		streaming: true,
 		params: Default::default(),
 		prompt: None,
-		bedrock_tool_names: None,
+		provider_state: None,
 	}
 }
 
@@ -811,7 +811,7 @@ mod response {
 			streaming: false,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		}
 	}
 
@@ -1365,7 +1365,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		streaming: true,
 		params: Default::default(),
 		prompt: None,
-		bedrock_tool_names: None,
+		provider_state: None,
 	};
 
 	let body = Body::from(error_json.as_bytes().to_vec());
@@ -1454,7 +1454,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 				streaming: true,
 				params: Default::default(),
 				prompt: None,
-				bedrock_tool_names: None,
+				provider_state: None,
 			},
 			LLMResponsePolicies::default(),
 			None,
@@ -1555,7 +1555,7 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 		streaming: false,
 		params: Default::default(),
 		prompt: None,
-		bedrock_tool_names: None,
+		provider_state: None,
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://proxy.example.com/v1/chat/completions?trace=repro",
@@ -1589,7 +1589,7 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 		streaming: false,
 		params: Default::default(),
 		prompt: None,
-		bedrock_tool_names: None,
+		provider_state: None,
 	}
 }
 
@@ -1719,7 +1719,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1767,7 +1767,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1811,7 +1811,7 @@ async fn messages_passthrough_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1852,7 +1852,7 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1888,7 +1888,7 @@ async fn responses_passthrough_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1925,7 +1925,7 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};

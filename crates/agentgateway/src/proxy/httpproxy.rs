@@ -2373,7 +2373,7 @@ async fn make_backend_call(
 								input_tokens: None,
 								params: Default::default(),
 								prompt: Default::default(),
-								bedrock_tool_names: None,
+								provider_state: None,
 							})
 						});
 					}
@@ -3065,7 +3065,7 @@ mod tests {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		}
 	}
 

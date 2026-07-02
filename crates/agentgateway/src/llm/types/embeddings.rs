@@ -85,7 +85,7 @@ impl RequestType for Request {
 				dimensions: self.dimensions.map(|d| d as u64),
 			},
 			prompt: Default::default(),
-			bedrock_tool_names: None,
+			provider_state: None,
 		})
 	}
 

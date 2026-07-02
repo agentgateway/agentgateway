@@ -221,7 +221,7 @@ impl RequestType for Request {
 				dimensions: None,
 			},
 			prompt: Default::default(),
-			bedrock_tool_names: None,
+			provider_state: None,
 		};
 		Ok(llm)
 	}

@@ -2212,7 +2212,7 @@ mod tests {
 			streaming: false,
 			params: llm::LLMRequestParams::default(),
 			prompt: None,
-			bedrock_tool_names: None,
+			provider_state: None,
 		};
 		let response = llm::LLMResponse {
 			input_tokens: Some(1_000_000),

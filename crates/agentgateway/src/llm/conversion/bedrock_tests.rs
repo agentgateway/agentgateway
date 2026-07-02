@@ -1517,7 +1517,11 @@ fn test_bedrock_tool_name_sanitizes_long_mcp_names() {
 	let sanitized = map.register(long_name);
 
 	assert!(sanitized.len() <= super::BEDROCK_TOOL_NAME_MAX_LEN);
-	assert!(sanitized.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
+	assert!(
+		sanitized
+			.chars()
+			.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+	);
 	assert_eq!(map.restore(&sanitized), long_name);
 }
 
@@ -1638,7 +1642,8 @@ fn test_messages_long_tool_name_round_trip_response() {
 		output_config: None,
 	};
 
-	let (bedrock_req, tool_map) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let (bedrock_req, tool_map) =
+		super::from_messages::translate_internal(req, &provider, None).unwrap();
 	let bedrock_name = bedrock_req
 		.tool_config
 		.as_ref()

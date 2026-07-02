@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use rand::RngExt;
@@ -27,7 +27,6 @@ pub struct BedrockRequest {
 pub struct BedrockToolNameMap {
 	forward: HashMap<String, String>,
 	reverse: HashMap<String, String>,
-	used_sanitized: HashSet<String>,
 }
 
 impl BedrockToolNameMap {
@@ -46,14 +45,13 @@ impl BedrockToolNameMap {
 			return mapped.clone();
 		}
 
-		if is_valid_bedrock_tool_name(&original) && !self.used_sanitized.contains(&original) {
-			self.used_sanitized.insert(original.clone());
+		if is_valid_bedrock_tool_name(&original) && !self.forward.values().any(|used| used == &original)
+		{
 			self.forward.insert(original.clone(), original.clone());
 			return original;
 		}
 
-		let sanitized = make_valid_bedrock_tool_name(&original, &self.used_sanitized);
-		self.used_sanitized.insert(sanitized.clone());
+		let sanitized = make_valid_bedrock_tool_name(&original, self.forward.values());
 		self.forward.insert(original.clone(), sanitized.clone());
 		if sanitized != original {
 			self.reverse.insert(sanitized.clone(), original);
@@ -63,7 +61,8 @@ impl BedrockToolNameMap {
 
 	/// Restore the client-facing tool name from a Bedrock response.
 	pub fn restore(&self, sanitized: &str) -> String {
-		self.reverse
+		self
+			.reverse
 			.get(sanitized)
 			.cloned()
 			.unwrap_or_else(|| sanitized.to_string())
@@ -94,9 +93,12 @@ fn sanitize_bedrock_tool_name_chars(name: &str) -> String {
 	}
 }
 
-fn make_valid_bedrock_tool_name(original: &str, used: &HashSet<String>) -> String {
+fn make_valid_bedrock_tool_name<'a>(
+	original: &str,
+	used: impl Iterator<Item = &'a String> + Clone,
+) -> String {
 	let base = sanitize_bedrock_tool_name_chars(original);
-	if base.len() <= BEDROCK_TOOL_NAME_MAX_LEN && !used.contains(&base) {
+	if base.len() <= BEDROCK_TOOL_NAME_MAX_LEN && !used.clone().any(|used| used == &base) {
 		return base;
 	}
 
@@ -108,7 +110,7 @@ fn make_valid_bedrock_tool_name(original: &str, used: &HashSet<String>) -> Strin
 	let mut candidate = format!("{prefix}_{hash}");
 
 	let mut counter = 0u32;
-	while used.contains(&candidate) {
+	while used.clone().any(|used| used == &candidate) {
 		counter += 1;
 		let suffix = format!("_{counter:x}");
 		let trim = BEDROCK_TOOL_NAME_MAX_LEN.saturating_sub(suffix.len());
@@ -122,7 +124,8 @@ fn make_valid_bedrock_tool_name(original: &str, used: &HashSet<String>) -> Strin
 }
 
 fn restore_tool_name(map: Option<&BedrockToolNameMap>, name: &str) -> String {
-	map.map(|m| m.restore(name))
+	map
+		.map(|m| m.restore(name))
 		.unwrap_or_else(|| name.to_string())
 }
 
@@ -571,40 +574,6 @@ pub mod from_completions {
 		})
 	}
 
-	fn collect_completions_tool_names(req: &completions::Request) -> Vec<String> {
-		let mut names = Vec::new();
-		if let Some(tools) = &req.tools {
-			for tool in tools {
-				if let completions::Tool::Function(function_tool) = tool {
-					names.push(function_tool.function.name.clone());
-				}
-			}
-		}
-		if let Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice {
-			function,
-		})) = &req.tool_choice
-		{
-			names.push(function.name.clone());
-		}
-		for msg in &req.messages {
-			if let completions::RequestMessage::Assistant(assistant) = msg {
-				if let Some(tool_calls) = &assistant.tool_calls {
-					for call in tool_calls {
-						match call {
-							completions::MessageToolCalls::Function(call) => {
-								names.push(call.function.name.clone());
-							},
-							completions::MessageToolCalls::Custom(call) => {
-								names.push(call.custom_tool.name.clone());
-							},
-						}
-					}
-				}
-			}
-		}
-		names
-	}
-
 	pub(super) fn translate_internal(
 		req: completions::Request,
 		model_id: String,
@@ -613,8 +582,35 @@ pub mod from_completions {
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> (bedrock::ConverseRequest, super::BedrockToolNameMap) {
 		let mut tool_name_map = super::BedrockToolNameMap::default();
-		for name in collect_completions_tool_names(&req) {
-			tool_name_map.register(&name);
+		for tool in req.tools.iter().flatten() {
+			if let completions::Tool::Function(function_tool) = tool {
+				tool_name_map.register(&function_tool.function.name);
+			}
+		}
+		if let Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice {
+			function,
+		})) = &req.tool_choice
+		{
+			tool_name_map.register(&function.name);
+		}
+		for msg in &req.messages {
+			let completions::RequestMessage::Assistant(assistant) = msg else {
+				continue;
+			};
+			for call in assistant
+				.tool_calls
+				.iter()
+				.flat_map(|tool_calls| tool_calls.iter())
+			{
+				match call {
+					completions::MessageToolCalls::Function(call) => {
+						tool_name_map.register(&call.function.name);
+					},
+					completions::MessageToolCalls::Custom(call) => {
+						tool_name_map.register(&call.custom_tool.name);
+					},
+				};
+			}
 		}
 		// Extract and join system prompts from completions format
 		let system_text = req
@@ -623,6 +619,55 @@ pub mod from_completions {
 			.filter_map(extract_system_text)
 			.collect::<Vec<String>>()
 			.join("\n");
+
+		let inference_config = bedrock::InferenceConfiguration {
+			max_tokens: req.max_tokens(),
+			temperature: req.temperature,
+			top_p: req.top_p,
+			// Map Anthropic-style vendor extension to Bedrock topK when provided
+			top_k: req.vendor_extensions.top_k,
+			stop_sequences: req.stop_sequence(),
+		};
+
+		let tool_choice = match req.tool_choice {
+			Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice { function })) => {
+				Some(bedrock::ToolChoice::Tool {
+					name: tool_name_map.register(&function.name),
+				})
+			},
+			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Auto)) => {
+				Some(bedrock::ToolChoice::Auto)
+			},
+			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Required)) => {
+				Some(bedrock::ToolChoice::Any)
+			},
+			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::None)) => None,
+			_ => None,
+		};
+		let tools = req.tools.map(|tools| {
+			tools
+				.into_iter()
+				.filter_map(|tool| match tool {
+					completions::Tool::Function(function_tool) => {
+						let tool_spec = bedrock::ToolSpecification {
+							name: tool_name_map.register(&function_tool.function.name),
+							description: function_tool.function.description,
+							input_schema: function_tool
+								.function
+								.parameters
+								.map(bedrock::ToolInputSchema::Json),
+						};
+
+						Some(bedrock::Tool::ToolSpec(tool_spec))
+					},
+					_ => {
+						tracing::warn!("Unsupported tool type in Bedrock conversion");
+						None
+					},
+				})
+				.collect_vec()
+		});
+		let tool_config = tools.map(|tools| bedrock::ToolConfiguration { tools, tool_choice });
 
 		let messages = req
 			.messages
@@ -676,15 +721,6 @@ pub mod from_completions {
 				msgs
 			});
 
-		let inference_config = bedrock::InferenceConfiguration {
-			max_tokens: req.max_tokens(),
-			temperature: req.temperature,
-			top_p: req.top_p,
-			// Map Anthropic-style vendor extension to Bedrock topK when provided
-			top_k: req.vendor_extensions.top_k,
-			stop_sequences: req.stop_sequence(),
-		};
-
 		// Build guardrail configuration if specified
 		let guardrail_config = if let (Some(identifier), Some(version)) =
 			(&provider.guardrail_identifier, &provider.guardrail_version)
@@ -706,46 +742,6 @@ pub mod from_completions {
 		} else {
 			Some(metadata)
 		};
-
-		let tool_choice = match req.tool_choice {
-			Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice { function })) => {
-				Some(bedrock::ToolChoice::Tool {
-					name: tool_name_map.register(&function.name),
-				})
-			},
-			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Auto)) => {
-				Some(bedrock::ToolChoice::Auto)
-			},
-			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::Required)) => {
-				Some(bedrock::ToolChoice::Any)
-			},
-			Some(completions::ToolChoiceOption::Mode(completions::ToolChoiceOptions::None)) => None,
-			_ => None,
-		};
-		let tools = req.tools.map(|tools| {
-			tools
-				.into_iter()
-				.filter_map(|tool| match tool {
-					completions::Tool::Function(function_tool) => {
-						let tool_spec = bedrock::ToolSpecification {
-							name: tool_name_map.register(&function_tool.function.name),
-							description: function_tool.function.description,
-							input_schema: function_tool
-								.function
-								.parameters
-								.map(bedrock::ToolInputSchema::Json),
-						};
-
-						Some(bedrock::Tool::ToolSpec(tool_spec))
-					},
-					_ => {
-						tracing::warn!("Unsupported tool type in Bedrock conversion");
-						None
-					},
-				})
-				.collect_vec()
-		});
-		let tool_config = tools.map(|tools| bedrock::ToolConfiguration { tools, tool_choice });
 
 		let explicit_thinking_budget = req.vendor_extensions.thinking_budget_tokens;
 		let enabled_thinking_budget = explicit_thinking_budget.or_else(|| {
@@ -1197,34 +1193,24 @@ pub mod from_messages {
 		})
 	}
 
-	fn collect_messages_tool_names(req: &messages::Request) -> Vec<String> {
-		let mut names = Vec::new();
-		if let Some(tools) = &req.tools {
-			for tool in tools {
-				names.push(tool.name.clone());
-			}
-		}
-		if let Some(messages::ToolChoice::Tool { name, .. }) = &req.tool_choice {
-			names.push(name.clone());
-		}
-		for msg in &req.messages {
-			for block in &msg.content {
-				if let messages::ContentBlock::ToolUse { name, .. } = block {
-					names.push(name.clone());
-				}
-			}
-		}
-		names
-	}
-
 	pub(super) fn translate_internal(
 		req: messages::Request,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
 		let mut tool_name_map = super::BedrockToolNameMap::default();
-		for name in collect_messages_tool_names(&req) {
-			tool_name_map.register(&name);
+		for tool in req.tools.iter().flatten() {
+			tool_name_map.register(&tool.name);
+		}
+		if let Some(messages::ToolChoice::Tool { name, .. }) = &req.tool_choice {
+			tool_name_map.register(name);
+		}
+		for msg in &req.messages {
+			for block in &msg.content {
+				if let messages::ContentBlock::ToolUse { name, .. } = block {
+					tool_name_map.register(name);
+				}
+			}
 		}
 		let mut cache_points_used = 0;
 		// Converse placement note (AWS docs):
@@ -1260,6 +1246,57 @@ pub mod from_messages {
 		// Bedrock applies strict inference/tool-choice constraints only to explicit extended thinking.
 		let thinking_enabled = requested_thinking
 			.is_some_and(|thinking| matches!(thinking, messages::ThinkingInput::Enabled { .. }));
+
+		// Prepare typed tools before messages so definitions keep priority if a previous tool-use
+		// name would otherwise collide. Cache points are inserted later in their original order.
+		let pending_tool_config = if let Some(tools) = req.tools {
+			let mut bedrock_tools = Vec::with_capacity(tools.len());
+			for tool in tools {
+				bedrock_tools.push((
+					bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
+						name: tool_name_map.register(&tool.name),
+						description: tool.description,
+						input_schema: Some(bedrock::ToolInputSchema::Json(tool.input_schema)),
+					}),
+					tool.cache_control.is_some(),
+				));
+			}
+
+			if bedrock_tools.is_empty() {
+				None
+			} else {
+				let tool_choice = match req.tool_choice {
+					Some(messages::ToolChoice::Auto { .. }) => {
+						if thinking_enabled {
+							Some(bedrock::ToolChoice::Any)
+						} else {
+							Some(bedrock::ToolChoice::Auto)
+						}
+					},
+					Some(messages::ToolChoice::Any { .. }) => Some(bedrock::ToolChoice::Any),
+					Some(messages::ToolChoice::Tool { name, .. }) => {
+						if thinking_enabled {
+							Some(bedrock::ToolChoice::Any)
+						} else {
+							Some(bedrock::ToolChoice::Tool {
+								name: tool_name_map.register(&name),
+							})
+						}
+					},
+					Some(messages::ToolChoice::None {}) | None => {
+						if thinking_enabled {
+							Some(bedrock::ToolChoice::Any)
+						} else {
+							None
+						}
+					},
+				};
+
+				Some((bedrock_tools, tool_choice))
+			}
+		} else {
+			None
+		};
 
 		// Convert system prompt to Bedrock format with cache point insertion
 		// Note: Anthropic MessagesRequest.system is Option<SystemPrompt>, Bedrock wants Option<Vec<SystemContentBlock>>
@@ -1471,66 +1508,20 @@ pub mod from_messages {
 			stop_sequences: req.stop_sequences,
 		};
 
-		// Convert typed tools to Bedrock tool config
-		// NOTE: Only send toolConfig if we have at least one tool. Bedrock rejects empty tools arrays.
-		let tool_config = if let Some(tools) = req.tools {
-			let bedrock_tools: Vec<bedrock::Tool> = {
-				let mut result = Vec::with_capacity(tools.len() * 2);
-				for tool in tools {
-					let has_cache_control = tool.cache_control.is_some();
-
-					result.push(bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
-						name: tool_name_map.register(&tool.name),
-						description: tool.description,
-						input_schema: Some(bedrock::ToolInputSchema::Json(tool.input_schema)),
-					}));
-
-					if has_cache_control && cache_points_used < 4 {
-						result.push(bedrock::Tool::CachePoint(helpers::create_cache_point()));
-						cache_points_used += 1;
-					}
+		let tool_config = pending_tool_config.map(|(tools, tool_choice)| {
+			let mut bedrock_tools = Vec::with_capacity(tools.len() * 2);
+			for (tool, has_cache_control) in tools {
+				bedrock_tools.push(tool);
+				if has_cache_control && cache_points_used < 4 {
+					bedrock_tools.push(bedrock::Tool::CachePoint(helpers::create_cache_point()));
+					cache_points_used += 1;
 				}
-				result
-			};
-
-			if bedrock_tools.is_empty() {
-				None
-			} else {
-				let tool_choice = match req.tool_choice {
-					Some(messages::ToolChoice::Auto { .. }) => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							Some(bedrock::ToolChoice::Auto)
-						}
-					},
-					Some(messages::ToolChoice::Any { .. }) => Some(bedrock::ToolChoice::Any),
-					Some(messages::ToolChoice::Tool { name, .. }) => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							Some(bedrock::ToolChoice::Tool {
-								name: tool_name_map.register(&name),
-							})
-						}
-					},
-					Some(messages::ToolChoice::None {}) | None => {
-						if thinking_enabled {
-							Some(bedrock::ToolChoice::Any)
-						} else {
-							None
-						}
-					},
-				};
-
-				Some(bedrock::ToolConfiguration {
-					tools: bedrock_tools,
-					tool_choice,
-				})
 			}
-		} else {
-			None
-		};
+			bedrock::ToolConfiguration {
+				tools: bedrock_tools,
+				tool_choice,
+			}
+		});
 
 		// Build Anthropic model-specific fields under Converse's additionalModelRequestFields.
 		let mut additional_fields = requested_thinking.map(|thinking| {
@@ -1989,35 +1980,6 @@ pub mod from_responses {
 		})
 	}
 
-	fn collect_responses_tool_names(req: &responses::CreateResponse) -> Vec<String> {
-		use responses::{
-			InputItem, InputParam, Item, Tool, ToolChoiceFunction, ToolChoiceParam,
-		};
-		let mut names = Vec::new();
-		if let Some(tools) = &req.tools {
-			for tool in tools {
-				if let Tool::Function(func) = tool {
-					names.push(func.name.clone());
-				}
-			}
-		}
-		if let Some(ToolChoiceParam::Function(ToolChoiceFunction { name })) = &req.tool_choice {
-			names.push(name.clone());
-		}
-		let items = match &req.input {
-			InputParam::Text(_) => vec![],
-			InputParam::Items(items) => items.clone(),
-		};
-		for item in items {
-			if let InputItem::Item(Item::FunctionCall(call)) = item {
-				names.push(call.name);
-			} else if let InputItem::Item(Item::CustomToolCall(call)) = item {
-				names.push(call.name);
-			}
-		}
-		names
-	}
-
 	pub(super) fn translate_internal(
 		req: responses::CreateResponse,
 		explicit_thinking_budget: Option<u64>,
@@ -2033,9 +1995,83 @@ pub mod from_responses {
 		};
 
 		let mut tool_name_map = super::BedrockToolNameMap::default();
-		for name in collect_responses_tool_names(&req) {
-			tool_name_map.register(&name);
+		for tool in req.tools.iter().flatten() {
+			if let responses::Tool::Function(func) = tool {
+				tool_name_map.register(&func.name);
+			}
 		}
+		if let Some(responses::ToolChoiceParam::Function(responses::ToolChoiceFunction { name })) =
+			&req.tool_choice
+		{
+			tool_name_map.register(name);
+		}
+		if let responses::InputParam::Items(items) = &req.input {
+			for item in items {
+				match item {
+					responses::InputItem::Item(responses::Item::FunctionCall(call)) => {
+						tool_name_map.register(&call.name);
+					},
+					responses::InputItem::Item(responses::Item::CustomToolCall(call)) => {
+						tool_name_map.register(&call.name);
+					},
+					_ => {},
+				}
+			}
+		}
+
+		// Convert tools from typed Responses API format to Bedrock format before messages so
+		// definitions keep priority if a previous tool-use name would otherwise collide.
+		let (tools, tool_choice) = if let Some(response_tools) = &req.tools {
+			let bedrock_tools: Vec<bedrock::Tool> = response_tools
+				.iter()
+				.filter_map(|tool_def| {
+					use responses::Tool;
+					match tool_def {
+						Tool::Function(func) => Some(bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
+							name: tool_name_map.register(&func.name),
+							description: func.description.clone(),
+							input_schema: Some(bedrock::ToolInputSchema::Json(
+								func.parameters.clone().unwrap_or_default(),
+							)),
+						})),
+						_ => {
+							tracing::warn!("Unsupported tool type in Responses API: {:?}", tool_def);
+							None
+						},
+					}
+				})
+				.collect();
+
+			let bedrock_tool_choice = req.tool_choice.as_ref().and_then(|tc| {
+				use responses::{ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam};
+				match tc {
+					ToolChoiceParam::Mode(ToolChoiceOptions::Auto) => Some(bedrock::ToolChoice::Auto),
+					ToolChoiceParam::Mode(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any),
+					ToolChoiceParam::Mode(ToolChoiceOptions::None) => None,
+					ToolChoiceParam::Function(ToolChoiceFunction { name }) => {
+						Some(bedrock::ToolChoice::Tool {
+							name: tool_name_map.register(&name),
+						})
+					},
+					ToolChoiceParam::Hosted(_) => {
+						tracing::warn!("Hosted tool choice not supported for Bedrock");
+						None
+					},
+					ToolChoiceParam::AllowedTools(_)
+					| ToolChoiceParam::Mcp(_)
+					| ToolChoiceParam::Custom(_)
+					| ToolChoiceParam::ApplyPatch
+					| ToolChoiceParam::Shell => {
+						tracing::warn!("Unsupported tool choice for Bedrock: {:?}", tc);
+						None
+					},
+				}
+			});
+
+			(bedrock_tools, bedrock_tool_choice)
+		} else {
+			(vec![], None)
+		};
 
 		let supports_caching = req.model.as_deref().is_some_and(supports_prompt_caching);
 
@@ -2323,59 +2359,6 @@ pub mod from_responses {
 				}
 			})
 		});
-
-		// Convert tools from typed Responses API format to Bedrock format
-		let (tools, tool_choice) = if let Some(response_tools) = &req.tools {
-			let bedrock_tools: Vec<bedrock::Tool> = response_tools
-				.iter()
-				.filter_map(|tool_def| {
-					use responses::Tool;
-					match tool_def {
-						Tool::Function(func) => Some(bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
-							name: tool_name_map.register(&func.name),
-							description: func.description.clone(),
-							input_schema: Some(bedrock::ToolInputSchema::Json(
-								func.parameters.clone().unwrap_or_default(),
-							)),
-						})),
-						_ => {
-							tracing::warn!("Unsupported tool type in Responses API: {:?}", tool_def);
-							None
-						},
-					}
-				})
-				.collect();
-
-			let bedrock_tool_choice = req.tool_choice.as_ref().and_then(|tc| {
-				use responses::{ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam};
-				match tc {
-					ToolChoiceParam::Mode(ToolChoiceOptions::Auto) => Some(bedrock::ToolChoice::Auto),
-					ToolChoiceParam::Mode(ToolChoiceOptions::Required) => Some(bedrock::ToolChoice::Any),
-					ToolChoiceParam::Mode(ToolChoiceOptions::None) => None,
-					ToolChoiceParam::Function(ToolChoiceFunction { name }) => {
-						Some(bedrock::ToolChoice::Tool {
-							name: tool_name_map.register(&name),
-						})
-					},
-					ToolChoiceParam::Hosted(_) => {
-						tracing::warn!("Hosted tool choice not supported for Bedrock");
-						None
-					},
-					ToolChoiceParam::AllowedTools(_)
-					| ToolChoiceParam::Mcp(_)
-					| ToolChoiceParam::Custom(_)
-					| ToolChoiceParam::ApplyPatch
-					| ToolChoiceParam::Shell => {
-						tracing::warn!("Unsupported tool choice for Bedrock: {:?}", tc);
-						None
-					},
-				}
-			});
-
-			(bedrock_tools, bedrock_tool_choice)
-		} else {
-			(vec![], None)
-		};
 
 		let tool_config = if !tools.is_empty() {
 			Some(bedrock::ToolConfiguration { tools, tool_choice })
