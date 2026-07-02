@@ -160,6 +160,12 @@ async fn apply_request_policies(
 		.await?;
 	http::strip_request_cookies_by_prefix(req, http::oidc::RESERVED_COOKIE_PREFIX);
 
+	// AAuth (HTTP message signing) runs before token-based auth so policies further down the
+	// chain can rely on AAuth claims being attached when present.
+	pol
+		.aauth
+		.apply_without_response("aauth", c, l, req, rp.headers())
+		.await?;
 	pol
 		.jwt
 		.apply_without_response("jwt auth", c, l, req, rp.headers())
@@ -377,6 +383,10 @@ async fn apply_gateway_policies(
 		.apply_without_response("gateway oidc", c, l, req, response_policies.headers())
 		.await?;
 
+	policies
+		.aauth
+		.apply_without_response("gateway aauth", c, l, req, response_policies.headers())
+		.await?;
 	policies
 		.jwt
 		.apply_without_response("gateway jwt", c, l, req, response_policies.headers())

@@ -19,12 +19,14 @@ schema = ["schemars"]
 internal_benches = ["divan"]
 
 [dependencies]
+aauth.workspace = true
 agent-core.workspace = true
 agent-celx.workspace = true
 agent-hbone.workspace = true
 agent-xds.workspace = true
 agent-pool.workspace = true
 anyhow.workspace = true
+http-message-sig.workspace = true
 arc-swap.workspace = true
 async-compression.workspace = true
 async-openai.workspace = true

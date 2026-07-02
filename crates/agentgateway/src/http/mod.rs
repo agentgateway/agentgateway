@@ -11,6 +11,7 @@ pub mod localratelimit;
 pub mod retry;
 pub mod route;
 
+pub mod aauth;
 pub mod apikey;
 pub mod auth;
 pub mod authorization;

@@ -24,6 +24,7 @@ use serde_json::json;
 use tracing::event;
 
 use crate::cel::{Error, Expression, context, query};
+use crate::http::aauth::AAuthClaims;
 use crate::http::ext_authz::ExtAuthzDynamicMetadata;
 use crate::http::ext_proc::ExtProcDynamicMetadata;
 use crate::http::transformation_cel::TransformationMetadata;
@@ -71,6 +72,10 @@ pub struct Executor<'a> {
 	pub extauthz: ExtensionOrDirect<'a, ExtAuthzDynamicMetadata>,
 
 	pub extproc: ExtensionOrDirect<'a, ExtProcDynamicMetadata>,
+
+	/// AAuth (HTTP message signing) claims. Populated when the AAuth policy successfully verifies
+	/// the request: `scheme`, `agent`, `agent_delegate`, `user`, `scope`, `jwt_claims`, `thumbprint`.
+	pub aauth: ExtensionOrDirect<'a, AAuthClaims>,
 
 	#[dynamic(rename = "mcpGuardrails")]
 	pub mcp_guardrails: ExtensionOrDirect<'a, McpGuardrailsDynamicMetadata>,
@@ -556,6 +561,7 @@ impl<'a> Executor<'a> {
 		self.basic_auth = ExtensionOrDirect::Extension(ext);
 		self.extauthz = ExtensionOrDirect::Extension(ext);
 		self.extproc = ExtensionOrDirect::Extension(ext);
+		self.aauth = ExtensionOrDirect::Extension(ext);
 		self.mcp_guardrails = ExtensionOrDirect::Extension(ext);
 		self.metadata = ExtensionOrDirect::Extension(ext);
 		self.backend = ExtensionOrDirect::Extension(ext);
@@ -571,6 +577,7 @@ impl<'a> Executor<'a> {
 		self.basic_auth = ExtensionOrDirect::Direct(req.basic_auth.as_ref());
 		self.extauthz = ExtensionOrDirect::Direct(req.extauthz.as_ref());
 		self.extproc = ExtensionOrDirect::Direct(req.extproc.as_ref());
+		self.aauth = ExtensionOrDirect::Direct(req.aauth.as_ref());
 		self.mcp_guardrails = ExtensionOrDirect::Direct(req.mcp_guardrails.as_ref());
 		self.metadata = ExtensionOrDirect::Direct(req.metadata.as_ref());
 		self.backend = ExtensionOrDirect::Direct(req.backend.as_ref());
@@ -796,6 +803,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		jwt: ext::<jwt::Claims>(req, clear),
 		api_key: ext::<apikey::Claims>(req, clear),
 		basic_auth: ext::<basicauth::Claims>(req, clear),
+		aauth: ext::<AAuthClaims>(req, clear),
 		backend: ext::<BackendContext>(req, clear),
 		proxy: ext::<ProxyContext>(req, clear),
 		source: ext::<SourceContext>(req, clear),
@@ -845,6 +853,8 @@ pub struct RequestSnapshot {
 	pub api_key: Option<apikey::Claims>,
 
 	pub basic_auth: Option<basicauth::Claims>,
+
+	pub aauth: Option<AAuthClaims>,
 
 	pub backend: Option<BackendContext>,
 
