@@ -28,7 +28,8 @@ pub struct UpstreamOpenAPICall {
 	pub method: String, /* TODO: Switch to Method, but will require getting rid of Serialize/Deserialize */
 	pub path: String,
 	pub allowed_headers: HashSet<String>,
-	// todo: params
+	#[serde(default)]
+	pub content_type: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -332,24 +333,35 @@ pub(crate) fn parse_openapi_schema(
 							// Build the schema
 							let mut final_schema = JsonSchema::default();
 
+							let mut request_content_type: Option<String> = None;
 							let body: Option<(String, serde_json::Value, bool)> = match op.request_body.as_ref() {
 								Some(body) => {
 									let body = resolve_request_body(body, open_api)?;
-									match body.content.get("application/json") {
-										Some(media_type) => {
-											let schema_ref = media_type
-												.schema
-												.as_ref()
-												.ok_or(ParseError::MissingReference("application/json".to_string()))?;
-											let schema = resolve_nested_schema(schema_ref, open_api)?;
-											let body_schema =
-												serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
-											final_schema
-												.properties
-												.insert(BODY_NAME.clone(), body_schema.clone());
-											Some((BODY_NAME.clone(), body_schema, body.required))
-										},
-										None => None,
+									if let Some(media_type) = body.content.get("application/json") {
+										let schema_ref = media_type
+											.schema
+											.as_ref()
+											.ok_or(ParseError::MissingReference("application/json".to_string()))?;
+										let schema = resolve_nested_schema(schema_ref, open_api)?;
+										let body_schema =
+											serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
+										final_schema
+											.properties
+											.insert(BODY_NAME.clone(), body_schema.clone());
+										Some((BODY_NAME.clone(), body_schema, body.required))
+									} else if body.content.contains_key("application/octet-stream") {
+										request_content_type = Some("application/octet-stream".to_string());
+										let body_schema = json!({
+											"type": "string",
+											"format": "byte",
+											"description": "Base64-encoded binary content"
+										});
+										final_schema
+											.properties
+											.insert(BODY_NAME.clone(), body_schema.clone());
+										Some((BODY_NAME.clone(), body_schema, body.required))
+									} else {
+										None
 									}
 								},
 								None => None,
@@ -453,6 +465,7 @@ pub(crate) fn parse_openapi_schema(
 								method: method.to_string(),
 								path: path.clone(),
 								allowed_headers,
+								content_type: request_content_type,
 							};
 							Ok((tool, upstream))
 						},
@@ -851,8 +864,23 @@ impl Handler {
 
 		// Build request body
 		let body = if let Some(body_val) = body_value {
-			rb = rb.header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-			serde_json::to_vec(&body_val).map_err(|e| UpstreamError::OpenAPIError(e.into()))?
+			match info.content_type.as_deref() {
+				Some("application/octet-stream") => {
+					rb = rb.header(
+						CONTENT_TYPE,
+						HeaderValue::from_static("application/octet-stream"),
+					);
+					let s = body_val.as_str().unwrap_or_default();
+					use base64::Engine;
+					base64::engine::general_purpose::STANDARD
+						.decode(s)
+						.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
+				},
+				_ => {
+					rb = rb.header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+					serde_json::to_vec(&body_val).map_err(|e| UpstreamError::OpenAPIError(e.into()))?
+				},
+			}
 		} else {
 			Vec::new()
 		};
