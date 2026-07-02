@@ -2682,11 +2682,7 @@ impl LocalMcpAuthentication {
 							// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
 							// JWKS lives at the project level: https://api.descope.com/{project-id}/.well-known/jwks.json
 							let parsed: url::Url = self.issuer.parse()?;
-							let segments: Vec<&str> = parsed
-								.path()
-								.trim_start_matches('/')
-								.split('/')
-								.collect();
+							let segments: Vec<&str> = parsed.path().trim_start_matches('/').split('/').collect();
 							if segments.len() >= 5
 								&& segments[0] == "v1"
 								&& segments[1] == "apps"

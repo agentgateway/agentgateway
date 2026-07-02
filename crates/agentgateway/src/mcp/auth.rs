@@ -353,11 +353,7 @@ pub(super) async fn client_registration(
 			let parsed: url::Url = issuer
 				.parse()
 				.map_err(|e| ProxyError::ProcessingString(format!("invalid issuer URL: {e}")))?;
-			let segments: Vec<&str> = parsed
-				.path()
-				.trim_start_matches('/')
-				.split('/')
-				.collect();
+			let segments: Vec<&str> = parsed.path().trim_start_matches('/').split('/').collect();
 			if segments.len() >= 5
 				&& segments[0] == "v1"
 				&& segments[1] == "apps"
