@@ -126,7 +126,7 @@ Also in `examples/mcp-authentication/config.yaml`:
 ### Scenario C: Adapting a vendor Authorization Server (e.g., Keycloak)
 
 When your Authorization Server doesn’t implement the spec as-is, agentgateway can fill in the gaps.
-Currently, five providers are supported: Keycloak, Auth0, Okta, Descope, and authentik.
+Currently, six providers are supported: Keycloak, Auth0, Okta, Descope, authentik, and Microsoft Entra ID (Azure AD).
 
 Excerpt from `examples/mcp-authentication/config.yaml`:
 
@@ -176,6 +176,7 @@ What setting a provider does (high level):
   - Okta → `<issuer>/.well-known/jwks.json`
   - Descope → `https://api.descope.com/{project-id}/.well-known/jwks.json` (derived from agentic issuer path)
   - authentik → `<issuer>/jwks/`
+  - Entra → `https://login.microsoftonline.com/<tenant>/discovery/v2.0/keys` (tenant derived from the issuer)
 
 Auth0-specific notes:
 - Gateway appends `?audience=...` to the authorization endpoint it exposes.
@@ -195,6 +196,17 @@ authentik-specific notes:
 - No RFC 8707 support, and no audience query parameter workaround. authentik sets `aud` to the OAuth client ID, so configure `audiences` with the pre-registered client ID.
 - No Dynamic Client Registration support ([goauthentik/authentik#8751](https://github.com/goauthentik/authentik/issues/8751)). **Setting `clientId` is required**: the gateway injects a `registration_endpoint` into the AS metadata it exposes and answers registration requests itself with the pre-registered client.
 - The pre-registered authentik client must be a **public** client (the mock registration response advertises `token_endpoint_auth_method: none`) with PKCE, and its redirect URIs must cover your MCP clients (authentik supports regex redirect URIs).
+
+Entra (Azure AD)-specific notes:
+- Entra only serves OIDC Discovery metadata (no RFC 8414); the gateway fetches the tenant's v2.0 `openid-configuration` and serves it as AS metadata. Both the v2 issuer (`https://login.microsoftonline.com/<tenant>/v2.0`) and the v1 issuer (`https://sts.windows.net/<tenant>/`) forms are accepted in `issuer`.
+- Entra's v2.0 endpoints reject the RFC 8707 `resource` parameter that MCP clients are required to send (`AADSTS9010010: invalid_target`). The gateway advertises proxied `.../authorize` and `.../token` endpoints in the served AS metadata and strips `resource` before forwarding to Entra, so make sure the route also matches the `/.well-known/oauth-authorization-server/...` path prefix.
+- No Dynamic Client Registration (RFC 7591); set `clientId` to a pre-registered app registration id and the gateway short-circuits registration requests with it.
+- MCP clients always remain public clients using PKCE (the registration short-circuit advertises `token_endpoint_auth_method: none`). `clientSecret` is not a credential for MCP clients — it is the credential of the gateway operator's own Entra app registration, and it pairs with `clientId`.
+- Entra decides confidential-vs-public per app registration platform. When the app's redirect URIs are registered under the **Web** platform, Entra treats it as a confidential client and requires client authentication at the token endpoint *in addition to* PKCE (`AADSTS7000218` otherwise). Set `clientSecret` and the gateway attaches it server-side — only to `authorization_code`/`refresh_token` requests for the configured `clientId`, never to other grant types (e.g. `client_credentials`).
+- If the app registration is a genuine public client ("Mobile and desktop applications" platform with public client flows allowed), omit `clientSecret` — the flow is pure PKCE end to end.
+- The SPA platform does not work behind the gateway's token proxy: Entra only redeems SPA-issued authorization codes via browser cross-origin requests (`AADSTS9002327`).
+- PKCE (`S256`) is advertised in the served metadata even though Entra omits `code_challenge_methods_supported` from its discovery document.
+- List both `api://<client-id>` and the bare client id in `audiences` to accept the `aud` formats Entra mints for v1 and v2 tokens.
 
 Descope-specific notes:
 - Uses OIDC discovery (`{issuer}/.well-known/openid-configuration`), not RFC 8414.

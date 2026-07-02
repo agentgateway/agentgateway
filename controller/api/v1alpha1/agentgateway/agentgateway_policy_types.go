@@ -2072,6 +2072,7 @@ const (
 	Okta      McpIDP = "Okta"
 	Descope   McpIDP = "Descope"
 	Authentik McpIDP = "Authentik"
+	Entra     McpIDP = "Entra"
 )
 
 type BackendTunnel struct {

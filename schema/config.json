@@ -4166,6 +4166,13 @@
             "string",
             "null"
           ]
+        },
+        "clientSecret": {
+          "description": "OAuth client secret injected into proxied token requests for confidential clients.\nCurrently used by the `entra` provider, whose Web-platform app registrations require a\nclient secret at the token endpoint.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -4239,6 +4246,19 @@
           },
           "required": [
             "authentik"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "entra": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "entra"
           ],
           "additionalProperties": false
         }

@@ -984,6 +984,9 @@ message TrafficPolicySpec {
       BackendPolicySpec.McpAuthentication.McpIDP provider = 1;
       BackendPolicySpec.McpAuthentication.ResourceMetadata resource_metadata = 2;
       optional string client_id = 3;
+      // OAuth client secret injected into proxied token requests for confidential clients
+      // (used by the ENTRA provider).
+      optional string client_secret = 4;
     }
 
     // Validation mode for JWT authentication
@@ -1498,6 +1501,7 @@ message BackendPolicySpec {
       OKTA = 3;
       DESCOPE = 4;
       AUTHENTIK = 5;
+      ENTRA = 6;
     }
 
     // Validation mode for JWT authentication
@@ -1521,6 +1525,9 @@ message BackendPolicySpec {
     JWTValidationOptions jwt_validation_options = 7;
     AuthorizationLocation authorization_location = 8;
     optional string client_id = 9;
+    // OAuth client secret injected into proxied token requests for confidential clients
+    // (used by the ENTRA provider).
+    optional string client_secret = 10;
   }
 
   // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of

@@ -452,6 +452,7 @@ fn mcp_authentication_from_proto(
 		std::sync::Arc::new(jwt_validator),
 		mode,
 		m.client_id.clone(),
+		m.client_secret.clone().map(Into::into),
 	))
 }
 
@@ -492,6 +493,7 @@ fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
 		x if x == McpIdp::Okta as i32 => Some(McpIDP::Okta {}),
 		x if x == McpIdp::Descope as i32 => Some(McpIDP::Descope {}),
 		x if x == McpIdp::Authentik as i32 => Some(McpIDP::Authentik {}),
+		x if x == McpIdp::Entra as i32 => Some(McpIDP::Entra {}),
 		_ => None,
 	}
 }
@@ -515,6 +517,7 @@ where
 	ResourceMetadata { extra }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_mcp_authentication(
 	issuer: String,
 	audiences: Vec<String>,
@@ -523,6 +526,7 @@ fn build_mcp_authentication(
 	jwt_validator: Arc<http::jwt::Jwt>,
 	mode: McpAuthenticationMode,
 	client_id: Option<String>,
+	client_secret: Option<secrecy::SecretString>,
 ) -> McpAuthentication {
 	McpAuthentication {
 		issuer,
@@ -532,6 +536,7 @@ fn build_mcp_authentication(
 		jwt_validator,
 		mode,
 		client_id,
+		client_secret,
 	}
 }
 
@@ -2110,6 +2115,7 @@ fn traffic_policy_from_proto(
 							tps::jwt::Mode::Permissive => McpAuthenticationMode::Permissive,
 						},
 						mcp.client_id.clone(),
+						mcp.client_secret.clone().map(Into::into),
 					))
 				},
 				None => None,
