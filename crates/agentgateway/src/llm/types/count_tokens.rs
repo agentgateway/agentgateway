@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::llm::types::{RequestType, messages};
 use crate::llm::{
-	AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, conversion,
-	logged_response_parsing,
+	AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, logged_response_parsing,
 };
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -39,7 +38,6 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::CountTokens,
-			native_format: Some(crate::llm::custom::ProviderFormat::AnthropicTokenCount),
 			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
@@ -58,19 +56,6 @@ impl RequestType for Request {
 		unimplemented!(
 			"set_messages is used for prompt guard; prompt guard is disable for token counting."
 		)
-	}
-
-	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
-		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
-	}
-
-	fn to_bedrock_token_count(&self, headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
-		conversion::bedrock::from_anthropic_token_count::translate(self, headers)
-	}
-
-	fn to_vertex(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
-		let body = self.to_anthropic()?;
-		provider.prepare_anthropic_count_tokens_body(body)
 	}
 }
 

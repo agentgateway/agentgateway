@@ -2613,8 +2613,8 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.formats`|[]object||
-|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
-|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].path`|string||
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -4001,8 +4001,8 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.model`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -10388,8 +10388,8 @@
 |`backends[].ai.provider.custom.model`|string||
 |`backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`backends[].ai.provider.custom.formats`|[]object||
-|`backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
-|`backends[].ai.provider.custom.formats[].path`|string||
+|`backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -11776,8 +11776,8 @@
 |`backends[].ai.groups[].providers[].provider.custom.model`|string||
 |`backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
-|`backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
-|`backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
+|`backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -17007,8 +17007,8 @@
 |`routeGroups[].routes[].backends[].ai.provider.custom.model`|string||
 |`routeGroups[].routes[].backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routeGroups[].routes[].backends[].ai.provider.custom.formats`|[]object||
-|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
-|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].path`|string||
+|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routeGroups[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -18395,8 +18395,8 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.model`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object||
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string||
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathPrefix`|string|Override the default base path prefix for this provider.|
@@ -21147,8 +21147,8 @@
 |`llm.providers[].provider.custom.model`|string||
 |`llm.providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`llm.providers[].provider.custom.formats`|[]object||
-|`llm.providers[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
-|`llm.providers[].provider.custom.formats[].path`|string||
+|`llm.providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`llm.providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`llm.providers[].defaults`|object|defaults defines provider-level policy defaults. Model-level policy fields override these.|
 |`llm.providers[].defaults.defaults`|object||
 |`llm.providers[].defaults.overrides`|object||
@@ -21295,8 +21295,8 @@
 |`llm.models[].provider.custom.model`|string||
 |`llm.models[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`llm.models[].provider.custom.formats`|[]object||
-|`llm.models[].provider.custom.formats[].type`|enum|Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
-|`llm.models[].provider.custom.formats[].path`|string||
+|`llm.models[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`llm.models[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`llm.models[].passthrough`|enum|passthrough controls how requests are handled.<br>By default, requests will be parsed and translated as needed.<br>With passthrough, they will be unmodified and optionally inspected (with `detect`).<br>In this mode, requests must be sent in the native format of the provider.<br>Possible values: `detect`, `opaque`.|
 |`llm.models[].authorization`|object|authorization configures HTTP authorization rules for requests to this model.|
 |`llm.models[].authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|

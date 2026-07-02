@@ -108,7 +108,6 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Rerank,
-			native_format: Some(crate::llm::custom::ProviderFormat::Rerank),
 			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
@@ -125,27 +124,6 @@ impl RequestType for Request {
 
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for rerank.")
-	}
-
-	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
-		// Passthrough to Cohere-compatible backends (Cohere, Jina, vLLM, Azure Foundry).
-		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
-	}
-
-	fn to_bedrock(
-		&self,
-		provider: &crate::llm::bedrock::Provider,
-		_headers: Option<&::http::HeaderMap>,
-		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
-		Ok(crate::llm::conversion::bedrock::BedrockRequest {
-			body: crate::llm::conversion::bedrock::from_rerank::translate(self, provider)?,
-			tool_name_map: Default::default(),
-		})
-	}
-
-	fn to_vertex(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
-		crate::llm::conversion::vertex::from_rerank::translate(self, provider)
 	}
 }
 
@@ -243,7 +221,7 @@ mod tests {
 		// Voyage-style extra field must survive passthrough via `rest`.
 		let raw = r#"{"model":"rerank-2","query":"q","documents":["a","b"],"truncation":true}"#;
 		let req: Request = serde_json::from_str(raw).unwrap();
-		let out = String::from_utf8(req.to_openai().unwrap()).unwrap();
+		let out = String::from_utf8(serde_json::to_vec(&req).unwrap()).unwrap();
 		assert!(out.contains("\"truncation\":true"));
 		assert!(out.contains("\"query\":\"q\""));
 	}

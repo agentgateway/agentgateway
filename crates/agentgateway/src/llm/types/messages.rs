@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::llm::policy::webhook::{Message, ResponseChoice};
 use crate::llm::types::{RequestType, ResponseType, SimpleChatCompletionMessage};
-use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, conversion};
+use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
 
 #[derive(Debug, Deserialize, Clone, Serialize, Default)]
 pub struct Request {
@@ -205,7 +205,6 @@ impl RequestType for Request {
 		let llm = LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Messages,
-			native_format: Some(crate::llm::custom::ProviderFormat::Messages),
 			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
@@ -250,32 +249,6 @@ impl RequestType for Request {
 			))
 		};
 		self.messages = message_prompts.into_iter().map(Into::into).collect();
-	}
-
-	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
-		conversion::completions::from_messages::translate(self)
-	}
-
-	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
-		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
-	}
-
-	fn to_bedrock(
-		&self,
-		provider: &crate::llm::bedrock::Provider,
-		headers: Option<&::http::HeaderMap>,
-		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
-		conversion::bedrock::from_messages::translate(self, provider, headers)
-	}
-
-	fn to_vertex(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
-		if provider.is_anthropic_model(self.model.as_deref()) {
-			let body = self.to_anthropic()?;
-			provider.prepare_anthropic_message_body(body)
-		} else {
-			self.to_openai()
-		}
 	}
 }
 

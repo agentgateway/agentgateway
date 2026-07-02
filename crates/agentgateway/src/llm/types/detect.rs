@@ -1,15 +1,12 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
-use http::HeaderMap;
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use tracing::debug;
 use x509_parser::nom::AsBytes;
 
-use crate::llm::bedrock::Provider;
-use crate::llm::policy::PromptCachingConfig;
 use crate::llm::policy::webhook::ResponseChoice;
 use crate::llm::{
 	AIError, AmendOnDrop, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
@@ -64,6 +61,7 @@ impl RequestType for Request {
 	fn supports_model(&self) -> bool {
 		false
 	}
+
 	fn model(&mut self) -> &mut Option<String> {
 		unimplemented!("model is not available");
 	}
@@ -81,7 +79,6 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::Detect,
-			native_format: None,
 			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: self
 				.lookup(lookups::MODEL, |v| v.as_str())
@@ -114,33 +111,6 @@ impl RequestType for Request {
 
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for detect.")
-	}
-	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
-		match self {
-			Self::Raw(bytes) => Ok(bytes.to_vec()),
-			Self::Json(v) => serde_json::to_vec(v).map_err(AIError::RequestMarshal),
-		}
-	}
-	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
-		self.to_openai()
-	}
-
-	fn to_bedrock(
-		&self,
-		_provider: &Provider,
-		_headers: Option<&HeaderMap>,
-		_prompt_caching: Option<&PromptCachingConfig>,
-	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
-		Ok(crate::llm::conversion::bedrock::BedrockRequest {
-			body: self.to_openai()?,
-			tool_name_map: Default::default(),
-		})
-	}
-	fn to_bedrock_token_count(&self, _headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
-		self.to_openai()
-	}
-	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
-		self.to_openai()
 	}
 }
 
@@ -196,7 +166,6 @@ mod tests {
 		LLMRequest {
 			input_tokens: None,
 			input_format: crate::llm::InputFormat::Detect,
-			native_format: None,
 			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: strng::new("unknown"),
 			provider: strng::new("aws.bedrock"),

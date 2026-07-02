@@ -2244,7 +2244,6 @@ mod tests {
 		let request = llm::LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Completions,
-			native_format: None,
 			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
 			request_model: strng::literal!("my-model"),
 			provider: strng::literal!("openai"),

@@ -2304,15 +2304,19 @@ async fn make_backend_call(
 						.map_err(|e| ProxyError::Processing(e.into()))?,
 						_ => unreachable!(),
 					};
-					let (mut req, llm_request) = match r {
-						RequestResult::Success(r, lr) => (r, lr),
+					let (mut req, llm_request, upstream_route_type) = match r {
+						RequestResult::Success {
+							request,
+							llm_request,
+							upstream_route_type,
+						} => (request, llm_request, upstream_route_type),
 						RequestResult::Rejected(dr) => return Err(ProxyResponse::DirectResponse(Box::new(dr))),
 					};
 					dtrace::trace(|trace| {
 						trace.llm_request_detected(
 							llm_provider.clone(),
 							format!("{:?}", llm_request.input_format),
-							llm_request.native_format.map(|f| format!("{f:?}")),
+							Some(format!("{upstream_route_type:?}")),
 							llm_request.request_model.to_string(),
 							llm_request.streaming,
 						);
@@ -2323,7 +2327,7 @@ async fn make_backend_call(
 						.provider
 						.setup_request(
 							&mut req,
-							route_type,
+							upstream_route_type,
 							Some(&llm_request),
 							llm.path_override.as_deref(),
 							llm.path_prefix.as_deref(),
@@ -2387,7 +2391,6 @@ async fn make_backend_call(
 						log.add(|l| {
 							l.llm_request = Some(LLMRequest {
 								input_format: InputFormat::Realtime,
-								native_format: Some(llm::custom::ProviderFormat::Realtime),
 								cache_convention: llm::CacheTokenConvention::pending(),
 								request_model,
 								streaming: true,
@@ -3082,7 +3085,6 @@ mod tests {
 		llm::LLMRequest {
 			input_tokens: None,
 			input_format: llm::InputFormat::Completions,
-			native_format: Some(llm::custom::ProviderFormat::Completions),
 			cache_convention: llm::CacheTokenConvention::pending(),
 			request_model: "test-model".into(),
 			provider: "test-provider".into(),

@@ -25,20 +25,16 @@ impl Provider {
 			.any(|supported| supported.format == format)
 	}
 
-	pub fn native_format_for(&self, input_format: InputFormat) -> Option<ProviderFormat> {
-		input_format
-			.provider_format_preferences()
-			.iter()
-			.copied()
-			.find(|format| self.supports(*format))
-	}
-
 	pub fn path_for(&self, format: ProviderFormat) -> Option<&str> {
 		self
 			.formats
 			.iter()
 			.find(|supported| supported.format == format)
 			.and_then(|supported| supported.path.as_deref())
+	}
+
+	pub fn path_for_route(&self, route_type: RouteType) -> Option<&str> {
+		ProviderFormat::from_route_type(route_type).and_then(|format| self.path_for(format))
 	}
 }
 
@@ -48,11 +44,19 @@ impl super::Provider for Provider {
 
 #[apply(schema!)]
 pub struct ProviderFormatConfig {
+	/// Upstream API shape this custom provider says it accepts.
 	#[serde(rename = "type")]
 	pub format: ProviderFormat,
+	/// Optional path override for this specific upstream format.
 	pub path: Option<Strng>,
 }
 
+/// A custom provider's advertised upstream wire format.
+///
+/// Unlike `InputFormat`, this describes what the backend accepts, not what the
+/// client sent. Unlike `RouteType`, it is only for LLM payload endpoints that
+/// can be converted or passed through; generic routes such as models,
+/// passthrough, and detect do not have a `ProviderFormat`.
 #[apply(schema!)]
 #[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ProviderFormat {
@@ -66,6 +70,19 @@ pub enum ProviderFormat {
 }
 
 impl ProviderFormat {
+	pub fn from_route_type(route_type: RouteType) -> Option<Self> {
+		Some(match route_type {
+			RouteType::Completions => Self::Completions,
+			RouteType::Messages => Self::Messages,
+			RouteType::Responses => Self::Responses,
+			RouteType::Embeddings => Self::Embeddings,
+			RouteType::AnthropicTokenCount => Self::AnthropicTokenCount,
+			RouteType::Realtime => Self::Realtime,
+			RouteType::Rerank => Self::Rerank,
+			RouteType::Models | RouteType::Passthrough | RouteType::Detect => return None,
+		})
+	}
+
 	pub fn input_format(self) -> InputFormat {
 		match self {
 			Self::Completions => InputFormat::Completions,
@@ -94,42 +111,6 @@ impl ProviderFormat {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	fn provider(supported_formats: Vec<ProviderFormat>) -> Provider {
-		Provider {
-			model: None,
-			provider_override: None,
-			formats: supported_formats
-				.into_iter()
-				.map(|format| ProviderFormatConfig { format, path: None })
-				.collect(),
-		}
-	}
-
-	#[test]
-	fn native_format_selection_uses_preference_table() {
-		let messages_only = provider(vec![ProviderFormat::Messages]);
-		assert_eq!(
-			messages_only.native_format_for(InputFormat::Completions),
-			Some(ProviderFormat::Messages)
-		);
-
-		let completions_only = provider(vec![ProviderFormat::Completions]);
-		assert_eq!(
-			completions_only.native_format_for(InputFormat::Messages),
-			Some(ProviderFormat::Completions)
-		);
-		assert_eq!(
-			completions_only.native_format_for(InputFormat::Responses),
-			Some(ProviderFormat::Completions)
-		);
-
-		let embeddings_only = provider(vec![ProviderFormat::Embeddings]);
-		assert_eq!(
-			embeddings_only.native_format_for(InputFormat::Completions),
-			None
-		);
-	}
 
 	#[test]
 	fn path_for_returns_format_path() {

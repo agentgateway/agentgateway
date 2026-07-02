@@ -4309,6 +4309,7 @@
       "additionalProperties": false
     },
     "RouteType": {
+      "description": "The HTTP endpoint class, such as `/v1/chat/completions` or `/v1/messages`.\n\nThis is used both for the client route we matched and for the upstream route\nwe finally send to. For chat, those can differ: a client Anthropic\n`/v1/messages` request is `RouteType::Messages` and `InputFormat::Messages`,\nbut it may be translated and sent upstream as `RouteType::Completions`.\n\n`RouteType` is about the HTTP endpoint. `InputFormat` is about the parsed\nclient payload and the response shape we owe back to that client. The main\ndifference is this type includes things like Detect and Passthrough.",
       "oneOf": [
         {
           "description": "OpenAI /v1/chat/completions",
@@ -7184,9 +7185,11 @@
       "type": "object",
       "properties": {
         "type": {
+          "description": "Upstream API shape this custom provider says it accepts.",
           "$ref": "#/$defs/ProviderFormat"
         },
         "path": {
+          "description": "Optional path override for this specific upstream format.",
           "type": [
             "string",
             "null"
@@ -7199,6 +7202,7 @@
       ]
     },
     "ProviderFormat": {
+      "description": "A custom provider's advertised upstream wire format.\n\nUnlike `InputFormat`, this describes what the backend accepts, not what the\nclient sent. Unlike `RouteType`, it is only for LLM payload endpoints that\ncan be converted or passed through; generic routes such as models,\npassthrough, and detect do not have a `ProviderFormat`.",
       "type": "string",
       "enum": [
         "completions",

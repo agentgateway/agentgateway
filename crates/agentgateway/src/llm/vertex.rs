@@ -28,6 +28,12 @@ impl super::Provider for Provider {
 	const NAME: Strng = strng::literal!("gcp.vertex_ai");
 }
 
+pub fn prepare_anthropic_message_body(body: Vec<u8>) -> Result<Vec<u8>, AIError> {
+	prepare_anthropic_body(body, |b| {
+		b.remove("model");
+	})
+}
+
 impl Provider {
 	fn configured_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<&'a str> {
 		self.model.as_deref().or(request_model)
@@ -38,13 +44,11 @@ impl Provider {
 	}
 
 	pub fn prepare_anthropic_message_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
-		self.prepare_anthropic_body(body, |b| {
-			b.remove("model");
-		})
+		prepare_anthropic_message_body(body)
 	}
 
 	pub fn prepare_anthropic_count_tokens_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
-		self.prepare_anthropic_body(body, |b| {
+		prepare_anthropic_body(body, |b| {
 			if let Some(Value::String(model)) = b.get("model") {
 				let normalized = self
 					.configured_model(Some(model))
@@ -54,25 +58,26 @@ impl Provider {
 			}
 		})
 	}
+}
 
-	/// Shared pipeline for Vertex Anthropic requests: parse, inject version,
-	/// apply caller-specific model handling, strip unsupported fields, serialize.
-	fn prepare_anthropic_body(
-		&self,
-		body: Vec<u8>,
-		apply: impl FnOnce(&mut Map<String, Value>),
-	) -> Result<Vec<u8>, AIError> {
-		let mut body: Map<String, Value> =
-			serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
-		body.insert(
-			"anthropic_version".to_string(),
-			Value::String(ANTHROPIC_VERSION.to_string()),
-		);
-		apply(&mut body);
-		remove_unsupported_vertex_fields(&mut body);
-		serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
-	}
+/// Shared pipeline for Vertex Anthropic requests: parse, inject version,
+/// apply caller-specific model handling, strip unsupported fields, serialize.
+fn prepare_anthropic_body(
+	body: Vec<u8>,
+	apply: impl FnOnce(&mut Map<String, Value>),
+) -> Result<Vec<u8>, AIError> {
+	let mut body: Map<String, Value> =
+		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
+	body.insert(
+		"anthropic_version".to_string(),
+		Value::String(ANTHROPIC_VERSION.to_string()),
+	);
+	apply(&mut body);
+	remove_unsupported_vertex_fields(&mut body);
+	serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
+}
 
+impl Provider {
 	pub fn get_path_for_model(
 		&self,
 		route: RouteType,

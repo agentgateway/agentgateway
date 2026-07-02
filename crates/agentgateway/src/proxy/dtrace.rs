@@ -366,14 +366,14 @@ pub enum MessageType {
 	LlmRequestDetected {
 		provider: String,
 		inputFormat: String,
-		nativeFormat: Option<String>,
+		upstreamRouteType: Option<String>,
 		requestModel: String,
 		streaming: bool,
 	},
 	LlmStreamingTranslation {
 		provider: String,
 		inputFormat: String,
-		nativeFormat: Option<String>,
+		upstreamRouteType: Option<String>,
 		streamFormat: String,
 	},
 	RequestFinished,
@@ -748,14 +748,14 @@ impl DebugTracer {
 		&self,
 		provider: String,
 		input_format: String,
-		native_format: Option<String>,
+		upstream_route_type: Option<String>,
 		request_model: String,
 		streaming: bool,
 	) {
 		self.send(MessageType::LlmRequestDetected {
 			provider,
 			inputFormat: input_format,
-			nativeFormat: native_format,
+			upstreamRouteType: upstream_route_type,
 			requestModel: request_model,
 			streaming,
 		})
@@ -764,13 +764,13 @@ impl DebugTracer {
 		&self,
 		provider: String,
 		input_format: String,
-		native_format: Option<String>,
+		upstream_route_type: Option<String>,
 		stream_format: String,
 	) {
 		self.send(MessageType::LlmStreamingTranslation {
 			provider,
 			inputFormat: input_format,
-			nativeFormat: native_format,
+			upstreamRouteType: upstream_route_type,
 			streamFormat: stream_format,
 		})
 	}
