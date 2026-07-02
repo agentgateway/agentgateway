@@ -416,7 +416,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -1082,7 +1097,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -1743,7 +1773,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -2630,7 +2675,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -3296,7 +3356,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -4240,7 +4315,21 @@ spec:
                                 (!has(self.kind) || size(self.kind) == 0 || self.kind
                                 == ''Secret'') : (has(self.kind) && size(self.kind)
                                 > 0)'
+                          workloadIdentity:
+                            description: |-
+                              Workload identity authentication settings. Uses the federated token
+                              projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                              `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                              environment variables) to authenticate. This is the recommended method
+                              when running on Azure Kubernetes Service (AKS) with Workload Identity
+                              enabled.
+                            type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: at most one of the fields in [secretRef managedIdentity
+                            workloadIdentity] may be set
+                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                            <= 1'
                       gcp:
                         description: |-
                           Google authentication method for the backend.

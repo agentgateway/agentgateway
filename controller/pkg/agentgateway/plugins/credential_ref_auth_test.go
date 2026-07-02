@@ -65,6 +65,29 @@ func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	}
 }
 
+func TestAzureAuthBuildsExplicitAndImplicitConfigs(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthBuildsExplicitAndImplicitConfigs"))
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	t.Run("workloadIdentity", func(t *testing.T) {
+		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
+			WorkloadIdentity: &agentgateway.AzureWorkloadIdentity{},
+		}, "default")
+		assert.NoError(t, err)
+		explicit := policy.GetAzure().GetExplicitConfig()
+		assert.Equal(t, explicit != nil, true)
+		assert.Equal(t, explicit.GetWorkloadIdentityCredential() != nil, true)
+	})
+
+	t.Run("implicit when no credential source is set", func(t *testing.T) {
+		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{}, "default")
+		assert.NoError(t, err)
+		assert.Equal(t, policy.GetAzure().GetImplicit() != nil, true)
+	})
+}
+
 func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

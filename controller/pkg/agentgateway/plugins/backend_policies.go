@@ -1045,8 +1045,32 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 		}, nil
 	}
 
-	errs = append(errs, errors.New("no valid Azure auth method provided"))
-	return nil, errors.Join(errs...)
+	if auth.WorkloadIdentity != nil {
+		return &api.BackendAuthPolicy{
+			Kind: &api.BackendAuthPolicy_Azure{
+				Azure: &api.Azure{
+					Kind: &api.Azure_ExplicitConfig{
+						ExplicitConfig: &api.AzureExplicitConfig{
+							CredentialSource: &api.AzureExplicitConfig_WorkloadIdentityCredential{
+								WorkloadIdentityCredential: &api.AzureWorkloadIdentityCredential{},
+							},
+						},
+					},
+				},
+			},
+		}, nil
+	}
+
+	// No explicit credential source: use implicit authentication
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_Azure{
+			Azure: &api.Azure{
+				Kind: &api.Azure_Implicit{
+					Implicit: &api.AzureImplicit{},
+				},
+			},
+		},
+	}, nil
 }
 
 func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string, errs []error) (*api.BackendAuthPolicy, error) {
