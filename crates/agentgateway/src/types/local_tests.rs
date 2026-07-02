@@ -809,6 +809,56 @@ mcp:
 }
 
 #[tokio::test]
+async fn test_local_mcp_stdio_target_policies_carried_on_target() {
+	let yaml = r#"
+mcp:
+  targets:
+  - name: everything
+    stdio:
+      cmd: echo
+    policies:
+      mcpAuthorization:
+        rules:
+        - 'mcp.tool.name == "echo"'
+"#;
+	let config = normalize_test_yaml(yaml)
+		.await
+		.expect("stdio target policies should be accepted");
+	let mcp = config
+		.backends
+		.iter()
+		.find_map(|b| match &b.backend {
+			Backend::MCP(_, m) => Some(m),
+			_ => None,
+		})
+		.expect("MCP backend");
+	let target = mcp.targets.first().expect("stdio target");
+	assert!(
+		target
+			.inline_policies
+			.iter()
+			.any(|p| matches!(p, BackendTrafficPolicy::McpAuthorization(_))),
+		"stdio target policies must be carried on the target"
+	);
+}
+
+#[tokio::test]
+async fn test_local_mcp_stdio_target_rejects_transport_policies() {
+	let yaml = r#"
+mcp:
+  targets:
+  - name: everything
+    stdio:
+      cmd: echo
+    policies:
+      backendTLS: {}
+"#;
+	normalize_test_yaml(yaml)
+		.await
+		.expect_err("transport policies on a stdio MCP target should be rejected");
+}
+
+#[tokio::test]
 async fn test_aws_config() {
 	test_config_parsing("aws").await;
 }

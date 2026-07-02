@@ -1446,7 +1446,7 @@ impl LocalBackend {
 				for (idx, t) in tgt.targets.iter().enumerate() {
 					validate_mcp_target_name(t.name.as_str()).map_err(Error::msg)?;
 					let name = strng::format!("mcp/{}/{}", name.clone(), idx);
-					let spec = match t.spec.clone() {
+					let (spec, inline_policies) = match t.spec.clone() {
 						LocalMcpTargetSpec::Sse { backend } => {
 							let (bref, path, be) = Self::process_mcp_backend(
 								local_name(name.clone()),
@@ -1458,10 +1458,13 @@ impl LocalBackend {
 							if let Some(be) = be {
 								backends.push(be);
 							}
-							McpTargetSpec::Sse(SseTargetSpec {
-								backend: bref,
-								path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
-							})
+							(
+								McpTargetSpec::Sse(SseTargetSpec {
+									backend: bref,
+									path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
+								}),
+								Vec::new(),
+							)
 						},
 						LocalMcpTargetSpec::Mcp { backend } => {
 							let (bref, path, be) = Self::process_mcp_backend(
@@ -1474,21 +1477,58 @@ impl LocalBackend {
 							if let Some(be) = be {
 								backends.push(be);
 							}
-							McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
-								backend: bref,
-								path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
-							})
+							(
+								McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
+									backend: bref,
+									path: path.ok_or_else(|| anyhow!("path is required when backend is set"))?,
+								}),
+								Vec::new(),
+							)
 						},
 						LocalMcpTargetSpec::Stdio {
 							cmd,
 							args,
 							env,
 							clear_env,
-						} => McpTargetSpec::Stdio {
-							cmd,
-							args,
-							env,
-							clear_env,
+						} => {
+							let inline_policies = if let Some(p) = t.policies.clone() {
+								let pols = LocalBackendPolicies {
+									simple: p.simple,
+									mcp_authorization: p.mcp_authorization,
+									mcp_guardrails: p.mcp_guardrails,
+									..Default::default()
+								}
+								.translate(resources)
+								.await?;
+								if let Some(bad) = pols.iter().find(|p| {
+									!matches!(
+										p,
+										BackendTrafficPolicy::McpAuthorization(_)
+											| BackendTrafficPolicy::McpGuardrails(_)
+									)
+								}) {
+									anyhow::bail!(
+										"stdio MCP target '{}': only mcpAuthorization and mcpGuardrails policies are supported, got {}",
+										t.name,
+										serde_json::to_value(bad)
+											.ok()
+											.and_then(|v| v.as_object().and_then(|o| o.keys().next().cloned()))
+											.unwrap_or_else(|| "unknown".to_string()),
+									);
+								}
+								pols
+							} else {
+								Vec::new()
+							};
+							(
+								McpTargetSpec::Stdio {
+									cmd,
+									args,
+									env,
+									clear_env,
+								},
+								inline_policies,
+							)
 						},
 						LocalMcpTargetSpec::OpenAPI { backend, schema } => {
 							let (bref, _, be) = Self::process_mcp_backend(
@@ -1503,15 +1543,19 @@ impl LocalBackend {
 							}
 
 							let openapi_schema = schema.load_openapi_schema(resources).await?;
-							McpTargetSpec::OpenAPI(OpenAPITarget {
-								backend: bref,
-								schema: openapi_schema.into(),
-							})
+							(
+								McpTargetSpec::OpenAPI(OpenAPITarget {
+									backend: bref,
+									schema: openapi_schema.into(),
+								}),
+								Vec::new(),
+							)
 						},
 					};
 					let t = McpTarget {
 						name: t.name.clone(),
 						spec,
+						inline_policies,
 					};
 					targets.push(Arc::new(t));
 				}
@@ -1606,6 +1650,8 @@ pub struct LocalMcpTarget {
 	pub name: McpTargetName,
 	#[serde(flatten)]
 	pub spec: LocalMcpTargetSpec,
+	/// Policies for this target. An MCP policy set here replaces the backend-level
+	/// equivalent for this target.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<MCPLocalBackendPolicies>,
 }

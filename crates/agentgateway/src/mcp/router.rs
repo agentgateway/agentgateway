@@ -83,9 +83,14 @@ impl App {
 						namespace: backend_group_name.namespace.as_ref(),
 						section: Some(t.name.as_ref()),
 					};
-					let backend_policies = backend_policies
-						.clone()
-						.merge(binds.sub_backend_policies(sub_backend_target, inline_pols));
+					let mut target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
+					if !t.inline_policies.is_empty() {
+						// Policies carried on the target itself (stdio targets have no sub-backend).
+						target_policies =
+							target_policies.merge(binds.inline_backend_policies(&t.inline_policies));
+					}
+					// Target-scoped policies replace their backend-level equivalents.
+					let backend_policies = backend_policies.clone().merge(target_policies);
 					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
@@ -121,6 +126,11 @@ impl App {
 		req.extensions_mut().insert(tracer);
 
 		authorization_policies.register(log.cel.ctx());
+		for t in &backends.targets {
+			if let Some(authz) = &t.backend_policies.mcp_authorization {
+				authz.register(log.cel.ctx());
+			}
+		}
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		// `response` is not valid here, since we run authz first

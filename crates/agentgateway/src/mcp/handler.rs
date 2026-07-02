@@ -20,6 +20,7 @@ use tracing::{debug, warn};
 use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
+use crate::mcp::guardrails::McpGuardrails;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
@@ -90,10 +91,12 @@ fn set_subscription_ack_id(
 
 #[derive(Debug, Clone)]
 pub struct Relay {
-	pub(crate) upstreams: Arc<upstream::UpstreamGroup>,
-	pub policies: McpAuthorizationSet,
-	pub(crate) mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
-	pub(crate) policy_client: PolicyClient,
+	upstreams: Arc<upstream::UpstreamGroup>,
+	policy_client: PolicyClient,
+
+	// backend level
+	policies: McpAuthorizationSet,
+	mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
 }
 
 pub struct RelayInputs {
@@ -126,13 +129,63 @@ impl Relay {
 			policy_client: client,
 		})
 	}
-	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
+
+	pub fn with_inputs(&self, inputs: &RelayInputs) -> Self {
 		Self {
 			upstreams: self.upstreams.clone(),
-			policies,
-			mcp_guardrails: self.mcp_guardrails.clone(),
+			policies: inputs.policies.clone(),
+			mcp_guardrails: inputs.mcp_guardrails.clone(),
 			policy_client: self.policy_client.clone(),
 		}
+	}
+
+	// prefer target-scoped guardrails otherwise use backend scoped
+	// TODO consider merging from both scopes, but for now this is
+	// consistent with how we handle mcpAuthorization
+	pub(crate) fn guardrails_for(&self, target: &str) -> Option<Arc<McpGuardrails>> {
+		match self.upstreams.effective_policies(target) {
+			Some(policies) => policies.mcp_guardrails.clone(),
+			None => self.mcp_guardrails.clone(),
+		}
+	}
+
+	// the full set of guardrails for all targets
+	pub(crate) fn guardrails_for_targets<'a>(
+		&self,
+		targets: impl IntoIterator<Item = &'a str>,
+	) -> Option<Arc<McpGuardrails>> {
+		// Dedup by pointer: targets inheriting the backend-level policy share one Arc.
+		let mut sets = targets
+			.into_iter()
+			.filter_map(|target| self.guardrails_for(target))
+			.unique_by(Arc::as_ptr)
+			.collect::<Vec<_>>();
+		match sets.len() {
+			0 | 1 => sets.pop(),
+			_ => Some(Arc::new(McpGuardrails {
+				processors: sets
+					.iter()
+					.flat_map(|s| s.processors.iter().cloned())
+					.collect(),
+			})),
+		}
+	}
+
+	pub(crate) fn validate(&self, res: &rbac::ResourceType, cel: &CelExecWrapper) -> bool {
+		Self::validate_with_policies(&self.upstreams, &self.policies, res, cel)
+	}
+
+	fn validate_with_policies(
+		upstreams: &upstream::UpstreamGroup,
+		fallback: &McpAuthorizationSet,
+		res: &rbac::ResourceType,
+		cel: &CelExecWrapper,
+	) -> bool {
+		let policies = upstreams
+			.effective_policies(res.target())
+			.and_then(|policies| policies.mcp_authorization.as_ref())
+			.unwrap_or(fallback);
+		policies.validate(res, cel)
 	}
 
 	fn rewrite_outbound_server_messages(&self, target: &str, stream: Messages) -> Messages {
@@ -241,18 +294,18 @@ impl Relay {
 
 	fn build_guardrails_ctx(
 		&self,
+		ext: Arc<crate::mcp::guardrails::McpGuardrails>,
 		r: &JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
 		backends: Vec<String>,
 	) -> Option<GuardrailsCtx> {
-		let ext = self.mcp_guardrails.as_ref()?;
 		let method = r.request.method().to_string();
 		if !ext.runs_response(&method) {
 			// we only need an GuardrailsCtx for response-phase guardrails hooks
 			return None;
 		}
 		Some(GuardrailsCtx {
-			ext: ext.clone(),
+			ext,
 			method,
 			backends,
 			client: self.policy_client.clone(),
@@ -262,13 +315,11 @@ impl Relay {
 
 	pub(crate) async fn run_guardrails_call_request<P: serde::de::DeserializeOwned>(
 		&self,
+		ext: &Arc<crate::mcp::guardrails::McpGuardrails>,
 		ext_ctx: &mut crate::mcp::guardrails::CallRequestCtx<'_>,
 		ctx: &mut IncomingRequestContext,
 	) -> Result<Option<P>, UpstreamError> {
 		use crate::mcp::guardrails::Outcome;
-		let Some(ext) = self.mcp_guardrails.as_ref() else {
-			return Ok(None);
-		};
 		let method = ext_ctx.method;
 		match crate::mcp::guardrails::run_call_request::<P>(ext, ext_ctx, ctx, &self.policy_client)
 			.await
@@ -300,7 +351,7 @@ impl Relay {
 	where
 		P: serde::Serialize + serde::de::DeserializeOwned,
 	{
-		let Some(ext) = self.mcp_guardrails.as_ref() else {
+		let Some(ext) = self.guardrails_for(backend) else {
 			return Ok(());
 		};
 		// Skip the (potentially expensive) params serialization when this method
@@ -313,6 +364,7 @@ impl Relay {
 		let backends = [backend.to_string()];
 		if let Some(p) = self
 			.run_guardrails_call_request::<P>(
+				&ext,
 				&mut crate::mcp::guardrails::CallRequestCtx {
 					backends: &backends,
 					method,
@@ -328,6 +380,7 @@ impl Relay {
 	}
 
 	pub fn merge_tools(&self) -> Box<MergeFn> {
+		let upstreams = self.upstreams.clone();
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
@@ -342,7 +395,9 @@ impl Relay {
 						.into_iter()
 						// Apply authorization policies, filtering tools that are not allowed.
 						.filter(|t| {
-							policies.validate(
+							Self::validate_with_policies(
+								&upstreams,
+								&policies,
 								&rbac::ResourceType::Tool(rbac::ResourceId::new(
 									server_name.to_string(),
 									t.name.to_string(),
@@ -451,6 +506,7 @@ impl Relay {
 	}
 
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
+		let upstreams = self.upstreams.clone();
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
@@ -464,7 +520,9 @@ impl Relay {
 					prompts
 						.into_iter()
 						.filter(|p| {
-							policies.validate(
+							Self::validate_with_policies(
+								&upstreams,
+								&policies,
 								&rbac::ResourceType::Prompt(rbac::ResourceId::new(
 									server_name.to_string(),
 									p.name.to_string(),
@@ -491,6 +549,7 @@ impl Relay {
 		})
 	}
 	pub fn merge_resources(&self) -> Box<MergeFn> {
+		let upstreams = self.upstreams.clone();
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
@@ -504,7 +563,9 @@ impl Relay {
 					resources
 						.into_iter()
 						.filter(|r| {
-							policies.validate(
+							Self::validate_with_policies(
+								&upstreams,
+								&policies,
 								&rbac::ResourceType::Resource(rbac::ResourceId::new(
 									server_name.to_string(),
 									r.uri.to_string(),
@@ -532,6 +593,7 @@ impl Relay {
 		})
 	}
 	pub fn merge_resource_templates(&self) -> Box<MergeFn> {
+		let upstreams = self.upstreams.clone();
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
@@ -545,7 +607,9 @@ impl Relay {
 					resource_templates
 						.into_iter()
 						.filter(|rt| {
-							policies.validate(
+							Self::validate_with_policies(
+								&upstreams,
+								&policies,
 								&rbac::ResourceType::Resource(rbac::ResourceId::new(
 									server_name.to_string(),
 									rt.uri_template.to_string(),
@@ -596,7 +660,9 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
+		let guardrails = self
+			.guardrails_for(service_name)
+			.and_then(|ext| self.build_guardrails_ctx(ext, &r, &ctx, vec![service_name.to_string()]));
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(us.generic_stream(r, &ctx).assert_size::<{ 3 * 1024 }>()).await?,
@@ -754,26 +820,23 @@ impl Relay {
 			));
 		}
 
-		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
-		// fans out to (just the one name when there is a single backend).
-		let service_names = self.mcp_guardrails.as_ref().map(|_| {
-			selected_upstreams
-				.iter()
-				.map(|(n, _)| n.to_string())
-				.collect::<Vec<_>>()
-		});
+		let service_names = selected_upstreams
+			.iter()
+			.map(|(name, _)| name.to_string())
+			.collect::<Vec<_>>();
+		let guardrails = self.guardrails_for_targets(service_names.iter().map(String::as_str));
 
-		// Request-phase hook runs once for the whole client call. params is None for
-		// fanout (no body to rewrite); header/metadata side effects apply to the single
+		// Request-phase hook runs once for the whole client call. params is None
+		// for fanout (no body to rewrite); header/metadata side effects apply to the single
 		// shared ctx forwarded to every upstream. A reject fails the whole call.
-		if let Some(ext) = self.mcp_guardrails.as_ref() {
+		if let Some(ext) = guardrails.as_ref() {
 			// params is None, so mutations are discarded unparsed and the params
 			// type is never used.
 			let outcome = Box::pin(
 				crate::mcp::guardrails::run_call_request::<serde_json::Value>(
 					ext,
 					&mut crate::mcp::guardrails::CallRequestCtx {
-						backends: service_names.as_deref().unwrap_or_default(),
+						backends: service_names.as_slice(),
 						method,
 						params: None,
 					},
@@ -836,7 +899,7 @@ impl Relay {
 			mergestream::MergeStream::new(streams, id.clone(), merge, cel, self.upstreams.failure_mode);
 
 		// Response-phase hook runs once on the merged (muxed) result.
-		match service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)) {
+		match guardrails.and_then(|ext| self.build_guardrails_ctx(ext, &r, &ctx, service_names)) {
 			Some(guardrails) => messages_to_response(
 				id,
 				wrap_with_guardrails(ms, guardrails),

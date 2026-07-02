@@ -272,7 +272,7 @@ impl BackendPolicies {
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
-			// TODO: is this right??
+			// TODO: is this right?? replace instead of merge..
 			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			mcp_guardrails: other.mcp_guardrails.or(self.mcp_guardrails),

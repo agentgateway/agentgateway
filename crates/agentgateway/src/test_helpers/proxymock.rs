@@ -720,6 +720,7 @@ impl TestBind {
 							path: "/sse".to_string(),
 						})
 					},
+					inline_policies: Vec::new(),
 				})],
 				stateful,
 				always_use_prefix: false,
@@ -783,6 +784,7 @@ impl TestBind {
 									path: "/sse".to_string(),
 								})
 							},
+							inline_policies: Vec::new(),
 						})
 					})
 					.collect_vec(),

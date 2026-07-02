@@ -68,6 +68,14 @@ pub enum ResourceType {
 	Resource(ResourceId),
 }
 
+impl ResourceType {
+	pub fn target(&self) -> &str {
+		match self {
+			ResourceType::Tool(t) | ResourceType::Prompt(t) | ResourceType::Resource(t) => t.target(),
+		}
+	}
+}
+
 impl cel::DynamicType for ResourceType {
 	fn materialize(&self) -> Value<'_> {
 		let (n, t) = match self {
