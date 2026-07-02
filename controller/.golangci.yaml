@@ -102,9 +102,11 @@ linters:
               useProtobuf: Forbid
               usePatchStrategy: Ignore
     depguard:
-      deny:
-        - pkg: sort
-          desc: Should be replaced with slices package
+      rules:
+        main:
+          deny:
+            - pkg: sort
+              desc: Should be replaced with slices package
     forbidigo:
       forbid:
         - pattern: anypb.New
