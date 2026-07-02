@@ -1952,6 +1952,69 @@ fn custom_provider(format: custom::ProviderFormat) -> AIProvider {
 	})
 }
 
+#[tokio::test]
+async fn read_body_decodes_gzip_request_before_json_parse() {
+	// Regression: a gzip-compressed request body (Content-Encoding: gzip) must be
+	// decompressed before the JSON parse. Clients such as the Claude Code harness
+	// gzip request bodies above a size threshold; previously the reader handed the
+	// raw compressed bytes to serde_json and failed with a misleading
+	// "LLM request body must be valid JSON" 400, even for tiny payloads.
+	let provider = custom_provider(custom::ProviderFormat::Messages);
+
+	let plaintext =
+		br#"{"model":"claude-sonnet-4-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}"#;
+	let gz = crate::http::compression::encode_body(plaintext, "gzip")
+		.await
+		.expect("gzip encode");
+	// The payload is genuinely compressed (gzip magic) and tiny, so this exercises
+	// content-encoding decoding rather than the buffer-size path.
+	assert_eq!(&gz[..2], &[0x1f, 0x8b]);
+
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.header(::http::header::CONTENT_ENCODING, "gzip")
+		.body(Body::from(gz.to_vec()))
+		.unwrap();
+
+	let (parts, parsed) = provider
+		.read_body_and_default_model::<types::messages::Request>(None, req, &mut None)
+		.await
+		.expect("gzip request body should decode and parse as JSON");
+
+	assert_eq!(parsed.model.as_deref(), Some("claude-sonnet-4-5"));
+	// The encoding header is stripped now that the body is plaintext.
+	assert!(
+		parts
+			.headers
+			.get(::http::header::CONTENT_ENCODING)
+			.is_none()
+	);
+}
+
+#[tokio::test]
+async fn read_body_still_parses_plaintext_request() {
+	// A plaintext (unencoded) request body must continue to parse unchanged — the
+	// decompression path is a no-op when no Content-Encoding is present.
+	let provider = custom_provider(custom::ProviderFormat::Messages);
+
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{"model":"claude-sonnet-4-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let (_parts, parsed) = provider
+		.read_body_and_default_model::<types::messages::Request>(None, req, &mut None)
+		.await
+		.expect("plaintext request body should parse as JSON");
+
+	assert_eq!(parsed.model.as_deref(), Some("claude-sonnet-4-5"));
+}
+
 #[test]
 fn provider_capabilities_select_native_formats() {
 	use custom::ProviderFormat::{
