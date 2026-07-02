@@ -8392,10 +8392,10 @@ spec:
                                         `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
                                         body exceeds that limit. Defaults to `FullDuplexStreamed`.
                                       enum:
-                                      - None
                                       - Buffered
                                       - BufferedPartial
                                       - FullDuplexStreamed
+                                      - None
                                       type: string
                                     requestHeaderMode:
                                       default: Send
@@ -8412,8 +8412,8 @@ spec:
                                         Whether request trailers are sent to the external processor.
                                         Defaults to `Send`.
                                       enum:
-                                      - Skip
                                       - Send
+                                      - Skip
                                       type: string
                                     responseBodyMode:
                                       default: FullDuplexStreamed
@@ -8423,10 +8423,10 @@ spec:
                                         `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
                                         body exceeds that limit. Defaults to `FullDuplexStreamed`.
                                       enum:
-                                      - None
                                       - Buffered
                                       - BufferedPartial
                                       - FullDuplexStreamed
+                                      - None
                                       type: string
                                     responseHeaderMode:
                                       default: Send
@@ -8443,8 +8443,8 @@ spec:
                                         Whether response trailers are sent to the external processor.
                                         Defaults to `Send`.
                                       enum:
-                                      - Skip
                                       - Send
+                                      - Skip
                                       type: string
                                   type: object
                                 requestAttributes:
@@ -8519,10 +8519,10 @@ spec:
                               `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
                               body exceeds that limit. Defaults to `FullDuplexStreamed`.
                             enum:
-                            - None
                             - Buffered
                             - BufferedPartial
                             - FullDuplexStreamed
+                            - None
                             type: string
                           requestHeaderMode:
                             default: Send
@@ -8539,8 +8539,8 @@ spec:
                               Whether request trailers are sent to the external processor.
                               Defaults to `Send`.
                             enum:
-                            - Skip
                             - Send
+                            - Skip
                             type: string
                           responseBodyMode:
                             default: FullDuplexStreamed
@@ -8550,10 +8550,10 @@ spec:
                               `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
                               body exceeds that limit. Defaults to `FullDuplexStreamed`.
                             enum:
-                            - None
                             - Buffered
                             - BufferedPartial
                             - FullDuplexStreamed
+                            - None
                             type: string
                           responseHeaderMode:
                             default: Send
@@ -8570,8 +8570,8 @@ spec:
                               Whether response trailers are sent to the external processor.
                               Defaults to `Send`.
                             enum:
-                            - Skip
                             - Send
+                            - Skip
                             type: string
                         type: object
                       requestAttributes:

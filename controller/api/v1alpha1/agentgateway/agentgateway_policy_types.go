@@ -552,7 +552,7 @@ type FrontendProxyProtocol struct {
 	Mode ProxyProtocolMode `json:"mode,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Deny;Route;Tunnel
+// +k8s:enum
 type FrontendConnectMode string
 
 const (
@@ -1059,7 +1059,6 @@ type JWTMCPConfig struct {
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata,omitempty"`
 
 	// Identity provider to use for MCP authentication flows.
-	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	Provider *McpIDP `json:"provider,omitempty"`
 
@@ -1657,7 +1656,6 @@ type MCPAuthentication struct {
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata"`
 
 	// Identity provider to use for authentication.
-	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	McpIDP *McpIDP `json:"provider,omitempty"`
 
@@ -1888,7 +1886,7 @@ type HeaderTransformation struct {
 }
 
 // How HTTP bodies are delivered to the external processor.
-// +kubebuilder:validation:Enum=None;Buffered;BufferedPartial;FullDuplexStreamed
+// +k8s:enum
 type BodySendMode string
 
 const (
@@ -1905,7 +1903,7 @@ const (
 )
 
 // Whether HTTP headers are delivered to the external processor.
-// +kubebuilder:validation:Enum=Send;Skip
+// +k8s:enum
 type HeaderSendMode string
 
 const (
@@ -1916,7 +1914,7 @@ const (
 )
 
 // Whether HTTP trailers are delivered to the external processor.
-// +kubebuilder:validation:Enum=Skip;Send
+// +k8s:enum
 type TrailerSendMode string
 
 const (
