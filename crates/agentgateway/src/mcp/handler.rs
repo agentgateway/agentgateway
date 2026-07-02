@@ -149,28 +149,6 @@ impl Relay {
 		}
 	}
 
-	// the full set of guardrails for all targets
-	pub(crate) fn guardrails_for_targets<'a>(
-		&self,
-		targets: impl IntoIterator<Item = &'a str>,
-	) -> Option<Arc<McpGuardrails>> {
-		// Dedup by pointer: targets inheriting the backend-level policy share one Arc.
-		let mut sets = targets
-			.into_iter()
-			.filter_map(|target| self.guardrails_for(target))
-			.unique_by(Arc::as_ptr)
-			.collect::<Vec<_>>();
-		match sets.len() {
-			0 | 1 => sets.pop(),
-			_ => Some(Arc::new(McpGuardrails {
-				processors: sets
-					.iter()
-					.flat_map(|s| s.processors.iter().cloned())
-					.collect(),
-			})),
-		}
-	}
-
 	pub(crate) fn validate(&self, res: &rbac::ResourceType, cel: &CelExecWrapper) -> bool {
 		Self::validate_with_policies(&self.upstreams, &self.policies, res, cel)
 	}
@@ -824,7 +802,13 @@ impl Relay {
 			.iter()
 			.map(|(name, _)| name.to_string())
 			.collect::<Vec<_>>();
-		let guardrails = self.guardrails_for_targets(service_names.iter().map(String::as_str));
+		// A single participant uses its effective set; multi-target fanout uses the
+		// precomputed union over all configured targets (a superset of the participants
+		// if some targets failed to initialize under failOpen).
+		let guardrails = match service_names.as_slice() {
+			[single] => self.guardrails_for(single),
+			_ => self.upstreams.fanout_guardrails.clone(),
+		};
 
 		// Request-phase hook runs once for the whole client call. params is None
 		// for fanout (no body to rewrite); header/metadata side effects apply to the single
