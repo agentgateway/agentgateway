@@ -18,12 +18,13 @@ pub fn is_runtime_shutdown(e: &Error) -> bool {
 
 pub struct WatchedFiles {
 	paths: Vec<PathBuf>,
-	changes: mpsc::Receiver<()>,
+	changes: mpsc::Receiver<FileWatchChange>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WatchFilesOptions {
 	reload_on_disappearance: bool,
+	close_on_removal: bool,
 }
 
 impl WatchFilesOptions {
@@ -31,6 +32,15 @@ impl WatchFilesOptions {
 		self.reload_on_disappearance = reload;
 		self
 	}
+
+	pub fn close_on_removal(mut self, close: bool) -> Self {
+		self.close_on_removal = close;
+		self
+	}
+}
+
+struct FileWatchChange {
+	invalidated: bool,
 }
 
 impl WatchedFiles {
@@ -39,6 +49,12 @@ impl WatchedFiles {
 	}
 	pub async fn changed(&mut self) -> bool {
 		self.changes.recv().await.is_some()
+	}
+
+	/// Waits for the next reload-worthy change and reports whether the underlying
+	/// watch was invalidated by file removal/replacement.
+	pub async fn changed_invalidated(&mut self) -> Option<bool> {
+		self.changes.recv().await.map(|change| change.invalidated)
 	}
 }
 
@@ -62,7 +78,7 @@ pub fn watch_files_with_options(
 
 	let paths = paths
 		.iter()
-		.map(absolute)
+		.map(|path| normalize_watch_path(path))
 		.collect::<std::io::Result<Vec<_>>>()?;
 	if paths.is_empty() {
 		bail!("no files supplied to watch");
@@ -110,6 +126,8 @@ pub fn watch_files_with_options(
 			match events {
 				Ok(events) => {
 					let current = resolve_targets(&paths);
+					let invalidated = options.close_on_removal
+						&& batch_invalidates_watch(events.iter().map(|e| &**e), &paths, &targets);
 					let triggered = batch_triggers_reload(
 						events.iter().map(|e| &**e),
 						&paths,
@@ -118,7 +136,15 @@ pub fn watch_files_with_options(
 						options,
 					);
 					targets = current;
-					if triggered && change_tx.send(()).await.is_err() {
+					if (triggered || invalidated)
+						&& change_tx
+							.send(FileWatchChange { invalidated })
+							.await
+							.is_err()
+					{
+						break;
+					}
+					if invalidated {
 						break;
 					}
 				},
@@ -136,7 +162,7 @@ pub fn watch_files_with_options(
 
 fn watch_targets_for_path(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
 	let mut targets = vec![path.to_path_buf()];
-	if requires_parent_watch(path)? {
+	if should_watch_parent(path)? {
 		let parent = path.parent().ok_or_else(|| {
 			anyhow!(
 				"failed to get the parent of watched file {}",
@@ -148,7 +174,7 @@ fn watch_targets_for_path(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
 	Ok(targets)
 }
 
-fn requires_parent_watch(path: &Path) -> anyhow::Result<bool> {
+fn should_watch_parent(path: &Path) -> anyhow::Result<bool> {
 	let meta = match fs_err::symlink_metadata(path) {
 		Ok(meta) => meta,
 		Err(e) if e.kind() == ErrorKind::NotFound => return Ok(true),
@@ -189,6 +215,27 @@ fn has_kubernetes_projection_component(path: &Path) -> bool {
 			.to_str()
 			.is_some_and(|name| name == "..data" || name.starts_with("..20"))
 	})
+}
+
+fn normalize_watch_path(path: &Path) -> std::io::Result<PathBuf> {
+	match fs_err::symlink_metadata(path) {
+		Ok(meta) if meta.file_type().is_symlink() => absolute(path),
+		Ok(_) => fs_err::canonicalize(path),
+		Err(e) if e.kind() == ErrorKind::NotFound => {
+			let absolute_path = absolute(path)?;
+			let Some(parent) = absolute_path.parent() else {
+				return Ok(absolute_path);
+			};
+			let Some(file_name) = absolute_path.file_name() else {
+				return Ok(absolute_path);
+			};
+			match fs_err::canonicalize(parent) {
+				Ok(parent) => Ok(parent.join(file_name)),
+				Err(_) => Ok(absolute_path),
+			}
+		},
+		Err(e) => Err(e),
+	}
 }
 
 fn notify_error_reason(e: &notify::Error) -> String {
@@ -235,14 +282,59 @@ fn batch_triggers_reload<'a>(
 	target_rotated
 		|| events
 			.into_iter()
-			.any(|event| should_reload(event, abspaths, current_targets))
+			.any(|event| should_reload(event, abspaths, previous_targets, current_targets))
 }
 
-fn should_reload(event: &notify::Event, abspaths: &[PathBuf], targets: &[Option<PathBuf>]) -> bool {
-	if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+fn batch_invalidates_watch<'a>(
+	events: impl IntoIterator<Item = &'a notify::Event>,
+	abspaths: &[PathBuf],
+	previous_targets: &[Option<PathBuf>],
+) -> bool {
+	// File removal or rename can invalidate an OS file watch even if the replacement
+	// exists by debounce time. Callers can use this to close and re-register the watch.
+	events.into_iter().any(|event| {
+		matches!(
+			event.kind,
+			EventKind::Remove(_) | EventKind::Modify(notify::event::ModifyKind::Name(_))
+		) && event.paths.iter().any(|path| {
+			abspaths
+				.iter()
+				.zip(previous_targets.iter())
+				.any(|(abspath, previous)| abspath == path || previous.as_deref() == Some(path.as_path()))
+		})
+	})
+}
+
+fn should_reload(
+	event: &notify::Event,
+	abspaths: &[PathBuf],
+	previous_targets: &[Option<PathBuf>],
+	current_targets: &[Option<PathBuf>],
+) -> bool {
+	if matches!(
+		event.kind,
+		EventKind::Modify(_)
+			| EventKind::Create(_)
+			| EventKind::Access(notify::event::AccessKind::Close(
+				notify::event::AccessMode::Write
+			))
+	) {
 		return event.paths.iter().any(|path| {
 			abspaths.iter().any(|abspath| abspath == path)
-				|| targets.iter().any(|t| t.as_deref() == Some(path.as_path()))
+				|| current_targets
+					.iter()
+					.any(|t| t.as_deref() == Some(path.as_path()))
+		});
+	}
+	if matches!(event.kind, EventKind::Remove(_)) {
+		return event.paths.iter().any(|path| {
+			abspaths
+				.iter()
+				.zip(previous_targets.iter())
+				.zip(current_targets.iter())
+				.any(|((abspath, previous), current)| {
+					current.is_some() && (abspath == path || previous.as_deref() == Some(path.as_path()))
+				})
 		});
 	}
 	false
@@ -250,7 +342,7 @@ fn should_reload(event: &notify::Event, abspaths: &[PathBuf], targets: &[Option<
 
 #[cfg(test)]
 mod tests {
-	use notify::event::{AccessKind, AccessMode, CreateKind, DataChange, ModifyKind};
+	use notify::event::{AccessKind, AccessMode, CreateKind, DataChange, ModifyKind, RenameMode};
 
 	use super::*;
 
@@ -261,6 +353,11 @@ mod tests {
 
 	fn open(path: &str) -> notify::Event {
 		notify::Event::new(EventKind::Access(AccessKind::Open(AccessMode::Any)))
+			.add_path(PathBuf::from(path))
+	}
+
+	fn close_write(path: &str) -> notify::Event {
+		notify::Event::new(EventKind::Access(AccessKind::Close(AccessMode::Write)))
 			.add_path(PathBuf::from(path))
 	}
 
@@ -330,6 +427,7 @@ mod tests {
 		assert!(should_reload(
 			&event,
 			std::slice::from_ref(&file),
+			&[Some(target.clone())],
 			&[Some(target)]
 		));
 	}
@@ -339,7 +437,25 @@ mod tests {
 		let file = PathBuf::from("/cfg/price.json");
 		let target = PathBuf::from("/cfg/..data/price.json");
 		let event = modify("/cfg/..data/price.json");
-		assert!(should_reload(&event, &[file], &[Some(target)]));
+		assert!(should_reload(
+			&event,
+			&[file],
+			&[Some(target.clone())],
+			&[Some(target)]
+		));
+	}
+
+	#[test]
+	fn reloads_on_access_close_write_events() {
+		let file = PathBuf::from("/cfg/price.json");
+		let target = file.clone();
+		let event = close_write("/cfg/price.json");
+		assert!(should_reload(
+			&event,
+			std::slice::from_ref(&file),
+			&[Some(target.clone())],
+			&[Some(target)]
+		));
 	}
 
 	#[test]
@@ -351,6 +467,7 @@ mod tests {
 		assert!(!should_reload(
 			&event,
 			std::slice::from_ref(&file),
+			&[Some(target.clone())],
 			&[Some(target)]
 		));
 	}
@@ -363,7 +480,34 @@ mod tests {
 		assert!(!should_reload(
 			&event,
 			std::slice::from_ref(&file),
+			&[Some(target.clone())],
 			&[Some(target)]
+		));
+	}
+
+	#[test]
+	fn reloads_when_vim_replaces_watched_file_before_debounce() {
+		let file = PathBuf::from("/cfg/price.json");
+		let event =
+			notify::Event::new(EventKind::Remove(notify::event::RemoveKind::File)).add_path(file.clone());
+		assert!(batch_triggers_reload(
+			[&event],
+			std::slice::from_ref(&file),
+			&[Some(file.clone())],
+			&[Some(file.clone())],
+			WatchFilesOptions::default()
+		));
+	}
+
+	#[test]
+	fn rename_of_watched_file_invalidates_watch() {
+		let file = PathBuf::from("/cfg/price.json");
+		let event = notify::Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Any)))
+			.add_path(file.clone());
+		assert!(batch_invalidates_watch(
+			[&event],
+			std::slice::from_ref(&file),
+			&[Some(file.clone())]
 		));
 	}
 

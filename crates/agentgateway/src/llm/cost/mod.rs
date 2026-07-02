@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
 use super::{CacheTokenConvention, LLMInfo, LLMResponse};
-use crate::ModelCatalogSource;
+use crate::{ModelCatalogSource, apply, schema};
 
 mod catalog;
 pub mod refresh;
@@ -300,9 +300,8 @@ impl CostProjection {
 	}
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, ::cel::DynamicType)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[apply(schema!)]
+#[derive(Copy, Default, ::cel::DynamicType)]
 pub struct CostRates {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input: Option<f64>,
@@ -359,9 +358,8 @@ impl Breakdown {
 	}
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, ::cel::DynamicType)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[apply(schema!)]
+#[derive(Copy, Default, ::cel::DynamicType)]
 pub struct CostBreakdown {
 	pub total: f64,
 	pub input: f64,

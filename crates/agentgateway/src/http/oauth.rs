@@ -1,8 +1,9 @@
-#[derive(
-	Debug, Clone, Copy, serde::Serialize, serde::Deserialize, Default, PartialEq, Eq, PartialOrd, Ord,
-)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+use macro_rules_attribute::apply;
+
+use crate::schema;
+
+#[apply(schema!)]
+#[derive(Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TokenEndpointAuth {
 	#[default]
 	ClientSecretBasic,

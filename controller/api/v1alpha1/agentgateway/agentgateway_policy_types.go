@@ -57,8 +57,12 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.mcp) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'AgentgatewayBackend' && has(t.sectionName))))",message="backend.mcp may not target an AgentgatewayBackend sectionName"
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.ai) || ((!has(self.targetRefs) || !self.targetRefs.exists(t, t.kind == 'Service')) && (!has(self.targetSelectors) || !self.targetSelectors.exists(t, t.kind == 'Service')))",message="backend.ai may not be used with a Service target"
 // +kubebuilder:validation:XValidation:rule="!(has(self.traffic) && has(self.traffic.jwtAuthentication) && has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))",message="traffic.jwtAuthentication may not be used with backend.mcp.authentication in the same policy"
-// +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind == 'Gateway' && !has(t.sectionName)) : true",message="the 'frontend' field can only target a Gateway"
-// +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind == 'Gateway' && !has(t.sectionName)) : true",message="the 'frontend' field can only target a Gateway"
+// +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind == 'Gateway') : true",message="the 'frontend' field can only target a Gateway"
+// +kubebuilder:validation:XValidation:rule="has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind == 'Gateway') : true",message="the 'frontend' field can only target a Gateway"
+// +kubebuilder:validation:XValidation:rule="has(self.frontend) && (has(self.frontend.tcp) || has(self.frontend.networkAuthorization) || has(self.frontend.tls) || has(self.frontend.http) || has(self.frontend.proxyProtocol) || has(self.frontend.connect)) && has(self.targetRefs) ? self.targetRefs.all(t, !has(t.sectionName)) : true",message="frontend tcp, networkAuthorization, tls, http, proxyProtocol, and connect policies may only target a Gateway or port, not a listener (sectionName)"
+// +kubebuilder:validation:XValidation:rule="has(self.frontend) && (has(self.frontend.tcp) || has(self.frontend.networkAuthorization) || has(self.frontend.tls) || has(self.frontend.http) || has(self.frontend.proxyProtocol) || has(self.frontend.connect)) && has(self.targetSelectors) ? self.targetSelectors.all(t, !has(t.sectionName)) : true",message="frontend tcp, networkAuthorization, tls, http, proxyProtocol, and connect policies may only target a Gateway or port, not a listener (sectionName)"
+// +kubebuilder:validation:XValidation:rule="has(self.targetRefs) && self.targetRefs.exists(t, has(t.port)) ? (has(self.frontend) && !has(self.traffic) && !has(self.backend)) : true",message="port may only be set on frontend-only policies (not traffic or backend)"
+// +kubebuilder:validation:XValidation:rule="has(self.targetSelectors) && self.targetSelectors.exists(t, has(t.port)) ? (has(self.frontend) && !has(self.traffic) && !has(self.backend)) : true",message="port may only be set on frontend-only policies (not traffic or backend)"
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet', 'InferencePool']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, HTTPRoute, or InferencePool"
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet', 'InferencePool']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, HTTPRoute, or InferencePool"
 // +kubebuilder:validation:XValidation:rule="has(self.targetRefs) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetRefs.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
@@ -1277,6 +1281,10 @@ type BufferBody struct {
 	// +optional
 	// If unset, defaults to the global proxy setting, which defaults to 2Mi.
 	MaxBytes *ByteSize `json:"maxBytes,omitempty"`
+	// Behavior when the request or response body exceeds the buffer limit.
+	// +optional
+	// If unset, defaults to FailClosed, returning 413 for oversized requests and 502 for oversized responses.
+	FailureMode FailureMode `json:"failureMode,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -1975,6 +1983,28 @@ type ExtProc struct {
 	// How request and response phases are sent to ext_proc.
 	// +optional
 	ProcessingOptions *ProcessingOptions `json:"processingOptions,omitempty"`
+
+	// Metadata to send to the external processor in the
+	// `metadata_context.filter_metadata` field of the ProcessingRequest.
+	// Keyed by metadata namespace, then by key within that namespace; values are
+	// CEL expressions evaluated per request.
+	// +optional
+	// +kubebuilder:validation:MaxProperties=64
+	MetadataContext map[string]map[string]CELExpression `json:"metadataContext,omitempty"`
+
+	// Request attributes to send to the external processor in the request
+	// `attributes` field of the ProcessingRequest. Values are CEL expressions
+	// evaluated per request.
+	// +optional
+	// +kubebuilder:validation:MaxProperties=64
+	RequestAttributes map[string]CELExpression `json:"requestAttributes,omitempty"`
+
+	// Response attributes to send to the external processor in the response
+	// `attributes` field of the ProcessingRequest. Values are CEL expressions
+	// evaluated per response.
+	// +optional
+	// +kubebuilder:validation:MaxProperties=64
+	ResponseAttributes map[string]CELExpression `json:"responseAttributes,omitempty"`
 }
 
 type ExtProcConditional struct {
@@ -2496,6 +2526,17 @@ type OtlpAccessLog struct {
 	// Supported types: `Service` and `AgentgatewayBackend`.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// CEL expression used to filter OTLP logs. A log
+	// will only be exported if the expression evaluates to `true`.
+	// If unset, the parent access log filter is used.
+	// +optional
+	Filter *CELExpression `json:"filter,omitempty"`
+
+	// Customizations to the key-value pairs exported over OTLP.
+	// If unset, the parent access log attributes are used.
+	// +optional
+	Attributes *LogTracingAttributes `json:"attributes,omitempty"`
 
 	// OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC

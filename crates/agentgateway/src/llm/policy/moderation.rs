@@ -4,7 +4,7 @@ use itertools::Itertools;
 use crate::http::jwt::Claims;
 use crate::json;
 use crate::llm::RequestType;
-use crate::llm::policy::Moderation;
+use crate::llm::policy::{Moderation, with_default_timeout};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
@@ -48,7 +48,7 @@ pub async fn send_request(
 	);
 	let resp = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-		.call_with_explicit_policies_list(req, mock_be, pols)
+		.call_with_explicit_policies_list(with_default_timeout(req), mock_be, pols)
 		.await?;
 	let resp: async_openai::types::moderations::CreateModerationResponse =
 		json::from_response_body(resp).await?;

@@ -3,7 +3,6 @@ package helm
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -89,7 +88,7 @@ func TestImageTagVPrefix(t *testing.T) {
 					args = append(args, "--set", setValue)
 				}
 
-				helmCmd := exec.Command("helm", args...)
+				helmCmd := helmCommand(t, args...)
 				var output bytes.Buffer
 				var stderr bytes.Buffer
 				helmCmd.Stdout = &output
@@ -370,7 +369,7 @@ func TestHelmChartTemplate(t *testing.T) {
 					args = append(args, "-f", valuesFile.Name())
 				}
 
-				helmCmd := exec.Command("helm", args...)
+				helmCmd := helmCommand(t, args...)
 				var output bytes.Buffer
 				var stderr bytes.Buffer
 				helmCmd.Stdout = &output

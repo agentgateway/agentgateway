@@ -120,6 +120,17 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	if !lp.remove.is_empty() {
 		log.cel.fields.remove = lp.remove.clone();
 	}
+	if let Some(otlp) = &lp.otlp {
+		log.cel.otlp_filter = otlp.filter.clone().or_else(|| log.cel.filter.clone());
+		log.cel.otlp_fields = if let Some(fields) = &otlp.fields {
+			log::LoggingFields {
+				add: fields.add.clone(),
+				remove: fields.remove.clone(),
+			}
+		} else {
+			log.cel.fields.clone()
+		};
+	}
 	if let Some(database) = &lp.database
 		&& !database.add.is_empty()
 	{
@@ -549,6 +560,7 @@ impl HTTPProxy {
 			.clone();
 		connection.copy::<TLSConnectionInfo>(req.extensions_mut());
 		connection.copy::<cel::SourceContext>(req.extensions_mut());
+		connection.copy::<cel::DestinationContext>(req.extensions_mut());
 		connection.copy::<WaypointService>(req.extensions_mut());
 		req
 			.extensions_mut()
@@ -3404,7 +3416,12 @@ mod tests {
 		.expect("local AI backend");
 		let backend = Backend::AI(
 			ResourceName::new("llm".into(), "".into()),
-			local_backend.translate().expect("translated backend"),
+			local_backend
+				.translate(&crate::resource_manager::ResourceFetcher::direct(
+					bind.pi.upstream.clone(),
+				))
+				.await
+				.expect("translated backend"),
 		);
 		bind
 			.pi

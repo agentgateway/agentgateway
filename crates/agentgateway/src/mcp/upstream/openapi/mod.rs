@@ -657,36 +657,40 @@ impl Handler {
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
 				id,
 				ListPromptsResult {
-					meta: None,
-					next_cursor: None,
-					prompts: vec![],
-				},
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
 			),
 			ClientRequest::ListResourcesRequest(_) => Messages::from_result(
 				id,
 				ListResourcesResult {
-					meta: None,
-					next_cursor: None,
-					resources: vec![],
-				},
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
 			),
 			ClientRequest::ListResourceTemplatesRequest(_) => Messages::from_result(
 				id,
 				ListResourceTemplatesResult {
-					meta: None,
-					next_cursor: None,
-					resource_templates: vec![],
-				},
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
+			),
+			ClientRequest::DiscoverRequest(_) => Messages::from_result(
+				id,
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::builder().enable_tools().build(),
+				)
+				.with_cache(0, CacheScope::Private),
 			),
 			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
-			ClientRequest::GetTaskInfoRequest(_) => Messages::from_result(
-				id,
-				GetTaskResult {
-					task: Task::default(),
-					meta: None,
-				},
-			),
-			ClientRequest::GetTaskResultRequest(_) => {
+			ClientRequest::GetTaskRequest(_) => {
+				Messages::from_result(id, GetTaskResult::new(Task::default()))
+			},
+			ClientRequest::GetTaskPayloadRequest(_) => {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
 			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
@@ -694,6 +698,10 @@ impl Handler {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
 			ClientRequest::PingRequest(_) => Messages::from_result(id, ServerResult::empty(())),
+			ClientRequest::SubscriptionsListenRequest(_) => {
+				let subscription_id = id.clone();
+				Messages::from_result(id, SubscriptionsListenResult::new(subscription_id))
+			},
 			ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)
@@ -713,17 +721,18 @@ impl Handler {
 				let serialized_content = serde_json::to_string(&res)
 					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
 
-				let mut result = CallToolResult::success(vec![Content::text(serialized_content)]);
+				let mut result = CallToolResult::success(vec![ContentBlock::text(serialized_content)]);
 				result.structured_content = Some(res);
 				Messages::from_result(id, result)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,
 				ListToolsResult {
-					meta: None,
-					next_cursor: None,
 					tools: self.tools(),
-				},
+					..Default::default()
+				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private),
 			),
 		};
 		Ok(res)

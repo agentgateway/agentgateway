@@ -871,6 +871,15 @@ fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
 }
 
 #[cfg(test)]
+static ENV_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> =
+	std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
+
+#[cfg(test)]
+pub(crate) fn lock_env_for_tests() -> std::sync::MutexGuard<'static, ()> {
+	ENV_LOCK.lock().expect("env mutex poisoned")
+}
+
+#[cfg(test)]
 mod parse_headers_tests {
 	use std::env;
 	use std::ffi::OsString;
@@ -950,14 +959,11 @@ mod parse_headers_tests {
 mod tests {
 	use std::env;
 	use std::ffi::OsString;
-	use std::sync::{LazyLock, Mutex};
 
 	use super::*;
 
-	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
 	fn lock_env() -> std::sync::MutexGuard<'static, ()> {
-		ENV_LOCK.lock().expect("env mutex poisoned")
+		lock_env_for_tests()
 	}
 
 	struct TempEnvVar {

@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"helm.sh/helm/v3/pkg/chart"
+	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
 	"istio.io/istio/pkg/kube/kclient"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -85,7 +85,7 @@ func (gp *GatewayParameters) GetAgentgatewayParametersClient() kclient.Client[*a
 	return nil
 }
 
-func LoadAgentgatewayChart() (*chart.Chart, error) {
+func LoadAgentgatewayChart() (*chartv2.Chart, error) {
 	return loadChart(helm.AgentgatewayHelmChart)
 }
 

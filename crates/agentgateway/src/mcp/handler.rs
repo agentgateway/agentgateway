@@ -10,10 +10,10 @@ use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	ClientNotification, ClientRequest, Implementation, JsonRpcNotification, JsonRpcRequest,
-	ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
-	ProtocolVersion, RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
-	ServerNotification, ServerResult,
+	CacheScope, ClientNotification, ClientRequest, DiscoverResult, Implementation,
+	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
+	ListResourcesResult, ListToolsResult, Meta, ProtocolVersion, RequestId, ServerCapabilities,
+	ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerResult, SubscriptionsListenResult,
 };
 use tracing::{debug, warn};
 
@@ -23,7 +23,7 @@ use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
-use crate::mcp::streamablehttp::ServerSseMessage;
+use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
@@ -69,6 +69,21 @@ fn rewrite_resource_update_message(
 			target,
 			resource_updated.params.uri.as_str(),
 		);
+	}
+	message
+}
+
+fn set_subscription_ack_id(
+	mut message: ServerJsonRpcMessage,
+	subscription_id: &RequestId,
+) -> ServerJsonRpcMessage {
+	if let ServerJsonRpcMessage::Notification(notification) = &mut message
+		&& let ServerNotification::SubscriptionsAcknowledgedNotification(ack) =
+			&mut notification.notification
+	{
+		let mut meta = ack.params.meta.take().unwrap_or_else(Meta::new);
+		meta.set_subscription_id(subscription_id.clone());
+		ack.params.meta = Some(meta);
 	}
 	message
 }
@@ -350,9 +365,10 @@ impl Relay {
 			Ok(
 				ListToolsResult {
 					tools,
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
 				.into(),
 			)
 		})
@@ -397,6 +413,43 @@ impl Relay {
 		})
 	}
 
+	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
+		let resource_subscribe = self.upstreams.stateful();
+		Box::new(move |s, _cel| {
+			if !multiplexing {
+				let res = s.into_iter().next().and_then(|(_, r)| match r {
+					ServerResult::DiscoverResult(dr) => Some(dr),
+					_ => None,
+				});
+				if let Some(dr) = res {
+					// Cache hints describe the gateway's presented server, not the upstream.
+					// Gateway routing/backend config can change without client invalidation.
+					return Ok(dr.with_cache(0, CacheScope::Private).into());
+				}
+				// If we got here in FailOpen mode, it means the only target failed.
+				// Return a default discovery response so clients can continue negotiation.
+				return Ok(Self::get_discovery(resource_subscribe, Vec::new()).into());
+			}
+
+			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
+			let mut supported_versions = ProtocolVersion::KNOWN_VERSIONS.to_vec();
+			for (server_name, v) in s {
+				if let ServerResult::DiscoverResult(r) = v {
+					supported_versions.retain(|version| r.supported_versions.contains(version));
+					if let Some(instructions) = r.instructions
+						&& !instructions.is_empty()
+					{
+						upstream_instructions.push((server_name.to_string(), instructions));
+					}
+				}
+			}
+
+			let mut discover = Self::get_discovery(resource_subscribe, upstream_instructions);
+			discover.supported_versions = supported_versions;
+			Ok(discover.into())
+		})
+	}
+
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
@@ -429,9 +482,10 @@ impl Relay {
 			Ok(
 				ListPromptsResult {
 					prompts,
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
 				.into(),
 			)
 		})
@@ -469,9 +523,10 @@ impl Relay {
 			Ok(
 				ListResourcesResult {
 					resources,
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
 				.into(),
 			)
 		})
@@ -513,15 +568,20 @@ impl Relay {
 			Ok(
 				ListResourceTemplatesResult {
 					resource_templates,
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}
+				.with_ttl_ms(0)
+				.with_cache_scope(CacheScope::Private)
 				.into(),
 			)
 		})
 	}
 	pub fn merge_empty(&self) -> Box<MergeFn> {
 		Box::new(move |_, _cel| Ok(rmcp::model::ServerResult::empty(())))
+	}
+
+	pub fn merge_subscriptions_listen(&self, subscription_id: RequestId) -> Box<MergeFn> {
+		Box::new(move |_, _cel| Ok(SubscriptionsListenResult::new(subscription_id).into()))
 	}
 	pub async fn send_single(
 		&self,
@@ -543,10 +603,13 @@ impl Relay {
 		);
 
 		match guardrails {
-			Some(guardrails) => {
-				messages_to_response(id, wrap_with_guardrails(stream, guardrails), mcp_log)
-			},
-			None => messages_to_response(id, stream, mcp_log),
+			Some(guardrails) => messages_to_response(
+				id,
+				wrap_with_guardrails(stream, guardrails),
+				mcp_log,
+				ctx_downstream_modern(&ctx),
+			),
+			None => messages_to_response(id, stream, mcp_log, ctx_downstream_modern(&ctx)),
 		}
 	}
 	pub async fn send_fanout_deletion(
@@ -639,30 +702,63 @@ impl Relay {
 			// FailClosed: unreachable — InitializeRequest would have failed with NoBackends.
 			// FailOpen: keep the SSE connection open so legacy SSE clients do not immediately
 			// reconnect in a tight loop after all upstream GET streams disappear.
-			return messages_to_response(RequestId::Number(0), Messages::pending(), None);
+			return messages_to_response(
+				RequestId::Number(0),
+				Messages::pending(),
+				None,
+				ctx_downstream_modern(&ctx),
+			);
 		}
 
 		let ms = mergestream::MergeStream::new_without_merge(streams, self.upstreams.failure_mode);
-		messages_to_response(RequestId::Number(0), ms, None)
+		messages_to_response(RequestId::Number(0), ms, None, ctx_downstream_modern(&ctx))
 	}
 
 	pub async fn send_fanout(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
-		mut ctx: IncomingRequestContext,
+		ctx: IncomingRequestContext,
 		merge: Box<MergeFn>,
 	) -> Result<Response, UpstreamError> {
+		self.send_fanout_to(r, ctx, merge, None).await
+	}
+
+	pub async fn send_fanout_to(
+		&self,
+		r: JsonRpcRequest<ClientRequest>,
+		mut ctx: IncomingRequestContext,
+		merge: Box<MergeFn>,
+		target_names: Option<Vec<String>>,
+	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
+		let subscription_id = if matches!(&r.request, ClientRequest::SubscriptionsListenRequest(_)) {
+			Some(id.clone())
+		} else {
+			None
+		};
 		let mut streams = Vec::new();
 		let method = r.request.method().to_string();
 		let method = method.as_str();
+		let selected_upstreams = self
+			.upstreams
+			.iter_named()
+			.filter(|(name, _)| {
+				target_names
+					.as_ref()
+					.is_none_or(|targets| targets.iter().any(|target| target == name.as_str()))
+			})
+			.collect::<Vec<_>>();
+		if selected_upstreams.is_empty() {
+			return Err(UpstreamError::InvalidRequest(
+				"no upstreams available".to_string(),
+			));
+		}
 
 		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
 		// fans out to (just the one name when there is a single backend).
 		let service_names = self.mcp_guardrails.as_ref().map(|_| {
-			self
-				.upstreams
-				.iter_named()
+			selected_upstreams
+				.iter()
 				.map(|(n, _)| n.to_string())
 				.collect::<Vec<_>>()
 		});
@@ -692,9 +788,8 @@ impl Relay {
 			}
 		}
 
-		let futs: Vec<_> = self
-			.upstreams
-			.iter_named()
+		let futs: Vec<_> = selected_upstreams
+			.into_iter()
 			.map(|(name, con)| {
 				let r = r.clone();
 				let ctx = &ctx;
@@ -708,7 +803,12 @@ impl Relay {
 		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
-					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					let mut s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					if let Some(subscription_id) = subscription_id.clone() {
+						s = s.map_server_messages(move |message| {
+							set_subscription_ack_id(message, &subscription_id)
+						});
+					}
 					streams.push((name, s));
 				},
 				Err(e) => {
@@ -737,8 +837,13 @@ impl Relay {
 
 		// Response-phase hook runs once on the merged (muxed) result.
 		match service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)) {
-			Some(guardrails) => messages_to_response(id, wrap_with_guardrails(ms, guardrails), None),
-			None => messages_to_response(id, ms, None),
+			Some(guardrails) => messages_to_response(
+				id,
+				wrap_with_guardrails(ms, guardrails),
+				None,
+				ctx_downstream_modern(&ctx),
+			),
+			None => messages_to_response(id, ms, None, ctx_downstream_modern(&ctx)),
 		}
 	}
 	pub async fn send_notification(
@@ -830,6 +935,23 @@ impl Relay {
 			))
 			.with_instructions(instructions.unwrap_or_default())
 	}
+
+	fn get_discovery(
+		resource_subscribe: bool,
+		upstream_instructions: Vec<(String, String)>,
+	) -> DiscoverResult {
+		let info = Self::get_info(
+			ProtocolVersion::default(),
+			resource_subscribe,
+			upstream_instructions,
+		);
+		DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
+			.with_server_info(info.server_info)
+			.with_instructions(info.instructions.unwrap_or_default())
+			// Discovery is immediately stale because the gateway has no way to
+			// invalidate clients when backend membership or routing config changes.
+			.with_cache(0, CacheScope::Private)
+	}
 }
 
 pub fn setup_request_log(
@@ -864,11 +986,20 @@ fn messages_to_response(
 	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
+	downstream_modern: bool,
 ) -> Result<Response, UpstreamError> {
 	Ok(mcp::session::sse_stream_response(
-		into_sse_stream(id, stream, mcp_log),
+		into_sse_stream(id, stream, mcp_log, downstream_modern),
 		None,
 	))
+}
+
+fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
+	ctx
+		.as_request()
+		.extensions()
+		.get::<RequestProtocol>()
+		.is_some_and(RequestProtocol::is_modern)
 }
 
 fn wrap_with_guardrails(
@@ -897,12 +1028,15 @@ fn into_sse_stream(
 	request_id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
+	downstream_modern: bool,
 ) -> impl Stream<Item = ServerSseMessage> + Send + 'static {
 	use futures_util::StreamExt;
 	let mut captured_terminal = false;
 	stream.map(move |rpc| {
 		let r = match rpc {
 			Ok(rpc) => {
+				let rpc = with_gateway_cache_policy(rpc);
+				let rpc = normalize_outbound_for_protocol(rpc, downstream_modern);
 				if !captured_terminal && let Some(log) = mcp_log.as_ref() {
 					captured_terminal = capture_terminal_mcp_payload(log, &request_id, &rpc);
 				}
@@ -910,7 +1044,7 @@ fn into_sse_stream(
 			},
 			Err(e) => ServerJsonRpcMessage::error(
 				ErrorData::internal_error(e.to_string(), None),
-				request_id.clone(),
+				Some(request_id.clone()),
 			),
 		};
 		// TODO: is it ok to have no event_id here?
@@ -919,6 +1053,118 @@ fn into_sse_stream(
 			message: Arc::new(r),
 		}
 	})
+}
+
+fn normalize_outbound_for_protocol(
+	mut msg: ServerJsonRpcMessage,
+	downstream_modern: bool,
+) -> ServerJsonRpcMessage {
+	if downstream_modern {
+		return msg;
+	}
+
+	let ServerJsonRpcMessage::Response(resp) = &mut msg else {
+		return msg;
+	};
+
+	match &mut resp.result {
+		ServerResult::DiscoverResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::InitializeResult(r) => r.result_type = None,
+		ServerResult::CompleteResult(r) => r.result_type = None,
+		ServerResult::GetPromptResult(r) => r.result_type = None,
+		ServerResult::ListPromptsResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ListResourcesResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ListResourceTemplatesResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ReadResourceResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ListToolsResult(r) => {
+			r.result_type = None;
+			r.ttl_ms = None;
+			r.cache_scope = None;
+		},
+		ServerResult::ElicitResult(r) => r.result_type = None,
+		ServerResult::CreateTaskResult(r) => r.result_type = None,
+		ServerResult::ListTasksResult(r) => r.result_type = None,
+		ServerResult::GetTaskResult(r) => r.result_type = None,
+		ServerResult::CancelTaskResult(r) => r.result_type = None,
+		ServerResult::SubscriptionsListenResult(r) => r.result_type = None,
+		ServerResult::CallToolResult(r) => r.result_type = None,
+		ServerResult::GetTaskPayloadResult(r) => strip_protocol_result_fields(&mut r.0),
+		ServerResult::EmptyResult(r) => r.result_type = None,
+		ServerResult::CustomResult(r) => strip_protocol_result_fields(&mut r.0),
+		ServerResult::InputRequiredResult(_) => {},
+	}
+
+	msg
+}
+
+fn strip_protocol_result_fields(value: &mut serde_json::Value) {
+	let Some(obj) = value.as_object_mut() else {
+		return;
+	};
+	obj.remove("resultType");
+	obj.remove("ttlMs");
+	obj.remove("cacheScope");
+}
+
+fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMessage {
+	let ServerJsonRpcMessage::Response(resp) = &mut msg else {
+		return msg;
+	};
+
+	// Cache hints must describe the gateway-visible result, not the upstream's result.
+	// For now, keep all cacheable MCP responses immediately stale/private because
+	// routing config, backend membership, and authz filtering can change without a
+	// client invalidation path. A future opt-in can allow positive TTLs when no
+	// per-user/authz-dependent filtering applies.
+	match &mut resp.result {
+		ServerResult::DiscoverResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListToolsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListPromptsResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListResourcesResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ListResourceTemplatesResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		ServerResult::ReadResourceResult(r) => {
+			r.ttl_ms = Some(0);
+			r.cache_scope = Some(CacheScope::Private);
+		},
+		_ => {},
+	}
+
+	msg
 }
 
 async fn apply_guardrails_response_intercept(
@@ -938,7 +1184,7 @@ async fn apply_guardrails_response_intercept(
 			tracing::warn!(error = %e, "mcpGuardrails: failed to serialize result for inspection");
 			return Some(ServerJsonRpcMessage::error(
 				ErrorData::internal_error(format!("mcpGuardrails: serialize result: {e}"), None),
-				resp.id.clone(),
+				Some(resp.id.clone()),
 			));
 		},
 	};
@@ -956,7 +1202,7 @@ async fn apply_guardrails_response_intercept(
 		Outcome::Mutated(new_result) => {
 			Some(ServerJsonRpcMessage::response(new_result, resp.id.clone()))
 		},
-		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, resp.id.clone())),
+		Outcome::Reject(rej) => Some(ServerJsonRpcMessage::error(rej, Some(resp.id.clone()))),
 	}
 }
 
@@ -972,7 +1218,7 @@ fn capture_terminal_mcp_payload(
 			}
 			true
 		},
-		ServerJsonRpcMessage::Error(error) if error.id == *request_id => {
+		ServerJsonRpcMessage::Error(error) if error.id.as_ref() == Some(request_id) => {
 			log.non_atomic_mutate(|mcp| mcp.capture_call_error(&error.error));
 			true
 		},
@@ -995,6 +1241,29 @@ mod tests {
 
 	use super::*;
 
+	#[test]
+	fn normalize_outbound_result_type_by_downstream_protocol() {
+		let response = ServerJsonRpcMessage::response(
+			ServerResult::ListToolsResult(
+				ListToolsResult::with_all_items(vec![])
+					.with_ttl_ms(30_000)
+					.with_cache_scope(CacheScope::Public),
+			),
+			RequestId::Number(1),
+		);
+
+		let modern =
+			serde_json::to_value(normalize_outbound_for_protocol(response.clone(), true)).unwrap();
+		assert_eq!(modern["result"]["resultType"], "complete");
+		assert_eq!(modern["result"]["ttlMs"], 30_000);
+		assert_eq!(modern["result"]["cacheScope"], "public");
+
+		let legacy = serde_json::to_value(normalize_outbound_for_protocol(response, false)).unwrap();
+		assert!(legacy["result"].get("resultType").is_none());
+		assert!(legacy["result"].get("ttlMs").is_none());
+		assert!(legacy["result"].get("cacheScope").is_none());
+	}
+
 	#[tokio::test]
 	async fn messages_to_response_captures_first_matching_tool_result() {
 		let log = AsyncLog::default();
@@ -1006,8 +1275,7 @@ mod tests {
 			Ok(ServerJsonRpcMessage::response(
 				ServerResult::ListToolsResult(ListToolsResult {
 					tools: vec![],
-					next_cursor: None,
-					meta: None,
+					..Default::default()
 				}),
 				RequestId::Number(1),
 			)),
@@ -1019,11 +1287,12 @@ mod tests {
 			)),
 			Ok(ServerJsonRpcMessage::error(
 				ErrorData::internal_error("later error", None),
-				RequestId::Number(42),
+				Some(RequestId::Number(42)),
 			)),
 		]);
 
-		let response = messages_to_response(RequestId::Number(42), stream, Some(log.clone())).unwrap();
+		let response =
+			messages_to_response(RequestId::Number(42), stream, Some(log.clone()), false).unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();
@@ -1050,7 +1319,8 @@ mod tests {
 				RequestId::Number(7),
 			)),
 		]);
-		let response = messages_to_response(RequestId::Number(7), stream, Some(log.clone())).unwrap();
+		let response =
+			messages_to_response(RequestId::Number(7), stream, Some(log.clone()), false).unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();
@@ -1070,9 +1340,10 @@ mod tests {
 
 		let stream = stream::iter(vec![Ok(ServerJsonRpcMessage::error(
 			ErrorData::internal_error("boom", None),
-			RequestId::Number(7),
+			Some(RequestId::Number(7)),
 		))]);
-		let response = messages_to_response(RequestId::Number(7), stream, Some(log.clone())).unwrap();
+		let response =
+			messages_to_response(RequestId::Number(7), stream, Some(log.clone()), false).unwrap();
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();

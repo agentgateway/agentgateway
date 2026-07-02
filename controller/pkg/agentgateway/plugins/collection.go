@@ -13,7 +13,6 @@ import (
 	discovery "k8s.io/api/discovery/v1"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
@@ -59,7 +58,7 @@ type AgwCollections struct {
 	HTTPRoutesByNamespace   krt.Index[string, *gwv1.HTTPRoute]
 	GRPCRoutes              krt.Collection[*gwv1.GRPCRoute]
 	GRPCRoutesByNamespace   krt.Index[string, *gwv1.GRPCRoute]
-	TCPRoutes               krt.Collection[*gwv1a2.TCPRoute]
+	TCPRoutes               krt.Collection[*gwv1.TCPRoute]
 	TLSRoutes               krt.Collection[*gwv1.TLSRoute]
 	ReferenceGrants         krt.Collection[*gwv1b1.ReferenceGrant]
 	BackendTLSPolicies      krt.Collection[*gwv1.BackendTLSPolicy]
@@ -199,8 +198,7 @@ func NewAgwCollections(
 		BackendTLSPolicies: krt.WrapClient(kclient.NewDelayedInformer[*gwv1.BackendTLSPolicy](client, gvr.BackendTLSPolicy, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/BackendTLSPolicies")...),
 		ListenerSets:       listenerSets,
 
-		// Gateway API alpha
-		TCPRoutes:       krt.WrapClient(kclient.NewDelayedInformer[*gwv1a2.TCPRoute](client, gvr.TCPRoute, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/TCPRoutes")...),
+		TCPRoutes:       krt.WrapClient(kclient.NewDelayedInformer[*gwv1.TCPRoute](client, wellknown.TCPRouteGVR, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/TCPRoutes")...),
 		ReferenceGrants: krt.WrapClient(kclient.NewFilteredDelayed[*gwv1b1.ReferenceGrant](client, wellknown.ReferenceGrantGVR, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/ReferenceGrants")...),
 		// BackendTrafficPolicy?
 

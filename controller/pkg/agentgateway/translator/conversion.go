@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -150,8 +149,8 @@ func isPolicyErrorCritical(filterError *reporter.RouteCondition) bool {
 }
 
 // ConvertTCPRouteToAgw converts a TCPRouteRule to an agentgateway TCPRoute
-func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1a2.TCPRouteRule,
-	obj *gwv1a2.TCPRoute, pos int,
+func ConvertTCPRouteToAgw(ctx RouteContext, r gwv1.TCPRouteRule,
+	obj *gwv1.TCPRoute, pos int,
 ) (*api.TCPRoute, *reporter.RouteCondition) {
 	res := &api.TCPRoute{
 		// unique for route rule
@@ -1622,7 +1621,7 @@ func toNamespaceSet(name string, labels map[string]string) klabels.Set {
 
 func GetCommonRouteInfo(spec any) ([]gwv1.ParentReference, []gwv1.Hostname, schema.GroupVersionKind) {
 	switch t := spec.(type) {
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		return t.Spec.ParentRefs, nil, wellknown.TCPRouteGVK
 	case *gwv1.TLSRoute:
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.TLSRouteGVK

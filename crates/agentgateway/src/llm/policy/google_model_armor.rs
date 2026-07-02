@@ -13,7 +13,7 @@ use crate::http::auth::{BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::json;
 use crate::llm::RequestType;
-use crate::llm::policy::GoogleModelArmor;
+use crate::llm::policy::{GoogleModelArmor, with_default_timeout};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
@@ -376,7 +376,7 @@ async fn send_model_armor_request<T: Serialize>(
 
 	let resp = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-		.call_with_explicit_policies_list(req, mock_be, pols)
+		.call_with_explicit_policies_list(with_default_timeout(req), mock_be, pols)
 		.await?;
 
 	let resp: SanitizeResponse = json::from_response_body(resp).await?;

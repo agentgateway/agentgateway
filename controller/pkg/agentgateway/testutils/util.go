@@ -21,7 +21,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	"sigs.k8s.io/yaml"
 
@@ -239,7 +238,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		Gateways:             krttest.GetMockCollection[*gwv1.Gateway](mock),
 		HTTPRoutes:           krttest.GetMockCollection[*gwv1.HTTPRoute](mock),
 		GRPCRoutes:           krttest.GetMockCollection[*gwv1.GRPCRoute](mock),
-		TCPRoutes:            krttest.GetMockCollection[*gwv1a2.TCPRoute](mock),
+		TCPRoutes:            krttest.GetMockCollection[*gwv1.TCPRoute](mock),
 		TLSRoutes:            krttest.GetMockCollection[*gwv1.TLSRoute](mock),
 		ReferenceGrants:      krttest.GetMockCollection[*gwv1b1.ReferenceGrant](mock),
 		BackendTLSPolicies:   krttest.GetMockCollection[*gwv1.BackendTLSPolicy](mock),

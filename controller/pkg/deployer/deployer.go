@@ -9,10 +9,11 @@ import (
 	"io"
 	"slices"
 
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/storage"
-	"helm.sh/helm/v3/pkg/storage/driver"
+	"helm.sh/helm/v4/pkg/action"
+	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
+	"helm.sh/helm/v4/pkg/release"
+	"helm.sh/helm/v4/pkg/storage"
+	"helm.sh/helm/v4/pkg/storage/driver"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,7 +57,7 @@ type Patcher func(client apiclient.Client, fieldManager string, gvr schema.Group
 type Deployer struct {
 	agwControllerName                    string
 	agwGatewayClassName                  string
-	agentgatewayChart                    *chart.Chart
+	agentgatewayChart                    *chartv2.Chart
 	scheme                               *runtime.Scheme
 	client                               apiclient.Client
 	helmValues                           HelmValuesGenerator
@@ -84,7 +85,7 @@ func NewDeployerWithMultipleCharts(
 	agwControllerName, agwGatewayClassName string,
 	scheme *runtime.Scheme,
 	client apiclient.Client,
-	agentgatewayChart *chart.Chart,
+	agentgatewayChart *chartv2.Chart,
 	hvg HelmValuesGenerator,
 	helmReleaseNameAndNamespaceGenerator func(obj client.Object) (string, string),
 	opts ...Option,
@@ -161,19 +162,23 @@ func (d *Deployer) RenderManifest(ns, name string, vals map[string]any) ([]byte,
 	install.Namespace = ns
 	install.ReleaseName = name
 
-	// We rely on the Install object in `clientOnly` mode
+	// We rely on the Install object in client-side dry-run mode.
 	// This means that there is no i/o (i.e. no reads/writes to k8s) that would need to be cancelled.
 	// This essentially guarantees that this function terminates quickly and doesn't block the rest of the controller.
-	install.ClientOnly = true
+	install.DryRunStrategy = action.DryRunClient
 	installCtx := context.Background()
 
 	chartToUse := d.agentgatewayChart
 
-	release, err := install.RunWithContext(installCtx, chartToUse, vals)
+	rel, err := install.RunWithContext(installCtx, chartToUse, vals)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render helm chart for %s.%s: %w", ns, name, err)
 	}
-	return []byte(release.Manifest), nil
+	accessor, err := release.NewAccessor(rel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render helm chart for %s.%s: %w", ns, name, err)
+	}
+	return []byte(accessor.Manifest()), nil
 }
 
 // GetObjsToDeploy does the following:

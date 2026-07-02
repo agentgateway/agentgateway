@@ -561,6 +561,8 @@ func (s *Syncer) buildBindsFromGateway(listeners []*translator.GatewayListener) 
 	type bindInfo struct {
 		protocol       api.Bind_Protocol
 		tunnelProtocol api.Bind_TunnelProtocol
+		sawInternal    bool
+		sawStandard    bool
 	}
 	byPort := map[uint32]*bindInfo{}
 	for _, listener := range listeners {
@@ -580,18 +582,31 @@ func (s *Syncer) buildBindsFromGateway(listeners []*translator.GatewayListener) 
 			if tp := s.getTunnelProtocol(listener); tp != api.Bind_DIRECT {
 				bi.tunnelProtocol = tp
 			}
+			// A bind is internal only if every contributing listener agrees. Disagreement
+			// (sawInternal && sawStandard) is reported as Accepted=False in translation and
+			// leaves the bind standard here.
+			if listener.ParentInfo.Internal {
+				bi.sawInternal = true
+			} else {
+				bi.sawStandard = true
+			}
 		}
 	}
 
 	binds := make([]agwir.AgwResource, 0, len(byPort))
 	for _, port := range slices.Sort(maps.Keys(byPort)) { // sorted for deterministic output
 		bi := byPort[port]
+		mode := api.Bind_STANDARD
+		if bi.sawInternal && !bi.sawStandard {
+			mode = api.Bind_INTERNAL
+		}
 		bind := translator.AgwBind{
 			Bind: &api.Bind{
 				Key:            fmt.Sprint(port) + "/" + parentGateway.String(),
 				Port:           port,
 				Protocol:       bi.protocol,
 				TunnelProtocol: bi.tunnelProtocol,
+				Mode:           mode,
 			},
 		}
 		binds = append(binds, translator.ToResourceForGateway(parentGateway, bind))

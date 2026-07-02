@@ -49,6 +49,8 @@ pub struct Executor<'a> {
 
 	pub source: ExtensionOrDirect<'a, SourceContext>,
 
+	pub destination: ExtensionOrDirect<'a, DestinationContext>,
+
 	pub jwt: ExtensionOrDirect<'a, jwt::Claims>,
 
 	#[dynamic(rename = "apiKey")]
@@ -317,6 +319,17 @@ pub struct SourceContext {
 
 #[apply(schema!)]
 #[derive(cel::DynamicType)]
+pub struct DestinationContext {
+	#[serde(default = "dummy_address")]
+	/// The IP address of the downstream request destination at agentgateway.
+	pub address: IpAddr,
+	#[serde(default)]
+	/// The port of the downstream request destination at agentgateway.
+	pub port: u16,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
 /// Workload context wrapper. All fields live under `unverified` to make it
 /// clear that the data is resolved by IP, not cryptographically verified.
 pub struct WorkloadContext {
@@ -346,6 +359,15 @@ impl SourceContext {
 			tls,
 			unverified_workload,
 			connect_headers: http::HeaderMap::new(),
+		}
+	}
+}
+
+impl DestinationContext {
+	pub fn from_tcp_connection(tcp: &crate::transport::stream::TCPConnectionInfo) -> Self {
+		Self {
+			address: tcp.local_addr.ip(),
+			port: tcp.local_addr.port(),
 		}
 	}
 }
@@ -539,6 +561,7 @@ impl<'a> Executor<'a> {
 		self.backend = ExtensionOrDirect::Extension(ext);
 		self.proxy = ExtensionOrDirect::Extension(ext);
 		self.source = ExtensionOrDirect::Extension(ext);
+		self.destination = ExtensionOrDirect::Extension(ext);
 	}
 	fn set_request_snapshot(&mut self, req: &'a RequestSnapshot) {
 		self.request = Some(req.into());
@@ -553,6 +576,7 @@ impl<'a> Executor<'a> {
 		self.backend = ExtensionOrDirect::Direct(req.backend.as_ref());
 		self.proxy = ExtensionOrDirect::Direct(req.proxy.as_ref());
 		self.source = ExtensionOrDirect::Direct(req.source.as_ref());
+		self.destination = ExtensionOrDirect::Direct(req.destination.as_ref());
 	}
 	fn set_response(&mut self, resp: &'a crate::http::Response) {
 		self.response = Some(resp.into());
@@ -775,6 +799,7 @@ pub fn snapshot_request(req: &mut crate::http::Request, clear: bool) -> RequestS
 		backend: ext::<BackendContext>(req, clear),
 		proxy: ext::<ProxyContext>(req, clear),
 		source: ext::<SourceContext>(req, clear),
+		destination: ext::<DestinationContext>(req, clear),
 		extauthz: ext::<ExtAuthzDynamicMetadata>(req, clear),
 		extproc: ext::<ExtProcDynamicMetadata>(req, clear),
 		mcp_guardrails: ext::<McpGuardrailsDynamicMetadata>(req, clear),
@@ -826,6 +851,8 @@ pub struct RequestSnapshot {
 	pub proxy: Option<ProxyContext>,
 
 	pub source: Option<SourceContext>,
+
+	pub destination: Option<DestinationContext>,
 
 	pub start_time: Option<RequestTime>,
 
@@ -1859,6 +1886,10 @@ pub struct ExecutorSerde {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub source: Option<SourceContext>,
 
+	/// `destination` contains attributes about the downstream request destination at agentgateway.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub destination: Option<DestinationContext>,
+
 	/// `mcp` contains attributes about the MCP request.
 	/// Request-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.
 	/// Post-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.
@@ -1963,6 +1994,7 @@ impl ExecutorSerde {
 
 		// Set all the ExtensionOrDirect fields
 		exec.source = ExtensionOrDirect::Direct(self.source.as_ref());
+		exec.destination = ExtensionOrDirect::Direct(self.destination.as_ref());
 		exec.jwt = ExtensionOrDirect::Direct(self.jwt.as_ref());
 		exec.api_key = ExtensionOrDirect::Direct(self.api_key.as_ref());
 		exec.basic_auth = ExtensionOrDirect::Direct(self.basic_auth.as_ref());
@@ -2056,6 +2088,10 @@ pub fn full_example_executor() -> ExecutorSerde {
 				http::HeaderName::from_static("x-custom-header"),
 				http::HeaderValue::from_static("custom-value"),
 			)]),
+		}),
+		destination: Some(DestinationContext {
+			address: "10.0.0.1".parse().unwrap(),
+			port: 8080,
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![

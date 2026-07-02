@@ -609,8 +609,7 @@ impl WorkloadByAddr {
 	}
 }
 
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub struct Dump {
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
 	pub workloads: Vec<Arc<Workload>>,

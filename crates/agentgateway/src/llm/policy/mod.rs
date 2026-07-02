@@ -5,7 +5,7 @@ use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::http::filters::HeaderModifier;
+use crate::http::filters::{BackendRequestTimeout, HeaderModifier};
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
@@ -16,6 +16,13 @@ use crate::types::agent::{
 	BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference,
 };
 use crate::*;
+
+fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
+	req
+		.extensions_mut()
+		.insert(BackendRequestTimeout(Duration::from_secs(10)));
+	req
+}
 
 pub mod webhook;
 
@@ -147,6 +154,16 @@ pub struct Policy {
 		schemars(with = "std::collections::HashMap<String, crate::llm::RouteType>")
 	)]
 	pub routes: SortedRoutes,
+}
+
+impl crate::store::HasExpressions for Policy {
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self
+			.transformations
+			.iter()
+			.flatten()
+			.map(|(_, expr)| expr.as_ref())
+	}
 }
 
 /// Wildcard pattern converted to regex for model name matching.

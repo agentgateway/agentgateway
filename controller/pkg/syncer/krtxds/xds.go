@@ -648,7 +648,7 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 	// 1. no subscribed resources change from spontaneous delta request.
 	// 2. subscribed resources changes from ACK.
 	if spontaneousReq && !subChanged || !spontaneousReq && subChanged {
-		log.Error("ADS: Subscribed resources check mismatch", "type", stype, "spontaneous", spontaneousReq, "subChanged", subChanged)
+		log.Error("ADS: Subscribed resources check mismatch", "type", stype, "spontaneous", spontaneousReq, "sub_changed", subChanged)
 		if features.EnableUnsafeAssertions {
 			panic(fmt.Sprintf("ADS:%s: Subscribed resources check mismatch: %v vs %v", stype, spontaneousReq, subChanged))
 		}
@@ -1064,15 +1064,15 @@ func debounce(ch chan *PushRequest, stopCh <-chan struct{}, opts DebounceOptions
 				if req.ConfigsUpdated == nil {
 					log.Info("push debounce stable",
 						"id", pushCounter,
-						"debouncedEvents", debouncedEvents,
-						"lastChange", quietTime.String(),
-						"lastPush", eventDelay.String())
+						"debounced_events", debouncedEvents,
+						"last_change", quietTime.String(),
+						"last_push", eventDelay.String())
 				} else {
 					log.Info("push debounce stable",
 						"id", pushCounter,
-						"debouncedEvents", debouncedEvents,
-						"lastChange", quietTime.String(),
-						"lastPush", eventDelay.String(),
+						"debounced_events", debouncedEvents,
+						"last_change", quietTime.String(),
+						"last_push", eventDelay.String(),
 						"cause", configsUpdated(req),
 					)
 				}

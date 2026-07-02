@@ -573,6 +573,10 @@ func GatewayIRFrom(gw *gwv1.Gateway, controllerNameGuess string) *collections.Ga
 		},
 		ControllerName: controllerNameGuess,
 		Ports:          smallset.New(ports.UnsortedList()...),
+		// This guess path has no ListenerSets, so internal ports are derived from the
+		// Gateway annotation only. Without this, internal (routing-only) ports would be
+		// incorrectly exposed via Service/container ports in GetPortsValues.
+		InternalPorts: collections.ComputeInternalPorts(gw, nil),
 	}
 }
 func DeepMergeResourceRequirements(dst, src *corev1.ResourceRequirements) *corev1.ResourceRequirements {

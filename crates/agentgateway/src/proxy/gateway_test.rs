@@ -92,6 +92,21 @@ fn test_jwks() -> JwkSet {
 	.expect("jwks json")
 }
 
+fn test_server_tls_config() -> crate::types::agent::ServerTLSConfig {
+	crate::types::agent::ServerTLSConfig::from_pem_with_profile(
+		include_bytes!("../../../../examples/tls/certs/cert.pem").to_vec(),
+		include_bytes!("../../../../examples/tls/certs/key.pem").to_vec(),
+		None,
+		vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+		None,
+		None,
+		None,
+		None,
+		false,
+	)
+	.expect("test server tls config")
+}
+
 fn signed_id_token(nonce: &str) -> String {
 	jsonwebtoken::encode(
 		&Header {
@@ -144,20 +159,7 @@ fn https_bind() -> Bind {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: strng::new("*.example.com"),
-			protocol: ListenerProtocol::HTTPS(
-				types::local::LocalTLSServerConfig {
-					mode: Default::default(),
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
-					root: None,
-					cipher_suites: None,
-					min_tls_version: None,
-					max_tls_version: None,
-					key_exchange_groups: None,
-				}
-				.try_into()
-				.unwrap(),
-			),
+			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
 		}]),
 		protocol: BindProtocol::tls,
 		tunnel_protocol: Default::default(),
@@ -1454,9 +1456,10 @@ async fn llm_detect_mode_respects_model_rewrite() {
 
 async fn setup_local_llm_config(yaml: &str) -> TestBind {
 	let t = setup_proxy_test("{}").unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
 	let normalized = crate::types::local::NormalizedLocalConfig::from(
 		t.pi.cfg.as_ref(),
-		t.pi.upstream.clone(),
+		&resources,
 		t.pi.cfg.gateway(),
 		yaml,
 	)
@@ -1476,9 +1479,10 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 
 async fn setup_local_llm_config_with_user_model_header(yaml: &str) -> TestBind {
 	let t = setup_proxy_test("{}").unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
 	let mut normalized = crate::types::local::NormalizedLocalConfig::from(
 		t.pi.cfg.as_ref(),
-		t.pi.upstream.clone(),
+		&resources,
 		t.pi.cfg.gateway(),
 		yaml,
 	)
@@ -3637,20 +3641,7 @@ async fn connect_tunnel_terminates_outer_tls() {
 				key: LISTENER_KEY,
 				name: Default::default(),
 				hostname: strng::new("*.example.com"),
-				protocol: ListenerProtocol::HTTPS(
-					types::local::LocalTLSServerConfig {
-						mode: Default::default(), // Static
-						cert: "../../examples/tls/certs/cert.pem".into(),
-						key: "../../examples/tls/certs/key.pem".into(),
-						root: None,
-						cipher_suites: None,
-						min_tls_version: None,
-						max_tls_version: None,
-						key_exchange_groups: None,
-					}
-					.try_into()
-					.unwrap(),
-				),
+				protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
 			}]),
 			protocol: BindProtocol::tls,
 			tunnel_protocol: TunnelProtocol::Connect,
@@ -4927,20 +4918,7 @@ fn setup_dfp_https() -> (TestBind, Client<MemoryConnector, Body>) {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
-			protocol: ListenerProtocol::HTTPS(
-				types::local::LocalTLSServerConfig {
-					mode: Default::default(),
-					cert: "../../examples/tls/certs/cert.pem".into(),
-					key: "../../examples/tls/certs/key.pem".into(),
-					root: None,
-					cipher_suites: None,
-					min_tls_version: None,
-					max_tls_version: None,
-					key_exchange_groups: None,
-				}
-				.try_into()
-				.unwrap(),
-			),
+			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
 		}]),
 		protocol: BindProtocol::tls,
 		tunnel_protocol: Default::default(),
@@ -5263,20 +5241,7 @@ async fn auto_protocol_mixed_listeners() {
 				key: strng::new("https-listener"),
 				name: Default::default(),
 				hostname: strng::new("*.example.com"),
-				protocol: ListenerProtocol::HTTPS(
-					types::local::LocalTLSServerConfig {
-						mode: Default::default(),
-						cert: "../../examples/tls/certs/cert.pem".into(),
-						key: "../../examples/tls/certs/key.pem".into(),
-						root: None,
-						cipher_suites: None,
-						min_tls_version: None,
-						max_tls_version: None,
-						key_exchange_groups: None,
-					}
-					.try_into()
-					.unwrap(),
-				),
+				protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
 			},
 		]),
 		protocol: BindProtocol::auto,

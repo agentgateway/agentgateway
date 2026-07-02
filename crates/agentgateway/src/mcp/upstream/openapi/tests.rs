@@ -1326,10 +1326,10 @@ async fn test_call_tool_structured_content_fallback() {
 		.first()
 		.expect("content should have at least one item");
 
-	let RawContent::Text(text_content) = &content_item.raw else {
+	let rmcp::model::ContentBlock::Text(text_content) = content_item else {
 		panic!(
 			"content[0] should be Text content type, got: {:?}",
-			content_item.raw
+			content_item
 		);
 	};
 
@@ -1479,8 +1479,13 @@ async fn test_openapi_from_url() {
 
 	// Convert to runtime backends
 	let backend_name = ResourceName::new("test-users".into(), "".into());
+	let resources = crate::resource_manager::ResourceFetcher::direct(client);
 	let result = local_backend
-		.as_backends(backend_name, client, crate::mcp::DEFAULT_SESSION_IDLE_TTL)
+		.as_backends(
+			backend_name,
+			&resources,
+			crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+		)
 		.await;
 
 	// Verify the conversion succeeded

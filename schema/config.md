@@ -2281,8 +2281,10 @@
 |`binds[].listeners[].routes[].policies.buffer`|object|Buffer request and response bodies.|
 |`binds[].listeners[].routes[].policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
 |`binds[].listeners[].routes[].policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`binds[].listeners[].routes[].policies.buffer.request.failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`binds[].listeners[].routes[].policies.buffer.response.failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -7461,6 +7463,10 @@
 |`frontendPolicies.accessLog.otlp.service.port`|integer||
 |`frontendPolicies.accessLog.otlp.host`|string|Hostname or IP address|
 |`frontendPolicies.accessLog.otlp.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.accessLog.otlp.filter`|string|CEL expression that decides whether a request is exported over OTLP.|
+|`frontendPolicies.accessLog.otlp.fields`|object|OTLP-specific access log fields. If unset, the parent access log fields are used.|
+|`frontendPolicies.accessLog.otlp.fields.remove`|[]string|Access log field names to remove.|
+|`frontendPolicies.accessLog.otlp.fields.add`|object|Access log fields to add, computed from CEL expressions.|
 |`frontendPolicies.accessLog.otlp.policies`|object|Backend policies used when exporting OTLP logs.|
 |`frontendPolicies.accessLog.otlp.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`frontendPolicies.accessLog.otlp.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -7591,6 +7597,10 @@
 |`frontendPolicies.logging.otlp.service.port`|integer||
 |`frontendPolicies.logging.otlp.host`|string|Hostname or IP address|
 |`frontendPolicies.logging.otlp.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.logging.otlp.filter`|string|CEL expression that decides whether a request is exported over OTLP.|
+|`frontendPolicies.logging.otlp.fields`|object|OTLP-specific access log fields. If unset, the parent access log fields are used.|
+|`frontendPolicies.logging.otlp.fields.remove`|[]string|Access log field names to remove.|
+|`frontendPolicies.logging.otlp.fields.add`|object|Access log fields to add, computed from CEL expressions.|
 |`frontendPolicies.logging.otlp.policies`|object|Backend policies used when exporting OTLP logs.|
 |`frontendPolicies.logging.otlp.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`frontendPolicies.logging.otlp.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -10033,8 +10043,10 @@
 |`policies[].policy.buffer`|object|Buffer request and response bodies.|
 |`policies[].policy.buffer.request`|object|Buffer incoming request bodies before forwarding.|
 |`policies[].policy.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`policies[].policy.buffer.request.failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`policies[].policy.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`policies[].policy.buffer.response.failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.timeout`|object|Set request timeout limits.|
 |`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -16631,8 +16643,10 @@
 |`routeGroups[].routes[].policies.buffer`|object|Buffer request and response bodies.|
 |`routeGroups[].routes[].policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
 |`routeGroups[].routes[].policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`routeGroups[].routes[].policies.buffer.request.failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`routeGroups[].routes[].policies.buffer.response.failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -26437,8 +26451,10 @@
 |`mcp.policies.buffer`|object|Buffer request and response bodies.|
 |`mcp.policies.buffer.request`|object|Buffer incoming request bodies before forwarding.|
 |`mcp.policies.buffer.request.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`mcp.policies.buffer.request.failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`mcp.policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
+|`mcp.policies.buffer.response.failureMode`|enum|Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.timeout`|object|Set request timeout limits.|
 |`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|

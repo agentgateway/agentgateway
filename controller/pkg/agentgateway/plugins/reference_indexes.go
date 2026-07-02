@@ -35,7 +35,7 @@ type ReferenceTypes struct {
 	// ReferenceGrant to entries. Extension authors must add their kinds here
 	// when they need ReferenceGrant permission checks to recognize those targets.
 	KnownToReferences       sets.Set[schema.GroupKind]
-	PolicyTargets           func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool)
+	PolicyTargets           func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName, port *gwv1.PortNumber) ([]*api.PolicyTarget, bool)
 	PolicyTargetsBySelector func(krtctx krt.HandlerContext, policyNamespace string, selector agentgateway.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget
 	PolicyBackend           func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
 	RouteBackend            func(krtctx krt.HandlerContext, defaultNamespace string, gk schema.GroupKind, name gwv1.ObjectName, namespace *gwv1.Namespace, port *gwv1.PortNumber) (*api.BackendReference, error)
@@ -86,12 +86,12 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 			wellknown.AgentgatewayBackendGVK.GroupKind(),
 		),
 		// AgentgatewayPolicy targets
-		PolicyTargets: func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool) {
+		PolicyTargets: func(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName, port *gwv1.PortNumber) ([]*api.PolicyTarget, bool) {
 			key := namespace + "/" + string(name)
 			switch gk {
 			case wellknown.GatewayGVK.GroupKind():
 				return []*api.PolicyTarget{{
-					Kind: utils.GatewayTarget(namespace, string(name), sectionName),
+					Kind: utils.GatewayTarget(namespace, string(name), sectionName, port),
 				}}, ResourceExists(krtctx, agw.Gateways, key)
 			case wellknown.HTTPRouteGVK.GroupKind():
 				return []*api.PolicyTarget{{
@@ -130,7 +130,7 @@ func DefaultReferenceTypes(agw *AgwCollections) ReferenceTypes {
 			case wellknown.GatewayGVK.GroupKind():
 				for _, gw := range krt.Fetch(krtctx, agw.Gateways, krt.FilterLabel(selector.MatchLabels), krt.FilterIndex(agw.GatewaysByNamespace, policyNamespace)) {
 					policyTargets := []*api.PolicyTarget{{
-						Kind: utils.GatewayTarget(gw.Namespace, gw.Name, sectionName),
+						Kind: utils.GatewayTarget(gw.Namespace, gw.Name, sectionName, selector.Port),
 					}}
 					targets = append(targets, ResolvedPolicySelectorTarget{Name: gwv1.ObjectName(gw.Name), Namespace: gw.Namespace, PolicyTargets: policyTargets})
 				}
@@ -469,8 +469,8 @@ func (p ReferenceIndex) WithListenerSetAttachments(references krt.IndexCollectio
 	return p
 }
 
-func (p ReferenceIndex) PolicyTarget(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName) ([]*api.PolicyTarget, bool) {
-	return p.explicitReferences.PolicyTargets(krtctx, namespace, name, gk, sectionName)
+func (p ReferenceIndex) PolicyTarget(krtctx krt.HandlerContext, namespace string, name gwv1.ObjectName, gk schema.GroupKind, sectionName *gwv1.SectionName, port *gwv1.PortNumber) ([]*api.PolicyTarget, bool) {
+	return p.explicitReferences.PolicyTargets(krtctx, namespace, name, gk, sectionName, port)
 }
 
 func (p ReferenceIndex) PolicyTargetsBySelector(krtctx krt.HandlerContext, policyNamespace string, selector agentgateway.LocalPolicyTargetSelectorWithSectionName) []ResolvedPolicySelectorTarget {

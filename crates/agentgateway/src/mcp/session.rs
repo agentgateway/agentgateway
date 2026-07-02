@@ -12,8 +12,9 @@ use anyhow::anyhow;
 use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
-	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, Implementation,
-	InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId, ServerJsonRpcMessage,
+	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
+	Implementation, InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId,
+	ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -80,7 +81,13 @@ impl Session {
 		};
 		let is_init = request_type.is_some_and(|r| matches!(r, ClientRequest::InitializeRequest(_)));
 		if !is_init {
-			let init_request = rmcp::model::InitializeRequest::new(get_client_info());
+			let mut client_info = get_client_info();
+			if let Some(protocol_version) =
+				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone())?
+			{
+				client_info.protocol_version = protocol_version;
+			}
+			let init_request = rmcp::model::InitializeRequest::new(client_info);
 			// first, determine how widely to send the initialize
 			match request_type {
 				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_)) => {
@@ -399,6 +406,7 @@ impl Session {
 					l.method_name = Some(method.clone());
 					l.session_id = Some(session_id);
 				});
+				self.strip_unsupported_client_capabilities_from_meta(&mut r.request);
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
 						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
@@ -424,6 +432,14 @@ impl Session {
 						}
 						res
 					},
+					ClientRequest::DiscoverRequest(_) => {
+						Box::pin(self.relay.send_fanout(
+							r,
+							ctx,
+							self.relay.merge_discover(self.relay.is_multiplexing()),
+						))
+						.await
+					},
 					ClientRequest::ListToolsRequest(_) => {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_tools())).await
 					},
@@ -431,6 +447,46 @@ impl Session {
 					// as heuristic for the connection pool (and handle client pings as a local reply from agentgateway)?
 					ClientRequest::PingRequest(_) | ClientRequest::SetLevelRequest(_) => {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_empty())).await
+					},
+					ClientRequest::SubscriptionsListenRequest(slr) => {
+						let subscription_id = r.id.clone();
+						let target_names = if let Some(resource_subscriptions) =
+							&mut slr.params.notifications.resource_subscriptions
+						{
+							let mut target_name = None;
+							for uri in resource_subscriptions.iter_mut() {
+								let requested_uri = uri.clone();
+								let (service_name, original_uri) = self.relay.parse_resource_uri(&requested_uri)?;
+								if let Some(target_name) = &target_name
+									&& target_name != service_name
+								{
+									return Err(UpstreamError::InvalidRequest(
+										"subscriptions/listen resourceSubscriptions must target one upstream"
+											.to_string(),
+									));
+								}
+								self.authorize_resource_request(
+									service_name,
+									&original_uri,
+									&method,
+									&mut span,
+									&log,
+									&cel,
+								)?;
+								target_name = Some(service_name.to_string());
+								*uri = original_uri;
+							}
+							target_name.map(|target| vec![target])
+						} else {
+							None
+						};
+						Box::pin(self.relay.send_fanout_to(
+							r,
+							ctx,
+							self.relay.merge_subscriptions_listen(subscription_id),
+							target_names,
+						))
+						.await
 					},
 					ClientRequest::ListPromptsRequest(_) => {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_prompts())).await
@@ -553,8 +609,8 @@ impl Session {
 					},
 
 					ClientRequest::ListTasksRequest(_)
-					| ClientRequest::GetTaskInfoRequest(_)
-					| ClientRequest::GetTaskResultRequest(_)
+					| ClientRequest::GetTaskRequest(_)
+					| ClientRequest::GetTaskPayloadRequest(_)
 					| ClientRequest::CancelTaskRequest(_)
 					| ClientRequest::CustomRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
@@ -582,15 +638,17 @@ impl Session {
 							cr.params.r#ref = Reference::for_resource(original_uri);
 							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 						},
+						_ => Err(UpstreamError::InvalidMethod(method)),
 					},
 				}
 			},
-			ClientJsonRpcMessage::Notification(r) => {
+			ClientJsonRpcMessage::Notification(mut r) => {
 				let method = match &r.notification {
 					ClientNotification::CancelledNotification(r) => r.method.as_str(),
 					ClientNotification::ProgressNotification(r) => r.method.as_str(),
 					ClientNotification::InitializedNotification(r) => r.method.as_str(),
 					ClientNotification::RootsListChangedNotification(r) => r.method.as_str(),
+					ClientNotification::TaskStatusNotification(r) => r.method.as_str(),
 					ClientNotification::CustomNotification(r) => r.method.as_str(),
 				};
 				let ctx = IncomingRequestContext::new(&parts);
@@ -600,6 +658,7 @@ impl Session {
 					l.method_name = Some(method.to_string());
 					l.session_id = Some(session_id);
 				});
+				self.strip_unsupported_client_capabilities_from_meta(&mut r.notification);
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
 				Box::pin(self.relay.send_notification(r, ctx)).await
@@ -621,6 +680,14 @@ impl Session {
 		capabilities.roots = None;
 		capabilities.sampling = None;
 		capabilities.elicitation = None;
+	}
+
+	fn strip_unsupported_client_capabilities_from_meta<T: GetMeta>(&self, message: &mut T) {
+		let Some(mut capabilities) = message.get_meta().client_capabilities() else {
+			return;
+		};
+		self.strip_unsupported_client_capabilities(&mut capabilities);
+		message.get_meta_mut().set_client_capabilities(capabilities);
 	}
 }
 

@@ -245,6 +245,24 @@ pub struct MetricsFieldsPolicy {
 }
 
 #[apply(schema!)]
+pub struct AccessLogFields {
+	/// Access log field names to remove.
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashSet<String>")
+	)]
+	#[serde(default, skip_serializing_if = "empty_string_set")]
+	pub remove: Arc<FzHashSet<String>>,
+	/// Access log fields to add, computed from CEL expressions.
+	#[serde(default, skip_serializing_if = "OrderedStringMap::is_empty")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
+}
+
+#[apply(schema!)]
 pub struct LoggingPolicy {
 	/// CEL expression that decides whether a request is logged.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -304,6 +322,12 @@ pub struct OtlpLoggingConfig {
 	/// Backend that receives OTLP logs.
 	#[serde(flatten)]
 	pub provider_backend: super::agent::SimpleBackendReference,
+	/// CEL expression that decides whether a request is exported over OTLP.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub filter: Option<Arc<cel::Expression>>,
+	/// OTLP-specific access log fields. If unset, the parent access log fields are used.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub fields: Option<AccessLogFields>,
 	/// Backend policies used when exporting OTLP logs.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]

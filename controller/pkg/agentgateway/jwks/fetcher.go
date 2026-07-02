@@ -294,7 +294,7 @@ func (f *Fetcher) maybeFetchJwks(ctx context.Context) {
 		requestURL, jwks, err := f.fetchJwks(ctx, state.source)
 		if err != nil {
 			next := nextRetryDelay(fetch.RetryAttempt)
-			logger.Error("error fetching jwks", "request_key", fetch.RequestKey, "target", state.source.Target.URL, "error", err, "retryAttempt", fetch.RetryAttempt, "next", next.String())
+			logger.Error("error fetching jwks", "request_key", fetch.RequestKey, "target", state.source.Target.URL, "error", err, "retry_attempt", fetch.RetryAttempt, "next", next.String())
 			f.scheduleAt(fetch.RequestKey, state.generation, now.Add(next), fetch.RetryAttempt+1)
 			continue
 		}

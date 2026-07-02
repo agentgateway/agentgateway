@@ -21,7 +21,7 @@ use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::store::{BackendPolicy, PolicyExpressions, RequestPolicy};
+use crate::store::{BackendPolicy, HasExpressions, PolicyExpressions, RequestPolicy};
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendTargetRef, BackendTrafficPolicy, BackendWithPolicies,
 	Bind, BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
@@ -192,7 +192,7 @@ impl FrontendPolices {
 			filter,
 			add: fields_add,
 			remove: _,
-			otlp: _,
+			otlp,
 			database,
 			access_log_policy: _,
 		}) = &self.access_log
@@ -206,6 +206,16 @@ impl FrontendPolices {
 			if let Some(database) = database {
 				for (_, v) in database.add.iter() {
 					ctx.register_log_expression(v)
+				}
+			}
+			if let Some(otlp) = otlp {
+				if let Some(f) = &otlp.filter {
+					ctx.register_log_expression(f)
+				}
+				if let Some(fields) = &otlp.fields {
+					for (_, v) in fields.add.iter() {
+						ctx.register_log_expression(v)
+					}
 				}
 			}
 		}
@@ -302,6 +312,11 @@ impl BackendPolicies {
 	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
+		if let Some(llm) = self.llm.as_ref() {
+			for expr in llm.expressions() {
+				ctx.register_expression(expr);
+			}
+		}
 		if let Some(health) = self.health.as_ref() {
 			health.register_expressions(ctx);
 		}
@@ -392,6 +407,7 @@ impl RoutePolicies {
 			&self.transformation as &dyn PolicyExpressions,
 			&self.csrf as &dyn PolicyExpressions,
 			&self.direct_response as &dyn PolicyExpressions,
+			&self.llm as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
 			&self.retry as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
@@ -1696,18 +1712,14 @@ impl Store {
 pub struct StoreUpdater {
 	state: Arc<RwLock<Store>>,
 }
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct RoutesDump {
 	pub http_mesh: HashMap<NamespacedHostname, RouteSet>,
 	pub tcp_mesh: HashMap<NamespacedHostname, TCPRouteSet>,
 	pub route_groups: HashMap<RouteGroupKey, RouteSet>,
 }
 
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct DumpListener {
 	#[serde(flatten)]
 	pub listener: Listener,
@@ -1717,17 +1729,14 @@ pub struct DumpListener {
 	pub tcp_routes: Option<Arc<TCPRouteSet>>,
 }
 
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct DumpBind {
 	#[serde(flatten)]
 	pub bind: Arc<Bind>,
 	pub listeners: BTreeMap<ListenerKey, DumpListener>,
 }
 
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
+#[apply(schema_ser_schema!)]
 pub struct Dump {
 	pub binds: Vec<DumpBind>,
 	pub routes: RoutesDump,

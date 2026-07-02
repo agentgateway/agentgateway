@@ -2403,9 +2403,15 @@ fn traffic_policy_from_proto(
 			})
 		},
 		Some(tps::Kind::Buffer(buffer)) => {
-			let to_body = |b: Option<proto::agent::BufferBody>| {
+			use proto::agent::traffic_policy_spec::buffer;
+
+			let to_body = |b: Option<proto::agent::traffic_policy_spec::buffer::BufferBody>| {
 				b.map(|bb| BufferBody {
 					max_bytes: bb.max_bytes.map(|v| v as usize),
+					failure_mode: match buffer::FailureMode::try_from(bb.failure_mode) {
+						Ok(buffer::FailureMode::FailOpen) => http::buffer::FailureMode::FailOpen,
+						_ => http::buffer::FailureMode::FailClosed,
+					},
 				})
 			};
 			TrafficPolicy::Buffer(RequestPolicy::single(http::buffer::Buffer {
@@ -2806,8 +2812,34 @@ fn frontend_policy_from_proto(
 						_ => types::agent::TracingProtocol::Http,
 					};
 					let path = oal.path.clone().unwrap_or_else(|| "/v1/logs".to_string());
+					let fields = oal
+						.fields
+						.as_ref()
+						.map(|f| {
+							let add = f
+								.add
+								.iter()
+								.map(|f| {
+									let expr = permissive_cel_expression_arc(
+										diagnostics,
+										format!("frontend.logging.otlp.fields.add.{}", f.name),
+										&f.expression,
+									);
+									Ok::<_, ProtoError>((f.name.clone(), expr))
+								})
+								.collect::<Result<Vec<_>, _>>()?;
+							Ok::<_, ProtoError>(frontend::AccessLogFields {
+								add: Arc::new(OrderedStringMap::from_iter(add)),
+								remove: Arc::new(FzHashSet::new(f.remove.clone())),
+							})
+						})
+						.transpose()?;
 					Ok(frontend::OtlpLoggingConfig {
 						provider_backend,
+						filter: oal.filter.as_ref().map(|expr| {
+							permissive_cel_expression_arc(diagnostics, "frontend.logging.otlp.filter", expr)
+						}),
+						fields,
 						policies,
 						protocol,
 						path,

@@ -29,7 +29,7 @@ var AllCRDs = []schema.GroupVersionResource{
 	gvr.GatewayClass,
 	gvr.HTTPRoute,
 	gvr.GRPCRoute,
-	gvr.TCPRoute,
+	wellknown.TCPRouteGVR,
 	gvr.TLSRoute,
 	gvr.ReferenceGrant,
 	gvr.BackendTLSPolicy,

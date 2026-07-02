@@ -62,6 +62,8 @@ where
 #[derive(Clone)]
 struct AdminState {
 	stores: crate::store::Stores,
+	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+	resource_manager: crate::resource_manager::ResourceManager,
 	config: Arc<Config>,
 	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
 	model_catalog: Arc<crate::llm::cost::ModelCatalog>,
@@ -113,6 +115,7 @@ impl Service {
 		config: Arc<Config>,
 		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 		stores: crate::store::Stores,
+		resource_manager: crate::resource_manager::ResourceManager,
 		shutdown_trigger: signal::ShutdownTrigger,
 		drain_rx: DrainWatcher,
 		dataplane_handle: Handle,
@@ -121,6 +124,7 @@ impl Service {
 			config,
 			model_catalog,
 			stores,
+			resource_manager,
 			shutdown_trigger,
 			dataplane_handle,
 		});
@@ -182,6 +186,7 @@ fn admin_router(state: Arc<AdminState>) -> Router {
 	let router = router.merge(crate::ui::router(
 		state.config.clone(),
 		state.model_catalog.clone(),
+		state.resource_manager.clone(),
 	));
 	#[cfg(not(feature = "ui"))]
 	let router = router.route("/", get(handle_dashboard));

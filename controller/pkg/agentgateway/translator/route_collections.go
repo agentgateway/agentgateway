@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/api"
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
@@ -437,7 +436,7 @@ func AgwRouteCollection(
 	queue *status.StatusCollections,
 	httpRouteCol krt.Collection[*gwv1.HTTPRoute],
 	grpcRouteCol krt.Collection[*gwv1.GRPCRoute],
-	tcpRouteCol krt.Collection[*gwv1a2.TCPRoute],
+	tcpRouteCol krt.Collection[*gwv1.TCPRoute],
 	tlsRouteCol krt.Collection[*gwv1.TLSRoute],
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
@@ -488,7 +487,7 @@ func AgwRouteCollection(
 	status.RegisterStatus(queue, grpcRouteStatus, GetStatus)
 
 	tcpRouteStatus, tcpRoutes := createRouteCollectionGeneric(tcpRouteCol, inputs, krtopts, "translator/TCPRoutes",
-		func(ctx RouteContext, obj *gwv1a2.TCPRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
+		func(ctx RouteContext, obj *gwv1.TCPRoute) (RouteContext, iter.Seq2[AgwTCPRoute, *reporter.RouteCondition]) {
 			route := obj.Spec
 			return ctx, func(yield func(AgwTCPRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
@@ -499,8 +498,8 @@ func AgwRouteCollection(
 					}
 				}
 			}
-		}, func(status gwv1.RouteStatus) gwv1a2.TCPRouteStatus {
-			return gwv1a2.TCPRouteStatus{RouteStatus: status}
+		}, func(status gwv1.RouteStatus) gwv1.TCPRouteStatus {
+			return gwv1.TCPRouteStatus{RouteStatus: status}
 		})
 	status.RegisterStatus(queue, tcpRouteStatus, GetStatus)
 
@@ -556,13 +555,13 @@ func AgwRouteCollection(
 		}, krtopts.ToOptions("translator/GRPCAncestors")...),
 		krt.NewManyCollection(tlsRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.TLSRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
-			return extractAncestorBackends(ctx, obj, "TLSRoute", obj.Spec.Rules, func(r gwv1.TLSRouteRule) []gwv1a2.BackendRef {
+			return extractAncestorBackends(ctx, obj, "TLSRoute", obj.Spec.Rules, func(r gwv1.TLSRouteRule) []gwv1.BackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("translator/TLSAncestors")...),
-		krt.NewManyCollection(tcpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1a2.TCPRoute) []*utils.AncestorBackend {
+		krt.NewManyCollection(tcpRouteCol, func(krtctx krt.HandlerContext, obj *gwv1.TCPRoute) []*utils.AncestorBackend {
 			ctx := inputs.WithCtx(krtctx)
-			return extractAncestorBackends(ctx, obj, "TCPRoute", obj.Spec.Rules, func(r gwv1a2.TCPRouteRule) []gwv1a2.BackendRef {
+			return extractAncestorBackends(ctx, obj, "TCPRoute", obj.Spec.Rules, func(r gwv1.TCPRouteRule) []gwv1.BackendRef {
 				return r.BackendRefs
 			})
 		}, krtopts.ToOptions("translator/TCPAncestors")...),
