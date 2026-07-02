@@ -13,6 +13,10 @@ import type {
   ProviderName,
   VirtualApiKey,
 } from "./types";
+import type {
+  ConfigResource,
+  ConfigResourceKind,
+} from "./api/configResourcesApi";
 import { keyValue } from "./credentialDisplay";
 
 const promptLogKey = "gen_ai.prompt";
@@ -127,15 +131,6 @@ export function ensureLlm(config: GatewayConfig): LlmConfig {
     config.llm = { models: [] };
     ensureLlmFrontendDefaults(config);
   }
-  if (!Array.isArray(config.llm.models)) {
-    config.llm.models = [];
-  }
-  if (!Array.isArray(config.llm.providers)) {
-    config.llm.providers = [];
-  }
-  if (!Array.isArray(config.llm.virtualModels)) {
-    config.llm.virtualModels = [];
-  }
   return config.llm;
 }
 
@@ -204,11 +199,12 @@ export function usesUiGateways(config: GatewayConfig | undefined) {
 export function upsertModel(
   config: GatewayConfig,
   model: LlmModel,
-  previousName?: string,
+  previousId?: string,
 ) {
   const llm = ensureLlm(config);
+  llm.models ??= [];
   const index = llm.models.findIndex(
-    (item) => item.name === (previousName ?? model.name),
+    (item) => modelIdentity(item) === (previousId ?? modelIdentity(model)),
   );
   if (index >= 0) {
     llm.models[index] = model;
@@ -217,9 +213,15 @@ export function upsertModel(
   }
 }
 
-export function removeModel(config: GatewayConfig, name: string) {
-  const llm = ensureLlm(config);
-  llm.models = llm.models.filter((model) => model.name !== name);
+export function removeModel(config: GatewayConfig, id: string) {
+  if (!config.llm?.models) return;
+  config.llm.models = config.llm.models.filter(
+    (model) => modelIdentity(model) !== id,
+  );
+}
+
+export function modelIdentity(model: LlmModel): string {
+  return model.id || model.name;
 }
 
 export function upsertVirtualModel(
@@ -228,6 +230,7 @@ export function upsertVirtualModel(
   previousName?: string,
 ) {
   const llm = ensureLlm(config);
+  llm.virtualModels ??= [];
   const index =
     llm.virtualModels?.findIndex(
       (item) => item.name === (previousName ?? model.name),
@@ -240,8 +243,8 @@ export function upsertVirtualModel(
 }
 
 export function removeVirtualModel(config: GatewayConfig, name: string) {
-  const llm = ensureLlm(config);
-  llm.virtualModels = (llm.virtualModels ?? []).filter(
+  if (!config.llm?.virtualModels) return;
+  config.llm.virtualModels = config.llm.virtualModels.filter(
     (model) => model.name !== name,
   );
 }
@@ -252,6 +255,7 @@ export function upsertLlmProvider(
   previousName?: string,
 ) {
   const llm = ensureLlm(config);
+  llm.providers ??= [];
   const index =
     llm.providers?.findIndex(
       (item) => item.name === (previousName ?? provider.name),
@@ -264,10 +268,53 @@ export function upsertLlmProvider(
 }
 
 export function removeLlmProvider(config: GatewayConfig, name: string) {
-  const llm = ensureLlm(config);
-  llm.providers = (llm.providers ?? []).filter(
+  if (!config.llm?.providers) return;
+  config.llm.providers = config.llm.providers.filter(
     (provider) => provider.name !== name,
   );
+}
+
+export function llmProviderResources(
+  resources: ConfigResource<ConfigResourceKind>[] | undefined,
+): LlmProvider[] {
+  return llmResourceValues(resources, "llm.provider");
+}
+
+export function llmModelResources(
+  resources: ConfigResource<ConfigResourceKind>[] | undefined,
+): LlmModel[] {
+  return llmResourceValues(resources, "llm.model");
+}
+
+export function llmVirtualModelResources(
+  resources: ConfigResource<ConfigResourceKind>[] | undefined,
+): LlmVirtualModel[] {
+  return llmResourceValues(resources, "llm.virtualModel");
+}
+
+export function llmApiKeyResources(
+  resources: ConfigResource<ConfigResourceKind>[] | undefined,
+): VirtualApiKey[] {
+  return llmResourceValues(resources, "llm.apiKey");
+}
+
+export function isDatabaseConfigResource(
+  resources: ConfigResource<ConfigResourceKind>[] | undefined,
+  kind: ConfigResourceKind,
+  id: string,
+) {
+  return (resources ?? []).some(
+    (resource) => resource.kind === kind && resource.id === id,
+  );
+}
+
+function llmResourceValues<K extends ConfigResourceKind>(
+  resources: ConfigResource<ConfigResourceKind>[] | undefined,
+  kind: K,
+) {
+  return (resources ?? [])
+    .filter((resource) => resource.kind === kind)
+    .map((resource) => resource.value) as ConfigResource<K>["value"][];
 }
 
 type LlmPolicyWithGuardrails = NonNullable<LlmConfig["policies"]> & {
@@ -466,12 +513,22 @@ export function configWarnings(config: GatewayConfig): string[] {
   const models = config.llm?.models ?? [];
   const mcpTargets = config.mcp?.targets ?? [];
   const duplicateNames = models
+    .filter((model) => !model.id)
     .map((model) => model.name)
     .filter((name, index, names) => names.indexOf(name) !== index);
   if (duplicateNames.length > 0)
     warnings.push(
-      `Duplicate model names: ${Array.from(new Set(duplicateNames)).join(", ")}.`,
+      `Duplicate model names may be ambiguous: ${Array.from(new Set(duplicateNames)).join(", ")}.`,
     );
+  const duplicateIds = models
+    .map((model) => model.id)
+    .filter((id): id is string => Boolean(id))
+    .filter((id, index, ids) => ids.indexOf(id) !== index);
+  if (duplicateIds.length > 0) {
+    warnings.push(
+      `Duplicate model IDs: ${Array.from(new Set(duplicateIds)).join(", ")}.`,
+    );
+  }
   const apiPolicy = config.llm?.policies?.apiKey;
   if (apiPolicy?.mode && apiPolicy.mode !== "strict") {
     warnings.push(
@@ -533,4 +590,10 @@ export function makeEmptyMcpTarget(): McpTarget {
       path: "/mcp",
     },
   };
+}
+
+export function enableTrafficConfig(config: GatewayConfig) {
+  if (!("gateways" in config)) {
+    config.gateways = { public: { port: 8080 } };
+  }
 }

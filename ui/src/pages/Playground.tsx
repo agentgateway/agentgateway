@@ -19,7 +19,7 @@ import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
 import { hasKeyValue, keyLabel } from "../credentialDisplay";
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from "../gatewayUrls";
 import {
-  useGatewayConfig,
+  useLlmConfigData,
   useStoredStringState,
   useUpdateConfig,
 } from "../hooks";
@@ -97,8 +97,7 @@ type RunStep = {
 };
 
 type RequestModelOption =
-  | { kind: "model"; config: LlmModel }
-  | { kind: "virtual" };
+  { kind: "model"; config: LlmModel } | { kind: "virtual" };
 
 const storageKeys = {
   model: "playgroundModel",
@@ -115,17 +114,9 @@ const legacySecretStorageKeys = [
 ];
 
 export function PlaygroundPage() {
-  const config = useGatewayConfig();
+  const { config, models, virtualModels, providers, apiKeys } =
+    useLlmConfigData();
   const updateConfig = useUpdateConfig();
-  const models = useMemo(() => config.data?.llm?.models ?? [], [config.data]);
-  const virtualModels = useMemo(
-    () => config.data?.llm?.virtualModels ?? [],
-    [config.data],
-  );
-  const providers = useMemo(
-    () => config.data?.llm?.providers ?? [],
-    [config.data],
-  );
   const modelOptions = useMemo(
     () => [
       ...models.map((item) => ({
@@ -149,14 +140,7 @@ export function PlaygroundPage() {
     ],
     [models, providers, virtualModels],
   );
-  const virtualKeys = useMemo(
-    () => config.data?.llm?.policies?.apiKey?.keys ?? [],
-    [config.data],
-  );
-  const rawVirtualKeys = useMemo(
-    () => virtualKeys.filter(hasKeyValue),
-    [virtualKeys],
-  );
+  const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
   const [storedModel, setStoredModel] = useStoredStringState(
     storageKeys.model,
     "",
@@ -1081,8 +1065,7 @@ function extractToolCalls(response: unknown): ToolCall[] {
   const choices = (response as { choices?: unknown }).choices;
   if (!Array.isArray(choices)) return [];
   const first = choices[0] as
-    | { message?: { tool_calls?: unknown } }
-    | undefined;
+    { message?: { tool_calls?: unknown } } | undefined;
   const calls = first?.message?.tool_calls;
   if (!Array.isArray(calls)) return [];
   return calls.filter((call): call is ToolCall =>

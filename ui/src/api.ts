@@ -1,5 +1,6 @@
 export * from "./api/celApi";
 export * from "./api/configApi";
+export * from "./api/configResourcesApi";
 export * from "./api/configDumpApi";
 export * from "./api/costsApi";
 export * from "./api/logsApi";

@@ -56,7 +56,7 @@ test("onboards all surfaces from a completely empty config", async ({
 
   await expect.poll(() => gateway.postedConfigs.length).toBe(1);
   expect(gateway.postedConfigs[0].gateways).toMatchObject({
-    default: { port: 8080 },
+    public: { port: 8080 },
   });
   await expect(
     page.getByRole("heading", { name: "Welcome to Agentgateway" }),
@@ -91,6 +91,163 @@ test("onboards all surfaces from a completely empty config", async ({
   await expect(
     page.getByRole("heading", { name: "Gateway Overview" }),
   ).toBeVisible();
+});
+
+test("enables traffic consistently from get started", async ({ page }) => {
+  const gateway = await mockGateway(page, {});
+  await page.goto("/traffic/get-started");
+
+  await page.getByRole("button", { name: "Enable", exact: true }).click();
+
+  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+  expect(gateway.postedConfigs[0].gateways).toEqual({
+    public: { port: 8080 },
+  });
+});
+
+test("controls the reserved default gateway name", async ({ page }) => {
+  await mockGateway(page, {
+    gateways: { public: { port: 8080 } },
+    llm: { models: [], providers: [], virtualModels: [] },
+    mcp: { targets: [] },
+    ui: {},
+  });
+  await page.goto("/traffic/gateways");
+  await page.getByRole("button", { name: "Add gateway" }).click();
+
+  const defaultGateway = page.getByRole("checkbox", {
+    name: /Default gateway/,
+  });
+  const name = page.getByRole("textbox", { name: /^Name/ });
+  await defaultGateway.check();
+  await expect(name).toHaveValue("default");
+  await expect(name).toBeDisabled();
+  await expect(page.getByText(/impact LLM, UI, MCP traffic/)).toBeVisible();
+
+  await defaultGateway.uncheck();
+  await expect(name).toHaveValue("public-2");
+  await name.fill("default");
+  await expect(page.getByText("Default name is reserved")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Save gateway" }),
+  ).toBeDisabled();
+});
+
+test("does not allow a second default gateway", async ({ page }) => {
+  await mockGateway(page, {
+    gateways: { default: { port: 8080 } },
+  });
+  await page.goto("/traffic/gateways");
+  await page.getByRole("button", { name: "Add gateway" }).click();
+
+  await expect(
+    page.getByRole("checkbox", { name: /Default gateway/ }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("Another gateway is already the default gateway."),
+  ).toBeVisible();
+});
+
+test("hybrid settings shows file diff without applying it", async ({
+  page,
+}) => {
+  const gateway = await mockGateway(page, {
+    gateways: { public: { port: 8080 } },
+  });
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+  await page.goto("/settings");
+
+  await page.getByRole("combobox", { name: "Public UI gateway" }).click();
+  await page.getByRole("option", { name: /public/ }).click();
+  const apply = page.getByRole("button", { name: "Save UI gateway" });
+  await expect(apply).toBeDisabled();
+
+  await page.getByRole("button", { name: "View diff" }).click();
+  const diff = page.locator(".drawer.nested");
+  await expect(diff).toBeVisible();
+  const save = diff.getByRole("button", { name: "Save" });
+  await expect(save).toBeDisabled();
+  await save.hover({ force: true });
+  await expect(
+    page.getByRole("tooltip").getByText(/read-only in hybrid mode/),
+  ).toBeVisible();
+  expect(gateway.postedConfigs).toHaveLength(0);
+
+  await page.keyboard.down("Control");
+  await page.keyboard.down("Shift");
+  await expect(
+    page.getByRole("tooltip").getByText(/Override active/),
+  ).toBeVisible();
+  await save.click({ force: true });
+  await page.keyboard.up("Shift");
+  await page.keyboard.up("Control");
+  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+  await expect(diff).not.toBeVisible();
+});
+
+test("raw configuration lists hybrid database resources with masked keys", async ({
+  page,
+}) => {
+  await mockGateway(page, {});
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+  await page.route("**/api/config/resources", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        resources: [
+          {
+            kind: "llm.model",
+            id: "model-id",
+            value: { id: "model-id", name: "test-model" },
+            revision: 2,
+            createdAt: "2026-07-10T00:00:00Z",
+            updatedAt: "2026-07-10T01:00:00Z",
+          },
+          {
+            kind: "llm.apiKey",
+            id: "key-id",
+            value: {
+              key: "agw_sk_supersecret123",
+              metadata: { id: "key-id", name: "Test key" },
+            },
+            revision: 1,
+            createdAt: "2026-07-10T00:00:00Z",
+            updatedAt: "2026-07-10T01:00:00Z",
+          },
+        ],
+      }),
+    }),
+  );
+  await page.goto("/raw-config");
+  await page.getByRole("tab", { name: "Database" }).click();
+
+  await expect(page.getByRole("cell", { name: "llm.model" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "llm.apiKey" })).toBeVisible();
+  await page
+    .getByRole("row", { name: /llm.apiKey/ })
+    .getByText("View JSON")
+    .click();
+  await expect(page.getByText("agw_sk_...t123")).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("agw_sk_supersecret123");
 });
 
 test("onboards LLM and MCP onto the UI gateway when present", async ({
@@ -360,6 +517,148 @@ test("creates a weighted virtual model with a concrete wildcard target", async (
       },
     },
   });
+});
+
+test("hybrid model edits use the resource's owning store", async ({ page }) => {
+  const config = emptyConfig();
+  const llm = config.llm as { models: Array<Record<string, unknown>> };
+  llm.models = [
+    {
+      name: "file-model",
+      provider: "openai",
+      params: { model: "gpt-file" },
+    },
+  ];
+  delete (llm as Record<string, unknown>).providers;
+  delete (llm as Record<string, unknown>).virtualModels;
+  const gateway = await mockGateway(page, config);
+  const resourceWrites: Array<Record<string, unknown>> = [];
+  const dbResource = {
+    kind: "llm.model",
+    id: "db-model-id",
+    value: {
+      id: "db-model-id",
+      name: "db-model",
+      provider: "openai",
+      params: { model: "gpt-db" },
+    },
+    revision: 1,
+    createdAt: "2026-07-10T00:00:00Z",
+    updatedAt: "2026-07-10T00:00:00Z",
+  };
+
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {
+          version: "test",
+          gitRevision: "test",
+          rustVersion: "test",
+          buildProfile: "test",
+          buildTarget: "test",
+        },
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+  await page.route("**/api/config/resources**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources: [dbResource] }),
+      });
+      return;
+    }
+    if (route.request().method() === "PUT") {
+      const request = route.request().postDataJSON() as {
+        resources: Array<{ value: Record<string, unknown> }>;
+      };
+      const value = request.resources[0].value;
+      resourceWrites.push(value);
+      dbResource.value = value as typeof dbResource.value;
+      dbResource.revision += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources: [dbResource] }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/llm/models");
+
+  const fileRow = page.getByRole("row", { name: /file-model/ });
+  const databaseRow = page.getByRole("row", { name: /db-model/ });
+  await expect(fileRow.getByText("File", { exact: true })).toBeVisible();
+  await expect(
+    databaseRow.getByText("Database", { exact: true }),
+  ).toBeVisible();
+
+  await fileRow.getByRole("button", { name: "Edit model" }).click();
+  await page.getByLabel("Incoming model match").fill("file-model-renamed");
+  await page.getByRole("button", { name: "View diff" }).click();
+  const diffDrawer = page.locator(".drawer.nested");
+  await expect(
+    diffDrawer.getByRole("heading", { name: "Model config diff" }),
+  ).toBeVisible();
+  await diffDrawer.getByRole("button", { name: "Close" }).first().click();
+  await page.getByRole("button", { name: "Save model" }).click();
+
+  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+  expect(resourceWrites).toHaveLength(0);
+  const savedFileConfig = gateway.postedConfigs[0] as {
+    llm?: {
+      models?: Array<{ name: string }>;
+      providers?: unknown;
+      virtualModels?: unknown;
+    };
+  };
+  expect(savedFileConfig.llm?.models?.[0]).toMatchObject({
+    name: "file-model-renamed",
+  });
+  expect(savedFileConfig.llm?.models?.[0]).not.toHaveProperty("id");
+  expect(savedFileConfig.llm).not.toHaveProperty("providers");
+  expect(savedFileConfig.llm).not.toHaveProperty("virtualModels");
+
+  await databaseRow.getByRole("button", { name: "Edit model" }).click();
+  await page.getByLabel("Incoming model match").fill("db-model-renamed");
+  await page.getByRole("button", { name: "View diff" }).click();
+  await expect(
+    diffDrawer.getByRole("heading", { name: "Model resource diff" }),
+  ).toBeVisible();
+  await diffDrawer.getByRole("button", { name: "Close" }).first().click();
+  await page.getByRole("button", { name: "Save model" }).click();
+
+  await expect.poll(() => resourceWrites.length).toBe(1);
+  expect(gateway.postedConfigs).toHaveLength(1);
+  expect(resourceWrites[0]).toMatchObject({
+    id: "db-model-id",
+    name: "db-model-renamed",
+  });
+
+  await page.goto("/llm/client-setup");
+  await page.getByRole("combobox", { name: "Model" }).click();
+  await expect(
+    page.getByRole("option", { name: "db-model-renamed" }),
+  ).toBeVisible();
+  await page.getByRole("option", { name: "db-model-renamed" }).click();
+  const clientRecipe = page.locator(".client-recipe-card");
+  await expect(clientRecipe).not.toContainText("Authorization: Bearer");
+  await expect(clientRecipe).not.toContainText("agw_sk_...");
+  await page.getByRole("combobox", { name: "Integration" }).click();
+  await page.getByRole("option", { name: "OpenAI JavaScript SDK" }).click();
+  await expect(clientRecipe).toContainText("dummy_key");
+
+  await page.goto("/llm/playground");
+  await page.getByRole("combobox", { name: "Model" }).click();
+  await expect(
+    page.getByRole("option", { name: "db-model-renamed" }),
+  ).toBeVisible();
 });
 
 test("reveals a virtual API key explicitly", async ({ page }) => {

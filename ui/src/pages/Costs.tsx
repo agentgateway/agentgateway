@@ -11,7 +11,14 @@ import {
   StatusBanner,
   formatNumber,
 } from "../components/Primitives";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import { ConfigSaveButton } from "../components/ConfigDiffDrawer";
+import {
+  takeHybridFileWriteOverride,
+  useLlmConfigData,
+  useUpdateConfig,
+  useUpsertConfigResource,
+} from "../hooks";
+import type { ConfigResource } from "../api/configResourcesApi";
 import type { GatewayConfig } from "../types";
 import { useEffect, useMemo, useState } from "react";
 
@@ -24,14 +31,46 @@ type CustomCostRow = {
   cacheWrite: string;
 };
 
+type DisplayCostSource = CostCatalogSource & {
+  storage: "Database" | "File";
+  label: string;
+};
+
 export function CostsPage() {
-  const config = useGatewayConfig();
+  const { config, hybrid, resources, configResources } = useLlmConfigData();
   const updateConfig = useUpdateConfig();
+  const upsertResource = useUpsertConfigResource();
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const sources = configuredCostSources(config.data);
-  const customRows = useMemo(() => inlineCostRows(sources), [sources]);
+  const databaseCatalog = useMemo(
+    () => modelCatalogResource(resources),
+    [resources],
+  );
+  const sources = useMemo(
+    () => [
+      ...databaseCostSources(databaseCatalog),
+      ...configuredCostSources(config.data).map(fileCostSource),
+    ],
+    [config.data, databaseCatalog],
+  );
+  const baseFile = useMemo(
+    () =>
+      configuredCostSources(config.data).find((source) => source.file)?.file,
+    [config.data],
+  );
+  const customRows = useMemo(
+    () =>
+      inlineCostRows(
+        hybrid
+          ? databaseCatalog.custom === undefined
+            ? []
+            : [{ inline: databaseCatalog.custom }]
+          : sources,
+      ),
+    [databaseCatalog, hybrid, sources],
+  );
+  const saving = updateConfig.isPending || upsertResource.isPending;
   const [editingCustom, setEditingCustom] = useState(false);
   const [customDraft, setCustomDraft] = useState<CustomCostRow[]>(customRows);
   const [customError, setCustomError] = useState<string | null>(null);
@@ -41,11 +80,13 @@ export function CostsPage() {
   }, [customRows, editingCustom]);
 
   async function refreshCosts() {
+    if (hybrid && baseFile) takeHybridFileWriteOverride();
     setRefreshing(true);
     setError(null);
     setMessage(null);
     try {
       const refreshed = await refreshBaseCostsAndConfigure(updateConfig);
+      if (hybrid) await configResources.refetch();
       setMessage(
         `Base cost catalog refreshed: ${formatNumber(refreshed.models)} models from ${formatNumber(refreshed.providers)} providers.`,
       );
@@ -66,15 +107,15 @@ export function CostsPage() {
         title="LLM Costs"
         description="Manage model cost catalogs used for analytics and request cost attribution."
         actions={
-          <button
-            className="button primary"
-            type="button"
-            disabled={refreshing || updateConfig.isPending}
+          <ConfigSaveButton
+            disabled={refreshing || saving}
+            allowHybridWrite={!baseFile}
+            hybridFileWriteMessage={`Base costs are stored in ${baseFile}. File writes are disabled in hybrid mode.`}
             onClick={() => void refreshCosts()}
           >
             <RefreshCw size={16} />
             Refresh base costs
-          </button>
+          </ConfigSaveButton>
         }
       />
       {error ? (
@@ -88,8 +129,8 @@ export function CostsPage() {
           <div>
             <h3>Catalog sources</h3>
             <p>
-              Sources are merged in order. Later sources override earlier
-              entries.
+              Sources are merged in order. Database sources load first, and
+              later file sources override them.
             </p>
           </div>
         </div>
@@ -98,6 +139,7 @@ export function CostsPage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>Storage</th>
                   <th>Source</th>
                   <th>Type</th>
                 </tr>
@@ -106,7 +148,10 @@ export function CostsPage() {
                 {sources.map((source, index) => (
                   <tr key={index}>
                     <td>
-                      <code>{sourceLabel(source)}</code>
+                      <span className="badge">{source.storage}</span>
+                    </td>
+                    <td>
+                      <code>{source.label}</code>
                     </td>
                     <td>{sourceType(source)}</td>
                   </tr>
@@ -136,7 +181,7 @@ export function CostsPage() {
                 <button
                   className="button"
                   type="button"
-                  disabled={updateConfig.isPending}
+                  disabled={saving}
                   onClick={() => {
                     setCustomDraft(customRows);
                     setCustomError(null);
@@ -148,7 +193,7 @@ export function CostsPage() {
                 <button
                   className="button primary"
                   type="button"
-                  disabled={updateConfig.isPending}
+                  disabled={saving}
                   onClick={() => void saveCustomCosts()}
                 >
                   Save
@@ -345,9 +390,19 @@ export function CostsPage() {
       return;
     }
     try {
-      await updateConfig.mutateAsync((next) =>
-        setInlineCostRows(next, customDraft),
-      );
+      if (hybrid) {
+        await upsertResource.mutateAsync({
+          kind: "modelCatalog",
+          value: {
+            ...databaseCatalog,
+            custom: inlineCatalog(customDraft),
+          },
+        });
+      } else {
+        await updateConfig.mutateAsync((next) =>
+          setInlineCostRows(next, customDraft),
+        );
+      }
       setEditingCustom(false);
     } catch (err) {
       setCustomError(
@@ -355,6 +410,46 @@ export function CostsPage() {
       );
     }
   }
+}
+
+function modelCatalogResource(resources: ConfigResource[] | undefined): {
+  base?: unknown;
+  custom?: unknown;
+} {
+  const value = resources?.find(
+    (resource) => resource.kind === "modelCatalog",
+  )?.value;
+  return record(value) as { base?: unknown; custom?: unknown };
+}
+
+function databaseCostSources(catalog: {
+  base?: unknown;
+  custom?: unknown;
+}): DisplayCostSource[] {
+  const sources: DisplayCostSource[] = [];
+  if (catalog.base !== undefined) {
+    sources.push({
+      inline: catalog.base,
+      storage: "Database",
+      label: "Base catalog",
+    });
+  }
+  if (catalog.custom !== undefined) {
+    sources.push({
+      inline: catalog.custom,
+      storage: "Database",
+      label: "Custom overrides",
+    });
+  }
+  return sources;
+}
+
+function fileCostSource(source: CostCatalogSource): DisplayCostSource {
+  return {
+    ...source,
+    storage: "File",
+    label: sourceLabel(source),
+  };
 }
 
 function sourceType(source: CostCatalogSource) {

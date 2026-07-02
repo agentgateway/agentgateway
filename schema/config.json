@@ -171,6 +171,17 @@
             }
           ]
         },
+        "configStore": {
+          "description": "Controls whether UI-managed configuration is written to the config file or a DB overlay.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawConfigStoreConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caAddress": {
           "description": "Address of the Certificate Authority used to issue SPIFFE certificates.",
           "type": [
@@ -660,6 +671,30 @@
       "additionalProperties": false,
       "required": [
         "url"
+      ]
+    },
+    "RawConfigStoreConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ConfigStoreMode",
+          "default": "file"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigStoreMode": {
+      "oneOf": [
+        {
+          "description": "Store all UI-managed configuration in the local config file.",
+          "type": "string",
+          "const": "file"
+        },
+        {
+          "description": "Read a file baseline and store UI-managed overlay resources in the configured database.",
+          "type": "string",
+          "const": "hybrid"
+        }
       ]
     },
     "RawStandardAttributes": {
@@ -10536,6 +10571,13 @@
     "LocalLLMModels": {
       "type": "object",
       "properties": {
+        "id": {
+          "description": "id is a stable identity for this model config entry. The name field remains the model match pattern.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "name": {
           "description": "name is the name of the model we are matching from a users request. If params.model is set, that\nwill be used in the request to the LLM provider. If not, the incoming model is used.",
           "type": "string"

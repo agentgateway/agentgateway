@@ -582,6 +582,66 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_model_accepts_stable_id() {
+	normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: 4f8572ff-20c4-49c1-b7c3-d1519ad1e860
+    name: ollama/*
+    provider: ollama
+"#,
+	)
+	.await
+	.expect("model id should be accepted");
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_duplicate_id() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: shared
+    name: ollama/*
+    provider: ollama
+  - id: shared
+    name: openai/*
+    provider: openAI
+"#,
+	)
+	.await
+	.expect_err("duplicate model id should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("llm.models contains duplicate model id: shared"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_empty_id() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: ""
+    name: ollama/*
+    provider: ollama
+"#,
+	)
+	.await
+	.expect_err("empty model id should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("llm.models model id cannot be empty"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
 async fn test_llm_weighted_virtual_model_allows_authorized_target() {
 	let normalized = normalize_test_config(
 		r#"

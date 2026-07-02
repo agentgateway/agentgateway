@@ -23,6 +23,7 @@ const TRACE_POLICY_KIND: &str = "llm_cost";
 
 pub struct ModelCatalog {
 	snapshot: ArcSwap<CatalogSnapshot>,
+	sources: ArcSwap<Vec<ModelCatalogSource>>,
 }
 
 impl fmt::Debug for ModelCatalog {
@@ -37,6 +38,7 @@ impl Default for ModelCatalog {
 	fn default() -> Self {
 		Self {
 			snapshot: ArcSwap::from_pointee(CatalogSnapshot::empty()),
+			sources: ArcSwap::from_pointee(Vec::new()),
 		}
 	}
 }
@@ -55,23 +57,17 @@ impl ModelCatalog {
 				ModelCatalogSource::InlineCatalog { .. } => None,
 			})
 			.collect();
+		catalog.sources.store(Arc::new(sources));
 		tokio::spawn({
-			let sources = sources.clone();
 			let catalog = catalog.clone();
 			async move {
-				match load_sources(&sources).await {
-					Ok(loaded) => {
-						log_loaded_catalog("loaded model catalog", &loaded);
-						catalog.snapshot.store(Arc::new(loaded.snapshot));
-					},
-					Err(e) => {
-						warn!("model catalog load failed; will load when the files become valid: {e:#}")
-					},
+				if let Err(e) = catalog.reload().await {
+					warn!("model catalog load failed; will load when the files become valid: {e:#}")
 				}
 			}
 		});
 		if !file_paths.is_empty() {
-			watch_catalog_files(file_paths, sources, catalog.clone())?;
+			watch_catalog_files(file_paths, catalog.clone())?;
 		}
 		Ok(catalog)
 	}
@@ -88,8 +84,24 @@ impl ModelCatalog {
 		self.snapshot.load().list_models()
 	}
 
-	pub fn replace(&self, snapshot: CatalogSnapshot) {
-		self.snapshot.store(Arc::new(snapshot));
+	pub async fn replace_sources(&self, sources: Vec<ModelCatalogSource>) -> anyhow::Result<()> {
+		if sources.is_empty() {
+			self.sources.store(Arc::new(sources));
+			self.snapshot.store(Arc::new(CatalogSnapshot::empty()));
+			return Ok(());
+		}
+		let loaded = load_sources(&sources).await?;
+		log_loaded_catalog("model catalog reloaded", &loaded);
+		self.sources.store(Arc::new(sources));
+		self.snapshot.store(Arc::new(loaded.snapshot));
+		Ok(())
+	}
+
+	pub(super) async fn reload(&self) -> anyhow::Result<()> {
+		let loaded = load_sources(&self.sources.load_full()).await?;
+		log_loaded_catalog("model catalog loaded", &loaded);
+		self.snapshot.store(Arc::new(loaded.snapshot));
+		Ok(())
 	}
 
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
@@ -518,11 +530,7 @@ fn log_loaded_catalog(message: &'static str, loaded: &LoadedCatalog) {
 	}
 }
 
-fn watch_catalog_files(
-	file_paths: Vec<PathBuf>,
-	all_sources: Vec<ModelCatalogSource>,
-	catalog: Arc<ModelCatalog>,
-) -> anyhow::Result<()> {
+fn watch_catalog_files(file_paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
 	let mut watched = crate::util::watch_files_with_options(
 		file_paths,
 		crate::util::WatchFilesOptions::default().reload_on_disappearance(true),
@@ -533,14 +541,8 @@ fn watch_catalog_files(
 	);
 	tokio::task::spawn(async move {
 		while watched.changed().await {
-			match load_sources(&all_sources).await {
-				Ok(loaded) => {
-					log_loaded_catalog("model catalog reloaded", &loaded);
-					catalog.snapshot.store(Arc::new(loaded.snapshot));
-				},
-				Err(e) => {
-					error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
-				},
+			if let Err(e) = catalog.reload().await {
+				error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
 			}
 		}
 	});
@@ -657,6 +659,7 @@ mod tests {
 	fn model_catalog(json: &str) -> ModelCatalog {
 		ModelCatalog {
 			snapshot: ArcSwap::from_pointee(CatalogSnapshot::parse(json).unwrap()),
+			..Default::default()
 		}
 	}
 

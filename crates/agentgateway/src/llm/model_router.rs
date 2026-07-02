@@ -18,6 +18,8 @@ use crate::{apply, cel, llm, schema_enum};
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRoute {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub id: Option<String>,
 	pub name: String,
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,

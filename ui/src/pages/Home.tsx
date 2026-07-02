@@ -3,6 +3,7 @@ import { Bot, Network, Server, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
+  enableTrafficConfig,
   configWarnings,
   ensureLlm,
   ensureLlmFrontendDefaults,
@@ -11,7 +12,7 @@ import {
   startupMcpConfig,
 } from "../config";
 import { refreshBaseCostsAndConfigure } from "../costs";
-import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
+import { useConfigDumpMode, useLlmConfigData, useUpdateConfig } from "../hooks";
 import { PageHeader, StatusBanner } from "../components/Primitives";
 import { trafficStats } from "../traffic";
 import {
@@ -35,7 +36,7 @@ const uiAuthPolicyKeys = [
 export function HomePage() {
   const mode = useConfigDumpMode();
   const dumpMode = mode.data?.mode === "dump";
-  const config = useGatewayConfig({
+  const { config, models, virtualModels, providers } = useLlmConfigData({
     enabled: Boolean(mode.data && mode.data.mode !== "dump"),
   });
   const update = useUpdateConfig();
@@ -43,7 +44,12 @@ export function HomePage() {
   const [locallyEnabled, setLocallyEnabled] = useState<Set<StartupSurface>>(
     () => new Set(),
   );
-  const hasLlm = Boolean(config.data?.llm);
+  const hasLlm = Boolean(
+    config.data?.llm ||
+    models.length ||
+    virtualModels.length ||
+    providers.length,
+  );
   const hasMcp = Boolean(config.data?.mcp);
   const hasTraffic = Boolean(
     config.data &&
@@ -53,8 +59,6 @@ export function HomePage() {
       "tcpRoutes" in config.data),
   );
   const hasBinds = Boolean(config.data?.binds?.length);
-  const models = config.data?.llm?.models ?? [];
-  const virtualModels = config.data?.llm?.virtualModels ?? [];
   const mcpServers = config.data?.mcp?.targets ?? [];
   const warnings = config.data ? configWarnings(config.data) : [];
   const uiGatewayNeedsAuthWarning = uiExposedWithoutAuth(config.data);
@@ -91,7 +95,7 @@ export function HomePage() {
         } else if (surface === "mcp") {
           next.mcp = startupMcpConfig(next, 3000);
         } else {
-          next.gateways ??= { default: { port: 8080 } };
+          enableTrafficConfig(next);
         }
       });
       setLocallyEnabled((current) => new Set(current).add(surface));
@@ -278,7 +282,7 @@ export function HomePage() {
           overview={[
             `${models.length} ${models.length === 1 ? "model" : "models"}`,
             `${virtualModels.length} virtual ${virtualModels.length === 1 ? "model" : "models"}`,
-            `${config.data?.llm?.providers?.length ?? 0} shared ${config.data?.llm?.providers?.length === 1 ? "provider" : "providers"}`,
+            `${providers.length} shared ${providers.length === 1 ? "provider" : "providers"}`,
             surfaceEndpointLabel(
               config.data?.llm?.gateways,
               config.data?.llm?.port ?? 4000,

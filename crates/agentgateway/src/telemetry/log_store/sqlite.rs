@@ -88,6 +88,10 @@ impl SqliteLogStore {
 			.connect_with(options)
 			.await
 			.context("failed to connect request log sqlite database")?;
+		Self::from_pool(pool).await
+	}
+
+	pub async fn from_pool(pool: SqlitePool) -> anyhow::Result<Self> {
 		sqlx::raw_sql(SCHEMA).execute(&pool).await?;
 		Ok(Self { pool })
 	}

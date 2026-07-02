@@ -127,6 +127,16 @@ button:disabled {
   opacity: 0.6;
 }
 
+button.hybrid-write-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button.hybrid-write-disabled.hybrid-write-override {
+  cursor: pointer;
+  opacity: 1;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -3382,6 +3392,50 @@ tbody tr:hover {
   margin-bottom: 14px;
 }
 
+.gateway-identity-grid {
+  margin-bottom: 0;
+}
+
+.gateway-default-option {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 22px;
+}
+
+.raw-config-view-tabs {
+  width: fit-content;
+  margin-bottom: 14px;
+}
+
+.raw-config-resource-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.raw-config-resource-table th:nth-child(1),
+.raw-config-resource-table th:nth-child(2) {
+  width: 22%;
+}
+
+.raw-config-resource-table th:nth-child(3) {
+  width: 10%;
+}
+
+.raw-config-resource-table th:nth-child(4) {
+  width: 28%;
+}
+
+.raw-config-resource-table th:nth-child(5) {
+  width: 18%;
+}
+
+.raw-config-resource-detail .json-block {
+  width: 100%;
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -3507,6 +3561,15 @@ input::placeholder,
 textarea::placeholder {
   color: var(--placeholder);
   opacity: 1;
+}
+
+input:disabled:not([type="checkbox"]),
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
 }
 
 input:focus,

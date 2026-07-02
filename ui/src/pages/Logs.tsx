@@ -44,7 +44,7 @@ import {
   uiLogAttributeExpressions,
 } from "../config";
 import { queryParam, useStickyQueryParam } from "../drawerRouteState";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import { useLlmConfigData, useUpdateConfig } from "../hooks";
 import {
   Drawer,
   EmptyState,
@@ -87,11 +87,21 @@ import type {
 
 export function LogsPage() {
   const navigate = useNavigate({ from: "/llm/logs" });
-  const config = useGatewayConfig();
+  const {
+    config,
+    models: configuredModels,
+    virtualModels,
+    providers,
+  } = useLlmConfigData();
   const updateConfig = useUpdateConfig();
   const models = useMemo(
-    () => llmModelOptions(config.data?.llm),
-    [config.data],
+    () =>
+      llmModelOptions({
+        models: configuredModels,
+        virtualModels,
+        providers,
+      }),
+    [configuredModels, providers, virtualModels],
   );
   const promptLoggingEnabled = promptCompletionLoggingEnabled(config.data);
   const [settings, setSettings] = useStickyQueryParam("settings");

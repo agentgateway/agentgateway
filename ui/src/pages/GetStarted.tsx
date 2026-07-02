@@ -2,6 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Bot, Network, Server } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
+  enableTrafficConfig,
   ensureLlmFrontendDefaults,
   startupLlmConfig,
   startupMcpConfig,
@@ -116,12 +117,8 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
               next,
               parsePort(port, defaultSurfacePort(props.surface)),
             );
-        } else if (!("gateways" in next)) {
-          next.gateways = {
-            default: {
-              port: parsePort(port, defaultSurfacePort(props.surface)),
-            },
-          };
+        } else {
+          enableTrafficConfig(next);
         }
       });
       void navigate({ to: surface.destination });
@@ -228,5 +225,6 @@ function parsePort(value: string, fallback: number) {
 
 function defaultSurfacePort(surface: SurfaceKind) {
   if (surface === "llm") return 4000;
+  if (surface === "traffic") return 8080;
   return 3000;
 }

@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import {
   invalidProviderApiKey,
+  isDatabaseConfigResource,
   makeEmptyModel,
   makeEmptyVirtualModel,
+  modelIdentity,
   modelWarnings,
   providerDisplayName,
   providerLabel,
@@ -25,7 +27,12 @@ import {
   upsertModel,
   upsertVirtualModel,
 } from "../config";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useDeleteConfigResource,
+  useLlmConfigData,
+  useUpdateConfig,
+  useUpsertConfigResource,
+} from "../hooks";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
@@ -109,20 +116,21 @@ type ConditionalVirtualTarget = NonNullable<
 >["targets"][number];
 
 export function ModelsPage() {
-  const config = useGatewayConfig();
+  const {
+    config,
+    hybrid,
+    configResources,
+    resources,
+    models,
+    virtualModels,
+    providers,
+  } = useLlmConfigData();
   const update = useUpdateConfig();
+  const upsertResource = useUpsertConfigResource();
+  const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
-  const models = useMemo(() => config.data?.llm?.models ?? [], [config.data]);
-  const virtualModels = useMemo(
-    () => config.data?.llm?.virtualModels ?? [],
-    [config.data],
-  );
-  const providers = useMemo(
-    () => config.data?.llm?.providers ?? [],
-    [config.data],
-  );
   const [editing, setEditing] = useState<{
-    previousName?: string;
+    previousId?: string;
     model: LlmModel;
   } | null>(() => {
     const provider = providerFromUrl();
@@ -134,6 +142,7 @@ export function ModelsPage() {
   } | null>(null);
   const [deleting, setDeleting] = useState<{
     kind: "model" | "virtual model";
+    id: string;
     name: string;
   } | null>(null);
   const [modelHash, setModelHashState] = useState<ModelHash | null>(() =>
@@ -141,7 +150,9 @@ export function ModelsPage() {
   );
   const hashEditModel =
     modelHash?.kind === "edit"
-      ? (models.find((model) => model.name === modelHash.modelName) ?? null)
+      ? (models.find((model) => modelIdentity(model) === modelHash.modelId) ??
+        models.find((model) => model.name === modelHash.modelId) ??
+        null)
       : null;
   const activeEditing =
     editing ??
@@ -150,7 +161,7 @@ export function ModelsPage() {
       : null) ??
     (hashEditModel
       ? {
-          previousName: hashEditModel.name,
+          previousId: modelIdentity(hashEditModel),
           model: structuredClone(hashEditModel),
         }
       : null);
@@ -159,6 +170,26 @@ export function ModelsPage() {
     (modelHash?.kind === "add" && modelHash.type === "virtual"
       ? { model: makeEmptyVirtualModel() }
       : null);
+  const editingDatabaseModel = Boolean(
+    hybrid &&
+    activeEditing &&
+    (!activeEditing.previousId ||
+      isDatabaseConfigResource(
+        resources,
+        "llm.model",
+        activeEditing.previousId,
+      )),
+  );
+  const editingDatabaseVirtualModel = Boolean(
+    hybrid &&
+    activeVirtualEditing &&
+    (!activeVirtualEditing.previousName ||
+      isDatabaseConfigResource(
+        resources,
+        "llm.virtualModel",
+        activeVirtualEditing.previousName,
+      )),
+  );
   const modelRows = useMemo(
     () => [
       ...models.map((model) => ({ kind: "model" as const, model })),
@@ -170,6 +201,8 @@ export function ModelsPage() {
   useEffect(() => {
     function syncSelectedFromUrl() {
       update.reset();
+      upsertResource.reset();
+      deleteResource.reset();
       setEditing(null);
       setEditingVirtual(null);
       setModelHashState(modelHashFromUrl());
@@ -180,17 +213,27 @@ export function ModelsPage() {
       window.removeEventListener("hashchange", syncSelectedFromUrl);
       window.removeEventListener("popstate", syncSelectedFromUrl);
     };
-  }, [update]);
+  }, [deleteResource, update, upsertResource]);
+
+  const saving =
+    update.isPending || upsertResource.isPending || deleteResource.isPending;
+  const saveError =
+    update.error?.message ??
+    upsertResource.error?.message ??
+    deleteResource.error?.message ??
+    null;
+  const saved =
+    update.isSuccess || upsertResource.isSuccess || deleteResource.isSuccess;
 
   function openModelEditor(model: LlmModel) {
-    update.reset();
+    resetSaves();
     setEditing(null);
-    setModelHashState({ kind: "edit", modelName: model.name });
-    setModelHash({ kind: "edit", modelName: model.name }, "push");
+    setModelHashState({ kind: "edit", modelId: modelIdentity(model) });
+    setModelHash({ kind: "edit", modelId: modelIdentity(model) }, "push");
   }
 
   function openNewModel() {
-    update.reset();
+    resetSaves();
     clearModelSearch();
     setModelHashState(null);
     setEditing(null);
@@ -199,7 +242,7 @@ export function ModelsPage() {
   }
 
   function openNewVirtualModel() {
-    update.reset();
+    resetSaves();
     clearModelSearch();
     setEditingVirtual(null);
     setModelHashState({ kind: "add", type: "virtual" });
@@ -207,7 +250,7 @@ export function ModelsPage() {
   }
 
   function closeModelEditor() {
-    update.reset();
+    resetSaves();
     setEditing(null);
     clearModelSearch();
     if (
@@ -220,12 +263,82 @@ export function ModelsPage() {
   }
 
   function closeVirtualModelEditor() {
-    update.reset();
+    resetSaves();
     setEditingVirtual(null);
     if (modelHash?.kind === "add" && modelHash.type === "virtual") {
       setModelHashState(null);
       setModelHash(null, "replace");
     }
+  }
+
+  function resetSaves() {
+    update.reset();
+    upsertResource.reset();
+    deleteResource.reset();
+  }
+
+  function saveModel(model: LlmModel, previousId?: string) {
+    if (
+      hybrid &&
+      (!previousId ||
+        isDatabaseConfigResource(resources, "llm.model", previousId))
+    ) {
+      model.id ??= crypto.randomUUID();
+      upsertResource.mutate(
+        { kind: "llm.model", value: model, previousId },
+        { onSuccess: closeModelEditor },
+      );
+      return;
+    }
+    update.mutate((next) => upsertModel(next, model, previousId), {
+      onSuccess: closeModelEditor,
+    });
+  }
+
+  function deleteModel(id: string) {
+    if (hybrid && isDatabaseConfigResource(resources, "llm.model", id)) {
+      deleteResource.mutate(
+        { kind: "llm.model", id },
+        { onSuccess: () => setDeleting(null) },
+      );
+      return;
+    }
+    update.mutate((next) => removeModel(next, id), {
+      onSuccess: () => setDeleting(null),
+    });
+  }
+
+  function saveVirtualModel(model: LlmVirtualModel, previousName?: string) {
+    if (
+      hybrid &&
+      (!previousName ||
+        isDatabaseConfigResource(resources, "llm.virtualModel", previousName))
+    ) {
+      upsertResource.mutate(
+        { kind: "llm.virtualModel", value: model, previousId: previousName },
+        { onSuccess: closeVirtualModelEditor },
+      );
+      return;
+    }
+    update.mutate((next) => upsertVirtualModel(next, model, previousName), {
+      onSuccess: closeVirtualModelEditor,
+    });
+  }
+
+  function deleteVirtualModel(name: string) {
+    if (
+      hybrid &&
+      isDatabaseConfigResource(resources, "llm.virtualModel", name)
+    ) {
+      deleteResource.mutate(
+        { kind: "llm.virtualModel", id: name },
+        { onSuccess: () => setDeleting(null) },
+      );
+      return;
+    }
+    update.mutate((next) => removeVirtualModel(next, name), {
+      onSuccess: () => setDeleting(null),
+    });
   }
 
   return (
@@ -255,21 +368,19 @@ export function ModelsPage() {
         }
       />
 
-      {update.isError ? (
+      {saveError ? (
         <StatusBanner state="bad" title="Save failed">
-          {update.error.message}
+          {saveError}
         </StatusBanner>
       ) : null}
-      {update.isSuccess ? (
-        <StatusBanner state="ok" title="Configuration saved" />
-      ) : null}
+      {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
 
       <Panel>
-        {config.isLoading ? (
+        {config.isLoading || (hybrid && configResources.isLoading) ? (
           <StatusBanner state="loading" title="Loading models" />
-        ) : config.isError ? (
+        ) : config.isError || (hybrid && configResources.isError) ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error.message}
+            {config.error?.message ?? configResources.error?.message}
           </StatusBanner>
         ) : modelRows.length === 0 ? (
           <EmptyState
@@ -302,6 +413,7 @@ export function ModelsPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  {hybrid ? <th>Source</th> : null}
                   <th>Provider</th>
                   <th>Outgoing model</th>
                   <th>Policy state</th>
@@ -315,6 +427,19 @@ export function ModelsPage() {
                     return (
                       <tr key={`virtual:${model.name}`}>
                         <td className="strong">{model.name}</td>
+                        {hybrid ? (
+                          <td>
+                            <span className="badge">
+                              {isDatabaseConfigResource(
+                                resources,
+                                "llm.virtualModel",
+                                model.name,
+                              )
+                                ? "Database"
+                                : "File"}
+                            </span>
+                          </td>
+                        ) : null}
                         <td>
                           <span className="badge">
                             <GitBranch size={14} /> Virtual
@@ -357,10 +482,11 @@ export function ModelsPage() {
                               className="icon-button danger"
                               aria-label="Delete model"
                               type="button"
-                              disabled={update.isPending}
+                              disabled={saving}
                               onClick={() =>
                                 setDeleting({
                                   kind: "virtual model",
+                                  id: model.name,
                                   name: model.name,
                                 })
                               }
@@ -375,8 +501,21 @@ export function ModelsPage() {
                   const model = row.model;
                   const warnings = modelWarnings(model);
                   return (
-                    <tr key={`model:${model.name}`}>
+                    <tr key={`model:${modelIdentity(model)}`}>
                       <td className="strong">{model.name}</td>
+                      {hybrid ? (
+                        <td>
+                          <span className="badge">
+                            {isDatabaseConfigResource(
+                              resources,
+                              "llm.model",
+                              modelIdentity(model),
+                            )
+                              ? "Database"
+                              : "File"}
+                          </span>
+                        </td>
+                      ) : null}
                       <td>
                         <ModelProviderBadge
                           model={model}
@@ -416,9 +555,13 @@ export function ModelsPage() {
                             className="icon-button danger"
                             aria-label="Delete model"
                             type="button"
-                            disabled={update.isPending}
+                            disabled={saving}
                             onClick={() =>
-                              setDeleting({ kind: "model", name: model.name })
+                              setDeleting({
+                                kind: "model",
+                                id: modelIdentity(model),
+                                name: model.name,
+                              })
                             }
                           >
                             <Trash2 size={16} />
@@ -436,20 +579,17 @@ export function ModelsPage() {
 
       {activeEditing ? (
         <ModelEditor
-          key={activeEditing.previousName ?? "new"}
-          previousName={activeEditing.previousName}
+          key={activeEditing.previousId ?? "new"}
+          previousId={activeEditing.previousId}
           initial={activeEditing.model}
           config={config.data}
+          databaseBacked={editingDatabaseModel}
           providers={providers}
           help={help}
-          saving={update.isPending}
-          saveError={update.isError ? update.error.message : null}
+          saving={saving}
+          saveError={saveError}
           onCancel={closeModelEditor}
-          onSave={(model, previousName) => {
-            update.mutate((next) => upsertModel(next, model, previousName), {
-              onSuccess: closeModelEditor,
-            });
-          }}
+          onSave={saveModel}
         />
       ) : null}
       {activeVirtualEditing ? (
@@ -458,20 +598,14 @@ export function ModelsPage() {
           previousName={activeVirtualEditing.previousName}
           initial={activeVirtualEditing.model}
           config={config.data}
+          databaseBacked={editingDatabaseVirtualModel}
           baseModels={models}
           providers={providers}
           help={help}
-          saving={update.isPending}
-          saveError={update.isError ? update.error.message : null}
+          saving={saving}
+          saveError={saveError}
           onCancel={closeVirtualModelEditor}
-          onSave={(model, previousName) =>
-            update.mutate(
-              (next) => upsertVirtualModel(next, model, previousName),
-              {
-                onSuccess: closeVirtualModelEditor,
-              },
-            )
-          }
+          onSave={saveVirtualModel}
         />
       ) : null}
       {deleting ? (
@@ -479,16 +613,12 @@ export function ModelsPage() {
           title={`Delete ${deleting.kind}?`}
           destructive
           confirmLabel={`Delete ${deleting.kind}`}
-          confirmDisabled={update.isPending}
+          confirmDisabled={saving}
           onCancel={() => setDeleting(null)}
           onConfirm={() =>
-            update.mutate(
-              (next) =>
-                deleting.kind === "virtual model"
-                  ? removeVirtualModel(next, deleting.name)
-                  : removeModel(next, deleting.name),
-              { onSuccess: () => setDeleting(null) },
-            )
+            deleting.kind === "virtual model"
+              ? deleteVirtualModel(deleting.id)
+              : deleteModel(deleting.id)
           }
         >
           <p>
@@ -503,13 +633,14 @@ export function ModelsPage() {
 function ModelEditor(props: {
   initial: LlmModel;
   config?: GatewayConfig;
+  databaseBacked: boolean;
   providers: LlmProvider[];
-  previousName?: string;
+  previousId?: string;
   help: SchemaHelp;
   saving: boolean;
   saveError?: string | null;
   onCancel: () => void;
-  onSave: (model: LlmModel, previousName?: string) => void;
+  onSave: (model: LlmModel, previousId?: string) => void;
 }) {
   const [model, setModel] = useState<LlmModel>(() => {
     if (props.initial.name || !props.initial.provider) return props.initial;
@@ -609,7 +740,7 @@ function ModelEditor(props: {
       return;
     }
     setPolicyError(null);
-    props.onSave(preview ?? model, props.previousName);
+    props.onSave(preview ?? model, props.previousId);
   }
 
   function validateBeforeDiff() {
@@ -626,14 +757,26 @@ function ModelEditor(props: {
 
   return (
     <Drawer
-      title={props.previousName ? "Edit model" : "Add model"}
+      title={props.previousId ? "Edit model" : "Add model"}
       onClose={props.onCancel}
       dirty={draft !== initialDraft}
       saving={props.saving}
       footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
-          diffTitle="Model config diff"
+          resourceDiff={
+            props.databaseBacked
+              ? {
+                  original: props.previousId
+                    ? modelConfigForDisplay(props.initial)
+                    : {},
+                  modified: modelConfigForDisplay(preview),
+                }
+              : undefined
+          }
+          diffTitle={
+            props.databaseBacked ? "Model resource diff" : "Model config diff"
+          }
           saveLabel="Save model"
           saving={props.saving}
           saveDisabled={!model.name.trim() || !preview?.provider}
@@ -641,7 +784,7 @@ function ModelEditor(props: {
           onSave={save}
           beforeDiff={validateBeforeDiff}
           applyDiff={(next) =>
-            upsertModel(next, preview ?? model, props.previousName)
+            upsertModel(next, preview ?? model, props.previousId)
           }
         />
       )}
@@ -716,7 +859,7 @@ function ModelEditor(props: {
               current.name === currentDefault;
             if (shouldUseDefault) setAutoModelMatch(true);
             if (
-              !props.previousName &&
+              !props.previousId &&
               shouldUseDefault &&
               stripPrefixCandidate(nextDefault)
             )
@@ -816,7 +959,7 @@ function ModelEditor(props: {
       {providerSelected ? (
         <details>
           <summary>Generated model config</summary>
-          <YamlBlock value={preview ?? {}} />
+          <YamlBlock value={modelConfigForDisplay(preview)} />
         </details>
       ) : null}
     </Drawer>
@@ -1173,6 +1316,7 @@ function modelPolicySummary(model: Partial<LlmModel>) {
 function VirtualModelEditor(props: {
   initial: LlmVirtualModel;
   config?: GatewayConfig;
+  databaseBacked: boolean;
   previousName?: string;
   baseModels: LlmModel[];
   providers: LlmProvider[];
@@ -1320,7 +1464,19 @@ function VirtualModelEditor(props: {
       footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
-          diffTitle="Virtual model config diff"
+          resourceDiff={
+            props.databaseBacked
+              ? {
+                  original: props.previousName ? props.initial : {},
+                  modified: preview ?? {},
+                }
+              : undefined
+          }
+          diffTitle={
+            props.databaseBacked
+              ? "Virtual model resource diff"
+              : "Virtual model config diff"
+          }
           saveLabel="Save virtual model"
           saving={props.saving}
           saveDisabled={saveDisabled}
@@ -1869,6 +2025,12 @@ function optionalMappingYamlText(
   value: Record<string, unknown> | null | undefined,
 ) {
   return value && Object.keys(value).length ? toYamlText(value) : "";
+}
+
+function modelConfigForDisplay(model: LlmModel | undefined) {
+  if (!model) return {};
+  const { id: _id, ...config } = model;
+  return config;
 }
 
 function initialUpstreamMode(model: LlmModel): UpstreamModelMode {

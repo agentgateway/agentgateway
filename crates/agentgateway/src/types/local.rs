@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -734,6 +734,9 @@ impl LocalRateLimitPolicy {
 
 #[apply(schema_de!)]
 pub struct LocalLLMModels {
+	/// id is a stable identity for this model config entry. The name field remains the model match pattern.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	id: Option<String>,
 	/// name is the name of the model we are matching from a users request. If params.model is set, that
 	/// will be used in the request to the LLM provider. If not, the incoming model is used.
 	name: String,
@@ -3908,8 +3911,17 @@ impl LocalLLMModelRegistry {
 	}
 
 	fn validate_model_patterns(&self) -> anyhow::Result<()> {
+		let mut ids = HashSet::new();
 		for model in &self.models {
 			validate_llm_model_pattern(&model.name)?;
+			if let Some(id) = model.id.as_ref() {
+				if id.is_empty() {
+					bail!("llm.models model id cannot be empty");
+				}
+				if !ids.insert(id) {
+					bail!("llm.models contains duplicate model id: {id}");
+				}
+			}
 		}
 		Ok(())
 	}
@@ -4155,8 +4167,11 @@ async fn convert_llm_config(
 		model_config.apply_provider_defaults();
 		model_config.apply_base_url()?;
 		let model_name = strng::new(&model_config.name);
-		// Index is needed because the same name can be used with different match criteria
-		let backend_key = strng::format!("llm:model:{}:{idx}", model_config.name);
+		// Index is needed when the same model pattern without an ID has different match criteria.
+		let backend_key = match &model_config.id {
+			Some(id) => strng::format!("llm:model:{id}"),
+			None => strng::format!("llm:model:{}:{idx}", model_config.name),
+		};
 		let p = model_config.params.clone();
 		let model = p.model;
 		let llm_routes = llm_route_types(model_config.passthrough.as_ref());
@@ -4425,6 +4440,7 @@ async fn convert_llm_config(
 		});
 
 		router_models.push(llm::model_router::ModelRoute {
+			id: model_config.id.clone(),
 			name: model_config.name.clone(),
 			visibility: model_config.visibility,
 			header_matches: model_config

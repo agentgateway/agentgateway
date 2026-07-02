@@ -15,8 +15,9 @@ use crate::telemetry::trc;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::util::ErrorContext;
 use crate::{
-	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingFields,
-	RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
+	Address, Config, ConfigSource, ConfigStoreConfig, ConfigStoreMode, DnsLookupFamily,
+	NestedRawConfig, RawLoggingFields, RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel,
+	client, serdes, telemetry, types,
 };
 
 const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
@@ -359,10 +360,16 @@ pub fn parse_config(
 		})
 		.or(raw.model_catalog)
 		.unwrap_or_default();
-	let database = raw
-		.database
+	let shared_database = raw.database.clone();
+	let database = shared_database
 		.clone()
 		.or_else(|| raw.logging.as_ref().and_then(|l| l.database.clone()));
+	let config_store = ConfigStoreConfig {
+		mode: raw.config_store.clone().unwrap_or_default().mode,
+	};
+	if config_store.mode == ConfigStoreMode::Hybrid && shared_database.is_none() {
+		anyhow::bail!("configStore.mode=hybrid requires config.database.url");
+	}
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -550,6 +557,7 @@ pub fn parse_config(
 			sources: model_catalog_sources,
 		},
 		database,
+		config_store,
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
@@ -1224,6 +1232,75 @@ config:
 			err
 				.to_string()
 				.contains("config.tracing requires otlpEndpoint"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn config_store_defaults_to_file_mode() {
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.config_store.mode, ConfigStoreMode::File);
+		assert!(config.database.is_none());
+	}
+
+	#[test]
+	fn config_store_hybrid_uses_shared_database_url() {
+		let config = parse_config(
+			r#"
+config:
+  database:
+    url: "sqlite::memory:"
+  configStore:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect("hybrid config should parse with primary database");
+
+		assert_eq!(config.config_store.mode, ConfigStoreMode::Hybrid);
+		assert_eq!(
+			config.database.as_ref().map(|db| db.url.as_str()),
+			Some("sqlite::memory:")
+		);
+
+		let err = parse_config(
+			r#"
+config:
+  configStore:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("hybrid config without database should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("configStore.mode=hybrid requires config.database.url"),
+			"unexpected error: {err}"
+		);
+
+		let err = parse_config(
+			r#"
+config:
+  logging:
+    database:
+      url: "sqlite::memory:"
+  configStore:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("hybrid config should require top-level database");
+
+		assert!(
+			err
+				.to_string()
+				.contains("configStore.mode=hybrid requires config.database.url"),
 			"unexpected error: {err}"
 		);
 	}
