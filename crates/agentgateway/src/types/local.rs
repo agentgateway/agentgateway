@@ -1881,10 +1881,7 @@ where
 {
 	Option::<BackendAuthCompat>::deserialize(deserializer)?
 		.map(|auth| match auth {
-			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(mut auth)) => {
-				auth
-					.apply_local_defaults()
-					.map_err(serde::de::Error::custom)?;
+			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;

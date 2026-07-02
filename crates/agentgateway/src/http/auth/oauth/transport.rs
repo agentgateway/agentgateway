@@ -87,7 +87,7 @@ impl TokenResponse {
 		}
 
 		if let Some(issued) = &self.issued_token_type {
-			let issued: OAuthTokenType = issued.parse().map_err(|_| {
+			let issued = OAuthTokenType::from_urn(issued).ok_or_else(|| {
 				FetchError::Upstream(anyhow!(
 					"token exchange returned unusable issued_token_type: {issued}"
 				))
@@ -210,8 +210,8 @@ fn build_token_request_form(
 					.append_pair("actor_token", actor_token.expose_secret())
 					.append_pair("actor_token_type", actor_token_type.as_str());
 			}
-			if let Some(rtt) = &auth.requested_token_type {
-				ser.append_pair("requested_token_type", rtt);
+			if let Some(rtt) = auth.requested_token_type {
+				ser.append_pair("requested_token_type", rtt.as_str());
 			}
 		},
 		OAuthGrantType::JwtBearer => {

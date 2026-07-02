@@ -36,7 +36,7 @@ impl InMemoryTokenCache {
 		fetch: F,
 	) -> Result<TokenCacheResult, E>
 	where
-		F: FnOnce(&ExchangeRequest) -> Fut,
+		F: FnOnce() -> Fut,
 		Fut: Future<Output = Result<TokenEndpointResponse, E>>,
 	{
 		let now = SystemTime::now();
@@ -62,7 +62,7 @@ impl InMemoryTokenCache {
 		let TokenEndpointResponse {
 			access_token,
 			expires_in,
-		} = fetch(req).await?;
+		} = fetch().await?;
 
 		if let Some(expires_at) = cache_expiry(expires_in, subject_token, self.default_ttl) {
 			let _ = guard.insert(CachedToken {
@@ -192,6 +192,7 @@ mod tests {
 	use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 	use rstest::rstest;
 
+	use super::super::OAuthTokenType;
 	use super::*;
 
 	struct CacheFetch {
@@ -210,7 +211,7 @@ mod tests {
 	fn exchange_req(subject: &str, token_type: &str) -> ExchangeRequest {
 		ExchangeRequest {
 			subject_token: subject.to_string().into(),
-			subject_token_type: token_type.parse().unwrap(),
+			subject_token_type: OAuthTokenType::from_urn(token_type).unwrap(),
 			..Default::default()
 		}
 	}
@@ -232,7 +233,7 @@ mod tests {
 		let calls = Arc::clone(calls);
 
 		cache
-			.get_or_insert_with(req, move |_| {
+			.get_or_insert_with(req, move || {
 				calls.fetch_add(1, Ordering::Relaxed);
 				std::future::ready(Ok::<_, Infallible>(TokenEndpointResponse {
 					access_token: access_token.into(),

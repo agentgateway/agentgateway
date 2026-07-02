@@ -3317,7 +3317,7 @@
           }
         },
         "cache": {
-          "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `inMemory.maxEntries` to 0 to disable.",
+          "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.",
           "anyOf": [
             {
               "$ref": "#/$defs/TokenCacheConfig"
@@ -3484,23 +3484,6 @@
       ]
     },
     "TokenCacheConfig": {
-      "type": "object",
-      "properties": {
-        "inMemory": {
-          "description": "In-memory token response cache. When unset, default in-memory settings are used.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InMemoryTokenCacheConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "InMemoryTokenCacheConfig": {
       "type": "object",
       "properties": {
         "maxEntries": {
