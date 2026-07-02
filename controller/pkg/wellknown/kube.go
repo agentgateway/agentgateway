@@ -11,6 +11,7 @@ import (
 
 var (
 	DeploymentGVK              = appsv1.SchemeGroupVersion.WithKind("Deployment")
+	DaemonSetGVK               = appsv1.SchemeGroupVersion.WithKind("DaemonSet")
 	SecretGVK                  = corev1.SchemeGroupVersion.WithKind("Secret")
 	ConfigMapGVK               = corev1.SchemeGroupVersion.WithKind("ConfigMap")
 	ServiceGVK                 = corev1.SchemeGroupVersion.WithKind("Service")
@@ -21,4 +22,5 @@ var (
 	HorizontalPodAutoscalerGVK = autoscalingv2.SchemeGroupVersion.WithKind("HorizontalPodAutoscaler")
 	// VerticalPodAutoscaler is from the autoscaling.k8s.io API group (VPA custom resource)
 	VerticalPodAutoscalerGVK = schema.GroupVersionKind{Group: "autoscaling.k8s.io", Version: "v1", Kind: "VerticalPodAutoscaler"}
+	VerticalPodAutoscalerGVR = VerticalPodAutoscalerGVK.GroupVersion().WithResource("verticalpodautoscalers")
 )

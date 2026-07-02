@@ -39,6 +39,7 @@ var AllCRDs = []schema.GroupVersionResource{
 	// K8s API
 	gvr.Service,
 	gvr.Pod,
+	wellknown.VerticalPodAutoscalerGVR,
 	// Istio API
 	gvr.ServiceEntry,
 	gvr.WorkloadEntry,

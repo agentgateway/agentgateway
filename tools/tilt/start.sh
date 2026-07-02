@@ -16,27 +16,32 @@
 
 set -eu
 
+state_dir="/tmp/agentgateway-live-update"
+process_file="$state_dir/process.txt"
+restart_file="$state_dir/restart.txt"
 process_id=""
 
 trap quit TERM INT
 
 quit() {
   if [ -n "$process_id" ]; then
-    kill $process_id
+    kill "$process_id"
   fi
 }
 
+mkdir -p "$state_dir"
+
 while true; do
-    rm -f restart.txt
+    rm -f "$restart_file"
 
     "$@" &
     process_id=$!
-    echo "$process_id" > process.txt
+    echo "$process_id" > "$process_file"
     set +e
-    wait $process_id
+    wait "$process_id"
     EXIT_CODE=$?
     set -e
-    if [ ! -f restart.txt ]; then
+    if [ ! -f "$restart_file" ]; then
         echo "Exiting with code $EXIT_CODE"
         exit $EXIT_CODE
     fi

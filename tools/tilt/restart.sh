@@ -14,12 +14,15 @@
 #   To restart the container:
 #   ./restart.sh
 
-set -u
+set -eu
 
-touch restart.txt
-PID="$(cat process.txt)"
-if [ $? -ne 0 ]; then
+state_dir="/tmp/agentgateway-live-update"
+process_file="$state_dir/process.txt"
+restart_file="$state_dir/restart.txt"
+
+if ! PID="$(cat "$process_file")"; then
   echo "unable to read process.txt. was your process started with start.sh?"
   exit 1
 fi
+touch "$restart_file"
 kill "$PID"
