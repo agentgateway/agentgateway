@@ -1574,6 +1574,7 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1632,6 +1633,7 @@ fn test_messages_long_tool_name_round_trip_response() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
