@@ -448,40 +448,60 @@ async fn proxy_policy_v1_rejects_v2_header() {
 	assert_eq!(read, 0);
 }
 
-#[tokio::test]
-async fn tracing_exports_to_otel_trace_mock() {
+type ExportedTraces =
+	Arc<StdMutex<Vec<opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest>>>;
+
+/// Spawns a mock OTLP trace collector that records every export it receives.
+async fn spawn_capturing_otel_mock() -> (crate::test_helpers::MockInstance, ExportedTraces) {
 	unsafe {
 		// Drop export time to make tests fast
 		std::env::set_var("OTEL_BLRP_SCHEDULE_DELAY", "20");
 		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
 	}
-	struct CountingTraceHandler {
-		exports: Arc<AtomicUsize>,
+	struct CapturingTraceHandler {
+		captured: ExportedTraces,
 	}
 
 	#[async_trait::async_trait]
-	impl oteltracemock::Handler for CountingTraceHandler {
+	impl oteltracemock::Handler for CapturingTraceHandler {
 		async fn export(
 			&mut self,
-			_request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
 		) -> Result<
 			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
 			tonic::Status,
 		> {
-			self.exports.fetch_add(1, Ordering::SeqCst);
+			self.captured.lock().unwrap().push(request.clone());
 			oteltracemock::ok_response()
 		}
 	}
 
-	let exports = Arc::new(AtomicUsize::new(0));
+	let captured: ExportedTraces = Arc::new(StdMutex::new(Vec::new()));
 	let otel = oteltracemock::OtelTraceMock::new({
-		let exports = Arc::clone(&exports);
-		move || CountingTraceHandler {
-			exports: Arc::clone(&exports),
+		let captured = Arc::clone(&captured);
+		move || CapturingTraceHandler {
+			captured: Arc::clone(&captured),
 		}
 	})
 	.spawn()
 	.await;
+	(otel, captured)
+}
+
+/// Waits until at least one trace export has been captured.
+async fn wait_for_export(captured: &ExportedTraces) {
+	tokio::time::timeout(Duration::from_secs(2), async {
+		while captured.lock().unwrap().is_empty() {
+			tokio::task::yield_now().await;
+		}
+	})
+	.await
+	.expect("expected an export before timeout");
+}
+
+#[tokio::test]
+async fn tracing_exports_to_otel_trace_mock() {
+	let (otel, captured) = spawn_capturing_otel_mock().await;
 
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
@@ -496,15 +516,48 @@ async fn tracing_exports_to_otel_trace_mock() {
 	let res = send_request(io, Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
 
-	tokio::time::timeout(Duration::from_secs(2), async {
-		while exports.load(Ordering::SeqCst) == 0 {
-			tokio::task::yield_now().await;
-		}
-	})
-	.await
-	.unwrap();
+	wait_for_export(&captured).await;
+	assert_eq!(captured.lock().unwrap().len(), 1);
+}
 
-	assert_eq!(exports.load(Ordering::SeqCst), 1);
+#[tokio::test]
+async fn tracing_attributes_are_exported_on_spans() {
+	// End-to-end: a `tracing.attributes` expression referencing the request body must
+	// show up on the exported span. This exercises the full plumbing (tracer build,
+	// registering the attribute expressions, buffering the body, and evaluating them
+	// at export time), not just the individual primitives.
+	let (otel, captured) = spawn_capturing_otel_mock().await;
+
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_frontend_policy(json!({
+			"tracing": {
+				"host": otel.address.to_string(),
+				"randomSampling": true,
+				"attributes": {
+					"test.body_len": "size(request.body)"
+				}
+			}
+		}))
+		.await;
+
+	let body = b"hello world";
+	let res = send_request_body(io, Method::POST, "http://lo", body).await;
+	assert_eq!(res.status(), 200);
+
+	wait_for_export(&captured).await;
+
+	let export = captured.lock().unwrap().remove(0);
+	let span = &export.resource_spans[0].scope_spans[0].spans[0];
+	let attr = span
+		.attributes
+		.iter()
+		.find(|kv| kv.key == "test.body_len")
+		.expect("test.body_len attribute should be present on the exported span");
+	assert_eq!(
+		attr.value.as_ref().and_then(|v| v.value.clone()),
+		Some(opentelemetry_proto::tonic::common::v1::any_value::Value::IntValue(body.len() as i64))
+	);
 }
 
 #[tokio::test]
