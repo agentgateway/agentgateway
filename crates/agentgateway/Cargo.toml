@@ -17,6 +17,7 @@ tls-openssl = ["dep:openssl", "dep:rustls-openssl"]
 ui = []
 schema = ["schemars"]
 internal_benches = ["divan"]
+fuzzing = []
 
 [dependencies]
 agent-core.workspace = true

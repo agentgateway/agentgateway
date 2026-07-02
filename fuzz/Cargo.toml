@@ -1,0 +1,45 @@
+[package]
+name = "agentgateway-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[patch.crates-io]
+schemars = { git = "https://github.com/howardjohn/schemars", rev = "4364354fa41897a0c2001d891c0a9a38eafedb82" }
+http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
+wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b96083125fdabc3e62f92790ee15ae3a10d" }
+
+[dependencies]
+agentgateway = { path = "../crates/agentgateway", features = ["fuzzing"] }
+libfuzzer-sys = "0.4"
+once_cell = "1.21"
+rmcp = "=1.6.0"
+serde_json = "1.0"
+tokio = { version = "1.50", features = ["io-util", "rt"] }
+
+[[bin]]
+name = "proxy_protocol"
+path = "fuzz_targets/proxy_protocol.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "llm_request_conversions"
+path = "fuzz_targets/llm_request_conversions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cel_expression"
+path = "fuzz_targets/cel_expression.rs"
+test = false
+doc = false
+bench = false
