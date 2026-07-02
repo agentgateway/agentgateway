@@ -219,5 +219,47 @@ binds:
             #         - query
             #         resourceDocumentation: http://localhost:3000/okta/docs
             #         resourcePolicyUri: http://localhost:3000/okta/policies
+            # Example configuration for Descope:
+            # - backends:
+            #   - mcp:
+            #       targets:
+            #       - name: everything
+            #         stdio:
+            #           args:
+            #           - '@modelcontextprotocol/server-everything'
+            #           cmd: npx
+            #   matches:
+            #   - path:
+            #       exact: /descope/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-protected-resource/descope/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/descope/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/descope/mcp/client-registration
+            #   policies:
+            #     cors:
+            #       allowHeaders:
+            #       - mcp-protocol-version
+            #       - content-type
+            #       allowOrigins:
+            #       - '*'
+            #     mcpAuthentication:
+            #       issuer: https://api.descope.com/v1/apps/agentic/<project-id>/<server-id>
+            #       audiences:
+            #       - <your-audience>
+            #       provider:
+            #         descope: {}
+            #       # clientId is recommended — DCR requires a management key not available to MCP clients
+            #       clientId: <pre-registered-client-id>
+            #       resourceMetadata:
+            #         resource: http://localhost:3000/descope/mcp
+            #         scopesSupported:
+            #         - openid
+            #         - profile
+            #         bearerMethodsSupported:
+            #         - header
+            #         resourceDocumentation: http://localhost:3000/descope/docs
+            #         resourcePolicyUri: http://localhost:3000/descope/policies
   # Public port to listen on
   port: 3000
