@@ -1,7 +1,7 @@
 package plugins
 
 import (
-	"sort"
+	"cmp"
 
 	"istio.io/istio/pilot/pkg/util/protoconv"
 	"istio.io/istio/pkg/config"
@@ -155,8 +155,8 @@ func TypedResourceFromName(typ string, o types.NamespacedName) *api.TypedResourc
 }
 
 func appendPolicyForGateways(policies []AgwPolicy, gatewayTargets []types.NamespacedName, policy *api.Policy) []AgwPolicy {
-	sort.Slice(gatewayTargets, func(i, j int) bool {
-		return gatewayTargets[i].String() < gatewayTargets[j].String()
+	slices.SortFunc(gatewayTargets, func(a, b types.NamespacedName) int {
+		return cmp.Compare(a.String(), b.String())
 	})
 	for _, gatewayTarget := range gatewayTargets {
 		policies = append(policies, AgwPolicy{

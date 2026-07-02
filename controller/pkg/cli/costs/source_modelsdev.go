@@ -1,13 +1,14 @@
 package costs
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -114,7 +115,7 @@ func modelsDevSelectProviders(api map[string]modelsDevProvider, requested []stri
 			ids = append(ids, id)
 		}
 	}
-	sort.Strings(ids)
+	slices.Sort(ids)
 	return ids
 }
 
@@ -221,7 +222,7 @@ func modelsDevBuildTiers(src []modelsDevTier, label string, warn func(format str
 		}
 		tiers = append(tiers, Tier{ContextOver: t.Tier.Size, Rates: rates})
 	}
-	sort.Slice(tiers, func(i, j int) bool { return tiers[i].ContextOver < tiers[j].ContextOver })
+	slices.SortFunc(tiers, func(a, b Tier) int { return cmp.Compare(a.ContextOver, b.ContextOver) })
 	return tiers, nil
 }
 

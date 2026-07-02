@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"sort"
 	"strings"
 
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -1599,7 +1598,7 @@ func namespacesFromSelector(ctx krt.HandlerContext, localNamespace string, names
 		}
 	}
 	// Ensure stable order
-	sort.Strings(namespaces)
+	slices.Sort(namespaces)
 	return namespaces
 }
 
@@ -1755,7 +1754,7 @@ func truncatedKeysMessage(data map[string][]byte) string {
 	for k := range data {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	if len(keys) < 3 {
 		return strings.Join(keys, ", ")
 	}

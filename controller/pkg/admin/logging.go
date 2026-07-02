@@ -3,7 +3,7 @@ package admin
 import (
 	"fmt"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
@@ -27,7 +27,7 @@ func getLoggingDescription() string {
 	for comp := range componentLevels {
 		components = append(components, comp)
 	}
-	sort.Strings(components) // Sort alphabetically
+	slices.Sort(components) // Sort alphabetically
 
 	for _, comp := range components {
 		componentSelector.WriteString(fmt.Sprintf(`<option value="%s">%s (Current: %s)</option>`, comp, comp, logging.LevelToString(componentLevels[comp])))

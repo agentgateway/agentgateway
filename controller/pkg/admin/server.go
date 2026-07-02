@@ -2,12 +2,13 @@ package admin
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"sort"
+	"slices"
 	"time"
 
 	"istio.io/istio/pkg/kube/krt"
@@ -119,8 +120,8 @@ func index(profileDescriptions map[string]dynamicProfileDescription) func(w http
 			})
 		}
 
-		sort.Slice(profiles, func(i, j int) bool {
-			return profiles[i].Name < profiles[j].Name
+		slices.SortFunc(profiles, func(a, b profile) int {
+			return cmp.Compare(a.Name, b.Name)
 		})
 
 		// Adding other profiles exposed from within this package

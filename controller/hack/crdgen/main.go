@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,7 +12,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -322,13 +322,13 @@ func inferredMarkerCandidates(parser *crd.Parser) ([]inferredMarkerCandidate, er
 	}
 
 	// Sort so processing order (and which error surfaces first) is deterministic.
-	sort.Slice(candidates, func(i, j int) bool {
-		iPkg := loader.NonVendorPath(candidates[i].typ.Package.PkgPath)
-		jPkg := loader.NonVendorPath(candidates[j].typ.Package.PkgPath)
+	slices.SortFunc(candidates, func(a, b inferredMarkerCandidate) int {
+		iPkg := loader.NonVendorPath(a.typ.Package.PkgPath)
+		jPkg := loader.NonVendorPath(b.typ.Package.PkgPath)
 		if iPkg != jPkg {
-			return iPkg < jPkg
+			return cmp.Compare(iPkg, jPkg)
 		}
-		return candidates[i].typ.Name < candidates[j].typ.Name
+		return cmp.Compare(a.typ.Name, b.typ.Name)
 	})
 	return candidates, nil
 }
@@ -756,7 +756,7 @@ func dedupeAndSort(in []string) []string {
 		seen[v] = struct{}{}
 		out = append(out, v)
 	}
-	sort.Strings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -783,7 +783,7 @@ func sortedPropertyNames(schema *apiextensionsv1.JSONSchemaProps) []string {
 	for name := range namesSet {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names
 }
 
@@ -845,7 +845,7 @@ func allJSONFieldNamesForType(
 	for field := range fieldSet {
 		fields = append(fields, field)
 	}
-	sort.Strings(fields)
+	slices.Sort(fields)
 
 	fieldCache[typ] = fields
 	return append([]string(nil), fields...), nil

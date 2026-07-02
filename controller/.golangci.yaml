@@ -13,6 +13,7 @@ linters:
   enable:
     - bodyclose
     - copyloopvar
+    - depguard
     - forbidigo
     - ginkgolinter
     - gomodguard_v2
@@ -100,6 +101,12 @@ linters:
               isFirstField: Ignore
               useProtobuf: Forbid
               usePatchStrategy: Ignore
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: sort
+              desc: Should be replaced with slices package
     forbidigo:
       forbid:
         - pattern: anypb.New
