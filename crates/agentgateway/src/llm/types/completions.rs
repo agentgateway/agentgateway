@@ -327,7 +327,7 @@ impl super::RequestType for Request {
 		provider: &Provider,
 		headers: Option<&::http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<Vec<u8>, AIError> {
+	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
 		conversion::bedrock::from_completions::translate(self, provider, headers, prompt_caching)
 	}
 
@@ -376,6 +376,7 @@ impl super::RequestType for Request {
 				dimensions: None,
 			},
 			prompt: Default::default(),
+			provider_state: None,
 		};
 		Ok(llm)
 	}

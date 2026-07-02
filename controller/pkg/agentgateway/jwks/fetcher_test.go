@@ -332,7 +332,7 @@ func TestFetchJwksViaProxy(t *testing.T) {
 	var proxyRequestCount atomic.Int32
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proxyRequestCount.Add(1)
-		outReq, err := http.NewRequestWithContext(r.Context(), r.Method, r.URL.String(), r.Body)
+		outReq, err := http.NewRequestWithContext(r.Context(), r.Method, r.URL.String(), r.Body) //nolint:gosec // Test proxy forwards requests
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -394,7 +394,7 @@ func TestFetchJwksViaProxyWithTLS(t *testing.T) {
 		}
 		connectCount.Add(1)
 
-		destConn, err := net.Dial("tcp", r.Host)
+		destConn, err := net.Dial("tcp", r.Host) //nolint:gosec // Test proxy dials to target host
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return

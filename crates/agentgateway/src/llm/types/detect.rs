@@ -104,6 +104,7 @@ impl RequestType for Request {
 				dimensions: self.lookup(lookups::DIMENSIONS, |v| v.as_u64()),
 			},
 			prompt: Default::default(),
+			provider_state: None,
 		})
 	}
 
@@ -129,8 +130,11 @@ impl RequestType for Request {
 		_provider: &Provider,
 		_headers: Option<&HeaderMap>,
 		_prompt_caching: Option<&PromptCachingConfig>,
-	) -> Result<Vec<u8>, AIError> {
-		self.to_openai()
+	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
+		Ok(crate::llm::conversion::bedrock::BedrockRequest {
+			body: self.to_openai()?,
+			tool_name_map: Default::default(),
+		})
 	}
 	fn to_bedrock_token_count(&self, _headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
 		self.to_openai()
@@ -199,6 +203,7 @@ mod tests {
 			streaming: false,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		}
 	}
 

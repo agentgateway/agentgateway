@@ -115,6 +115,7 @@ impl RequestType for Request {
 			streaming: false,
 			params: LLMRequestParams::default(),
 			prompt: Default::default(),
+			provider_state: None,
 		})
 	}
 
@@ -136,8 +137,11 @@ impl RequestType for Request {
 		provider: &crate::llm::bedrock::Provider,
 		_headers: Option<&::http::HeaderMap>,
 		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<Vec<u8>, AIError> {
-		crate::llm::conversion::bedrock::from_rerank::translate(self, provider)
+	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
+		Ok(crate::llm::conversion::bedrock::BedrockRequest {
+			body: crate::llm::conversion::bedrock::from_rerank::translate(self, provider)?,
+			tool_name_map: Default::default(),
+		})
 	}
 
 	fn to_vertex(&self, provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {

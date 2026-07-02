@@ -536,16 +536,6 @@ message DirectResponse {
   repeated ExpressionHeader headers = 4;
 }
 
-message BufferBody {
-  optional uint32 max_bytes = 1;
-}
-
-message Buffer {
-  optional BufferBody request = 1;
-  optional BufferBody response = 2;
-}
-
-
 message ExpressionHeader {
   string name = 1;
   string expression = 2;
@@ -733,6 +723,10 @@ message FrontendPolicySpec {
       Protocol protocol = 3;
       // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/logs.
       optional string path = 4;
+      // CEL expression to filter OTLP logs. If unset, inherits Logging.filter.
+      optional string filter = 5;
+      // Fields applied to OTLP logs. If unset, inherits Logging.fields.
+      Fields fields = 6;
 
       enum Protocol {
         HTTP = 0;
@@ -1103,6 +1097,22 @@ message TrafficPolicySpec {
   }
 
   PolicyPhase phase = 1;
+
+  message Buffer {
+    enum FailureMode {
+      FAIL_CLOSED = 0;
+      FAIL_OPEN = 1;
+    }
+
+    message BufferBody {
+      optional uint32 max_bytes = 1;
+      FailureMode failure_mode = 2;
+    }
+
+    optional BufferBody request = 1;
+    optional BufferBody response = 2;
+  }
+
   oneof kind {
     Timeout timeout = 2;
     Retry retry = 3;
@@ -1447,6 +1457,7 @@ message BackendPolicySpec {
       AUTH0 = 1;
       KEYCLOAK = 2;
       OKTA = 3;
+      DESCOPE = 4;
     }
 
     // Validation mode for JWT authentication

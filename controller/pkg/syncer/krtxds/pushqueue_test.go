@@ -1,9 +1,10 @@
 package krtxds
 
 import (
+	"cmp"
 	"fmt"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"sync"
 	"testing"
@@ -342,10 +343,10 @@ func TestProxyQueue(t *testing.T) {
 						updated = append(updated, configkey)
 					}
 				}
-				sort.Slice(updated, func(i, j int) bool {
-					l, _ := strconv.Atoi(updated[i])
-					r, _ := strconv.Atoi(updated[j])
-					return l < r
+				slices.SortFunc(updated, func(a, b string) int {
+					l, _ := strconv.Atoi(a)
+					r, _ := strconv.Atoi(b)
+					return cmp.Compare(l, r)
 				})
 				processed = append(processed, updated...)
 				if len(processed) == 100 {

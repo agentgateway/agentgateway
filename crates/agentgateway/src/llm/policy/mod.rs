@@ -5,7 +5,7 @@ use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::http::filters::HeaderModifier;
+use crate::http::filters::{BackendRequestTimeout, HeaderModifier};
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
@@ -16,6 +16,13 @@ use crate::types::agent::{
 	BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference,
 };
 use crate::*;
+
+fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
+	req
+		.extensions_mut()
+		.insert(BackendRequestTimeout(Duration::from_secs(10)));
+	req
+}
 
 pub mod webhook;
 
@@ -147,6 +154,16 @@ pub struct Policy {
 		schemars(with = "std::collections::HashMap<String, crate::llm::RouteType>")
 	)]
 	pub routes: SortedRoutes,
+}
+
+impl crate::store::HasExpressions for Policy {
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self
+			.transformations
+			.iter()
+			.flatten()
+			.map(|(_, expr)| expr.as_ref())
+	}
 }
 
 /// Wildcard pattern converted to regex for model name matching.
@@ -622,6 +639,26 @@ impl Policy {
 		// Slow path: bytes --> json (transform) --> typed
 		let v: serde_json::Value =
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+		self.unmarshal_request_value(v, log)
+	}
+
+	pub fn unmarshal_request_value<T: DeserializeOwned>(
+		&self,
+		v: serde_json::Value,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<T, AIError> {
+		let v = self.apply_request_body_mutations(v, log)?;
+		serde_json::from_value(v).map_err(AIError::RequestParsing)
+	}
+
+	pub fn apply_request_body_mutations(
+		&self,
+		v: serde_json::Value,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<serde_json::Value, AIError> {
+		if !self.has_request_body_mutations() {
+			return Ok(v);
+		}
 		let exec = cel::Executor::new_llm(log.as_ref().and_then(|x| x.request_snapshot.as_deref()), &v);
 		let to_set: Vec<_> = self
 			.transformations
@@ -649,7 +686,7 @@ impl Policy {
 		for (k, v) in self.defaults.iter().flatten() {
 			map.entry(k.clone()).or_insert_with(|| v.clone());
 		}
-		serde_json::from_value(serde_json::Value::Object(map)).map_err(AIError::RequestParsing)
+		Ok(serde_json::Value::Object(map))
 	}
 
 	fn eval_transformation_expression(

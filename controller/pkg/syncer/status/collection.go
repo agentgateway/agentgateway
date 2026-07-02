@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -115,7 +114,7 @@ func enqueueStatus[T any](sw WorkerQueue, obj controllers.Object, ws T, extraGVK
 		res.GroupVersionKind = wellknown.GatewayGVK
 	case *gwv1.HTTPRoute:
 		res.GroupVersionKind = wellknown.HTTPRouteGVK
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		res.GroupVersionKind = wellknown.TCPRouteGVK
 	case *gwv1.TLSRoute:
 		res.GroupVersionKind = wellknown.TLSRouteGVK

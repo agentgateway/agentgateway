@@ -46,6 +46,7 @@ impl RequestType for Request {
 			streaming: false,
 			params: Default::default(),
 			prompt: Default::default(),
+			provider_state: None,
 		})
 	}
 

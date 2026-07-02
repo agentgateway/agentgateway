@@ -8,7 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -94,7 +93,7 @@ func (r *ReportMap) route(obj metav1.Object) *RouteReport {
 	switch obj.(type) {
 	case *gwv1.HTTPRoute:
 		return r.HTTPRoutes[key]
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		return r.TCPRoutes[key]
 	case *gwv1.TLSRoute:
 		return r.TLSRoutes[key]
@@ -116,7 +115,7 @@ func (r *ReportMap) newRouteReport(obj metav1.Object) *RouteReport {
 	switch obj.(type) {
 	case *gwv1.HTTPRoute:
 		r.HTTPRoutes[key] = rr
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		r.TCPRoutes[key] = rr
 	case *gwv1.TLSRoute:
 		r.TLSRoutes[key] = rr

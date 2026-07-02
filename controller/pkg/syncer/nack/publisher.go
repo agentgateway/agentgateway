@@ -99,5 +99,5 @@ func (p *Publisher) PublishNack(event *NackEvent) {
 	p.eventRecorder.Event(gatewayRef, corev1.EventTypeWarning, ReasonNack, event.ErrorMsg)
 	p.eventRecorder.Event(deploymentRef, corev1.EventTypeWarning, ReasonNack, event.ErrorMsg)
 
-	log.Debug("published NACK event for Gateway", "gateway", event.Gateway, "typeURL", event.TypeUrl)
+	log.Debug("published NACK event for Gateway", "gateway", event.Gateway, "type_url", event.TypeUrl)
 }

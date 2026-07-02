@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 
 use ::http::HeaderName;
 use bytes::Bytes;
@@ -11,6 +12,7 @@ use tracing::{debug, warn};
 use crate::cel;
 use crate::http::envoy_proto_common::json_to_prost_value;
 use crate::http::ext_proc::GrpcReferenceChannel;
+use crate::http::filters::BackendRequestTimeout;
 use crate::mcp::guardrails::wire::ext_mcp_client::ExtMcpClient;
 use crate::mcp::guardrails::wire::{
 	self, AuthorizationError, McpRequest, McpResponse, mcp_request_result, mcp_response_result,
@@ -20,6 +22,14 @@ use crate::mcp::guardrails::{
 };
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;
+
+fn with_default_timeout<T>(msg: T) -> tonic::Request<T> {
+	let mut req = tonic::Request::new(msg);
+	req
+		.extensions_mut()
+		.insert(BackendRequestTimeout(Duration::from_secs(10)));
+	req
+}
 
 pub(crate) async fn check_request<P: serde::de::DeserializeOwned>(
 	remote: &Remote,
@@ -41,7 +51,7 @@ pub(crate) async fn check_request<P: serde::de::DeserializeOwned>(
 		headers,
 	};
 	let mut grpc = build_client(remote, client.clone());
-	let tonic_req = tonic::Request::new(req);
+	let tonic_req = with_default_timeout(req);
 	let resp = match grpc.check_request(tonic_req).await {
 		Ok(resp) => resp.into_inner(),
 		Err(status) => return on_grpc_error(remote, method, backends, "checkRequest", status),
@@ -191,7 +201,7 @@ pub(crate) async fn check_response(
 		mcp_response,
 	};
 	let mut grpc = build_client(remote, client.clone());
-	let tonic_req = tonic::Request::new(req);
+	let tonic_req = with_default_timeout(req);
 	let result = match grpc.check_response(tonic_req).await {
 		Ok(resp) => resp.into_inner().result,
 		Err(status) => return on_grpc_error(remote, method, backends, "checkResponse", status),

@@ -16,6 +16,13 @@ impl HTTPAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
 		Self(rs)
 	}
+	pub fn merge(mut self, other: Self) -> Self {
+		self.0.0.extend(other.0.0);
+		self
+	}
+	pub fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.0.expressions()
+	}
 	pub fn apply(&self, req: &http::Request) -> anyhow::Result<()> {
 		tracing::debug!(info=?http::DebugExtensions(req), "Checking HTTP request");
 		let exec = cel::Executor::new_request(req);
@@ -45,7 +52,25 @@ impl crate::store::RequestPolicyTrait for HTTPAuthorizationSet {
 	}
 }
 
-#[derive(Clone, Debug)]
+impl crate::store::BackendPolicyTrait for HTTPAuthorizationSet {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut Option<&mut crate::telemetry::log::RequestLog>,
+		req: &mut http::Request,
+	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(req)
+			.map_err(|_| crate::proxy::ProxyResponse::from(ProxyError::AuthorizationFailed))?;
+		Ok(http::PolicyResponse::default())
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.0.expressions()
+	}
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct NetworkAuthorizationSet(RuleSets);
 
 impl NetworkAuthorizationSet {
@@ -184,9 +209,7 @@ where
 	Ok(res)
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct RuleSets(Vec<Arc<RuleSet>>);
 
 impl From<Vec<RuleSet>> for RuleSets {

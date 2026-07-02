@@ -8,12 +8,16 @@ use super::*;
 async fn spawn_admin(cfg: &str) -> (SocketAddr, agent_core::drain::DrainTrigger) {
 	let config = Arc::new(crate::config::parse_config(cfg.to_string(), None).unwrap());
 	let stores = crate::store::Stores::new(config.ipv6_enabled, config.threading_mode);
+	let client = crate::client::Client::new(&config.dns, None, Default::default(), None);
+	let resource_manager =
+		crate::resource_manager::ResourceManager::new(client).expect("resource manager");
 	let shutdown = signal::Shutdown::new();
 	let (drain_tx, drain_rx) = agent_core::drain::new();
 	let svc = Service::new(
 		config,
 		crate::llm::cost::ModelCatalog::empty(),
 		stores,
+		resource_manager,
 		shutdown.trigger(),
 		drain_rx,
 		Handle::current(),

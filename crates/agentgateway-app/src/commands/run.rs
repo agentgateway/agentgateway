@@ -86,9 +86,10 @@ async fn validate(
 	let client = client::Client::new(&config.dns, None, BackendConfig::default(), None);
 	if let Some(cfg) = config.xds.local_config.as_ref() {
 		let cs = cfg.read_to_string().await?;
+		let resources = agentgateway::resource_manager::ResourceFetcher::direct(client);
 		agentgateway::types::local::NormalizedLocalConfig::from(
 			&config,
-			client,
+			&resources,
 			ListenerTarget {
 				gateway_name: strng::literal!("default"),
 				gateway_namespace: strng::literal!("default"),

@@ -11,10 +11,10 @@ use serde_json::Value;
 use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, Response};
 use crate::types::agent::{
-	BackendReference, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, RouteBackendReference,
-	TrafficPolicy,
+	Authorization, BackendReference, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch,
+	RouteBackendReference,
 };
-use crate::{apply, cel, schema_enum};
+use crate::{apply, cel, llm, schema_enum};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,8 +23,15 @@ pub struct ModelRoute {
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,
 	pub backend_key: Strng,
-	pub route_policies: Vec<TrafficPolicy>,
+	pub policies: ModelRoutePolicies,
 	pub backend_policies: Vec<BackendTrafficPolicy>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoutePolicies {
+	pub llm: Arc<llm::Policy>,
+	pub authorization: Option<Authorization>,
 }
 
 #[apply(schema_enum!)]
@@ -47,7 +54,7 @@ impl ModelVisibility {
 #[serde(rename_all = "camelCase")]
 pub struct VirtualModelRoute {
 	pub name: String,
-	pub route_policies: Vec<TrafficPolicy>,
+	pub llm_policy: Arc<llm::Policy>,
 	pub routing: VirtualModelRouting,
 }
 
@@ -84,7 +91,7 @@ pub struct ModelRouter {
 #[derive(Debug, Clone)]
 pub struct ResolvedBackend {
 	pub backend: RouteBackendReference,
-	pub route_policies: Vec<TrafficPolicy>,
+	pub llm_policy: Arc<llm::Policy>,
 }
 
 pub enum ResolveResult {
@@ -208,7 +215,7 @@ impl ModelRouter {
 						target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
 						inline_policies: vec![],
 					},
-					route_policies: virtual_model.route_policies.clone(),
+					llm_policy: virtual_model.llm_policy.clone(),
 				});
 			},
 			VirtualModelRouting::Conditional(targets) => {
@@ -275,7 +282,7 @@ impl ModelRouter {
 				target: BackendReference::Backend(strng::format!("/{}", model.backend_key)).into(),
 				inline_policies: model.backend_policies.clone(),
 			},
-			route_policies: model.route_policies.clone(),
+			llm_policy: model.policies.llm.clone(),
 		})
 	}
 }
@@ -315,12 +322,10 @@ fn llm_error_response(status: ::http::StatusCode, message: &str, code: &str) -> 
 
 fn model_authorized(model: &ModelRoute, req: &Request) -> bool {
 	let rules = model
-		.route_policies
+		.policies
+		.authorization
 		.iter()
-		.filter_map(|policy| match policy {
-			TrafficPolicy::Authorization(authorization) => Some(authorization.0.clone()),
-			_ => None,
-		})
+		.map(|authorization| authorization.0.clone())
 		.collect::<Vec<_>>();
 	if rules.is_empty() {
 		return true;

@@ -240,25 +240,30 @@ func TranslateAgentgatewayPolicy(
 		Name        string
 		Namespace   string
 		SectionName string
+		Port        int32
 	}
 	seen := make(map[targetKey]struct{})
-	tryProcessTarget := func(gk schema.GroupKind, name gwv1.ObjectName, sectionName *gwv1.SectionName, targetNamespace string) {
+	tryProcessTarget := func(gk schema.GroupKind, name gwv1.ObjectName, sectionName *gwv1.SectionName, port *gwv1.PortNumber, targetNamespace string) {
 		section := ""
 		if sectionName != nil {
 			section = string(*sectionName)
 		}
-		key := targetKey{Group: gk.Group, Kind: gk.Kind, Name: string(name), Namespace: targetNamespace, SectionName: section}
+		var portNum int32
+		if port != nil {
+			portNum = int32(*port)
+		}
+		key := targetKey{Group: gk.Group, Kind: gk.Kind, Name: string(name), Namespace: targetNamespace, SectionName: section, Port: portNum}
 		if _, ok := seen[key]; ok {
 			return
 		}
 		seen[key] = struct{}{}
-		policyTargets, targetExists := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName)
+		policyTargets, targetExists := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName, port)
 		processTarget(name, targetNamespace, gk, policyTargets, targetExists)
 	}
 
 	for _, target := range policy.Spec.TargetRefs {
 		gk := schema.GroupKind{Group: string(target.Group), Kind: string(target.Kind)}
-		tryProcessTarget(gk, target.Name, target.SectionName, policy.Namespace)
+		tryProcessTarget(gk, target.Name, target.SectionName, target.Port, policy.Namespace)
 	}
 	for _, selector := range policy.Spec.TargetSelectors {
 		gk := schema.GroupKind{Group: string(selector.Group), Kind: string(selector.Kind)}
@@ -567,14 +572,21 @@ func translateTrafficPolicyToAgw(
 	return agwPolicies, errors.Join(errs...)
 }
 
-func translateBufferBody(b *agentgateway.BufferBody) *api.BufferBody {
+func bufferBodyFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_Buffer_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.TrafficPolicySpec_Buffer_FAIL_OPEN
+	}
+	return api.TrafficPolicySpec_Buffer_FAIL_CLOSED
+}
+
+func translateBufferBody(b *agentgateway.BufferBody) *api.TrafficPolicySpec_Buffer_BufferBody {
+	bBody := &api.TrafficPolicySpec_Buffer_BufferBody{}
 	if b != nil {
 		if v := b.MaxBytes; v != nil {
-			return &api.BufferBody{
-				MaxBytes: quantityUint32(v),
-			}
+			bBody.MaxBytes = quantityUint32(v)
 		}
-		return &api.BufferBody{}
+		bBody.FailureMode = bufferBodyFailureMode(b.FailureMode)
+		return bBody
 	}
 
 	return nil
@@ -582,7 +594,7 @@ func translateBufferBody(b *agentgateway.BufferBody) *api.BufferBody {
 
 func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, policyName types.NamespacedName) (*api.Policy, error) {
 	var errs []error
-	translatedBuffer := &api.Buffer{}
+	translatedBuffer := &api.TrafficPolicySpec_Buffer{}
 	translatedBuffer.Request = translateBufferBody(buffer.Request)
 	translatedBuffer.Response = translateBufferBody(buffer.Response)
 
@@ -591,7 +603,7 @@ func processBufferPolicy(buffer *agentgateway.Buffer, basePolicyName string, pol
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policyName),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Buffer{
+				Kind: &api.TrafficPolicySpec_Buffer_{
 					Buffer: translatedBuffer,
 				},
 			},
@@ -1286,15 +1298,15 @@ func processExtProcTraffic(
 	extProc *agentgateway.ExtProc,
 	policy types.NamespacedName,
 ) (*api.Policy_Traffic, error) {
-	var backendErr error
+	var errs []error
 	var be *api.BackendReference
 	if extProc.BackendRef == nil {
-		backendErr = fmt.Errorf("failed to build extProc: backendRef is required")
+		errs = append(errs, fmt.Errorf("failed to build extProc: backendRef is required"))
 	} else {
 		var err error
 		be, err = BuildBackendRef(ctx, *extProc.BackendRef, policy.Namespace)
 		if err != nil {
-			backendErr = fmt.Errorf("failed to build extProc: %v", err)
+			errs = append(errs, fmt.Errorf("failed to build extProc: %v", err))
 		}
 	}
 
@@ -1329,13 +1341,29 @@ func processExtProcTraffic(
 		}
 	}
 
+	spec.RequestAttributes = castCELMap(extProc.RequestAttributes, func(key string, expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("extProc requestAttributes %q is not a valid CEL expression: %s", key, expr))
+	})
+	spec.ResponseAttributes = castCELMap(extProc.ResponseAttributes, func(key string, expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("extProc responseAttributes %q is not a valid CEL expression: %s", key, expr))
+	})
+	if len(extProc.MetadataContext) > 0 {
+		spec.MetadataContext = make(map[string]*api.TrafficPolicySpec_ExtProc_NamespacedMetadataContext, len(extProc.MetadataContext))
+		for ns, ctx := range extProc.MetadataContext {
+			context := castCELMap(ctx, func(key string, expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("extProc metadataContext %q/%q is not a valid CEL expression: %s", ns, key, expr))
+			})
+			spec.MetadataContext[ns] = &api.TrafficPolicySpec_ExtProc_NamespacedMetadataContext{Context: context}
+		}
+	}
+
 	return &api.Policy_Traffic{
 		Traffic: &api.TrafficPolicySpec{
 			Kind: &api.TrafficPolicySpec_ExtProc_{
 				ExtProc: spec,
 			},
 		},
-	}, backendErr
+	}, errors.Join(errs...)
 }
 
 func toBodySendMode(mode agentgateway.BodySendMode) api.TrafficPolicySpec_ExtProc_BodySendMode {
@@ -1918,6 +1946,11 @@ func attachmentName(target *api.PolicyTarget) string {
 		if v.Gateway.Listener != nil {
 			b += "/" + *v.Gateway.Listener
 		}
+		if v.Gateway.Port != nil {
+			// Use a "port=" marker (the "=" is invalid in a SectionName) so a numeric
+			// listener name (e.g. "443") can't produce the same key suffix as a port.
+			b += "/port=" + strconv.Itoa(int(*v.Gateway.Port))
+		}
 		return b
 	case *api.PolicyTarget_Route:
 		b := ":" + v.Route.Namespace + "/" + v.Route.Name
@@ -2021,7 +2054,7 @@ func BackendReferencesFromPolicyForSource(
 	}
 	for _, tgt := range s.TargetRefs {
 		gk := schema.GroupKind{Group: string(tgt.Group), Kind: string(tgt.Kind)}
-		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName)
+		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName, tgt.Port)
 		if policyTarget == nil || !targetExists {
 			continue
 		}

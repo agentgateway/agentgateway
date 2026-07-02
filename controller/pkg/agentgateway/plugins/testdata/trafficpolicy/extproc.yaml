@@ -13,6 +13,13 @@ spec:
       backendRef:
         name: extproc-svc
         port: 4444
+      requestAttributes:
+        source.address: source.address
+      responseAttributes:
+        response.code: response.code
+      metadataContext:
+        envoy.filters.http.jwt_authn:
+          jwt_payload: request.jwt.payload
       processingOptions:
         requestBodyMode: BufferedPartial
         responseBodyMode: FullDuplexStreamed
@@ -49,6 +56,10 @@ output:
           namespace: default
       traffic:
         extProc:
+          metadataContext:
+            envoy.filters.http.jwt_authn:
+              context:
+                jwt_payload: request.jwt.payload
           processingOptions:
             allowModeOverride: true
             requestBodyMode: BUFFERED_PARTIAL
@@ -57,6 +68,10 @@ output:
             responseBodyMode: FULL_DUPLEX_STREAMED
             responseHeaderMode: SEND
             responseTrailerMode: SKIP
+          requestAttributes:
+            source.address: source.address
+          responseAttributes:
+            response.code: response.code
           target:
             port: 4444
             service:

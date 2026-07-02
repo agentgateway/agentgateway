@@ -3,7 +3,6 @@ use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
 
-use anyhow::Context;
 use openapiv3::OpenAPI;
 #[cfg(feature = "schema")]
 pub use schemars::JsonSchema;
@@ -13,8 +12,7 @@ use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serializer};
 pub use serde_with;
 
-use crate::client::Client;
-use crate::http::Body;
+use crate::resource_manager::{ResourceFetcher, ResourceKind, ResourceRef};
 
 /// Serde yaml represents things different than just as "JSON in YAML format".
 /// We don't want this. Instead, we transcode YAML via the JSON module.
@@ -427,49 +425,47 @@ pub enum FileInlineOrRemote {
 }
 
 impl FileInlineOrRemote {
-	pub async fn load<T: DeserializeOwned>(&self, client: Client) -> anyhow::Result<T> {
-		let s = match self {
-			FileInlineOrRemote::File { file } => fs_err::tokio::read_to_string(file).await?,
-			FileInlineOrRemote::Inline(s) => s.clone(),
-			FileInlineOrRemote::Remote { url } => {
-				let resp = client
-					.simple_call(
-						::http::Request::builder()
-							.uri(url)
-							.body(Body::empty())
-							.expect("builder should succeed"),
-					)
-					.await
-					.context(format!("fetch {url}"))?;
-				return crate::json::from_response_body::<T>(resp)
-					.await
-					.map_err(Into::into);
-			},
-		};
+	pub async fn load<T: DeserializeOwned>(
+		&self,
+		resources: &ResourceFetcher,
+		kind: ResourceKind,
+	) -> anyhow::Result<T> {
+		let s = self.load_string(resources, kind).await?;
 		serde_json::from_str(&s).map_err(Into::into)
 	}
 
-	pub async fn load_openapi_schema(&self, client: Client) -> anyhow::Result<OpenAPI> {
-		let s = match self {
-			FileInlineOrRemote::File { file } => fs_err::tokio::read_to_string(file).await?,
-			FileInlineOrRemote::Inline(s) => s.clone(),
-			FileInlineOrRemote::Remote { url } => {
-				let resp = client
-					.simple_call(
-						::http::Request::builder()
-							.uri(url)
-							.body(Body::empty())
-							.expect("builder should succeed"),
-					)
-					.await
-					.context(format!("fetch {url}"))?;
-				let body_bytes = crate::http::read_resp_body(resp).await?;
-				String::from_utf8(body_bytes.to_vec())?
-			},
-		};
+	pub async fn load_openapi_schema(&self, resources: &ResourceFetcher) -> anyhow::Result<OpenAPI> {
+		let s = self.load_string(resources, ResourceKind::OpenApi).await?;
 		stacker::grow(2 * 1024 * 1024, || {
 			yamlviajson::from_str::<OpenAPI>(s.as_str())
 		})
+	}
+
+	async fn load_string(
+		&self,
+		resources: &ResourceFetcher,
+		kind: ResourceKind,
+	) -> anyhow::Result<String> {
+		Ok(match self {
+			FileInlineOrRemote::Inline(s) => s.clone(),
+			FileInlineOrRemote::File { .. } | FileInlineOrRemote::Remote { .. } => {
+				let bytes = resources
+					.fetch(self.as_resource_ref(kind).expect("resource ref"))
+					.await?;
+				String::from_utf8(bytes.to_vec())?
+			},
+		})
+	}
+
+	fn as_resource_ref(&self, kind: ResourceKind) -> Option<ResourceRef> {
+		match self {
+			FileInlineOrRemote::File { file } => Some(ResourceRef::File(file.clone())),
+			FileInlineOrRemote::Inline(_) => None,
+			FileInlineOrRemote::Remote { url } => Some(ResourceRef::Http {
+				url: url.clone(),
+				kind,
+			}),
+		}
 	}
 }
 

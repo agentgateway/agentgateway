@@ -237,10 +237,37 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 			path = new(*otlp.Path)
 		}
 
+		var filter *string
+		if f := otlp.Filter; f != nil {
+			filter = castCELPtr(f, func(expr agentgateway.CELExpression) {
+				errs = append(errs, fmt.Errorf("frontend accessLog OTLP filter is not a valid CEL expression: %s", expr))
+			})
+		}
+
+		var fields *api.FrontendPolicySpec_Logging_Fields
+		if a := otlp.Attributes; a != nil {
+			addedFields := make([]*api.FrontendPolicySpec_Logging_Field, 0, len(a.Add))
+			for _, add := range a.Add {
+				if !isCEL(add.Expression) {
+					errs = append(errs, fmt.Errorf("frontend accessLog OTLP field %q is not a valid CEL expression: %s", add.Name, add.Expression))
+				}
+				addedFields = append(addedFields, &api.FrontendPolicySpec_Logging_Field{
+					Name:       add.Name,
+					Expression: string(add.Expression),
+				})
+			}
+			fields = &api.FrontendPolicySpec_Logging_Fields{
+				Remove: a.Remove,
+				Add:    addedFields,
+			}
+		}
+
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{
 			ProviderBackend: provider,
 			Protocol:        protocol,
 			Path:            path,
+			Filter:          filter,
+			Fields:          fields,
 		}
 	}
 

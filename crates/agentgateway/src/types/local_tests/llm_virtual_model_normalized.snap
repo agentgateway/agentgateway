@@ -18,99 +18,10 @@ binds:
         protocol: HTTP
 listener_routes:
   - - llm
-    - - key: "llm:request"
-        llmRouter:
-          models:
-            - name: openai/gpt-5-mini
-              visibility: internal
-              headerMatches: []
-              backendKey: "llm:model:openai/gpt-5-mini:0"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-            - name: anthropic/*
-              visibility: internal
-              headerMatches: []
-              backendKey: "llm:model:anthropic/*:1"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-            - name: "*"
-              visibility: internal
-              headerMatches: []
-              backendKey: "llm:model:*:2"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-          virtualModels:
-            - name: fast
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              routing:
-                weighted:
-                  - model: anthropic/haiku
-                    weight: 60
-                  - model: openai/gpt-5-mini
-                    weight: 30
-                  - model: fallback-small
-                    weight: 10
-          created: 0
+    - - backends:
+          - backend: "/llm:router"
+            weight: 1
+        key: "llm:request"
         matches:
           - path:
               pathPrefix: /
@@ -220,6 +131,104 @@ backends:
               rejected: {}
     inlinePolicies:
       - ai: {}
+  - backend:
+      llmRouter:
+        name: "llm:router"
+        namespace: ""
+        target:
+          models:
+            - name: openai/gpt-5-mini
+              visibility: internal
+              headerMatches: []
+              backendKey: "llm:model:openai/gpt-5-mini:0"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+            - name: anthropic/*
+              visibility: internal
+              headerMatches: []
+              backendKey: "llm:model:anthropic/*:1"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+            - name: "*"
+              visibility: internal
+              headerMatches: []
+              backendKey: "llm:model:*:2"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+          virtualModels:
+            - name: fast
+              llmPolicy:
+                routes:
+                  "*": passthrough
+                  /v1/chat/completions: completions
+                  /v1/embeddings: embeddings
+                  /v1/images/edits: detect
+                  /v1/images/generations: detect
+                  /v1/images/variations: detect
+                  /v1/messages: messages
+                  /v1/rerank: rerank
+                  /v1/responses: responses
+                  /v1/responses/compact: detect
+                  /v2/rerank: rerank
+                  ":rawPredict": messages
+                  ":streamRawPredict": messages
+              routing:
+                weighted:
+                  - model: anthropic/haiku
+                    weight: 60
+                  - model: openai/gpt-5-mini
+                    weight: 30
+                  - model: fallback-small
+                    weight: 10
+          created: 0
 route_groups: []
 workloads: []
 services: []

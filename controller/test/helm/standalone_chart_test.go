@@ -3,7 +3,6 @@ package helm
 import (
 	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,7 +30,7 @@ func renderStandaloneChart(t *testing.T, valuesYAML string) (string, string, err
 		args = append(args, "-f", valuesFile.Name())
 	}
 
-	cmd := exec.Command("helm", args...)
+	cmd := helmCommand(t, args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout

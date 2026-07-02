@@ -134,6 +134,21 @@ spec:
   traffic:
     buffer: {}
 ---
+_err: 'failureMode: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: invalid-overflow-action-buffer
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    buffer: 
+      request:
+        failureMode: "Resend"
+---
 _err: 'http.maxBufferSize'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -1068,3 +1083,137 @@ spec:
         name: api-key-secret
         group: agentgateway.dev
         kind: ""
+---
+_err: 'may only target a Gateway or port, not a listener'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-tcp-listener-invalid
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+      sectionName: https
+  frontend:
+    tcp:
+      keepalive:
+        retries: 5
+---
+_err: 'at most one of the fields in [sectionName port] may be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-section-and-port-invalid
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+      sectionName: https
+      port: 8080
+  frontend:
+    accessLog:
+      filter: 'true'
+---
+_err: 'port may only be set on frontend-only policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-port-invalid
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+      port: 8080
+  traffic:
+    timeouts:
+      request: 30s
+---
+_err: 'port may only be set on frontend-only policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-traffic-port-invalid
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+      port: 8080
+  frontend:
+    tcp:
+      keepalive:
+        retries: 5
+  traffic:
+    timeouts:
+      request: 30s
+---
+_err: 'port may only be set on frontend-only policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-backend-port-invalid
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+      port: 8080
+  frontend:
+    tcp:
+      keepalive:
+        retries: 5
+  backend:
+    tls: {}
+---
+_err: 'may only target a Gateway or port, not a listener'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-tcp-listener-selector-invalid
+spec:
+  targetSelectors:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      matchLabels:
+        app: foo
+      sectionName: https
+  frontend:
+    tls:
+      handshakeTimeout: 15s
+---
+_err: 'at most one of the fields in [sectionName port] may be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: frontend-section-and-port-selector-invalid
+spec:
+  targetSelectors:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      matchLabels:
+        app: foo
+      sectionName: https
+      port: 8080
+  frontend:
+    accessLog:
+      filter: 'true'
+---
+_err: 'port may only be set on frontend-only policies'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-port-selector-invalid
+spec:
+  targetSelectors:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      matchLabels:
+        app: foo
+      port: 8080
+  traffic:
+    timeouts:
+      request: 30s
+---

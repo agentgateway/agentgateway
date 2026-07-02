@@ -10,6 +10,7 @@ use tracing::trace;
 use url::form_urlencoded;
 
 use crate::http::Body;
+use crate::http::filters::BackendRequestTimeout;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
 use crate::types::agent::SimpleBackendReference;
@@ -82,6 +83,12 @@ const TOKEN_TYPE_JWT: &str = "urn:ietf:params:oauth:token-type:jwt";
 
 const CACHE_SAFETY_MARGIN: Duration = Duration::from_secs(30);
 const CACHE_CAPACITY: usize = 1024;
+
+/// Default timeout for the RFC 8693 token-endpoint call. Without a bound, a token
+/// endpoint that accepts the TCP connection but never responds would hang the
+/// request indefinitely (issue #2401). The token endpoint backend can override
+/// this by setting its own `http.requestTimeout` policy.
+const DEFAULT_TOKEN_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
@@ -172,6 +179,7 @@ pub(super) async fn fetch_token(
 		.uri(path)
 		.header(CONTENT_TYPE, "application/x-www-form-urlencoded")
 		.header(ACCEPT, "application/json")
+		.extension(BackendRequestTimeout(DEFAULT_TOKEN_ENDPOINT_TIMEOUT))
 		.body(Body::from(body.into_bytes()))?;
 
 	let resp = client

@@ -2,6 +2,7 @@ use ::http::header::CONTENT_TYPE;
 use ::http::{HeaderMap, HeaderValue, header};
 use serde::{Deserialize, Serialize};
 
+use crate::llm::policy::with_default_timeout;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::SimpleBackendReference;
@@ -177,7 +178,7 @@ pub async fn send_request(
 	http_headers: &HeaderMap,
 	messages: Vec<Message>,
 ) -> anyhow::Result<GuardrailsPromptResponse> {
-	let whr = build_request_for_request(http_headers, messages)?;
+	let whr = with_default_timeout(build_request_for_request(http_headers, messages)?);
 	let res = Box::pin(
 		client
 			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
@@ -194,7 +195,7 @@ pub async fn send_response(
 	http_headers: &HeaderMap,
 	choices: Vec<ResponseChoice>,
 ) -> anyhow::Result<GuardrailsResponseResponse> {
-	let whr = build_request_for_response(http_headers, choices)?;
+	let whr = with_default_timeout(build_request_for_response(http_headers, choices)?);
 	let res = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_reference(whr, target)

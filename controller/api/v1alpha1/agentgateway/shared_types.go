@@ -39,14 +39,23 @@ type LocalPolicyTargetReference struct {
 }
 
 // Selects one same-namespace object by `group`, `kind`, `name`, and,
-// optionally, `sectionName`.
+// optionally, `sectionName` or `port`.
 // The object must be in the same namespace as the policy.
+// +kubebuilder:validation:AtMostOneOf=sectionName;port
 type LocalPolicyTargetReferenceWithSectionName struct {
 	LocalPolicyTargetReference `json:",inline"`
 
 	// The named section of the target resource.
 	// +optional
 	SectionName *gwv1.SectionName `json:"sectionName,omitempty"`
+
+	// The port of the target resource this policy applies to.
+	// At most one of `sectionName` or `port` may be set.
+	// Only valid on frontend policies targeting a `Gateway`.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port *int32 `json:"port,omitempty"`
 }
 
 // Selects same-namespace objects by `group`, `kind`, and `matchLabels`.
@@ -73,12 +82,21 @@ type LocalPolicyTargetSelector struct {
 // the specified labels.
 // Prefer `targetRefs` when reconciliation latency is important, especially
 // when many policies target the same resource.
+// +kubebuilder:validation:AtMostOneOf=sectionName;port
 type LocalPolicyTargetSelectorWithSectionName struct {
 	LocalPolicyTargetSelector `json:",inline"`
 
 	// The named section of each selected target resource.
 	// +optional
 	SectionName *gwv1.SectionName `json:"sectionName,omitempty"`
+
+	// The port of each selected target resource this policy applies to.
+	// At most one of `sectionName` or `port` may be set.
+	// Only valid on frontend policies targeting a `Gateway`.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port *int32 `json:"port,omitempty"`
 }
 
 type PolicyStatus struct {

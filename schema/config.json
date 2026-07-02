@@ -3501,6 +3501,19 @@
             "okta"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "descope": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "descope"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -6109,9 +6122,20 @@
           ],
           "format": "uint",
           "minimum": 0
+        },
+        "failureMode": {
+          "$ref": "#/$defs/FailureMode2",
+          "default": "failClosed"
         }
       },
       "additionalProperties": false
+    },
+    "FailureMode2": {
+      "type": "string",
+      "enum": [
+        "failClosed",
+        "failOpen"
+      ]
     },
     "TimeoutPolicy": {
       "type": "object",
@@ -6989,7 +7013,8 @@
             "null"
           ]
         }
-      }
+      },
+      "additionalProperties": false
     },
     "VertexProvider": {
       "type": "object",
@@ -7053,6 +7078,7 @@
           ]
         }
       },
+      "additionalProperties": false,
       "required": [
         "region"
       ]
@@ -7310,6 +7336,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "authorization": {
+          "description": "Authorize incoming requests after this backend is selected.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
             },
             {
               "type": "null"
@@ -8308,6 +8346,28 @@
     "OtlpLoggingConfig": {
       "type": "object",
       "properties": {
+        "filter": {
+          "description": "CEL expression that decides whether a request is exported over OTLP.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "description": "OTLP-specific access log fields. If unset, the parent access log fields are used.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccessLogFields"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "policies": {
           "description": "Backend policies used when exporting OTLP logs.",
           "anyOf": [
@@ -8385,6 +8445,27 @@
           ]
         }
       ]
+    },
+    "AccessLogFields": {
+      "type": "object",
+      "properties": {
+        "remove": {
+          "description": "Access log field names to remove.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "add": {
+          "description": "Access log fields to add, computed from CEL expressions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "TracingProtocol": {
       "type": "string",

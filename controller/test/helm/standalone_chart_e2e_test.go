@@ -94,7 +94,7 @@ func runStandaloneE2ECommand(t *testing.T, name string, args ...string) error {
 func runStandaloneE2ECommandOutput(t *testing.T, name string, args ...string) (string, error) {
 	t.Helper()
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command(name, args...) //nolint:gosec // Test helper: name and args are controlled by test code, not user input
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout

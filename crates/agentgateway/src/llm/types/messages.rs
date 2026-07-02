@@ -223,6 +223,7 @@ impl RequestType for Request {
 				dimensions: None,
 			},
 			prompt: Default::default(),
+			provider_state: None,
 		};
 		Ok(llm)
 	}
@@ -266,7 +267,7 @@ impl RequestType for Request {
 		provider: &crate::llm::bedrock::Provider,
 		headers: Option<&::http::HeaderMap>,
 		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<Vec<u8>, AIError> {
+	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
 		conversion::bedrock::from_messages::translate(self, provider, headers)
 	}
 

@@ -248,7 +248,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
 use url::{Url, form_urlencoded};
 
-use crate::cel::{BackendContext, LLMContext, RequestTime, SourceContext};
+use crate::cel::{BackendContext, DestinationContext, LLMContext, RequestTime, SourceContext};
 use crate::client::PoolKey;
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::BufferLimit;
@@ -980,6 +980,9 @@ impl Debug for DebugExtensions<'_> {
 		}
 		if let Some(e) = ext.get::<SourceContext>() {
 			d.field("SourceContext", e);
+		}
+		if let Some(e) = ext.get::<DestinationContext>() {
+			d.field("DestinationContext", e);
 		}
 		if let Some(e) = ext.get::<RequestTime>() {
 			d.field("RequestTime", e);

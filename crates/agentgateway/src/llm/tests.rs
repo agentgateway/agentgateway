@@ -21,6 +21,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 		streaming: true,
 		params: Default::default(),
 		prompt: None,
+		provider_state: None,
 	}
 }
 
@@ -325,8 +326,10 @@ mod requests {
 			assume_role_cache: Default::default(),
 		};
 
-		let bedrock =
-			|i| conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None);
+		let bedrock = |i| {
+			conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None)
+				.map(|r| r.body)
+		};
 		let anthropic = |i| conversion::messages::from_completions::translate(&i);
 
 		for (name, providers) in COMPLETION_REQUESTS {
@@ -364,8 +367,9 @@ mod requests {
 			project_id: strng::new("test-project-123"),
 		};
 
-		let bedrock_request =
-			|i| conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None);
+		let bedrock_request = |i| {
+			conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None).map(|r| r.body)
+		};
 		let vertex_request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
 			let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
 			vertex_provider.prepare_anthropic_message_body(anthropic_body)
@@ -401,6 +405,7 @@ mod requests {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, test, |req| {
 						conversion::bedrock::from_responses::translate(&req, &bedrock_provider, None, None)
+							.map(|r| r.body)
 					}),
 					GEMINI => test_request(GEMINI, test, |req| {
 						conversion::openai_compat::from_responses::translate(&req)
@@ -847,6 +852,7 @@ mod response {
 			streaming: false,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		}
 	}
 
@@ -1104,6 +1110,115 @@ async fn count_tokens_resolves_model_alias_once_for_upstream_request() {
 
 	assert_eq!(forwarded_json["model"], json!("middle-name"));
 	assert_eq!(llm_request.request_model, "middle-name");
+}
+
+#[tokio::test]
+async fn provider_model_is_set_before_llm_transformations() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: Some("gcp/failover-model".into()),
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		transformations: Some(
+			[(
+				"model".to_string(),
+				std::sync::Arc::new(
+					crate::cel::Expression::new_strict(r#"llmRequest.model.stripPrefix("gcp/")"#).unwrap(),
+				),
+			)]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "public-model",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success(forwarded, llm_request) = provider
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["model"], json!("failover-model"));
+	assert_eq!(llm_request.request_model, "failover-model");
+}
+
+#[tokio::test]
+async fn llm_transformations_can_set_missing_model() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		transformations: Some(
+			[(
+				"model".to_string(),
+				std::sync::Arc::new(crate::cel::Expression::new_strict(r#""transformed-model""#).unwrap()),
+			)]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success(forwarded, llm_request) = provider
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["model"], json!("transformed-model"));
+	assert_eq!(llm_request.request_model, "transformed-model");
 }
 
 #[test]
@@ -1400,6 +1515,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		streaming: true,
 		params: Default::default(),
 		prompt: None,
+		provider_state: None,
 	};
 
 	let body = Body::from(error_json.as_bytes().to_vec());
@@ -1488,6 +1604,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 				streaming: true,
 				params: Default::default(),
 				prompt: None,
+				provider_state: None,
 			},
 			LLMResponsePolicies::default(),
 			None,
@@ -1588,6 +1705,7 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 		streaming: false,
 		params: Default::default(),
 		prompt: None,
+		provider_state: None,
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://proxy.example.com/v1/chat/completions?trace=repro",
@@ -1621,6 +1739,7 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 		streaming: false,
 		params: Default::default(),
 		prompt: None,
+		provider_state: None,
 	}
 }
 
@@ -1750,6 +1869,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1763,6 +1883,7 @@ async fn bedrock_from_messages_stream_captures_completion() {
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
 		llm::LogContentFields { completion: true, tool_calls: true },
+		None,
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1796,6 +1917,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1809,6 +1931,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
 		llm::LogContentFields::default(),
+		None,
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1838,6 +1961,7 @@ async fn messages_passthrough_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1878,6 +2002,7 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1913,6 +2038,7 @@ async fn responses_passthrough_stream_captures_completion() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
@@ -1949,6 +2075,7 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};

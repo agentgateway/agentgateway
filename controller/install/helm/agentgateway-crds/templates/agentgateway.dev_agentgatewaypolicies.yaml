@@ -416,7 +416,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -1082,7 +1097,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -1743,7 +1773,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -2630,7 +2675,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -3296,7 +3356,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -4240,7 +4315,21 @@ spec:
                                 (!has(self.kind) || size(self.kind) == 0 || self.kind
                                 == ''Secret'') : (has(self.kind) && size(self.kind)
                                 > 0)'
+                          workloadIdentity:
+                            description: |-
+                              Workload identity authentication settings. Uses the federated token
+                              projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                              `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                              environment variables) to authenticate. This is the recommended method
+                              when running on Azure Kubernetes Service (AKS) with Workload Identity
+                              enabled.
+                            type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: at most one of the fields in [secretRef managedIdentity
+                            workloadIdentity] may be set
+                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                            <= 1'
                       gcp:
                         description: |-
                           Google authentication method for the backend.
@@ -4926,6 +5015,7 @@ spec:
                             description: Identity provider to use for authentication.
                             enum:
                             - Auth0
+                            - Descope
                             - Keycloak
                             - Okta
                             type: string
@@ -5783,6 +5873,51 @@ spec:
                           OTLP access log export to an
                           OpenTelemetry-compatible backend.
                         properties:
+                          attributes:
+                            description: |-
+                              Customizations to the key-value pairs exported over OTLP.
+                              If unset, the parent access log attributes are used.
+                            properties:
+                              add:
+                                description: |-
+                                  Additional key-value pairs to add to each entry.
+                                  The value is a CEL expression. If the CEL expression fails to evaluate,
+                                  the pair will be excluded.
+                                items:
+                                  properties:
+                                    expression:
+                                      description: A Common Expression Language (CEL)
+                                        expression.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                    name:
+                                      maxLength: 256
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - expression
+                                  - name
+                                  type: object
+                                minItems: 1
+                                type: array
+                              remove:
+                                description: |-
+                                  Default fields to remove. For example,
+                                  `http.method`.
+                                items:
+                                  maxLength: 64
+                                  minLength: 1
+                                  type: string
+                                maxItems: 32
+                                minItems: 1
+                                type: array
+                            type: object
+                            x-kubernetes-validations:
+                            - message: at least one of the fields in [add remove]
+                                must be set
+                              rule: '[has(self.add),has(self.remove)].filter(x,x==true).size()
+                                >= 1'
                           backendRef:
                             description: |-
                               OTLP server to send access logs to.
@@ -5855,6 +5990,14 @@ spec:
                             - message: Must have port for Service reference
                               rule: '(size(self.group) == 0 && self.kind == ''Service'')
                                 ? has(self.port) : true'
+                          filter:
+                            description: |-
+                              CEL expression used to filter OTLP logs. A log
+                              will only be exported if the expression evaluates to `true`.
+                              If unset, the parent access log filter is used.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
                           path:
                             description: |-
                               OTLP/HTTP path to use. This is only applicable
@@ -6522,7 +6665,7 @@ spec:
                 items:
                   description: |-
                     Selects one same-namespace object by `group`, `kind`, `name`, and,
-                    optionally, `sectionName`.
+                    optionally, `sectionName` or `port`.
                     The object must be in the same namespace as the policy.
                   properties:
                     group:
@@ -6544,6 +6687,15 @@ spec:
                       maxLength: 253
                       minLength: 1
                       type: string
+                    port:
+                      description: |-
+                        The port of the target resource this policy applies to.
+                        At most one of `sectionName` or `port` may be set.
+                        Only valid on frontend policies targeting a `Gateway`.
+                      format: int32
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
                     sectionName:
                       description: The named section of the target resource.
                       maxLength: 253
@@ -6555,6 +6707,11 @@ spec:
                   - kind
                   - name
                   type: object
+                  x-kubernetes-validations:
+                  - message: at most one of the fields in [sectionName port] may be
+                      set
+                    rule: '[has(self.sectionName),has(self.port)].filter(x,x==true).size()
+                      <= 1'
                 maxItems: 16
                 minItems: 1
                 type: array
@@ -6602,6 +6759,15 @@ spec:
                       description: Labels that must be present on each selected target
                         resource.
                       type: object
+                    port:
+                      description: |-
+                        The port of each selected target resource this policy applies to.
+                        At most one of `sectionName` or `port` may be set.
+                        Only valid on frontend policies targeting a `Gateway`.
+                      format: int32
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
                     sectionName:
                       description: The named section of each selected target resource.
                       maxLength: 253
@@ -6613,6 +6779,11 @@ spec:
                   - kind
                   - matchLabels
                   type: object
+                  x-kubernetes-validations:
+                  - message: at most one of the fields in [sectionName port] may be
+                      set
+                    rule: '[has(self.sectionName),has(self.port)].filter(x,x==true).size()
+                      <= 1'
                 maxItems: 16
                 minItems: 1
                 type: array
@@ -6992,6 +7163,14 @@ spec:
                       request:
                         description: Request body buffering settings.
                         properties:
+                          failureMode:
+                            description: |-
+                              Behavior when the request or response body exceeds the buffer limit.
+                              If unset, defaults to FailClosed, returning 413 for oversized requests and 502 for oversized responses.
+                            enum:
+                            - FailClosed
+                            - FailOpen
+                            type: string
                           maxBytes:
                             anyOf:
                             - type: integer
@@ -7012,6 +7191,14 @@ spec:
                       response:
                         description: Response body buffering settings.
                         properties:
+                          failureMode:
+                            description: |-
+                              Behavior when the request or response body exceeds the buffer limit.
+                              If unset, defaults to FailClosed, returning 413 for oversized requests and 502 for oversized responses.
+                            enum:
+                            - FailClosed
+                            - FailOpen
+                            type: string
                           maxBytes:
                             anyOf:
                             - type: integer
@@ -8261,6 +8448,22 @@ spec:
                                   - message: Must have port for Service reference
                                     rule: '(size(self.group) == 0 && self.kind ==
                                       ''Service'') ? has(self.port) : true'
+                                metadataContext:
+                                  additionalProperties:
+                                    additionalProperties:
+                                      description: A Common Expression Language (CEL)
+                                        expression.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
+                                    type: object
+                                  description: |-
+                                    Metadata to send to the external processor in the
+                                    `metadata_context.filter_metadata` field of the ProcessingRequest.
+                                    Keyed by metadata namespace, then by key within that namespace; values are
+                                    CEL expressions evaluated per request.
+                                  maxProperties: 64
+                                  type: object
                                 processingOptions:
                                   description: How request and response phases are
                                     sent to ext_proc.
@@ -8279,10 +8482,10 @@ spec:
                                         `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
                                         body exceeds that limit. Defaults to `FullDuplexStreamed`.
                                       enum:
-                                      - None
                                       - Buffered
                                       - BufferedPartial
                                       - FullDuplexStreamed
+                                      - None
                                       type: string
                                     requestHeaderMode:
                                       default: Send
@@ -8299,8 +8502,8 @@ spec:
                                         Whether request trailers are sent to the external processor.
                                         Defaults to `Send`.
                                       enum:
-                                      - Skip
                                       - Send
+                                      - Skip
                                       type: string
                                     responseBodyMode:
                                       default: FullDuplexStreamed
@@ -8310,10 +8513,10 @@ spec:
                                         `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
                                         body exceeds that limit. Defaults to `FullDuplexStreamed`.
                                       enum:
-                                      - None
                                       - Buffered
                                       - BufferedPartial
                                       - FullDuplexStreamed
+                                      - None
                                       type: string
                                     responseHeaderMode:
                                       default: Send
@@ -8330,9 +8533,35 @@ spec:
                                         Whether response trailers are sent to the external processor.
                                         Defaults to `Send`.
                                       enum:
-                                      - Skip
                                       - Send
+                                      - Skip
                                       type: string
+                                  type: object
+                                requestAttributes:
+                                  additionalProperties:
+                                    description: A Common Expression Language (CEL)
+                                      expression.
+                                    maxLength: 16384
+                                    minLength: 1
+                                    type: string
+                                  description: |-
+                                    Request attributes to send to the external processor in the request
+                                    `attributes` field of the ProcessingRequest. Values are CEL expressions
+                                    evaluated per request.
+                                  maxProperties: 64
+                                  type: object
+                                responseAttributes:
+                                  additionalProperties:
+                                    description: A Common Expression Language (CEL)
+                                      expression.
+                                    maxLength: 16384
+                                    minLength: 1
+                                    type: string
+                                  description: |-
+                                    Response attributes to send to the external processor in the response
+                                    `attributes` field of the ProcessingRequest. Values are CEL expressions
+                                    evaluated per response.
+                                  maxProperties: 64
                                   type: object
                               type: object
                               x-kubernetes-validations:
@@ -8348,6 +8577,21 @@ spec:
                         - message: conditional entries without condition must be last
                           rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
                             !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      metadataContext:
+                        additionalProperties:
+                          additionalProperties:
+                            description: A Common Expression Language (CEL) expression.
+                            maxLength: 16384
+                            minLength: 1
+                            type: string
+                          type: object
+                        description: |-
+                          Metadata to send to the external processor in the
+                          `metadata_context.filter_metadata` field of the ProcessingRequest.
+                          Keyed by metadata namespace, then by key within that namespace; values are
+                          CEL expressions evaluated per request.
+                        maxProperties: 64
+                        type: object
                       processingOptions:
                         description: How request and response phases are sent to ext_proc.
                         properties:
@@ -8365,10 +8609,10 @@ spec:
                               `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
                               body exceeds that limit. Defaults to `FullDuplexStreamed`.
                             enum:
-                            - None
                             - Buffered
                             - BufferedPartial
                             - FullDuplexStreamed
+                            - None
                             type: string
                           requestHeaderMode:
                             default: Send
@@ -8385,8 +8629,8 @@ spec:
                               Whether request trailers are sent to the external processor.
                               Defaults to `Send`.
                             enum:
-                            - Skip
                             - Send
+                            - Skip
                             type: string
                           responseBodyMode:
                             default: FullDuplexStreamed
@@ -8396,10 +8640,10 @@ spec:
                               `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
                               body exceeds that limit. Defaults to `FullDuplexStreamed`.
                             enum:
-                            - None
                             - Buffered
                             - BufferedPartial
                             - FullDuplexStreamed
+                            - None
                             type: string
                           responseHeaderMode:
                             default: Send
@@ -8416,14 +8660,38 @@ spec:
                               Whether response trailers are sent to the external processor.
                               Defaults to `Send`.
                             enum:
-                            - Skip
                             - Send
+                            - Skip
                             type: string
+                        type: object
+                      requestAttributes:
+                        additionalProperties:
+                          description: A Common Expression Language (CEL) expression.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        description: |-
+                          Request attributes to send to the external processor in the request
+                          `attributes` field of the ProcessingRequest. Values are CEL expressions
+                          evaluated per request.
+                        maxProperties: 64
+                        type: object
+                      responseAttributes:
+                        additionalProperties:
+                          description: A Common Expression Language (CEL) expression.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        description: |-
+                          Response attributes to send to the external processor in the response
+                          `attributes` field of the ProcessingRequest. Values are CEL expressions
+                          evaluated per response.
+                        maxProperties: 64
                         type: object
                     type: object
                     x-kubernetes-validations:
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.processingOptions)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.metadataContext),has(self.processingOptions),has(self.requestAttributes),has(self.responseAttributes)].filter(x,x==true).size()
                         == 0 : true'
                     - message: 'backendRef: Required value'
                       rule: 'has(self.conditional) ? true : has(self.backendRef)'
@@ -8825,6 +9093,7 @@ spec:
                               flows.
                             enum:
                             - Auth0
+                            - Descope
                             - Keycloak
                             - Okta
                             type: string
@@ -10161,10 +10430,34 @@ spec:
                 has(self.backend) && has(self.backend.mcp) && has(self.backend.mcp.authentication))'
             - message: the 'frontend' field can only target a Gateway
               rule: 'has(self.frontend) && has(self.targetRefs) ? self.targetRefs.all(t,
-                t.kind == ''Gateway'' && !has(t.sectionName)) : true'
+                t.kind == ''Gateway'') : true'
             - message: the 'frontend' field can only target a Gateway
               rule: 'has(self.frontend) && has(self.targetSelectors) ? self.targetSelectors.all(t,
-                t.kind == ''Gateway'' && !has(t.sectionName)) : true'
+                t.kind == ''Gateway'') : true'
+            - message: frontend tcp, networkAuthorization, tls, http, proxyProtocol,
+                and connect policies may only target a Gateway or port, not a listener
+                (sectionName)
+              rule: 'has(self.frontend) && (has(self.frontend.tcp) || has(self.frontend.networkAuthorization)
+                || has(self.frontend.tls) || has(self.frontend.http) || has(self.frontend.proxyProtocol)
+                || has(self.frontend.connect)) && has(self.targetRefs) ? self.targetRefs.all(t,
+                !has(t.sectionName)) : true'
+            - message: frontend tcp, networkAuthorization, tls, http, proxyProtocol,
+                and connect policies may only target a Gateway or port, not a listener
+                (sectionName)
+              rule: 'has(self.frontend) && (has(self.frontend.tcp) || has(self.frontend.networkAuthorization)
+                || has(self.frontend.tls) || has(self.frontend.http) || has(self.frontend.proxyProtocol)
+                || has(self.frontend.connect)) && has(self.targetSelectors) ? self.targetSelectors.all(t,
+                !has(t.sectionName)) : true'
+            - message: port may only be set on frontend-only policies (not traffic
+                or backend)
+              rule: 'has(self.targetRefs) && self.targetRefs.exists(t, has(t.port))
+                ? (has(self.frontend) && !has(self.traffic) && !has(self.backend))
+                : true'
+            - message: port may only be set on frontend-only policies (not traffic
+                or backend)
+              rule: 'has(self.targetSelectors) && self.targetSelectors.exists(t, has(t.port))
+                ? (has(self.frontend) && !has(self.traffic) && !has(self.backend))
+                : true'
             - message: the 'traffic' field can only target a Gateway, ListenerSet,
                 GRPCRoute, HTTPRoute, or InferencePool
               rule: 'has(self.traffic) && has(self.targetRefs) ? self.targetRefs.all(t,

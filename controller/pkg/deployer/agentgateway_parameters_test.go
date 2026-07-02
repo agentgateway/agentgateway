@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient/fake"
 )
@@ -33,6 +34,37 @@ func newSyncedSecretClient(t *testing.T, objects ...client.Object) kclient.Clien
 	fakeClient.RunAndWait(stop)
 	kube.WaitForCacheSync("test", stop, secretClient.HasSynced)
 	return secretClient
+}
+
+// TestGatewayIRFromInternalPorts guards the IR-fallback path (used when a Gateway
+// isn't yet in the IR): internal (routing-only) ports must be populated from the
+// annotation so GetPortsValues excludes them from the Service/container ports.
+func TestGatewayIRFromInternalPorts(t *testing.T) {
+	gw := &gwv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "gw",
+			Namespace:   "ns",
+			Annotations: map[string]string{annotations.InternalPorts: "8080"},
+		},
+		Spec: gwv1.GatewaySpec{
+			Listeners: []gwv1.Listener{
+				{Name: "internal", Port: 8080, Protocol: gwv1.HTTPProtocolType},
+				{Name: "public", Port: 8443, Protocol: gwv1.HTTPProtocolType},
+			},
+		},
+	}
+
+	ir := GatewayIRFrom(gw, "example.com/controller")
+	assert.True(t, ir.InternalPorts.Contains(8080), "internal port 8080 should be recorded")
+	assert.False(t, ir.InternalPorts.Contains(8443), "public port 8443 should not be internal")
+
+	ports := GetPortsValues(ir, 0)
+	got := map[int32]bool{}
+	for _, p := range ports {
+		got[*p.Port] = true
+	}
+	assert.False(t, got[8080], "internal port 8080 must not be exposed via Service/container ports")
+	assert.True(t, got[8443], "public port 8443 should be exposed")
 }
 
 func TestAgentgatewayParametersApplier_ApplyToHelmValues_Image(t *testing.T) {

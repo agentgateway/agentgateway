@@ -3,11 +3,116 @@ package agentgateway
 import (
 	"encoding/json"
 	"math"
+	"reflect"
+	"strings"
 	"testing"
 
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/test/util/tmpl"
 	"sigs.k8s.io/yaml"
+
+	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 )
+
+// frontendConnectionFields are the Frontend policy fields resolved at the bind
+// (gateway-or-port) level by the data plane's frontend_policies path. They may
+// only target a Gateway or a port, never a listener (sectionName).
+//
+// frontendObservabilityFields are resolved per-listener by the data plane's
+// listener_frontend_policies path, so they may additionally target a listener.
+//
+// Both sets are mirrored in the AgentgatewayPolicySpec CEL validation. When a
+// new Frontend field is added, classify it here AND update the connection/L4
+// XValidation rule in agentgateway_policy_types.go if the new field must not be
+// listener-scoped. TestFrontendFieldsAreClassified fails until that is done.
+var (
+	frontendConnectionFields = map[string]struct{}{
+		"tcp":                  {},
+		"networkAuthorization": {},
+		"tls":                  {},
+		"http":                 {},
+		"proxyProtocol":        {},
+		"connect":              {},
+	}
+	frontendObservabilityFields = map[string]struct{}{
+		"accessLog": {},
+		"tracing":   {},
+		"metrics":   {},
+	}
+)
+
+// TestFrontendFieldsAreClassified guards the CEL rules that decide which
+// frontend policies may target a listener (sectionName). Every field on the
+// Frontend struct must be classified as either a connection/L4 field (no
+// sectionName) or an observability field (sectionName allowed). A newly added,
+// unclassified field fails this test so the author cannot silently grant it
+// listener targeting that the data plane does not honor.
+func TestFrontendFieldsAreClassified(t *testing.T) {
+	for field := range reflect.TypeFor[Frontend]().Fields() {
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		_, isConn := frontendConnectionFields[name]
+		_, isObs := frontendObservabilityFields[name]
+		switch {
+		case isConn && isObs:
+			t.Errorf("Frontend field %q is classified as both connection and observability", name)
+		case !isConn && !isObs:
+			t.Errorf("Frontend field %q is not classified; add it to frontendConnectionFields or "+
+				"frontendObservabilityFields and update the AgentgatewayPolicySpec CEL rules accordingly", name)
+		}
+	}
+}
+
+// TestFrontendConnectionFieldTargeting exercises the CEL rules that decide which
+// frontend policies may target a listener (sectionName). Every field in
+// frontendConnectionFields is resolved at the bind (gateway-or-port) level, so it
+// must accept a `port` target but reject a listener (sectionName). It drives off
+// frontendConnectionFields directly, and requires a minimal valid body for every
+// entry, so a newly added connection field cannot be left unexercised.
+func TestFrontendConnectionFieldTargeting(t *testing.T) {
+	// Minimal valid body for each connection/L4 frontend field.
+	bodies := map[string]string{
+		"tcp":                  "tcp:\n  keepalive:\n    retries: 5",
+		"networkAuthorization": "networkAuthorization:\n  policy:\n    matchExpressions:\n    - \"true\"",
+		"tls":                  "tls:\n  handshakeTimeout: 15s",
+		"http":                 "http:\n  http1MaxHeaders: 100",
+		"proxyProtocol":        "proxyProtocol: {}",
+		"connect":              "connect:\n  mode: Tunnel",
+	}
+	tm := `apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: t
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: t1
+    {{if .port}}port: 8080{{else}}sectionName: https{{end}}
+  frontend:
+    {{.body|nindent 4}}
+`
+	v := apitests.NewAgentgatewayValidator(t)
+	for name := range frontendConnectionFields {
+		body, ok := bodies[name]
+		if !ok {
+			t.Fatalf("connection field %q has no test body; add a minimal valid body to exercise its port/listener targeting", name)
+		}
+		t.Run(name, func(t *testing.T) {
+			// port targeting is allowed.
+			res := tmpl.EvaluateOrFail(t, tm, map[string]any{"body": body, "port": true})
+			assert.NoError(t, v.ValidateCustomResourceYAML(res, nil))
+			// listener (sectionName) targeting is rejected.
+			res = tmpl.EvaluateOrFail(t, tm, map[string]any{"body": body, "port": false})
+			if err := v.ValidateCustomResourceYAML(res, nil); err == nil {
+				t.Fatalf("expected listener targeting of frontend.%s to be rejected", name)
+			}
+		})
+	}
+}
 
 func TestByteSizeInvalidJSONDecodesAsUnset(t *testing.T) {
 	var b ByteSize

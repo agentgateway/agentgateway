@@ -10,8 +10,6 @@ use std::sync::Arc;
 use agent_pool::Error as HyperError;
 pub use gateway::Gateway;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use rmcp::ErrorData;
-use rmcp::model::{ErrorCode, JsonRpcError};
 use tonic::Code;
 
 use crate::http::{HeaderValue, Response, StatusCode, ext_proc};
@@ -296,6 +294,7 @@ impl ProxyError {
 			ProxyError::UpstreamTCPCallFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::UpstreamTCPProxy(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::MethodNotAllowed) => StatusCode::METHOD_NOT_ALLOWED,
+			ProxyError::MCP(mcp::Error::GetStreamNotSupported) => StatusCode::METHOD_NOT_ALLOWED,
 			ProxyError::MCP(mcp::Error::InvalidAccept) => StatusCode::NOT_ACCEPTABLE,
 			ProxyError::MCP(mcp::Error::InvalidAcceptGet) => StatusCode::NOT_ACCEPTABLE,
 			ProxyError::MCP(mcp::Error::InvalidContentType) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
@@ -307,6 +306,11 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::InvalidSessionIdQuery) => StatusCode::UNPROCESSABLE_ENTITY,
 			ProxyError::MCP(mcp::Error::InvalidSessionIdHeader) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::InvalidProtocolVersion) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::UnsupportedVersion(_, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::UnsupportedVersionForInitialize(_, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::VersionMismatch(_)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::HeaderBodyMismatch(_, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::InvalidRoutingHeader(_, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::CreateSseUrl(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::EstablishGetStream(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::ForwardLegacySse(_)) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -317,7 +321,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
-			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::OK,
 		};
 		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
 		let mut rb = ::http::Response::builder().status(code);
@@ -377,53 +381,12 @@ impl ProxyError {
 				)))
 				.unwrap();
 		}
-		if let ProxyError::MCP(ref e @ mcp::Error::SendError(ref id, _)) = self {
-			let err = if let Some(req_id) = id {
-				serde_json::to_string(&JsonRpcError {
-					jsonrpc: Default::default(),
-					id: req_id.clone(),
-					error: ErrorData {
-						code: ErrorCode::INTERNAL_ERROR,
-						message: format!("failed to send message: {e}",).into(),
-						data: None,
-					},
-				})
-				.ok()
-			} else {
-				None
-			};
-			let msg = err.unwrap_or_else(|| format!("failed to send message: {e}"));
+		if let ProxyError::MCP(e) = self
+			&& let Some(body) = e.jsonrpc_error_body()
+		{
 			return rb
 				.header("content-type", "application/json")
-				.body(http::Body::from(msg))
-				.unwrap();
-		}
-		if let ProxyError::MCP(ref e @ mcp::Error::Authorization(ref req_id, _, _)) = self {
-			let msg = serde_json::to_string(&JsonRpcError {
-				jsonrpc: Default::default(),
-				id: req_id.clone(),
-				error: ErrorData {
-					code: ErrorCode::INVALID_PARAMS,
-					message: e.to_string().into(),
-					data: None,
-				},
-			})
-			.unwrap_or_default();
-			return rb
-				.header("content-type", "application/json")
-				.body(http::Body::from(msg))
-				.unwrap();
-		}
-		if let ProxyError::MCP(mcp::Error::McpGuardrails(req_id, rej)) = self {
-			let msg = serde_json::to_string(&JsonRpcError {
-				jsonrpc: Default::default(),
-				id: req_id.clone(),
-				error: rej.clone(),
-			})
-			.unwrap_or_default();
-			return rb
-				.header("content-type", "application/json")
-				.body(http::Body::from(msg))
+				.body(http::Body::from(body))
 				.unwrap();
 		}
 

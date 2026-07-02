@@ -567,28 +567,6 @@ func (this *DirectResponse) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
-// MarshalJSON is a custom marshaler for BufferBody
-func (this *BufferBody) MarshalJSON() ([]byte, error) {
-	str, err := ResourceMarshaler.MarshalToString(this)
-	return []byte(str), err
-}
-
-// UnmarshalJSON is a custom unmarshaler for BufferBody
-func (this *BufferBody) UnmarshalJSON(b []byte) error {
-	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
-}
-
-// MarshalJSON is a custom marshaler for Buffer
-func (this *Buffer) MarshalJSON() ([]byte, error) {
-	str, err := ResourceMarshaler.MarshalToString(this)
-	return []byte(str), err
-}
-
-// UnmarshalJSON is a custom unmarshaler for Buffer
-func (this *Buffer) UnmarshalJSON(b []byte) error {
-	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
-}
-
 // MarshalJSON is a custom marshaler for ExpressionHeader
 func (this *ExpressionHeader) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1224,6 +1202,28 @@ func (this *TrafficPolicySpec_HostRewrite) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_HostRewrite
 func (this *TrafficPolicySpec_HostRewrite) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_Buffer
+func (this *TrafficPolicySpec_Buffer) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_Buffer
+func (this *TrafficPolicySpec_Buffer) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_Buffer_BufferBody
+func (this *TrafficPolicySpec_Buffer_BufferBody) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_Buffer_BufferBody
+func (this *TrafficPolicySpec_Buffer_BufferBody) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

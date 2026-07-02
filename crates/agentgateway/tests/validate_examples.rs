@@ -69,9 +69,10 @@ async fn validate_example(path: &str) -> Result<(), String> {
 	let yaml = std::fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
 	let config = test_config();
 	let client = test_client(&config);
+	let resources = agentgateway::resource_manager::ResourceFetcher::direct(client);
 	NormalizedLocalConfig::from(
 		&config,
-		client,
+		&resources,
 		ListenerTarget {
 			gateway_name: "default".into(),
 			gateway_namespace: "default".into(),

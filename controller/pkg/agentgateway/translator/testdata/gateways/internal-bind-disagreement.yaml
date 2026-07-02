@@ -1,0 +1,173 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: example
+  namespace: default
+  annotations:
+    agentgateway.dev/internal-ports: "8080"
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: gw-8080
+      protocol: HTTP
+      port: 8080
+      hostname: a.example.com
+  allowedListeners:
+    namespaces:
+      from: All
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: foo
+  namespace: default
+spec:
+  parentRef:
+    name: example
+    kind: Gateway
+    group: gateway.networking.k8s.io
+  listeners:
+    - name: ls-8080
+      protocol: HTTP
+      port: 8080
+      hostname: b.example.com
+      allowedRoutes:
+        namespaces:
+          from: All
+
+---
+# Output
+output:
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/example
+      port: 8080
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      hostname: a.example.com
+      key: default/example.gw-8080
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: gw-8080
+      protocol: HTTP
+- gateway:
+    Name: example
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/example
+      hostname: b.example.com
+      key: default/foo.ls-8080
+      name:
+        gatewayName: example
+        gatewayNamespace: default
+        listenerName: ls-8080
+        listenerSet:
+          name: foo
+          namespace: default
+      protocol: HTTP
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: ListenerSet
+  metadata:
+    name: foo
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Resource accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Resource programmed
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: ls-8080
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: example
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 1
+    conditions:
+    - lastTransitionTime: fake
+      message: 'conflicting agentgateway.dev/internal-ports annotation: port(s) [8080]
+        are marked internal by some listeners but standard by others'
+      reason: Invalid
+      status: "False"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: gw-8080
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

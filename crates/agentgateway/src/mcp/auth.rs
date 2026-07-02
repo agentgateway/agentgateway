@@ -223,9 +223,9 @@ pub(super) async fn authorization_server_metadata(
 	// RFC 8414 URL for standard AS metadata. Keycloak does not implement RFC 8414; it only
 	// exposes OpenID Provider Metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
 	let metadata_uri = match &auth.provider {
-		// Keycloak and Okta do not support the RFC 8414 path-based issuer format;
+		// Keycloak, Okta, and Descope do not support the RFC 8414 path-based issuer format;
 		// they serve metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
-		Some(McpIDP::Keycloak { .. }) | Some(McpIDP::Okta {}) => {
+		Some(McpIDP::Keycloak { .. }) | Some(McpIDP::Okta {}) | Some(McpIDP::Descope {}) => {
 			openid_configuration_metadata_url(&auth.issuer)
 		},
 		_ => authorization_server_metadata_url(&auth.issuer),
@@ -270,6 +270,17 @@ pub(super) async fn authorization_server_metadata(
 			}
 
 			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak)
+			let current_uri = request_uri_for_oauth_metadata(req);
+			if let Some(serde_json::Value::String(re)) =
+				json::traverse_mut(&mut resp, &["registration_endpoint"])
+			{
+				*re = format!("{current_uri}/client-registration");
+			}
+		},
+		Some(McpIDP::Descope {}) => {
+			// Descope supports RFC 8707, so no audience workaround needed.
+			// Management DCR endpoint likely lacks CORS — proxy it.
+			// Note: DCR requires a management key; recommend using clientId short-circuit instead.
 			let current_uri = request_uri_for_oauth_metadata(req);
 			if let Some(serde_json::Value::String(re)) =
 				json::traverse_mut(&mut resp, &["registration_endpoint"])
@@ -335,6 +346,27 @@ pub(super) async fn client_registration(
 				.map_err(|e| ProxyError::ProcessingString(format!("invalid issuer URL: {e}")))?;
 			let origin = parsed.origin().ascii_serialization();
 			format!("{origin}/oauth2/v1/clients")
+		},
+		Some(McpIDP::Descope {}) => {
+			// DCR endpoint: https://api.descope.com/v1/mgmt/mcp/client/{project-id}/{server-id}/register
+			// Derived from agentic issuer: https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}
+			let parsed: url::Url = issuer
+				.parse()
+				.map_err(|e| ProxyError::ProcessingString(format!("invalid issuer URL: {e}")))?;
+			let segments: Vec<&str> = parsed.path().trim_start_matches('/').split('/').collect();
+			if segments.len() >= 5
+				&& segments[0] == "v1"
+				&& segments[1] == "apps"
+				&& segments[2] == "agentic"
+			{
+				let (project_id, server_id) = (segments[3], segments[4]);
+				let origin = parsed.origin().ascii_serialization();
+				format!("{origin}/v1/mgmt/mcp/client/{project_id}/{server_id}/register")
+			} else {
+				return Err(ProxyError::ProcessingString(
+					"Descope DCR requires an agentic issuer URL".to_string(),
+				));
+			}
 		},
 		// Keycloak and default
 		_ => format!("{issuer}/clients-registrations/openid-connect"),

@@ -18,32 +18,10 @@ binds:
         protocol: HTTP
 listener_routes:
   - - llm
-    - - key: "llm:request"
-        llmRouter:
-          models:
-            - name: anthropic/*
-              visibility: public
-              headerMatches: []
-              backendKey: "llm:model:anthropic/*:0"
-              routePolicies:
-                - ai:
-                    routes:
-                      "*": passthrough
-                      /v1/chat/completions: completions
-                      /v1/embeddings: embeddings
-                      /v1/images/edits: detect
-                      /v1/images/generations: detect
-                      /v1/images/variations: detect
-                      /v1/messages: messages
-                      /v1/rerank: rerank
-                      /v1/responses: responses
-                      /v1/responses/compact: detect
-                      /v2/rerank: rerank
-                      ":rawPredict": messages
-                      ":streamRawPredict": messages
-              backendPolicies: []
-          virtualModels: []
-          created: 0
+    - - backends:
+          - backend: "/llm:router"
+            weight: 1
+        key: "llm:request"
         matches:
           - path:
               pathPrefix: /
@@ -99,6 +77,36 @@ backends:
             cacheTools: false
             minTokens: 2048
             cacheMessageOffset: 0
+  - backend:
+      llmRouter:
+        name: "llm:router"
+        namespace: ""
+        target:
+          models:
+            - name: anthropic/*
+              visibility: public
+              headerMatches: []
+              backendKey: "llm:model:anthropic/*:0"
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+          virtualModels: []
+          created: 0
 route_groups: []
 workloads: []
 services: []
