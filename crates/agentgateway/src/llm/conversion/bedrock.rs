@@ -563,7 +563,7 @@ pub mod from_completions {
 		headers: Option<&http::HeaderMap>,
 		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
 	) -> Result<super::BedrockRequest, AIError> {
-		let typed = json::convert::<_, completions::Request>(req).map_err(AIError::RequestParsing)?;
+		let typed = req.to_typed_request()?;
 		let model_id = typed.model.clone().unwrap_or_default();
 		let (xlated, tool_name_map) =
 			translate_internal(typed, model_id, provider, headers, prompt_caching);

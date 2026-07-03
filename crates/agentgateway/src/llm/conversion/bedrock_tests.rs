@@ -1694,3 +1694,35 @@ fn test_messages_long_tool_name_round_trip_response() {
 
 	assert_eq!(tool_use_name, long_name);
 }
+
+#[test]
+fn test_to_typed_request_fills_missing_tool_call_id() {
+	let req: types::completions::Request = serde_json::from_value(json!({
+		"model": "claude",
+		"messages": [
+			{"role": "user", "content": "check status"},
+			{
+				"role": "assistant",
+				"content": null,
+				"tool_calls": [{
+					"id": "call_abc",
+					"type": "function",
+					"function": {"name": "k8s_get_resources", "arguments": "{}"}
+				}]
+			},
+			{"role": "tool", "name": "k8s_get_resources", "content": "pod-1 Running"}
+		]
+	}))
+	.expect("valid loose completions request");
+
+	let typed = req
+		.to_typed_request()
+		.expect("tool messages without tool_call_id should be normalized");
+
+	match &typed.messages[2] {
+		types::completions::typed::RequestMessage::Tool(tool) => {
+			assert_eq!(tool.tool_call_id, "call_abc");
+		},
+		other => panic!("expected tool message, got {other:?}"),
+	}
+}

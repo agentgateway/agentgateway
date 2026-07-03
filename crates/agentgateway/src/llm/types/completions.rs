@@ -65,6 +65,62 @@ impl Request {
 			.as_deref()
 			.is_some_and(|model| model.starts_with("gpt-"))
 	}
+
+	/// Ensure tool messages carry a `tool_call_id` before converting to the tagged
+	/// async-openai message enum (which requires the field).
+	pub fn normalize_tool_message_ids(&mut self) {
+		let mut pending_tool_call_ids: Vec<String> = Vec::new();
+
+		for msg in &mut self.messages {
+			match msg.role.as_str() {
+				"assistant" => {
+					pending_tool_call_ids = extract_tool_call_ids(&msg.tool_calls);
+				},
+				"tool" => {
+					if msg.tool_call_id.is_none() {
+						msg.tool_call_id = extract_tool_call_id_from_value(&msg.rest);
+					}
+					if msg.tool_call_id.is_none() && !pending_tool_call_ids.is_empty() {
+						msg.tool_call_id = Some(pending_tool_call_ids.remove(0));
+					}
+				},
+				_ => {
+					pending_tool_call_ids.clear();
+				},
+			}
+		}
+	}
+
+	pub fn to_typed_request(&self) -> Result<typed::Request, AIError> {
+		let mut normalized = self.clone();
+		normalized.normalize_tool_message_ids();
+		json::convert::<_, typed::Request>(&normalized).map_err(AIError::RequestParsing)
+	}
+}
+
+fn extract_tool_call_ids(tool_calls: &Option<Vec<serde_json::Value>>) -> Vec<String> {
+	tool_calls
+		.iter()
+		.flatten()
+		.filter_map(|tool_call| {
+			tool_call
+				.get("id")
+				.and_then(serde_json::Value::as_str)
+				.map(ToString::to_string)
+		})
+		.collect()
+}
+
+fn extract_tool_call_id_from_value(value: &serde_json::Value) -> Option<String> {
+	if !value.is_object() {
+		return None;
+	}
+	for key in ["tool_call_id", "call_id", "id"] {
+		if let Some(id) = value.get(key).and_then(serde_json::Value::as_str) {
+			return Some(id.to_string());
+		}
+	}
+	None
 }
 
 /// Options for streaming response. Only set this when you set `stream: true`.
@@ -402,7 +458,12 @@ impl TryInto<typed::Request> for &Request {
 	type Error = AIError;
 
 	fn try_into(self) -> Result<typed::Request, Self::Error> {
-		json::convert::<_, typed::Request>(self).map_err(AIError::RequestMarshal)
+		self
+			.to_typed_request()
+			.map_err(|err| match err {
+				AIError::RequestParsing(err) => AIError::RequestMarshal(err),
+				other => other,
+			})
 	}
 }
 
