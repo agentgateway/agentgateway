@@ -1355,11 +1355,15 @@ pub(crate) fn backend_with_policies_from_proto(
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								provider_preference: bedrock
-									.provider_preference
-									.as_deref()
-									.map(|m| m.parse().unwrap_or_default())
-									.unwrap_or_default(),
+								provider_preference: match bedrock.provider_preference() {
+									proto::agent::ai_backend::BedrockProviderPreference::MantleOnly => {
+										llm::bedrock::BedrockProviderPreference::MantleOnly
+									},
+									proto::agent::ai_backend::BedrockProviderPreference::RuntimeOnly => {
+										llm::bedrock::BedrockProviderPreference::RuntimeOnly
+									},
+									_ => llm::bedrock::BedrockProviderPreference::RuntimePreferred,
+								},
 								source_credentials_cache: Default::default(),
 								assume_role_cache: Default::default(),
 							})

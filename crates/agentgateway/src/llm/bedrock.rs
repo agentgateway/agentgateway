@@ -9,25 +9,13 @@ pub struct AwsRegion {
 	pub region: String,
 }
 
-#[apply(schema!)]
+#[apply(schema_enum!)]
+#[derive(Default)]
 pub enum BedrockProviderPreference {
 	#[default]
 	RuntimePreferred,
 	MantleOnly,
 	RuntimeOnly,
-}
-
-impl std::str::FromStr for BedrockProviderPreference {
-	type Err = ();
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s {
-			"RuntimePreferred" | "Runtime" => Ok(Self::RuntimePreferred),
-			"MantleOnly" => Ok(Self::MantleOnly),
-			"RuntimeOnly" => Ok(Self::RuntimeOnly),
-			_ => Err(()),
-		}
-	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,9 +37,7 @@ fn strip_cris_prefix(model: &str) -> &str {
 	model
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "BedrockProvider"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]

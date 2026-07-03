@@ -1259,14 +1259,14 @@ impl AIProvider {
 						// Runtime Converse (default): translate to the Bedrock Converse format.
 						_ => {
 							let bedrock = req.to_bedrock(
-							p,
-							Some(&parts.headers),
-							policies.and_then(|p| p.prompt_caching.as_ref()),
+								p,
+								Some(&parts.headers),
+								policies.and_then(|p| p.prompt_caching.as_ref()),
 							)?;
 							if !bedrock.tool_name_map.is_empty() {
-							llm_info.provider_state = Some(ProviderState::Bedrock {
-								tool_names: Arc::new(bedrock.tool_name_map),
-							});
+								llm_info.provider_state = Some(ProviderState::Bedrock {
+									tool_names: Arc::new(bedrock.tool_name_map),
+								});
 							}
 							bedrock.body
 						},
@@ -1691,19 +1691,31 @@ impl AIProvider {
 				Some(custom::ProviderFormat::Messages),
 			) => conversion::messages::from_completions::translate_response(bytes),
 			(AIProvider::Bedrock(_), InputFormat::Completions, _) => {
-				conversion::bedrock::from_completions::translate_response(bytes, &req.request_model)
+				conversion::bedrock::from_completions::translate_response(
+					bytes,
+					&req.request_model,
+					bedrock_tool_name_map(req),
+				)
 			},
 			(AIProvider::Bedrock(_), InputFormat::Messages, Some(custom::ProviderFormat::Messages)) => {
 				Self::parse_messages_response(bytes)
 			},
 			(AIProvider::Bedrock(_), InputFormat::Messages, _) => {
-				conversion::bedrock::from_messages::translate_response(bytes, &req.request_model)
+				conversion::bedrock::from_messages::translate_response(
+					bytes,
+					&req.request_model,
+					bedrock_tool_name_map(req),
+				)
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses, Some(custom::ProviderFormat::Responses)) => {
 				Self::parse_responses_response(bytes)
 			},
 			(AIProvider::Bedrock(_), InputFormat::Responses, _) => {
-				conversion::bedrock::from_responses::translate_response(bytes, &req.request_model)
+				conversion::bedrock::from_responses::translate_response(
+					bytes,
+					&req.request_model,
+					bedrock_tool_name_map(req),
+				)
 			},
 			(AIProvider::Vertex(p), InputFormat::Completions, _) => {
 				if p.is_anthropic_model(Some(&req.request_model)) {

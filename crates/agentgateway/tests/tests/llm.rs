@@ -521,7 +521,7 @@ mod bedrock_runtime {
 		"bedrock",
 		"",
 		MODEL_HAIKU_45_RUNTIME,
-		"RuntimeOnly",
+		"runtimeOnly",
 		send_messages,
 		false
 	);
@@ -530,7 +530,7 @@ mod bedrock_runtime {
 		"bedrock",
 		"",
 		MODEL_HAIKU_45_RUNTIME,
-		"RuntimeOnly",
+		"runtimeOnly",
 		send_messages,
 		true
 	);
@@ -539,7 +539,7 @@ mod bedrock_runtime {
 		"bedrock",
 		"",
 		MODEL_HAIKU_45_RUNTIME,
-		"RuntimeOnly",
+		"runtimeOnly",
 		send_completions,
 		false
 	);
@@ -548,7 +548,7 @@ mod bedrock_runtime {
 		"bedrock",
 		"",
 		MODEL_HAIKU_45_RUNTIME,
-		"RuntimeOnly",
+		"runtimeOnly",
 		send_completions,
 		true
 	);
@@ -560,7 +560,7 @@ mod bedrock_runtime {
 		"bedrock",
 		"",
 		MODEL_HAIKU_45_RUNTIME,
-		"RuntimePreferred",
+		"runtimePreferred",
 		send_messages,
 		false
 	);
@@ -569,7 +569,7 @@ mod bedrock_runtime {
 		"bedrock",
 		"",
 		MODEL_HAIKU_45_RUNTIME,
-		"RuntimePreferred",
+		"runtimePreferred",
 		send_completions,
 		false
 	);
@@ -582,7 +582,7 @@ mod bedrock_mantle {
 	#[ignore = "requires a live Bedrock Mantle endpoint (AWS creds + Mantle enabled)"]
 	async fn mantle_smoke() {
 		if let Some(gw) =
-			setup_with_preference("bedrock", "", "openai.gpt-oss-120b", Some("MantleOnly")).await
+			setup_with_preference("bedrock", "", "openai.gpt-oss-120b", Some("mantleOnly")).await
 		{
 			send_completions_request(&gw, false, Some(50), None, "give me a 1 word answer").await;
 			send_completions_request(&gw, true, Some(50), None, "give me a 1 word answer").await;

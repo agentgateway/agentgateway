@@ -7304,7 +7304,7 @@
         },
         "providerPreference": {
           "$ref": "#/$defs/BedrockProviderPreference",
-          "default": "RuntimePreferred"
+          "default": "runtimePreferred"
         }
       },
       "additionalProperties": false,
@@ -7315,9 +7315,9 @@
     "BedrockProviderPreference": {
       "type": "string",
       "enum": [
-        "RuntimePreferred",
-        "MantleOnly",
-        "RuntimeOnly"
+        "runtimePreferred",
+        "mantleOnly",
+        "runtimeOnly"
       ]
     },
     "AzureProvider": {
@@ -9347,7 +9347,7 @@
         },
         "bedrockProviderPreference": {
           "$ref": "#/$defs/BedrockProviderPreference",
-          "default": "RuntimePreferred"
+          "default": "runtimePreferred"
         },
         "vertexRegion": {
           "type": [

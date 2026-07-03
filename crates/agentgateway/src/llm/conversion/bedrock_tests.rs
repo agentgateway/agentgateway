@@ -1738,8 +1738,6 @@ mod provider_routing {
 
 	#[test]
 	fn resolve_endpoint_explicit_preferences_ignore_model_table() {
-		// MantleOnly and RuntimeOnly short-circuit before consulting the model table,
-		// so any model ID produces a deterministic result regardless of global catalog state.
 		let p_mantle = provider(BedrockProviderPreference::MantleOnly);
 		let p_runtime = provider(BedrockProviderPreference::RuntimeOnly);
 		assert_eq!(
@@ -1750,7 +1748,6 @@ mod provider_routing {
 			p_runtime.resolve_endpoint(RouteType::Messages, Some("any-model")),
 			BedrockEndpoint::Runtime
 		);
-		// RuntimePreferred + model-table fallthrough is covered by bedrock_model_table::tests.
 	}
 
 	#[test]
@@ -1802,7 +1799,6 @@ mod provider_routing {
 
 	#[test]
 	fn body_native_format_mantle_passthrough_runtime_converse() {
-		// Mantle: body stays in its native wire format.
 		let mantle = provider(BedrockProviderPreference::MantleOnly);
 		assert_eq!(
 			mantle.body_native_format(InputFormat::Messages, "any"),
@@ -1816,8 +1812,6 @@ mod provider_routing {
 			mantle.body_native_format(InputFormat::Responses, "any"),
 			Some(ProviderFormat::Responses)
 		);
-
-		// Runtime + non-Anthropic model: convert to Converse (None = use default translation).
 		let runtime = provider(BedrockProviderPreference::RuntimeOnly);
 		assert_eq!(
 			runtime.body_native_format(InputFormat::Messages, "amazon.titan-text-lite-v1"),
