@@ -1,6 +1,6 @@
-## Backend OAuth
+## Token exchange with `extAuthz`
 
-This example uses `extAuthz` to get OAuth access tokens from Keycloak before forwarding requests upstream.
+This example uses `extAuthz` to get OAuth access tokens from Keycloak before forwarding requests upstream, building the token request by hand with CEL. For the built-in `backendAuth.oauth` policy that does the same job, see the sibling [oauth-rfc8693](../oauth-rfc8693/README.md) and [jwt-authz-grant](../jwt-authz-grant/README.md) examples.
 
 It includes two backend auth flows:
 
@@ -12,13 +12,13 @@ It includes two backend auth flows:
 Start Keycloak and the demo upstream:
 
 ```bash
-docker compose -f examples/traffic-backend-oauth/docker-compose.yaml up -d
+docker compose -f examples/traffic-token-exchange/extauthz/docker-compose.yaml up -d
 ```
 
 Run agentgateway:
 
 ```bash
-cargo run -- -f examples/traffic-backend-oauth/config.yaml
+cargo run -- -f examples/traffic-token-exchange/extauthz/config.yaml
 ```
 
 Get an initial token for the token exchange flow:
@@ -55,5 +55,5 @@ backend_oauth.grant="..." backend_oauth.subject="..." backend_oauth.audience="ta
 Stop the demo:
 
 ```bash
-docker compose -f examples/traffic-backend-oauth/docker-compose.yaml down
+docker compose -f examples/traffic-token-exchange/extauthz/docker-compose.yaml down
 ```
