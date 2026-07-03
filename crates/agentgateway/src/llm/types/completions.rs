@@ -68,6 +68,10 @@ impl Request {
 
 	/// Ensure tool messages carry a `tool_call_id` before converting to the tagged
 	/// async-openai message enum (which requires the field).
+	///
+	/// When clients omit `tool_call_id`, IDs are inferred from the most recent
+	/// assistant `tool_calls` in FIFO order. Tool results are assumed to appear in
+	/// the same order as the assistant's `tool_calls` list.
 	pub fn normalize_tool_message_ids(&mut self) {
 		let mut pending_tool_call_ids: Vec<String> = Vec::new();
 
@@ -80,7 +84,11 @@ impl Request {
 					if msg.tool_call_id.is_none() {
 						msg.tool_call_id = extract_tool_call_id_from_value(&msg.rest);
 					}
-					if msg.tool_call_id.is_none() && !pending_tool_call_ids.is_empty() {
+					if let Some(id) = msg.tool_call_id.as_ref() {
+						if let Some(pos) = pending_tool_call_ids.iter().position(|p| p == id) {
+							pending_tool_call_ids.remove(pos);
+						}
+					} else if !pending_tool_call_ids.is_empty() {
 						msg.tool_call_id = Some(pending_tool_call_ids.remove(0));
 					}
 				},

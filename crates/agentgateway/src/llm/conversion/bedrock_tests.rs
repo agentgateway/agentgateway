@@ -1695,29 +1695,139 @@ fn test_messages_long_tool_name_round_trip_response() {
 	assert_eq!(tool_use_name, long_name);
 }
 
+fn loose_tool_call_request(messages: serde_json::Value) -> types::completions::Request {
+	serde_json::from_value(json!({
+		"model": "claude",
+		"messages": messages
+	}))
+	.expect("valid loose completions request")
+}
+
 #[test]
 fn test_to_typed_request_fills_missing_tool_call_id() {
-	let req: types::completions::Request = serde_json::from_value(json!({
-		"model": "claude",
-		"messages": [
-			{"role": "user", "content": "check status"},
-			{
-				"role": "assistant",
-				"content": null,
-				"tool_calls": [{
-					"id": "call_abc",
-					"type": "function",
-					"function": {"name": "k8s_get_resources", "arguments": "{}"}
-				}]
-			},
-			{"role": "tool", "name": "k8s_get_resources", "content": "pod-1 Running"}
-		]
-	}))
-	.expect("valid loose completions request");
+	let req = loose_tool_call_request(json!([
+		{"role": "user", "content": "check status"},
+		{
+			"role": "assistant",
+			"content": null,
+			"tool_calls": [{
+				"id": "call_abc",
+				"type": "function",
+				"function": {"name": "k8s_get_resources", "arguments": "{}"}
+			}]
+		},
+		{"role": "tool", "name": "k8s_get_resources", "content": "pod-1 Running"}
+	]));
 
 	let typed = req
 		.to_typed_request()
 		.expect("tool messages without tool_call_id should be normalized");
+
+	match &typed.messages[2] {
+		types::completions::typed::RequestMessage::Tool(tool) => {
+			assert_eq!(tool.tool_call_id, "call_abc");
+		},
+		other => panic!("expected tool message, got {other:?}"),
+	}
+}
+
+#[test]
+fn test_to_typed_request_fills_parallel_missing_tool_call_ids() {
+	let req = loose_tool_call_request(json!([
+		{"role": "user", "content": "check status"},
+		{
+			"role": "assistant",
+			"content": null,
+			"tool_calls": [
+				{
+					"id": "call_1",
+					"type": "function",
+					"function": {"name": "tool_a", "arguments": "{}"}
+				},
+				{
+					"id": "call_2",
+					"type": "function",
+					"function": {"name": "tool_b", "arguments": "{}"}
+				}
+			]
+		},
+		{"role": "tool", "name": "tool_a", "content": "a"},
+		{"role": "tool", "name": "tool_b", "content": "b"}
+	]));
+
+	let typed = req.to_typed_request().expect("parallel tool ids should normalize");
+
+	match (&typed.messages[2], &typed.messages[3]) {
+		(
+			types::completions::typed::RequestMessage::Tool(first),
+			types::completions::typed::RequestMessage::Tool(second),
+		) => {
+			assert_eq!(first.tool_call_id, "call_1");
+			assert_eq!(second.tool_call_id, "call_2");
+		},
+		other => panic!("expected tool messages, got {other:?}"),
+	}
+}
+
+#[test]
+fn test_to_typed_request_mixed_explicit_and_missing_tool_call_ids() {
+	let req = loose_tool_call_request(json!([
+		{"role": "user", "content": "check status"},
+		{
+			"role": "assistant",
+			"content": null,
+			"tool_calls": [
+				{
+					"id": "call_1",
+					"type": "function",
+					"function": {"name": "tool_a", "arguments": "{}"}
+				},
+				{
+					"id": "call_2",
+					"type": "function",
+					"function": {"name": "tool_b", "arguments": "{}"}
+				}
+			]
+		},
+		{"role": "tool", "tool_call_id": "call_1", "name": "tool_a", "content": "a"},
+		{"role": "tool", "name": "tool_b", "content": "b"}
+	]));
+
+	let typed = req
+		.to_typed_request()
+		.expect("mixed explicit and inferred tool ids should normalize");
+
+	match (&typed.messages[2], &typed.messages[3]) {
+		(
+			types::completions::typed::RequestMessage::Tool(first),
+			types::completions::typed::RequestMessage::Tool(second),
+		) => {
+			assert_eq!(first.tool_call_id, "call_1");
+			assert_eq!(second.tool_call_id, "call_2");
+		},
+		other => panic!("expected tool messages, got {other:?}"),
+	}
+}
+
+#[test]
+fn test_to_typed_request_reads_call_id_from_rest() {
+	let req = loose_tool_call_request(json!([
+		{"role": "user", "content": "check status"},
+		{
+			"role": "assistant",
+			"content": null,
+			"tool_calls": [{
+				"id": "call_abc",
+				"type": "function",
+				"function": {"name": "tool_a", "arguments": "{}"}
+			}]
+		},
+		{"role": "tool", "call_id": "call_abc", "name": "tool_a", "content": "done"}
+	]));
+
+	let typed = req
+		.to_typed_request()
+		.expect("call_id in rest should satisfy typed parsing");
 
 	match &typed.messages[2] {
 		types::completions::typed::RequestMessage::Tool(tool) => {
