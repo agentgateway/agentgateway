@@ -202,6 +202,18 @@ impl Stream for MergeStream {
 							self.terminal_messages[i] = Some((k, r.result));
 							// This stream is done, never look at it again
 						},
+						Ok(ServerJsonRpcMessage::Error(e)) => {
+							if self.failure_mode == FailureMode::FailOpen {
+								warn!(
+									"upstream JSON-RPC error, skipping (failure_mode=FailOpen): {:?}",
+									e
+								);
+								drop = true;
+							} else {
+								self.complete = true;
+								return Poll::Ready(Some(Ok(ServerJsonRpcMessage::Error(e))));
+							}
+						},
 						Err(e) => {
 							if self.failure_mode == FailureMode::FailOpen {
 								warn!(
