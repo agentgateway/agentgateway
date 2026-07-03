@@ -372,7 +372,7 @@ func (d *Deployer) DeployObjsWithSource(ctx context.Context, objs []client.Objec
 // and stale autoscaling or disruption resources after configuration changes.
 func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Object, desiredObjs []client.Object) error {
 	ownerNamespace := owner.GetNamespace()
-	labelSelector := fmt.Sprintf("%s=%s", wellknown.GatewayNameLabel, owner.GetName())
+	labelSelector := fmt.Sprintf("%s=%s", wellknown.GatewayNameLabel, safeLabelValue(owner.GetName()))
 
 	// Build map of desired resources by GVK
 	desiredByGVK := make(map[schema.GroupVersionKind]map[string]bool)

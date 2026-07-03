@@ -765,6 +765,31 @@ func TestPruneRemovedResources(t *testing.T) {
 		assert.Equal(t, 0, len(deploymentList.Items))
 	})
 
+	t.Run("prunes stale Deployment for long Gateway name labeled with safe value", func(t *testing.T) {
+		longGwName := strings.Join([]string{
+			"extremely-long-gateway-name-that-exceeds-the-sixty-three-character-limit",
+			"imposed-by-kubernetes-dns-naming-requirements",
+		}, "-")
+		safeGwName := "extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097"
+		gw := createGateway()
+		gw.Name = longGwName
+		deployment := createDeployment(safeGwName, safeGwName, ownerRefForGateway(gw, true))
+		desiredDaemonSet := createDaemonSet(safeGwName, safeGwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		deploymentList, err := fc.Dynamic().Resource(deploymentGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(deploymentList.Items))
+	})
+
 	t.Run("prunes stale HPA when desired workload is DaemonSet", func(t *testing.T) {
 		gw := createGateway()
 		ownerRefs := ownerRefForGateway(gw, true)
