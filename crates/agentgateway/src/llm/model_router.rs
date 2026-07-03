@@ -585,6 +585,7 @@ async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 
 async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 	let limit = http::buffer_limit(req);
+	let inspect_limit = limit.saturating_add(1);
 	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
 		if body.0.len() < limit {
 			return Ok(body.0.clone());
@@ -593,7 +594,11 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 			return Err(Box::new(request_body_too_large_response()));
 		}
 	}
-	let inspect_limit = limit.saturating_add(1);
+	// A pre-buffered body that is exactly at the limit is ambiguous: it might be
+	// an exact-fit request, or a truncated peek from an oversized body captured by
+	// an earlier CEL/body-inspection stage. Re-inspect one more byte from the live
+	// body so oversized requests consistently surface as 413 instead of falling
+	// through to a later JSON parse error on truncated bytes.
 	let mut body = http::inspect_body_with_limit(req.body_mut(), inspect_limit)
 		.await
 		.map_err(|err| {
@@ -682,6 +687,35 @@ mod tests {
 		let resp = *body_bytes(&mut req)
 			.await
 			.expect_err("over-limit body should fail");
+		assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
+		let error_body = http::read_body_with_limit(resp.into_body(), 1024)
+			.await
+			.expect("error body");
+		let error: Value = serde_json::from_slice(&error_body).expect("error JSON");
+		assert_eq!(error["error"]["code"], "request_body_too_large");
+
+		let restored = http::read_body_with_limit(req.into_body(), 1024)
+			.await
+			.expect("restored request body");
+		assert_eq!(restored, Bytes::from_static(request_body));
+	}
+
+	#[tokio::test]
+	async fn body_bytes_rejects_truncated_buffered_body_over_buffer_limit() {
+		let request_body =
+			br#"{"model":"real-model","messages":[{"role":"user","content":"this part is over the limit"}]}"#;
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::from(request_body.as_slice()))
+			.unwrap();
+		req.extensions_mut().insert(BufferLimit(24));
+		req
+			.extensions_mut()
+			.insert(cel::BufferedBody(Bytes::copy_from_slice(&request_body[..24])));
+
+		let resp = *body_bytes(&mut req)
+			.await
+			.expect_err("truncated over-limit buffered body should fail");
 		assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
 		let error_body = http::read_body_with_limit(resp.into_body(), 1024)
 			.await
