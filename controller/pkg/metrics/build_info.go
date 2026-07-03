@@ -13,7 +13,7 @@ var buildInfoCollector = func() prometheus.Collector {
 	return prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Namespace: DefaultNamespace,
-			Name:      "build_info",
+			Name:      "controller_build_info",
 			Help:      "Agentgateway build metadata exposed as labels with a constant value of 1.",
 			ConstLabels: prometheus.Labels{
 				"version":    info.Controller,

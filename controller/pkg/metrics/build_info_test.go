@@ -19,7 +19,7 @@ func TestBuildInfoMetric(t *testing.T) {
 	info := version.Info()
 	gathered := metricstest.MustGatherMetrics(t)
 
-	gathered.AssertMetric("agentgateway_build_info", &metricstest.ExpectedMetric{
+	gathered.AssertMetric("agentgateway_controller_build_info", &metricstest.ExpectedMetric{
 		Labels: []metrics.Label{
 			{Name: "version", Value: info.Controller},
 			{Name: "git_commit", Value: info.Commit},
