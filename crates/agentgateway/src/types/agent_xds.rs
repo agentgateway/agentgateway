@@ -3452,6 +3452,27 @@ fn convert_regex_rules(
 							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::CaSin => {
 								llm::policy::Builtin::CaSin
 							},
+							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::ApiKey => {
+								llm::policy::Builtin::ApiKey
+							},
+							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::PrivateKey => {
+								llm::policy::Builtin::PrivateKey
+							},
+							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::GithubToken => {
+								llm::policy::Builtin::GithubToken
+							},
+							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::AwsAccessKey => {
+								llm::policy::Builtin::AwsAccessKey
+							},
+							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::SlackToken => {
+								llm::policy::Builtin::SlackToken
+							},
+							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::Jwt => {
+								llm::policy::Builtin::Jwt
+							},
+							proto::agent::backend_policy_spec::ai::BuiltinRegexRule::GcpApiKey => {
+								llm::policy::Builtin::GcpApiKey
+							},
 							_ => {
 								diagnostics.add_warning(format!("unknown builtin regex rule value {b}; skipping"));
 								return None;

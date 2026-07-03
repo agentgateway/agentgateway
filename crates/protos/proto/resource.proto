@@ -1184,6 +1184,13 @@ message BackendPolicySpec {
       PHONE_NUMBER = 3;
       EMAIL = 4;
       CA_SIN = 5;
+      API_KEY = 6;
+      PRIVATE_KEY = 7;
+      GITHUB_TOKEN = 8;
+      AWS_ACCESS_KEY = 9;
+      SLACK_TOKEN = 10;
+      JWT = 11;
+      GCP_API_KEY = 12;
     }
 
     message RegexRule {

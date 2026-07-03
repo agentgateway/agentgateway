@@ -4585,6 +4585,41 @@
           "description": "Canadian Social Insurance Number pattern.",
           "type": "string",
           "const": "caSin"
+        },
+        {
+          "description": "Generic API key pattern.",
+          "type": "string",
+          "const": "apiKey"
+        },
+        {
+          "description": "Private key (PEM/PGP block) pattern.",
+          "type": "string",
+          "const": "privateKey"
+        },
+        {
+          "description": "GitHub token pattern.",
+          "type": "string",
+          "const": "githubToken"
+        },
+        {
+          "description": "AWS access key ID pattern.",
+          "type": "string",
+          "const": "awsAccessKey"
+        },
+        {
+          "description": "Slack token pattern.",
+          "type": "string",
+          "const": "slackToken"
+        },
+        {
+          "description": "JSON Web Token pattern.",
+          "type": "string",
+          "const": "jwt"
+        },
+        {
+          "description": "GCP API key pattern.",
+          "type": "string",
+          "const": "gcpApiKey"
         }
       ]
     },

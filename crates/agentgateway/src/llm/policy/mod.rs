@@ -1189,6 +1189,13 @@ impl Policy {
 						Builtin::PhoneNumber => &*pii::PHONE,
 						Builtin::Email => &*pii::EMAIL,
 						Builtin::CaSin => &*pii::CA_SIN,
+						Builtin::ApiKey => &*pii::API_KEY,
+						Builtin::PrivateKey => &*pii::PRIVATE_KEY,
+						Builtin::GithubToken => &*pii::GITHUB_TOKEN,
+						Builtin::AwsAccessKey => &*pii::AWS_ACCESS_KEY,
+						Builtin::SlackToken => &*pii::SLACK_TOKEN,
+						Builtin::Jwt => &*pii::JWT,
+						Builtin::GcpApiKey => &*pii::GCP_API_KEY,
 					};
 					let results = pii::recognizer(rec, working.as_deref().unwrap_or(original_content));
 					if results.is_empty() {
@@ -1428,6 +1435,20 @@ pub enum Builtin {
 	Email,
 	/// Canadian Social Insurance Number pattern.
 	CaSin,
+	/// Generic API key pattern.
+	ApiKey,
+	/// Private key (PEM/PGP block) pattern.
+	PrivateKey,
+	/// GitHub token pattern.
+	GithubToken,
+	/// AWS access key ID pattern.
+	AwsAccessKey,
+	/// Slack token pattern.
+	SlackToken,
+	/// JSON Web Token pattern.
+	Jwt,
+	/// GCP API key pattern.
+	GcpApiKey,
 }
 
 #[apply(schema!)]

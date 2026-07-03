@@ -1488,17 +1488,31 @@ const (
 	BackendPolicySpec_Ai_PHONE_NUMBER        BackendPolicySpec_Ai_BuiltinRegexRule = 3
 	BackendPolicySpec_Ai_EMAIL               BackendPolicySpec_Ai_BuiltinRegexRule = 4
 	BackendPolicySpec_Ai_CA_SIN              BackendPolicySpec_Ai_BuiltinRegexRule = 5
+	BackendPolicySpec_Ai_API_KEY             BackendPolicySpec_Ai_BuiltinRegexRule = 6
+	BackendPolicySpec_Ai_PRIVATE_KEY         BackendPolicySpec_Ai_BuiltinRegexRule = 7
+	BackendPolicySpec_Ai_GITHUB_TOKEN        BackendPolicySpec_Ai_BuiltinRegexRule = 8
+	BackendPolicySpec_Ai_AWS_ACCESS_KEY      BackendPolicySpec_Ai_BuiltinRegexRule = 9
+	BackendPolicySpec_Ai_SLACK_TOKEN         BackendPolicySpec_Ai_BuiltinRegexRule = 10
+	BackendPolicySpec_Ai_JWT                 BackendPolicySpec_Ai_BuiltinRegexRule = 11
+	BackendPolicySpec_Ai_GCP_API_KEY         BackendPolicySpec_Ai_BuiltinRegexRule = 12
 )
 
 // Enum value maps for BackendPolicySpec_Ai_BuiltinRegexRule.
 var (
 	BackendPolicySpec_Ai_BuiltinRegexRule_name = map[int32]string{
-		0: "BUILTIN_UNSPECIFIED",
-		1: "SSN",
-		2: "CREDIT_CARD",
-		3: "PHONE_NUMBER",
-		4: "EMAIL",
-		5: "CA_SIN",
+		0:  "BUILTIN_UNSPECIFIED",
+		1:  "SSN",
+		2:  "CREDIT_CARD",
+		3:  "PHONE_NUMBER",
+		4:  "EMAIL",
+		5:  "CA_SIN",
+		6:  "API_KEY",
+		7:  "PRIVATE_KEY",
+		8:  "GITHUB_TOKEN",
+		9:  "AWS_ACCESS_KEY",
+		10: "SLACK_TOKEN",
+		11: "JWT",
+		12: "GCP_API_KEY",
 	}
 	BackendPolicySpec_Ai_BuiltinRegexRule_value = map[string]int32{
 		"BUILTIN_UNSPECIFIED": 0,
@@ -1507,6 +1521,13 @@ var (
 		"PHONE_NUMBER":        3,
 		"EMAIL":               4,
 		"CA_SIN":              5,
+		"API_KEY":             6,
+		"PRIVATE_KEY":         7,
+		"GITHUB_TOKEN":        8,
+		"AWS_ACCESS_KEY":      9,
+		"SLACK_TOKEN":         10,
+		"JWT":                 11,
+		"GCP_API_KEY":         12,
 	}
 )
 
@@ -16289,7 +16310,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xf2X\n" +
+	"\x04kind\"\xe2Y\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -16311,7 +16332,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x06health\x18\x0f \x01(\v23.agentgateway.dev.resource.BackendPolicySpec.HealthH\x00R\x06health\x12c\n" +
 	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x12X\n" +
 	"\text_authz\x18\x11 \x01(\v29.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuthH\x00R\bextAuthz\x12c\n" +
-	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x1a\xc1,\n" +
+	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x1a\xb1-\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -16432,7 +16453,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1at\n" +
 	"\vRoutesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12O\n" +
-	"\x05value\x18\x02 \x01(\x0e29.agentgateway.dev.resource.BackendPolicySpec.Ai.RouteTypeR\x05value:\x028\x01\"n\n" +
+	"\x05value\x18\x02 \x01(\x0e29.agentgateway.dev.resource.BackendPolicySpec.Ai.RouteTypeR\x05value:\x028\x01\"\xdd\x01\n" +
 	"\x10BuiltinRegexRule\x12\x17\n" +
 	"\x13BUILTIN_UNSPECIFIED\x10\x00\x12\a\n" +
 	"\x03SSN\x10\x01\x12\x0f\n" +
@@ -16440,7 +16461,15 @@ const file_resource_proto_rawDesc = "" +
 	"\fPHONE_NUMBER\x10\x03\x12\t\n" +
 	"\x05EMAIL\x10\x04\x12\n" +
 	"\n" +
-	"\x06CA_SIN\x10\x05\":\n" +
+	"\x06CA_SIN\x10\x05\x12\v\n" +
+	"\aAPI_KEY\x10\x06\x12\x0f\n" +
+	"\vPRIVATE_KEY\x10\a\x12\x10\n" +
+	"\fGITHUB_TOKEN\x10\b\x12\x12\n" +
+	"\x0eAWS_ACCESS_KEY\x10\t\x12\x0f\n" +
+	"\vSLACK_TOKEN\x10\n" +
+	"\x12\a\n" +
+	"\x03JWT\x10\v\x12\x0f\n" +
+	"\vGCP_API_KEY\x10\f\":\n" +
 	"\n" +
 	"ActionKind\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\b\n" +
