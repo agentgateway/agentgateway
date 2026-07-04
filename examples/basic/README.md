@@ -47,6 +47,20 @@ targets:
 
 When clients connect to the gateway, the `cmd` will be executed to serve the traffic.
 
+For a remote Streamable HTTP MCP server that expects a bearer token, configure an HTTP MCP target and set the upstream header on the backend:
+
+```yaml
+backends:
+- mcp:
+    targets:
+    - name: xquik
+      mcp:
+        host: https://xquik.com/mcp
+  requestHeaderModifier:
+    set:
+      authorization: "Bearer <XQUIK_API_KEY>"
+```
+
 Now that we have the gateway running, we can use the [mcpinspector](https://github.com/modelcontextprotocol/inspector) to try it out.
 ```bash
 npx @modelcontextprotocol/inspector
