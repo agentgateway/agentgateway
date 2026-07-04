@@ -45,6 +45,7 @@ type McpResponse = {
 
 const storageKeys = {
   tool: "mcpPlaygroundTool",
+  baseUrlOverride: "mcpPlaygroundBaseUrlOverride",
 };
 
 export function McpPlaygroundPage() {
@@ -55,7 +56,11 @@ export function McpPlaygroundPage() {
     config.data?.mcp?.port ?? 3000,
     "/mcp",
   );
-  const baseUrl = derivedBaseUrl;
+  const [baseUrlOverride, setBaseUrlOverride] = useStoredStringState(
+    storageKeys.baseUrlOverride,
+    "",
+  );
+  const baseUrl = baseUrlOverride.trim() || derivedBaseUrl;
   const [initialized, setInitialized] = useState(false);
   const [sessionId, setSessionId] = useState("");
   const [tools, setTools] = useState<McpTool[]>([]);
@@ -264,6 +269,26 @@ export function McpPlaygroundPage() {
                 spellCheck={false}
                 onChange={(event) => setBearerToken(event.target.value)}
                 placeholder="Optional token"
+              />
+            </Field>
+          </details>
+
+          <details className="schema-details mcp-endpoint-details">
+            <summary>Endpoint URL</summary>
+            <Field
+              label="MCP endpoint URL"
+              hint={`Auto-derived from config: ${derivedBaseUrl}. Leave blank to use the default; override only when the listener is exposed on a different host:port (e.g. behind a reverse proxy or a non-default docker-compose port mapping).`}
+            >
+              <input
+                type="text"
+                value={baseUrlOverride}
+                placeholder={derivedBaseUrl}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                onChange={(event) => setBaseUrlOverride(event.target.value)}
+                style={{ fontFamily: "monospace" }}
               />
             </Field>
           </details>
