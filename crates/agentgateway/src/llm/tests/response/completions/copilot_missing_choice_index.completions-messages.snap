@@ -1,0 +1,44 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/completions/copilot_missing_choice_index.json
+info:
+  id: chatcmpl-copilot
+  object: chat.completion
+  created: 1775595226
+  model: claude-haiku-4.5
+  choices:
+    - message:
+        role: assistant
+        content: hello from copilot
+      finish_reason: stop
+  usage:
+    prompt_tokens: 10
+    completion_tokens: 2
+    total_tokens: 12
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "hello from copilot"
+      }
+    ],
+    "model": "claude-haiku-4.5",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 10,
+      "output_tokens": 2
+    }
+  },
+  "parsed": {
+    "input_tokens": 10,
+    "output_tokens": 2,
+    "total_tokens": 12,
+    "provider_model": "claude-haiku-4.5"
+  }
+}

@@ -608,6 +608,7 @@ mod response {
 		("openrouter_reasoning", ALL_COMPLETIONS),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
+		("copilot_missing_choice_index", ALL_COMPLETIONS),
 	];
 	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream", ALL_COMPLETIONS),
@@ -1808,6 +1809,26 @@ fn completions_response_missing_message_and_usage_fields() {
 	assert_eq!(usage.prompt_tokens, 5);
 	assert_eq!(usage.completion_tokens, 0);
 	assert_eq!(usage.total_tokens, 12);
+}
+
+#[test]
+fn typed_completions_response_missing_choice_index() {
+	// GitHub Copilot's chat-completions responses omit `index` on choices.
+	let json = r#"{
+		"id": "chatcmpl-copilot",
+		"object": "chat.completion",
+		"created": 0,
+		"model": "claude-haiku-4.5",
+		"choices": [{
+			"message": {"role": "assistant", "content": "hello"},
+			"finish_reason": "stop"
+		}],
+		"usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}
+	}"#;
+	let resp: types::completions::typed::Response = serde_json::from_str(json).unwrap();
+	assert_eq!(resp.choices.len(), 1);
+	assert_eq!(resp.choices[0].index, 0);
+	assert_eq!(resp.choices[0].message.content.as_deref(), Some("hello"));
 }
 
 #[tokio::test]

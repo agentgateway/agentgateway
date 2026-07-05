@@ -1,0 +1,20 @@
+{
+  "id": "chatcmpl-copilot",
+  "object": "chat.completion",
+  "created": 1775595226,
+  "model": "claude-haiku-4.5",
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "hello from copilot"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 2,
+    "total_tokens": 12
+  }
+}

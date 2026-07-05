@@ -591,6 +591,7 @@ pub mod typed {
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoiceStream {
 		/// The index of the choice in the list of choices.
+		#[serde(default)]
 		pub index: u32,
 		pub delta: StreamResponseDelta,
 		/// The reason the model stopped generating tokens. This will be
@@ -652,6 +653,7 @@ pub mod typed {
 	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 	pub struct ChatChoice {
 		/// The index of the choice in the list of choices.
+		#[serde(default)]
 		pub index: u32,
 		pub message: ResponseMessage,
 		/// The reason the model stopped generating tokens. This will be `stop` if the model hit a natural stop point or a provided stop sequence,
