@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
+	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/util/protomarshal"
@@ -46,7 +47,7 @@ func TestBuildMCP(t *testing.T) {
 								Static: &agentgateway.McpTarget{
 									Host:     shortStringPtr("mcp-server.example.com"),
 									Port:     8080,
-									Path:     new("override-sse"),
+									Path:     ptr.Of(agentgateway.LongString("override-sse")),
 									Protocol: new(agentgateway.MCPProtocolSSE),
 								},
 							},
@@ -338,7 +339,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							OpenAI: &agentgateway.OpenAIConfig{
-								Model: new("gpt-4"),
+								Model: ptr.Of(agentgateway.ShortString("gpt-4")),
 							},
 						},
 					},
@@ -357,8 +358,8 @@ func TestBuildAIBackend(t *testing.T) {
 						LLM: &agentgateway.LLMProvider{
 							AzureOpenAI: &agentgateway.AzureOpenAIConfig{
 								Endpoint:       "endpoint-123.openai.azure.com",
-								DeploymentName: new("my-deployment"),
-								ApiVersion:     new("2024-02-15-preview"),
+								DeploymentName: ptr.Of(agentgateway.ShortString("my-deployment")),
+								ApiVersion:     ptr.Of(agentgateway.TinyString("2024-02-15-preview")),
 							},
 						},
 					},
@@ -378,9 +379,9 @@ func TestBuildAIBackend(t *testing.T) {
 							Azure: &agentgateway.AzureConfig{
 								ResourceName: "my-foundry-resource",
 								ResourceType: agentgateway.AzureResourceTypeFoundry,
-								Model:        new("gpt-4o-mini"),
-								ApiVersion:   new("2024-12-01-preview"),
-								ProjectName:  new("my-project"),
+								Model:        ptr.Of(agentgateway.ShortString("gpt-4o-mini")),
+								ApiVersion:   ptr.Of(agentgateway.TinyString("2024-12-01-preview")),
+								ProjectName:  ptr.Of(agentgateway.ShortString("my-project")),
 							},
 						},
 					},
@@ -398,7 +399,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Anthropic: &agentgateway.AnthropicConfig{
-								Model: new("claude-3-sonnet"),
+								Model: ptr.Of(agentgateway.ShortString("claude-3-sonnet")),
 							},
 						},
 					},
@@ -416,7 +417,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Gemini: &agentgateway.GeminiConfig{
-								Model: new("gemini-pro"),
+								Model: ptr.Of(agentgateway.ShortString("gemini-pro")),
 							},
 						},
 					},
@@ -434,7 +435,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							VertexAI: &agentgateway.VertexAIConfig{
-								Model: new("gemini-pro"),
+								Model: ptr.Of(agentgateway.ShortString("gemini-pro")),
 							},
 						},
 					},
@@ -532,7 +533,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model:  new("anthropic.claude-3-haiku-20240307-v1:0"),
+								Model:  ptr.Of(agentgateway.ShortString("anthropic.claude-3-haiku-20240307-v1:0")),
 								Region: "eu-west-1",
 								Guardrail: &agentgateway.AWSGuardrailConfig{
 									GuardrailIdentifier: "test-guardrail",
@@ -569,7 +570,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							OpenAI: &agentgateway.OpenAIConfig{
-								Model: new("gpt-3.5-turbo"),
+								Model: ptr.Of(agentgateway.ShortString("gpt-3.5-turbo")),
 							},
 						},
 					},
@@ -602,7 +603,7 @@ func TestBuildAIBackend(t *testing.T) {
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											OpenAI: &agentgateway.OpenAIConfig{
-												Model: new("gpt-4"),
+												Model: ptr.Of(agentgateway.ShortString("gpt-4")),
 											},
 										},
 									},
@@ -615,7 +616,7 @@ func TestBuildAIBackend(t *testing.T) {
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											Anthropic: &agentgateway.AnthropicConfig{
-												Model: new("claude-3"),
+												Model: ptr.Of(agentgateway.ShortString("claude-3")),
 											},
 										},
 									},
@@ -647,7 +648,7 @@ func TestBuildAIBackend(t *testing.T) {
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											OpenAI: &agentgateway.OpenAIConfig{
-												Model: new("gpt-4"),
+												Model: ptr.Of(agentgateway.ShortString("gpt-4")),
 											},
 										},
 									},
@@ -660,7 +661,7 @@ func TestBuildAIBackend(t *testing.T) {
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											Anthropic: &agentgateway.AnthropicConfig{
-												Model: new("claude-3-opus"),
+												Model: ptr.Of(agentgateway.ShortString("claude-3-opus")),
 											},
 										},
 									},
@@ -677,7 +678,7 @@ func TestBuildAIBackend(t *testing.T) {
 										},
 										LLMProvider: agentgateway.LLMProvider{
 											Gemini: &agentgateway.GeminiConfig{
-												Model: new("gemini-pro"),
+												Model: ptr.Of(agentgateway.ShortString("gemini-pro")),
 											},
 										},
 									},
@@ -709,7 +710,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							OpenAI: &agentgateway.OpenAIConfig{
-								Model: new("gpt-4o-mini"),
+								Model: ptr.Of(agentgateway.ShortString("gpt-4o-mini")),
 							},
 						},
 					},

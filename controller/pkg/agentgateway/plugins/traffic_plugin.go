@@ -741,7 +741,7 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 	}
 	for idx, pp := range jwt.Providers {
 		jp := &api.TrafficPolicySpec_JWTProvider{
-			Issuer:    pp.Issuer,
+			Issuer:    string(pp.Issuer),
 			Audiences: pp.Audiences,
 		}
 		if i := pp.JWKS.Inline; i != nil {
@@ -1253,11 +1253,11 @@ func buildExtAuthSpec(
 			Path:                   path,
 			Redirect:               redirect,
 			Body:                   body,
-			IncludeResponseHeaders: h.AllowedResponseHeaders,
+			IncludeResponseHeaders: agentgateway.ConvertShortStrings(h.AllowedResponseHeaders),
 			AddRequestHeaders:      addRequestHeaders,
 			Metadata:               metadata,
 		}
-		spec.IncludeRequestHeaders = h.AllowedRequestHeaders
+		spec.IncludeRequestHeaders = agentgateway.ConvertShortStrings(h.AllowedRequestHeaders)
 		spec.Protocol = &api.TrafficPolicySpec_ExternalAuth_Http{
 			Http: p,
 		}
@@ -1674,7 +1674,7 @@ func processGlobalRateLimitTraffic(ctx PolicyCtx, grl *agentgateway.GlobalRateLi
 	return &api.Policy_Traffic{Traffic: &api.TrafficPolicySpec{
 		Kind: &api.TrafficPolicySpec_RemoteRateLimit_{
 			RemoteRateLimit: &api.TrafficPolicySpec_RemoteRateLimit{
-				Domain:      grl.Domain,
+				Domain:      string(grl.Domain),
 				Target:      be,
 				Descriptors: descriptors,
 				FailureMode: remoteRateLimitFailureMode(grl.FailureMode),
@@ -1712,7 +1712,7 @@ func processRateLimitDescriptor(descriptor agentgateway.RateLimitDescriptor) (*a
 			errs = append(errs, fmt.Errorf("rate limit descriptor entry %q is not a valid CEL expression: %s", entry.Name, entry.Expression))
 		}
 		entries = append(entries, &api.TrafficPolicySpec_RemoteRateLimit_Entry{
-			Key:   entry.Name,
+			Key:   string(entry.Name),
 			Value: string(entry.Expression),
 		})
 	}
@@ -1816,7 +1816,7 @@ func processCSRFPolicy(csrf *agentgateway.CSRF, basePolicyName string, policy ty
 			Traffic: &api.TrafficPolicySpec{
 				Kind: &api.TrafficPolicySpec_Csrf{
 					Csrf: &api.TrafficPolicySpec_CSRF{
-						AdditionalOrigins: csrf.AdditionalOrigins,
+						AdditionalOrigins: agentgateway.ConvertShortStrings(csrf.AdditionalOrigins),
 					},
 				},
 			},

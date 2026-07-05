@@ -282,7 +282,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 						},
 						Port: uint32(s.Port), //nolint:gosec // G115: validated by the CRD schema
 					},
-					Path: ptr.OrEmpty(s.Path),
+					Path: string(ptr.OrEmpty(s.Path)),
 				}
 
 				switch ptr.OrEmpty(s.Protocol) {
@@ -303,7 +303,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				Name: plugins.ResourceName(be),
 				Kind: &api.Backend_Static{
 					Static: &api.StaticBackend{
-						Host: ptr.OrEmpty(s.Host),
+						Host: string(ptr.OrEmpty(s.Host)),
 						Port: s.Port,
 					},
 				},
@@ -328,7 +328,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 						Backend: staticBackendRef,
 					},
 				},
-				Path: ptr.OrEmpty(s.Path),
+				Path: string(ptr.OrEmpty(s.Path)),
 			}
 
 			switch ptr.OrEmpty(s.Protocol) {
@@ -456,24 +456,26 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 
 	if llm.Host != "" {
 		provider.HostOverride = &api.AIBackend_HostOverride{
-			Host: llm.Host,
+			Host: string(llm.Host),
 			Port: ptr.NonEmptyOrDefault(llm.Port, 443), // Port is required when Host is set (CEL validated)
 		}
 	}
 
 	if llm.Path != "" {
-		provider.PathOverride = &llm.Path
+		path := string(llm.Path)
+		provider.PathOverride = &path
 	}
 
 	if llm.PathPrefix != "" {
-		provider.PathPrefix = &llm.PathPrefix
+		prefix := string(llm.PathPrefix)
+		provider.PathPrefix = &prefix
 	}
 
 	// Extract auth token and model based on provider
 	if llm.OpenAI != nil {
 		provider.Provider = &api.AIBackend_Provider_Openai{
 			Openai: &api.AIBackend_OpenAI{
-				Model: llm.OpenAI.Model,
+				Model: agentgateway.ConvertStringPtr(llm.OpenAI.Model),
 			},
 		}
 	} else if llm.AzureOpenAI != nil {
@@ -482,8 +484,8 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			Azure: &api.AIBackend_Azure{
 				ResourceName: resourceName,
 				ResourceType: resourceType,
-				Model:        llm.AzureOpenAI.DeploymentName,
-				ApiVersion:   llm.AzureOpenAI.ApiVersion,
+				Model:        agentgateway.ConvertStringPtr(llm.AzureOpenAI.DeploymentName),
+				ApiVersion:   agentgateway.ConvertTinyStringPtr(llm.AzureOpenAI.ApiVersion),
 			},
 		}
 	} else if llm.Azure != nil {
@@ -495,43 +497,43 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			Azure: &api.AIBackend_Azure{
 				ResourceName: string(llm.Azure.ResourceName),
 				ResourceType: resourceType,
-				Model:        llm.Azure.Model,
-				ApiVersion:   llm.Azure.ApiVersion,
-				ProjectName:  llm.Azure.ProjectName,
+				Model:        agentgateway.ConvertStringPtr(llm.Azure.Model),
+				ApiVersion:   agentgateway.ConvertTinyStringPtr(llm.Azure.ApiVersion),
+				ProjectName:  agentgateway.ConvertStringPtr(llm.Azure.ProjectName),
 			},
 		}
 	} else if llm.Anthropic != nil {
 		provider.Provider = &api.AIBackend_Provider_Anthropic{
 			Anthropic: &api.AIBackend_Anthropic{
-				Model: llm.Anthropic.Model,
+				Model: agentgateway.ConvertStringPtr(llm.Anthropic.Model),
 			},
 		}
 	} else if llm.Gemini != nil {
 		provider.Provider = &api.AIBackend_Provider_Gemini{
 			Gemini: &api.AIBackend_Gemini{
-				Model: llm.Gemini.Model,
+				Model: agentgateway.ConvertStringPtr(llm.Gemini.Model),
 			},
 		}
 	} else if llm.VertexAI != nil {
 		// TODO: publisher?
 		provider.Provider = &api.AIBackend_Provider_Vertex{
 			Vertex: &api.AIBackend_Vertex{
-				Region:    llm.VertexAI.Region,
-				Model:     llm.VertexAI.Model,
-				ProjectId: llm.VertexAI.ProjectId,
+				Region:    string(llm.VertexAI.Region),
+				Model:     agentgateway.ConvertStringPtr(llm.VertexAI.Model),
+				ProjectId: string(llm.VertexAI.ProjectId),
 			},
 		}
 	} else if llm.Bedrock != nil {
 		region := llm.Bedrock.Region
 		var guardrailIdentifier, guardrailVersion *string
 		if llm.Bedrock.Guardrail != nil {
-			guardrailIdentifier = &llm.Bedrock.Guardrail.GuardrailIdentifier
-			guardrailVersion = &llm.Bedrock.Guardrail.GuardrailVersion
+			guardrailIdentifier = agentgateway.ConvertStringPtr(&llm.Bedrock.Guardrail.GuardrailIdentifier)
+			guardrailVersion = agentgateway.ConvertStringPtr(&llm.Bedrock.Guardrail.GuardrailVersion)
 		}
 
 		provider.Provider = &api.AIBackend_Provider_Bedrock{
 			Bedrock: &api.AIBackend_Bedrock{
-				Model:               llm.Bedrock.Model,
+				Model:               agentgateway.ConvertStringPtr(llm.Bedrock.Model),
 				Region:              region,
 				GuardrailIdentifier: guardrailIdentifier,
 				GuardrailVersion:    guardrailVersion,
@@ -545,7 +547,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 		provider.Provider = &api.AIBackend_Provider_Custom{
 			Custom: &api.AIBackend_Custom{
 				Formats: formats,
-				Model:   llm.Custom.Model,
+				Model:   agentgateway.ConvertStringPtr(llm.Custom.Model),
 			},
 		}
 		if llm.Custom.BackendRef != nil {

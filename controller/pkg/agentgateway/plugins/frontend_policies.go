@@ -104,12 +104,12 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 				errs = append(errs, fmt.Errorf("frontend tracing attribute %q is not a valid CEL expression: %s", add.Name, add.Expression))
 			}
 			addAttributes = append(addAttributes, &api.FrontendPolicySpec_TracingAttribute{
-				Name:  add.Name,
+				Name:  string(add.Name),
 				Value: string(add.Expression),
 			})
 		}
 		for _, rm := range tracing.Attributes.Remove {
-			rmAttributes = append(rmAttributes, rm)
+			rmAttributes = append(rmAttributes, string(rm))
 		}
 	}
 
@@ -120,7 +120,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 				errs = append(errs, fmt.Errorf("frontend tracing resource %q is not a valid CEL expression: %s", add.Name, add.Expression))
 			}
 			addResources = append(addResources, &api.FrontendPolicySpec_TracingAttribute{
-				Name:  add.Name,
+				Name:  string(add.Name),
 				Value: string(add.Expression),
 			})
 		}
@@ -149,7 +149,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 
 	var path *string
 	if tracing.Path != nil {
-		path = new(*tracing.Path)
+		path = agentgateway.ConvertLongStringPtr(tracing.Path)
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -206,12 +206,12 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 				errs = append(errs, fmt.Errorf("frontend accessLog field %q is not a valid CEL expression: %s", add.Name, add.Expression))
 			}
 			fields = append(fields, &api.FrontendPolicySpec_Logging_Field{
-				Name:       add.Name,
+				Name:       string(add.Name),
 				Expression: string(add.Expression),
 			})
 		}
 		f := &api.FrontendPolicySpec_Logging_Fields{
-			Remove: a.Remove,
+			Remove: agentgateway.ConvertTinyStrings(a.Remove),
 			Add:    fields,
 		}
 		spec.Fields = f
@@ -234,7 +234,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 		var path *string
 		if otlp.Path != nil {
-			path = new(*otlp.Path)
+			path = agentgateway.ConvertLongStringPtr(otlp.Path)
 		}
 
 		var filter *string
@@ -252,12 +252,12 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 					errs = append(errs, fmt.Errorf("frontend accessLog OTLP field %q is not a valid CEL expression: %s", add.Name, add.Expression))
 				}
 				addedFields = append(addedFields, &api.FrontendPolicySpec_Logging_Field{
-					Name:       add.Name,
+					Name:       string(add.Name),
 					Expression: string(add.Expression),
 				})
 			}
 			fields = &api.FrontendPolicySpec_Logging_Fields{
-				Remove: a.Remove,
+				Remove: agentgateway.ConvertTinyStrings(a.Remove),
 				Add:    addedFields,
 			}
 		}
@@ -452,7 +452,7 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 	}
 
 	if tls.AlpnProtocols != nil {
-		spec.Alpn = &api.Alpn{Protocols: *tls.AlpnProtocols}
+		spec.Alpn = &api.Alpn{Protocols: agentgateway.ConvertTinyStrings(*tls.AlpnProtocols)}
 	}
 
 	if tls.MaxTLSVersion != nil {
@@ -621,7 +621,7 @@ func translateFrontendMetrics(policy *agentgateway.AgentgatewayPolicy, name stri
 			errs = append(errs, fmt.Errorf("frontend metrics field %q is not a valid CEL expression: %s", add.Name, add.Expression))
 		}
 		fields = append(fields, &api.FrontendPolicySpec_Metrics_Field{
-			Name:       add.Name,
+			Name:       string(add.Name),
 			Expression: string(add.Expression),
 		})
 	}

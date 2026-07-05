@@ -433,9 +433,9 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 	}
 
 	if len(tls.VerifySubjectAltNames) > 0 {
-		p.VerifySubjectAltNames = tls.VerifySubjectAltNames
+		p.VerifySubjectAltNames = agentgateway.ConvertShortStrings(tls.VerifySubjectAltNames)
 	}
-	p.Hostname = tls.Sni
+	p.Hostname = agentgateway.ConvertSNIPtr(tls.Sni)
 
 	if tls.InsecureSkipVerify != nil {
 		switch *tls.InsecureSkipVerify {
@@ -447,7 +447,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 	}
 
 	if tls.AlpnProtocols != nil {
-		p.Alpn = &api.Alpn{Protocols: *tls.AlpnProtocols}
+		p.Alpn = &api.Alpn{Protocols: agentgateway.ConvertTinyStrings(*tls.AlpnProtocols)}
 	}
 	p.KeyExchangeGroups = convertTLSKeyExchangeGroups(tls.KeyExchangeGroups)
 
@@ -629,7 +629,7 @@ func translateMCPAuthenticationSpec(
 	}
 
 	mcpAuthn := &api.BackendPolicySpec_McpAuthentication{
-		Issuer:    authnPolicy.Issuer,
+		Issuer:    string(authnPolicy.Issuer),
 		Audiences: authnPolicy.Audiences,
 		Provider:  idp,
 		ResourceMetadata: &api.BackendPolicySpec_McpAuthentication_ResourceMetadata{
@@ -717,7 +717,7 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		if translatedAIPolicy.Defaults == nil {
 			translatedAIPolicy.Defaults = make(map[string]string)
 		}
-		translatedAIPolicy.Defaults[def.Field] = val
+		translatedAIPolicy.Defaults[string(def.Field)] = val
 	}
 
 	for _, def := range aiSpec.Overrides {
@@ -730,7 +730,7 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		if translatedAIPolicy.Overrides == nil {
 			translatedAIPolicy.Overrides = make(map[string]string)
 		}
-		translatedAIPolicy.Overrides[def.Field] = val
+		translatedAIPolicy.Overrides[string(def.Field)] = val
 	}
 	for _, xfm := range aiSpec.Transformations {
 		if translatedAIPolicy.Transformations == nil {
@@ -742,7 +742,7 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		}
 
 		// Still set it so it wipes out the value on error, mirroring the header value.
-		translatedAIPolicy.Transformations[xfm.Field] = string(xfm.Expression)
+		translatedAIPolicy.Transformations[string(xfm.Field)] = string(xfm.Expression)
 	}
 
 	if aiSpec.PromptGuard != nil {
@@ -1151,7 +1151,7 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 	} else {
 		gcp.TokenType = &api.Gcp_IdToken_{
 			IdToken: &api.Gcp_IdToken{
-				Audience: auth.Audience,
+				Audience: agentgateway.ConvertStringPtr(auth.Audience),
 			},
 		}
 	}

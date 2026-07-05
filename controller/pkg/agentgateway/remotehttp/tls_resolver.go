@@ -85,8 +85,8 @@ func resolvedTLSFromBackendTLS(
 
 	resolved := &resolvedTLS{
 		verification: verificationMode(btls.InsecureSkipVerify),
-		serverName:   ptr.OrEmpty(btls.Sni),
-		nextProtos:   ptr.OrEmpty(btls.AlpnProtocols),
+		serverName:   string(ptr.OrEmpty(btls.Sni)),
+		nextProtos:   agentgateway.ConvertTinyStrings(ptr.OrEmpty(btls.AlpnProtocols)),
 	}
 	resolved.tlsConfig = &tls.Config{
 		ServerName: resolved.serverName,

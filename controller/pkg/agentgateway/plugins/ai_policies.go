@@ -212,7 +212,7 @@ func processRegex(regex *agentgateway.Regex) *api.BackendPolicySpec_Ai_RegexRule
 	}
 
 	for _, match := range regex.Matches {
-		rules.Rules = append(rules.Rules, processRegexRule(match))
+		rules.Rules = append(rules.Rules, processRegexRule(string(match)))
 	}
 
 	for _, builtin := range regex.Builtins {
@@ -251,9 +251,9 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 	}
 
 	pgGuardrails := &api.BackendPolicySpec_Ai_BedrockGuardrails{
-		Identifier: guardrails.GuardrailIdentifier,
-		Version:    guardrails.GuardrailVersion,
-		Region:     guardrails.Region,
+		Identifier: string(guardrails.GuardrailIdentifier),
+		Version:    string(guardrails.GuardrailVersion),
+		Region:     string(guardrails.Region),
 	}
 
 	if guardrails.Policies != nil {
@@ -277,13 +277,13 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	}
 
 	pgArmor := &api.BackendPolicySpec_Ai_GoogleModelArmor{
-		TemplateId: armor.TemplateID,
-		ProjectId:  armor.ProjectID,
+		TemplateId: string(armor.TemplateID),
+		ProjectId:  string(armor.ProjectID),
 	}
 
 	// Set location with default value if not specified
 	if armor.Location != nil {
-		pgArmor.Location = new(*armor.Location)
+		pgArmor.Location = agentgateway.ConvertStringPtr(armor.Location)
 	} else {
 		pgArmor.Location = new("us-central1")
 	}

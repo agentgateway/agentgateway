@@ -336,7 +336,7 @@ func (in *AgentgatewayBackendSpec) DeepCopyInto(out *AgentgatewayBackendSpec) {
 	if in.A2A != nil {
 		in, out := &in.A2A, &out.A2A
 		*out = new(A2ABackend)
-		(*in).DeepCopyInto(*out)
+		**out = **in
 	}
 	if in.AI != nil {
 		in, out := &in.AI, &out.AI
@@ -1126,9 +1126,7 @@ func (in *BackendAI) DeepCopyInto(out *BackendAI) {
 	if in.Transformations != nil {
 		in, out := &in.Transformations, &out.Transformations
 		*out = make([]FieldTransformation, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		copy(*out, *in)
 	}
 	if in.ModelAliases != nil {
 		in, out := &in.ModelAliases, &out.ModelAliases
@@ -1569,7 +1567,7 @@ func (in *BedrockConfig) DeepCopyInto(out *BedrockConfig) {
 	if in.Guardrail != nil {
 		in, out := &in.Guardrail, &out.Guardrail
 		*out = new(AWSGuardrailConfig)
-		(*in).DeepCopyInto(*out)
+		**out = **in
 	}
 }
 
@@ -1709,9 +1707,7 @@ func (in *CustomProvider) DeepCopyInto(out *CustomProvider) {
 	if in.Formats != nil {
 		in, out := &in.Formats, &out.Formats
 		*out = make([]ProviderFormatConfig, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		copy(*out, *in)
 	}
 }
 
@@ -2958,9 +2954,7 @@ func (in *LogTracingAttributes) DeepCopyInto(out *LogTracingAttributes) {
 	if in.Add != nil {
 		in, out := &in.Add, &out.Add
 		*out = make([]AttributeAdd, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		copy(*out, *in)
 	}
 }
 
@@ -3227,9 +3221,7 @@ func (in *MetricAttributes) DeepCopyInto(out *MetricAttributes) {
 	if in.Add != nil {
 		in, out := &in.Add, &out.Add
 		*out = make([]AttributeAdd, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		copy(*out, *in)
 	}
 }
 
@@ -3737,9 +3729,7 @@ func (in *RateLimitDescriptor) DeepCopyInto(out *RateLimitDescriptor) {
 	if in.Entries != nil {
 		in, out := &in.Entries, &out.Entries
 		*out = make([]RateLimitDescriptorEntry, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		copy(*out, *in)
 	}
 	if in.Unit != nil {
 		in, out := &in.Unit, &out.Unit
@@ -4045,9 +4035,7 @@ func (in *Tracing) DeepCopyInto(out *Tracing) {
 	if in.Resources != nil {
 		in, out := &in.Resources, &out.Resources
 		*out = make([]ResourceAdd, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
+		copy(*out, *in)
 	}
 	if in.RandomSampling != nil {
 		in, out := &in.RandomSampling, &out.RandomSampling

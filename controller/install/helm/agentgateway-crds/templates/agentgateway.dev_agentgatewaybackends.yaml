@@ -444,11 +444,9 @@ spec:
                                             this CRD."
                                           properties:
                                             field:
-                                              allOf:
-                                              - minLength: 1
-                                              - minLength: 1
                                               description: Name of the field.
                                               maxLength: 256
+                                              minLength: 1
                                               type: string
                                             value:
                                               description: Default value for the field.
@@ -505,11 +503,9 @@ spec:
                                             this CRD."
                                           properties:
                                             field:
-                                              allOf:
-                                              - minLength: 1
-                                              - minLength: 1
                                               description: Name of the field.
                                               maxLength: 256
+                                              minLength: 1
                                               type: string
                                             value:
                                               description: Default value for the field.
@@ -4949,11 +4945,9 @@ spec:
                                               minLength: 1
                                               type: string
                                             field:
-                                              allOf:
-                                              - minLength: 1
-                                              - minLength: 1
                                               description: Name of the field to set.
                                               maxLength: 256
+                                              minLength: 1
                                               type: string
                                           required:
                                           - expression
@@ -7292,11 +7286,9 @@ spec:
                             body, not fields in this CRD."
                           properties:
                             field:
-                              allOf:
-                              - minLength: 1
-                              - minLength: 1
                               description: Name of the field.
                               maxLength: 256
+                              minLength: 1
                               type: string
                             value:
                               description: Default value for the field. This can be
@@ -7343,11 +7335,9 @@ spec:
                             body, not fields in this CRD."
                           properties:
                             field:
-                              allOf:
-                              - minLength: 1
-                              - minLength: 1
                               description: Name of the field.
                               maxLength: 256
+                              minLength: 1
                               type: string
                             value:
                               description: Default value for the field. This can be
@@ -11362,11 +11352,9 @@ spec:
                               minLength: 1
                               type: string
                             field:
-                              allOf:
-                              - minLength: 1
-                              - minLength: 1
                               description: Name of the field to set.
                               maxLength: 256
+                              minLength: 1
                               type: string
                           required:
                           - expression

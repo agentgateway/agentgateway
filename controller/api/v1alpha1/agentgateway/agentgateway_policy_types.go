@@ -312,20 +312,112 @@ type BackendFull struct {
 
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=64
-type TinyString = string
+type TinyString string
 
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=256
-type ShortString = string
+type ShortString string
 
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=1024
-type LongString = string
+type LongString string
 
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=253
 // +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
-type SNI = string
+type SNI string
+
+// String converts TinyString to string
+func (t TinyString) String() string {
+	return string(t)
+}
+
+// String converts ShortString to string
+func (s ShortString) String() string {
+	return string(s)
+}
+
+// String converts LongString to string
+func (l LongString) String() string {
+	return string(l)
+}
+
+// String converts SNI to string
+func (s SNI) String() string {
+	return string(s)
+}
+
+// ConvertTinyStrings converts []TinyString to []string
+func ConvertTinyStrings(in []TinyString) []string {
+	if in == nil {
+		return nil
+	}
+	out := make([]string, len(in))
+	for i, v := range in {
+		out[i] = string(v)
+	}
+	return out
+}
+
+// ConvertShortStrings converts []ShortString to []string
+func ConvertShortStrings(in []ShortString) []string {
+	if in == nil {
+		return nil
+	}
+	out := make([]string, len(in))
+	for i, v := range in {
+		out[i] = string(v)
+	}
+	return out
+}
+
+// ConvertLongStrings converts []LongString to []string
+func ConvertLongStrings(in []LongString) []string {
+	if in == nil {
+		return nil
+	}
+	out := make([]string, len(in))
+	for i, v := range in {
+		out[i] = string(v)
+	}
+	return out
+}
+
+// ConvertStringPtr converts *ShortString to *string
+func ConvertStringPtr(in *ShortString) *string {
+	if in == nil {
+		return nil
+	}
+	s := string(*in)
+	return &s
+}
+
+// ConvertLongStringPtr converts *LongString to *string
+func ConvertLongStringPtr(in *LongString) *string {
+	if in == nil {
+		return nil
+	}
+	s := string(*in)
+	return &s
+}
+
+// ConvertTinyStringPtr converts *TinyString to *string
+func ConvertTinyStringPtr(in *TinyString) *string {
+	if in == nil {
+		return nil
+	}
+	s := string(*in)
+	return &s
+}
+
+// ConvertSNIPtr converts *SNI to *string
+func ConvertSNIPtr(in *SNI) *string {
+	if in == nil {
+		return nil
+	}
+	s := string(*in)
+	return &s
+}
 
 // Byte quantity that must fit in the data plane size limit.
 // +kubebuilder:validation:XIntOrString

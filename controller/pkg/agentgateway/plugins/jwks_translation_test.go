@@ -101,7 +101,7 @@ func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorLeavesInlineEmptyAn
 	if spec.JwksInline != "" {
 		t.Fatalf("expected jwks inline to be empty, got %q", spec.JwksInline)
 	}
-	if spec.Issuer != authn.Issuer {
+	if spec.Issuer != string(authn.Issuer) {
 		t.Fatalf("expected issuer %q, got %q", authn.Issuer, spec.Issuer)
 	}
 	if len(spec.Audiences) != 1 || spec.Audiences[0] != authn.Audiences[0] {

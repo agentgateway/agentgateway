@@ -201,7 +201,7 @@ func staticBackend(name, host string, port int32, tlsPolicy *agentgateway.Backen
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
 		Spec: agentgateway.AgentgatewayBackendSpec{
 			Static: &agentgateway.StaticBackend{
-				Host: host,
+				Host: agentgateway.ShortString(host),
 				Port: port,
 			},
 			Policies: &agentgateway.BackendFull{
