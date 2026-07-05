@@ -7,12 +7,12 @@
 # so an agent can call a downstream API *as the user* without a second interactive login:
 #
 #   1. The inbound request carries the user's OIDC ID token, validated by `jwtAuth`.
-#   2. `backendAuth.identityAssertion` exchanges that ID token at the user's IdP
+#   2. `backendAuth.xaa` exchanges that ID token at the user's IdP
 #      (RFC 8693 token exchange, requested_token_type = ...:id-jag) for an ID-JAG assertion.
-#   3. It presents the ID-JAG to the resource's authorization server
+#   3. The configured resource authorization server leg presents the ID-JAG
 #      (RFC 7523 JWT-bearer grant) and receives a Bearer access token.
 #   4. The Bearer token is attached as `Authorization: Bearer <token>` to the upstream
-#      request and cached per (user, audience, scope, resource) until shortly before expiry.
+#      request and cached until shortly before expiry.
 #
 # NOTE: this is an illustrative config. Running it end to end requires an IdP that can
 # issue ID-JAGs and a resource authorization server that accepts the jwt-bearer grant;
@@ -34,43 +34,46 @@ binds:
 
         # Step 2-4: exchange the identity for a backend access token and attach it.
         backendAuth:
-          identityAssertion:
+          xaa:
             # The user's IdP authorization server (performs the RFC 8693 token exchange).
             idp:
-              tokenEndpoint: https://idp.example.com/oauth2/token
-              clientId: gateway-at-idp
+              host: idp.example.com:443
+              tokenEndpointPath: /oauth2/token
               clientAuth:
-                clientSecretBasic:
-                  # Prefer `clientSecret: { file: /path/to/secret }` in production.
-                  clientSecret: "REPLACE_WITH_IDP_CLIENT_SECRET"
-
+                clientId: gateway-at-idp
+                method: clientSecretBasic
+                # Prefer `clientSecret: { file: /path/to/secret }` in production.
+                clientSecret: "REPLACE_WITH_IDP_CLIENT_SECRET"
             # The resource's authorization server (exchanges the ID-JAG for an access token).
-            # Note this is a *different* client registration than the IdP one above.
+            # Note this is a different client registration than the IdP one above.
             resourceAs:
-              tokenEndpoint: https://chat.example.com/oauth2/token
-              clientId: gateway-at-chat
+              host: chat.example.com:443
+              tokenEndpointPath: /oauth2/token
               clientAuth:
-                clientSecretBasic:
-                  clientSecret: "REPLACE_WITH_RESOURCE_AS_CLIENT_SECRET"
+                clientId: gateway-at-chat
+                method: clientSecretBasic
+                clientSecret: "REPLACE_WITH_RESOURCE_AS_CLIENT_SECRET"
                 # Alternatively, authenticate with a signed JWT assertion (private_key_jwt),
                 # which enterprise IdPs such as Okta commonly require:
                 #
-                # privateKeyJwt:
-                #   signingKey: { file: ./manifests/idjag/resource-as-key.pem }
-                #   alg: RS256          # one of RS256/RS384/RS512/ES256/ES384
-                #   kid: my-signing-key # optional `kid` header
-
-            # Identifier of the resource authorization server (REQUIRED). Sent as the
-            # `audience` of the exchange; the ID-JAG is bound to it.
+                # method: privateKeyJwt
+                # signingKey: { file: ./manifests/idjag/resource-as-key.pem }
+                # alg: RS256          # one of RS256/RS384/RS512/ES256/ES384
+                # kid: my-signing-key # optional `kid` header
+                # assertionAudience: https://chat.example.com/oauth2/token
+            # Identifier of the resource authorization server (REQUIRED for ID-JAG).
+            # The issued ID-JAG is bound to this audience.
             audience: https://chat.example.com/
-            # Identifier of the protected resource/API (RFC 8707, optional). Defaults to the
-            # backend hostname when omitted.
-            resource: https://api.chat.example.com/
+            # Identifier of the protected resource/API (RFC 8707, optional but explicit here).
+            resources:
+            - https://api.chat.example.com/
             # Scopes to request; the authorization server may grant a subset (optional).
-            scope: "chat.read chat.history"
-            # Cap on how long an access token is cached. The effective TTL is the smaller of
-            # this and the token's own `expires_in` (optional).
-            cacheTtl: 1h
+            scopes:
+            - chat.read
+            - chat.history
+
+            cache:
+              defaultTtl: 1h
 
       backends:
       # The downstream API the agent calls on the user's behalf.

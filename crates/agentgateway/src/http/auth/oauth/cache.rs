@@ -111,6 +111,11 @@ impl From<&ExchangeRequest> for TokenCacheKey {
 			digest.field(key.as_bytes());
 			digest.field(value.as_bytes());
 		}
+		digest.field([0xff]);
+		for (key, value) in &req.chained_extra_params {
+			digest.field(key.as_bytes());
+			digest.field(value.as_bytes());
+		}
 
 		digest.finish()
 	}

@@ -351,11 +351,25 @@ where
 	D: Deserializer<'de>,
 {
 	let input = FileOrInline::deserialize(deserializer)?;
+	load_secret(input).map_err(serde::de::Error::custom)
+}
 
-	let k = input
-		.load()
-		.map_err(|e| serde::de::Error::custom(e.to_string()))?;
-	Ok(SecretString::from(k.trim().to_string()))
+pub fn deser_key_from_file_option<'de, D>(deserializer: D) -> Result<Option<SecretString>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	let input = Option::<FileOrInline>::deserialize(deserializer)?;
+	let Some(input) = input else {
+		return Ok(None);
+	};
+	load_secret(input)
+		.map(Some)
+		.map_err(serde::de::Error::custom)
+}
+
+fn load_secret(input: FileOrInline) -> Result<SecretString, String> {
+	let key = input.load().map_err(|e| e.to_string())?;
+	Ok(SecretString::from(key.trim().to_string()))
 }
 
 pub fn deser_key<'de, D>(deserializer: D) -> Result<SecretString, D::Error>

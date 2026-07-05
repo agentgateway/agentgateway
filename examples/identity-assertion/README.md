@@ -18,8 +18,7 @@ backend call:
    authorization server with `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`,
    receiving a **Bearer access token** scoped to the downstream API.
 4. **Attach + cache.** The Bearer token is added as `Authorization: Bearer <token>` to the
-   upstream request and cached per `(user, audience, scope, resource)` until shortly before
-   it expires (bounded by `cacheTtl`).
+   upstream request and cached until shortly before it expires.
 
 ```
 client ──ID token──▶ agentgateway ──(1) token-exchange──▶ IdP AS ──ID-JAG──▶ agentgateway
@@ -43,19 +42,23 @@ endpoints must be replaced with values from your own IdP and resource server.
 
 ## Configuration walkthrough
 
-The whole feature is a single `backendAuth.identityAssertion` policy that sits alongside the
-`jwtAuth` policy that authenticates the user:
+The feature is configured as a focused `backendAuth.xaa` policy next to the `jwtAuth`
+policy that authenticates the user:
 
-- `idp` / `resourceAs` — the two token endpoints and the client credentials used to
-  authenticate to each. Supported client authentication methods are `clientSecretBasic`,
-  `clientSecretPost`, and `privateKeyJwt` (a signed JWT assertion, commonly required by
-  enterprise IdPs such as Okta).
-- `audience` (required) — the resource authorization server's identifier; the ID-JAG is
-  bound to it and cannot be reused for another server.
-- `resource` (optional) — the downstream API identifier (RFC 8707). Defaults to the backend
-  hostname.
-- `scope` (optional) — the scopes to request; the authorization server may grant a subset.
-- `cacheTtl` (optional) — an upper bound on how long the resulting access token is cached.
+- `idp` — the user's IdP token endpoint. agentgateway sends the authenticated ID token as
+  the RFC 8693 `subject_token` and asks for `urn:ietf:params:oauth:token-type:id-jag`.
+- `resourceAs` — the resource authorization server token endpoint. This leg uses the
+  RFC 7523 jwt-bearer grant; the ID-JAG from the IdP leg is sent as the `assertion`.
+- `audience` — the resource authorization server identifier. The issued ID-JAG is bound
+  to this value.
+- `clientAuth` — supported methods are `clientSecretBasic`, `clientSecretPost`, and
+  `privateKeyJwt`. `privateKeyJwt` requires an explicit `assertionAudience` because token
+  endpoints are configured as backend references rather than raw URLs.
+- `resources` (optional) — protected resource/API identifiers (RFC 8707). Configure these
+  explicitly when the authorization server expects them.
+- `scopes` (optional) — scopes to request; the authorization server may grant a subset.
+- `cache.defaultTtl` (optional) — fallback TTL when the final token response omits
+  `expires_in`. The cache is capped by the subject token's JWT `exp` when present.
 
 > The `jwtAuth` policy must validate an **OIDC ID token** (not an arbitrary access token), as
 > that is what the IdP expects as the `subject_token`.

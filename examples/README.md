@@ -27,9 +27,9 @@ The oauth2-proxy example shows how to integrate with an external `oauth2-proxy` 
 
 The backend OAuth example shows how to use `extAuthz` to acquire Keycloak tokens for upstream requests using token exchange or client credentials.
 
-### [Identity Assertion (ID-JAG / Cross App Access)](identity-assertion/README.md)
+### [XAA (ID-JAG / Cross App Access)](identity-assertion/README.md)
 
-The `identity-assertion` example shows how to use the OAuth Identity Assertion Authorization Grant to exchange an authenticated user's identity for a backend-scoped access token, so the gateway can call a downstream API as the user.
+The `identity-assertion` example shows how to use XAA over the OAuth Identity Assertion Authorization Grant to exchange an authenticated user's identity for a backend-scoped access token, so the gateway can call a downstream API as the user.
 
 ### [TLS](tls/README.md)
 

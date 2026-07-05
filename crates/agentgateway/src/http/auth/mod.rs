@@ -2,7 +2,6 @@ pub mod aws;
 pub mod azure;
 mod copilot;
 pub mod gcp;
-pub mod idjag;
 pub mod oauth;
 
 use std::borrow::Cow;
@@ -12,7 +11,10 @@ pub use aws::{AwsAssumeRole, AwsAuth};
 pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;
-pub use oauth::{OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType, OAuthTokenExchangeAuth};
+pub use oauth::{
+	OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType, OAuthTokenExchangeAuth, PrivateKeyJwt,
+	XaaAuth,
+};
 use secrecy::{ExposeSecret, SecretString};
 use url::form_urlencoded;
 
@@ -59,9 +61,10 @@ pub enum BackendAuth {
 	Copilot,
 	/// Use OAuth token exchange flows to obtain a backend access token.
 	#[serde(rename = "oauth")]
-	OAuthTokenExchange(Box<OAuthTokenExchangeAuth>), /* Boxed because this variant is much larger than the others */
-	#[serde(rename = "identityAssertion")]
-	IdentityAssertion(Box<idjag::IdentityAssertion>),
+	OAuthTokenExchange(Box<OAuthTokenExchangeAuth>),
+	/// Use XAA (Identity Assertion / ID-JAG) to obtain a backend access token.
+	#[serde(rename = "xaa")]
+	Xaa(Box<XaaAuth>),
 }
 
 /// Records whether the backend auth location was explicitly configured by the user
@@ -172,40 +175,11 @@ pub async fn apply_backend_auth(
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
 		},
-		BackendAuth::IdentityAssertion(cfg) => {
-			// Extract the inbound identity synchronously so the async call below never holds a
-			// borrow of the (non-Sync) request across an await point.
-			let (subject_token, subject) = {
-				let claims = req.extensions().get::<Claims>().ok_or_else(|| {
-					ProxyError::BackendAuthenticationFailed(anyhow::anyhow!(
-						"identityAssertion requires an authenticated request (no JWT found)"
-					))
-				})?;
-				// A missing/empty `sub` would collapse distinct users onto the same cache key, so
-				// reject it rather than defaulting to an empty subject.
-				let subject = claims
-					.inner
-					.get("sub")
-					.and_then(|v| v.as_str())
-					.unwrap_or_default();
-				if subject.is_empty() {
-					return Err(ProxyError::BackendAuthenticationFailed(anyhow::anyhow!(
-						"identityAssertion requires a non-empty `sub` claim in the inbound JWT"
-					)));
-				}
-				// Keep the token wrapped in SecretString; expose_secret() is deferred to the form body.
-				(claims.jwt.clone(), subject.to_string())
-			};
-			let token = idjag::get_token(
-				&backend_info.inputs.upstream,
-				cfg.as_ref(),
-				&backend_info.call_target,
-				&subject_token,
-				&subject,
-			)
-			.await
-			.map_err(ProxyError::BackendAuthenticationFailed)?;
-			req.headers_mut().insert(http::header::AUTHORIZATION, token);
+		BackendAuth::Xaa(xaa) => {
+			let explicit = oauth::apply_identity_assertion(&backend_info.inputs, xaa, req).await?;
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
 		},
 	}
 	Ok(())
