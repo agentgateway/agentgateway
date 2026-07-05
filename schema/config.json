@@ -3054,11 +3054,44 @@
         "roleArn": {
           "description": "AWS IAM role ARN to assume.",
           "type": "string"
+        },
+        "sessionName": {
+          "description": "Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report\nattribution. Max 64 chars, matching `[\\w+=,.@-]`. If unset, the AWS SDK\ngenerates a random session name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "description": "Session tags passed to STS AssumeRole for cost attribution. Once activated as\ncost allocation tags, each tag surfaces in the AWS Cost & Usage Report under\n`resourceTags/user:TagKey`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AwsSessionTag"
+          }
         }
       },
       "additionalProperties": false,
       "required": [
         "roleArn"
+      ]
+    },
+    "AwsSessionTag": {
+      "description": "An AWS STS session tag: a key/value pair passed to AssumeRole for cost attribution.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "Tag key.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Tag value.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "value"
       ]
     },
     "AzureAuth": {

@@ -38,6 +38,18 @@ const (
 	healthPolicySuffix            = ":health"
 )
 
+func translateAwsSessionTags(tags []agentgateway.AwsSessionTag) []*api.AwsSessionTag {
+	if len(tags) == 0 {
+		return nil
+	}
+	return slices.Map(tags, func(t agentgateway.AwsSessionTag) *api.AwsSessionTag {
+		return &api.AwsSessionTag{
+			Key:   t.Key,
+			Value: t.Value,
+		}
+	})
+}
+
 func translateAuthorizationLocation(loc *agentgateway.AuthorizationLocation) *api.AuthorizationLocation {
 	if loc == nil {
 		return nil
@@ -952,6 +964,10 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 	if auth.AssumeRole != nil {
 		assumeRole = &api.AwsAssumeRole{
 			RoleArn: auth.AssumeRole.RoleArn,
+			Tags:    translateAwsSessionTags(auth.AssumeRole.Tags),
+		}
+		if auth.AssumeRole.SessionName != nil {
+			assumeRole.SessionName = *auth.AssumeRole.SessionName
 		}
 	}
 

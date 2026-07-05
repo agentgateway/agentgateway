@@ -27,6 +27,59 @@ fn test_aws_auth_deserializes_assume_role() {
 }
 
 #[test]
+fn test_aws_auth_deserializes_assume_role_with_session_name_and_tags() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"sessionName": "acme-payments-invoice-processor",
+			"tags": [
+				{"key": "Team", "value": "acme-payments"},
+				{"key": "App", "value": "invoice-processor"}
+			]
+		}
+	}))
+	.expect("should deserialize assume role with session name and tags");
+	match implicit {
+		AwsAuth::Implicit {
+			assume_role: Some(ar),
+			..
+		} => {
+			assert_eq!(ar.role_arn, "arn:aws:iam::123456789012:role/my-role");
+			assert_eq!(
+				ar.session_name.as_deref(),
+				Some("acme-payments-invoice-processor")
+			);
+			assert_eq!(ar.tags.len(), 2);
+			assert_eq!(ar.tags[0].key, "Team");
+			assert_eq!(ar.tags[0].value, "acme-payments");
+			assert_eq!(ar.tags[1].key, "App");
+			assert_eq!(ar.tags[1].value, "invoice-processor");
+		},
+		_ => panic!("expected implicit AWS auth with assume role"),
+	}
+}
+
+#[test]
+fn test_aws_auth_assume_role_defaults_session_name_and_tags() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/backend"
+		}
+	}))
+	.expect("assume role without session name or tags should deserialize");
+	match implicit {
+		AwsAuth::Implicit {
+			assume_role: Some(ar),
+			..
+		} => {
+			assert_eq!(ar.session_name, None);
+			assert!(ar.tags.is_empty());
+		},
+		_ => panic!("expected implicit AWS auth with assume role"),
+	}
+}
+
+#[test]
 fn test_authorization_location_expression_extracts_from_cel() {
 	let req = ::http::Request::builder()
 		.uri("http://example.com/")

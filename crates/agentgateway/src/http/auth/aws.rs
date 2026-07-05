@@ -81,6 +81,26 @@ impl std::fmt::Debug for AwsAssumeRoleCache {
 pub struct AwsAssumeRole {
 	/// AWS IAM role ARN to assume.
 	pub role_arn: String,
+	/// Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report
+	/// attribution. Max 64 chars, matching `[\w+=,.@-]`. If unset, the AWS SDK
+	/// generates a random session name.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub session_name: Option<String>,
+	/// Session tags passed to STS AssumeRole for cost attribution. Once activated as
+	/// cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under
+	/// `resourceTags/user:TagKey`.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub tags: Vec<AwsSessionTag>,
+}
+
+/// An AWS STS session tag: a key/value pair passed to AssumeRole for cost attribution.
+#[derive(PartialEq, Eq, Hash)]
+#[apply(schema!)]
+pub struct AwsSessionTag {
+	/// Tag key.
+	pub key: String,
+	/// Tag value.
+	pub value: String,
 }
 
 impl AwsAuth {
@@ -280,6 +300,9 @@ async fn load_source_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentia
 struct AssumeRoleCacheKey {
 	role_arn: String,
 	resolved_sts_region: String,
+	session_name: Option<String>,
+	/// Sorted (key, value) pairs so the cache key is stable regardless of tag order.
+	tags: Vec<(String, String)>,
 }
 
 const ASSUMED_CREDENTIAL_REFRESH_BUFFER: Duration = Duration::from_secs(60);
@@ -290,9 +313,17 @@ async fn load_assumed_credentials(
 	signing_region: &str,
 ) -> anyhow::Result<Credentials> {
 	let sts_region = resolve_sts_region(assume_role, signing_region).await?;
+	let mut tags: Vec<(String, String)> = assume_role
+		.tags
+		.iter()
+		.map(|t| (t.key.clone(), t.value.clone()))
+		.collect();
+	tags.sort();
 	let key = AssumeRoleCacheKey {
 		role_arn: assume_role.role_arn.clone(),
 		resolved_sts_region: sts_region.clone(),
+		session_name: assume_role.session_name.clone(),
+		tags,
 	};
 
 	{
@@ -304,9 +335,22 @@ async fn load_assumed_credentials(
 	}
 
 	let config = Box::pin(sdk_config()).await;
-	let builder = AssumeRoleProvider::builder(&assume_role.role_arn)
+	let mut builder = AssumeRoleProvider::builder(&assume_role.role_arn)
 		.configure(config)
 		.region(Region::new(sts_region));
+
+	if let Some(session_name) = &assume_role.session_name {
+		builder = builder.session_name(session_name);
+	}
+
+	if !assume_role.tags.is_empty() {
+		builder = builder.tags(
+			assume_role
+				.tags
+				.iter()
+				.map(|t| (t.key.clone(), t.value.clone())),
+		);
+	}
 
 	let source_credentials_provider = config.credentials_provider().ok_or(anyhow::anyhow!(
 		"No credentials provider found in AWS config"
@@ -341,5 +385,74 @@ fn credentials_valid(creds: &Credentials) -> bool {
 			.duration_since(SystemTime::now())
 			.is_ok_and(|ttl| ttl > ASSUMED_CREDENTIAL_REFRESH_BUFFER),
 		None => true,
+	}
+}
+
+#[cfg(test)]
+mod cache_key_tests {
+	use super::*;
+
+	fn tag(key: &str, value: &str) -> AwsSessionTag {
+		AwsSessionTag {
+			key: key.to_string(),
+			value: value.to_string(),
+		}
+	}
+
+	fn key_for(assume_role: &AwsAssumeRole, region: &str) -> AssumeRoleCacheKey {
+		let mut tags: Vec<(String, String)> = assume_role
+			.tags
+			.iter()
+			.map(|t| (t.key.clone(), t.value.clone()))
+			.collect();
+		tags.sort();
+		AssumeRoleCacheKey {
+			role_arn: assume_role.role_arn.clone(),
+			resolved_sts_region: region.to_string(),
+			session_name: assume_role.session_name.clone(),
+			tags,
+		}
+	}
+
+	#[test]
+	fn different_session_names_produce_different_keys() {
+		let base = AwsAssumeRole {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			session_name: Some("team-a".to_string()),
+			tags: vec![],
+		};
+		let other = AwsAssumeRole {
+			session_name: Some("team-b".to_string()),
+			..base.clone()
+		};
+		assert_ne!(key_for(&base, "us-east-1"), key_for(&other, "us-east-1"));
+	}
+
+	#[test]
+	fn different_tags_produce_different_keys() {
+		let base = AwsAssumeRole {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			session_name: None,
+			tags: vec![tag("Team", "acme-payments")],
+		};
+		let other = AwsAssumeRole {
+			tags: vec![tag("Team", "acme-billing")],
+			..base.clone()
+		};
+		assert_ne!(key_for(&base, "us-east-1"), key_for(&other, "us-east-1"));
+	}
+
+	#[test]
+	fn tag_order_does_not_affect_key() {
+		let a = AwsAssumeRole {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			session_name: None,
+			tags: vec![tag("Team", "acme"), tag("App", "invoicer")],
+		};
+		let b = AwsAssumeRole {
+			tags: vec![tag("App", "invoicer"), tag("Team", "acme")],
+			..a.clone()
+		};
+		assert_eq!(key_for(&a, "us-east-1"), key_for(&b, "us-east-1"));
 	}
 }

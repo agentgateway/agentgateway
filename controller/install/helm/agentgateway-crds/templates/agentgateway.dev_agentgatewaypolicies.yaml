@@ -311,6 +311,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -992,6 +1028,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -1668,6 +1740,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -2570,6 +2678,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -3251,6 +3395,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -4217,6 +4397,40 @@ spec:
                                 minLength: 1
                                 pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                 type: string
+                              sessionName:
+                                description: |-
+                                  SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                  Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                pattern: ^[\w+=,.@-]{2,64}$
+                                type: string
+                              tags:
+                                description: |-
+                                  Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                  allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                  attribution. STS allows at most 50 session tags per role session.
+                                items:
+                                  description: |-
+                                    AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                    for cost attribution.
+                                  properties:
+                                    key:
+                                      description: Key is the tag key.
+                                      maxLength: 128
+                                      minLength: 1
+                                      type: string
+                                    value:
+                                      description: Value is the tag value.
+                                      maxLength: 256
+                                      type: string
+                                  required:
+                                  - key
+                                  - value
+                                  type: object
+                                maxItems: 50
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - key
+                                x-kubernetes-list-type: map
                             required:
                             - roleArn
                             type: object

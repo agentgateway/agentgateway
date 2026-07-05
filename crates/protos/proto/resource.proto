@@ -439,6 +439,22 @@ message AwsImplicit {}
 message AwsAssumeRole {
   // Role ARN to assume before signing backend requests.
   string role_arn = 1;
+  // Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report
+  // attribution. Must match [\w+=,.@-]{2,64}. If unset, the AWS SDK generates a
+  // random session name.
+  string session_name = 2;
+  // Session tags passed to STS AssumeRole. Once activated as cost allocation
+  // tags, they surface as columns in the AWS Cost & Usage Report for per-tenant
+  // cost attribution.
+  repeated AwsSessionTag tags = 3;
+}
+
+// AWS STS session tag, a key/value pair passed to AssumeRole for cost attribution.
+message AwsSessionTag {
+  // Tag key.
+  string key = 1;
+  // Tag value.
+  string value = 2;
 }
 
 // Explicit Azure credentials configuration
