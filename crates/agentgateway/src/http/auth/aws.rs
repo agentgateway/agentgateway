@@ -81,6 +81,64 @@ impl std::fmt::Debug for AwsAssumeRoleCache {
 pub struct AwsAssumeRole {
 	/// AWS IAM role ARN to assume.
 	pub role_arn: String,
+	/// Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report
+	/// attribution. Max 64 chars, matching `[\w+=,.@-]`. If unset, the AWS SDK
+	/// generates a random session name.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub session_name: Option<String>,
+	/// Session tags passed to STS AssumeRole for cost attribution. Once activated as
+	/// cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under
+	/// `resourceTags/user:TagKey`.
+	// Stored pre-sorted as (key, value) pairs so building the assume-role cache key
+	// is a cheap Arc clone instead of a per-request copy and sort.
+	#[serde(
+		default,
+		skip_serializing_if = "<[(String, String)]>::is_empty",
+		deserialize_with = "de_session_tags",
+		serialize_with = "ser_session_tags"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<AwsSessionTag>"))]
+	pub tags: Arc<[(String, String)]>,
+}
+
+/// An AWS STS session tag: a key/value pair passed to AssumeRole for cost attribution.
+#[derive(PartialEq, Eq, Hash)]
+#[apply(schema!)]
+pub struct AwsSessionTag {
+	/// Tag key.
+	pub key: String,
+	/// Tag value.
+	pub value: String,
+}
+
+/// Sorts session tags into their canonical stored form so equality (and thus the
+/// assume-role cache key) is independent of the order tags were configured in.
+pub fn sorted_session_tags<I: IntoIterator<Item = (String, String)>>(
+	tags: I,
+) -> Arc<[(String, String)]> {
+	let mut tags: Vec<(String, String)> = tags.into_iter().collect();
+	tags.sort();
+	tags.into()
+}
+
+fn de_session_tags<'de, D>(deserializer: D) -> Result<Arc<[(String, String)]>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let tags = Vec::<AwsSessionTag>::deserialize(deserializer)?;
+	Ok(sorted_session_tags(
+		tags.into_iter().map(|t| (t.key, t.value)),
+	))
+}
+
+fn ser_session_tags<S>(tags: &Arc<[(String, String)]>, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	serializer.collect_seq(tags.iter().map(|(key, value)| AwsSessionTag {
+		key: key.clone(),
+		value: value.clone(),
+	}))
 }
 
 impl AwsAuth {
@@ -280,6 +338,10 @@ async fn load_source_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentia
 struct AssumeRoleCacheKey {
 	role_arn: String,
 	resolved_sts_region: String,
+	session_name: Option<String>,
+	/// Pre-sorted (key, value) pairs (see [`sorted_session_tags`]) so the cache key
+	/// is stable regardless of tag order.
+	tags: Arc<[(String, String)]>,
 }
 
 const ASSUMED_CREDENTIAL_REFRESH_BUFFER: Duration = Duration::from_secs(60);
@@ -293,6 +355,8 @@ async fn load_assumed_credentials(
 	let key = AssumeRoleCacheKey {
 		role_arn: assume_role.role_arn.clone(),
 		resolved_sts_region: sts_region.clone(),
+		session_name: assume_role.session_name.clone(),
+		tags: assume_role.tags.clone(),
 	};
 
 	{
@@ -304,9 +368,17 @@ async fn load_assumed_credentials(
 	}
 
 	let config = Box::pin(sdk_config()).await;
-	let builder = AssumeRoleProvider::builder(&assume_role.role_arn)
+	let mut builder = AssumeRoleProvider::builder(&assume_role.role_arn)
 		.configure(config)
 		.region(Region::new(sts_region));
+
+	if let Some(session_name) = &assume_role.session_name {
+		builder = builder.session_name(session_name);
+	}
+
+	if !assume_role.tags.is_empty() {
+		builder = builder.tags(assume_role.tags.iter().cloned());
+	}
 
 	let source_credentials_provider = config.credentials_provider().ok_or(anyhow::anyhow!(
 		"No credentials provider found in AWS config"
@@ -341,5 +413,75 @@ fn credentials_valid(creds: &Credentials) -> bool {
 			.duration_since(SystemTime::now())
 			.is_ok_and(|ttl| ttl > ASSUMED_CREDENTIAL_REFRESH_BUFFER),
 		None => true,
+	}
+}
+
+#[cfg(test)]
+mod cache_key_tests {
+	use super::*;
+
+	fn tags(pairs: &[(&str, &str)]) -> Arc<[(String, String)]> {
+		sorted_session_tags(pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())))
+	}
+
+	fn key_for(assume_role: &AwsAssumeRole, region: &str) -> AssumeRoleCacheKey {
+		AssumeRoleCacheKey {
+			role_arn: assume_role.role_arn.clone(),
+			resolved_sts_region: region.to_string(),
+			session_name: assume_role.session_name.clone(),
+			tags: assume_role.tags.clone(),
+		}
+	}
+
+	#[test]
+	fn different_session_names_produce_different_keys() {
+		let base = AwsAssumeRole {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			session_name: Some("team-a".to_string()),
+			tags: tags(&[]),
+		};
+		let other = AwsAssumeRole {
+			session_name: Some("team-b".to_string()),
+			..base.clone()
+		};
+		assert_ne!(key_for(&base, "us-east-1"), key_for(&other, "us-east-1"));
+	}
+
+	#[test]
+	fn different_tags_produce_different_keys() {
+		let base = AwsAssumeRole {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			session_name: None,
+			tags: tags(&[("Team", "acme-payments")]),
+		};
+		let other = AwsAssumeRole {
+			tags: tags(&[("Team", "acme-billing")]),
+			..base.clone()
+		};
+		assert_ne!(key_for(&base, "us-east-1"), key_for(&other, "us-east-1"));
+	}
+
+	#[test]
+	fn tag_order_does_not_affect_key() {
+		// Tags are canonicalized (sorted) at deserialization, so configs that only
+		// differ in tag order deserialize to equal values and thus equal cache keys.
+		let a: AwsAssumeRole = serde_json::from_value(serde_json::json!({
+			"roleArn": "arn:aws:iam::123456789012:role/backend",
+			"tags": [
+				{"key": "Team", "value": "acme"},
+				{"key": "App", "value": "invoicer"},
+			],
+		}))
+		.expect("assume role should deserialize");
+		let b: AwsAssumeRole = serde_json::from_value(serde_json::json!({
+			"roleArn": "arn:aws:iam::123456789012:role/backend",
+			"tags": [
+				{"key": "App", "value": "invoicer"},
+				{"key": "Team", "value": "acme"},
+			],
+		}))
+		.expect("assume role should deserialize");
+		assert_eq!(a.tags, b.tags);
+		assert_eq!(key_for(&a, "us-east-1"), key_for(&b, "us-east-1"));
 	}
 }

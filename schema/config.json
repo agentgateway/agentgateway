@@ -2802,14 +2802,15 @@
           "const": "copilot"
         },
         {
+          "description": "Use OAuth token exchange flows to obtain a backend access token.",
           "type": "object",
           "properties": {
-            "oAuthTokenExchange": {
+            "oauth": {
               "$ref": "#/$defs/OAuthTokenExchangeAuth"
             }
           },
           "required": [
-            "oAuthTokenExchange"
+            "oauth"
           ],
           "additionalProperties": false
         }
@@ -2894,21 +2895,11 @@
           "additionalProperties": false
         },
         {
-          "description": "Read the credential from a CEL expression evaluated against the incoming request.",
+          "description": "Read the credential from a CEL expression evaluated against the incoming request.\nCEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
           "type": "object",
           "properties": {
             "expression": {
-              "type": "object",
-              "properties": {
-                "expression": {
-                  "description": "CEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
-                  "$ref": "#/$defs/Expression"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "expression"
-              ]
+              "$ref": "#/$defs/Expression"
             }
           },
           "required": [
@@ -3063,11 +3054,44 @@
         "roleArn": {
           "description": "AWS IAM role ARN to assume.",
           "type": "string"
+        },
+        "sessionName": {
+          "description": "Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report\nattribution. Max 64 chars, matching `[\\w+=,.@-]`. If unset, the AWS SDK\ngenerates a random session name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "description": "Session tags passed to STS AssumeRole for cost attribution. Once activated as\ncost allocation tags, each tag surfaces in the AWS Cost & Usage Report under\n`resourceTags/user:TagKey`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AwsSessionTag"
+          }
         }
       },
       "additionalProperties": false,
       "required": [
         "roleArn"
+      ]
+    },
+    "AwsSessionTag": {
+      "description": "An AWS STS session tag: a key/value pair passed to AssumeRole for cost attribution.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "Tag key.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Tag value.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "value"
       ]
     },
     "AzureAuth": {
@@ -3225,13 +3249,49 @@
     "OAuthTokenExchangeAuth": {
       "type": "object",
       "properties": {
-        "tokenEndpoint": {
-          "description": "Backend serving the RFC 8693 token endpoint.",
-          "$ref": "#/$defs/SimpleLocalBackendSerde"
+        "policies": {
+          "description": "Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "tokenEndpointPath": {
           "description": "Token endpoint path on the backend; defaults to \"/\".",
           "type": "string"
+        },
+        "grantType": {
+          "description": "Selects which RFC the request follows; defaults to token exchange (RFC 8693).",
+          "$ref": "#/$defs/OAuthGrantType",
+          "default": "tokenExchange"
+        },
+        "subjectToken": {
+          "description": "Where the subject token is read from, and its token type. Defaults to the\nAuthorization Bearer header with token type access_token.",
+          "$ref": "#/$defs/TokenSpec",
+          "default": {
+            "source": {
+              "header": {
+                "name": "authorization",
+                "prefix": "Bearer "
+              }
+            },
+            "tokenType": "urn:ietf:params:oauth:token-type:access_token"
+          }
+        },
+        "actorToken": {
+          "description": "RFC 8693 delegation actor token. Token-exchange grant only.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActorTokenSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "audiences": {
           "description": "`audience` parameters naming the target services at the authorization server.",
@@ -3255,13 +3315,14 @@
           }
         },
         "requestedTokenType": {
-          "description": "`requested_token_type` parameter; the server picks when unset.",
+          "description": "`requested_token_type` parameter. When unset, the form field is omitted\nand a declared response type is expected to be access_token.",
           "type": [
             "string",
             "null"
           ]
         },
         "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint.\nWhen unset, no client authentication fields are sent.",
           "anyOf": [
             {
               "$ref": "#/$defs/OAuthClientAuth"
@@ -3270,11 +3331,150 @@
               "type": "null"
             }
           ]
+        },
+        "additionalParams": {
+          "description": "Extra form parameters appended to the token request.\nValues are CEL expressions evaluated against the incoming request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "authorizationLocation": {
+          "description": "Where to place the exchanged token in the backend request. Defaults to the\nAuthorization header with a \"Bearer \" prefix. The CEL `expression` source is\nnot valid here (it cannot insert).",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "cache": {
+          "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "writeOnly": true
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
+    "OAuthGrantType": {
+      "oneOf": [
+        {
+          "description": "RFC 8693 token exchange; the subject token is sent as `subject_token`.",
+          "type": "string",
+          "const": "tokenExchange"
+        },
+        {
+          "description": "RFC 7523; the subject token is sent as the `assertion`.",
+          "type": "string",
+          "const": "jwtBearer"
+        }
+      ]
+    },
+    "TokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the token is read from in the incoming request. The CEL `expression`\nsource is permitted (extraction only).",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "tokenType": {
+          "description": "RFC 8693 token type URN; when omitted defaults to access_token",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ActorTokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the actor token is read from in the incoming request. The CEL\n`expression` source is permitted (extraction only). Unlike subject tokens,\nactor tokens have no default source.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "tokenType": {
+          "description": "RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        },
+        "enforceMayAct": {
+          "description": "Enforce that the subject's `may_act` claim authorizes the actor before exchanging.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
       "required": [
-        "tokenEndpoint"
+        "source"
       ]
     },
     "OAuthClientAuth": {
@@ -3283,12 +3483,60 @@
         "clientId": {
           "description": "`client_id` parameter identifying the gateway at the authorization server.",
           "type": "string"
+        },
+        "clientSecret": {
+          "description": "Client secret. When absent the client is public, which is only valid with `ClientSecretPost`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "method": {
+          "description": "RFC 6749 §2.3 client authentication method.",
+          "$ref": "#/$defs/OAuthClientAuthMethod",
+          "default": "clientSecretBasic"
         }
       },
       "additionalProperties": false,
       "required": [
         "clientId"
       ]
+    },
+    "OAuthClientAuthMethod": {
+      "oneOf": [
+        {
+          "description": "`client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).",
+          "type": "string",
+          "const": "clientSecretBasic"
+        },
+        {
+          "description": "`client_id`/`client_secret` sent in the request form body.",
+          "type": "string",
+          "const": "clientSecretPost"
+        }
+      ]
+    },
+    "TokenCacheConfig": {
+      "type": "object",
+      "properties": {
+        "maxEntries": {
+          "description": "Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "defaultTtl": {
+          "description": "TTL used when the token endpoint omits `expires_in`. Defaults to 300s.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "HTTP": {
       "type": "object",
@@ -3499,6 +3747,19 @@
           },
           "required": [
             "okta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "descope": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "descope"
           ],
           "additionalProperties": false
         }
@@ -4296,6 +4557,7 @@
       "additionalProperties": false
     },
     "RouteType": {
+      "description": "The HTTP endpoint class, such as `/v1/chat/completions` or `/v1/messages`.\n\nThis is used both for the client route we matched and for the upstream route\nwe finally send to. For chat, those can differ: a client Anthropic\n`/v1/messages` request is `RouteType::Messages` and `InputFormat::Messages`,\nbut it may be translated and sent upstream as `RouteType::Completions`.\n\n`RouteType` is about the HTTP endpoint. `InputFormat` is about the parsed\nclient payload and the response shape we owe back to that client. The main\ndifference is this type includes things like Detect and Passthrough.",
       "oneOf": [
         {
           "description": "OpenAI /v1/chat/completions",
@@ -7149,9 +7411,11 @@
       "type": "object",
       "properties": {
         "type": {
+          "description": "Upstream API shape this custom provider says it accepts.",
           "$ref": "#/$defs/ProviderFormat"
         },
         "path": {
+          "description": "Optional path override for this specific upstream format.",
           "type": [
             "string",
             "null"
@@ -7164,6 +7428,7 @@
       ]
     },
     "ProviderFormat": {
+      "description": "A custom provider's advertised upstream wire format.\n\nUnlike `InputFormat`, this describes what the backend accepts, not what the\nclient sent. Unlike `RouteType`, it is only for LLM payload endpoints that\ncan be converted or passed through; generic routes such as models,\npassthrough, and detect do not have a `ProviderFormat`.",
       "type": "string",
       "enum": [
         "completions",
@@ -7301,6 +7566,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "authorization": {
+          "description": "Authorize incoming requests after this backend is selected.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
             },
             {
               "type": "null"

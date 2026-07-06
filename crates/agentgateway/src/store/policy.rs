@@ -437,14 +437,25 @@ impl<T> Default for BackendPolicy<T> {
 	}
 }
 
-impl<T: BackendPolicyTrait> BackendPolicy<T> {
+impl<T> BackendPolicy<T> {
+	pub fn from_arc(pol: Arc<T>) -> Self {
+		Self(Some(pol))
+	}
+
+	pub fn into_arc(self) -> Option<Arc<T>> {
+		self.0
+	}
+
 	pub fn as_ref(&self) -> Option<&Arc<T>> {
 		self.0.as_ref()
 	}
+
 	pub fn or(self, other: Self) -> Self {
 		BackendPolicy(self.0.or(other.0))
 	}
+}
 
+impl<T: BackendPolicyTrait> BackendPolicy<T> {
 	pub fn set_if_unset(&mut self, pol: &Arc<T>) {
 		if self.0.is_none() {
 			self.0 = Some(pol.clone());

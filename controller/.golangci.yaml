@@ -117,23 +117,24 @@ linters:
           msg: use apiclient.Client instead of controller-runtime's client.Client
         - pattern: (\bt|\bT\(\))\.Cleanup
           msg: require testutils.Cleanup in e2e tests (test/e2e/)
-    gomodguard:
+        - pattern: errors\.As\b
+          msg: use errors.AsType[T](err) instead of errors.As (Go 1.26+)
+    gomodguard_v2:
       blocked:
-        modules:
-          - github.com/rotisserie/eris:
-              recommendations:
-                - errors.Join
-              reason: Use the std-lib errors package with \\%w instead.
-          - github.com/hashicorp/go-multierror:
-              recommendations:
-                - errors.Join
-              reason: Use errors.Join (Go 1.20+) instead.
-          - github.com/pkg/errors:
-              recommendations:
-                - fmt.Errorf
-                - errors.New
-                - errors.Join
-              reason: Use the std-lib errors package and fmt.Errorf with \\%w instead.
+        - module: github.com/rotisserie/eris
+          recommendations:
+            - errors.Join
+          reason: Use the std-lib errors package with \\%w instead.
+        - module: github.com/hashicorp/go-multierror
+          recommendations:
+            - errors.Join
+          reason: Use errors.Join (Go 1.20+) instead.
+        - module: github.com/pkg/errors
+          recommendations:
+            - fmt.Errorf
+            - errors.New
+            - errors.Join
+          reason: Use the std-lib errors package and fmt.Errorf with \\%w instead.
     importas:
       alias:
         - pkg: k8s.io/api/apps/v1
@@ -227,6 +228,11 @@ linters:
       - path-except: "^api/v1alpha1"
         linters:
           - kubeapilinter
+      # gosec taint-analysis rules are noisy in tests
+      - path: _test\.go
+        linters:
+          - gosec
+        text: 'G(702|704|705)'
 issues:
   max-same-issues: 0
   uniq-by-line: true

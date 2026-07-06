@@ -707,7 +707,14 @@ func summarizeEvent(event traceEvent) string {
 		}
 		return truncate(strings.Join(parts, " "), 120)
 	case "requestFinished":
-		return "request finished"
+		parts := []string{"request finished"}
+		if event.Status != nil {
+			parts = append(parts, fmt.Sprintf("status=%d", *event.Status))
+		}
+		if event.Error != nil && *event.Error != "" {
+			parts = append(parts, "error="+*event.Error)
+		}
+		return truncate(strings.Join(parts, " "), 120)
 	case "bodySnapshot":
 		return fmt.Sprintf("%s body snapshot", event.Stage)
 	case "llmRouteResolved":

@@ -5,10 +5,13 @@ package conformance_test
 import (
 	"context"
 	"fmt"
+	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 
 	"istio.io/istio/pkg/ptr"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -201,28 +204,38 @@ func guessFromIPAddressPool(cfg *rest.Config) (string, error) {
 		Resource: "ipaddresspools",
 	}
 
-	pools, err := dynamicClient.Resource(gvr).List(context.Background(), metav1.ListOptions{})
+	poolList, err := dynamicClient.Resource(gvr).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to list IPAddressPools: %w", err)
 	}
 
-	// Collect all address strings
-	var allAddresses []string
-	for _, pool := range pools.Items {
+	usedAddresses, err := usedLoadBalancerAddresses(cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to list used LoadBalancer addresses: %w", err)
+	}
+
+	var pools []metalLBAddressPool
+	for _, pool := range poolList.Items {
 		addresses, found, err := unstructured.NestedStringSlice(pool.Object, "spec", "addresses")
 		if err != nil || !found || len(addresses) == 0 {
 			continue
 		}
-		allAddresses = append(allAddresses, addresses...)
+		autoAssign, found, err := unstructured.NestedBool(pool.Object, "spec", "autoAssign")
+		if err != nil {
+			return "", fmt.Errorf("failed to read autoAssign for IPAddressPool %s: %w", pool.GetName(), err)
+		}
+		pools = append(pools, metalLBAddressPool{
+			name:       pool.GetName(),
+			addresses:  addresses,
+			autoAssign: !found || autoAssign,
+		})
 	}
 
-	if len(allAddresses) == 0 {
+	if len(pools) == 0 {
 		return "", fmt.Errorf("no addresses found in IPAddressPool resources")
 	}
 
-	// Pick the last address string
-	lastAddr := strings.TrimSpace(allAddresses[len(allAddresses)-1])
-	return extractLastFromAddress(lastAddr), nil
+	return chooseMetallbAddress(pools, usedAddresses)
 }
 
 // guessFromConfigMap tries to get an address from the ConfigMap format
@@ -252,40 +265,169 @@ func guessFromConfigMap(cfg *rest.Config) (string, error) {
 		return "", fmt.Errorf("failed to parse config YAML: %w", err)
 	}
 
-	// Collect all address strings
-	var allAddresses []string
+	var pools []metalLBAddressPool
 	for _, pool := range config.AddressPools {
 		if len(pool.Addresses) > 0 {
-			allAddresses = append(allAddresses, pool.Addresses...)
+			pools = append(pools, metalLBAddressPool{addresses: pool.Addresses, autoAssign: true})
 		}
 	}
 
-	if len(allAddresses) == 0 {
+	if len(pools) == 0 {
 		return "", fmt.Errorf("no addresses found in ConfigMap")
 	}
 
-	// Pick the last address string
-	lastAddr := strings.TrimSpace(allAddresses[len(allAddresses)-1])
-	// Remove trailing comma if present
-	lastAddr = strings.TrimSuffix(lastAddr, ",")
-	return extractLastFromAddress(lastAddr), nil
+	return chooseMetallbAddress(pools, nil)
 }
 
-// extractLastFromAddress extracts the last part from an address string.
-// For ranges "a-b", returns "b". For single addresses or CIDRs, returns as-is.
-func extractLastFromAddress(addr string) string {
-	addr = strings.TrimSpace(addr)
-	if strings.Contains(addr, "-") {
-		parts := strings.Split(addr, "-")
-		if len(parts) == 2 {
-			return strings.TrimSpace(parts[1])
+type metalLBAddressPool struct {
+	name       string
+	addresses  []string
+	autoAssign bool
+}
+
+func chooseMetallbAddress(pools []metalLBAddressPool, usedAddresses map[string]struct{}) (string, error) {
+	autoAssignedCandidates := map[string]struct{}{}
+	hasStaticPool := false
+	for _, pool := range pools {
+		if !pool.autoAssign {
+			hasStaticPool = true
+			continue
+		}
+		for _, address := range pool.addresses {
+			for _, candidate := range candidateIPv4Addresses(address) {
+				autoAssignedCandidates[candidate] = struct{}{}
+			}
 		}
 	}
-	// For CIDR or single IP, just return it
-	if strings.Contains(addr, "/") {
-		// Extract IP part from CIDR
-		parts := strings.Split(addr, "/")
-		return strings.TrimSpace(parts[0])
+
+	slices.SortStableFunc(pools, func(a, b metalLBAddressPool) int {
+		if a.autoAssign != b.autoAssign {
+			if !a.autoAssign {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.name, b.name)
+	})
+
+	var firstAutoAssigned string
+	for _, pool := range pools {
+		for _, address := range pool.addresses {
+			for _, candidate := range candidateIPv4Addresses(address) {
+				if _, used := usedAddresses[candidate]; used {
+					continue
+				}
+				if !pool.autoAssign {
+					if _, overlaps := autoAssignedCandidates[candidate]; overlaps {
+						continue
+					}
+					return candidate, nil
+				}
+				if firstAutoAssigned == "" {
+					firstAutoAssigned = candidate
+				}
+			}
+		}
 	}
-	return addr
+	if hasStaticPool {
+		return "", fmt.Errorf("no unused IPv4 addresses found in non-auto-assigned MetalLB address pools")
+	}
+	if firstAutoAssigned != "" {
+		return firstAutoAssigned, nil
+	}
+
+	return "", fmt.Errorf("no unused IPv4 addresses found in MetalLB address pools")
+}
+
+func candidateIPv4Addresses(address string) []string {
+	address = strings.TrimSuffix(strings.TrimSpace(address), ",")
+	if address == "" {
+		return nil
+	}
+	if strings.Contains(address, "-") {
+		parts := strings.Split(address, "-")
+		if len(parts) != 2 {
+			return nil
+		}
+		return validIPv4Candidates(strings.TrimSpace(parts[1]), strings.TrimSpace(parts[0]))
+	}
+	if strings.Contains(address, "/") {
+		prefix, err := netip.ParsePrefix(address)
+		if err != nil {
+			return nil
+		}
+		if last, ok := lastIPv4InPrefix(prefix); ok {
+			return []string{last.String()}
+		}
+		return nil
+	}
+	return validIPv4Candidates(address)
+}
+
+func validIPv4Candidates(addresses ...string) []string {
+	var candidates []string
+	for _, address := range addresses {
+		addr, err := netip.ParseAddr(address)
+		if err == nil && addr.Is4() {
+			candidates = append(candidates, addr.String())
+		}
+	}
+	return candidates
+}
+
+func lastIPv4InPrefix(prefix netip.Prefix) (netip.Addr, bool) {
+	prefix = prefix.Masked()
+	addr := prefix.Addr()
+	if !addr.Is4() {
+		return netip.Addr{}, false
+	}
+	bits := prefix.Bits()
+	if bits < 0 || bits > 32 {
+		return netip.Addr{}, false
+	}
+	raw := addr.As4()
+	value := uint32(raw[0])<<24 | uint32(raw[1])<<16 | uint32(raw[2])<<8 | uint32(raw[3])
+	hostBits := 32 - bits
+	if hostBits > 0 {
+		value |= (uint32(1) << hostBits) - 1
+	}
+	return netip.AddrFrom4([4]byte{
+		byte(value >> 24),
+		byte(value >> 16),
+		byte(value >> 8),
+		byte(value),
+	}), true
+}
+
+func usedLoadBalancerAddresses(cfg *rest.Config) (map[string]struct{}, error) {
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create clientset: %w", err)
+	}
+	services, err := clientset.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	used := map[string]struct{}{}
+	for _, svc := range services.Items {
+		for _, ip := range serviceAddresses(svc) {
+			used[ip] = struct{}{}
+		}
+	}
+	return used, nil
+}
+
+func serviceAddresses(svc corev1.Service) []string {
+	var addresses []string
+	if svc.Spec.LoadBalancerIP != "" {
+		addresses = append(addresses, svc.Spec.LoadBalancerIP)
+	}
+	addresses = append(addresses, svc.Spec.ExternalIPs...)
+	for _, ingress := range svc.Status.LoadBalancer.Ingress {
+		if ingress.IP != "" {
+			addresses = append(addresses, ingress.IP)
+		}
+	}
+	return addresses
 }

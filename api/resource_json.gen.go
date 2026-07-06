@@ -413,6 +413,17 @@ func (this *AwsAssumeRole) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for AwsSessionTag
+func (this *AwsSessionTag) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AwsSessionTag
+func (this *AwsSessionTag) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for AzureExplicitConfig
 func (this *AzureExplicitConfig) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1818,6 +1829,50 @@ func (this *OAuthTokenExchange_ClientAuth) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for OAuthTokenExchange_ClientAuth
 func (this *OAuthTokenExchange_ClientAuth) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for OAuthTokenExchange_TokenSpec
+func (this *OAuthTokenExchange_TokenSpec) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for OAuthTokenExchange_TokenSpec
+func (this *OAuthTokenExchange_TokenSpec) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for OAuthTokenExchange_ActorToken
+func (this *OAuthTokenExchange_ActorToken) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for OAuthTokenExchange_ActorToken
+func (this *OAuthTokenExchange_ActorToken) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for OAuthTokenExchange_TokenCache
+func (this *OAuthTokenExchange_TokenCache) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for OAuthTokenExchange_TokenCache
+func (this *OAuthTokenExchange_TokenCache) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for OAuthTokenExchange_TokenCache_InMemory
+func (this *OAuthTokenExchange_TokenCache_InMemory) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for OAuthTokenExchange_TokenCache_InMemory
+func (this *OAuthTokenExchange_TokenCache_InMemory) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

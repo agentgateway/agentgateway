@@ -26,7 +26,6 @@ Name|Version|License
 [spf13/cobra](https://github.com/spf13/cobra)|v1.10.2|Apache License 2.0
 [spf13/pflag](https://github.com/spf13/pflag)|v1.0.10|BSD 3-clause "New" or "Revised" License
 [stretchr/testify](https://github.com/stretchr/testify)|v1.11.1|MIT License
-[go.opencensus.io](https://go.opencensus.io)|v0.24.0|Apache License 2.0
 [go.uber.org/atomic](https://go.uber.org/atomic)|v1.11.0|MIT License
 [go.uber.org/zap](https://go.uber.org/zap)|v1.28.0|MIT License
 [x/clipboard](https://golang.design/x/clipboard)|v0.8.0|MIT License
@@ -40,7 +39,7 @@ Name|Version|License
 [helm/v4](https://helm.sh/helm/v4)|v4.2.2|Apache License 2.0
 [istio.io/api](https://istio.io/api)|v1.30.0-alpha.1.0.20260626010135-ac56ebb29e59|Apache License 2.0
 [istio.io/client-go](https://istio.io/client-go)|v1.30.0-beta.0|Apache License 2.0
-[istio.io/istio](https://istio.io/istio)|v0.0.0-20260701162249-99f2f4f55d5c|Apache License 2.0
+[istio.io/istio](https://istio.io/istio)|v0.0.0-20260704181517-116e8ec30db4|Apache License 2.0
 [k8s.io/api](https://k8s.io/api)|v0.36.2|Apache License 2.0
 [k8s.io/apiextensions-apiserver](https://k8s.io/apiextensions-apiserver)|v0.36.2|Apache License 2.0
 [k8s.io/apimachinery](https://k8s.io/apimachinery)|v0.36.2|Apache License 2.0
@@ -50,10 +49,10 @@ Name|Version|License
 [k8s.io/utils](https://k8s.io/utils)|v0.0.0-20260626114624-be93311217bd|Apache License 2.0
 [sigs.k8s.io/controller-runtime](https://sigs.k8s.io/controller-runtime)|v0.24.1|Apache License 2.0
 [sigs.k8s.io/controller-tools](https://sigs.k8s.io/controller-tools)|v0.21.0|Apache License 2.0
-[sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.6.0-rc.1|Apache License 2.0
+[sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.6.0|Apache License 2.0
 [sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v1.5.0|Apache License 2.0
 [gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260610234253-d7447d7420de|Apache License 2.0
-[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.6.0-rc.1|Apache License 2.0
+[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.6.0|Apache License 2.0
 [sigs.k8s.io/yaml](https://sigs.k8s.io/yaml)|v1.6.0|MIT License
 [cmd/goimports](https://golang.org/x/tools/cmd/goimports)|latest|MIT License
 [gogo/protobuf](https://github.com/gogo/protobuf)|latest|MIT License

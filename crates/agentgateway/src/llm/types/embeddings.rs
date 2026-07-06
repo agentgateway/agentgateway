@@ -66,7 +66,6 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::Embeddings,
-			native_format: Some(crate::llm::custom::ProviderFormat::Embeddings),
 			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
@@ -85,6 +84,7 @@ impl RequestType for Request {
 				dimensions: self.dimensions.map(|d| d as u64),
 			},
 			prompt: Default::default(),
+			provider_state: None,
 		})
 	}
 
@@ -94,23 +94,6 @@ impl RequestType for Request {
 
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disable for embeddings.")
-	}
-
-	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
-		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
-	}
-
-	fn to_bedrock(
-		&self,
-		provider: &crate::llm::bedrock::Provider,
-		_headers: Option<&::http::HeaderMap>,
-		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<Vec<u8>, AIError> {
-		crate::llm::conversion::bedrock::from_embeddings::translate(self, provider)
-	}
-
-	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
-		crate::llm::conversion::vertex::from_embeddings::translate(self)
 	}
 }
 

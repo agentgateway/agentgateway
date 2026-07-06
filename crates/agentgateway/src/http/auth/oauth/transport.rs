@@ -1,0 +1,257 @@
+use std::time::Duration;
+
+use ::http::StatusCode;
+use ::http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use anyhow::anyhow;
+use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
+use tracing::debug;
+use url::form_urlencoded;
+
+use super::{
+	ExchangeRequest, OAuthClientAuthMethod, OAuthGrantType, OAuthTokenExchangeAuth, OAuthTokenType,
+};
+use crate::http::filters::BackendRequestTimeout;
+use crate::http::oauth::{
+	GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE, encode_client_secret_basic,
+	format_token_endpoint_error_body,
+};
+use crate::http::{self, Body};
+use crate::json;
+use crate::proxy::ProxyError;
+use crate::proxy::httpproxy::PolicyClient;
+
+/// Default token-endpoint timeout, overridable by backend request-timeout policy
+const DEFAULT_TOKEN_ENDPOINT_TIMEOUT: Duration = Duration::from_secs(10);
+
+pub(super) struct TokenEndpointResponse {
+	pub(super) access_token: SecretString,
+	pub(super) expires_in: Option<u64>,
+}
+
+/// Classifies token failures: request-token 4xx as client errors, transport and auth failures as upstream faults
+#[derive(Debug, thiserror::Error)]
+pub(in crate::http::auth) enum FetchError {
+	#[error("{source}")]
+	Client {
+		status: ::http::StatusCode,
+		#[source]
+		source: anyhow::Error,
+	},
+	#[error("{0}")]
+	Upstream(anyhow::Error),
+}
+
+impl FetchError {
+	pub(in crate::http::auth) fn into_proxy_error(self) -> ProxyError {
+		match self {
+			FetchError::Client { status, .. } => {
+				// The authorization server rejected the request/subject token; surface
+				// as a client error (4xx), not a gateway fault. Keep proxy logs terse here:
+				// the upstream error body may contain provider-specific detail.
+				debug!(%status, "oauth token exchange rejected by authorization server");
+				ProxyError::InvalidRequest
+			},
+			FetchError::Upstream(e) => ProxyError::BackendAuthenticationFailed(e),
+		}
+	}
+}
+
+#[derive(Debug, Deserialize)]
+struct TokenResponse {
+	access_token: SecretString,
+	// Optional for RFC 7523 jwt-bearer responses
+	#[serde(default)]
+	issued_token_type: Option<String>,
+	#[serde(default)]
+	token_type: Option<String>,
+	#[serde(default)]
+	expires_in: Option<u64>,
+}
+
+impl TokenResponse {
+	fn into_token(
+		self,
+		expected_issued_token_type: Option<OAuthTokenType>,
+	) -> Result<TokenEndpointResponse, FetchError> {
+		// Only bearer-style tokens are forwarded
+		let Some(token_type) = self.token_type.as_deref() else {
+			return Err(FetchError::Upstream(anyhow!(
+				"token exchange response missing token_type"
+			)));
+		};
+		if !token_type.eq_ignore_ascii_case("Bearer") {
+			return Err(FetchError::Upstream(anyhow!(
+				"token exchange returned unsupported token_type: {token_type}",
+			)));
+		}
+
+		if let Some(issued) = &self.issued_token_type {
+			let issued = OAuthTokenType::from_urn(issued).ok_or_else(|| {
+				FetchError::Upstream(anyhow!(
+					"token exchange returned unusable issued_token_type: {issued}"
+				))
+			})?;
+			if let Some(expected) = expected_issued_token_type {
+				// Requested token types must match the response
+				if issued != expected {
+					return Err(FetchError::Upstream(anyhow!(
+						"token exchange returned issued_token_type {}, expected {}",
+						issued.as_str(),
+						expected.as_str()
+					)));
+				}
+			}
+		}
+
+		if self.access_token.expose_secret().is_empty() {
+			return Err(FetchError::Upstream(anyhow!(
+				"token exchange response contained an empty access_token"
+			)));
+		}
+
+		Ok(TokenEndpointResponse {
+			access_token: self.access_token,
+			expires_in: self.expires_in,
+		})
+	}
+}
+
+pub(super) async fn request_token(
+	client: &PolicyClient,
+	auth: &OAuthTokenExchangeAuth,
+	req: &ExchangeRequest,
+) -> Result<TokenEndpointResponse, FetchError> {
+	let mut req = build_token_request(auth, req)?;
+	// Default timeout, overridable by backend request-timeout policy
+	req
+		.extensions_mut()
+		.insert(BackendRequestTimeout(DEFAULT_TOKEN_ENDPOINT_TIMEOUT));
+
+	let resp = client
+		.call_reference_with_policies(req, &auth.target, &auth.policies)
+		.await
+		.map_err(|e| FetchError::Upstream(anyhow!("token exchange request failed: {e}")))?;
+
+	let status = resp.status();
+	let limit = http::response_buffer_limit(&resp);
+	if !status.is_success() {
+		let body = http::read_body_with_limit(resp.into_body(), limit)
+			.await
+			.unwrap_or_default();
+		let body = format_token_endpoint_error_body(&body, 256);
+		let err = anyhow!("token exchange returned status {status}: {body}");
+		return Err(classify_token_endpoint_error(status, err));
+	}
+
+	json::from_body_with_limit::<TokenResponse>(resp.into_body(), limit)
+		.await
+		.map_err(|e| FetchError::Upstream(anyhow!("token exchange response decode failed: {e}")))?
+		.into_token(auth.expected_issued_token_type())
+}
+
+fn classify_token_endpoint_error(status: StatusCode, err: anyhow::Error) -> FetchError {
+	// 401/403 usually mean gateway client auth or token-endpoint policy failed.
+	if status.is_client_error() && !matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+	{
+		FetchError::Client {
+			status,
+			source: err,
+		}
+	} else {
+		FetchError::Upstream(err)
+	}
+}
+
+fn build_token_request(
+	auth: &OAuthTokenExchangeAuth,
+	req: &ExchangeRequest,
+) -> Result<::http::Request<Body>, FetchError> {
+	let form = build_token_request_form(auth, req);
+	let path = if auth.token_endpoint_path.is_empty() {
+		"/"
+	} else {
+		auth.token_endpoint_path.as_str()
+	};
+	let mut builder = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri(path)
+		.header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+		.header(ACCEPT, "application/json");
+	if let Some(basic) = &form.basic_auth {
+		builder = builder.header(AUTHORIZATION, format!("Basic {basic}"));
+	}
+	builder
+		.body(Body::from(form.body.into_bytes()))
+		.map_err(|e| FetchError::Upstream(e.into()))
+}
+
+struct TokenRequestForm {
+	body: String,
+	basic_auth: Option<String>,
+}
+
+fn build_token_request_form(
+	auth: &OAuthTokenExchangeAuth,
+	req: &ExchangeRequest,
+) -> TokenRequestForm {
+	let mut basic_auth = None;
+	let mut ser = form_urlencoded::Serializer::new(String::new());
+	let subject_token = req.subject_token.expose_secret();
+	match auth.grant_type {
+		OAuthGrantType::TokenExchange => {
+			// RFC 8693 sends the incoming credential as subject_token
+			ser
+				.append_pair("grant_type", GRANT_TYPE_TOKEN_EXCHANGE)
+				.append_pair("subject_token", subject_token)
+				.append_pair("subject_token_type", req.subject_token_type.as_str());
+			if let Some((actor_token, actor_token_type)) = &req.actor {
+				ser
+					.append_pair("actor_token", actor_token.expose_secret())
+					.append_pair("actor_token_type", actor_token_type.as_str());
+			}
+			if let Some(rtt) = auth.requested_token_type {
+				ser.append_pair("requested_token_type", rtt.as_str());
+			}
+		},
+		OAuthGrantType::JwtBearer => {
+			// RFC 7523 sends the incoming credential as assertion
+			ser
+				.append_pair("grant_type", GRANT_TYPE_JWT_BEARER)
+				.append_pair("assertion", subject_token);
+		},
+	}
+	for audience in &auth.audiences {
+		ser.append_pair("audience", audience);
+	}
+	if !auth.scopes.is_empty() {
+		ser.append_pair("scope", &auth.scopes.join(" "));
+	}
+	for resource in &auth.resources {
+		ser.append_pair("resource", resource);
+	}
+	for (key, value) in &req.extra_params {
+		ser.append_pair(key, value);
+	}
+	if let Some(client_auth) = &auth.client_auth {
+		match client_auth.method {
+			OAuthClientAuthMethod::ClientSecretBasic => {
+				// Basic auth stays in the header, not the form body
+				if let Some(secret) = &client_auth.client_secret {
+					basic_auth = Some(encode_client_secret_basic(&client_auth.client_id, secret));
+				}
+			},
+			OAuthClientAuthMethod::ClientSecretPost => {
+				ser.append_pair("client_id", &client_auth.client_id);
+				if let Some(secret) = &client_auth.client_secret {
+					ser.append_pair("client_secret", secret.expose_secret());
+				}
+			},
+		}
+	}
+
+	TokenRequestForm {
+		body: ser.finish(),
+		basic_auth,
+	}
+}

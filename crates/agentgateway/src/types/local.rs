@@ -1385,6 +1385,7 @@ impl LocalBackend {
 					request_redirect: None,
 					health: None,
 					ext_authz: None,
+					authorization: None,
 				}
 				.translate(resources)
 				.await?
@@ -1787,6 +1788,29 @@ fn default_matches() -> Vec<RouteMatch> {
 	}]
 }
 
+fn mcp_matches() -> Vec<RouteMatch> {
+	vec![
+		RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/mcp".into()),
+			method: None,
+			query: vec![],
+		},
+		RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/sse".into()),
+			method: None,
+			query: vec![],
+		},
+		RouteMatch {
+			headers: vec![],
+			path: PathMatch::PathPrefix("/.well-known".into()),
+			method: None,
+			query: vec![],
+		},
+	]
+}
+
 #[apply(schema_de!)]
 struct LocalTCPRoute {
 	#[serde(flatten)]
@@ -1889,15 +1913,21 @@ pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D
 where
 	D: Deserializer<'de>,
 {
-	Option::<BackendAuthCompat>::deserialize(deserializer).map(|auth| {
-		auth.map(|auth| match auth {
-			BackendAuthCompat::Full(auth) => auth,
-			BackendAuthCompat::PlainKey { key } => BackendAuth::Key {
+	Option::<BackendAuthCompat>::deserialize(deserializer)?
+		.map(|auth| match auth {
+			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
+				// OAuth has a few cross-field checks serde won't catch on its own.
+				// Keep them here so untagged compat parsing still returns the real error.
+				auth.validate_load().map_err(serde::de::Error::custom)?;
+				Ok(BackendAuth::OAuthTokenExchange(auth))
+			},
+			BackendAuthCompat::Full(auth) => Ok(auth),
+			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
 				value: key,
 				location: None,
-			},
+			}),
 		})
-	})
+		.transpose()
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -2115,6 +2145,9 @@ pub struct LocalBackendPolicies {
 	/// Authorize incoming requests by calling an external authorization service after this backend is selected.
 	#[serde(default)]
 	pub ext_authz: Option<crate::http::ext_authz::ExtAuthz>,
+	/// Authorize incoming requests after this backend is selected.
+	#[serde(default)]
+	pub authorization: Option<Authorization>,
 
 	/// Authorization rules for MCP requests.
 	#[serde(default)]
@@ -2188,6 +2221,7 @@ impl LocalBackendPolicies {
 			request_redirect,
 			health,
 			ext_authz,
+			authorization,
 		} = self;
 		let mut pols = vec![];
 		if let Some(p) = tcp {
@@ -2238,6 +2272,9 @@ impl LocalBackendPolicies {
 			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
 				p.with_configured_cache_store(),
 			)))
+		}
+		if let Some(p) = authorization {
+			pols.push(BackendTrafficPolicy::Authorization(p))
 		}
 		if let Some(mut p) = ai {
 			p.compile_model_alias_patterns();
@@ -2552,6 +2589,7 @@ async fn convert(
 			Backend::Opaque(n, _)
 			| Backend::MCP(n, _)
 			| Backend::AI(n, _)
+			| Backend::LLMRouter(n, _)
 			| Backend::Aws(n, _)
 			| Backend::Dynamic(n, _)
 			| Backend::Internal(n, _) => n == &name,
@@ -2565,24 +2603,47 @@ async fn convert(
 		all_backends.extend(bws);
 	}
 
-	// Convert llm config if present
-	if let Some(llm_config) = llm {
-		let (llm_bind, llm_routes, llm_policies, llm_backends) =
-			convert_llm_config(resources, config, gateway.clone(), llm_config).await?;
-		all_listener_routes.push((strng::new("llm"), llm_routes));
-		all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
-		all_binds.push(llm_bind);
-		all_policies.extend_from_slice(&llm_policies);
-		all_backends.extend_from_slice(&llm_backends);
-	}
-	if let Some(mcp_config) = mcp {
-		let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
-			convert_mcp_config(resources, config, gateway.clone(), mcp_config).await?;
-		all_listener_routes.push((strng::new("mcp"), mcp_routes));
-		all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
-		all_binds.push(mcp_bind);
-		all_policies.extend_from_slice(&mcp_policies);
-		all_backends.extend_from_slice(&mcp_backends);
+	match (llm, mcp) {
+		(Some(llm_config), Some(mcp_config))
+			if llm_config.port.unwrap_or(DEFAULT_LLM_PORT)
+				== mcp_config.port.unwrap_or(DEFAULT_MCP_PORT) =>
+		{
+			if llm_config.tls.is_some() {
+				bail!("top-level llm and mcp cannot share a port when llm.tls is configured");
+			}
+			let (llm_bind, mut llm_routes, llm_policies, llm_backends) =
+				convert_llm_config(resources, config, gateway.clone(), llm_config).await?;
+			let (_mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
+				convert_mcp_config(resources, config, gateway.clone(), mcp_config, true).await?;
+			llm_routes.extend(mcp_routes);
+			all_listener_routes.push((strng::new("llm"), llm_routes));
+			all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
+			all_binds.push(llm_bind);
+			all_policies.extend_from_slice(&llm_policies);
+			all_policies.extend_from_slice(&mcp_policies);
+			all_backends.extend_from_slice(&llm_backends);
+			all_backends.extend_from_slice(&mcp_backends);
+		},
+		(llm, mcp) => {
+			if let Some(llm_config) = llm {
+				let (llm_bind, llm_routes, llm_policies, llm_backends) =
+					convert_llm_config(resources, config, gateway.clone(), llm_config).await?;
+				all_listener_routes.push((strng::new("llm"), llm_routes));
+				all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
+				all_binds.push(llm_bind);
+				all_policies.extend_from_slice(&llm_policies);
+				all_backends.extend_from_slice(&llm_backends);
+			}
+			if let Some(mcp_config) = mcp {
+				let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
+					convert_mcp_config(resources, config, gateway.clone(), mcp_config, false).await?;
+				all_listener_routes.push((strng::new("mcp"), mcp_routes));
+				all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
+				all_binds.push(mcp_bind);
+				all_policies.extend_from_slice(&mcp_policies);
+				all_backends.extend_from_slice(&mcp_backends);
+			}
+		},
 	}
 
 	// Convert route groups
@@ -2646,25 +2707,37 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 			wildcard_binds
 		);
 	}
-	if let Some(llm) = &config.llm {
-		insert_local_listener_port(
-			llm.port.unwrap_or(DEFAULT_LLM_PORT),
-			if llm.port.is_some() {
-				"llm".to_string()
-			} else {
-				"llm (default)".to_string()
-			},
-		)?;
-	}
-	if let Some(mcp) = &config.mcp {
-		insert_local_listener_port(
-			mcp.port.unwrap_or(DEFAULT_MCP_PORT),
-			if mcp.port.is_some() {
-				"mcp".to_string()
-			} else {
-				"mcp (default)".to_string()
-			},
-		)?;
+	match (&config.llm, &config.mcp) {
+		(Some(llm), Some(mcp))
+			if llm.port.unwrap_or(DEFAULT_LLM_PORT) == mcp.port.unwrap_or(DEFAULT_MCP_PORT) =>
+		{
+			insert_local_listener_port(
+				llm.port.unwrap_or(DEFAULT_LLM_PORT),
+				"llm and mcp".to_string(),
+			)?;
+		},
+		(llm, mcp) => {
+			if let Some(llm) = llm {
+				insert_local_listener_port(
+					llm.port.unwrap_or(DEFAULT_LLM_PORT),
+					if llm.port.is_some() {
+						"llm".to_string()
+					} else {
+						"llm (default)".to_string()
+					},
+				)?;
+			}
+			if let Some(mcp) = mcp {
+				insert_local_listener_port(
+					mcp.port.unwrap_or(DEFAULT_MCP_PORT),
+					if mcp.port.is_some() {
+						"mcp".to_string()
+					} else {
+						"mcp (default)".to_string()
+					},
+				)?;
+			}
+		},
 	}
 	Ok(())
 }
@@ -2709,7 +2782,6 @@ struct ResolvedLLMModelTarget {
 	name: String,
 	provider: NamedAIProvider,
 	inline_policies: Vec<BackendTrafficPolicy>,
-	authorization: Option<Authorization>,
 }
 
 struct LocalLLMModelRegistry {
@@ -2892,17 +2964,6 @@ impl ResolvedLLMModelRegistry {
 			}
 		}
 		bail!("virtual model target {target} does not match any llm.models entry")
-	}
-
-	fn resolve_failover_target(&self, target: &str) -> anyhow::Result<ResolvedLLMModelTarget> {
-		let resolved = self.resolve(target)?;
-		if resolved.authorization.is_some() {
-			// Technically this is possible but would require us to move authorization down into post-LB.
-			bail!(
-				"virtual model target {target} has authorization; failover virtual models cannot target authorized models"
-			);
-		}
-		Ok(resolved)
 	}
 }
 
@@ -3324,6 +3385,9 @@ async fn convert_llm_config(
 				|e: crate::cel::Error| anyhow::anyhow!("health.unhealthyExpression: {}", e),
 			)?));
 		}
+		if let Some(authorization) = model_config.authorization.clone() {
+			pols.push(BackendTrafficPolicy::Authorization(authorization));
+		}
 		let prompt_guard =
 			merge_prompt_guards(shared_prompt_guard.clone(), model_config.guardrails.clone());
 		pols.push(BackendTrafficPolicy::AI(Arc::new(llm::Policy {
@@ -3347,16 +3411,8 @@ async fn convert_llm_config(
 			name: model_config.name.clone(),
 			provider: resolved_provider,
 			inline_policies: resolved_inline_policies,
-			authorization: model_config.authorization.clone(),
 		});
 
-		let mut model_route_inline_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
-			routes: llm_routes.into_iter().collect(),
-			..Default::default()
-		}))];
-		if let Some(p) = model_config.authorization.clone() {
-			model_route_inline_policies.push(TrafficPolicy::Authorization(p));
-		}
 		router_models.push(llm::model_router::ModelRoute {
 			name: model_config.name.clone(),
 			visibility: model_config.visibility,
@@ -3366,7 +3422,13 @@ async fn convert_llm_config(
 				.map(|m| m.headers.clone())
 				.collect(),
 			backend_key,
-			route_policies: model_route_inline_policies,
+			policies: llm::model_router::ModelRoutePolicies {
+				llm: Arc::new(crate::llm::Policy {
+					routes: llm_routes.into_iter().collect(),
+					..Default::default()
+				}),
+				authorization: model_config.authorization.clone(),
+			},
 			backend_policies: vec![],
 		});
 	}
@@ -3374,10 +3436,10 @@ async fn convert_llm_config(
 	let virtual_models = llm_registry.into_virtual_models();
 	let mut router_virtual_models = Vec::new();
 	for (idx, virtual_model) in virtual_models.into_iter().enumerate() {
-		let route_policies = vec![TrafficPolicy::AI(Arc::new(crate::llm::Policy {
+		let llm_policy = Arc::new(crate::llm::Policy {
 			routes: llm_route_types(None).into_iter().collect(),
 			..Default::default()
-		}))];
+		});
 		let routing = match virtual_model.routing_strategy()? {
 			LocalLLMVirtualRoutingStrategy::Conditional(conditional) => {
 				for target in &conditional.targets {
@@ -3419,7 +3481,7 @@ async fn convert_llm_config(
 					.map(|(_, targets)| {
 						targets
 							.map(|target| {
-								let resolved = resolved_models.resolve_failover_target(&target.model)?;
+								let resolved = resolved_models.resolve(&target.model)?;
 								let mut provider = resolved.provider.clone();
 								provider.name = strng::new(&target.model);
 								ensure_ai_provider_model(&mut provider.provider, &target.model);
@@ -3446,10 +3508,23 @@ async fn convert_llm_config(
 		};
 		router_virtual_models.push(llm::model_router::VirtualModelRoute {
 			name: virtual_model.name,
-			route_policies,
+			llm_policy,
 			routing,
 		});
 	}
+
+	let router_backend_key = strng::new("llm:router");
+	all_backends.push(BackendWithPolicies {
+		backend: Backend::LLMRouter(
+			local_name(router_backend_key.clone()),
+			Arc::new(llm::model_router::ModelRouter::new(
+				router_models,
+				router_virtual_models,
+				startup_timestamp,
+			)),
+		),
+		inline_policies: vec![],
+	});
 
 	routes.push(Route {
 		key: strng::new("llm:request"),
@@ -3468,12 +3543,12 @@ async fn convert_llm_config(
 			headers: vec![],
 			query: vec![],
 		}],
-		backends: vec![],
-		llm_router: Some(Arc::new(llm::model_router::ModelRouter::new(
-			router_models,
-			router_virtual_models,
-			startup_timestamp,
-		))),
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			target: BackendReference::Backend(strng::format!("/{router_backend_key}")).into(),
+			inline_policies: vec![],
+		}],
+		llm_router: None,
 		inline_policies: vec![],
 	});
 
@@ -3552,6 +3627,7 @@ async fn convert_mcp_config(
 	config: &crate::Config,
 	gateway: ListenerTarget,
 	mcp_config: LocalSimpleMcpConfig,
+	shared_port: bool,
 ) -> anyhow::Result<(
 	Bind,
 	Vec<Route>,
@@ -3584,7 +3660,11 @@ async fn convert_mcp_config(
 			kind: None,
 		},
 		hostnames: vec![],
-		matches: default_matches(),
+		matches: if shared_port {
+			mcp_matches()
+		} else {
+			default_matches()
+		},
 		backends: vec![RouteBackendReference {
 			weight: 1,
 			target: BackendReference::Backend(strng::new("/mcp")).into(),

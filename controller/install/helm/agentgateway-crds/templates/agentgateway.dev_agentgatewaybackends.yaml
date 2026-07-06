@@ -662,6 +662,46 @@ spec:
                                                                       minLength: 1
                                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                                       type: string
+                                                                    sessionName:
+                                                                      description: |-
+                                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                                      type: string
+                                                                    tags:
+                                                                      description: |-
+                                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                                        attribution. STS allows at most 50 session tags per role session.
+                                                                      items:
+                                                                        description: |-
+                                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                                          for cost attribution.
+                                                                        properties:
+                                                                          key:
+                                                                            description: Key
+                                                                              is the
+                                                                              tag
+                                                                              key.
+                                                                            maxLength: 128
+                                                                            minLength: 1
+                                                                            type: string
+                                                                          value:
+                                                                            description: Value
+                                                                              is the
+                                                                              tag
+                                                                              value.
+                                                                            maxLength: 256
+                                                                            type: string
+                                                                        required:
+                                                                        - key
+                                                                        - value
+                                                                        type: object
+                                                                      maxItems: 50
+                                                                      type: array
+                                                                      x-kubernetes-list-map-keys:
+                                                                      - key
+                                                                      x-kubernetes-list-type: map
                                                                   required:
                                                                   - roleArn
                                                                   type: object
@@ -786,7 +826,24 @@ spec:
                                                                       : (has(self.kind)
                                                                       && size(self.kind)
                                                                       > 0)'
+                                                                workloadIdentity:
+                                                                  description: |-
+                                                                    Workload identity authentication settings. Uses the federated token
+                                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                                    environment variables) to authenticate. This is the recommended method
+                                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                                    enabled.
+                                                                  type: object
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: at most one
+                                                                  of the fields in
+                                                                  [secretRef managedIdentity
+                                                                  workloadIdentity]
+                                                                  may be set
+                                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                                  <= 1'
                                                             gcp:
                                                               description: |-
                                                                 Google authentication method for the backend.
@@ -1407,6 +1464,46 @@ spec:
                                                                       minLength: 1
                                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                                       type: string
+                                                                    sessionName:
+                                                                      description: |-
+                                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                                      type: string
+                                                                    tags:
+                                                                      description: |-
+                                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                                        attribution. STS allows at most 50 session tags per role session.
+                                                                      items:
+                                                                        description: |-
+                                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                                          for cost attribution.
+                                                                        properties:
+                                                                          key:
+                                                                            description: Key
+                                                                              is the
+                                                                              tag
+                                                                              key.
+                                                                            maxLength: 128
+                                                                            minLength: 1
+                                                                            type: string
+                                                                          value:
+                                                                            description: Value
+                                                                              is the
+                                                                              tag
+                                                                              value.
+                                                                            maxLength: 256
+                                                                            type: string
+                                                                        required:
+                                                                        - key
+                                                                        - value
+                                                                        type: object
+                                                                      maxItems: 50
+                                                                      type: array
+                                                                      x-kubernetes-list-map-keys:
+                                                                      - key
+                                                                      x-kubernetes-list-type: map
                                                                   required:
                                                                   - roleArn
                                                                   type: object
@@ -1531,7 +1628,24 @@ spec:
                                                                       : (has(self.kind)
                                                                       && size(self.kind)
                                                                       > 0)'
+                                                                workloadIdentity:
+                                                                  description: |-
+                                                                    Workload identity authentication settings. Uses the federated token
+                                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                                    environment variables) to authenticate. This is the recommended method
+                                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                                    enabled.
+                                                                  type: object
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: at most one
+                                                                  of the fields in
+                                                                  [secretRef managedIdentity
+                                                                  workloadIdentity]
+                                                                  may be set
+                                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                                  <= 1'
                                                             gcp:
                                                               description: |-
                                                                 Google authentication method for the backend.
@@ -2148,6 +2262,46 @@ spec:
                                                                       minLength: 1
                                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                                       type: string
+                                                                    sessionName:
+                                                                      description: |-
+                                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                                      type: string
+                                                                    tags:
+                                                                      description: |-
+                                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                                        attribution. STS allows at most 50 session tags per role session.
+                                                                      items:
+                                                                        description: |-
+                                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                                          for cost attribution.
+                                                                        properties:
+                                                                          key:
+                                                                            description: Key
+                                                                              is the
+                                                                              tag
+                                                                              key.
+                                                                            maxLength: 128
+                                                                            minLength: 1
+                                                                            type: string
+                                                                          value:
+                                                                            description: Value
+                                                                              is the
+                                                                              tag
+                                                                              value.
+                                                                            maxLength: 256
+                                                                            type: string
+                                                                        required:
+                                                                        - key
+                                                                        - value
+                                                                        type: object
+                                                                      maxItems: 50
+                                                                      type: array
+                                                                      x-kubernetes-list-map-keys:
+                                                                      - key
+                                                                      x-kubernetes-list-type: map
                                                                   required:
                                                                   - roleArn
                                                                   type: object
@@ -2272,7 +2426,24 @@ spec:
                                                                       : (has(self.kind)
                                                                       && size(self.kind)
                                                                       > 0)'
+                                                                workloadIdentity:
+                                                                  description: |-
+                                                                    Workload identity authentication settings. Uses the federated token
+                                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                                    environment variables) to authenticate. This is the recommended method
+                                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                                    enabled.
+                                                                  type: object
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: at most one
+                                                                  of the fields in
+                                                                  [secretRef managedIdentity
+                                                                  workloadIdentity]
+                                                                  may be set
+                                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                                  <= 1'
                                                             gcp:
                                                               description: |-
                                                                 Google authentication method for the backend.
@@ -3121,6 +3292,46 @@ spec:
                                                                       minLength: 1
                                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                                       type: string
+                                                                    sessionName:
+                                                                      description: |-
+                                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                                      type: string
+                                                                    tags:
+                                                                      description: |-
+                                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                                        attribution. STS allows at most 50 session tags per role session.
+                                                                      items:
+                                                                        description: |-
+                                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                                          for cost attribution.
+                                                                        properties:
+                                                                          key:
+                                                                            description: Key
+                                                                              is the
+                                                                              tag
+                                                                              key.
+                                                                            maxLength: 128
+                                                                            minLength: 1
+                                                                            type: string
+                                                                          value:
+                                                                            description: Value
+                                                                              is the
+                                                                              tag
+                                                                              value.
+                                                                            maxLength: 256
+                                                                            type: string
+                                                                        required:
+                                                                        - key
+                                                                        - value
+                                                                        type: object
+                                                                      maxItems: 50
+                                                                      type: array
+                                                                      x-kubernetes-list-map-keys:
+                                                                      - key
+                                                                      x-kubernetes-list-type: map
                                                                   required:
                                                                   - roleArn
                                                                   type: object
@@ -3245,7 +3456,24 @@ spec:
                                                                       : (has(self.kind)
                                                                       && size(self.kind)
                                                                       > 0)'
+                                                                workloadIdentity:
+                                                                  description: |-
+                                                                    Workload identity authentication settings. Uses the federated token
+                                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                                    environment variables) to authenticate. This is the recommended method
+                                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                                    enabled.
+                                                                  type: object
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: at most one
+                                                                  of the fields in
+                                                                  [secretRef managedIdentity
+                                                                  workloadIdentity]
+                                                                  may be set
+                                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                                  <= 1'
                                                             gcp:
                                                               description: |-
                                                                 Google authentication method for the backend.
@@ -3866,6 +4094,46 @@ spec:
                                                                       minLength: 1
                                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                                       type: string
+                                                                    sessionName:
+                                                                      description: |-
+                                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                                      type: string
+                                                                    tags:
+                                                                      description: |-
+                                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                                        attribution. STS allows at most 50 session tags per role session.
+                                                                      items:
+                                                                        description: |-
+                                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                                          for cost attribution.
+                                                                        properties:
+                                                                          key:
+                                                                            description: Key
+                                                                              is the
+                                                                              tag
+                                                                              key.
+                                                                            maxLength: 128
+                                                                            minLength: 1
+                                                                            type: string
+                                                                          value:
+                                                                            description: Value
+                                                                              is the
+                                                                              tag
+                                                                              value.
+                                                                            maxLength: 256
+                                                                            type: string
+                                                                        required:
+                                                                        - key
+                                                                        - value
+                                                                        type: object
+                                                                      maxItems: 50
+                                                                      type: array
+                                                                      x-kubernetes-list-map-keys:
+                                                                      - key
+                                                                      x-kubernetes-list-type: map
                                                                   required:
                                                                   - roleArn
                                                                   type: object
@@ -3990,7 +4258,24 @@ spec:
                                                                       : (has(self.kind)
                                                                       && size(self.kind)
                                                                       > 0)'
+                                                                workloadIdentity:
+                                                                  description: |-
+                                                                    Workload identity authentication settings. Uses the federated token
+                                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                                    environment variables) to authenticate. This is the recommended method
+                                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                                    enabled.
+                                                                  type: object
                                                               type: object
+                                                              x-kubernetes-validations:
+                                                              - message: at most one
+                                                                  of the fields in
+                                                                  [secretRef managedIdentity
+                                                                  workloadIdentity]
+                                                                  may be set
+                                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                                  <= 1'
                                                             gcp:
                                                               description: |-
                                                                 Google authentication method for the backend.
@@ -4904,6 +5189,42 @@ spec:
                                                 minLength: 1
                                                 pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                 type: string
+                                              sessionName:
+                                                description: |-
+                                                  SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                  Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                pattern: ^[\w+=,.@-]{2,64}$
+                                                type: string
+                                              tags:
+                                                description: |-
+                                                  Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                  allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                  attribution. STS allows at most 50 session tags per role session.
+                                                items:
+                                                  description: |-
+                                                    AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                    for cost attribution.
+                                                  properties:
+                                                    key:
+                                                      description: Key is the tag
+                                                        key.
+                                                      maxLength: 128
+                                                      minLength: 1
+                                                      type: string
+                                                    value:
+                                                      description: Value is the tag
+                                                        value.
+                                                      maxLength: 256
+                                                      type: string
+                                                  required:
+                                                  - key
+                                                  - value
+                                                  type: object
+                                                maxItems: 50
+                                                type: array
+                                                x-kubernetes-list-map-keys:
+                                                - key
+                                                x-kubernetes-list-type: map
                                             required:
                                             - roleArn
                                             type: object
@@ -5009,7 +5330,22 @@ spec:
                                                 == 0 || self.kind == ''Secret'') :
                                                 (has(self.kind) && size(self.kind)
                                                 > 0)'
+                                          workloadIdentity:
+                                            description: |-
+                                              Workload identity authentication settings. Uses the federated token
+                                              projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                              `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                              environment variables) to authenticate. This is the recommended method
+                                              when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                              enabled.
+                                            type: object
                                         type: object
+                                        x-kubernetes-validations:
+                                        - message: at most one of the fields in [secretRef
+                                            managedIdentity workloadIdentity] may
+                                            be set
+                                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                            <= 1'
                                       gcp:
                                         description: |-
                                           Google authentication method for the backend.
@@ -6503,6 +6839,41 @@ spec:
                                               minLength: 1
                                               pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                               type: string
+                                            sessionName:
+                                              description: |-
+                                                SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                              pattern: ^[\w+=,.@-]{2,64}$
+                                              type: string
+                                            tags:
+                                              description: |-
+                                                Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                attribution. STS allows at most 50 session tags per role session.
+                                              items:
+                                                description: |-
+                                                  AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                  for cost attribution.
+                                                properties:
+                                                  key:
+                                                    description: Key is the tag key.
+                                                    maxLength: 128
+                                                    minLength: 1
+                                                    type: string
+                                                  value:
+                                                    description: Value is the tag
+                                                      value.
+                                                    maxLength: 256
+                                                    type: string
+                                                required:
+                                                - key
+                                                - value
+                                                type: object
+                                              maxItems: 50
+                                              type: array
+                                              x-kubernetes-list-map-keys:
+                                              - key
+                                              x-kubernetes-list-type: map
                                           required:
                                           - roleArn
                                           type: object
@@ -6606,7 +6977,22 @@ spec:
                                               == 0) ? (!has(self.kind) || size(self.kind)
                                               == 0 || self.kind == ''Secret'') : (has(self.kind)
                                               && size(self.kind) > 0)'
+                                        workloadIdentity:
+                                          description: |-
+                                            Workload identity authentication settings. Uses the federated token
+                                            projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                            `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                            environment variables) to authenticate. This is the recommended method
+                                            when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                            enabled.
+                                          type: object
                                       type: object
+                                      x-kubernetes-validations:
+                                      - message: at most one of the fields in [secretRef
+                                          managedIdentity workloadIdentity] may be
+                                          set
+                                        rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                          <= 1'
                                     gcp:
                                       description: |-
                                         Google authentication method for the backend.
@@ -7379,6 +7765,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -7484,7 +7906,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -8045,6 +8482,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -8150,7 +8623,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -8706,6 +9194,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -8811,7 +9335,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -9593,6 +10132,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -9698,7 +10273,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -10259,6 +10849,42 @@ spec:
                                                       minLength: 1
                                                       pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                                       type: string
+                                                    sessionName:
+                                                      description: |-
+                                                        SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                                        Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                                      pattern: ^[\w+=,.@-]{2,64}$
+                                                      type: string
+                                                    tags:
+                                                      description: |-
+                                                        Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                                        allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                                        attribution. STS allows at most 50 session tags per role session.
+                                                      items:
+                                                        description: |-
+                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                                          for cost attribution.
+                                                        properties:
+                                                          key:
+                                                            description: Key is the
+                                                              tag key.
+                                                            maxLength: 128
+                                                            minLength: 1
+                                                            type: string
+                                                          value:
+                                                            description: Value is
+                                                              the tag value.
+                                                            maxLength: 256
+                                                            type: string
+                                                        required:
+                                                        - key
+                                                        - value
+                                                        type: object
+                                                      maxItems: 50
+                                                      type: array
+                                                      x-kubernetes-list-map-keys:
+                                                      - key
+                                                      x-kubernetes-list-type: map
                                                   required:
                                                   - roleArn
                                                   type: object
@@ -10364,7 +10990,22 @@ spec:
                                                       size(self.kind) == 0 || self.kind
                                                       == ''Secret'') : (has(self.kind)
                                                       && size(self.kind) > 0)'
+                                                workloadIdentity:
+                                                  description: |-
+                                                    Workload identity authentication settings. Uses the federated token
+                                                    projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                                                    `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                                                    environment variables) to authenticate. This is the recommended method
+                                                    when running on Azure Kubernetes Service (AKS) with Workload Identity
+                                                    enabled.
+                                                  type: object
                                               type: object
+                                              x-kubernetes-validations:
+                                              - message: at most one of the fields
+                                                  in [secretRef managedIdentity workloadIdentity]
+                                                  may be set
+                                                rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                                                  <= 1'
                                             gcp:
                                               description: |-
                                                 Google authentication method for the backend.
@@ -11210,6 +11851,40 @@ spec:
                                 minLength: 1
                                 pattern: ^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$
                                 type: string
+                              sessionName:
+                                description: |-
+                                  SessionName is a custom session name (RoleSessionName) for CloudTrail and
+                                  Cost & Usage Report attribution. If unset, AWS generates a random name.
+                                pattern: ^[\w+=,.@-]{2,64}$
+                                type: string
+                              tags:
+                                description: |-
+                                  Tags are session tags passed to STS AssumeRole. Once activated as cost
+                                  allocation tags, they appear in the AWS Cost & Usage Report for cost
+                                  attribution. STS allows at most 50 session tags per role session.
+                                items:
+                                  description: |-
+                                    AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+                                    for cost attribution.
+                                  properties:
+                                    key:
+                                      description: Key is the tag key.
+                                      maxLength: 128
+                                      minLength: 1
+                                      type: string
+                                    value:
+                                      description: Value is the tag value.
+                                      maxLength: 256
+                                      type: string
+                                  required:
+                                  - key
+                                  - value
+                                  type: object
+                                maxItems: 50
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                - key
+                                x-kubernetes-list-type: map
                             required:
                             - roleArn
                             type: object
@@ -11308,7 +11983,21 @@ spec:
                                 (!has(self.kind) || size(self.kind) == 0 || self.kind
                                 == ''Secret'') : (has(self.kind) && size(self.kind)
                                 > 0)'
+                          workloadIdentity:
+                            description: |-
+                              Workload identity authentication settings. Uses the federated token
+                              projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+                              `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+                              environment variables) to authenticate. This is the recommended method
+                              when running on Azure Kubernetes Service (AKS) with Workload Identity
+                              enabled.
+                            type: object
                         type: object
+                        x-kubernetes-validations:
+                        - message: at most one of the fields in [secretRef managedIdentity
+                            workloadIdentity] may be set
+                          rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
+                            <= 1'
                       gcp:
                         description: |-
                           Google authentication method for the backend.
@@ -11994,6 +12683,7 @@ spec:
                             description: Identity provider to use for authentication.
                             enum:
                             - Auth0
+                            - Descope
                             - Keycloak
                             - Okta
                             type: string

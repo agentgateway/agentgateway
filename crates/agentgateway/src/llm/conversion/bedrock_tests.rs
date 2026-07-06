@@ -155,7 +155,7 @@ fn test_metadata_from_header() {
 		output_config: None,
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, Some(&headers)).unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, Some(&headers)).unwrap();
 	let metadata = out.request_metadata.unwrap();
 
 	assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
@@ -210,7 +210,7 @@ fn test_messages_metadata_is_preserved_in_additional_model_request_fields() {
 		output_config: None,
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	let additional_fields = out.additional_model_request_fields.unwrap();
 	let metadata = additional_fields.get("metadata").unwrap();
 
@@ -259,7 +259,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 		}),
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -324,7 +324,7 @@ fn test_output_config_format_maps_to_converse_output_config() {
 		}),
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -390,7 +390,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 		}),
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -449,7 +449,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		}),
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -515,7 +515,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		output_config: None,
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, Some(0.7));
 	assert_eq!(inference.top_p, Some(0.8));
@@ -592,7 +592,7 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		output_config: None,
 	};
 
-	let out = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, None);
 	assert_eq!(inference.top_p, None);
@@ -719,7 +719,7 @@ fn test_completions_request_metadata_only_uses_bedrock_header() {
 			.unwrap(),
 	);
 
-	let out = super::from_completions::translate_internal(
+	let (out, _) = super::from_completions::translate_internal(
 		req,
 		"anthropic.claude-3-sonnet".to_string(),
 		&provider,
@@ -810,7 +810,7 @@ fn test_completions_json_schema_response_format_maps_to_converse_output_config()
 		reasoning_effort: None,
 	};
 
-	let out = super::from_completions::translate_internal(
+	let (out, _) = super::from_completions::translate_internal(
 		req,
 		"anthropic.claude-3-sonnet".to_string(),
 		&provider,
@@ -890,7 +890,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 		reasoning_effort: Some(types::completions::typed::ReasoningEffort::Xhigh),
 	};
 
-	let out = super::from_completions::translate_internal(
+	let (out, _) = super::from_completions::translate_internal(
 		req,
 		"anthropic.claude-3-sonnet".to_string(),
 		&provider,
@@ -968,7 +968,7 @@ fn test_completions_explicit_thinking_budget_forces_enabled_thinking() {
 		reasoning_effort: Some(types::completions::typed::ReasoningEffort::High),
 	};
 
-	let out = super::from_completions::translate_internal(
+	let (out, _) = super::from_completions::translate_internal(
 		req,
 		"anthropic.claude-3-sonnet".to_string(),
 		&provider,
@@ -1021,7 +1021,9 @@ fn test_responses_json_schema_text_format_maps_to_converse_output_config() {
 	}))
 	.expect("valid responses request");
 
-	let translated = super::from_responses::translate(&req, &provider, None, None).unwrap();
+	let translated = super::from_responses::translate(&req, &provider, None, None)
+		.unwrap()
+		.body;
 	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
 
 	assert_eq!(
@@ -1072,7 +1074,9 @@ fn test_responses_request_metadata_only_uses_bedrock_header() {
 			.unwrap(),
 	);
 
-	let translated = super::from_responses::translate(&req, &provider, Some(&headers), None).unwrap();
+	let translated = super::from_responses::translate(&req, &provider, Some(&headers), None)
+		.unwrap()
+		.body;
 	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
 	let metadata = translated["requestMetadata"]
 		.as_object()
@@ -1107,7 +1111,9 @@ fn test_responses_reasoning_effort_maps_to_enabled_thinking_budget() {
 	}))
 	.expect("valid responses request");
 
-	let translated = super::from_responses::translate(&req, &provider, None, None).unwrap();
+	let translated = super::from_responses::translate(&req, &provider, None, None)
+		.unwrap()
+		.body;
 	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
 
 	assert_eq!(
@@ -1145,7 +1151,9 @@ fn test_responses_explicit_thinking_budget_forces_enabled_thinking() {
 	}))
 	.expect("valid responses request");
 
-	let translated = super::from_responses::translate(&req, &provider, None, None).unwrap();
+	let translated = super::from_responses::translate(&req, &provider, None, None)
+		.unwrap()
+		.body;
 	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
 
 	assert_eq!(
@@ -1180,7 +1188,9 @@ fn test_responses_vendor_extension_thinking_budget_forces_enabled_thinking() {
 	}))
 	.expect("valid responses request");
 
-	let translated = super::from_responses::translate(&req, &provider, None, None).unwrap();
+	let translated = super::from_responses::translate(&req, &provider, None, None)
+		.unwrap()
+		.body;
 	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
 
 	assert_eq!(
@@ -1496,4 +1506,191 @@ fn test_insert_cache_point_empty_messages_noop() {
 	let mut msgs: Vec<types::bedrock::Message> = vec![];
 	helpers::insert_message_cache_point(&mut msgs, 0);
 	assert!(msgs.is_empty());
+}
+
+#[test]
+fn test_bedrock_tool_name_sanitizes_long_mcp_names() {
+	let long_name = "mcp__plugin_atlassian_atlassian__createCompassComponentRelationship";
+	assert!(long_name.len() > super::BEDROCK_TOOL_NAME_MAX_LEN);
+
+	let mut map = super::BedrockToolNameMap::default();
+	let sanitized = map.register(long_name);
+
+	assert!(sanitized.len() <= super::BEDROCK_TOOL_NAME_MAX_LEN);
+	assert!(
+		sanitized
+			.chars()
+			.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+	);
+	assert_eq!(map.restore(&sanitized), long_name);
+}
+
+#[test]
+fn test_bedrock_tool_name_preserves_valid_short_names() {
+	let mut map = super::BedrockToolNameMap::default();
+	let name = "get_weather";
+	assert_eq!(map.register(name), name);
+	assert_eq!(map.restore(name), name);
+	assert!(map.is_empty());
+}
+
+#[test]
+fn test_bedrock_tool_name_sanitizes_invalid_characters() {
+	let mut map = super::BedrockToolNameMap::default();
+	let sanitized = map.register("my.tool/name");
+	assert_eq!(sanitized, "my_tool_name");
+}
+
+#[test]
+fn test_messages_long_tool_names_fit_bedrock_tool_config() {
+	use types::messages::typed as messages;
+
+	let long_name = "mcp__plugin_atlassian_atlassian__createCompassComponentRelationship";
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	};
+
+	let req = messages::Request {
+		model: "anthropic.claude-sonnet-4-20250514-v1:0".to_string(),
+		max_tokens: 1024,
+		messages: vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		tools: Some(vec![messages::Tool {
+			name: long_name.to_string(),
+			description: Some("test".to_string()),
+			input_schema: serde_json::json!({"type": "object"}),
+			cache_control: None,
+		}]),
+		tool_choice: None,
+		system: None,
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let (out, tool_map) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let bedrock_name = out
+		.tool_config
+		.as_ref()
+		.and_then(|tc| tc.tools.first())
+		.and_then(|tool| match tool {
+			types::bedrock::Tool::ToolSpec(spec) => Some(spec.name.clone()),
+			_ => None,
+		})
+		.expect("tool spec");
+
+	assert!(bedrock_name.len() <= super::BEDROCK_TOOL_NAME_MAX_LEN);
+	assert_eq!(tool_map.restore(&bedrock_name), long_name);
+}
+
+#[test]
+fn test_messages_long_tool_name_round_trip_response() {
+	use types::messages::typed as messages;
+
+	let long_name = "mcp__plugin_atlassian_atlassian__createCompassComponentRelationship";
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	};
+
+	let req = messages::Request {
+		model: "anthropic.claude-sonnet-4-20250514-v1:0".to_string(),
+		max_tokens: 1024,
+		messages: vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+		}],
+		tools: Some(vec![messages::Tool {
+			name: long_name.to_string(),
+			description: Some("test".to_string()),
+			input_schema: serde_json::json!({"type": "object"}),
+			cache_control: None,
+		}]),
+		tool_choice: None,
+		system: None,
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let (bedrock_req, tool_map) =
+		super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let bedrock_name = bedrock_req
+		.tool_config
+		.as_ref()
+		.and_then(|tc| tc.tools.first())
+		.and_then(|tool| match tool {
+			types::bedrock::Tool::ToolSpec(spec) => Some(spec.name.clone()),
+			_ => None,
+		})
+		.expect("sanitized tool name");
+	let model = "anthropic.claude-sonnet-4-20250514-v1:0";
+
+	let bedrock_response = json!({
+		"output": {
+			"message": {
+				"role": "assistant",
+				"content": [{
+					"toolUse": {
+						"toolUseId": "toolu_01TestRoundTrip",
+						"name": bedrock_name,
+						"input": {"query": "test"}
+					}
+				}]
+			}
+		},
+		"stopReason": "tool_use",
+		"usage": {
+			"inputTokens": 100,
+			"outputTokens": 20,
+			"totalTokens": 120
+		}
+	});
+	let bytes = Bytes::from(serde_json::to_vec(&bedrock_response).unwrap());
+
+	let response = super::from_messages::translate_response(&bytes, model, Some(&tool_map)).unwrap();
+	let response_json: serde_json::Value =
+		serde_json::from_slice(&response.serialize().unwrap()).unwrap();
+	let tool_use_name = response_json["content"]
+		.as_array()
+		.and_then(|blocks| {
+			blocks.iter().find_map(|block| {
+				block
+					.get("name")
+					.and_then(|n| n.as_str())
+					.filter(|_| block.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
+			})
+		})
+		.expect("tool use block in response");
+
+	assert_eq!(tool_use_name, long_name);
 }

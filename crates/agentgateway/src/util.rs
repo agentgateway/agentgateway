@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::io::{Error, ErrorKind};
 use std::path::{Component, Path, PathBuf, absolute};
 use std::time::Duration;
@@ -6,6 +7,22 @@ use anyhow::{anyhow, bail};
 use notify::{EventKind, RecursiveMode};
 use tokio::sync::mpsc;
 use tracing::warn;
+
+pub trait ErrorContext<T> {
+	fn ctx(self, msg: impl Display) -> anyhow::Result<T>;
+}
+
+impl<T, E: Display> ErrorContext<T> for Result<T, E> {
+	fn ctx(self, msg: impl Display) -> anyhow::Result<T> {
+		self.map_err(|err| anyhow!("{msg}: {err}"))
+	}
+}
+
+impl<T> ErrorContext<T> for Option<T> {
+	fn ctx(self, msg: impl Display) -> anyhow::Result<T> {
+		self.ok_or_else(|| anyhow!("{msg}"))
+	}
+}
 
 pub fn is_runtime_shutdown(e: &Error) -> bool {
 	if e.kind() == ErrorKind::Other

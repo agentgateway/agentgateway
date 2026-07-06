@@ -552,7 +552,7 @@ type FrontendProxyProtocol struct {
 	Mode ProxyProtocolMode `json:"mode,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Deny;Route;Tunnel
+// +k8s:enum
 type FrontendConnectMode string
 
 const (
@@ -1059,7 +1059,6 @@ type JWTMCPConfig struct {
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata,omitempty"`
 
 	// Identity provider to use for MCP authentication flows.
-	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	Provider *McpIDP `json:"provider,omitempty"`
 
@@ -1425,8 +1424,48 @@ type AwsAssumeRole struct {
 	// +kubebuilder:validation:Pattern="^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$"
 	// +required
 	RoleArn string `json:"roleArn"`
+
+	// SessionName is a custom session name (RoleSessionName) for CloudTrail and
+	// Cost & Usage Report attribution. If unset, AWS generates a random name.
+	//
+	// +optional
+	// +kubebuilder:validation:Pattern="^[\\w+=,.@-]{2,64}$"
+	SessionName *string `json:"sessionName,omitempty"`
+
+	// Tags are session tags passed to STS AssumeRole. Once activated as cost
+	// allocation tags, they appear in the AWS Cost & Usage Report for cost
+	// attribution. STS allows at most 50 session tags per role session.
+	//
+	// +optional
+	// +listType=map
+	// +listMapKey=key
+	// +kubebuilder:validation:MaxItems=50
+	Tags []AwsSessionTag `json:"tags,omitempty"`
 }
 
+// AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+// for cost attribution.
+type AwsSessionTag struct {
+	// Key is the tag key.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=128
+	// +required
+	Key string `json:"key"`
+
+	// Value is the tag value.
+	//
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	Value string `json:"value"`
+}
+
+// AzureAuth configures authentication to Azure services. At most one explicit
+// credential source may be set. When none is set, authentication is implicit:
+// the method is automatically detected from the environment, which resolves to
+// Workload Identity when running on Kubernetes.
+//
+// +kubebuilder:validation:AtMostOneOf=secretRef;managedIdentity;workloadIdentity
 type AzureAuth struct {
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, containing the Azure credentials. When using the default Secret
@@ -1440,6 +1479,16 @@ type AzureAuth struct {
 	//
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
+
+	// Workload identity authentication settings. Uses the federated token
+	// projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
+	// `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
+	// environment variables) to authenticate. This is the recommended method
+	// when running on Azure Kubernetes Service (AKS) with Workload Identity
+	// enabled.
+	//
+	// +optional
+	WorkloadIdentity *AzureWorkloadIdentity `json:"workloadIdentity,omitempty"`
 }
 
 type AzureManagedIdentity struct {
@@ -1449,6 +1498,10 @@ type AzureManagedIdentity struct {
 	ObjectID string `json:"objectId"`
 	// +required
 	ResourceID string `json:"resourceId"`
+}
+
+// AzureWorkloadIdentity configures Azure Workload Identity authentication.
+type AzureWorkloadIdentity struct {
 }
 
 type BackendAuthPassthrough struct {
@@ -1657,7 +1710,6 @@ type MCPAuthentication struct {
 	ResourceMetadata map[string]apiextensionsv1.JSON `json:"resourceMetadata"`
 
 	// Identity provider to use for authentication.
-	// +kubebuilder:validation:Enum=Auth0;Keycloak;Okta
 	// +optional
 	McpIDP *McpIDP `json:"provider,omitempty"`
 
@@ -1698,6 +1750,7 @@ const (
 	Auth0    McpIDP = "Auth0"
 	Keycloak McpIDP = "Keycloak"
 	Okta     McpIDP = "Okta"
+	Descope  McpIDP = "Descope"
 )
 
 type BackendTunnel struct {
@@ -1888,7 +1941,7 @@ type HeaderTransformation struct {
 }
 
 // How HTTP bodies are delivered to the external processor.
-// +kubebuilder:validation:Enum=None;Buffered;BufferedPartial;FullDuplexStreamed
+// +k8s:enum
 type BodySendMode string
 
 const (
@@ -1905,7 +1958,7 @@ const (
 )
 
 // Whether HTTP headers are delivered to the external processor.
-// +kubebuilder:validation:Enum=Send;Skip
+// +k8s:enum
 type HeaderSendMode string
 
 const (
@@ -1916,7 +1969,7 @@ const (
 )
 
 // Whether HTTP trailers are delivered to the external processor.
-// +kubebuilder:validation:Enum=Skip;Send
+// +k8s:enum
 type TrailerSendMode string
 
 const (

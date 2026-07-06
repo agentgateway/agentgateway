@@ -321,7 +321,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::SendError(_, _)) => StatusCode::INTERNAL_SERVER_ERROR,
 			// Note: we do not return a 401/403 here, as the obscure that it was rejected due to auth
 			ProxyError::MCP(mcp::Error::Authorization(_, _, _)) => StatusCode::BAD_REQUEST,
-			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::McpGuardrails(_, _)) => StatusCode::OK,
 		};
 		let grpc_status = is_grpc_request.then(|| proxy_error_to_grpc_status(&self, code));
 		let mut rb = ::http::Response::builder().status(code);

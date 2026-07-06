@@ -1224,6 +1224,8 @@ pub enum Backend {
 	MCP(ResourceName, McpBackend),
 	#[serde(rename = "ai", serialize_with = "serialize_backend_tuple")]
 	AI(ResourceName, crate::llm::AIBackend),
+	#[serde(rename = "llmRouter", serialize_with = "serialize_backend_tuple")]
+	LLMRouter(ResourceName, Arc<crate::llm::model_router::ModelRouter>),
 	#[serde(rename = "aws", serialize_with = "serialize_backend_tuple")]
 	Aws(ResourceName, crate::aws::AwsBackendConfig),
 	#[serde(serialize_with = "serialize_backend_tuple")]
@@ -1418,6 +1420,7 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
+			| Backend::LLMRouter(name, _)
 			| Backend::Aws(name, _)
 			| Backend::Dynamic(name, _)
 			| Backend::Internal(name, _) => BackendTarget::Backend {
@@ -1439,6 +1442,7 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
+			| Backend::LLMRouter(name, _)
 			| Backend::Aws(name, _)
 			| Backend::Dynamic(name, _)
 			| Backend::Internal(name, _) => BackendTargetRef::Backend {
@@ -1456,6 +1460,7 @@ impl Backend {
 			Backend::Opaque(name, _)
 			| Backend::MCP(name, _)
 			| Backend::AI(name, _)
+			| Backend::LLMRouter(name, _)
 			| Backend::Aws(name, _)
 			| Backend::Dynamic(name, _)
 			| Backend::Internal(name, _) => {
@@ -1474,7 +1479,7 @@ impl Backend {
 			Backend::Service(_, _) => cel::BackendType::Service,
 			Backend::Opaque(_, _) => cel::BackendType::Static,
 			Backend::MCP(_, _) => cel::BackendType::MCP,
-			Backend::AI(_, _) => cel::BackendType::AI,
+			Backend::AI(_, _) | Backend::LLMRouter(_, _) => cel::BackendType::AI,
 			Backend::Aws(_, _) => cel::BackendType::Unknown,
 			Backend::Dynamic(_, _) => cel::BackendType::Dynamic,
 			Backend::Internal(_, _) => cel::BackendType::Unknown,
@@ -1485,7 +1490,7 @@ impl Backend {
 	pub fn backend_protocol(&self) -> Option<cel::BackendProtocol> {
 		match self {
 			Backend::MCP(_, _) => Some(cel::BackendProtocol::mcp),
-			Backend::AI(_, _) => Some(cel::BackendProtocol::llm),
+			Backend::AI(_, _) | Backend::LLMRouter(_, _) => Some(cel::BackendProtocol::llm),
 			_ => None,
 		}
 	}
@@ -2482,6 +2487,7 @@ pub enum TrafficPolicy {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BackendTrafficPolicy {
+	Authorization(Authorization),
 	McpAuthorization(McpAuthorization),
 	McpAuthentication(McpAuthentication),
 	McpGuardrails(Arc<crate::mcp::guardrails::McpGuardrails>),
@@ -2678,6 +2684,28 @@ impl LocalMcpAuthentication {
 						None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
 							format!("{}/.well-known/jwks.json", self.issuer).parse()?
 						},
+						Some(McpIDP::Descope {}) => {
+							// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
+							// JWKS lives at the project level: https://api.descope.com/{project-id}/.well-known/jwks.json
+							let parsed: url::Url = self.issuer.parse()?;
+							let segments: Vec<&str> = parsed.path().trim_start_matches('/').split('/').collect();
+							if segments.len() >= 5
+								&& segments[0] == "v1"
+								&& segments[1] == "apps"
+								&& segments[2] == "agentic"
+							{
+								let project_id = segments[3];
+								let base = format!(
+									"{}://{}/{}",
+									parsed.scheme(),
+									parsed.host_str().unwrap_or_default(),
+									project_id
+								);
+								format!("{base}/.well-known/jwks.json").parse()?
+							} else {
+								format!("{}/.well-known/jwks.json", self.issuer).parse()?
+							}
+						},
 						Some(McpIDP::Keycloak { .. }) => {
 							format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
 						},
@@ -2721,6 +2749,7 @@ pub enum McpIDP {
 	Auth0 {},
 	Keycloak {},
 	Okta {},
+	Descope {},
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

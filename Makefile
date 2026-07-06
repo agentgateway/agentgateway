@@ -46,13 +46,18 @@ lint:
 	cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
 	cargo clippy --all-targets -- -D warnings
 
-.PHONY: fix-lint
-fix-lint: format
+.PHONY: clippy
+fix-clippy:
 	cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs
 
 .PHONY: format
 format:
 	cargo fmt -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
+
+.PHONY: fix-lint
+fix-lint:
+	$(MAKE) fix-clippy
+	$(MAKE) format
 
 # test
 .PHONY: test

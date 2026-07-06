@@ -47,6 +47,58 @@ func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	}
 }
 
+func TestAwsAuthPropagatesAssumeRoleSessionNameAndTags(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthPropagatesAssumeRoleSessionNameAndTags"))
+	ctx := simpleAuthPolicyCtx(
+		&AgwCollections{
+			Secrets: secrets,
+		}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
+		AssumeRole: &agentgateway.AwsAssumeRole{
+			RoleArn:     "arn:aws:iam::111122223333:role/bedrock-team-acme-payments",
+			SessionName: new("acme-payments-invoice-processor"),
+			Tags: []agentgateway.AwsSessionTag{
+				{Key: "Team", Value: "acme-payments"},
+				{Key: "App", Value: "invoice-processor"},
+			},
+		},
+	}, "default")
+	assert.NoError(t, err)
+
+	assumeRole := policy.GetAws().GetAssumeRole()
+	assert.Equal(t, assumeRole != nil, true)
+	assert.Equal(t, assumeRole.GetRoleArn(), "arn:aws:iam::111122223333:role/bedrock-team-acme-payments")
+	assert.Equal(t, assumeRole.GetSessionName(), "acme-payments-invoice-processor")
+
+	tags := assumeRole.GetTags()
+	assert.Equal(t, len(tags), 2)
+	assert.Equal(t, tags[0].GetKey(), "Team")
+	assert.Equal(t, tags[0].GetValue(), "acme-payments")
+	assert.Equal(t, tags[1].GetKey(), "App")
+	assert.Equal(t, tags[1].GetValue(), "invoice-processor")
+}
+
+func TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags"))
+	ctx := simpleAuthPolicyCtx(
+		&AgwCollections{
+			Secrets: secrets,
+		}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
+		AssumeRole: &agentgateway.AwsAssumeRole{
+			RoleArn: "arn:aws:iam::111122223333:role/backend",
+		},
+	}, "default")
+	assert.NoError(t, err)
+
+	assumeRole := policy.GetAws().GetAssumeRole()
+	assert.Equal(t, assumeRole != nil, true)
+	assert.Equal(t, assumeRole.GetSessionName(), "")
+	assert.Equal(t, len(assumeRole.GetTags()), 0)
+}
+
 func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthResolvesConfiguredCredentialRef"))
 	ctx := simpleAuthPolicyCtx(&AgwCollections{
@@ -63,6 +115,29 @@ func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
 	if !errors.Is(err, kubeutils.ErrUnsupportedCredentialKind) {
 		t.Fatalf("buildAzureAuthPolicy() error = %v, want ErrUnsupportedCredentialKind", err)
 	}
+}
+
+func TestAzureAuthBuildsExplicitAndImplicitConfigs(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthBuildsExplicitAndImplicitConfigs"))
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	t.Run("workloadIdentity", func(t *testing.T) {
+		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{
+			WorkloadIdentity: &agentgateway.AzureWorkloadIdentity{},
+		}, "default")
+		assert.NoError(t, err)
+		explicit := policy.GetAzure().GetExplicitConfig()
+		assert.Equal(t, explicit != nil, true)
+		assert.Equal(t, explicit.GetWorkloadIdentityCredential() != nil, true)
+	})
+
+	t.Run("implicit when no credential source is set", func(t *testing.T) {
+		policy, err := buildAzureAuthPolicy(ctx, &agentgateway.AzureAuth{}, "default")
+		assert.NoError(t, err)
+		assert.Equal(t, policy.GetAzure().GetImplicit() != nil, true)
+	})
 }
 
 func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {

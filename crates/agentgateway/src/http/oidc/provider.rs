@@ -2,12 +2,12 @@ use std::time::Duration;
 
 use ::http::{Method, StatusCode, header};
 use anyhow::Context;
-use base64::Engine;
 use secrecy::{ExposeSecret, SecretString};
 
 use super::{Error, Provider, TokenEndpointAuth};
 use crate::http::Body;
 use crate::http::filters::BackendRequestTimeout;
+use crate::http::oauth::{encode_client_secret_basic, format_token_endpoint_error_body};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 
@@ -62,13 +62,9 @@ pub(crate) async fn exchange_code_with_timeout(
 		.header(header::ACCEPT, "application/json");
 	match client_config.token_endpoint_auth {
 		TokenEndpointAuth::ClientSecretBasic => {
-			let encoded_client_id = form_urlencode_component(&client_config.client_id);
-			let encoded_client_secret =
-				form_urlencode_component(client_config.client_secret.expose_secret());
 			let auth = format!(
 				"Basic {}",
-				base64::engine::general_purpose::STANDARD
-					.encode(format!("{}:{}", encoded_client_id, encoded_client_secret))
+				encode_client_secret_basic(&client_config.client_id, &client_config.client_secret)
 			);
 			req = req.header(header::AUTHORIZATION, auth);
 		},
@@ -103,33 +99,10 @@ pub(crate) async fn exchange_code_with_timeout(
 	if status != StatusCode::OK {
 		return Err(Error::TokenExchangeFailed(anyhow::anyhow!(
 			"token endpoint returned {status}: {}",
-			format_token_endpoint_error_body(&body)
+			format_token_endpoint_error_body(&body, 1024)
 		)));
 	}
 	serde_json::from_slice::<TokenResponse>(&body)
 		.context("failed to decode token response")
 		.map_err(Error::TokenExchangeFailed)
-}
-
-fn form_urlencode_component(value: &str) -> String {
-	url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
-}
-
-fn format_token_endpoint_error_body(body: &[u8]) -> String {
-	const LIMIT: usize = 1024;
-
-	let mut out = String::with_capacity(body.len().min(LIMIT));
-	let mut truncated = false;
-	for ch in String::from_utf8_lossy(body).chars() {
-		let ch = if ch.is_control() { ' ' } else { ch };
-		if out.len() + ch.len_utf8() > LIMIT {
-			truncated = true;
-			break;
-		}
-		out.push(ch);
-	}
-	if truncated {
-		out.push_str("...");
-	}
-	out
 }
