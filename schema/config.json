@@ -6412,7 +6412,7 @@
           "type": "string"
         },
         "policies": {
-          "description": "Policies for this target. mcpAuthorization rules set here apply in addition\nto route/backend-level rules (a deny at any level denies).",
+          "description": "Transport policies for connecting to this target's backend. Not supported\non stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to\nthe full target set and belong on the route or `mcp.policies`.",
           "anyOf": [
             {
               "$ref": "#/$defs/MCPLocalBackendPolicies"
@@ -6666,7 +6666,7 @@
       ]
     },
     "MCPLocalBackendPolicies": {
-      "description": "Policies that are coherent for a single MCP target: upstream transport settings\nand per-resource mcpAuthorization. Call-scoped policies (mcpGuardrails,\nmcpAuthentication) apply to the full target set and belong on the route or\n`mcp.policies` instead.",
+      "description": "Transport policies for connecting to a single MCP target's backend. MCP\npolicies (mcpAuthorization, mcpGuardrails, mcpAuthentication) apply to the\nfull target set and belong on the route or `mcp.policies` instead.",
       "type": "object",
       "properties": {
         "requestHeaderModifier": {
@@ -6745,18 +6745,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Tunnel"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "mcpAuthorization": {
-          "description": "Authorization rules for MCP requests, applied in addition to\nroute/backend-level rules.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/McpAuthorization"
             },
             {
               "type": "null"

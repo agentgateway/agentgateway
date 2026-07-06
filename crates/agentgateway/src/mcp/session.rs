@@ -164,11 +164,13 @@ impl Session {
 		log.non_atomic_mutate(|l| {
 			l.set_prompt(service_name.to_string(), prompt.to_string());
 		});
-		let res = rbac::ResourceType::Prompt(rbac::ResourceId::new(
-			service_name.to_string(),
-			prompt.to_string(),
-		));
-		if !self.relay.validate(&res, cel) {
+		if !self.relay.policies.validate(
+			&rbac::ResourceType::Prompt(rbac::ResourceId::new(
+				service_name.to_string(),
+				prompt.to_string(),
+			)),
+			cel,
+		) {
 			return Err(UpstreamError::Authorization {
 				resource_type: "prompt".to_string(),
 				resource_name: name.to_string(),
@@ -190,11 +192,13 @@ impl Session {
 		log.non_atomic_mutate(|l| {
 			l.set_resource(service_name.to_string(), uri.to_string());
 		});
-		let res = rbac::ResourceType::Resource(rbac::ResourceId::new(
-			service_name.to_string(),
-			uri.to_string(),
-		));
-		if !self.relay.validate(&res, cel) {
+		if !self.relay.policies.validate(
+			&rbac::ResourceType::Resource(rbac::ResourceId::new(
+				service_name.to_string(),
+				uri.to_string(),
+			)),
+			cel,
+		) {
 			return Err(UpstreamError::Authorization {
 				resource_type: "resource".to_string(),
 				resource_name: uri.to_string(),
@@ -223,7 +227,7 @@ impl Session {
 			.maybe_run_guardrails_call_request(backend, method, params, ctx)
 			.await?;
 		let cel = rbac::CelExecWrapper::new(ctx.as_request().map(|_| ()));
-		if self.relay.validate(&res, &cel) {
+		if self.relay.policies.validate(&res, &cel) {
 			Ok(())
 		} else {
 			Err(UpstreamError::Authorization {

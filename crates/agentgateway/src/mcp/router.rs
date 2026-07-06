@@ -84,17 +84,18 @@ impl App {
 						section: Some(t.name.as_ref()),
 					};
 					let mut target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
-					if !t.inline_policies.is_empty() {
-						// Policies carried on the target itself (stdio targets have no sub-backend).
-						target_policies =
-							target_policies.merge(binds.inline_backend_policies(&t.inline_policies));
-					}
-					// Call-scoped policies apply to the full target set; a per-target attachment
+					// MCP policies apply to the full target set; a per-target attachment
 					// (xds targetRef with a section name) cannot be honored.
 					if target_policies.mcp_guardrails.take().is_some() {
 						tracing::warn!(
 							target = %t.name,
 							"mcpGuardrails attached to an MCP sub-backend is ignored; attach it to the route or backend"
+						);
+					}
+					if target_policies.mcp_authorization.take().is_some() {
+						tracing::warn!(
+							target = %t.name,
+							"mcpAuthorization attached to an MCP sub-backend is ignored; attach it to the route or backend"
 						);
 					}
 					if target_policies.mcp_authentication.take().is_some() {
@@ -139,11 +140,6 @@ impl App {
 		req.extensions_mut().insert(tracer);
 
 		authorization_policies.register(log.cel.ctx());
-		for t in &backends.targets {
-			if let Some(authz) = &t.backend_policies.mcp_authorization {
-				authz.register(log.cel.ctx());
-			}
-		}
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		// `response` is not valid here, since we run authz first

@@ -809,41 +809,7 @@ mcp:
 }
 
 #[tokio::test]
-async fn test_local_mcp_stdio_target_policies_carried_on_target() {
-	let yaml = r#"
-mcp:
-  targets:
-  - name: everything
-    stdio:
-      cmd: echo
-    policies:
-      mcpAuthorization:
-        rules:
-        - 'mcp.tool.name == "echo"'
-"#;
-	let config = normalize_test_yaml(yaml)
-		.await
-		.expect("stdio target policies should be accepted");
-	let mcp = config
-		.backends
-		.iter()
-		.find_map(|b| match &b.backend {
-			Backend::MCP(_, m) => Some(m),
-			_ => None,
-		})
-		.expect("MCP backend");
-	let target = mcp.targets.first().expect("stdio target");
-	assert!(
-		target
-			.inline_policies
-			.iter()
-			.any(|p| matches!(p, BackendTrafficPolicy::McpAuthorization(_))),
-		"stdio target policies must be carried on the target"
-	);
-}
-
-#[tokio::test]
-async fn test_local_mcp_stdio_target_rejects_transport_policies() {
+async fn test_local_mcp_stdio_target_rejects_policies() {
 	let yaml = r#"
 mcp:
   targets:
@@ -855,32 +821,14 @@ mcp:
 "#;
 	normalize_test_yaml(yaml)
 		.await
-		.expect_err("transport policies on a stdio MCP target should be rejected");
+		.expect_err("policies on a stdio MCP target should be rejected");
 }
 
-/// mcpGuardrails is call-scoped and applies to the full target set; attaching it
-/// to an individual target must fail at load rather than being silently dropped.
+/// MCP policies apply to the full target set; attaching one to an individual
+/// target must fail at load rather than being silently dropped.
 #[tokio::test]
-async fn test_local_mcp_target_rejects_guardrails() {
-	let stdio_yaml = r#"
-mcp:
-  targets:
-  - name: everything
-    stdio:
-      cmd: echo
-    policies:
-      mcpGuardrails:
-        processors: []
-"#;
-	let err = normalize_test_yaml(stdio_yaml)
-		.await
-		.expect_err("mcpGuardrails on a stdio MCP target should be rejected");
-	assert!(
-		err.to_string().contains("mcpGuardrails"),
-		"error should mention mcpGuardrails, got: {err}"
-	);
-
-	let http_yaml = r#"
+async fn test_local_mcp_target_rejects_mcp_policies() {
+	let guardrails_yaml = r#"
 mcp:
   targets:
   - name: everything
@@ -890,9 +838,32 @@ mcp:
       mcpGuardrails:
         processors: []
 "#;
-	normalize_test_yaml(http_yaml)
+	let err = normalize_test_yaml(guardrails_yaml)
 		.await
-		.expect_err("mcpGuardrails on a streamable HTTP MCP target should be rejected");
+		.expect_err("mcpGuardrails on an MCP target should be rejected");
+	assert!(
+		err.to_string().contains("mcpGuardrails"),
+		"error should mention mcpGuardrails, got: {err}"
+	);
+
+	let authorization_yaml = r#"
+mcp:
+  targets:
+  - name: everything
+    mcp:
+      host: localhost:8080
+    policies:
+      mcpAuthorization:
+        rules:
+        - 'mcp.tool.name == "echo"'
+"#;
+	let err = normalize_test_yaml(authorization_yaml)
+		.await
+		.expect_err("mcpAuthorization on an MCP target should be rejected");
+	assert!(
+		err.to_string().contains("mcpAuthorization"),
+		"error should mention mcpAuthorization, got: {err}"
+	);
 }
 
 #[tokio::test]

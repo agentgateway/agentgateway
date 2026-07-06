@@ -21,7 +21,6 @@ use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{FailureMode, mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::store::BackendPolicies;
 use crate::types::agent::McpTargetSpec;
 use crate::*;
 
@@ -338,16 +337,6 @@ impl UpstreamGroup {
 	/// Used by `parse_resource_uri` to get a stable `&str` reference.
 	pub(crate) fn get_name(&self, name: &str) -> Option<&str> {
 		self.by_name.get_key_value(name).map(|(k, _)| k.as_str())
-	}
-
-	/// The merged (backend-level + target-scoped) policies for a target.
-	pub(crate) fn effective_policies(&self, name: &str) -> Option<&BackendPolicies> {
-		self
-			.backend
-			.targets
-			.iter()
-			.find(|target| target.name.as_str() == name)
-			.map(|target| &target.backend_policies)
 	}
 
 	pub(crate) fn stateful(&self) -> bool {

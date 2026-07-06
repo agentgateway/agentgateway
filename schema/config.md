@@ -2328,7 +2328,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.file`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].name`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|object|Policies for this target. mcpAuthorization rules set here apply in addition<br>to route/backend-level rules (a deny at any level denies).|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -2444,11 +2444,6 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests, applied in addition to<br>route/backend-level rules.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -9957,7 +9952,7 @@
 |`backends[].mcp.targets[].openapi.schema.file`|string||
 |`backends[].mcp.targets[].openapi.schema.url`|string||
 |`backends[].mcp.targets[].name`|string||
-|`backends[].mcp.targets[].policies`|object|Policies for this target. mcpAuthorization rules set here apply in addition<br>to route/backend-level rules (a deny at any level denies).|
+|`backends[].mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].mcp.targets[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`backends[].mcp.targets[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -10073,11 +10068,6 @@
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests, applied in addition to<br>route/backend-level rules.|
-|`backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
-|`backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
-|`backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -16430,7 +16420,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.file`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].name`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies`|object|Policies for this target. mcpAuthorization rules set here apply in addition<br>to route/backend-level rules (a deny at any level denies).|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -16546,11 +16536,6 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests, applied in addition to<br>route/backend-level rules.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`routeGroups[].routes[].backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -23644,7 +23629,7 @@
 |`mcp.targets[].openapi.schema.file`|string||
 |`mcp.targets[].openapi.schema.url`|string||
 |`mcp.targets[].name`|string||
-|`mcp.targets[].policies`|object|Policies for this target. mcpAuthorization rules set here apply in addition<br>to route/backend-level rules (a deny at any level denies).|
+|`mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.targets[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`mcp.targets[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -23760,11 +23745,6 @@
 |`mcp.targets[].policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests, applied in addition to<br>route/backend-level rules.|
-|`mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
-|`mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
-|`mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|

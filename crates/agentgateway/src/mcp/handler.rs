@@ -90,12 +90,10 @@ fn set_subscription_ack_id(
 
 #[derive(Debug, Clone)]
 pub struct Relay {
-	upstreams: Arc<upstream::UpstreamGroup>,
-	policy_client: PolicyClient,
-
-	// backend level
-	policies: McpAuthorizationSet,
-	mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
+	pub(crate) upstreams: Arc<upstream::UpstreamGroup>,
+	pub policies: McpAuthorizationSet,
+	pub(crate) mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
+	pub(crate) policy_client: PolicyClient,
 }
 
 pub struct RelayInputs {
@@ -136,23 +134,6 @@ impl Relay {
 			mcp_guardrails: inputs.mcp_guardrails.clone(),
 			policy_client: self.policy_client.clone(),
 		}
-	}
-
-	pub(crate) fn validate(&self, res: &rbac::ResourceType, cel: &CelExecWrapper) -> bool {
-		Self::validate_with_policies(&self.upstreams, &self.policies, res, cel)
-	}
-
-	fn validate_with_policies(
-		upstreams: &upstream::UpstreamGroup,
-		fallback: &McpAuthorizationSet,
-		res: &rbac::ResourceType,
-		cel: &CelExecWrapper,
-	) -> bool {
-		let policies = upstreams
-			.effective_policies(res.target())
-			.and_then(|policies| policies.mcp_authorization.as_ref())
-			.unwrap_or(fallback);
-		policies.validate(res, cel)
 	}
 
 	fn rewrite_outbound_server_messages(&self, target: &str, stream: Messages) -> Messages {
@@ -348,7 +329,6 @@ impl Relay {
 	}
 
 	pub fn merge_tools(&self) -> Box<MergeFn> {
-		let upstreams = self.upstreams.clone();
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
@@ -363,9 +343,7 @@ impl Relay {
 						.into_iter()
 						// Apply authorization policies, filtering tools that are not allowed.
 						.filter(|t| {
-							Self::validate_with_policies(
-								&upstreams,
-								&policies,
+							policies.validate(
 								&rbac::ResourceType::Tool(rbac::ResourceId::new(
 									server_name.to_string(),
 									t.name.to_string(),
@@ -474,7 +452,6 @@ impl Relay {
 	}
 
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
-		let upstreams = self.upstreams.clone();
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
@@ -488,9 +465,7 @@ impl Relay {
 					prompts
 						.into_iter()
 						.filter(|p| {
-							Self::validate_with_policies(
-								&upstreams,
-								&policies,
+							policies.validate(
 								&rbac::ResourceType::Prompt(rbac::ResourceId::new(
 									server_name.to_string(),
 									p.name.to_string(),
@@ -517,7 +492,6 @@ impl Relay {
 		})
 	}
 	pub fn merge_resources(&self) -> Box<MergeFn> {
-		let upstreams = self.upstreams.clone();
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
@@ -531,9 +505,7 @@ impl Relay {
 					resources
 						.into_iter()
 						.filter(|r| {
-							Self::validate_with_policies(
-								&upstreams,
-								&policies,
+							policies.validate(
 								&rbac::ResourceType::Resource(rbac::ResourceId::new(
 									server_name.to_string(),
 									r.uri.to_string(),
@@ -561,7 +533,6 @@ impl Relay {
 		})
 	}
 	pub fn merge_resource_templates(&self) -> Box<MergeFn> {
-		let upstreams = self.upstreams.clone();
 		let policies = self.policies.clone();
 		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
@@ -575,9 +546,7 @@ impl Relay {
 					resource_templates
 						.into_iter()
 						.filter(|rt| {
-							Self::validate_with_policies(
-								&upstreams,
-								&policies,
+							policies.validate(
 								&rbac::ResourceType::Resource(rbac::ResourceId::new(
 									server_name.to_string(),
 									rt.uri_template.to_string(),
