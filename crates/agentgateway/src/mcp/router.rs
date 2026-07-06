@@ -83,27 +83,7 @@ impl App {
 						namespace: backend_group_name.namespace.as_ref(),
 						section: Some(t.name.as_ref()),
 					};
-					let mut target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
-					// MCP policies apply to the full target set; a per-target attachment
-					// (xds targetRef with a section name) cannot be honored.
-					if target_policies.mcp_guardrails.take().is_some() {
-						tracing::warn!(
-							target = %t.name,
-							"mcpGuardrails attached to an MCP sub-backend is ignored; attach it to the route or backend"
-						);
-					}
-					if target_policies.mcp_authorization.take().is_some() {
-						tracing::warn!(
-							target = %t.name,
-							"mcpAuthorization attached to an MCP sub-backend is ignored; attach it to the route or backend"
-						);
-					}
-					if target_policies.mcp_authentication.take().is_some() {
-						tracing::warn!(
-							target = %t.name,
-							"mcpAuthentication attached to an MCP sub-backend is ignored; attach it to the route or backend"
-						);
-					}
+					let target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
 					let backend_policies = backend_policies.clone().merge(target_policies);
 					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {

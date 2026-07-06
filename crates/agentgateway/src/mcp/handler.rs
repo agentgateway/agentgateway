@@ -126,12 +126,11 @@ impl Relay {
 			policy_client: client,
 		})
 	}
-
-	pub fn with_inputs(&self, inputs: &RelayInputs) -> Self {
+	pub fn with_policies(&self, policies: McpAuthorizationSet) -> Self {
 		Self {
 			upstreams: self.upstreams.clone(),
-			policies: inputs.policies.clone(),
-			mcp_guardrails: inputs.mcp_guardrails.clone(),
+			policies,
+			mcp_guardrails: self.mcp_guardrails.clone(),
 			policy_client: self.policy_client.clone(),
 		}
 	}

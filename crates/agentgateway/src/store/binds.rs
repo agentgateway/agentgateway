@@ -273,6 +273,7 @@ impl BackendPolicies {
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
+			// Authorization composes to avoid erasing a broader deny
 			authorization: match (
 				self.authorization.into_arc(),
 				other.authorization.into_arc(),
@@ -284,8 +285,6 @@ impl BackendPolicies {
 				(None, Some(right)) => BackendPolicy::from_arc(right),
 				(None, None) => BackendPolicy::default(),
 			},
-			// Authorization composes across attachment levels rather than replacing:
-			// a target/sub-backend policy must not erase a route/backend-level deny.
 			mcp_authorization: match (self.mcp_authorization, other.mcp_authorization) {
 				(Some(base), Some(more)) => Some(base.merge(more)),
 				(base, more) => more.or(base),
@@ -1199,7 +1198,7 @@ impl Store {
 					}
 				},
 				BackendTrafficPolicy::McpAuthorization(p) => {
-					// Authorization policies merge, unlike others
+					// Authorization composes to avoid erasing a broader deny
 					mcp_authz.push(p.clone().into_inner());
 				},
 				BackendTrafficPolicy::McpAuthentication(p) => {

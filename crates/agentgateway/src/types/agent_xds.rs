@@ -3061,6 +3061,24 @@ pub(crate) fn targeted_policy_from_proto(
 		None => return Err(ProtoError::MissingRequiredField),
 	};
 
+	// section-level MCP policies are expressable via proto but blocked by CRDs
+	// drop and warn here
+	if let PolicyTarget::Backend(BackendTarget::Backend {
+		section: Some(section),
+		..
+	}) = &target
+		&& let PolicyType::Backend(bp) = &policy
+		&& let Some(kind) = match bp {
+			BackendTrafficPolicy::McpAuthorization(_) => Some("mcpAuthorization"),
+			BackendTrafficPolicy::McpAuthentication(_) => Some("mcpAuthentication"),
+			BackendTrafficPolicy::McpGuardrails(_) => Some("mcpGuardrails"),
+			_ => None,
+		} {
+		return Err(ProtoError::Generic(format!(
+			"{kind} applies to the whole MCP backend and cannot target section {section}",
+		)));
+	}
+
 	Ok(TargetedPolicy {
 		key: strng::new(&p.key),
 		name: p.name.as_ref().map(Into::into),
@@ -3530,6 +3548,39 @@ mod tests {
 		};
 		assert_eq!(policies.iter().count(), 2);
 		Ok(())
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_rejects_mcp_policy_on_sub_backend() {
+		let policy = |section: Option<String>| proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(proto::agent::PolicyTarget {
+				kind: Some(proto::agent::policy_target::Kind::Backend(
+					proto::agent::policy_target::BackendTarget {
+						name: "mcp".to_string(),
+						namespace: "default".to_string(),
+						section,
+					},
+				)),
+			}),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
+			kind: Some(proto::agent::policy::Kind::Backend(
+				proto::agent::BackendPolicySpec {
+					kind: Some(proto::agent::backend_policy_spec::Kind::McpAuthorization(
+						proto::agent::backend_policy_spec::McpAuthorization::default(),
+					)),
+				},
+			)),
+		};
+
+		let err = targeted_policy_from_proto(
+			&policy(Some("server".to_string())),
+			&mut Diagnostics::default(),
+		)
+		.unwrap_err();
+		assert!(err.to_string().contains("mcpAuthorization"), "{err}");
+		targeted_policy_from_proto(&policy(None), &mut Diagnostics::default()).unwrap();
 	}
 
 	#[test]

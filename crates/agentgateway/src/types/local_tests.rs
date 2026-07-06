@@ -240,6 +240,17 @@ binds:
 	);
 }
 
+#[test]
+fn test_local_backend_policies_reject_unknown_fields() {
+	// serde(flatten) disables deny_unknown_fields on the outer struct, but the
+	// flattened SimpleLocalBackendPolicies still rejects leftover unknown keys.
+	let err = crate::serdes::yamlviajson::from_str::<super::LocalBackendPolicies>(
+		"mcpAuthorizatoin: {}",
+	)
+	.unwrap_err();
+	assert!(err.to_string().contains("unknown field"), "{err}");
+}
+
 #[tokio::test]
 async fn test_multiple_wildcard_binds_rejected() {
 	let err = normalize_test_yaml(
@@ -905,8 +916,6 @@ mcp:
 		.expect_err("policies on a stdio MCP target should be rejected");
 }
 
-/// MCP policies apply to the full target set; attaching one to an individual
-/// target must fail at load rather than being silently dropped.
 #[tokio::test]
 async fn test_local_mcp_target_rejects_mcp_policies() {
 	let guardrails_yaml = r#"

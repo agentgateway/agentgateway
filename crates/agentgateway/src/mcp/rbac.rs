@@ -43,11 +43,11 @@ impl McpAuthorizationSet {
 		Self(rs)
 	}
 
-	/// Combine policies from multiple attachment levels (route/backend/target) so
-	/// all of them apply; a more specific policy cannot erase a broader deny.
+	/// Combine rule sets so both apply; see [`RuleSets::merge`].
 	pub fn merge(self, other: Self) -> Self {
 		Self(self.0.merge(other.0))
 	}
+
 	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
 		if !self.0.has_rules() {
 			return true;
@@ -182,22 +182,35 @@ mod tests {
 	}
 
 	#[test]
-	fn test_mcp_authorization_merge_deny_survives_allow() {
-		let deny_all = McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(PolicySet::new(
-			vec![],
-			vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
-			vec![],
-		))]));
-		let allow_all = authorization_set("true");
+	fn test_backend_policies_merge_composes_mcp_authorization() {
+		let with_authz = |authz: McpAuthorizationSet| crate::store::BackendPolicies {
+			mcp_authorization: Some(authz),
+			..Default::default()
+		};
+		let deny_all = || {
+			McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(PolicySet::new(
+				vec![],
+				vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+				vec![],
+			))]))
+		};
 		let res = tool_resource("server", "increment");
 		let cel = CelExecWrapper::new(req_without_claims());
 
-		assert!(allow_all.validate(&res, &cel));
-		let merged = deny_all.merge(allow_all);
-		assert!(
-			!merged.validate(&res, &cel),
-			"a merged-in allow must not erase a base deny"
-		);
+		// Higher-precedence allow does not erase a base deny
+		let merged = with_authz(deny_all())
+			.merge(with_authz(authorization_set("true")))
+			.mcp_authorization
+			.unwrap();
+		assert!(!merged.validate(&res, &cel));
+
+		// A policy on only one side passes through
+		for merged in [
+			with_authz(deny_all()).merge(Default::default()),
+			crate::store::BackendPolicies::default().merge(with_authz(deny_all())),
+		] {
+			assert!(!merged.mcp_authorization.unwrap().validate(&res, &cel));
+		}
 	}
 
 	#[test]
