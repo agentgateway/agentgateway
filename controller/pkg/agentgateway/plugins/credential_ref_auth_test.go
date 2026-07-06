@@ -57,7 +57,7 @@ func TestAwsAuthPropagatesAssumeRoleSessionNameAndTags(t *testing.T) {
 	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
 		AssumeRole: &agentgateway.AwsAssumeRole{
 			RoleArn:     "arn:aws:iam::111122223333:role/bedrock-team-acme-payments",
-			SessionName: ptr.Of("acme-payments-invoice-processor"),
+			SessionName: new("acme-payments-invoice-processor"),
 			Tags: []agentgateway.AwsSessionTag{
 				{Key: "Team", Value: "acme-payments"},
 				{Key: "App", Value: "invoice-processor"},

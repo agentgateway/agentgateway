@@ -89,8 +89,16 @@ pub struct AwsAssumeRole {
 	/// Session tags passed to STS AssumeRole for cost attribution. Once activated as
 	/// cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under
 	/// `resourceTags/user:TagKey`.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub tags: Vec<AwsSessionTag>,
+	// Stored pre-sorted as (key, value) pairs so building the assume-role cache key
+	// is a cheap Arc clone instead of a per-request copy and sort.
+	#[serde(
+		default,
+		skip_serializing_if = "<[(String, String)]>::is_empty",
+		deserialize_with = "de_session_tags",
+		serialize_with = "ser_session_tags"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<AwsSessionTag>"))]
+	pub tags: Arc<[(String, String)]>,
 }
 
 /// An AWS STS session tag: a key/value pair passed to AssumeRole for cost attribution.
@@ -101,6 +109,36 @@ pub struct AwsSessionTag {
 	pub key: String,
 	/// Tag value.
 	pub value: String,
+}
+
+/// Sorts session tags into their canonical stored form so equality (and thus the
+/// assume-role cache key) is independent of the order tags were configured in.
+pub fn sorted_session_tags<I: IntoIterator<Item = (String, String)>>(
+	tags: I,
+) -> Arc<[(String, String)]> {
+	let mut tags: Vec<(String, String)> = tags.into_iter().collect();
+	tags.sort();
+	tags.into()
+}
+
+fn de_session_tags<'de, D>(deserializer: D) -> Result<Arc<[(String, String)]>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let tags = Vec::<AwsSessionTag>::deserialize(deserializer)?;
+	Ok(sorted_session_tags(
+		tags.into_iter().map(|t| (t.key, t.value)),
+	))
+}
+
+fn ser_session_tags<S>(tags: &Arc<[(String, String)]>, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	serializer.collect_seq(tags.iter().map(|(key, value)| AwsSessionTag {
+		key: key.clone(),
+		value: value.clone(),
+	}))
 }
 
 impl AwsAuth {
@@ -301,8 +339,9 @@ struct AssumeRoleCacheKey {
 	role_arn: String,
 	resolved_sts_region: String,
 	session_name: Option<String>,
-	/// Sorted (key, value) pairs so the cache key is stable regardless of tag order.
-	tags: Vec<(String, String)>,
+	/// Pre-sorted (key, value) pairs (see [`sorted_session_tags`]) so the cache key
+	/// is stable regardless of tag order.
+	tags: Arc<[(String, String)]>,
 }
 
 const ASSUMED_CREDENTIAL_REFRESH_BUFFER: Duration = Duration::from_secs(60);
@@ -313,17 +352,11 @@ async fn load_assumed_credentials(
 	signing_region: &str,
 ) -> anyhow::Result<Credentials> {
 	let sts_region = resolve_sts_region(assume_role, signing_region).await?;
-	let mut tags: Vec<(String, String)> = assume_role
-		.tags
-		.iter()
-		.map(|t| (t.key.clone(), t.value.clone()))
-		.collect();
-	tags.sort();
 	let key = AssumeRoleCacheKey {
 		role_arn: assume_role.role_arn.clone(),
 		resolved_sts_region: sts_region.clone(),
 		session_name: assume_role.session_name.clone(),
-		tags,
+		tags: assume_role.tags.clone(),
 	};
 
 	{
@@ -344,12 +377,7 @@ async fn load_assumed_credentials(
 	}
 
 	if !assume_role.tags.is_empty() {
-		builder = builder.tags(
-			assume_role
-				.tags
-				.iter()
-				.map(|t| (t.key.clone(), t.value.clone())),
-		);
+		builder = builder.tags(assume_role.tags.iter().cloned());
 	}
 
 	let source_credentials_provider = config.credentials_provider().ok_or(anyhow::anyhow!(
@@ -392,25 +420,16 @@ fn credentials_valid(creds: &Credentials) -> bool {
 mod cache_key_tests {
 	use super::*;
 
-	fn tag(key: &str, value: &str) -> AwsSessionTag {
-		AwsSessionTag {
-			key: key.to_string(),
-			value: value.to_string(),
-		}
+	fn tags(pairs: &[(&str, &str)]) -> Arc<[(String, String)]> {
+		sorted_session_tags(pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())))
 	}
 
 	fn key_for(assume_role: &AwsAssumeRole, region: &str) -> AssumeRoleCacheKey {
-		let mut tags: Vec<(String, String)> = assume_role
-			.tags
-			.iter()
-			.map(|t| (t.key.clone(), t.value.clone()))
-			.collect();
-		tags.sort();
 		AssumeRoleCacheKey {
 			role_arn: assume_role.role_arn.clone(),
 			resolved_sts_region: region.to_string(),
 			session_name: assume_role.session_name.clone(),
-			tags,
+			tags: assume_role.tags.clone(),
 		}
 	}
 
@@ -419,7 +438,7 @@ mod cache_key_tests {
 		let base = AwsAssumeRole {
 			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 			session_name: Some("team-a".to_string()),
-			tags: vec![],
+			tags: tags(&[]),
 		};
 		let other = AwsAssumeRole {
 			session_name: Some("team-b".to_string()),
@@ -433,10 +452,10 @@ mod cache_key_tests {
 		let base = AwsAssumeRole {
 			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 			session_name: None,
-			tags: vec![tag("Team", "acme-payments")],
+			tags: tags(&[("Team", "acme-payments")]),
 		};
 		let other = AwsAssumeRole {
-			tags: vec![tag("Team", "acme-billing")],
+			tags: tags(&[("Team", "acme-billing")]),
 			..base.clone()
 		};
 		assert_ne!(key_for(&base, "us-east-1"), key_for(&other, "us-east-1"));
@@ -444,15 +463,25 @@ mod cache_key_tests {
 
 	#[test]
 	fn tag_order_does_not_affect_key() {
-		let a = AwsAssumeRole {
-			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
-			session_name: None,
-			tags: vec![tag("Team", "acme"), tag("App", "invoicer")],
-		};
-		let b = AwsAssumeRole {
-			tags: vec![tag("App", "invoicer"), tag("Team", "acme")],
-			..a.clone()
-		};
+		// Tags are canonicalized (sorted) at deserialization, so configs that only
+		// differ in tag order deserialize to equal values and thus equal cache keys.
+		let a: AwsAssumeRole = serde_json::from_value(serde_json::json!({
+			"roleArn": "arn:aws:iam::123456789012:role/backend",
+			"tags": [
+				{"key": "Team", "value": "acme"},
+				{"key": "App", "value": "invoicer"},
+			],
+		}))
+		.expect("assume role should deserialize");
+		let b: AwsAssumeRole = serde_json::from_value(serde_json::json!({
+			"roleArn": "arn:aws:iam::123456789012:role/backend",
+			"tags": [
+				{"key": "App", "value": "invoicer"},
+				{"key": "Team", "value": "acme"},
+			],
+		}))
+		.expect("assume role should deserialize");
+		assert_eq!(a.tags, b.tags);
 		assert_eq!(key_for(&a, "us-east-1"), key_for(&b, "us-east-1"));
 	}
 }

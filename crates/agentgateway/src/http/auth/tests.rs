@@ -49,11 +49,14 @@ fn test_aws_auth_deserializes_assume_role_with_session_name_and_tags() {
 				ar.session_name.as_deref(),
 				Some("acme-payments-invoice-processor")
 			);
-			assert_eq!(ar.tags.len(), 2);
-			assert_eq!(ar.tags[0].key, "Team");
-			assert_eq!(ar.tags[0].value, "acme-payments");
-			assert_eq!(ar.tags[1].key, "App");
-			assert_eq!(ar.tags[1].value, "invoice-processor");
+			// Tags are stored sorted by key, regardless of configured order.
+			assert_eq!(
+				ar.tags.as_ref(),
+				&[
+					("App".to_string(), "invoice-processor".to_string()),
+					("Team".to_string(), "acme-payments".to_string()),
+				]
+			);
 		},
 		_ => panic!("expected implicit AWS auth with assume role"),
 	}

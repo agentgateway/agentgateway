@@ -1004,14 +1004,9 @@ fn backend_auth_from_proto(
 				} else {
 					Some(assume_role.session_name)
 				},
-				tags: assume_role
-					.tags
-					.into_iter()
-					.map(|tag| auth::aws::AwsSessionTag {
-						key: tag.key,
-						value: tag.value,
-					})
-					.collect(),
+				tags: auth::aws::sorted_session_tags(
+					assume_role.tags.into_iter().map(|tag| (tag.key, tag.value)),
+				),
 			});
 			let aws_auth = match a.kind {
 				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
