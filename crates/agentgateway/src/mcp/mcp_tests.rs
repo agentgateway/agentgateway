@@ -3187,10 +3187,12 @@ async fn test_runtime_fanout_fail_open_skips_jsonrpc_error_frames() {
 
 	let streams = vec![("ok".into(), ok_stream), ("bad".into(), err_stream)];
 
-	let merge = Box::new(|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
-		assert_eq!(results.len(), 1);
-		Ok(results.into_iter().next().unwrap().1)
-	});
+	let merge = Box::new(
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
+			assert_eq!(results.len(), 1);
+			Ok(results.into_iter().next().unwrap().1)
+		},
+	);
 
 	let mut ms = MergeStream::new(
 		streams,
