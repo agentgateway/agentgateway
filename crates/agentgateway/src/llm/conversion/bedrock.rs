@@ -2880,7 +2880,6 @@ pub mod from_responses {
 }
 
 pub mod from_anthropic_token_count {
-	use crate::llm::types::RequestType;
 	use crate::llm::{AIError, types};
 
 	pub fn translate(
@@ -2893,7 +2892,7 @@ pub mod from_anthropic_token_count {
 			.and_then(|v| v.to_str().ok())
 			.unwrap_or("2023-06-01");
 
-		let body = req.to_anthropic()?;
+		let body = serde_json::to_vec(req).map_err(AIError::RequestMarshal)?;
 		let mut body: serde_json::Map<String, serde_json::Value> =
 			serde_json::from_slice(&body).map_err(AIError::RequestMarshal)?;
 

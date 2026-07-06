@@ -637,7 +637,6 @@ mod tests {
 			request: crate::llm::LLMRequest {
 				input_tokens: None,
 				input_format: crate::llm::InputFormat::Completions,
-				native_format: None,
 				cache_convention: CacheTokenConvention::InputIncludesCache,
 				request_model: request_model.into(),
 				provider: "openai".into(),

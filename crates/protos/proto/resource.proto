@@ -439,6 +439,22 @@ message AwsImplicit {}
 message AwsAssumeRole {
   // Role ARN to assume before signing backend requests.
   string role_arn = 1;
+  // Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report
+  // attribution. Must match [\w+=,.@-]{2,64}. If unset, the AWS SDK generates a
+  // random session name.
+  string session_name = 2;
+  // Session tags passed to STS AssumeRole. Once activated as cost allocation
+  // tags, they surface as columns in the AWS Cost & Usage Report for per-tenant
+  // cost attribution.
+  repeated AwsSessionTag tags = 3;
+}
+
+// AWS STS session tag, a key/value pair passed to AssumeRole for cost attribution.
+message AwsSessionTag {
+  // Tag key.
+  string key = 1;
+  // Tag value.
+  string value = 2;
 }
 
 // Explicit Azure credentials configuration
@@ -1735,18 +1751,112 @@ message Alpn {
   repeated string protocols = 1;
 }
 
-// RFC 8693 OAuth 2.0 Token Exchange.
+// Token exchange for the OAuth family (RFC 8693 / RFC 7523).
 message OAuthTokenExchange {
   message ClientAuth {
+    enum Method {
+        UNSPECIFIED         = 0; // defaults to CLIENT_SECRET_BASIC
+        CLIENT_SECRET_BASIC = 1; // id:secret in the Authorization: Basic header
+        CLIENT_SECRET_POST  = 2; // client_id/client_secret in the form body
+    }
+
+    // Required and non-empty when client_auth is set.
     string client_id = 1;
+    // When omitted, client_id is sent without a secret; only valid with
+    // CLIENT_SECRET_POST. For no client authentication fields at all, leave
+    // client_auth unset. An explicitly empty secret is rejected.
+    optional string client_secret = 2;
+    // RFC 6749 §2.3 client authentication method.
+    Method method = 3;
   }
+
+  message TokenSpec {
+    // Where to extract the token from the incoming request. The `expression`
+    // (CEL) variant is permitted here. A Header/Authorization source also reads
+    // from the Claims extension when an upstream JWT policy has stripped the
+    // header, so the default keeps working behind a JWT auth policy.
+    AuthorizationLocation source = 1;
+    // RFC 8693 §3 token type URN sent as subject_token_type / actor_token_type.
+    // e.g. "urn:ietf:params:oauth:token-type:access_token"
+    // Empty defaults to access_token under TOKEN_EXCHANGE. Ignored for the
+    // JWT_BEARER subject token because RFC 7523 sends the token as `assertion`
+    // and has no subject_token_type parameter.
+    string token_type = 2;
+  }
+
+  message ActorToken {
+    // Where to extract the RFC 8693 actor_token from the incoming request. The
+    // expression (CEL) variant is permitted here. Unlike subject_token, actor
+    // tokens have no default source: if actor_token is configured, source must
+    // be set explicitly so actor and subject are not accidentally the same
+    // credential.
+    AuthorizationLocation source = 1;
+
+    // RFC 8693 §3 token type URN sent as actor_token_type.
+    // e.g. "urn:ietf:params:oauth:token-type:access_token"
+    // Empty defaults to access_token, and actor_token_type is still sent.
+    string token_type = 2;
+
+    // Enforce that the subject's `may_act` claim authorizes the actor before exchanging.
+    bool enforce_may_act = 3;
+  }
+
+  enum GrantType {
+    UNSPECIFIED    = 0; // defaults to TOKEN_EXCHANGE
+    TOKEN_EXCHANGE = 1; // RFC 8693
+    JWT_BEARER     = 2; // RFC 7523
+  }
+
+  // ----- Token endpoint -----
   BackendReference token_endpoint = 1;
-  // Token endpoint path on the backend; defaults to "/".
-  string token_endpoint_path = 7;
-  // Optional RFC 8693 request parameters; sent only when non-empty.
+  // Token endpoint path on the backend that must start with "/" (defaults to "/")
+  optional string token_endpoint_path = 7;
+
+  // ----- Grant and incoming tokens -----
+  // Selects which RFC the request follows. Defaults to TOKEN_EXCHANGE (RFC 8693)
+  GrantType grant_type = 9;
+  // Subject token (RFC 8693) / assertion (RFC 7523). When unset, defaults to
+  // {source: Authorization header, Bearer prefix; token_type: access_token}
+  TokenSpec subject_token = 10;
+  // RFC 8693 §2.1 delegation actor token. TOKEN_EXCHANGE only; rejected under
+  // JWT_BEARER.
+  // When set, its token_type defaults to access_token if empty.
+  ActorToken actor_token = 11;
+
+  // ----- Token request parameters -----
+  // Properties sent only when non-empty.
   repeated string audiences = 2;
-  repeated string scopes = 3;
+  repeated string scopes = 3; // joined with spaces into a single `scope` param
   repeated string resources = 4;
-  string requested_token_type = 5;
+  // requested_token_type parameter sent under TOKEN_EXCHANGE only. Rejected
+  // under JWT_BEARER. When unset, no requested_token_type is sent; if the token
+  // endpoint returns issued_token_type, the gateway expects access_token.
+  optional string requested_token_type = 5;
+  // Arbitrary extra string form fields appended to the token exchange request.
+  // Values are CEL expressions evaluated against the incoming request.
+  map<string, string> additional_params = 12;
+
+  // ----- Authorization server client authentication -----
+  // When unset, no client authentication fields are sent; this supports
+  // public-client exchanges such as Google STS.
   ClientAuth client_auth = 6;
+
+  // ----- Output and runtime behavior -----
+  // Where to forward the exchanged token to the upstream. The expression
+  // location is not valid here because this field inserts a credential.
+  // Defaults to the Authorization header with a "Bearer " prefix if unset,
+  // matching the behavior of the Passthrough and Key auth policies.
+  AuthorizationLocation authorization_location = 13;
+
+  message TokenCache {
+    message InMemory {
+      optional uint32 max_entries = 1; // default 8192 (0 disables cache)
+      // TTL used when the token endpoint omits expires_in.
+      optional google.protobuf.Duration default_ttl = 3; // default 300s
+    }
+
+    InMemory in_memory = 1; // default when cache is unset
+  }
+  // Response cache configuration. When unset uses InMemory cache with defaults
+  TokenCache cache = 14;
 }

@@ -323,15 +323,17 @@ func SetRegistry(useBuiltinRegistry bool, r RegistererGatherer) {
 	registryLock.Lock()
 	defer registryLock.Unlock()
 
-	if !useBuiltinRegistry {
-		metrics.Registry = registry
-	}
+	// Always point controller-runtime's metrics to our local registry,
+	// which already has process/go collectors and all init-registered metrics.
+	metrics.Registry = registry
 
 	if isNil(r) {
-		registry = metrics.Registry
-	} else {
-		registry = r
+		// Keep using our local registry.
+		return
 	}
+	registry = r
+	// Also update controller-runtime to use the external registry.
+	metrics.Registry = r
 }
 
 // isNil checks if the provided interface contains nil or a nil value.

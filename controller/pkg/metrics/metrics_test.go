@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	. "github.com/agentgateway/agentgateway/controller/pkg/metrics"
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics/metricstest"
@@ -454,6 +455,102 @@ func (r exampleTypedLabels) toMetricsLabels() []Label {
 		{Name: "gateway", Value: r.GatewayName},
 		{Name: "port", Value: r.Port},
 	}
+}
+
+func TestSetRegistryWithNilAndBuiltinDisabled(t *testing.T) {
+	// Simulate the default setup path: SetRegistry(false, nil)
+	SetRegistry(false, nil)
+
+	// Registry() should return a non-nil registry.
+	r := Registry()
+	require.NotNil(t, r)
+
+	// The controller-runtime registry should be the same object as ours.
+	// Register a test gauge on our Registry() and verify it's visible via controller-runtime.
+	testGauge := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "setregistry_builtin_off_test",
+		Help: "test",
+	})
+	r.MustRegister(testGauge)
+	testGauge.Set(42)
+
+	families, err := crmetrics.Registry.Gather()
+	require.NoError(t, err)
+	found := false
+	for _, f := range families {
+		if f.GetName() == "setregistry_builtin_off_test" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "metric registered on Registry() should be visible via controller-runtime registry")
+}
+
+func TestSetRegistryWithNilAndBuiltinEnabled(t *testing.T) {
+	// Simulate the setup path when EnableBuiltinDefaultMetrics=true: SetRegistry(true, nil)
+	// This was previously buggy: the local registry (with init-registered metrics) was abandoned.
+	SetRegistry(true, nil)
+
+	r := Registry()
+	require.NotNil(t, r)
+
+	// Register a test gauge on our Registry() and verify it's visible via controller-runtime.
+	testGauge := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "setregistry_builtin_on_test",
+		Help: "test",
+	})
+	r.MustRegister(testGauge)
+	testGauge.Set(99)
+
+	families, err := crmetrics.Registry.Gather()
+	require.NoError(t, err)
+	found := false
+	for _, f := range families {
+		if f.GetName() == "setregistry_builtin_on_test" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "metric registered on Registry() should be visible via controller-runtime registry when EnableBuiltinDefaultMetrics=true")
+}
+
+func TestSetRegistryWithExternalRegistry(t *testing.T) {
+	external := prometheus.NewRegistry()
+	SetRegistry(false, external)
+
+	r := Registry()
+	require.NotNil(t, r)
+
+	// Register a test gauge and verify it's visible via the external registry.
+	testGauge := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "setregistry_external_test",
+		Help: "test",
+	})
+	r.MustRegister(testGauge)
+	testGauge.Set(77)
+
+	families, err := external.Gather()
+	require.NoError(t, err)
+	found := false
+	for _, f := range families {
+		if f.GetName() == "setregistry_external_test" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "metric registered on Registry() should be visible via the external registry")
+
+	// Controller-runtime should also point to the external registry.
+	families, err = crmetrics.Registry.Gather()
+	require.NoError(t, err)
+	found = false
+	for _, f := range families {
+		if f.GetName() == "setregistry_external_test" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "controller-runtime registry should also point to the external registry")
 }
 
 func BenchmarkCounter(b *testing.B) {

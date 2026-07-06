@@ -21,7 +21,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
-	"github.com/agentgateway/agentgateway/controller/pkg/utils/stopwatch"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -310,9 +309,6 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 	} else {
 		status = statusObj.(S)
 	}
-	stopwatch := stopwatch.NewTranslatorStopWatch(s.Name + "Status")
-	stopwatch.Start()
-	defer stopwatch.Stop(ctx)
 
 	logger := logger.With("kind", s.Name, "resource", obj.NamespacedName.String())
 	// TODO: move this to retry by putting it back on the queue, with some limit on the retry attempts allowed

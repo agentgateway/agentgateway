@@ -16,6 +16,12 @@ use crate::apply;
 use crate::llm::{AIError, LLMRequest, LLMResponse};
 use crate::serdes::schema;
 
+pub enum ChatRequest<'a> {
+	Completions(&'a completions::Request),
+	Messages(&'a messages::Request),
+	Responses(&'a responses::Request),
+}
+
 /// ResponseType is an abstraction over provider/endpoint specific response formats that enables
 /// uniform policy enforcement and observability
 pub trait ResponseType: Send + Sync {
@@ -40,39 +46,6 @@ pub trait RequestType: Send + Sync {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError>;
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
-
-	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
-		Err(AIError::UnsupportedConversion(strng::literal!("openai")))
-	}
-
-	fn to_anthropic(&self) -> Result<Vec<u8>, AIError> {
-		Err(AIError::UnsupportedConversion(strng::literal!("anthropic")))
-	}
-
-	fn to_bedrock(
-		&self,
-		_provider: &crate::llm::bedrock::Provider,
-		_headers: Option<&::http::HeaderMap>,
-		_prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
-		Err(AIError::UnsupportedConversion(strng::literal!("bedrock")))
-	}
-
-	fn to_bedrock_token_count(&self, _headers: &::http::HeaderMap) -> Result<Vec<u8>, AIError> {
-		Err(AIError::UnsupportedConversion(strng::literal!(
-			"bedrock token count"
-		)))
-	}
-
-	fn to_openai_chat_completions(&self) -> Result<Vec<u8>, AIError> {
-		Err(AIError::UnsupportedConversion(strng::literal!(
-			"openai-compatible chat completions"
-		)))
-	}
-
-	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
-		Err(AIError::UnsupportedConversion(strng::literal!("vertex")))
-	}
 }
 
 /// SimpleChatCompletionMessage is a simplified chat message

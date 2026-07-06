@@ -1862,7 +1862,7 @@ async fn llm_custom_provider_routes_to_provider_backend() {
 }
 
 #[tokio::test]
-async fn llm_custom_provider_uses_native_format_fallback() {
+async fn llm_custom_provider_uses_upstream_route_fallback() {
 	let mock = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
 	let (mock, _bind, io) =
 		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Messages]);

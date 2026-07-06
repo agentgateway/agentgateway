@@ -33,7 +33,6 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
-	go.opencensus.io v0.24.0
 	go.uber.org/atomic v1.11.0
 	go.uber.org/zap v1.28.0
 	golang.design/x/clipboard v0.8.0
@@ -47,7 +46,7 @@ require (
 	helm.sh/helm/v4 v4.2.2
 	istio.io/api v1.30.0-alpha.1.0.20260626010135-ac56ebb29e59
 	istio.io/client-go v1.30.0-beta.0
-	istio.io/istio v0.0.0-20260701162249-99f2f4f55d5c
+	istio.io/istio v0.0.0-20260704181517-116e8ec30db4
 	k8s.io/api v0.36.2
 	k8s.io/apiextensions-apiserver v0.36.2
 	k8s.io/apimachinery v0.36.2
@@ -57,10 +56,10 @@ require (
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/controller-tools v0.21.0
-	sigs.k8s.io/gateway-api v1.6.0-rc.1
+	sigs.k8s.io/gateway-api v1.6.0
 	sigs.k8s.io/gateway-api-inference-extension v1.5.0
 	sigs.k8s.io/gateway-api-inference-extension/conformance v1.5.0
-	sigs.k8s.io/gateway-api/conformance v1.6.0-rc.1
+	sigs.k8s.io/gateway-api/conformance v1.6.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -126,7 +125,6 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gofrs/flock v0.13.0 // indirect
-	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect

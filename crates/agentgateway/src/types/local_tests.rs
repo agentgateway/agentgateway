@@ -7,7 +7,7 @@ use secrecy::SecretString;
 use crate::llm::{AIProvider, NamedAIProvider};
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
-	Backend, BackendTrafficPolicy, ListenerTarget, PolicyPhase, PolicyTarget, PolicyType,
+	Backend, BackendTrafficPolicy, ListenerTarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType,
 	ResourceName, RouteBackendTarget, Target, TrafficPolicy,
 };
 use crate::types::local::NormalizedLocalConfig;
@@ -779,6 +779,89 @@ async fn test_mcp_simple_config() {
 }
 
 #[tokio::test]
+async fn test_llm_mcp_same_port_share_listener_routes() {
+	let normalized = normalize_test_yaml(
+		r#"
+llm:
+  port: 3000
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+"#,
+	)
+	.await
+	.expect("same-port LLM and MCP should normalize");
+
+	assert_eq!(normalized.binds.len(), 1);
+	assert_eq!(normalized.binds[0].address.port(), 3000);
+	assert_eq!(
+		normalized.binds[0]
+			.listeners
+			.iter()
+			.map(|listener| listener.key.as_str())
+			.collect::<Vec<_>>(),
+		vec!["llm"],
+	);
+	assert_eq!(normalized.listener_routes.len(), 1);
+	assert_eq!(normalized.listener_routes[0].0.as_str(), "llm");
+	let routes = &normalized.listener_routes[0].1;
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "llm:request")
+	);
+	let mcp_route = routes
+		.iter()
+		.find(|route| route.key.as_str() == "mcp:default")
+		.expect("expected MCP route on shared listener");
+	assert_eq!(
+		mcp_route
+			.matches
+			.iter()
+			.map(|route_match| match &route_match.path {
+				PathMatch::PathPrefix(path) => path.as_str(),
+				other => panic!("expected path prefix match, got {other:?}"),
+			})
+			.collect::<Vec<_>>(),
+		vec!["/mcp", "/sse", "/.well-known"],
+	);
+}
+
+#[tokio::test]
+async fn test_llm_mcp_same_port_rejects_llm_tls() {
+	let err = normalize_test_yaml(
+		r#"
+llm:
+  port: 3000
+  tls:
+    cert: inline
+    key: inline
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+"#,
+	)
+	.await
+	.expect_err("same-port LLM and MCP should reject llm.tls");
+	assert!(
+		err
+			.to_string()
+			.contains("top-level llm and mcp cannot share a port when llm.tls is configured"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
 async fn test_local_mcp_target_name_wiring_rejects_plus() {
 	let yaml = r#"
 mcp:
@@ -1488,5 +1571,32 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 			.to_string()
 			.contains("cannot mix host/port with backend for MCP target backend configuration"),
 		"{err}"
+	);
+}
+
+#[tokio::test]
+async fn test_oauth_token_exchange_reports_validation_errors_from_local_config() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauth:
+              host: 127.0.0.1:9000
+              clientAuth:
+                clientId: gateway-client
+"#,
+	)
+	.await
+	.expect_err("missing client secret should fail at config load");
+
+	assert!(
+		err.to_string().contains("client_secret"),
+		"returned unexpected error: {err}"
 	);
 }

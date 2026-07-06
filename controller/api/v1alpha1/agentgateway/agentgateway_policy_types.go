@@ -1424,6 +1424,40 @@ type AwsAssumeRole struct {
 	// +kubebuilder:validation:Pattern="^arn:aws[a-z-]*:iam::[0-9]{12}:role/.+$"
 	// +required
 	RoleArn string `json:"roleArn"`
+
+	// SessionName is a custom session name (RoleSessionName) for CloudTrail and
+	// Cost & Usage Report attribution. If unset, AWS generates a random name.
+	//
+	// +optional
+	// +kubebuilder:validation:Pattern="^[\\w+=,.@-]{2,64}$"
+	SessionName *string `json:"sessionName,omitempty"`
+
+	// Tags are session tags passed to STS AssumeRole. Once activated as cost
+	// allocation tags, they appear in the AWS Cost & Usage Report for cost
+	// attribution. STS allows at most 50 session tags per role session.
+	//
+	// +optional
+	// +listType=map
+	// +listMapKey=key
+	// +kubebuilder:validation:MaxItems=50
+	Tags []AwsSessionTag `json:"tags,omitempty"`
+}
+
+// AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
+// for cost attribution.
+type AwsSessionTag struct {
+	// Key is the tag key.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=128
+	// +required
+	Key string `json:"key"`
+
+	// Value is the tag value.
+	//
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	Value string `json:"value"`
 }
 
 // AzureAuth configures authentication to Azure services. At most one explicit

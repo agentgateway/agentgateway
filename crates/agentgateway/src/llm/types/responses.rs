@@ -9,7 +9,6 @@ use self::typed::{
 use super::*;
 use crate::llm::{
 	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType, ResponseType,
-	conversion,
 };
 
 /// Raw Responses API input — preserves the wire format for passthrough fidelity.
@@ -336,7 +335,6 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Responses,
-			native_format: Some(crate::llm::custom::ProviderFormat::Responses),
 			cache_convention: crate::llm::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
@@ -378,28 +376,6 @@ impl RequestType for Request {
 				.map(RawInputItem::from_simple_message)
 				.collect(),
 		);
-	}
-
-	fn to_openai(&self) -> Result<Vec<u8>, AIError> {
-		// Passthrough - just serialize
-		serde_json::to_vec(&self).map_err(AIError::RequestMarshal)
-	}
-
-	fn to_openai_chat_completions(&self) -> Result<Vec<u8>, AIError> {
-		conversion::openai_compat::from_responses::translate(self)
-	}
-
-	fn to_bedrock(
-		&self,
-		provider: &crate::llm::bedrock::Provider,
-		headers: Option<&http::HeaderMap>,
-		prompt_caching: Option<&crate::llm::policy::PromptCachingConfig>,
-	) -> Result<crate::llm::conversion::bedrock::BedrockRequest, AIError> {
-		conversion::bedrock::from_responses::translate(self, provider, headers, prompt_caching)
-	}
-
-	fn to_vertex(&self, _provider: &crate::llm::vertex::Provider) -> Result<Vec<u8>, AIError> {
-		self.to_openai()
 	}
 }
 
