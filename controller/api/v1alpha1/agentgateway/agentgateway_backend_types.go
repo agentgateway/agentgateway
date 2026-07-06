@@ -511,7 +511,29 @@ type BedrockConfig struct {
 	// If not specified, the AWS Guardrail policy will not be used.
 	// +optional
 	Guardrail *AWSGuardrailConfig `json:"guardrail,omitempty"`
+
+	// `providerPreference` controls which Bedrock API endpoint is used. Defaults to `RuntimePreferred`,
+	// which automatically routes Mantle-only models (e.g. Claude Mythos, GPT-5.x) to the Mantle
+	// endpoint via an internal model table. Use `MantleOnly` or `RuntimeOnly` as hard overrides.
+	// +optional
+	// +kubebuilder:validation:Enum=RuntimePreferred;MantleOnly;RuntimeOnly
+	ProviderPreference BedrockProviderPreference `json:"providerPreference,omitempty"`
 }
+
+// BedrockProviderPreference selects the Bedrock API provider preference.
+// +k8s:enum
+type BedrockProviderPreference string
+
+const (
+	// BedrockProviderPreferenceRuntimePreferred routes to the Runtime (Converse/Invoke) endpoint by
+	// default, automatically promoting Mantle-only models to the Mantle endpoint via the model table.
+	// This is the default.
+	BedrockProviderPreferenceRuntimePreferred BedrockProviderPreference = "RuntimePreferred"
+	// BedrockProviderPreferenceMantleOnly always uses the Mantle endpoint regardless of the model table.
+	BedrockProviderPreferenceMantleOnly BedrockProviderPreference = "MantleOnly"
+	// BedrockProviderPreferenceRuntimeOnly always uses the Runtime endpoint regardless of the model table.
+	BedrockProviderPreferenceRuntimeOnly BedrockProviderPreference = "RuntimeOnly"
+)
 
 type AWSGuardrailConfig struct {
 	// Identifier of the Guardrail policy to use for the backend.

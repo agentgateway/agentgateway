@@ -116,6 +116,7 @@ fn test_metadata_from_header() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -174,6 +175,7 @@ fn test_messages_metadata_is_preserved_in_additional_model_request_fields() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -226,6 +228,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -281,6 +284,7 @@ fn test_output_config_format_maps_to_converse_output_config() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -357,6 +361,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -414,6 +419,7 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -471,6 +477,7 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -547,6 +554,7 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -612,6 +620,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -660,6 +669,7 @@ fn test_completions_request_metadata_only_uses_bedrock_header() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -745,6 +755,7 @@ fn test_completions_json_schema_response_format_maps_to_converse_output_config()
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -841,6 +852,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -916,6 +928,7 @@ fn test_completions_explicit_thinking_budget_forces_enabled_thinking() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -994,6 +1007,7 @@ fn test_responses_json_schema_text_format_maps_to_converse_output_config() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1051,6 +1065,7 @@ fn test_responses_request_metadata_only_uses_bedrock_header() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1097,6 +1112,7 @@ fn test_responses_reasoning_effort_maps_to_enabled_thinking_budget() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1134,6 +1150,7 @@ fn test_responses_explicit_thinking_budget_forces_enabled_thinking() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1174,6 +1191,7 @@ fn test_responses_vendor_extension_thinking_budget_forces_enabled_thinking() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1211,6 +1229,7 @@ fn test_embeddings_translation_titan() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1239,6 +1258,7 @@ fn test_embeddings_titan_with_encoding_format() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1270,6 +1290,7 @@ fn test_embeddings_titan_rejects_array_input() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1296,6 +1317,7 @@ fn test_embeddings_cohere_with_passthrough_fields() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1324,6 +1346,7 @@ fn test_embeddings_rejects_invalid_input() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1551,6 +1574,7 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1609,6 +1633,7 @@ fn test_messages_long_tool_name_round_trip_response() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	};
@@ -1693,4 +1718,106 @@ fn test_messages_long_tool_name_round_trip_response() {
 		.expect("tool use block in response");
 
 	assert_eq!(tool_use_name, long_name);
+}
+mod provider_routing {
+	use agent_core::strng;
+
+	use crate::llm::bedrock::{BedrockEndpoint, BedrockProviderPreference, Provider};
+	use crate::llm::custom::ProviderFormat;
+	use crate::llm::{InputFormat, RouteType};
+
+	fn provider(pref: BedrockProviderPreference) -> Provider {
+		Provider {
+			model: None,
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			provider_preference: pref,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
+		}
+	}
+
+	#[test]
+	fn resolve_endpoint_explicit_preferences_ignore_model_table() {
+		let p_mantle = provider(BedrockProviderPreference::MantleOnly);
+		let p_runtime = provider(BedrockProviderPreference::RuntimeOnly);
+		assert_eq!(
+			p_mantle.resolve_endpoint(RouteType::Messages, Some("any-model")),
+			BedrockEndpoint::Mantle
+		);
+		assert_eq!(
+			p_runtime.resolve_endpoint(RouteType::Messages, Some("any-model")),
+			BedrockEndpoint::Runtime
+		);
+	}
+
+	#[test]
+	fn mantle_endpoint_uses_correct_host_path_and_signing() {
+		let p = provider(BedrockProviderPreference::MantleOnly);
+		assert_eq!(
+			p.get_host(RouteType::Messages, None).as_str(),
+			"bedrock-mantle.us-east-1.api.aws"
+		);
+		assert_eq!(
+			p.signing_service_name(RouteType::Messages, None),
+			Some("bedrock-mantle")
+		);
+		assert_eq!(
+			p.get_path_for_route(RouteType::Messages, false, "m")
+				.as_str(),
+			"/anthropic/v1/messages"
+		);
+		assert_eq!(
+			p.get_path_for_route(RouteType::Responses, false, "m")
+				.as_str(),
+			"/v1/responses"
+		);
+		assert_eq!(
+			p.get_path_for_route(RouteType::Completions, false, "m")
+				.as_str(),
+			"/v1/chat/completions"
+		);
+	}
+
+	#[test]
+	fn runtime_endpoint_uses_correct_host_path_and_signing() {
+		let p = provider(BedrockProviderPreference::RuntimeOnly);
+		assert_eq!(
+			p.get_host(RouteType::Messages, None).as_str(),
+			"bedrock-runtime.us-east-1.amazonaws.com"
+		);
+		assert_eq!(p.signing_service_name(RouteType::Messages, None), None);
+		assert_eq!(
+			p.get_path_for_route(
+				RouteType::Messages,
+				false,
+				"anthropic.claude-3-5-haiku-20241022-v1:0"
+			)
+			.as_str(),
+			"/model/anthropic.claude-3-5-haiku-20241022-v1:0/converse"
+		);
+	}
+
+	#[test]
+	fn body_native_format_mantle_passthrough_runtime_converse() {
+		let mantle = provider(BedrockProviderPreference::MantleOnly);
+		assert_eq!(
+			mantle.body_native_format(InputFormat::Messages, "any"),
+			Some(ProviderFormat::Messages)
+		);
+		assert_eq!(
+			mantle.body_native_format(InputFormat::Completions, "any"),
+			Some(ProviderFormat::Completions)
+		);
+		assert_eq!(
+			mantle.body_native_format(InputFormat::Responses, "any"),
+			Some(ProviderFormat::Responses)
+		);
+		let runtime = provider(BedrockProviderPreference::RuntimeOnly);
+		assert_eq!(
+			runtime.body_native_format(InputFormat::Messages, "amazon.titan-text-lite-v1"),
+			None
+		);
+	}
 }

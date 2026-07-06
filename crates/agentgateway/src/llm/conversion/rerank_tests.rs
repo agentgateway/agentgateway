@@ -10,6 +10,7 @@ fn bedrock_provider(model: &str, region: &str) -> crate::llm::bedrock::Provider 
 		region: agent_core::strng::new(region),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
 	}
@@ -33,7 +34,9 @@ fn test_bedrock_rerank_request_passes_through_full_arn() {
 fn test_bedrock_rerank_uses_agent_runtime_host_and_rerank_path() {
 	let provider = bedrock_provider("cohere.rerank-v3-5:0", "us-west-2");
 	assert_eq!(
-		provider.get_host(crate::llm::RouteType::Rerank).as_str(),
+		provider
+			.get_host(crate::llm::RouteType::Rerank, None)
+			.as_str(),
 		"bedrock-agent-runtime.us-west-2.amazonaws.com"
 	);
 	assert_eq!(
@@ -44,7 +47,7 @@ fn test_bedrock_rerank_uses_agent_runtime_host_and_rerank_path() {
 	);
 	assert_eq!(
 		provider
-			.get_host(crate::llm::RouteType::Embeddings)
+			.get_host(crate::llm::RouteType::Embeddings, None)
 			.as_str(),
 		"bedrock-runtime.us-west-2.amazonaws.com"
 	);

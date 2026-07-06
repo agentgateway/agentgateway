@@ -190,11 +190,34 @@ macro_rules! provider_env_model_test {
 	};
 }
 
+macro_rules! provider_preference_test {
+	($(#[$meta:meta])* $name:ident, $provider:expr, $env:expr, $model:expr, $preference:expr, $send_fn:ident $(, $arg:expr)* $(,)?) => {
+		$(#[$meta])*
+		#[tokio::test]
+		async fn $name() {
+			let Some(gw) = setup_with_preference($provider, $env, $model, Some($preference)).await else {
+				return;
+			};
+			$send_fn(&gw $(, $arg)*).await;
+		}
+	};
+}
+
 // Pins the Discovery Engine location to `global` in `llm_config` (ranking is not served from the
 // Vertex AI regions used for chat/embeddings).
 const VERTEX_RERANK_MODEL: &str = "semantic-ranker-default@latest";
 
+#[allow(dead_code)]
 fn llm_config(provider: &str, env: &str, model: &str) -> String {
+	llm_config_with_preference(provider, env, model, None)
+}
+
+fn llm_config_with_preference(
+	provider: &str,
+	env: &str,
+	model: &str,
+	provider_preference: Option<&str>,
+) -> String {
 	let policies = if provider == "azure" || provider == "foundry" {
 		r#"
       policies:
@@ -215,10 +238,15 @@ fn llm_config(provider: &str, env: &str, model: &str) -> String {
 		"".to_string()
 	};
 	let extra = if provider == "bedrock" {
-		r#"
-              region: us-west-2
+		let preference = provider_preference.map_or_else(
+			|| "".to_string(),
+			|p| format!("\n              providerPreference: {p}"),
+		);
+		format!(
+			r#"
+              region: us-west-2{preference}
               "#
-		.to_string()
+		)
 	} else if provider == "vertex" {
 		// Discovery Engine ranking (rerank) is only served from `global`/`us`/`eu`, not the Vertex AI
 		// regions used for chat/embeddings, so the rerank model pins the location to `global`.
@@ -480,6 +508,87 @@ mod bedrock {
 		MODEL_OPUS_46_PROFILE,
 		send_messages_output_config_effort
 	);
+}
+
+mod bedrock_runtime {
+	use super::*;
+
+	const MODEL_HAIKU_45_RUNTIME: &str = "anthropic.claude-haiku-4-5-20251001-v1:0";
+
+	// RuntimeOnly with messages endpoint: should use InvokeModel with native Anthropic format
+	provider_preference_test!(
+		messages_runtime_only,
+		"bedrock",
+		"",
+		MODEL_HAIKU_45_RUNTIME,
+		"runtimeOnly",
+		send_messages,
+		false
+	);
+	provider_preference_test!(
+		messages_runtime_only_streaming,
+		"bedrock",
+		"",
+		MODEL_HAIKU_45_RUNTIME,
+		"runtimeOnly",
+		send_messages,
+		true
+	);
+	provider_preference_test!(
+		completions_runtime_only,
+		"bedrock",
+		"",
+		MODEL_HAIKU_45_RUNTIME,
+		"runtimeOnly",
+		send_completions,
+		false
+	);
+	provider_preference_test!(
+		completions_runtime_only_streaming,
+		"bedrock",
+		"",
+		MODEL_HAIKU_45_RUNTIME,
+		"runtimeOnly",
+		send_completions,
+		true
+	);
+
+	// RuntimePreferred with messages endpoint: stays on the Converse wire format (zero change),
+	// failing over to Mantle only when a route requires it.
+	provider_preference_test!(
+		messages_runtime_preferred,
+		"bedrock",
+		"",
+		MODEL_HAIKU_45_RUNTIME,
+		"runtimePreferred",
+		send_messages,
+		false
+	);
+	provider_preference_test!(
+		completions_runtime_preferred,
+		"bedrock",
+		"",
+		MODEL_HAIKU_45_RUNTIME,
+		"runtimePreferred",
+		send_completions,
+		false
+	);
+}
+
+mod bedrock_mantle {
+	use super::*;
+
+	#[tokio::test]
+	#[ignore = "requires a live Bedrock Mantle endpoint (AWS creds + Mantle enabled)"]
+	async fn mantle_smoke() {
+		if let Some(gw) =
+			setup_with_preference("bedrock", "", "openai.gpt-oss-120b", Some("mantleOnly")).await
+		{
+			send_completions_request(&gw, false, Some(50), None, "give me a 1 word answer").await;
+			send_completions_request(&gw, true, Some(50), None, "give me a 1 word answer").await;
+			send_responses(&gw, false).await;
+		}
+	}
 }
 
 mod anthropic {
@@ -769,6 +878,15 @@ mod foundry {
 }
 
 pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
+	setup_with_preference(provider, env, model, None).await
+}
+
+pub async fn setup_with_preference(
+	provider: &str,
+	env: &str,
+	model: &str,
+	provider_preference: Option<&str>,
+) -> Option<AgentGateway> {
 	// Explicitly opt in to avoid accidentally using implicit configs
 	if !require_env("AGENTGATEWAY_E2E") {
 		return None;
@@ -788,9 +906,14 @@ pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGatewa
 	if provider == "foundry" && !require_env("FOUNDRY_RESOURCE_NAME") {
 		return None;
 	}
-	let gw = AgentGateway::new(llm_config(provider, env, model))
-		.await
-		.unwrap();
+	let gw = AgentGateway::new(llm_config_with_preference(
+		provider,
+		env,
+		model,
+		provider_preference,
+	))
+	.await
+	.unwrap();
 	Some(gw)
 }
 

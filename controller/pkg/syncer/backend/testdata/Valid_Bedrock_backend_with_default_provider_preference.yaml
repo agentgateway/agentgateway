@@ -1,0 +1,11 @@
+ai:
+  providerGroups:
+  - providers:
+    - bedrock:
+        model: anthropic.claude-3-5-sonnet-20241022-v2:0
+        region: us-east-1
+      name: backend
+key: test-ns/bedrock-default-pref
+name:
+  name: bedrock-default-pref
+  namespace: test-ns
