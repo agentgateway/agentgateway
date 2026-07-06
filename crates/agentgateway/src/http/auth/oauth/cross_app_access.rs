@@ -1,24 +1,23 @@
 use std::collections::BTreeMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 #[cfg(feature = "schema")]
 use super::TokenCacheConfig;
 use super::cache::InMemoryTokenCache;
 use super::{
 	ChainedExchange, OAuthClientAuth, OAuthGrantType, OAuthTokenExchangeAuth, OAuthTokenType,
-	TokenSpec, default_backend_tls_for_https_port, default_token_cache, deserialize_token_cache,
+	TokenSpec, default_token_cache, deserialize_token_cache,
 };
 use crate::http::auth::AuthorizationLocation;
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::{apply, schema};
 
 #[apply(schema!)]
-pub struct XaaAuth {
+pub struct CrossAppAccessAuth {
 	/// The user's IdP authorization server, used for the RFC 8693 token exchange.
-	pub(super) idp: XaaEndpoint,
+	pub(super) identity_provider: CrossAppAccessEndpoint,
 	/// The resource authorization server, which exchanges the ID-JAG for an access token.
-	#[serde(rename = "resourceAs")]
-	pub(super) resource_as: XaaEndpoint,
+	pub(super) resource_authorization_server: CrossAppAccessEndpoint,
 	/// Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.
 	pub(super) audience: String,
 	/// `resource` parameters naming the protected resource APIs.
@@ -38,41 +37,32 @@ pub struct XaaAuth {
 	pub(super) cache: Option<InMemoryTokenCache>,
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
-	pub(super) oauth: Arc<OnceLock<OAuthTokenExchangeAuth>>,
+	pub(super) oauth: Option<OAuthTokenExchangeAuth>,
 }
 
-impl XaaAuth {
+impl CrossAppAccessAuth {
 	pub(crate) fn validate_load(&self) -> Result<(), String> {
 		if self.audience.is_empty() {
-			return Err("xaa audience must not be empty".into());
+			return Err("crossAppAccess audience must not be empty".into());
 		}
-		self.idp.validate_load("xaa.idp")?;
-		self.resource_as.validate_load("xaa.resourceAs")?;
-		self.oauth_token_exchange();
+		self
+			.identity_provider
+			.validate_load("crossAppAccess.identityProvider")?;
+		self
+			.resource_authorization_server
+			.validate_load("crossAppAccess.resourceAuthorizationServer")?;
+		let oauth = self.oauth.as_ref().ok_or_else(|| {
+			"crossAppAccess derived oauth config must be initialized by apply_local_defaults".to_string()
+		})?;
+		oauth.validate_load()?;
 		Ok(())
 	}
 
 	pub(crate) fn apply_local_defaults(&mut self) -> Result<(), String> {
-		self.oauth = Arc::default();
-		self.idp.apply_local_defaults()?;
-		self.resource_as.apply_local_defaults()
-	}
-
-	pub(super) fn oauth_token_exchange(&self) -> &OAuthTokenExchangeAuth {
-		if self.oauth.get().is_none() {
-			let _ = self.oauth.set(self.build_oauth_token_exchange());
-		}
-		self
-			.oauth
-			.get()
-			.expect("XAA derived OAuth config must be initialized")
-	}
-
-	fn build_oauth_token_exchange(&self) -> OAuthTokenExchangeAuth {
-		OAuthTokenExchangeAuth {
-			target: self.idp.target.clone(),
-			policies: self.idp.policies.clone(),
-			token_endpoint_path: self.idp.token_endpoint_path.clone(),
+		self.oauth = Some(OAuthTokenExchangeAuth {
+			target: self.identity_provider.target.clone(),
+			policies: self.identity_provider.policies.clone(),
+			token_endpoint_path: self.identity_provider.token_endpoint_path.clone(),
 			grant_type: OAuthGrantType::TokenExchange,
 			subject_token: TokenSpec {
 				source: AuthorizationLocation::default(),
@@ -83,12 +73,24 @@ impl XaaAuth {
 			scopes: self.scopes.clone(),
 			resources: self.resources.clone(),
 			requested_token_type: Some(OAuthTokenType::IdJag),
-			client_auth: Some(self.idp.client_auth.clone()),
+			client_auth: Some(self.identity_provider.client_auth.clone()),
 			additional_params: BTreeMap::new(),
-			chained_exchange: Some(self.resource_as.as_chained_exchange(&self.scopes)),
+			chained_exchange: Some(
+				self
+					.resource_authorization_server
+					.as_chained_exchange(&self.scopes),
+			),
 			authorization_location: AuthorizationLocation::default(),
 			cache: self.cache.clone(),
-		}
+		});
+		Ok(())
+	}
+
+	pub(super) fn oauth_token_exchange(&self) -> &OAuthTokenExchangeAuth {
+		self
+			.oauth
+			.as_ref()
+			.expect("Cross App Access derived OAuth config must be initialized by apply_local_defaults")
 	}
 }
 
@@ -96,7 +98,7 @@ impl XaaAuth {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub(super) struct XaaEndpoint {
+pub(super) struct CrossAppAccessEndpoint {
 	/// Token endpoint backend.
 	#[serde(flatten)]
 	#[cfg_attr(
@@ -119,7 +121,7 @@ pub(super) struct XaaEndpoint {
 	pub(super) client_auth: OAuthClientAuth,
 }
 
-impl XaaEndpoint {
+impl CrossAppAccessEndpoint {
 	fn validate_load(&self, prefix: &str) -> Result<(), String> {
 		if !self.token_endpoint_path.is_empty() && !self.token_endpoint_path.starts_with('/') {
 			return Err(format!(
@@ -128,10 +130,6 @@ impl XaaEndpoint {
 			));
 		}
 		self.client_auth.validate_load()
-	}
-
-	fn apply_local_defaults(&mut self) -> Result<(), String> {
-		default_backend_tls_for_https_port(&self.target, &mut self.policies)
 	}
 
 	// The root ID-JAG exchange sends configured resources to the IdP; the resulting

@@ -7,7 +7,7 @@
 # so an agent can call a downstream API *as the user* without a second interactive login:
 #
 #   1. The inbound request carries the user's OIDC ID token, validated by `jwtAuth`.
-#   2. `backendAuth.xaa` exchanges that ID token at the user's IdP
+#   2. `backendAuth.crossAppAccess` exchanges that ID token at the user's IdP
 #      (RFC 8693 token exchange, requested_token_type = ...:id-jag) for an ID-JAG assertion.
 #   3. The configured resource authorization server leg presents the ID-JAG
 #      (RFC 7523 JWT-bearer grant) and receives a Bearer access token.
@@ -16,7 +16,7 @@
 #
 # NOTE: this is an illustrative config. Running it end to end requires an IdP that can
 # issue ID-JAGs and a resource authorization server that accepts the jwt-bearer grant;
-# the placeholder secrets below let the config load but must be replaced with real values.
+# set the secret environment variables below before loading the config.
 binds:
 - port: 3000
   listeners:
@@ -34,26 +34,29 @@ binds:
 
         # Step 2-4: exchange the identity for a backend access token and attach it.
         backendAuth:
-          xaa:
+          crossAppAccess:
             # The user's IdP authorization server (performs the RFC 8693 token exchange).
-            idp:
+            identityProvider:
               host: idp.example.com:443
+              policies:
+                backendTLS: {}
               tokenEndpointPath: /oauth2/token
               clientAuth:
                 clientId: gateway-at-idp
                 method: clientSecretBasic
-                # Prefer `clientSecret: { file: /path/to/secret }` in production.
-                clientSecret: "REPLACE_WITH_IDP_CLIENT_SECRET"
+                clientSecret: $IDP_CLIENT_SECRET
             # The resource's authorization server (exchanges the ID-JAG for an access token).
             # Note this is a different client registration than the IdP one above.
-            resourceAs:
+            resourceAuthorizationServer:
               host: chat.example.com:443
+              policies:
+                backendTLS: {}
               tokenEndpointPath: /oauth2/token
               clientAuth:
                 clientId: gateway-at-chat
                 method: clientSecretBasic
-                clientSecret: "REPLACE_WITH_RESOURCE_AS_CLIENT_SECRET"
-                # Alternatively, authenticate with a signed JWT assertion (private_key_jwt),
+                clientSecret: $RESOURCE_AUTHORIZATION_SERVER_CLIENT_SECRET
+                # Alternatively, authenticate with a signed JWT assertion (privateKeyJwt),
                 # which enterprise IdPs such as Okta commonly require:
                 #
                 # method: privateKeyJwt

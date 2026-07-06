@@ -1884,22 +1884,18 @@ where
 			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.
-				let mut auth = auth;
-				auth
-					.apply_local_defaults()
-					.map_err(serde::de::Error::custom)?;
 				auth.validate_load().map_err(serde::de::Error::custom)?;
 				Ok(BackendAuth::OAuthTokenExchange(auth))
 			},
-			BackendAuthCompat::Full(BackendAuth::Xaa(auth)) => {
-				// XAA is backed by the OAuth exchange implementation but has its own
+			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
+				// Cross App Access is backed by the OAuth exchange implementation but has its own
 				// focused config shape and cross-field checks.
 				let mut auth = auth;
 				auth
 					.apply_local_defaults()
 					.map_err(serde::de::Error::custom)?;
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::Xaa(auth))
+				Ok(BackendAuth::CrossAppAccess(auth))
 			},
 			BackendAuthCompat::Full(auth) => Ok(auth),
 			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {

@@ -2815,15 +2815,15 @@
           "additionalProperties": false
         },
         {
-          "description": "Use XAA (Identity Assertion / ID-JAG) to obtain a backend access token.",
+          "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
           "type": "object",
           "properties": {
-            "xaa": {
-              "$ref": "#/$defs/XaaAuth"
+            "crossAppAccess": {
+              "$ref": "#/$defs/CrossAppAccessAuth"
             }
           },
           "required": [
-            "xaa"
+            "crossAppAccess"
           ],
           "additionalProperties": false
         }
@@ -3522,7 +3522,7 @@
           ]
         },
         {
-          "description": "`private_key_jwt` client assertion (RFC 7523).",
+          "description": "`privateKeyJwt` client assertion (RFC 7523).",
           "type": "object",
           "properties": {
             "clientId": {
@@ -3610,16 +3610,16 @@
       },
       "additionalProperties": false
     },
-    "XaaAuth": {
+    "CrossAppAccessAuth": {
       "type": "object",
       "properties": {
-        "idp": {
+        "identityProvider": {
           "description": "The user's IdP authorization server, used for the RFC 8693 token exchange.",
-          "$ref": "#/$defs/XaaEndpoint"
+          "$ref": "#/$defs/CrossAppAccessEndpoint"
         },
-        "resourceAs": {
+        "resourceAuthorizationServer": {
           "description": "The resource authorization server, which exchanges the ID-JAG for an access token.",
-          "$ref": "#/$defs/XaaEndpoint"
+          "$ref": "#/$defs/CrossAppAccessEndpoint"
         },
         "audience": {
           "description": "Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.",
@@ -3654,12 +3654,12 @@
       },
       "additionalProperties": false,
       "required": [
-        "idp",
-        "resourceAs",
+        "identityProvider",
+        "resourceAuthorizationServer",
         "audience"
       ]
     },
-    "XaaEndpoint": {
+    "CrossAppAccessEndpoint": {
       "type": "object",
       "properties": {
         "policies": {

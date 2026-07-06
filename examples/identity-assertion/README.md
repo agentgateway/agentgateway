@@ -37,17 +37,17 @@ ID-JAG is a cross-domain protocol, so a full end-to-end run needs:
   resource authorization server (each with its own `clientId` and credentials).
 
 Because of those external dependencies, the [`config.yaml`](config.yaml) here is illustrative:
-it loads as-is (so you can lint and adapt it) but the placeholder secrets and example
-endpoints must be replaced with values from your own IdP and resource server.
+set `IDP_CLIENT_SECRET` and `RESOURCE_AUTHORIZATION_SERVER_CLIENT_SECRET`, then adapt the
+example endpoints to values from your own IdP and resource server.
 
 ## Configuration walkthrough
 
-The feature is configured as a focused `backendAuth.xaa` policy next to the `jwtAuth`
+The feature is configured as a focused `backendAuth.crossAppAccess` policy next to the `jwtAuth`
 policy that authenticates the user:
 
-- `idp` — the user's IdP token endpoint. agentgateway sends the authenticated ID token as
+- `identityProvider` — the user's IdP token endpoint. agentgateway sends the authenticated ID token as
   the RFC 8693 `subject_token` and asks for `urn:ietf:params:oauth:token-type:id-jag`.
-- `resourceAs` — the resource authorization server token endpoint. This leg uses the
+- `resourceAuthorizationServer` — the resource authorization server token endpoint. This leg uses the
   RFC 7523 jwt-bearer grant; the ID-JAG from the IdP leg is sent as the `assertion`.
 - `audience` — the resource authorization server identifier. The issued ID-JAG is bound
   to this value.

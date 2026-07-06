@@ -77,8 +77,8 @@ fn auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 	}
 }
 
-fn xaa_endpoint(endpoint: Arc<SimpleBackendReference>) -> XaaEndpoint {
-	XaaEndpoint {
+fn cross_app_access_endpoint(endpoint: Arc<SimpleBackendReference>) -> CrossAppAccessEndpoint {
+	CrossAppAccessEndpoint {
 		target: endpoint,
 		policies: vec![],
 		token_endpoint_path: "/token".into(),
@@ -91,16 +91,39 @@ fn xaa_endpoint(endpoint: Arc<SimpleBackendReference>) -> XaaEndpoint {
 	}
 }
 
-fn xaa(idp: Arc<SimpleBackendReference>, resource_as: Arc<SimpleBackendReference>) -> XaaAuth {
-	XaaAuth {
-		idp: xaa_endpoint(idp),
-		resource_as: xaa_endpoint(resource_as),
+fn cross_app_access_raw(
+	idp: Arc<SimpleBackendReference>,
+	resource_as: Arc<SimpleBackendReference>,
+) -> CrossAppAccessAuth {
+	CrossAppAccessAuth {
+		identity_provider: cross_app_access_endpoint(idp),
+		resource_authorization_server: cross_app_access_endpoint(resource_as),
 		audience: "https://resource-as.example".into(),
 		resources: vec![],
 		scopes: vec!["read".into()],
 		cache: Some(InMemoryTokenCache::default()),
-		oauth: Arc::default(),
+		oauth: None,
 	}
+}
+
+fn cross_app_access(
+	idp: Arc<SimpleBackendReference>,
+	resource_as: Arc<SimpleBackendReference>,
+) -> CrossAppAccessAuth {
+	let mut auth = cross_app_access_raw(idp, resource_as);
+	auth.apply_local_defaults().unwrap();
+	auth
+}
+
+fn cross_app_access_with_resources(
+	idp: Arc<SimpleBackendReference>,
+	resource_as: Arc<SimpleBackendReference>,
+	resources: Vec<String>,
+) -> CrossAppAccessAuth {
+	let mut auth = cross_app_access_raw(idp, resource_as);
+	auth.resources = resources;
+	auth.apply_local_defaults().unwrap();
+	auth
 }
 
 fn exchange_req(subject: &str, token_type: &str) -> ExchangeRequest {
@@ -485,8 +508,11 @@ async fn id_jag_chain_exchanges_two_legs_and_caches_final_token() {
 		"expires_in": 3600,
 	})))
 	.await;
-	let mut identity = xaa(endpoint(&idp), endpoint(&resource_as));
-	identity.resources = vec!["https://api.resource-as.example/chat".into()];
+	let identity = cross_app_access_with_resources(
+		endpoint(&idp),
+		endpoint(&resource_as),
+		vec!["https://api.resource-as.example/chat".into()],
+	);
 	let a = identity.oauth_token_exchange();
 
 	for _ in 0..2 {
@@ -533,7 +559,7 @@ async fn id_jag_intermediate_rejects_bearer_token_type() {
 	.await;
 	let resource_as =
 		mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let identity = xaa(endpoint(&idp), endpoint(&resource_as));
+	let identity = cross_app_access(endpoint(&idp), endpoint(&resource_as));
 	let a = identity.oauth_token_exchange();
 
 	let err = fetch_token(&policy_client(), a, exchange_req("subj", TOKEN_TYPE_ID))
@@ -561,7 +587,7 @@ async fn id_jag_chained_exchange_client_error_is_upstream_failure() {
 			.set_body_string(r#"{"error":"invalid_grant","error_description":"issuer not trusted"}"#),
 	)
 	.await;
-	let identity = xaa(endpoint(&idp), endpoint(&resource_as));
+	let identity = cross_app_access(endpoint(&idp), endpoint(&resource_as));
 	let a = identity.oauth_token_exchange();
 
 	let err = fetch_token(&policy_client(), a, exchange_req("subj", TOKEN_TYPE_ID))
@@ -684,17 +710,17 @@ fn client_auth_defaults_to_basic_when_method_is_omitted() {
 }
 
 #[test]
-fn xaa_endpoint_rejects_unknown_fields() {
-	let err = serde_json::from_str::<XaaAuth>(
+fn cross_app_access_endpoint_rejects_unknown_fields() {
+	let err = serde_json::from_str::<CrossAppAccessAuth>(
 		r#"{
-				"idp": {
+				"identityProvider": {
 					"host": "idp.example.com:443",
 					"clientAuth": {
 						"clientId": "gateway-at-idp",
 						"method": "clientSecretPost"
 					}
 				},
-				"resourceAs": {
+				"resourceAuthorizationServer": {
 					"host": "chat.example.com:443",
 					"tokenEndpointPat": "/oauth2/token",
 					"clientAuth": {
@@ -709,26 +735,25 @@ fn xaa_endpoint_rejects_unknown_fields() {
 	assert!(err.to_string().contains("unknown field"), "got: {err}");
 }
 
-#[test]
-fn deserializes_xaa_local_config_shape() {
-	let auth: XaaAuth = serde_json::from_str(
+fn cross_app_access_local_config() -> CrossAppAccessAuth {
+	let mut auth: CrossAppAccessAuth = serde_json::from_str(
 		r#"{
-				"idp": {
+				"identityProvider": {
 					"host": "idp.example.com:443",
 					"tokenEndpointPath": "/oauth2/token",
 					"clientAuth": {
 						"clientId": "gateway-at-idp",
 						"method": "clientSecretBasic",
-						"clientSecret": "REPLACE_WITH_IDP_CLIENT_SECRET"
+						"clientSecret": "mock-idp-client-secret"
 					}
 				},
-				"resourceAs": {
+				"resourceAuthorizationServer": {
 					"host": "chat.example.com:443",
 					"tokenEndpointPath": "/oauth2/token",
 					"clientAuth": {
 						"clientId": "gateway-at-chat",
 						"method": "clientSecretBasic",
-						"clientSecret": "REPLACE_WITH_RESOURCE_AS_CLIENT_SECRET"
+						"clientSecret": "mock-resource-authorization-server-client-secret"
 					}
 				},
 				"audience": "https://chat.example.com/",
@@ -740,7 +765,14 @@ fn deserializes_xaa_local_config_shape() {
 			}"#,
 	)
 	.unwrap();
+	auth.apply_local_defaults().unwrap();
 	auth.validate_load().unwrap();
+	auth
+}
+
+#[test]
+fn deserializes_cross_app_access_local_config_shape() {
+	let auth = cross_app_access_local_config();
 	let oauth = auth.oauth_token_exchange();
 	assert_eq!(oauth.requested_token_type, Some(OAuthTokenType::IdJag));
 	// The IdP token-exchange leg carries the configured resource (draft requires it there).
@@ -1054,7 +1086,7 @@ fn assert_load_err(auth: OAuthTokenExchangeAuth, expected: &str) {
 		audiences: vec!["https://resource-as.example".into()],
 		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
-	"backendAuth.xaa"
+	"backendAuth.crossAppAccess"
 )]
 #[case::expression_output_location(
 	OAuthTokenExchangeAuth {
@@ -1102,7 +1134,7 @@ fn accepts_supported_requested_token_types_from_proto() {
 		requested_token_type: Some(TOKEN_TYPE_ID_JAG.to_string()),
 		..Default::default()
 	},
-	"only supported by local backendAuth.xaa"
+	"only supported by local backendAuth.crossAppAccess"
 )]
 #[case::unsupported_subject_token_type(
 	proto::OAuthTokenExchange {

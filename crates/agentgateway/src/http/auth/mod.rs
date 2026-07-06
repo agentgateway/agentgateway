@@ -12,8 +12,8 @@ pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;
 pub use oauth::{
-	OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType, OAuthTokenExchangeAuth, PrivateKeyJwt,
-	XaaAuth,
+	CrossAppAccessAuth, OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType,
+	OAuthTokenExchangeAuth, PrivateKeyJwt,
 };
 use secrecy::{ExposeSecret, SecretString};
 use url::form_urlencoded;
@@ -62,9 +62,9 @@ pub enum BackendAuth {
 	/// Use OAuth token exchange flows to obtain a backend access token.
 	#[serde(rename = "oauth")]
 	OAuthTokenExchange(Box<OAuthTokenExchangeAuth>),
-	/// Use XAA (Identity Assertion / ID-JAG) to obtain a backend access token.
-	#[serde(rename = "xaa")]
-	Xaa(Box<XaaAuth>),
+	/// Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.
+	#[serde(rename = "crossAppAccess")]
+	CrossAppAccess(Box<CrossAppAccessAuth>),
 }
 
 /// Records whether the backend auth location was explicitly configured by the user
@@ -175,8 +175,8 @@ pub async fn apply_backend_auth(
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
 		},
-		BackendAuth::Xaa(xaa) => {
-			let explicit = oauth::apply_identity_assertion(&backend_info.inputs, xaa, req).await?;
+		BackendAuth::CrossAppAccess(auth) => {
+			let explicit = oauth::apply_identity_assertion(&backend_info.inputs, auth, req).await?;
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });

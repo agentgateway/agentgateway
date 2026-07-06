@@ -22,6 +22,9 @@ use agentgateway::{BackendConfig, client};
 /// OIDC browser auth, matching the value exported by `validate-configs.sh`.
 const TEST_OIDC_COOKIE_SECRET: &str =
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const TEST_IDP_CLIENT_SECRET: &str = "mock-idp-client-secret";
+const TEST_RESOURCE_AUTHORIZATION_SERVER_CLIENT_SECRET: &str =
+	"mock-resource-authorization-server-client-secret";
 
 /// Change the process working directory to the workspace root exactly once.
 ///
@@ -44,6 +47,13 @@ fn setup() {
 	SETUP.get_or_init(|| {
 		std::env::set_current_dir(workspace_root())
 			.expect("should be able to set cwd to workspace root");
+		unsafe {
+			std::env::set_var("IDP_CLIENT_SECRET", TEST_IDP_CLIENT_SECRET);
+			std::env::set_var(
+				"RESOURCE_AUTHORIZATION_SERVER_CLIENT_SECRET",
+				TEST_RESOURCE_AUTHORIZATION_SERVER_CLIENT_SECRET,
+			);
+		}
 	});
 }
 

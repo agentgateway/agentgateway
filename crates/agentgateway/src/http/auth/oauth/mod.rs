@@ -15,7 +15,7 @@ use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TO
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::types::agent_xds::{
 	Diagnostics, authorization_location, optional_authorization_location,
 	permissive_cel_expression_arc, resolve_simple_reference,
@@ -25,18 +25,18 @@ use crate::{apply, cel, schema_enum};
 
 mod cache;
 mod client_auth;
+mod cross_app_access;
 mod transport;
-mod xaa;
 
 use cache::{InMemoryTokenCache, TokenCacheResult};
 #[cfg(test)]
 use client_auth::RawPrivateKeyJwt;
 use client_auth::sign_client_assertion;
 pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt, SigningAlg};
-pub(super) use transport::FetchError;
-pub use xaa::XaaAuth;
+pub use cross_app_access::CrossAppAccessAuth;
 #[cfg(test)]
-use xaa::XaaEndpoint;
+use cross_app_access::CrossAppAccessEndpoint;
+pub(super) use transport::FetchError;
 
 #[cfg(test)]
 use crate::serdes::FileOrInline;
@@ -165,10 +165,6 @@ impl ChainedExchange {
 		Ok(())
 	}
 
-	pub(crate) fn apply_local_defaults(&mut self) -> Result<(), String> {
-		default_backend_tls_for_https_port(&self.target, &mut self.policies)
-	}
-
 	fn evaluate_additional_params(&self, req: &Request) -> anyhow::Result<Vec<(String, String)>> {
 		evaluate_additional_params(&self.additional_params, req)
 	}
@@ -228,7 +224,9 @@ impl OAuthTokenExchangeAuth {
 		}
 		if self.requested_token_type == Some(OAuthTokenType::IdJag) {
 			if self.chained_exchange.is_none() {
-				return Err("requested_token_type id-jag is only supported by backendAuth.xaa".into());
+				return Err(
+					"requested_token_type id-jag is only supported by backendAuth.crossAppAccess".into(),
+				);
 			}
 			if self.audiences.is_empty() {
 				return Err("requested_token_type id-jag requires at least one audience".into());
@@ -245,14 +243,6 @@ impl OAuthTokenExchangeAuth {
 			AuthorizationLocation::Expression { .. }
 		) {
 			return Err("expression auth location is only supported for credential extraction".into());
-		}
-		Ok(())
-	}
-
-	pub(crate) fn apply_local_defaults(&mut self) -> Result<(), String> {
-		default_backend_tls_for_https_port(&self.target, &mut self.policies)?;
-		if let Some(chained_exchange) = &mut self.chained_exchange {
-			chained_exchange.apply_local_defaults()?;
 		}
 		Ok(())
 	}
@@ -291,7 +281,7 @@ impl OAuthTokenExchangeAuth {
 		};
 		if requested_token_type == Some(OAuthTokenType::IdJag) {
 			return Err(ProtoError::Generic(
-				"requested_token_type id-jag is only supported by local backendAuth.xaa".into(),
+				"requested_token_type id-jag is only supported by local backendAuth.crossAppAccess".into(),
 			));
 		}
 
@@ -642,26 +632,6 @@ fn evaluate_additional_params(
 		.collect()
 }
 
-fn default_backend_tls_for_https_port(
-	target: &SimpleBackendReference,
-	policies: &mut Vec<BackendTrafficPolicy>,
-) -> Result<(), String> {
-	let SimpleBackendReference::InlineBackend(Target::Hostname(_, 443)) = target else {
-		return Ok(());
-	};
-	if policies
-		.iter()
-		.any(|policy| matches!(policy, BackendTrafficPolicy::BackendTLS(_)))
-	{
-		return Ok(());
-	}
-	let tls = crate::http::backendtls::ResolvedBackendTLS::default()
-		.try_into()
-		.map_err(|e| format!("failed to default backendTLS for oauth token endpoint: {e}"))?;
-	policies.push(BackendTrafficPolicy::BackendTLS(tls));
-	Ok(())
-}
-
 /// Per-request inputs to a token exchange, assembled by the dispatch layer so the
 /// exchange itself stays request-free.
 #[derive(Clone, Default)]
@@ -702,7 +672,7 @@ pub(super) async fn apply_token_exchange(
 
 pub(super) async fn apply_identity_assertion(
 	inputs: &Arc<crate::ProxyInputs>,
-	auth: &XaaAuth,
+	auth: &CrossAppAccessAuth,
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
 	let oauth = auth.oauth_token_exchange();

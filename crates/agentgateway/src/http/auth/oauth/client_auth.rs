@@ -9,6 +9,8 @@ use crate::serdes::FileOrInline;
 use crate::types::proto::{ProtoError, agent as proto};
 use crate::{apply, schema_enum, ser_redact};
 
+// Keep privateKeyJwt assertions short-lived to limit replay exposure while
+// allowing reasonable clock skew and token endpoint latency.
 const CLIENT_ASSERTION_LIFETIME: Duration = Duration::from_secs(300);
 
 #[serde_with::serde_as]
@@ -84,7 +86,7 @@ enum RawOAuthClientAuth {
 		)]
 		client_secret: Option<SecretString>,
 	},
-	/// `private_key_jwt` client assertion (RFC 7523).
+	/// `privateKeyJwt` client assertion (RFC 7523).
 	#[serde(rename_all = "camelCase")]
 	PrivateKeyJwt {
 		/// `client_id` parameter identifying the gateway at the authorization server.
@@ -177,7 +179,7 @@ pub enum OAuthClientAuthMethod {
 		)]
 		client_secret: Option<SecretString>,
 	},
-	/// `private_key_jwt` client assertion (RFC 7523).
+	/// `privateKeyJwt` client assertion (RFC 7523).
 	#[serde(rename_all = "camelCase")]
 	PrivateKeyJwt(PrivateKeyJwt),
 }
