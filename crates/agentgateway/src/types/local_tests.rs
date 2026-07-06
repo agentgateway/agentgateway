@@ -858,6 +858,43 @@ mcp:
 		.expect_err("transport policies on a stdio MCP target should be rejected");
 }
 
+/// mcpGuardrails is call-scoped and applies to the full target set; attaching it
+/// to an individual target must fail at load rather than being silently dropped.
+#[tokio::test]
+async fn test_local_mcp_target_rejects_guardrails() {
+	let stdio_yaml = r#"
+mcp:
+  targets:
+  - name: everything
+    stdio:
+      cmd: echo
+    policies:
+      mcpGuardrails:
+        processors: []
+"#;
+	let err = normalize_test_yaml(stdio_yaml)
+		.await
+		.expect_err("mcpGuardrails on a stdio MCP target should be rejected");
+	assert!(
+		err.to_string().contains("mcpGuardrails"),
+		"error should mention mcpGuardrails, got: {err}"
+	);
+
+	let http_yaml = r#"
+mcp:
+  targets:
+  - name: everything
+    mcp:
+      host: localhost:8080
+    policies:
+      mcpGuardrails:
+        processors: []
+"#;
+	normalize_test_yaml(http_yaml)
+		.await
+		.expect_err("mcpGuardrails on a streamable HTTP MCP target should be rejected");
+}
+
 #[tokio::test]
 async fn test_aws_config() {
 	test_config_parsing("aws").await;

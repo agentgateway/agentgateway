@@ -81,16 +81,6 @@ pub enum ProcessorKind {
 }
 
 impl McpGuardrails {
-	/// Collapse multiple guardrail sets into one ordered processor chain.
-	/// Returns None when there are no processors.
-	pub fn merge(sets: impl IntoIterator<Item = Arc<McpGuardrails>>) -> Option<Arc<McpGuardrails>> {
-		let mut processors = Vec::new();
-		for set in sets {
-			processors.extend(set.processors.iter().cloned());
-		}
-		(!processors.is_empty()).then(|| Arc::new(McpGuardrails { processors }))
-	}
-
 	/// Whether any processor runs the request side for `method`.
 	pub fn runs_request(&self, method: &str) -> bool {
 		self.processors.iter().any(|d| d.runs_request(method))

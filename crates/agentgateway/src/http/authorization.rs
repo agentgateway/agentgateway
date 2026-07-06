@@ -197,6 +197,13 @@ impl RuleSets {
 	pub fn from_arcs(value: Vec<Arc<RuleSet>>) -> Self {
 		Self(value)
 	}
+
+	/// Combine two sets so both apply: a deny in either denies, all requires must
+	/// hold, and allow rules are OR'd across both.
+	pub fn merge(mut self, other: Self) -> Self {
+		self.0.extend(other.0);
+		self
+	}
 }
 
 impl RuleSets {

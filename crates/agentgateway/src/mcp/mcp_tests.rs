@@ -916,6 +916,59 @@ async fn target_level_authorization_denies_tool() {
 	);
 }
 
+/// Authorization composes across levels: a target-level policy must not erase a
+/// backend-level deny (rule sets concatenate rather than replace).
+#[tokio::test]
+async fn target_level_authorization_cannot_erase_backend_deny() {
+	let mock = mock_streamable_http_server(true).await;
+
+	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // deny all
+		vec![],
+	)));
+	let allow_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())], // allow all
+		vec![],
+		vec![],
+	)));
+
+	let (_bind, io) = setup_proxy_policies_with_target(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(deny_all_policy)],
+		vec![BackendTrafficPolicy::McpAuthorization(allow_all_policy)],
+	)
+	.await;
+
+	let client = mcp_streamable_client(io).await;
+
+	let result = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await;
+	let err = result.expect_err("backend-level deny must survive a target-level allow");
+	let rmcp::ServiceError::McpError(mcp_error) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(mcp_error.code.0, -32602);
+	assert_eq!(mcp_error.message.as_ref(), "Unknown tool: echo");
+
+	let tools = client.list_tools(Default::default()).await.unwrap();
+	assert!(
+		tools.tools.is_empty(),
+		"backend-level deny-all should still filter all tools, got {:?}",
+		tools.tools
+	);
+}
+
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
 /// with INVALID_PARAMS error code (-32602) and message "Unknown prompt: {prompt_name}"
 #[tokio::test]
@@ -3644,72 +3697,6 @@ async fn mcp_guardrails_denies_tool_by_name() {
 		)
 		.await
 		.expect("allowed tool call should pass through mcpGuardrails");
-	assert!(!result.content.is_empty(), "echo should return content");
-}
-
-/// mcpGuardrails attached to the target (not the route) must be enforced.
-#[tokio::test]
-async fn mcp_guardrails_target_level_denies_tool_by_name() {
-	use protos::ext_mcp::authorization_error::Code;
-
-	use crate::test_helpers::extmcpmock::{
-		closure_mock, pass_request, pass_response, reject_request,
-	};
-
-	let extmcp_mock = closure_mock(
-		|req| {
-			let name = req
-				.mcp_request
-				.as_deref()
-				.and_then(|b| serde_json::from_slice::<serde_json::Value>(b).ok())
-				.and_then(|v| v.get("name").and_then(|n| n.as_str()).map(str::to_owned))
-				.unwrap_or_default();
-			if name.contains("forbidden") {
-				reject_request(Code::PermissionDenied, format!("tool {name} is forbidden"))
-			} else {
-				pass_request()
-			}
-		},
-		|_| pass_response(),
-	)
-	.spawn()
-	.await;
-
-	let mock = mock_streamable_http_server(true).await;
-	// No route-level policies; the guardrail rides the target's backend.
-	let (_bind, io) = setup_proxy_policies_with_target(
-		&mock,
-		true,
-		false,
-		vec![],
-		vec![guardrails_test_support::policy(extmcp_mock.address)],
-	)
-	.await;
-	let client = mcp_streamable_client(io).await;
-
-	let err = client
-		.call_tool(
-			rmcp::model::CallToolRequestParams::new("forbidden-tool")
-				.with_arguments(serde_json::Map::new()),
-		)
-		.await
-		.expect_err("forbidden tool call should be denied by target-level mcpGuardrails");
-	let rmcp::ServiceError::McpError(e) = &err else {
-		panic!("expected McpError, got {err:?}");
-	};
-	assert_eq!(e.code.0, -32001, "PermissionDenied should map to -32001");
-
-	let result = client
-		.call_tool(
-			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-				serde_json::json!({"hi": "world"})
-					.as_object()
-					.cloned()
-					.unwrap(),
-			),
-		)
-		.await
-		.expect("allowed tool call should pass through target-level mcpGuardrails");
 	assert!(!result.content.is_empty(), "echo should return content");
 }
 

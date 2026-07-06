@@ -1374,10 +1374,11 @@ impl LocalBackend {
 	) -> Result<BackendWithPolicies, anyhow::Error> {
 		let mut inline_policies = match policies {
 			Some(p) => {
+				let (simple, mcp_authorization) = p.split();
 				LocalBackendPolicies {
-					simple: p.simple,
-					mcp_authorization: p.mcp_authorization,
-					mcp_guardrails: p.mcp_guardrails,
+					simple,
+					mcp_authorization,
+					mcp_guardrails: None,
 					a2a: None,
 					inference_routing: None,
 					ai: None,
@@ -1492,23 +1493,20 @@ impl LocalBackend {
 							clear_env,
 						} => {
 							let inline_policies = if let Some(p) = t.policies.clone() {
+								let (simple, mcp_authorization) = p.split();
 								let pols = LocalBackendPolicies {
-									simple: p.simple,
-									mcp_authorization: p.mcp_authorization,
-									mcp_guardrails: p.mcp_guardrails,
+									simple,
+									mcp_authorization,
 									..Default::default()
 								}
 								.translate(resources)
 								.await?;
-								if let Some(bad) = pols.iter().find(|p| {
-									!matches!(
-										p,
-										BackendTrafficPolicy::McpAuthorization(_)
-											| BackendTrafficPolicy::McpGuardrails(_)
-									)
-								}) {
+								if let Some(bad) = pols
+									.iter()
+									.find(|p| !matches!(p, BackendTrafficPolicy::McpAuthorization(_)))
+								{
 									anyhow::bail!(
-										"stdio MCP target '{}': only mcpAuthorization and mcpGuardrails policies are supported, got {}",
+										"stdio MCP target '{}': only mcpAuthorization policies are supported, got {}",
 										t.name,
 										serde_json::to_value(bad)
 											.ok()
@@ -1650,8 +1648,8 @@ pub struct LocalMcpTarget {
 	pub name: McpTargetName,
 	#[serde(flatten)]
 	pub spec: LocalMcpTargetSpec,
-	/// Policies for this target. An MCP policy set here replaces the backend-level
-	/// equivalent for this target.
+	/// Policies for this target. mcpAuthorization rules set here apply in addition
+	/// to route/backend-level rules (a deny at any level denies).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<MCPLocalBackendPolicies>,
 }
@@ -2064,17 +2062,79 @@ pub struct SimpleLocalBackendPolicies {
 	pub backend_tunnel: Option<backend::Tunnel>,
 }
 
+/// Policies that are coherent for a single MCP target: upstream transport settings
+/// and per-resource mcpAuthorization. Call-scoped policies (mcpGuardrails,
+/// mcpAuthentication) apply to the full target set and belong on the route or
+/// `mcp.policies` instead.
+// The transport fields mirror SimpleLocalBackendPolicies but are inlined rather
+// than flattened: `deny_unknown_fields` does not fire through `#[serde(flatten)]`,
+// and unsupported policies must fail loudly.
 #[apply(schema_de!)]
 #[derive(Default)]
 pub struct MCPLocalBackendPolicies {
-	#[serde(flatten)]
-	simple: SimpleLocalBackendPolicies,
-	/// Authorization rules for MCP requests.
+	/// Modify request headers before forwarding to this backend.
 	#[serde(default)]
-	pub mcp_authorization: Option<McpAuthorization>,
-	/// External MCP policy processors.
+	request_header_modifier: Option<filters::HeaderModifier>,
+
+	/// Modify request and response data for this backend.
 	#[serde(default)]
-	pub mcp_guardrails: Option<LocalMcpGuardrails>,
+	#[serde(deserialize_with = "de_transform")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<http::transformation_cel::LocalTransformationConfig>")
+	)]
+	transformations: Option<crate::http::transformation_cel::Transformation>,
+
+	/// TLS settings used when connecting to this backend.
+	#[serde(rename = "backendTLS", default)]
+	backend_tls: Option<http::backendtls::LocalBackendTLS>,
+	/// Authentication credentials sent to this backend.
+	#[serde(default, deserialize_with = "de_backend_auth")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
+	backend_auth: Option<BackendAuth>,
+
+	/// HTTP protocol settings for this backend.
+	#[serde(default)]
+	http: Option<backend::HTTP>,
+	/// TCP protocol settings for this backend.
+	#[serde(default)]
+	tcp: Option<backend::TCP>,
+
+	/// Tunnel settings used when connecting to this backend.
+	#[serde(default)]
+	backend_tunnel: Option<backend::Tunnel>,
+
+	/// Authorization rules for MCP requests, applied in addition to
+	/// route/backend-level rules.
+	#[serde(default)]
+	mcp_authorization: Option<McpAuthorization>,
+}
+
+impl MCPLocalBackendPolicies {
+	fn split(self) -> (SimpleLocalBackendPolicies, Option<McpAuthorization>) {
+		let Self {
+			request_header_modifier,
+			transformations,
+			backend_tls,
+			backend_auth,
+			http,
+			tcp,
+			backend_tunnel,
+			mcp_authorization,
+		} = self;
+		(
+			SimpleLocalBackendPolicies {
+				request_header_modifier,
+				transformations,
+				backend_tls,
+				backend_auth,
+				http,
+				tcp,
+				backend_tunnel,
+			},
+			mcp_authorization,
+		)
+	}
 }
 
 #[apply(schema_de!)]

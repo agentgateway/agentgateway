@@ -89,7 +89,20 @@ impl App {
 						target_policies =
 							target_policies.merge(binds.inline_backend_policies(&t.inline_policies));
 					}
-					// Target-scoped policies replace their backend-level equivalents.
+					// Call-scoped policies apply to the full target set; a per-target attachment
+					// (xds targetRef with a section name) cannot be honored.
+					if target_policies.mcp_guardrails.take().is_some() {
+						tracing::warn!(
+							target = %t.name,
+							"mcpGuardrails attached to an MCP sub-backend is ignored; attach it to the route or backend"
+						);
+					}
+					if target_policies.mcp_authentication.take().is_some() {
+						tracing::warn!(
+							target = %t.name,
+							"mcpAuthentication attached to an MCP sub-backend is ignored; attach it to the route or backend"
+						);
+					}
 					let backend_policies = backend_policies.clone().merge(target_policies);
 					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {

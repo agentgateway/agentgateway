@@ -2328,7 +2328,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.file`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].name`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|object||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|object|Policies for this target. mcpAuthorization rules set here apply in addition<br>to route/backend-level rules (a deny at any level denies).|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -2444,141 +2444,11 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests, applied in addition to<br>route/backend-level rules.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails`|object|External MCP policy processors.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].service.name`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].service.port`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies`|object|Policies to connect to the backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations`|object|Modify request and response data for this backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.file`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.credential.file`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.accessKeyId`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.secretAccessKey`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.region`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.sessionToken`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.time`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.interval`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.retries`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout`|object|Maximum time allowed to establish a backend TCP connection.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout.secs`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout.nanos`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.name`|string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string||
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -10087,7 +9957,7 @@
 |`backends[].mcp.targets[].openapi.schema.file`|string||
 |`backends[].mcp.targets[].openapi.schema.url`|string||
 |`backends[].mcp.targets[].name`|string||
-|`backends[].mcp.targets[].policies`|object||
+|`backends[].mcp.targets[].policies`|object|Policies for this target. mcpAuthorization rules set here apply in addition<br>to route/backend-level rules (a deny at any level denies).|
 |`backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].mcp.targets[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`backends[].mcp.targets[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -10203,141 +10073,11 @@
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer||
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
+|`backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests, applied in addition to<br>route/backend-level rules.|
 |`backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`backends[].mcp.targets[].policies.mcpGuardrails`|object|External MCP policy processors.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].service.name`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].service.port`|integer||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies`|object|Policies to connect to the backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations`|object|Modify request and response data for this backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.file`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.credential.file`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.accessKeyId`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.secretAccessKey`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.region`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.sessionToken`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.time`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.interval`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.retries`|integer||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout`|object|Maximum time allowed to establish a backend TCP connection.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout.secs`|integer||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout.nanos`|integer||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.name`|string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string||
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
-|`backends[].mcp.targets[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -16690,7 +16430,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.file`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
 |`routeGroups[].routes[].backends[].mcp.targets[].name`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies`|object||
+|`routeGroups[].routes[].backends[].mcp.targets[].policies`|object|Policies for this target. mcpAuthorization rules set here apply in addition<br>to route/backend-level rules (a deny at any level denies).|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -16806,141 +16546,11 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer||
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests, applied in addition to<br>route/backend-level rules.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails`|object|External MCP policy processors.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].service.name`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].service.port`|integer||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies`|object|Policies to connect to the backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations`|object|Modify request and response data for this backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.file`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.credential.file`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.accessKeyId`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.secretAccessKey`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.region`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.sessionToken`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.time`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.interval`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.retries`|integer||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout`|object|Maximum time allowed to establish a backend TCP connection.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout.secs`|integer||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout.nanos`|integer||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.name`|string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string||
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`routeGroups[].routes[].backends[].mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
@@ -24034,7 +23644,7 @@
 |`mcp.targets[].openapi.schema.file`|string||
 |`mcp.targets[].openapi.schema.url`|string||
 |`mcp.targets[].name`|string||
-|`mcp.targets[].policies`|object||
+|`mcp.targets[].policies`|object|Policies for this target. mcpAuthorization rules set here apply in addition<br>to route/backend-level rules (a deny at any level denies).|
 |`mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.targets[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
 |`mcp.targets[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
@@ -24150,141 +23760,11 @@
 |`mcp.targets[].policies.backendTunnel.proxy.service.port`|integer||
 |`mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
+|`mcp.targets[].policies.mcpAuthorization`|object|Authorization rules for MCP requests, applied in addition to<br>route/backend-level rules.|
 |`mcp.targets[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`mcp.targets[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
 |`mcp.targets[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
 |`mcp.targets[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
-|`mcp.targets[].policies.mcpGuardrails`|object|External MCP policy processors.|
-|`mcp.targets[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].service`|object|Service reference. Service must be defined in the top level services list.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].service.name`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].service.port`|integer||
-|`mcp.targets[].policies.mcpGuardrails.processors[].host`|string|Hostname or IP address|
-|`mcp.targets[].policies.mcpGuardrails.processors[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies`|object|Policies to connect to the backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.set`|object|Headers to set, replacing any existing values.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.requestHeaderModifier.remove`|[]string|Header names to remove.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations`|object|Modify request and response data for this backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request`|object|Transform the request before it is forwarded.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.add`|object|Headers to append using CEL expressions for values.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.set`|object|Headers to set using CEL expressions for values.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.remove`|[]string|Header names to remove.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.body`|string|CEL expression that computes a replacement body.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.request.metadata`|object|Metadata values to add using CEL expressions.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response`|object|Transform the response before it is returned.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.add`|object|Headers to append using CEL expressions for values.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.set`|object|Headers to set using CEL expressions for values.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.remove`|[]string|Header names to remove.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.body`|string|CEL expression that computes a replacement body.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.transformations.response.metadata`|object|Metadata values to add using CEL expressions.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS`|object|TLS settings used when connecting to this backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.key`|string|Private key file for the client certificate.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.root`|string|Root certificate bundle used to verify the backend certificate.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.hostname`|string|Server name to use for TLS verification and SNI.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.insecure`|boolean|Skip certificate trust verification for the backend connection.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.insecureHost`|boolean|Skip hostname verification for the backend certificate.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.alpn`|[]string|ALPN protocols to offer to the backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.subjectAltNames`|[]string|Additional subject alternative names accepted for the backend certificate.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTLS.keyExchangeGroups`|[]enum|Key exchange groups allowed for negotiating TLS.<br>Possible values: `X25519`, `P-256`, `P-384`, `X25519_MLKEM768`.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth`|object|Authentication credentials sent to this backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.file`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough`|object|Forward the validated incoming JWT to the backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location`|object|Where to place the forwarded credential in the backend request.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header`|object|Read the credential from an HTTP header.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header.name`|string|Header name containing the credential.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie`|object|Read the credential from a request cookie.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.passthrough.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key`|object|Send a configured secret value to the backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value`|object|Secret value to send to the backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.value.file`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location`|object|Where to place the secret in the backend request.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header`|object|Read the credential from an HTTP header.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header.name`|string|Header name containing the credential.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.header.prefix`|string|Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter`|object|Read the credential from a URL query parameter.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.queryParameter.name`|string|Query parameter name containing the credential.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie`|object|Read the credential from a request cookie.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.cookie.name`|string|Cookie name containing the credential.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression`|object|Read the credential from a CEL expression evaluated against the incoming request.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.key.location.expression.expression`|string|CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp`|object|Authenticate to Google Cloud services.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `idToken`.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.audience`|string|Audience for the token. If not set, the destination host will be used.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.credential`|object|ADC-compatible Google credential JSON. If not set, ambient credentials are used.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.credential.file`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.gcp.type`|enum|Possible values: `accessToken`, `null`.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws`|object|Sign backend requests with AWS credentials.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.accessKeyId`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.secretAccessKey`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.region`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.sessionToken`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.serviceName`|string|AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole`|object|Optional AWS STS role to assume before signing requests.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.aws.assumeRole.roleArn`|string|AWS IAM role ARN to assume.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure`|object|Authenticate to Azure services.<br>Exactly one of explicitConfig, developerImplicit, or implicit may be set.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig`|object|Use explicit Azure credentials<br>Exactly one of clientSecret, managedIdentity, or workloadIdentity may be set.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret`|object||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.tenant_id`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_id`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.clientSecret.client_secret`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity`|object||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity`|object||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.clientId`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.objectId`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.managedIdentity.userAssignedIdentity.resourceId`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.explicitConfig.workloadIdentity`|object||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.developerImplicit`|object|Use implicit Azure auth. Note that this is for developer use-cases only!|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.azure.implicit`|object|Automatically detect authentication method based on environment.<br>Uses Workload Identity on K8s, Managed Identity on Azure VMs, or Developer Tools locally.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange`|object||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint`|object|Backend serving the RFC 8693 token endpoint.<br>Exactly one of service, host, or backend may be set.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service`|object|Service reference. Service must be defined in the top level services list.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.name`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.service.port`|integer||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.host`|string|Hostname or IP address|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpoint.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.tokenEndpointPath`|string|Token endpoint path on the backend; defaults to "/".|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter; the server picks when unset.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth`|object||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendAuth.oAuthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.http`|object|HTTP protocol settings for this backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.http.version`|string|HTTP version to use when connecting to the backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.http.requestTimeout`|string|Maximum time allowed for a backend HTTP request.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp`|object|TCP protocol settings for this backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives`|object|TCP keepalive settings for backend connections.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.enabled`|boolean||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.time`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.interval`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.keepalives.retries`|integer||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout`|object|Maximum time allowed to establish a backend TCP connection.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout.secs`|integer||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.tcp.connectTimeout.nanos`|integer||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel`|object|Tunnel settings used when connecting to this backend.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy`|object|Proxy backend used to tunnel the connection.<br>Exactly one of service, host, or backend may be set.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service`|object|Service reference. Service must be defined in the top level services list.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.name`|string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer||
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
-|`mcp.targets[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
-|`mcp.targets[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders`|object|Which incoming request headers are forwarded to the policy server.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders.allowed`|[]string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].requestHeaders.disallowed`|[]string||
-|`mcp.targets[].policies.mcpGuardrails.processors[].kind`|enum|Possible values: `remote`.|
-|`mcp.targets[].policies.mcpGuardrails.processors[].methods`|object|Allowlist: only methods listed here run through this processor, at the<br>configured phase. Keys may be exact (`tools/call`), prefix (`tools/*`),<br>or suffix (`*/list`) wildcards, or `*` for all methods. Methods matching<br>no key bypass this processor; see [`phase::resolve`] for match precedence.|
 |`mcp.statefulMode`|enum|Possible values: `stateless`, `stateful`.|
 |`mcp.prefixMode`|enum|Possible values: `always`, `conditional`, `null`.|
 |`mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|

@@ -15,9 +15,6 @@ use rmcp::transport::common::http_header::HEADER_SESSION_ID;
 use thiserror::Error;
 use tokio::process::Command;
 
-use itertools::Itertools;
-
-use crate::mcp::guardrails::McpGuardrails;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
@@ -267,8 +264,6 @@ pub(crate) struct UpstreamGroup {
 	pub default_target_name: Option<String>,
 	pub is_multiplexing: bool,
 	pub failure_mode: FailureMode,
-	/// Union of every target's effective guardrails, for multi-target fanout calls.
-	pub(crate) fanout_guardrails: Option<Arc<McpGuardrails>>,
 }
 
 impl UpstreamGroup {
@@ -286,14 +281,6 @@ impl UpstreamGroup {
 		} else {
 			Some(backend.targets[0].name.to_string())
 		};
-		// Targets inheriting the backend-level policy share one Arc, so it appears once.
-		let fanout_guardrails = McpGuardrails::merge(
-			backend
-				.targets
-				.iter()
-				.filter_map(|t| t.backend_policies.mcp_guardrails.clone())
-				.unique_by(Arc::as_ptr),
-		);
 		let mut s = Self {
 			failure_mode: backend.failure_mode,
 			backend,
@@ -301,7 +288,6 @@ impl UpstreamGroup {
 			by_name: IndexMap::new(),
 			default_target_name,
 			is_multiplexing,
-			fanout_guardrails,
 		};
 		s.setup_connections()?;
 		if s.by_name.is_empty() {

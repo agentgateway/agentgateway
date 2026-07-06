@@ -1533,9 +1533,8 @@ pub struct McpTarget {
 	#[serde(flatten)]
 	pub spec: McpTargetSpec,
 
-	// per-target policies that don't have a sub-backend to attach to (stdio)
-	// TODO in the future it might be useful to separate transport policies
-	// and mcp-specific policies
+	// per-target policies that don't have a sub-backend to attach to (stdio);
+	// only mcpAuthorization is carried here — guardrails are rejected at load
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
 	pub inline_policies: Vec<BackendTrafficPolicy>,

@@ -42,6 +42,12 @@ impl McpAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
 		Self(rs)
 	}
+
+	/// Combine policies from multiple attachment levels (route/backend/target) so
+	/// all of them apply; a more specific policy cannot erase a broader deny.
+	pub fn merge(self, other: Self) -> Self {
+		Self(self.0.merge(other.0))
+	}
 	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
 		if !self.0.has_rules() {
 			return true;
@@ -181,6 +187,25 @@ mod tests {
 			PolicySet::new(vec![], vec![], vec![]),
 		)]));
 		assert!(empty_rule_set.validate(&res, &CelExecWrapper::new(req_without_claims())));
+	}
+
+	#[test]
+	fn test_mcp_authorization_merge_deny_survives_allow() {
+		let deny_all = McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(PolicySet::new(
+			vec![],
+			vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+			vec![],
+		))]));
+		let allow_all = authorization_set("true");
+		let res = tool_resource("server", "increment");
+		let cel = CelExecWrapper::new(req_without_claims());
+
+		assert!(allow_all.validate(&res, &cel));
+		let merged = deny_all.merge(allow_all);
+		assert!(
+			!merged.validate(&res, &cel),
+			"a merged-in allow must not erase a base deny"
+		);
 	}
 
 	#[test]

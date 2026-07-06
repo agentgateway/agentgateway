@@ -20,7 +20,6 @@ use tracing::{debug, warn};
 use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
-use crate::mcp::guardrails::McpGuardrails;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
@@ -136,16 +135,6 @@ impl Relay {
 			policies: inputs.policies.clone(),
 			mcp_guardrails: inputs.mcp_guardrails.clone(),
 			policy_client: self.policy_client.clone(),
-		}
-	}
-
-	// prefer target-scoped guardrails otherwise use backend scoped
-	// TODO consider merging from both scopes, but for now this is
-	// consistent with how we handle mcpAuthorization
-	pub(crate) fn guardrails_for(&self, target: &str) -> Option<Arc<McpGuardrails>> {
-		match self.upstreams.effective_policies(target) {
-			Some(policies) => policies.mcp_guardrails.clone(),
-			None => self.mcp_guardrails.clone(),
 		}
 	}
 
@@ -272,18 +261,18 @@ impl Relay {
 
 	fn build_guardrails_ctx(
 		&self,
-		ext: Arc<crate::mcp::guardrails::McpGuardrails>,
 		r: &JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
 		backends: Vec<String>,
 	) -> Option<GuardrailsCtx> {
+		let ext = self.mcp_guardrails.as_ref()?;
 		let method = r.request.method().to_string();
 		if !ext.runs_response(&method) {
 			// we only need an GuardrailsCtx for response-phase guardrails hooks
 			return None;
 		}
 		Some(GuardrailsCtx {
-			ext,
+			ext: ext.clone(),
 			method,
 			backends,
 			client: self.policy_client.clone(),
@@ -293,11 +282,13 @@ impl Relay {
 
 	pub(crate) async fn run_guardrails_call_request<P: serde::de::DeserializeOwned>(
 		&self,
-		ext: &Arc<crate::mcp::guardrails::McpGuardrails>,
 		ext_ctx: &mut crate::mcp::guardrails::CallRequestCtx<'_>,
 		ctx: &mut IncomingRequestContext,
 	) -> Result<Option<P>, UpstreamError> {
 		use crate::mcp::guardrails::Outcome;
+		let Some(ext) = self.mcp_guardrails.as_ref() else {
+			return Ok(None);
+		};
 		let method = ext_ctx.method;
 		match crate::mcp::guardrails::run_call_request::<P>(ext, ext_ctx, ctx, &self.policy_client)
 			.await
@@ -329,7 +320,7 @@ impl Relay {
 	where
 		P: serde::Serialize + serde::de::DeserializeOwned,
 	{
-		let Some(ext) = self.guardrails_for(backend) else {
+		let Some(ext) = self.mcp_guardrails.as_ref() else {
 			return Ok(());
 		};
 		// Skip the (potentially expensive) params serialization when this method
@@ -342,7 +333,6 @@ impl Relay {
 		let backends = [backend.to_string()];
 		if let Some(p) = self
 			.run_guardrails_call_request::<P>(
-				&ext,
 				&mut crate::mcp::guardrails::CallRequestCtx {
 					backends: &backends,
 					method,
@@ -638,9 +628,7 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		let guardrails = self
-			.guardrails_for(service_name)
-			.and_then(|ext| self.build_guardrails_ctx(ext, &r, &ctx, vec![service_name.to_string()]));
+		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(us.generic_stream(r, &ctx).assert_size::<{ 3 * 1024 }>()).await?,
@@ -798,29 +786,26 @@ impl Relay {
 			));
 		}
 
-		let service_names = selected_upstreams
-			.iter()
-			.map(|(name, _)| name.to_string())
-			.collect::<Vec<_>>();
-		// A single participant uses its effective set; multi-target fanout uses the
-		// precomputed union over all configured targets (a superset of the participants
-		// if some targets failed to initialize under failOpen).
-		let guardrails = match service_names.as_slice() {
-			[single] => self.guardrails_for(single),
-			_ => self.upstreams.fanout_guardrails.clone(),
-		};
+		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
+		// fans out to (just the one name when there is a single backend).
+		let service_names = self.mcp_guardrails.as_ref().map(|_| {
+			selected_upstreams
+				.iter()
+				.map(|(n, _)| n.to_string())
+				.collect::<Vec<_>>()
+		});
 
-		// Request-phase hook runs once for the whole client call. params is None
-		// for fanout (no body to rewrite); header/metadata side effects apply to the single
+		// Request-phase hook runs once for the whole client call. params is None for
+		// fanout (no body to rewrite); header/metadata side effects apply to the single
 		// shared ctx forwarded to every upstream. A reject fails the whole call.
-		if let Some(ext) = guardrails.as_ref() {
+		if let Some(ext) = self.mcp_guardrails.as_ref() {
 			// params is None, so mutations are discarded unparsed and the params
 			// type is never used.
 			let outcome = Box::pin(
 				crate::mcp::guardrails::run_call_request::<serde_json::Value>(
 					ext,
 					&mut crate::mcp::guardrails::CallRequestCtx {
-						backends: service_names.as_slice(),
+						backends: service_names.as_deref().unwrap_or_default(),
 						method,
 						params: None,
 					},
@@ -883,7 +868,7 @@ impl Relay {
 			mergestream::MergeStream::new(streams, id.clone(), merge, cel, self.upstreams.failure_mode);
 
 		// Response-phase hook runs once on the merged (muxed) result.
-		match guardrails.and_then(|ext| self.build_guardrails_ctx(ext, &r, &ctx, service_names)) {
+		match service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)) {
 			Some(guardrails) => messages_to_response(
 				id,
 				wrap_with_guardrails(ms, guardrails),

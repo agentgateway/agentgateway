@@ -6412,6 +6412,7 @@
           "type": "string"
         },
         "policies": {
+          "description": "Policies for this target. mcpAuthorization rules set here apply in addition\nto route/backend-level rules (a deny at any level denies).",
           "anyOf": [
             {
               "$ref": "#/$defs/MCPLocalBackendPolicies"
@@ -6665,6 +6666,7 @@
       ]
     },
     "MCPLocalBackendPolicies": {
+      "description": "Policies that are coherent for a single MCP target: upstream transport settings\nand per-resource mcpAuthorization. Call-scoped policies (mcpGuardrails,\nmcpAuthentication) apply to the full target set and belong on the route or\n`mcp.policies` instead.",
       "type": "object",
       "properties": {
         "requestHeaderModifier": {
@@ -6751,22 +6753,10 @@
           "default": null
         },
         "mcpAuthorization": {
-          "description": "Authorization rules for MCP requests.",
+          "description": "Authorization rules for MCP requests, applied in addition to\nroute/backend-level rules.",
           "anyOf": [
             {
               "$ref": "#/$defs/McpAuthorization"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "mcpGuardrails": {
-          "description": "External MCP policy processors.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/McpGuardrails"
             },
             {
               "type": "null"
