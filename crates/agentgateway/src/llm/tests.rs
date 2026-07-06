@@ -1198,6 +1198,60 @@ async fn count_tokens_uses_native_endpoint_after_model_alias() {
 }
 
 #[tokio::test]
+async fn vertex_anthropic_messages_prepares_vertex_body() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project"),
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("us-central1-aiplatform.googleapis.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "claude-haiku-4-5-20251001",
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "say hi"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Vertex Anthropic messages request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Messages);
+	assert!(forwarded_json.get("model").is_none());
+	assert_eq!(
+		forwarded_json["anthropic_version"],
+		json!("vertex-2023-10-16")
+	);
+}
+
+#[tokio::test]
 async fn provider_model_is_set_before_llm_transformations() {
 	use crate::http::auth::BackendInfo;
 	use crate::llm::policy::Policy;

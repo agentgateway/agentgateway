@@ -282,14 +282,12 @@ impl InputFormat {
 /// The concrete upstream chat wire format selected by the conversion table.
 ///
 /// This is intentionally narrower than `ProviderFormat`: it only covers chat
-/// conversions, and it includes provider-specific variants where the same public
-/// API shape has different wire details.
+/// conversions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ChatFormat {
 	OpenAICompletions,
 	OpenAIResponses,
 	AnthropicMessages,
-	VertexAnthropicMessages,
 	BedrockConverse,
 }
 
@@ -359,13 +357,8 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// Completions
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
-		chat(
-			InputFormat::Completions,
-			ChatFormat::VertexAnthropicMessages,
-		),
 		// Messages
 		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
-		chat(InputFormat::Messages, ChatFormat::VertexAnthropicMessages),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
 		// Missing: Messages --> Responses
 		//
@@ -457,9 +450,7 @@ impl ChatTranslation {
 		match self.output {
 			ChatFormat::OpenAICompletions => custom::ProviderFormat::Completions,
 			ChatFormat::OpenAIResponses => custom::ProviderFormat::Responses,
-			ChatFormat::AnthropicMessages | ChatFormat::VertexAnthropicMessages => {
-				custom::ProviderFormat::Messages
-			},
+			ChatFormat::AnthropicMessages => custom::ProviderFormat::Messages,
 			ChatFormat::BedrockConverse => match self.input {
 				// Bedrock chat always renders to Converse. This format is only used for
 				// shared bookkeeping (route type, cache convention, custom-style labels);
@@ -480,10 +471,10 @@ impl ChatTranslation {
 		let body = match self.output {
 			ChatFormat::OpenAICompletions => req.render_openai_completions(),
 			ChatFormat::OpenAIResponses => req.render_openai_responses(),
-			ChatFormat::AnthropicMessages => req.render_anthropic_messages(),
-			ChatFormat::VertexAnthropicMessages => {
+			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
 				vertex::prepare_anthropic_message_body(req.render_anthropic_messages()?)
 			},
+			ChatFormat::AnthropicMessages => req.render_anthropic_messages(),
 			ChatFormat::BedrockConverse => return req.render_bedrock_converse(ctx),
 		}?;
 		Ok(RenderedChatRequest {
@@ -520,7 +511,7 @@ impl ChatTranslation {
 					self.input
 				))),
 			},
-			ChatFormat::AnthropicMessages | ChatFormat::VertexAnthropicMessages => match self.input {
+			ChatFormat::AnthropicMessages => match self.input {
 				InputFormat::Messages => AIProvider::parse_response::<types::messages::Response>(bytes),
 				InputFormat::Completions => {
 					conversion::messages::from_completions::translate_response(bytes)
@@ -585,7 +576,7 @@ impl ChatTranslation {
 				_ => resp,
 			},
 
-			ChatFormat::AnthropicMessages | ChatFormat::VertexAnthropicMessages => match self.input {
+			ChatFormat::AnthropicMessages => match self.input {
 				InputFormat::Messages => resp.map(|b| {
 					conversion::messages::passthrough_stream(
 						b,
@@ -694,7 +685,7 @@ impl ChatTranslation {
 				_ => unsupported(),
 			},
 
-			ChatFormat::AnthropicMessages | ChatFormat::VertexAnthropicMessages => match format {
+			ChatFormat::AnthropicMessages => match format {
 				ChatErrorFormat::Anthropic => match self.input {
 					InputFormat::Messages => conversion::messages::translate_anthropic_error(bytes, status),
 					InputFormat::Completions => {
@@ -939,7 +930,7 @@ impl AIProvider {
 			AIProvider::Bedrock(_) => vec![ChatFormat::BedrockConverse],
 
 			AIProvider::Vertex(p) if p.is_anthropic_model(request_model) => {
-				vec![ChatFormat::VertexAnthropicMessages]
+				vec![ChatFormat::AnthropicMessages]
 			},
 			AIProvider::Vertex(_) => vec![ChatFormat::OpenAICompletions],
 
@@ -969,9 +960,7 @@ impl AIProvider {
 				ChatErrorFormat::Google
 			},
 			(_, ChatFormat::BedrockConverse) => ChatErrorFormat::Bedrock,
-			(_, ChatFormat::AnthropicMessages | ChatFormat::VertexAnthropicMessages) => {
-				ChatErrorFormat::Anthropic
-			},
+			(_, ChatFormat::AnthropicMessages) => ChatErrorFormat::Anthropic,
 			(_, ChatFormat::OpenAICompletions | ChatFormat::OpenAIResponses) => ChatErrorFormat::OpenAI,
 		}
 	}
@@ -1806,7 +1795,7 @@ impl AIProvider {
 			None
 		};
 		let chat_translation = self.chat_translation(original_format, request_model.as_deref())?;
-		let provider_format = Some(chat_translation.provider_format());
+		let provider_format = chat_translation.provider_format();
 		let prepared = self
 			.prepare_request(
 				backend_info,
@@ -1814,7 +1803,7 @@ impl AIProvider {
 				original_format,
 				&mut req,
 				&mut parts,
-				provider_format,
+				Some(provider_format),
 				tokenize,
 				log,
 			)
@@ -1838,9 +1827,7 @@ impl AIProvider {
 		Ok(RequestResult::Success {
 			request: req,
 			llm_request: llm_info,
-			upstream_route_type: provider_format
-				.expect("chat requests always have an upstream provider format")
-				.route_type(),
+			upstream_route_type: provider_format.route_type(),
 		})
 	}
 
