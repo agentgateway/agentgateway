@@ -58,6 +58,20 @@
         "$ref": "#/$defs/LocalRouteGroup"
       }
     },
+    "gateways": {
+      "description": "gateways defines named HTTP listeners that features and routes can attach to without using low-level binds.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/LocalGateway"
+      }
+    },
+    "routes": {
+      "description": "routes defines HTTP routes attached to one or more named gateways.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LocalAttachedRoute"
+      }
+    },
     "llm": {
       "anyOf": [
         {
@@ -72,6 +86,16 @@
       "anyOf": [
         {
           "$ref": "#/$defs/LocalSimpleMcpConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ui": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalUIConfig"
         },
         {
           "type": "null"
@@ -9489,9 +9513,373 @@
         "routes"
       ]
     },
+    "LocalGateway": {
+      "type": "object",
+      "properties": {
+        "listeners": {
+          "description": "listeners defines multiple HTTP listeners under this gateway. When set, listener fields cannot be set on the gateway itself.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalGatewayListener"
+          }
+        },
+        "port": {
+          "description": "port is the downstream port to listen on for this gateway.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "hostname": {
+          "description": "Can be a wildcard.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tls": {
+          "description": "tls enables HTTPS for this gateway.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTLSServerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oidc": {
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jwtAuth": {
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalJwtConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extAuthz": {
+          "description": "Authorize incoming requests by calling an external authorization service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extProc": {
+          "description": "Send request and response data to an external processing service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtProc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transformations": {
+          "description": "Modify request and response headers, bodies, or metadata.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basicAuth": {
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBasicAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiKey": {
+          "description": "Authenticate incoming requests with API keys.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAPIKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalGatewayListener": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "name identifies this listener for gateway references like gateway/listener.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "port": {
+          "description": "port is the downstream port to listen on for this listener.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "hostname": {
+          "description": "Can be a wildcard.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tls": {
+          "description": "tls enables HTTPS for this listener.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTLSServerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oidc": {
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jwtAuth": {
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalJwtConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extAuthz": {
+          "description": "Authorize incoming requests by calling an external authorization service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extProc": {
+          "description": "Send request and response data to an external processing service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtProc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transformations": {
+          "description": "Modify request and response headers, bodies, or metadata.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basicAuth": {
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBasicAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiKey": {
+          "description": "Authenticate incoming requests with API keys.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAPIKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalAttachedRoute": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways attaches this route to named gateways or gateway listeners.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "namespace": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "ruleName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "hostnames": {
+          "description": "Can be a wildcard",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "matches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RouteMatch"
+          },
+          "default": [
+            {
+              "path": {
+                "pathPrefix": "/"
+              }
+            }
+          ]
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FilterOrPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalRouteBackend"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "LocalLLMConfig": {
       "type": "object",
       "properties": {
+        "gateways": {
+          "description": "gateways attaches the LLM API routes to named gateways. When set, port and tls must be configured on the gateway.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
         "port": {
           "type": [
             "integer",
@@ -10421,6 +10809,14 @@
     "LocalSimpleMcpConfig": {
       "type": "object",
       "properties": {
+        "gateways": {
+          "description": "gateways attaches the MCP routes to named gateways. When set, port must be configured on the gateway.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
         "port": {
           "type": [
             "integer",
@@ -10475,6 +10871,128 @@
       "required": [
         "targets"
       ]
+    },
+    "LocalUIConfig": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways exposes the UI and required UI API routes on named gateways.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "policies": {
+          "description": "policies defines route-level policies for the UI and required UI API routes.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalUIPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalUIPolicy": {
+      "type": "object",
+      "properties": {
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "oidc": {
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jwtAuth": {
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalJwtConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extAuthz": {
+          "description": "Authorize incoming requests by calling an external authorization service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basicAuth": {
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBasicAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiKey": {
+          "description": "Authenticate incoming requests with API keys.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAPIKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "csrf": {
+          "description": "Handle CSRF protection by validating request origins against configured allowed origins.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Csrf"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

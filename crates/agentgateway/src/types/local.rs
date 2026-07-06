@@ -11,6 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Context, Error, anyhow, bail};
+use indexmap::IndexMap;
 use itertools::Itertools;
 use secrecy::SecretString;
 
@@ -65,7 +66,7 @@ impl NormalizedLocalConfig {
 		let s = shellexpand::full(&s)?;
 		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
 		let scope = resources.scope_full_computation();
-		let result = convert(resources, gateway_name, config, local_config).await;
+		let result = Box::pin(convert(resources, gateway_name, config, local_config)).await;
 		scope.finish(result.is_ok());
 		let t = result?;
 		Ok(t)
@@ -322,14 +323,29 @@ pub struct LocalConfig {
 	backends: Vec<FullLocalBackend>,
 	#[serde(default, rename = "routeGroups")]
 	route_groups: Vec<LocalRouteGroup>,
+	/// gateways defines named HTTP listeners that features and routes can attach to without using low-level binds.
+	#[serde(default)]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, LocalGateway>")
+	)]
+	gateways: IndexMap<Strng, LocalGateway>,
+	/// routes defines HTTP routes attached to one or more named gateways.
+	#[serde(default)]
+	routes: Vec<LocalAttachedRoute>,
 	#[serde(default)]
 	llm: Option<LocalLLMConfig>,
 	#[serde(default)]
 	mcp: Option<LocalSimpleMcpConfig>,
+	#[serde(default)]
+	ui: Option<LocalUIConfig>,
 }
 
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
+	/// gateways attaches the LLM API routes to named gateways. When set, port and tls must be configured on the gateway.
+	#[serde(default, deserialize_with = "de_gateway_refs")]
+	gateways: Vec<Strng>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -465,12 +481,25 @@ pub struct LocalLLMConditionalTarget {
 
 #[apply(schema_de!)]
 pub struct LocalSimpleMcpConfig {
+	/// gateways attaches the MCP routes to named gateways. When set, port must be configured on the gateway.
+	#[serde(default, deserialize_with = "de_gateway_refs")]
+	gateways: Vec<Strng>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
 	#[serde(flatten)]
 	backend: LocalMcpBackend,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<FilterOrPolicy>,
+}
+
+#[apply(schema_de!)]
+pub struct LocalUIConfig {
+	/// gateways exposes the UI and required UI API routes on named gateways.
+	#[serde(default, deserialize_with = "de_gateway_refs")]
+	gateways: Vec<Strng>,
+	/// policies defines route-level policies for the UI and required UI API routes.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	policies: Option<LocalUIPolicy>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -1029,6 +1058,69 @@ fn custom_provider_format(
 		format,
 		path: path.map(strng::new),
 	}
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+enum LocalGatewayRefs {
+	One(Strng),
+	Many(Vec<Strng>),
+}
+
+fn de_gateway_refs<'de, D>(deserializer: D) -> Result<Vec<Strng>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	Option::<LocalGatewayRefs>::deserialize(deserializer).map(|refs| match refs {
+		None => Vec::new(),
+		Some(LocalGatewayRefs::One(reference)) => vec![reference],
+		Some(LocalGatewayRefs::Many(references)) => references,
+	})
+}
+
+#[apply(schema_de!)]
+struct LocalGateway {
+	/// listeners defines multiple HTTP listeners under this gateway. When set, listener fields cannot be set on the gateway itself.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	listeners: Vec<LocalGatewayListener>,
+	/// port is the downstream port to listen on for this gateway.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	port: Option<u16>,
+	/// Can be a wildcard.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	hostname: Option<Strng>,
+	/// tls enables HTTPS for this gateway.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	tls: Option<LocalTLSServerConfig>,
+	#[serde(flatten)]
+	policies: LocalGatewayPolicy,
+}
+
+#[apply(schema_de!)]
+struct LocalAttachedRoute {
+	/// gateways attaches this route to named gateways or gateway listeners.
+	#[serde(default, deserialize_with = "de_gateway_refs")]
+	gateways: Vec<Strng>,
+	#[serde(flatten)]
+	route: LocalRoute,
+}
+
+#[apply(schema_de!)]
+struct LocalGatewayListener {
+	/// name identifies this listener for gateway references like gateway/listener.
+	#[serde(default)]
+	name: Option<Strng>,
+	/// port is the downstream port to listen on for this listener.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	port: Option<u16>,
+	/// Can be a wildcard.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	hostname: Option<Strng>,
+	/// tls enables HTTPS for this listener.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	tls: Option<LocalTLSServerConfig>,
+	#[serde(flatten)]
+	policies: LocalGatewayPolicy,
 }
 
 #[apply(schema_de!)]
@@ -1804,6 +1896,34 @@ fn mcp_matches() -> Vec<RouteMatch> {
 	]
 }
 
+fn ui_matches(oidc_redirect_path: Option<Strng>) -> Vec<RouteMatch> {
+	let mut paths = vec![
+		PathMatch::Exact("/".into()),
+		PathMatch::PathPrefix("/ui".into()),
+		PathMatch::PathPrefix("/api/runtime".into()),
+		PathMatch::PathPrefix("/api/config".into()),
+		PathMatch::PathPrefix("/api/cel".into()),
+		PathMatch::PathPrefix("/api/logs".into()),
+		PathMatch::PathPrefix("/api/costs".into()),
+	];
+	if let Some(path) = oidc_redirect_path
+		&& !paths.iter().any(|existing| match existing {
+			PathMatch::Exact(existing) | PathMatch::PathPrefix(existing) => existing == &path,
+			PathMatch::Regex(_) | PathMatch::Invalid => false,
+		}) {
+		paths.push(PathMatch::Exact(path));
+	}
+	paths
+		.into_iter()
+		.map(|path| RouteMatch {
+			headers: vec![],
+			path,
+			method: None,
+			query: vec![],
+		})
+		.collect()
+}
+
 #[apply(schema_de!)]
 struct LocalTCPRoute {
 	#[serde(flatten)]
@@ -2047,6 +2167,75 @@ impl From<LocalGatewayPolicy> for FilterOrPolicy {
 			transformations,
 			basic_auth,
 			api_key,
+			..Default::default()
+		}
+	}
+}
+
+impl LocalGatewayPolicy {
+	fn is_empty(&self) -> bool {
+		self.oidc.is_none()
+			&& self.jwt_auth.is_none()
+			&& self.authorization.is_none()
+			&& self.ext_authz.is_none()
+			&& self.ext_proc.is_none()
+			&& self.cors.is_none()
+			&& self.transformations.is_none()
+			&& self.basic_auth.is_none()
+			&& self.api_key.is_none()
+	}
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+struct LocalUIPolicy {
+	/// Handle CORS preflight requests and append configured CORS headers to applicable requests.
+	#[serde(default)]
+	cors: Option<http::cors::Cors>,
+	/// Authenticate browser requests with OIDC authorization code flow.
+	#[serde(default)]
+	oidc: Option<crate::http::oidc::LocalOidcConfig>,
+	/// Authenticate incoming requests with JWT bearer tokens.
+	#[serde(default)]
+	jwt_auth: Option<crate::http::jwt::LocalJwtConfig>,
+	/// Authorization rules for incoming HTTP requests.
+	#[serde(default)]
+	authorization: Option<Authorization>,
+	/// Authorize incoming requests by calling an external authorization service.
+	#[serde(default)]
+	ext_authz: Option<LocalExtAuthzPolicy>,
+	/// Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.
+	#[serde(default)]
+	basic_auth: Option<crate::http::basicauth::LocalBasicAuth>,
+	/// Authenticate incoming requests with API keys.
+	#[serde(default)]
+	api_key: Option<crate::http::apikey::LocalAPIKeys>,
+	/// Handle CSRF protection by validating request origins against configured allowed origins.
+	#[serde(default)]
+	csrf: Option<http::csrf::Csrf>,
+}
+
+impl From<LocalUIPolicy> for FilterOrPolicy {
+	fn from(val: LocalUIPolicy) -> Self {
+		let LocalUIPolicy {
+			cors,
+			oidc,
+			jwt_auth,
+			authorization,
+			ext_authz,
+			basic_auth,
+			api_key,
+			csrf,
+		} = val;
+		FilterOrPolicy {
+			cors,
+			oidc,
+			jwt_auth,
+			authorization,
+			ext_authz,
+			basic_auth,
+			api_key,
+			csrf,
 			..Default::default()
 		}
 	}
@@ -2462,8 +2651,11 @@ async fn convert(
 		services,
 		backends,
 		route_groups,
+		gateways,
+		routes,
 		llm,
 		mcp,
+		ui,
 	} = i;
 	merge_deprecated_frontend_policies(config, &mut frontend_policies)?;
 	let mut all_policies = vec![];
@@ -2471,6 +2663,17 @@ async fn convert(
 	let mut all_binds = vec![];
 	let mut all_listener_routes = vec![];
 	let mut all_listener_tcp_routes = vec![];
+	let gateway_refs = Box::pin(convert_gateways(
+		resources,
+		config,
+		gateway.clone(),
+		gateways,
+		&mut all_binds,
+		&mut all_listener_routes,
+		&mut all_listener_tcp_routes,
+		&mut all_policies,
+	))
+	.await?;
 	for b in binds {
 		// A standard bind requires a numeric port; an internal bind may omit the port to act as
 		// the wildcard fallback that serves any destination port via in-process routing.
@@ -2489,14 +2692,14 @@ async fn convert(
 		};
 		let mut ls = ListenerSet::default();
 		for (idx, l) in b.listeners.into_iter().enumerate() {
-			let (l, routes, tcp_routes, pol, backends) = convert_listener(
+			let (l, routes, tcp_routes, pol, backends) = Box::pin(convert_listener(
 				resources,
 				config,
 				idx,
 				l,
 				bind_name.clone(),
 				gateway.clone(),
-			)
+			))
 			.await?;
 			all_listener_routes.push((l.key.clone(), routes));
 			all_listener_tcp_routes.push((l.key.clone(), tcp_routes));
@@ -2581,18 +2784,55 @@ async fn convert(
 		all_backends.extend(bws);
 	}
 
+	for route in routes {
+		if route.gateways.is_empty() {
+			bail!(
+				"routes.{} must set gateways",
+				route.route.name.name.as_deref().unwrap_or("<unnamed>")
+			);
+		}
+		let listeners = resolve_gateway_references(&gateway_refs, &route.gateways)?;
+		for listener_key in listeners {
+			let idx = listener_route_count(&all_listener_routes, &listener_key);
+			let (route, backends) = Box::pin(convert_route(
+				resources,
+				config,
+				route.route.clone(),
+				idx,
+				listener_key.clone(),
+			))
+			.await?;
+			push_listener_routes(&mut all_listener_routes, listener_key, vec![route]);
+			all_backends.extend_from_slice(&backends);
+		}
+	}
+
 	match (llm, mcp) {
 		(Some(llm_config), Some(mcp_config))
-			if llm_config.port.unwrap_or(DEFAULT_LLM_PORT)
-				== mcp_config.port.unwrap_or(DEFAULT_MCP_PORT) =>
+			if llm_config.gateways.is_empty()
+				&& mcp_config.gateways.is_empty()
+				&& llm_config.port.unwrap_or(DEFAULT_LLM_PORT)
+					== mcp_config.port.unwrap_or(DEFAULT_MCP_PORT) =>
 		{
 			if llm_config.tls.is_some() {
 				bail!("top-level llm and mcp cannot share a port when llm.tls is configured");
 			}
-			let (llm_bind, mut llm_routes, llm_policies, llm_backends) =
-				convert_llm_config(resources, config, gateway.clone(), llm_config).await?;
-			let (_mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
-				convert_mcp_config(resources, config, gateway.clone(), mcp_config, true).await?;
+			let (llm_bind, mut llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
+				resources,
+				config,
+				gateway.clone(),
+				llm_config,
+				false,
+			))
+			.await?;
+			let (_mcp_bind, mcp_routes, mcp_policies, mcp_backends) = Box::pin(convert_mcp_config(
+				resources,
+				config,
+				gateway.clone(),
+				mcp_config,
+				true,
+			))
+			.await?;
 			llm_routes.extend(mcp_routes);
 			all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
 			all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
@@ -2604,24 +2844,74 @@ async fn convert(
 		},
 		(llm, mcp) => {
 			if let Some(llm_config) = llm {
-				let (llm_bind, llm_routes, llm_policies, llm_backends) =
-					convert_llm_config(resources, config, gateway.clone(), llm_config).await?;
-				all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
-				all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
-				all_binds.push(llm_bind);
-				all_policies.extend_from_slice(&llm_policies);
-				all_backends.extend_from_slice(&llm_backends);
+				if llm_config.gateways.is_empty() {
+					let (llm_bind, llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
+						resources,
+						config,
+						gateway.clone(),
+						llm_config,
+						false,
+					))
+					.await?;
+					all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
+					all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
+					all_binds.push(llm_bind);
+					all_policies.extend_from_slice(&llm_policies);
+					all_backends.extend_from_slice(&llm_backends);
+				} else {
+					Box::pin(convert_attached_llm(
+						resources,
+						config,
+						gateway.clone(),
+						llm_config,
+						&gateway_refs,
+						&mut all_listener_routes,
+						&mut all_policies,
+						&mut all_backends,
+					))
+					.await?;
+				}
 			}
 			if let Some(mcp_config) = mcp {
-				let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
-					convert_mcp_config(resources, config, gateway.clone(), mcp_config, false).await?;
-				all_listener_routes.push((strng::new("mcp"), mcp_routes));
-				all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
-				all_binds.push(mcp_bind);
-				all_policies.extend_from_slice(&mcp_policies);
-				all_backends.extend_from_slice(&mcp_backends);
+				if mcp_config.gateways.is_empty() {
+					let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) = Box::pin(convert_mcp_config(
+						resources,
+						config,
+						gateway.clone(),
+						mcp_config,
+						false,
+					))
+					.await?;
+					all_listener_routes.push((strng::new("mcp"), mcp_routes));
+					all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
+					all_binds.push(mcp_bind);
+					all_policies.extend_from_slice(&mcp_policies);
+					all_backends.extend_from_slice(&mcp_backends);
+				} else {
+					Box::pin(convert_attached_mcp(
+						resources,
+						config,
+						gateway.clone(),
+						mcp_config,
+						&gateway_refs,
+						&mut all_listener_routes,
+						&mut all_backends,
+					))
+					.await?;
+				}
 			}
 		},
+	}
+	if let Some(ui_config) = ui {
+		Box::pin(convert_attached_ui(
+			resources,
+			config,
+			ui_config,
+			&gateway_refs,
+			&mut all_listener_routes,
+			&mut all_backends,
+		))
+		.await?;
 	}
 
 	// Convert route groups
@@ -2631,8 +2921,14 @@ async fn convert(
 		let mut routes = vec![];
 		for (idx, lr) in rg.routes.into_iter().enumerate() {
 			let route_group_listener_key: ListenerKey = strng::format!("routegroup/{rg_key}");
-			let (route, backends) =
-				convert_route(resources, config, lr, idx, route_group_listener_key).await?;
+			let (route, backends) = Box::pin(convert_route(
+				resources,
+				config,
+				lr,
+				idx,
+				route_group_listener_key,
+			))
+			.await?;
 			all_backends.extend_from_slice(&backends);
 			routes.push(route);
 		}
@@ -2678,6 +2974,72 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 			insert_local_listener_port(port, format!("binds[{idx}]"))?;
 		}
 	}
+	let mut gateway_ports = HashMap::<u16, String>::new();
+	let mut gateway_port_tls = HashMap::<u16, bool>::new();
+	let mut insert_gateway_port = |port: u16, label: String, tls: bool| -> anyhow::Result<()> {
+		if let Some(existing_tls) = gateway_port_tls.insert(port, tls)
+			&& existing_tls != tls
+		{
+			bail!("gateway listeners on port {port} cannot mix TLS and plaintext");
+		}
+		gateway_ports.insert(port, label);
+		Ok(())
+	};
+	for (gateway_name, gateway_config) in &config.gateways {
+		if gateway_config.listeners.is_empty() {
+			if gateway_config.port.is_none() {
+				bail!("gateways.{gateway_name}.port is required");
+			}
+			if let Some(port) = gateway_config.port {
+				insert_gateway_port(
+					port,
+					format!("gateways.{gateway_name}"),
+					gateway_config.tls.is_some(),
+				)?;
+			}
+		} else {
+			if gateway_config.port.is_some()
+				|| gateway_config.hostname.is_some()
+				|| gateway_config.tls.is_some()
+				|| !gateway_config.policies.is_empty()
+			{
+				bail!(
+					"gateways.{gateway_name} cannot set port, hostname, tls, or policy fields when listeners are configured"
+				);
+			}
+			for (idx, listener) in gateway_config.listeners.iter().enumerate() {
+				let label = listener
+					.name
+					.as_ref()
+					.map(|name| format!("gateways.{gateway_name}.listeners.{name}"))
+					.unwrap_or_else(|| format!("gateways.{gateway_name}.listeners[{idx}]"));
+				let Some(port) = listener.port else {
+					bail!("{label}.port is required");
+				};
+				insert_gateway_port(port, label, listener.tls.is_some())?;
+			}
+		}
+	}
+	for (port, label) in gateway_ports {
+		insert_local_listener_port(port, label)?;
+	}
+	if let Some(llm) = &config.llm
+		&& !llm.gateways.is_empty()
+		&& (llm.port.is_some() || llm.tls.is_some())
+	{
+		bail!("llm.gateways cannot be used with llm.port or llm.tls");
+	}
+	if let Some(mcp) = &config.mcp
+		&& !mcp.gateways.is_empty()
+		&& mcp.port.is_some()
+	{
+		bail!("mcp.gateways cannot be used with mcp.port");
+	}
+	if let Some(ui) = &config.ui
+		&& ui.gateways.is_empty()
+	{
+		bail!("ui.gateways must be set");
+	}
 	if wildcard_binds.len() > 1 {
 		bail!(
 			"at most one wildcard bind (an internal bind without a numeric port) is allowed, but found {}: binds{:?}",
@@ -2687,7 +3049,9 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 	}
 	match (&config.llm, &config.mcp) {
 		(Some(llm), Some(mcp))
-			if llm.port.unwrap_or(DEFAULT_LLM_PORT) == mcp.port.unwrap_or(DEFAULT_MCP_PORT) =>
+			if llm.gateways.is_empty()
+				&& mcp.gateways.is_empty()
+				&& llm.port.unwrap_or(DEFAULT_LLM_PORT) == mcp.port.unwrap_or(DEFAULT_MCP_PORT) =>
 		{
 			insert_local_listener_port(
 				llm.port.unwrap_or(DEFAULT_LLM_PORT),
@@ -2695,7 +3059,9 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 			)?;
 		},
 		(llm, mcp) => {
-			if let Some(llm) = llm {
+			if let Some(llm) = llm
+				&& llm.gateways.is_empty()
+			{
 				insert_local_listener_port(
 					llm.port.unwrap_or(DEFAULT_LLM_PORT),
 					if llm.port.is_some() {
@@ -2705,7 +3071,9 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 					},
 				)?;
 			}
-			if let Some(mcp) = mcp {
+			if let Some(mcp) = mcp
+				&& mcp.gateways.is_empty()
+			{
 				insert_local_listener_port(
 					mcp.port.unwrap_or(DEFAULT_MCP_PORT),
 					if mcp.port.is_some() {
@@ -2718,6 +3086,213 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 		},
 	}
 	Ok(())
+}
+
+type LocalGatewayReferences = HashMap<Strng, Vec<ListenerKey>>;
+
+#[allow(clippy::too_many_arguments)]
+async fn convert_gateways(
+	resources: &crate::resource_manager::ResourceFetcher,
+	config: &crate::Config,
+	gateway: ListenerTarget,
+	gateways: IndexMap<Strng, LocalGateway>,
+	all_binds: &mut Vec<Bind>,
+	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
+	all_listener_tcp_routes: &mut Vec<(ListenerKey, Vec<TCPRoute>)>,
+	all_policies: &mut Vec<TargetedPolicy>,
+) -> anyhow::Result<LocalGatewayReferences> {
+	let mut refs = LocalGatewayReferences::new();
+	let mut listeners_by_port = IndexMap::<u16, ListenerSet>::new();
+	for (gateway_name, gateway_config) in gateways {
+		if gateway_config.listeners.is_empty() {
+			let listener = LocalGatewayListener {
+				name: Some(gateway_name.clone()),
+				port: gateway_config.port,
+				hostname: gateway_config.hostname,
+				tls: gateway_config.tls,
+				policies: gateway_config.policies,
+			};
+			let (port, listener, policies) = Box::pin(convert_gateway_listener(
+				resources,
+				config,
+				gateway.clone(),
+				gateway_name.clone(),
+				listener,
+			))
+			.await?;
+			refs.insert(gateway_name, vec![listener.key.clone()]);
+			all_listener_routes.push((listener.key.clone(), Vec::new()));
+			all_listener_tcp_routes.push((listener.key.clone(), Vec::new()));
+			all_policies.extend(policies);
+			listeners_by_port.entry(port).or_default().insert(listener);
+		} else {
+			let mut listener_keys = Vec::new();
+			for (idx, listener_config) in gateway_config.listeners.into_iter().enumerate() {
+				let listener_name = listener_config
+					.name
+					.clone()
+					.unwrap_or_else(|| strng::format!("listener{}", idx));
+				let reference = strng::format!("{gateway_name}/{listener_name}");
+				let (port, listener, policies) = Box::pin(convert_gateway_listener(
+					resources,
+					config,
+					gateway.clone(),
+					reference.clone(),
+					listener_config,
+				))
+				.await?;
+				refs.insert(reference, vec![listener.key.clone()]);
+				listener_keys.push(listener.key.clone());
+				all_listener_routes.push((listener.key.clone(), Vec::new()));
+				all_listener_tcp_routes.push((listener.key.clone(), Vec::new()));
+				all_policies.extend(policies);
+				listeners_by_port.entry(port).or_default().insert(listener);
+			}
+			refs.insert(gateway_name, listener_keys);
+		}
+	}
+	for (port, listeners) in listeners_by_port {
+		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
+			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
+		} else {
+			SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port)
+		};
+		all_binds.push(Bind {
+			key: strng::format!("bind/{port}"),
+			address: sockaddr,
+			protocol: detect_bind_protocol(&listeners),
+			listeners,
+			tunnel_protocol: TunnelProtocol::Direct,
+			mode: BindMode::Standard,
+		});
+	}
+	Ok(refs)
+}
+
+async fn convert_gateway_listener(
+	resources: &crate::resource_manager::ResourceFetcher,
+	config: &crate::Config,
+	gateway: ListenerTarget,
+	reference: Strng,
+	listener: LocalGatewayListener,
+) -> anyhow::Result<(u16, Listener, Vec<TargetedPolicy>)> {
+	let LocalGatewayListener {
+		name: _,
+		port,
+		hostname,
+		tls,
+		policies,
+	} = listener;
+	let port = port.with_context(|| format!("gateways.{reference}.port is required"))?;
+	let protocol = match tls {
+		Some(tls) => ListenerProtocol::HTTPS(
+			tls
+				.into_server_tls_config_with_resources(config.dynamic_ca_cert_cache.clone(), resources)
+				.await?,
+		),
+		None => ListenerProtocol::HTTP,
+	};
+	let name = ListenerName {
+		gateway_name: gateway.gateway_name.clone(),
+		gateway_namespace: gateway.gateway_namespace.clone(),
+		listener_name: reference.clone(),
+		listener_set: None,
+	};
+	let key: ListenerKey = strng::format!("gateway/{reference}");
+	let listener = Listener {
+		key: key.clone(),
+		name: name.clone(),
+		hostname: hostname.unwrap_or_else(|| strng::new("*")),
+		protocol,
+	};
+	let mut all_policies = Vec::new();
+	if !policies.is_empty() {
+		let policy_context = strng::format!("gateway/{reference}");
+		let pols = split_policies(
+			resources,
+			policies.into(),
+			config.as_policy_context(policy_context),
+		)
+		.await?;
+		let target = PolicyTarget::Gateway(name.into());
+		for (idx, pol) in pols.route_policies.into_iter().enumerate() {
+			all_policies.push(TargetedPolicy {
+				key: strng::format!("gateway/{reference}/{idx}"),
+				name: None,
+				target: target.clone(),
+				inheritance: Default::default(),
+				policy: (pol, PolicyPhase::Gateway).into(),
+			});
+		}
+	}
+	Ok((port, listener, all_policies))
+}
+
+fn resolve_gateway_references(
+	gateway_refs: &LocalGatewayReferences,
+	references: &[Strng],
+) -> anyhow::Result<Vec<ListenerKey>> {
+	let mut listeners = Vec::new();
+	for reference in references {
+		let Some(resolved) = gateway_refs.get(reference) else {
+			bail!("unknown gateway reference {reference}");
+		};
+		for listener in resolved {
+			if !listeners.contains(listener) {
+				listeners.push(listener.clone());
+			}
+		}
+	}
+	Ok(listeners)
+}
+
+fn listener_route_count(
+	all_listener_routes: &[(ListenerKey, Vec<Route>)],
+	listener_key: &ListenerKey,
+) -> usize {
+	all_listener_routes
+		.iter()
+		.find(|(key, _)| key == listener_key)
+		.map(|(_, routes)| routes.len())
+		.unwrap_or_default()
+}
+
+fn push_listener_routes(
+	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
+	listener_key: ListenerKey,
+	routes: Vec<Route>,
+) {
+	if let Some((_, existing)) = all_listener_routes
+		.iter_mut()
+		.find(|(key, _)| key == &listener_key)
+	{
+		existing.extend(routes);
+	} else {
+		all_listener_routes.push((listener_key, routes));
+	}
+}
+
+fn scoped_routes(listener_key: &ListenerKey, routes: Vec<Route>) -> Vec<Route> {
+	routes
+		.into_iter()
+		.map(|mut route| {
+			route.key = strng::format!("{listener_key}/{}", route.key);
+			route
+		})
+		.collect()
+}
+
+fn ui_oidc_redirect_path(policies: Option<&LocalUIPolicy>) -> anyhow::Result<Option<Strng>> {
+	let Some(oidc) = policies.and_then(|pol| pol.oidc.as_ref()) else {
+		return Ok(None);
+	};
+	let uri: Uri = oidc.redirect_uri.parse().with_context(|| {
+		format!(
+			"invalid ui.policies.oidc.redirectURI: {}",
+			oidc.redirect_uri
+		)
+	})?;
+	Ok(Some(strng::new(uri.path())))
 }
 
 #[cfg(any(not(test), target_family = "unix"))]
@@ -2754,6 +3329,120 @@ fn merge_prompt_guards(
 			Some(shared)
 		},
 	}
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn convert_attached_llm(
+	resources: &crate::resource_manager::ResourceFetcher,
+	config: &crate::Config,
+	gateway: ListenerTarget,
+	llm_config: LocalLLMConfig,
+	gateway_refs: &LocalGatewayReferences,
+	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
+	all_policies: &mut Vec<TargetedPolicy>,
+	all_backends: &mut Vec<BackendWithPolicies>,
+) -> anyhow::Result<()> {
+	let listeners = resolve_gateway_references(gateway_refs, &llm_config.gateways)?;
+	let (_bind, routes, policies, backends) = Box::pin(convert_llm_config(
+		resources, config, gateway, llm_config, true,
+	))
+	.await?;
+	for listener_key in listeners {
+		push_listener_routes(
+			all_listener_routes,
+			listener_key.clone(),
+			scoped_routes(&listener_key, routes.clone()),
+		);
+	}
+	all_policies.extend_from_slice(&policies);
+	all_backends.extend_from_slice(&backends);
+	Ok(())
+}
+
+async fn convert_attached_mcp(
+	resources: &crate::resource_manager::ResourceFetcher,
+	config: &crate::Config,
+	gateway: ListenerTarget,
+	mcp_config: LocalSimpleMcpConfig,
+	gateway_refs: &LocalGatewayReferences,
+	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
+	all_backends: &mut Vec<BackendWithPolicies>,
+) -> anyhow::Result<()> {
+	let listeners = resolve_gateway_references(gateway_refs, &mcp_config.gateways)?;
+	let (_bind, routes, policies, backends) = Box::pin(convert_mcp_config(
+		resources, config, gateway, mcp_config, true,
+	))
+	.await?;
+	if !policies.is_empty() {
+		bail!("internal error: attached mcp generated targeted policies");
+	}
+	for listener_key in listeners {
+		push_listener_routes(
+			all_listener_routes,
+			listener_key.clone(),
+			scoped_routes(&listener_key, routes.clone()),
+		);
+	}
+	all_backends.extend_from_slice(&backends);
+	Ok(())
+}
+
+async fn convert_attached_ui(
+	resources: &crate::resource_manager::ResourceFetcher,
+	config: &crate::Config,
+	ui_config: LocalUIConfig,
+	gateway_refs: &LocalGatewayReferences,
+	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
+	all_backends: &mut Vec<BackendWithPolicies>,
+) -> anyhow::Result<()> {
+	let listeners = resolve_gateway_references(gateway_refs, &ui_config.gateways)?;
+	let route_key = strng::new("ui");
+	let route_matches = ui_matches(ui_oidc_redirect_path(ui_config.policies.as_ref())?);
+	let resolved_policies = if let Some(pol) = ui_config.policies {
+		split_policies(resources, pol.into(), config.as_policy_context(&route_key)).await?
+	} else {
+		ResolvedPolicies::default()
+	};
+	if !resolved_policies.backend_policies.is_empty() {
+		bail!("ui.policies cannot contain backend policies");
+	}
+	let backend_key = strng::new("ui");
+	let backends = LocalBackend::Internal(InternalBackend::Forward)
+		.as_backends(
+			local_name(backend_key.clone()),
+			resources,
+			config.mcp.session_ttl,
+		)
+		.await?;
+	let routes = vec![Route {
+		key: route_key,
+		service_key: None,
+		service_port: 0,
+		name: RouteName {
+			name: strng::new("ui"),
+			namespace: strng::new("internal"),
+			rule_name: None,
+			kind: None,
+		},
+		hostnames: vec![],
+		matches: route_matches,
+		backends: vec![RouteBackendReference {
+			weight: 1,
+			target: BackendReference::Backend(strng::format!("/{backend_key}")).into(),
+			inline_policies: vec![],
+		}],
+		llm_router: None,
+		inline_policies: resolved_policies.route_policies,
+	}];
+	for listener_key in listeners {
+		push_listener_routes(
+			all_listener_routes,
+			listener_key.clone(),
+			scoped_routes(&listener_key, routes.clone()),
+		);
+	}
+	all_backends.extend_from_slice(&backends);
+	Ok(())
 }
 
 #[derive(Clone)]
@@ -3014,6 +3703,7 @@ async fn convert_llm_config(
 	config: &crate::Config,
 	gateway: ListenerTarget,
 	llm_config: LocalLLMConfig,
+	attach_policies_to_route: bool,
 ) -> anyhow::Result<(
 	Bind,
 	Vec<Route>,
@@ -3021,6 +3711,7 @@ async fn convert_llm_config(
 	Vec<BackendWithPolicies>,
 )> {
 	let LocalLLMConfig {
+		gateways: _,
 		port,
 		tls,
 		providers,
@@ -3042,6 +3733,7 @@ async fn convert_llm_config(
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
 	let mut routes = Vec::new();
+	let mut llm_request_policies = Vec::new();
 	let mut shared_prompt_guard = None;
 	let (listener_gateway_policies, listener_route_policies) = if let Some(pol) = policies {
 		let LocalLLMPolicy {
@@ -3052,8 +3744,7 @@ async fn convert_llm_config(
 		} = pol;
 		// Guardrail is per-model config, but we let users configure it top level. Pull it out here.
 		shared_prompt_guard = guardrails;
-		// Rate limit is applied per-route as well. Resolve them here.
-		let route_policies = split_policies(
+		let feature_route_policies = split_policies(
 			resources,
 			FilterOrPolicy {
 				local_rate_limit: (!local_rate_limit.is_empty())
@@ -3065,7 +3756,6 @@ async fn convert_llm_config(
 		)
 		.await?;
 
-		// Rest of policies are PreRoute gateway policies; resolve these to our listener.
 		let gateway_policies: FilterOrPolicy = gateway.into();
 		let gateway_policies = split_policies(
 			resources,
@@ -3073,10 +3763,17 @@ async fn convert_llm_config(
 			config.as_policy_context("listener/llm"),
 		)
 		.await?;
-		(
-			gateway_policies.route_policies,
-			route_policies.route_policies,
-		)
+		if attach_policies_to_route {
+			llm_request_policies.extend(gateway_policies.route_policies);
+			llm_request_policies.extend(feature_route_policies.route_policies);
+			(vec![], vec![])
+		} else {
+			// Legacy top-level LLM owns its listener, so gateway-style policy fields target that listener.
+			(
+				gateway_policies.route_policies,
+				feature_route_policies.route_policies,
+			)
+		}
 	} else {
 		(vec![], vec![])
 	};
@@ -3525,7 +4222,7 @@ async fn convert_llm_config(
 			inline_policies: vec![],
 		}],
 		llm_router: None,
-		inline_policies: vec![],
+		inline_policies: llm_request_policies,
 	});
 
 	// Create listener
@@ -3611,6 +4308,7 @@ async fn convert_mcp_config(
 	Vec<BackendWithPolicies>,
 )> {
 	let LocalSimpleMcpConfig {
+		gateways: _,
 		port,
 		backend,
 		policies,
@@ -3808,14 +4506,15 @@ async fn convert_listener(
 
 	let mut rs = Vec::new();
 	for (idx, l) in routes.into_iter().flatten().enumerate() {
-		let (route, backends) = convert_route(resources, config, l, idx, key.clone()).await?;
+		let (route, backends) = Box::pin(convert_route(resources, config, l, idx, key.clone())).await?;
 		all_backends.extend_from_slice(&backends);
 		rs.push(route)
 	}
 
 	let mut trs = Vec::new();
 	for (idx, l) in tcp_routes.into_iter().flatten().enumerate() {
-		let (route, policies, backends) = convert_tcp_route(l, idx, key.clone(), resources).await?;
+		let (route, policies, backends) =
+			Box::pin(convert_tcp_route(l, idx, key.clone(), resources)).await?;
 		all_policies.extend_from_slice(&policies);
 		all_backends.extend_from_slice(&backends);
 		trs.push(route)

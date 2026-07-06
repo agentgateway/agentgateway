@@ -4,6 +4,7 @@ import {
   emptyConfig,
   mockGateway,
   populatedConfig,
+  sameOriginGatewayConfig,
 } from "./fixtures";
 
 const pages = [
@@ -258,6 +259,25 @@ test("LLM playground sends selected virtual model name", async ({ page }) => {
   expect(gateway.chatRequests[0].model).toBe("resilient");
 });
 
+test("LLM playground uses relative requests when UI shares the gateway", async ({
+  page,
+}) => {
+  const gateway = await mockGateway(page, sameOriginGatewayConfig());
+  await page.goto("/llm/playground");
+
+  await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Model" }).click();
+  await page.getByRole("option", { name: /resilient/ }).click();
+  await page.getByLabel("User message").fill("ping");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect.poll(() => gateway.chatUrls.length).toBe(1);
+  const pageOrigin = await page.evaluate(() => window.location.origin);
+  const requestUrl = new URL(gateway.chatUrls[0]);
+  expect(requestUrl.origin).toBe(pageOrigin);
+  expect(requestUrl.pathname).toBe("/v1/chat/completions");
+});
+
 test("MCP playground initializes, lists tools, and calls a tool", async ({
   page,
 }) => {
@@ -292,6 +312,23 @@ test("MCP playground initializes, lists tools, and calls a tool", async ({
       (headers) => headers.authorization === "Bearer mcp-secret",
     ),
   ).toBe(true);
+});
+
+test("MCP playground uses relative requests when UI shares the gateway", async ({
+  page,
+}) => {
+  const gateway = await mockGateway(page, sameOriginGatewayConfig());
+  await page.goto("/mcp/playground");
+
+  await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
+  await page.getByRole("button", { name: "Initialize", exact: true }).click();
+  await expect(page.getByText("initialized")).toBeVisible();
+
+  await expect.poll(() => gateway.mcpUrls.length).toBeGreaterThan(0);
+  const pageOrigin = await page.evaluate(() => window.location.origin);
+  const requestUrl = new URL(gateway.mcpUrls[0]);
+  expect(requestUrl.origin).toBe(pageOrigin);
+  expect(requestUrl.pathname).toBe("/mcp");
 });
 
 test("edits top-level MCP policies", async ({ page }) => {

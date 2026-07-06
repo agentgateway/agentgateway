@@ -115,7 +115,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	.await
 	.context("admin server starts")?;
 	#[cfg(feature = "ui")]
-	info!("serving UI at http://{}/ui", config.admin_addr);
+	info!("serving UI at {}", ui_url(config.as_ref()).await);
 
 	let pi = ProxyInputs {
 		cfg: config.clone(),
@@ -165,6 +165,127 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		stores,
 		ready,
 	})
+}
+
+#[cfg(feature = "ui")]
+async fn ui_url(config: &Config) -> String {
+	#[derive(serde::Deserialize)]
+	#[serde(rename_all = "camelCase")]
+	struct UiConfig {
+		#[serde(default, deserialize_with = "deserialize_gateway_refs")]
+		gateways: Vec<String>,
+	}
+
+	#[derive(serde::Deserialize)]
+	#[serde(rename_all = "camelCase")]
+	struct Gateway {
+		#[serde(default)]
+		listeners: Vec<GatewayListener>,
+		port: Option<u16>,
+		hostname: Option<String>,
+		tls: Option<serde_json::Value>,
+	}
+
+	#[derive(serde::Deserialize)]
+	#[serde(rename_all = "camelCase")]
+	struct GatewayListener {
+		name: Option<String>,
+		port: Option<u16>,
+		hostname: Option<String>,
+		tls: Option<serde_json::Value>,
+	}
+
+	#[derive(serde::Deserialize)]
+	#[serde(rename_all = "camelCase")]
+	struct LocalConfigSummary {
+		#[serde(default)]
+		gateways: IndexMap<String, Gateway>,
+		ui: Option<UiConfig>,
+	}
+
+	fn deserialize_gateway_refs<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		#[derive(serde::Deserialize)]
+		#[serde(untagged)]
+		enum GatewayRefs {
+			One(String),
+			Many(Vec<String>),
+		}
+
+		Ok(
+			<Option<GatewayRefs> as serde::Deserialize>::deserialize(deserializer)?
+				.map(|refs| match refs {
+					GatewayRefs::One(reference) => vec![reference],
+					GatewayRefs::Many(references) => references,
+				})
+				.unwrap_or_default(),
+		)
+	}
+
+	fn host(hostname: Option<&str>) -> &str {
+		match hostname {
+			Some(hostname) if hostname != "*" => hostname,
+			_ => "localhost",
+		}
+	}
+
+	fn gateway_url(gateway: &Gateway, listener_name: Option<&str>) -> Option<String> {
+		let listener = match listener_name {
+			Some(name) => Some(
+				gateway
+					.listeners
+					.iter()
+					.find(|listener| listener.name.as_deref() == Some(name))?,
+			),
+			None => gateway.listeners.first(),
+		};
+		let (port, hostname, tls) = match listener {
+			Some(listener) => (
+				listener.port?,
+				listener.hostname.as_deref(),
+				listener.tls.is_some(),
+			),
+			None => (
+				gateway.port?,
+				gateway.hostname.as_deref(),
+				gateway.tls.is_some(),
+			),
+		};
+		Some(format!(
+			"{}://{}:{port}/ui",
+			if tls { "https" } else { "http" },
+			host(hostname)
+		))
+	}
+
+	let Some(local_config) = &config.xds.local_config else {
+		return format!("http://{}/ui", config.admin_addr);
+	};
+	let Ok(contents) = local_config.read_to_string().await else {
+		return format!("http://{}/ui", config.admin_addr);
+	};
+	let Ok(summary) = crate::serdes::yamlviajson::from_str::<LocalConfigSummary>(&contents) else {
+		return format!("http://{}/ui", config.admin_addr);
+	};
+	let Some(ui) = summary.ui else {
+		return format!("http://{}/ui", config.admin_addr);
+	};
+	for reference in ui.gateways {
+		let (gateway_name, listener_name) = reference
+			.split_once('/')
+			.map(|(gateway, listener)| (gateway, Some(listener)))
+			.unwrap_or((reference.as_str(), None));
+		if let Some(url) = summary
+			.gateways
+			.get(gateway_name)
+			.and_then(|gateway| gateway_url(gateway, listener_name))
+		{
+			return url;
+		}
+	}
+	format!("http://{}/ui", config.admin_addr)
 }
 
 pub struct Bound {

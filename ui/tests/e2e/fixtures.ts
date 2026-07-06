@@ -196,6 +196,32 @@ export function populatedConfig(): TestConfig {
   };
 }
 
+export function sameOriginGatewayConfig(): TestConfig {
+  const config = populatedConfig();
+  config.gateways = {
+    public: {
+      port: 8080,
+    },
+  };
+  config.ui = {
+    gateways: ["public"],
+  };
+
+  const llm = config.llm as Record<string, unknown>;
+  llm.gateways = ["public"];
+  delete llm.port;
+  const llmPolicies = llm.policies as Record<string, unknown> | undefined;
+  delete llmPolicies?.cors;
+
+  const mcp = config.mcp as Record<string, unknown>;
+  mcp.gateways = ["public"];
+  delete mcp.port;
+  const mcpPolicies = mcp.policies as Record<string, unknown> | undefined;
+  delete mcpPolicies?.cors;
+
+  return config;
+}
+
 export async function mockGateway(
   page: Page,
   initialConfig: TestConfig = populatedConfig(),
@@ -203,7 +229,9 @@ export async function mockGateway(
   let config = structuredClone(initialConfig);
   const postedConfigs: TestConfig[] = [];
   const chatRequests: Array<Record<string, unknown>> = [];
+  const chatUrls: string[] = [];
   const mcpRequests: Array<Record<string, unknown>> = [];
+  const mcpUrls: string[] = [];
   const mcpHeaders: Array<Record<string, string>> = [];
 
   await page.route("**/config", async (route) => {
@@ -328,6 +356,7 @@ export async function mockGateway(
   });
 
   await page.route("**/v1/chat/completions", async (route) => {
+    chatUrls.push(route.request().url());
     chatRequests.push(
       route.request().postDataJSON() as Record<string, unknown>,
     );
@@ -346,6 +375,7 @@ export async function mockGateway(
 
   await page.route("**/mcp", async (route) => {
     const body = route.request().postDataJSON() as { method?: string };
+    mcpUrls.push(route.request().url());
     mcpRequests.push(body as Record<string, unknown>);
     mcpHeaders.push(route.request().headers());
     if (body.method === "initialize") {
@@ -406,7 +436,9 @@ export async function mockGateway(
   return {
     postedConfigs,
     chatRequests,
+    chatUrls,
     mcpRequests,
+    mcpUrls,
     mcpHeaders,
   };
 }

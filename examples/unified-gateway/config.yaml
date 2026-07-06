@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+gateways:
+  public:
+    port: 3000
+
+llm:
+  gateways: [public]
+  policies:
+    apiKey:
+      keys:
+      - key: agw_sk_example
+        metadata:
+          name: Example key
+          owner: platform
+      mode: strict
+      location:
+        header:
+          name: authorization
+          prefix: "Bearer "
+  providers:
+  - name: openai
+    provider: openAI
+    params:
+      apiKey: $OPENAI_API_KEY
+  models:
+  - name: gpt-4o-mini
+    provider:
+      reference: openai
+    params:
+      model: gpt-4o-mini
+
+mcp:
+  gateways: [public]
+  policies:
+    mcpAuthentication:
+      mode: strict
+      issuer: http://dex.local
+      audiences:
+      - http://localhost:3000/mcp
+      jwks:
+        url: http://dex.local/keys
+      resourceMetadata:
+        resource: http://localhost:3000/mcp
+        scopesSupported:
+        - read:all
+        bearerMethodsSupported:
+        - header
+        - body
+        - query
+        resourceDocumentation: http://localhost:3000/mcp/docs
+        resourcePolicyUri: http://localhost:3000/mcp/policies
+  targets:
+  - name: everything
+    stdio:
+      cmd: npx
+      args:
+      - '@modelcontextprotocol/server-everything'
+
+ui:
+  gateways: [public]
+  policies:
+    oidc:
+#      issuer: http://localhost:7080/realms/agentgateway
+      issuer: http://dex.local
+      clientId: local
+      clientSecret: local-secret
+      redirectURI: http://localhost:3000/oauth/callback
+      scopes:
+      - profile
+      - email

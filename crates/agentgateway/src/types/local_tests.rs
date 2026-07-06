@@ -137,8 +137,11 @@ async fn normalize_test_policies(
 			services: vec![],
 			backends: vec![],
 			route_groups: vec![],
+			gateways: Default::default(),
+			routes: vec![],
 			llm: None,
 			mcp: None,
+			ui: None,
 		},
 	)
 	.await
@@ -859,6 +862,166 @@ mcp:
 			.contains("top-level llm and mcp cannot share a port when llm.tls is configured"),
 		"{err:?}"
 	);
+}
+
+#[tokio::test]
+async fn test_gateways_attach_llm_mcp_and_ui_to_one_listener() {
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+gateways:
+  public:
+    port: 3000
+llm:
+  gateways: public
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  gateways: [public]
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+ui:
+  gateways: [public]
+  policies:
+    oidc:
+      issuer: https://issuer.example.com
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      jwks: '{TEST_OIDC_JWKS}'
+      clientId: client-id
+      clientSecret: client-secret
+      redirectURI: http://localhost:3000/oauth/callback
+"#,
+	))
+	.await
+	.expect("gateway-attached LLM, MCP, and UI should normalize");
+
+	assert_eq!(normalized.binds.len(), 1);
+	assert_eq!(normalized.binds[0].address.port(), 3000);
+	assert_eq!(
+		normalized.binds[0]
+			.listeners
+			.iter()
+			.map(|listener| listener.key.as_str())
+			.collect::<Vec<_>>(),
+		vec!["gateway/public"],
+	);
+
+	let routes = normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "gateway/public")
+		.map(|(_, routes)| routes)
+		.expect("public gateway listener routes");
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/public/llm:request")
+	);
+	let mcp_route = routes
+		.iter()
+		.find(|route| route.key.as_str() == "gateway/public/mcp:default")
+		.expect("MCP route");
+	assert_eq!(
+		mcp_route
+			.matches
+			.iter()
+			.map(|route_match| match &route_match.path {
+				PathMatch::PathPrefix(path) => path.as_str(),
+				other => panic!("expected path prefix match, got {other:?}"),
+			})
+			.collect::<Vec<_>>(),
+		vec!["/mcp", "/sse", "/.well-known"],
+	);
+	let ui_route = routes
+		.iter()
+		.find(|route| route.key.as_str() == "gateway/public/ui")
+		.expect("UI route");
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == "/")
+	));
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::PathPrefix(path) if path.as_str() == "/ui")
+	));
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == "/oauth/callback")
+	));
+	assert!(
+		ui_route
+			.inline_policies
+			.iter()
+			.any(|policy| matches!(policy, TrafficPolicy::Oidc(_)))
+	);
+	assert!(normalized.backends.iter().any(|backend| {
+		matches!(&backend.backend, Backend::Internal(name, _) if name.name.as_str() == "ui")
+	}));
+}
+
+#[tokio::test]
+async fn test_llm_gateways_preserves_route_policies() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  public:
+    port: 3000
+llm:
+  gateways: [public]
+  policies:
+    authorization:
+      rules:
+      - 'request.path == "/"'
+  models:
+  - name: gpt-4
+    provider: openAI
+"#,
+	)
+	.await
+	.expect("llm.gateways should allow route-level llm.policies");
+
+	let llm_route = normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "gateway/public")
+		.and_then(|(_, routes)| {
+			routes
+				.iter()
+				.find(|route| route.key.as_str() == "gateway/public/llm:request")
+		})
+		.expect("gateway-attached LLM route");
+	assert!(
+		llm_route
+			.inline_policies
+			.iter()
+			.any(|policy| matches!(policy, TrafficPolicy::Authorization(_)))
+	);
+}
+
+#[tokio::test]
+async fn test_ui_policies_rejects_non_ui_policy() {
+	for field in ["ai", "requestHeaderModifier", "responseHeaderModifier"] {
+		let err = normalize_test_yaml(&format!(
+			r#"
+gateways:
+  public:
+    port: 3000
+ui:
+  gateways: [public]
+  policies:
+    {field}: {{}}
+"#,
+		))
+		.await
+		.expect_err("ui.policies should reject non-UI policies");
+
+		assert!(
+			err
+				.to_string()
+				.contains(&format!("unknown field `{field}`")),
+			"{err:?}"
+		);
+	}
 }
 
 #[tokio::test]

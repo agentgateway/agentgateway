@@ -204,12 +204,12 @@ async fn write_config(
 
 	let resources =
 		crate::resource_manager::ResourceFetcher::cached_or_direct(app.resource_manager.clone());
-	if let Err(e) = crate::types::local::NormalizedLocalConfig::from(
+	if let Err(e) = Box::pin(crate::types::local::NormalizedLocalConfig::from(
 		&app.state,
 		&resources,
 		app.state.gateway(),
 		yaml_content.as_str(),
-	)
+	))
 	.await
 	{
 		return Err(ErrorResponse::String(e.to_string()));
