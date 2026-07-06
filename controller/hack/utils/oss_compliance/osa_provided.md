@@ -26,7 +26,6 @@ Name|Version|License
 [spf13/cobra](https://github.com/spf13/cobra)|v1.10.2|Apache License 2.0
 [spf13/pflag](https://github.com/spf13/pflag)|v1.0.10|BSD 3-clause "New" or "Revised" License
 [stretchr/testify](https://github.com/stretchr/testify)|v1.11.1|MIT License
-[go.opencensus.io](https://go.opencensus.io)|v0.24.0|Apache License 2.0
 [go.uber.org/atomic](https://go.uber.org/atomic)|v1.11.0|MIT License
 [go.uber.org/zap](https://go.uber.org/zap)|v1.28.0|MIT License
 [x/clipboard](https://golang.design/x/clipboard)|v0.8.0|MIT License
