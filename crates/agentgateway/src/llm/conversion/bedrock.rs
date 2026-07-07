@@ -877,6 +877,39 @@ pub mod from_completions {
 		})
 	}
 
+	// Bedrock reports cache-write tokens, but the OpenAI Completions type has no field
+	// for them, so completions::Response::to_llm_response reports None. Re-attach the
+	// value to the access-log LLMResponse here, mirroring the streaming path which sets
+	// r.response.cache_creation_input_tokens directly. The body and the OpenAI type are
+	// left untouched.
+	struct BedrockCompletionsResponse {
+		inner: types::completions::Response,
+		cache_creation_input_tokens: Option<u64>,
+	}
+
+	impl ResponseType for BedrockCompletionsResponse {
+		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
+			let mut r = self.inner.to_llm_response(include_completion_in_log);
+			r.cache_creation_input_tokens = self.cache_creation_input_tokens;
+			r
+		}
+
+		fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice> {
+			self.inner.to_webhook_choices()
+		}
+
+		fn set_webhook_choices(
+			&mut self,
+			resp: Vec<crate::llm::policy::webhook::ResponseChoice>,
+		) -> anyhow::Result<()> {
+			self.inner.set_webhook_choices(resp)
+		}
+
+		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
+			self.inner.serialize()
+		}
+	}
+
 	pub fn translate_response(
 		bytes: &Bytes,
 		model: &str,
@@ -885,9 +918,18 @@ pub mod from_completions {
 		let resp = serde_json::from_slice::<bedrock::ConverseResponse>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let openai = translate_response_internal(resp, model, tool_name_map)?;
+		// The typed response carries Bedrock's cache-write count; capture it before
+		// json::convert demotes it into the untyped OpenAI Completions `rest` bucket.
+		let cache_creation_input_tokens = openai
+			.usage
+			.as_ref()
+			.and_then(|u| u.cache_creation_input_tokens);
 		let passthrough = json::convert::<_, types::completions::Response>(&openai)
 			.map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(passthrough))
+		Ok(Box::new(BedrockCompletionsResponse {
+			inner: passthrough,
+			cache_creation_input_tokens,
+		}))
 	}
 
 	fn translate_response_internal(
