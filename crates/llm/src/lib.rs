@@ -8,20 +8,10 @@ use tiktoken_rs::CoreBPE;
 use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 use tracing::warn;
 
-#[cfg(feature = "schema")]
-pub use schemars::JsonSchema;
-#[cfg(not(feature = "schema"))]
-pub trait JsonSchema {}
+pub use agent_core::serdes;
+pub use agent_core::serdes::{JsonSchema, apply, attribute_alias, define_schema_aliases};
 
-pub use macro_rules_attribute::{apply, attribute_alias};
-
-attribute_alias! {
-	#[apply(schema_de!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Deserialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))];
-	#[apply(schema_ser!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Serialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)];
-	#[apply(schema_ser_schema!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Serialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))];
-	#[apply(schema!)] = #[serde_with::serde_as] #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))];
-	#[apply(schema_enum!)] = #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Copy, serde::Deserialize, serde::Serialize)] #[serde(rename_all = "camelCase", deny_unknown_fields)] #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))];
-}
+define_schema_aliases!();
 
 pub mod anthropic;
 pub mod azure;
@@ -109,12 +99,6 @@ pub mod json {
 	pub fn convert<I: Serialize, O: DeserializeOwned>(input: &I) -> Result<O, serde_json::Error> {
 		let v = serde_json::to_value(input)?;
 		serde_json::from_value::<O>(v)
-	}
-}
-
-pub mod serdes {
-	pub fn is_default<T: Default + PartialEq>(t: &T) -> bool {
-		*t == Default::default()
 	}
 }
 

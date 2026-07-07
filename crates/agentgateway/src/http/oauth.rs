@@ -1,8 +1,8 @@
 use std::io::Write;
 
+use crate::apply;
 use base64::prelude::BASE64_STANDARD;
 use base64::write::EncoderStringWriter;
-use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::schema;

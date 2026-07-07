@@ -9,7 +9,7 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [features]
-schema = ["schemars"]
+schema = ["schemars", "agent-core/schema"]
 
 [dependencies]
 agent-core.workspace = true
@@ -32,7 +32,6 @@ http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
 itertools.workspace = true
-macro_rules_attribute.workspace = true
 percent-encoding.workspace = true
 pin-project-lite.workspace = true
 rand.workspace = true

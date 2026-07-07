@@ -1,6 +1,6 @@
+use crate::apply;
 use base64::Engine;
 use htpasswd_verify_fork::Htpasswd;
-use macro_rules_attribute::apply;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;

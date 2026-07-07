@@ -1,7 +1,7 @@
 use std::hash::Hash;
 
+use crate::apply;
 use ::cel::Value;
-use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, Serializer};
 use sha2::{Digest, Sha256};

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use crate::apply;
 use jsonwebtoken::jwk::JwkSet;
-use macro_rules_attribute::apply;
 use secrecy::SecretString;
 
 use super::{

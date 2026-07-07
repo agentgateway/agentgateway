@@ -6,11 +6,11 @@ use std::time::Duration;
 #[cfg(not(test))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::apply;
 use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Context, Error, anyhow, bail};
 use itertools::Itertools;
-use macro_rules_attribute::apply;
 use secrecy::SecretString;
 
 use crate::http::auth::BackendAuth;
