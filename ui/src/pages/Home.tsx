@@ -35,7 +35,13 @@ export function HomePage() {
   );
   const hasLlm = Boolean(config.data?.llm);
   const hasMcp = Boolean(config.data?.mcp);
-  const hasTraffic = Boolean(config.data && "binds" in config.data);
+  const hasTraffic = Boolean(
+    config.data &&
+    ("binds" in config.data ||
+      "gateways" in config.data ||
+      "routes" in config.data),
+  );
+  const hasBinds = Boolean(config.data && "binds" in config.data);
   const models = config.data?.llm?.models ?? [];
   const virtualModels = config.data?.llm?.virtualModels ?? [];
   const mcpServers = config.data?.mcp?.targets ?? [];
@@ -69,7 +75,7 @@ export function HomePage() {
         } else if (surface === "mcp") {
           next.mcp = startupMcpConfig(next, 3000);
         } else {
-          next.binds = [];
+          next.gateways ??= { default: { port: 8080 } };
         }
       });
       setLocallyEnabled((current) => new Set(current).add(surface));
@@ -309,16 +315,29 @@ export function HomePage() {
           enabled={hasTraffic}
           disabled={update.isPending}
           onEnable={() => void enableSurface("apis")}
-          setupNeeded={traffic.listeners === 0}
-          setupText="Add a listener before HTTP or TCP traffic can be served."
-          setupTo="/traffic/listeners"
-          setupLabel="Set up listeners"
-          overview={[
-            `${traffic.binds} ${traffic.binds === 1 ? "bind" : "binds"}`,
-            `${traffic.listeners} ${traffic.listeners === 1 ? "listener" : "listeners"}`,
-            `${traffic.httpRoutes + traffic.tcpRoutes} ${traffic.httpRoutes + traffic.tcpRoutes === 1 ? "route" : "routes"}`,
-          ]}
-          links={[{ to: "/traffic/routes", label: "Manage routes" }]}
+          setupNeeded={
+            hasBinds ? traffic.listeners === 0 : traffic.gateways === 0
+          }
+          setupText={
+            hasBinds
+              ? "Add a listener before HTTP or TCP traffic can be served."
+              : "Add a gateway before HTTP traffic can be served."
+          }
+          setupTo={hasBinds ? "/traffic/listeners" : "/traffic/gateways"}
+          setupLabel={hasBinds ? "Set up listeners" : "Set up gateways"}
+          overview={
+            hasBinds
+              ? [
+                  `${traffic.binds} ${traffic.binds === 1 ? "bind" : "binds"}`,
+                  `${traffic.listeners} ${traffic.listeners === 1 ? "listener" : "listeners"}`,
+                  `${traffic.httpRoutes + traffic.tcpRoutes} ${traffic.httpRoutes + traffic.tcpRoutes === 1 ? "route" : "routes"}`,
+                ]
+              : [
+                  `${traffic.gateways} ${traffic.gateways === 1 ? "gateway" : "gateways"}`,
+                  `${traffic.httpRoutes} ${traffic.httpRoutes === 1 ? "route" : "routes"}`,
+                ]
+          }
+          links={[{ to: "/traffic/gateways", label: "Manage gateways" }]}
         />
       </section>
       {llmSettingsOpen ? (

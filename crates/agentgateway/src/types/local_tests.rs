@@ -960,6 +960,119 @@ ui:
 }
 
 #[tokio::test]
+async fn test_default_gateway_is_implicit_for_attached_surfaces_and_routes() {
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+gateways:
+  default:
+    port: 3000
+routes:
+- name: app
+  matches:
+  - path:
+      exact: /app
+  backends:
+  - host: example.com:80
+llm:
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+ui:
+  policies:
+    oidc:
+      issuer: https://issuer.example.com
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      jwks: '{TEST_OIDC_JWKS}'
+      clientId: client-id
+      clientSecret: client-secret
+      redirectURI: http://localhost:3000/oauth/callback
+"#,
+	))
+	.await
+	.expect("default gateway should be implicit");
+
+	assert_eq!(normalized.binds.len(), 1);
+	assert_eq!(normalized.binds[0].address.port(), 3000);
+	let routes = normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "gateway/default")
+		.map(|(_, routes)| routes)
+		.expect("default gateway listener routes");
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/default/default/app")
+	);
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/default/llm:request")
+	);
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/default/mcp:default")
+	);
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/default/ui")
+	);
+}
+
+#[tokio::test]
+async fn test_explicit_llm_mcp_ports_take_precedence_over_default_gateway() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  default:
+    port: 8080
+llm:
+  port: 4000
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  port: 3000
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+"#,
+	)
+	.await
+	.expect("explicit LLM/MCP ports should stay port-bound");
+
+	assert_eq!(
+		normalized
+			.binds
+			.iter()
+			.map(|bind| bind.address.port())
+			.collect::<Vec<_>>(),
+		vec![8080, 4000, 3000],
+	);
+	assert!(normalized.listener_routes.iter().any(|(listener, routes)| {
+		listener.as_str() == "llm"
+			&& routes
+				.iter()
+				.any(|route| route.key.as_str() == "llm:request")
+	}));
+	assert!(normalized.listener_routes.iter().any(|(listener, routes)| {
+		listener.as_str() == "mcp"
+			&& routes
+				.iter()
+				.any(|route| route.key.as_str() == "mcp:default")
+	}));
+}
+
+#[tokio::test]
 async fn test_llm_gateways_preserves_route_policies() {
 	let normalized = normalize_test_yaml(
 		r#"

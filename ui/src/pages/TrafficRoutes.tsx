@@ -30,13 +30,17 @@ import {
   type RouteKind,
 } from "../traffic";
 import type {
+  GatewayConfig,
   TrafficListener,
   TrafficRoute,
   TrafficRouteBackend,
   TrafficTcpRoute,
   TrafficTcpRouteBackend,
 } from "../types";
-import type { RouteMatch as GeneratedRouteMatch } from "../gateway-config";
+import type {
+  LocalAttachedRoute,
+  RouteMatch as GeneratedRouteMatch,
+} from "../gateway-config";
 import {
   ReadonlyModeBanner,
   TrafficDumpRoutesView,
@@ -86,6 +90,7 @@ function TrafficRoutesEditorPage() {
   const config = useGatewayConfig();
   const update = useUpdateConfig();
   const help = useSchemaHelp();
+  const hasLegacyBinds = Boolean(config.data && "binds" in config.data);
   const routes = useMemo(() => routeContexts(config.data), [config.data]);
   const listeners = useMemo(
     () =>
@@ -185,28 +190,33 @@ function TrafficRoutesEditorPage() {
     writeTrafficRouteSearch(null, "replace");
   }
 
+  if (!config.isLoading && !config.isError && !hasLegacyBinds) {
+    return <GatewayRoutesEditorPage />;
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
         title="Traffic Routes"
         description="Match incoming HTTP and TCP traffic and attach inline backends."
         actions={
-          <button
-            className="button primary"
-            type="button"
-            disabled={!listeners.length}
-            onClick={() => {
-              const first = listeners[0];
-              openAddRoute(
-                first.bindIndex,
-                first.listenerIndex,
-                first.listener,
-              );
-            }}
-          >
-            <Plus size={16} />
-            Add route
-          </button>
+          listeners.length ? (
+            <button
+              className="button primary"
+              type="button"
+              onClick={() => {
+                const first = listeners[0];
+                openAddRoute(
+                  first.bindIndex,
+                  first.listenerIndex,
+                  first.listener,
+                );
+              }}
+            >
+              <Plus size={16} />
+              Add route
+            </button>
+          ) : undefined
         }
       />
 
@@ -237,25 +247,35 @@ function TrafficRoutesEditorPage() {
         ) : !routes.length ? (
           <EmptyState
             title="No traffic routes configured"
-            description="Add a route under an HTTP or TCP listener."
+            description={
+              hasLegacyBinds
+                ? "Add a route under an HTTP or TCP listener."
+                : "Use traffic gateways for new HTTP routing configuration."
+            }
             action={
-              <button
-                className="button primary"
-                type="button"
-                disabled={!listeners.length}
-                onClick={() => {
-                  const first = listeners[0];
-                  if (!first) return;
-                  openAddRoute(
-                    first.bindIndex,
-                    first.listenerIndex,
-                    first.listener,
-                  );
-                }}
-              >
-                <RouteIcon size={16} />
-                Add route
-              </button>
+              hasLegacyBinds ? (
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={() => {
+                    const first = listeners[0];
+                    if (!first) return;
+                    openAddRoute(
+                      first.bindIndex,
+                      first.listenerIndex,
+                      first.listener,
+                    );
+                  }}
+                >
+                  <RouteIcon size={16} />
+                  Add route
+                </button>
+              ) : (
+                <Link className="button primary" to="/traffic/gateways">
+                  <RouteIcon size={16} />
+                  Manage gateways
+                </Link>
+              )
             }
           />
         ) : (
@@ -372,6 +392,305 @@ function TrafficRoutesEditorPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+function GatewayRoutesEditorPage() {
+  const config = useGatewayConfig();
+  const update = useUpdateConfig();
+  const help = useSchemaHelp();
+  const routes = config.data?.routes ?? [];
+  const gatewayOptions = gatewayReferenceOptions(config.data);
+  const [editing, setEditing] = useState<{
+    routeIndex?: number;
+    route: LocalAttachedRoute;
+  } | null>(null);
+
+  function openAddRoute() {
+    setEditing({
+      route: {
+        gateways: gatewayOptions[0]?.value,
+        matches: [{ path: { pathPrefix: "/" } }],
+        backends: [],
+      },
+    });
+  }
+
+  function closeEditor() {
+    setEditing(null);
+  }
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        title="Traffic Routes"
+        description="Attach HTTP routes to traffic gateways."
+        actions={
+          <button
+            className="button primary"
+            type="button"
+            disabled={!gatewayOptions.length}
+            onClick={openAddRoute}
+          >
+            <Plus size={16} />
+            Add route
+          </button>
+        }
+      />
+
+      {update.isError ? (
+        <StatusBanner state="bad" title="Save failed">
+          {update.error.message}
+        </StatusBanner>
+      ) : null}
+      {update.isSuccess ? (
+        <StatusBanner state="ok" title="Configuration saved" />
+      ) : null}
+
+      <Panel>
+        {config.isLoading ? (
+          <StatusBanner state="loading" title="Loading traffic routes" />
+        ) : config.isError ? (
+          <StatusBanner state="bad" title="Configuration API unavailable">
+            {config.error.message}
+          </StatusBanner>
+        ) : !gatewayOptions.length ? (
+          <EmptyState
+            title="No traffic gateways configured"
+            description="Add a gateway before attaching routes."
+            action={
+              <Link className="button primary" to="/traffic/gateways">
+                <RouteIcon size={16} />
+                Manage gateways
+              </Link>
+            }
+          />
+        ) : !routes.length ? (
+          <EmptyState
+            title="No traffic routes configured"
+            description="Attach a route to a gateway."
+            action={
+              <button
+                className="button primary"
+                type="button"
+                onClick={openAddRoute}
+              >
+                <RouteIcon size={16} />
+                Add route
+              </button>
+            }
+          />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Gateway</th>
+                  <th>Match</th>
+                  <th>Backends</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {routes.map((route, routeIndex) => (
+                  <tr key={`${gatewayRouteRef(route)}-${routeIndex}`}>
+                    <td className="strong">
+                      {routeDisplayName(route, routeIndex)}
+                    </td>
+                    <td>{gatewayRouteRef(route) || "Unassigned"}</td>
+                    <td>{pathSummary(route)}</td>
+                    <td>{backendListSummary(route.backends)}</td>
+                    <td className="row-actions">
+                      <Tooltip content="Edit route">
+                        <button
+                          className="icon-button"
+                          type="button"
+                          aria-label="Edit route"
+                          onClick={() =>
+                            setEditing({
+                              routeIndex,
+                              route: structuredClone(route),
+                            })
+                          }
+                        >
+                          <Pencil size={16} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip content="Delete route">
+                        <button
+                          className="icon-button danger"
+                          type="button"
+                          aria-label="Delete route"
+                          onClick={() =>
+                            update.mutate((next) => {
+                              next.routes = (next.routes ?? []).filter(
+                                (_, index) => index !== routeIndex,
+                              );
+                              if (!next.routes.length) delete next.routes;
+                            })
+                          }
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </Tooltip>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      {editing ? (
+        <GatewayRouteEditor
+          gatewayOptions={gatewayOptions}
+          editing={editing}
+          help={help}
+          saving={update.isPending}
+          onCancel={closeEditor}
+          onSave={(nextEditing) =>
+            update.mutate(
+              (next) => {
+                if (!Array.isArray(next.routes)) next.routes = [];
+                if (typeof nextEditing.routeIndex === "number")
+                  next.routes[nextEditing.routeIndex] = nextEditing.route;
+                else next.routes.push(nextEditing.route);
+              },
+              { onSuccess: closeEditor },
+            )
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function GatewayRouteEditor(props: {
+  gatewayOptions: Array<{ value: string; label: string; description?: string }>;
+  editing: {
+    routeIndex?: number;
+    route: LocalAttachedRoute;
+  };
+  help: SchemaHelp;
+  saving: boolean;
+  onCancel: () => void;
+  onSave: (editing: { routeIndex?: number; route: LocalAttachedRoute }) => void;
+}) {
+  const [route, setRoute] = useState<LocalAttachedRoute>(props.editing.route);
+  const [gateway, setGateway] = useState(gatewayRouteRef(props.editing.route));
+  const [error, setError] = useState<string | null>(null);
+  const preview = cleanGatewayRoute({ ...route, gateways: gateway });
+
+  function save() {
+    if (!gateway) {
+      setError("Select a gateway.");
+      return;
+    }
+    props.onSave({
+      routeIndex: props.editing.routeIndex,
+      route: preview,
+    });
+  }
+
+  return (
+    <Drawer
+      title={
+        typeof props.editing.routeIndex === "number"
+          ? "Edit route"
+          : "Add route"
+      }
+      onClose={props.onCancel}
+      footer={
+        <div className="button-row">
+          <button className="button" type="button" onClick={props.onCancel}>
+            Cancel
+          </button>
+          <button
+            className="button primary"
+            type="button"
+            disabled={props.saving}
+            onClick={save}
+          >
+            <Save size={16} />
+            Save route
+          </button>
+        </div>
+      }
+    >
+      {error ? <StatusBanner state="bad" title={error} /> : null}
+      <div className="route-editor-stack">
+        <FieldGroup
+          label="Gateway"
+          tooltip="Gateway or gateway listener that owns this route."
+        >
+          <Dropdown
+            ariaLabel="Gateway"
+            value={gateway}
+            options={props.gatewayOptions}
+            onChange={(value) => {
+              setGateway(value);
+              if (error) setError(null);
+            }}
+          />
+        </FieldGroup>
+
+        <div className="form-grid">
+          <Field
+            label="Name"
+            tooltip={props.help.field<TrafficRoute>("LocalRoute", "name")}
+          >
+            <input
+              value={route.name ?? ""}
+              onChange={(event) =>
+                setRoute({ ...route, name: event.target.value })
+              }
+              placeholder="api"
+            />
+          </Field>
+          <Field
+            label="Hostnames"
+            tooltip={props.help.field<TrafficRoute>(
+              "LocalRoute",
+              "hostnames",
+              "Comma-separated hostnames. Wildcards are allowed.",
+            )}
+          >
+            <input
+              value={(route.hostnames ?? []).join(", ")}
+              onChange={(event) =>
+                setRoute({ ...route, hostnames: splitList(event.target.value) })
+              }
+              placeholder="example.com, *.example.com"
+            />
+          </Field>
+        </div>
+
+        <HttpMatchEditor route={route} help={props.help} onChange={setRoute} />
+
+        <RouteBackendsEditor
+          kind="http"
+          help={props.help}
+          backends={(route.backends ?? []) as TrafficRouteBackend[]}
+          onChange={(backends) => setRoute({ ...route, backends })}
+        />
+
+        <TrafficPolicySection
+          title="Route policies"
+          schemaRoot="FilterOrPolicy"
+          policies={
+            route.policies as Record<string, unknown> | null | undefined
+          }
+          onChange={(policies) => setRoute({ ...route, policies })}
+        />
+
+        <details open>
+          <summary>Resulting YAML</summary>
+          <YamlBlock value={preview} />
+        </details>
+      </div>
+    </Drawer>
   );
 }
 
@@ -1559,6 +1878,51 @@ function routeFromSearch(
 
 function routeSearchValue(context: ReturnType<typeof routeContexts>[number]) {
   return `${context.bindIndex}:${context.listenerIndex}:${context.kind}:${context.routeIndex}`;
+}
+
+function gatewayReferenceOptions(config: GatewayConfig | null | undefined) {
+  return Object.entries(config?.gateways ?? {}).flatMap(([name, gateway]) => {
+    const listeners = gateway.listeners ?? [];
+    if (!listeners.length) {
+      return [
+        {
+          value: name,
+          label: name,
+          description: gateway.port ? `Port ${gateway.port}` : undefined,
+        },
+      ];
+    }
+    return [
+      {
+        value: name,
+        label: `${name} (all listeners)`,
+        description: gateway.port ? `Port ${gateway.port}` : undefined,
+      },
+      ...listeners.map((listener, index) => {
+        const listenerName = listener.name ?? `listener${index}`;
+        return {
+          value: `${name}/${listenerName}`,
+          label: `${name}/${listenerName}`,
+          description: listener.hostname ?? undefined,
+        };
+      }),
+    ];
+  });
+}
+
+function gatewayRouteRef(route: Pick<LocalAttachedRoute, "gateways">) {
+  if (Array.isArray(route.gateways)) return route.gateways[0] ?? "";
+  return route.gateways ?? "";
+}
+
+function cleanGatewayRoute(route: LocalAttachedRoute): LocalAttachedRoute {
+  const next = cleanRoute(route, "http") as LocalAttachedRoute;
+  if (Array.isArray(next.gateways)) {
+    next.gateways = next.gateways.filter(Boolean);
+    if (next.gateways.length === 1) next.gateways = next.gateways[0];
+  }
+  if (!next.gateways) delete next.gateways;
+  return next;
 }
 
 function writeTrafficRouteSearch(

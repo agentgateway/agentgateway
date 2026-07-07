@@ -95,7 +95,18 @@ export function Shell() {
         "gateways" in config.data ||
         "routes" in config.data
       : true;
-  const navGroups = navigationGroups({ hasLlm, hasMcp, hasTraffic, dumpMode });
+  const hasBinds = dumpMode
+    ? true
+    : config.data
+      ? "binds" in config.data
+      : false;
+  const navGroups = navigationGroups({
+    hasLlm,
+    hasMcp,
+    hasTraffic,
+    hasBinds,
+    dumpMode,
+  });
   const nav = navGroups.flatMap((group) => group.items);
   const currentNav =
     nav
@@ -214,6 +225,7 @@ export function Shell() {
 }
 
 function navigationGroups(options: {
+  hasBinds: boolean;
   hasLlm: boolean;
   hasMcp: boolean;
   hasTraffic: boolean;
@@ -297,7 +309,15 @@ function navigationGroups(options: {
       : options.hasTraffic
         ? [
             { to: "/traffic/gateways", label: "Gateways", icon: Network },
-            { to: "/traffic/listeners", label: "Listeners", icon: Network },
+            ...(options.hasBinds
+              ? [
+                  {
+                    to: "/traffic/listeners",
+                    label: "Listeners",
+                    icon: Network,
+                  },
+                ]
+              : []),
             { to: "/traffic/routes", label: "Routes", icon: Route },
           ]
         : [

@@ -1,5 +1,4 @@
-import { RotateCcw, Save } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import {
   Dropdown,
   FieldGroup,
@@ -32,7 +31,7 @@ export function RawSettingsPage() {
   return (
     <PolicyCatalogPage
       title="Top-level Settings"
-      description="Configure UI exposure and route-level UI policies."
+      description="Configure UI exposure and UI policies."
       schemaRoot="LocalUIPolicy"
       sections={uiPolicySections}
       yamlDescription="Read-only view of ui.policies."
@@ -69,30 +68,13 @@ function UiGatewayPanel() {
       firstGatewayRef(config.data?.ui?.gateways) ?? gatewayOptions[0]?.value,
     [config.data?.ui?.gateways, gatewayOptions],
   );
-  const [gateway, setGateway] = useState(initialGateway);
-  const previousInitial = useRef(initialGateway);
-  const dirty = gateway !== initialGateway;
 
-  useEffect(() => {
-    if (previousInitial.current !== initialGateway) {
-      setGateway(initialGateway);
-      previousInitial.current = initialGateway;
-    }
-  }, [initialGateway]);
-
-  function save() {
-    update.mutate(
-      (next) => {
-        next.ui ??= {};
-        if (gateway) next.ui.gateways = gateway;
-        else delete next.ui.gateways;
-      },
-      {
-        onSuccess: () => {
-          previousInitial.current = gateway;
-        },
-      },
-    );
+  function setGateway(gateway: string) {
+    update.mutate((next) => {
+      next.ui ??= {};
+      if (gateway) next.ui.gateways = gateway;
+      else delete next.ui.gateways;
+    });
   }
 
   return (
@@ -104,34 +86,14 @@ function UiGatewayPanel() {
         >
           <Dropdown
             ariaLabel="UI gateway"
-            value={gateway ?? ""}
+            value={initialGateway ?? ""}
             options={gatewayOptions}
-            disabled={!gatewayOptions.length}
+            disabled={!gatewayOptions.length || update.isPending}
             placeholder="No gateways configured"
             allowEmpty
             onChange={setGateway}
           />
         </FieldGroup>
-      </div>
-      <div className="button-row">
-        <button
-          className="button"
-          type="button"
-          disabled={!dirty || update.isPending}
-          onClick={() => setGateway(initialGateway)}
-        >
-          <RotateCcw size={16} />
-          Reset
-        </button>
-        <button
-          className="button primary"
-          type="button"
-          disabled={!dirty || update.isPending || !gateway}
-          onClick={save}
-        >
-          <Save size={16} />
-          Save
-        </button>
       </div>
       {!gatewayOptions.length ? (
         <StatusBanner state="warn" title="No gateways configured">

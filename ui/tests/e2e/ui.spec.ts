@@ -54,12 +54,14 @@ test("onboards all surfaces from a completely empty config", async ({
   await page.getByRole("button", { name: /APIs/ }).click();
 
   await expect.poll(() => gateway.postedConfigs.length).toBe(1);
-  expect(gateway.postedConfigs[0].binds).toEqual([]);
+  expect(gateway.postedConfigs[0].gateways).toMatchObject({
+    default: { port: 8080 },
+  });
   await expect(
     page.getByRole("heading", { name: "Welcome to Agentgateway" }),
   ).toBeVisible();
   await expect(
-    page.locator(".nav-list").getByRole("link", { name: "Listeners" }),
+    page.locator(".nav-list").getByRole("link", { name: "Gateways" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: /LLM/ }).click();
@@ -124,9 +126,58 @@ test("onboards LLM and MCP onto the UI gateway when present", async ({
   });
   expect(gateway.postedConfigs[1].mcp).not.toHaveProperty("port");
 
-  await page.getByRole("button", { name: /APIs/ }).click();
-  await expect.poll(() => gateway.postedConfigs.length).toBe(3);
-  expect(gateway.postedConfigs[2].binds).toEqual([]);
+  await expect(page.getByRole("button", { name: /APIs/ })).toHaveCount(0);
+  await expect(
+    page.locator(".nav-list").getByRole("link", { name: "Gateways" }),
+  ).toBeVisible();
+});
+
+test("homepage treats top-level gateways as traffic", async ({ page }) => {
+  await mockGateway(page, {
+    gateways: {
+      default: {
+        port: 4000,
+      },
+    },
+    routes: [],
+  });
+  await page.goto("/");
+
+  const traffic = page
+    .locator(".surface-row")
+    .filter({ has: page.getByText("Traffic") });
+  await expect(traffic).toContainText("Enabled");
+  await expect(traffic).toContainText("1 gateway");
+  await expect(traffic).not.toContainText("listener");
+  await expect(traffic).not.toContainText("Not enabled");
+  await expect(
+    page.locator(".nav-list").getByRole("link", { name: "Listeners" }),
+  ).toHaveCount(0);
+});
+
+test("attaches traffic routes to gateways", async ({ page }) => {
+  const gateway = await mockGateway(page, {
+    gateways: {
+      default: {
+        port: 4000,
+      },
+    },
+    routes: [],
+  });
+  await page.goto("/traffic/routes");
+
+  await page.getByRole("button", { name: "Add route" }).first().click();
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill("api");
+  await page.getByRole("button", { name: "Save route" }).click();
+
+  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+  expect(gateway.postedConfigs[0].routes).toMatchObject([
+    {
+      gateways: "default",
+      name: "api",
+      matches: [{ path: { pathPrefix: "/" } }],
+    },
+  ]);
 });
 
 test("raw configuration editor shows schema diagnostics", async ({ page }) => {
@@ -546,9 +597,7 @@ test("Playground shows Claude subscription key warning", async ({ page }) => {
   await expect(page.getByText("sk-ant-oat")).toBeVisible();
 });
 
-test("Client Setup shows Claude subscription key warning", async ({
-  page,
-}) => {
+test("Client Setup shows Claude subscription key warning", async ({ page }) => {
   await mockGateway(page, configWithClaudeSubscriptionKey());
   await page.goto("/llm/client-setup");
 
@@ -570,9 +619,9 @@ test("no Claude subscription warning for env-var API keys", async ({
   await page.getByRole("combobox", { name: "Model" }).click();
   await page.getByRole("option", { name: /anthropic/ }).click();
 
-  await expect(
-    page.getByText("Claude subscription key detected"),
-  ).toHaveCount(0);
+  await expect(page.getByText("Claude subscription key detected")).toHaveCount(
+    0,
+  );
 });
 
 function emptyConfigWithModels() {

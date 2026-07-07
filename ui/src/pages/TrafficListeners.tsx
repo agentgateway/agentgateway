@@ -174,17 +174,13 @@ function TrafficListenersEditorPage() {
           </StatusBanner>
         ) : !config.data?.binds?.length ? (
           <EmptyState
-            title="No traffic binds configured"
-            description="Add a bind port before attaching listeners and routes."
+            title="No legacy binds configured"
+            description="Use traffic gateways for new HTTP routing configuration."
             action={
-              <button
-                className="button primary"
-                type="button"
-                onClick={() => openBindEditor(null)}
-              >
+              <Link className="button primary" to="/traffic/gateways">
                 <Network size={16} />
-                Add bind
-              </button>
+                Manage gateways
+              </Link>
             }
           />
         ) : (

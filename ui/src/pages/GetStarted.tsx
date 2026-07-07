@@ -51,11 +51,15 @@ const surfaceConfig: Record<
   traffic: {
     title: "Enable Traffic",
     description:
-      "Create the traffic configuration section so HTTP and TCP listeners, routes, backends, and policies can be configured.",
+      "Create the traffic configuration section so HTTP gateways, routes, backends, and policies can be configured.",
     icon: Network,
-    enabled: (config) => Boolean(config && "binds" in config),
-    destination: "/traffic/listeners",
-    destinationLabel: "Continue to listeners",
+    enabled: (config) =>
+      Boolean(
+        config &&
+        ("gateways" in config || "routes" in config || "binds" in config),
+      ),
+    destination: "/traffic/gateways",
+    destinationLabel: "Continue to gateways",
   },
 };
 
@@ -112,8 +116,12 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
               next,
               parsePort(port, defaultSurfacePort(props.surface)),
             );
-        } else if (!("binds" in next)) {
-          next.binds = [];
+        } else if (!("gateways" in next)) {
+          next.gateways = {
+            default: {
+              port: parsePort(port, defaultSurfacePort(props.surface)),
+            },
+          };
         }
       });
       void navigate({ to: surface.destination });

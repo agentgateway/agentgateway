@@ -330,7 +330,8 @@ pub struct LocalConfig {
 		schemars(with = "std::collections::HashMap<String, LocalGateway>")
 	)]
 	gateways: IndexMap<Strng, LocalGateway>,
-	/// routes defines HTTP routes attached to one or more named gateways.
+	/// routes defines HTTP routes attached to one or more named gateways. When a gateway named `default` exists,
+	/// routes without gateways attach to it.
 	#[serde(default)]
 	routes: Vec<LocalAttachedRoute>,
 	#[serde(default)]
@@ -343,7 +344,8 @@ pub struct LocalConfig {
 
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
-	/// gateways attaches the LLM API routes to named gateways. When set, port and tls must be configured on the gateway.
+	/// gateways attaches the LLM API routes to named gateways. When omitted and a gateway named `default` exists,
+	/// the LLM API routes attach to it unless port or tls is set. When set, port and tls must be configured on the gateway.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
@@ -482,7 +484,8 @@ pub struct LocalLLMConditionalTarget {
 
 #[apply(schema_de!)]
 pub struct LocalSimpleMcpConfig {
-	/// gateways attaches the MCP routes to named gateways. When set, port must be configured on the gateway.
+	/// gateways attaches the MCP routes to named gateways. When omitted and a gateway named `default` exists,
+	/// the MCP routes attach to it unless port is set. When set, port must be configured on the gateway.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
@@ -496,7 +499,8 @@ pub struct LocalSimpleMcpConfig {
 
 #[apply(schema_de!)]
 pub struct LocalUIConfig {
-	/// gateways exposes the UI and required UI API routes on named gateways.
+	/// gateways exposes the UI and required UI API routes on named gateways. When omitted and a gateway named
+	/// `default` exists, the UI routes attach to it.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
@@ -1098,7 +1102,9 @@ struct LocalGateway {
 	policies: LocalGatewayPolicy,
 }
 
-#[apply(schema_de!)]
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 struct LocalAttachedRoute {
 	/// gateways attaches this route to named gateways or gateway listeners.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
@@ -2639,8 +2645,9 @@ async fn convert(
 	resources: &crate::resource_manager::ResourceFetcher,
 	gateway: ListenerTarget,
 	config: &crate::Config,
-	i: LocalConfig,
+	mut i: LocalConfig,
 ) -> anyhow::Result<NormalizedLocalConfig> {
+	apply_implicit_default_gateway(&mut i);
 	validate_local_listener_ports(&i)?;
 	let LocalConfig {
 		config: _,
@@ -2949,6 +2956,40 @@ async fn convert(
 		services,
 	};
 	Ok(normalized)
+}
+
+fn apply_implicit_default_gateway(config: &mut LocalConfig) {
+	let default_gateway = strng::literal!("default");
+	if !config.gateways.contains_key(&default_gateway) {
+		return;
+	}
+
+	for route in &mut config.routes {
+		if route.gateways.is_empty() {
+			route.gateways.push(default_gateway.clone());
+		}
+	}
+
+	if let Some(ui) = &mut config.ui
+		&& ui.gateways.is_empty()
+	{
+		ui.gateways.push(default_gateway.clone());
+	}
+
+	if let Some(llm) = &mut config.llm
+		&& llm.gateways.is_empty()
+		&& llm.port.is_none()
+		&& llm.tls.is_none()
+	{
+		llm.gateways.push(default_gateway.clone());
+	}
+
+	if let Some(mcp) = &mut config.mcp
+		&& mcp.gateways.is_empty()
+		&& mcp.port.is_none()
+	{
+		mcp.gateways.push(default_gateway);
+	}
 }
 
 fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
