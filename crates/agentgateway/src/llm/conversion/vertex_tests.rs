@@ -100,8 +100,8 @@ fn test_embeddings_response_translation() {
 
 	assert_eq!(resp.object, "list");
 	assert_eq!(resp.model, "text-embedding-004");
-	assert_eq!(resp.usage.prompt_tokens, 7);
-	assert_eq!(resp.usage.total_tokens, 7);
+	assert_eq!(resp.usage.as_ref().unwrap().prompt_tokens, 7);
+	assert_eq!(resp.usage.unwrap().total_tokens, 7);
 }
 
 #[test]
@@ -119,5 +119,5 @@ fn test_embeddings_response_missing_statistics() {
 		.and_then(|b| serde_json::from_slice::<types::embeddings::Response>(&b))
 		.unwrap();
 
-	assert_eq!(resp.usage.prompt_tokens, 0);
+	assert_eq!(resp.usage.unwrap().prompt_tokens, 0);
 }
