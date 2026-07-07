@@ -3389,7 +3389,7 @@ mod tests {
 		let fallback = wiremock::MockServer::start().await;
 		Mock::given(wiremock::matchers::any())
 			.respond_with(ResponseTemplate::new(200).set_body_raw(
-				include_bytes!("../llm/tests/response/completions/basic.json").to_vec(),
+				include_bytes!("../../../llm/src/tests/response/completions/basic.json").to_vec(),
 				"application/json",
 			))
 			.mount(&fallback)
@@ -3469,7 +3469,7 @@ mod tests {
 			io,
 			Method::POST,
 			"http://lo/v1/chat/completions",
-			include_bytes!("../llm/tests/requests/completions/basic.json"),
+			include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
 		)
 		.await;
 

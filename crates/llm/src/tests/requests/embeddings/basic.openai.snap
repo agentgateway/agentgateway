@@ -1,0 +1,13 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/embeddings/basic.json
+info:
+  model: text-embedding-3-small
+  input: hello world
+  dimensions: 1024
+---
+{
+  "model": "text-embedding-3-small",
+  "input": "hello world",
+  "dimensions": 1024
+}

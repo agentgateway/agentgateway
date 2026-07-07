@@ -1,0 +1,25 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock/rerank.json
+info:
+  results:
+    - index: 2
+      relevanceScore: 0.9
+    - index: 0
+      relevanceScore: 0.1
+---
+{
+  "response": {
+    "results": [
+      {
+        "index": 2,
+        "relevance_score": 0.9
+      },
+      {
+        "index": 0,
+        "relevance_score": 0.1
+      }
+    ]
+  },
+  "parsed": {}
+}

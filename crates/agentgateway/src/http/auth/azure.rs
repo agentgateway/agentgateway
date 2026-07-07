@@ -8,6 +8,7 @@ use tracing::trace;
 
 use crate::serdes::schema;
 use crate::{apply, client, ser_redact};
+pub use agent_llm::auth::AzureCredentialCache;
 
 // The Rust sdk for Azure is the only one that requires users to manually specify their auth method
 // for all non-developer use-cases. Therefore, we have to carry these different options in our API....
@@ -35,24 +36,6 @@ pub enum AzureUserAssignedIdentity {
 	ClientId(String),
 	ObjectId(String),
 	ResourceId(String),
-}
-
-/// Per-instance credential cache for [`AzureAuth`].
-///
-/// Each [`AzureAuth`] value owns its own cache so that different backends
-/// (e.g. two `ExplicitConfig` entries with different client secrets) get
-/// independent credentials instead of sharing a single global cache.
-/// Clones share the same underlying `Arc`, so the credential is built at
-/// most once per config instance.
-#[derive(Default, Clone)]
-pub struct AzureCredentialCache(
-	Arc<tokio::sync::OnceCell<Arc<dyn azure_core::credentials::TokenCredential>>>,
-);
-
-impl std::fmt::Debug for AzureCredentialCache {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str("AzureCredentialCache")
-	}
 }
 
 #[apply(schema!)]

@@ -100,6 +100,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-llm"
+version = "0.0.0"
+dependencies = [
+ "agent-core",
+ "anyhow",
+ "async-openai",
+ "aws-credential-types",
+ "aws-smithy-eventstream",
+ "aws-smithy-types",
+ "axum",
+ "axum-core",
+ "azure_core",
+ "base64",
+ "bytes",
+ "cel",
+ "chrono",
+ "futures-core",
+ "futures-util",
+ "headers",
+ "http 1.4.2",
+ "http-body 1.0.1",
+ "http-body-util",
+ "insta",
+ "itertools 0.15.0",
+ "macro_rules_attribute",
+ "percent-encoding",
+ "pin-project-lite",
+ "rand 0.10.1",
+ "rstest",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "serde_regex",
+ "serde_with",
+ "thiserror 2.0.18",
+ "tiktoken-rs",
+ "tokio",
+ "tokio-util",
+ "tokio_sse_codec",
+ "tracing",
+ "vector-map",
+ "x509-parser",
+]
+
+[[package]]
 name = "agent-pool"
 version = "0.0.0"
 dependencies = [
@@ -152,6 +197,7 @@ dependencies = [
  "agent-celx",
  "agent-core",
  "agent-hbone",
+ "agent-llm",
  "agent-pool",
  "agent-xds",
  "anyhow",

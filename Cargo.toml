@@ -9,6 +9,7 @@ resolver = "2"
 members = [
     "crates/agentgateway",
     "crates/agentgateway-app",
+    "crates/llm",
     "crates/cel-fork/cel",
     "crates/cel-fork/cel-derive",
     "crates/celx",
@@ -43,6 +44,7 @@ publish = false
 agent-core = { path = "crates/core" }
 agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
+agent-llm = { path = "crates/llm" }
 agent-pool = { path = "crates/pool" }
 agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }
