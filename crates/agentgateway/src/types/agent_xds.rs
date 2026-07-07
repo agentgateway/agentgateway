@@ -1019,14 +1019,17 @@ fn backend_auth_from_proto(
 									tag.key
 								)));
 							}
+							// Permissive: a bad expression fails requests that hit this tag
+							// (fail closed) instead of rejecting the whole policy update.
+							let expression = permissive_cel_expression_arc(
+								diagnostics,
+								format!("AWS session tag {:?}", tag.key),
+								tag.expression,
+							);
 							Ok(auth::aws::AwsSessionTag {
 								key: tag.key,
 								value: None,
-								expression: Some(Arc::new(
-									cel::Expression::new_strict(&tag.expression).map_err(|e| {
-										ProtoError::Generic(format!("invalid session tag expression: {e}"))
-									})?,
-								)),
+								expression: Some(expression),
 							})
 						})
 						.collect::<Result<Vec<_>, _>>()?;

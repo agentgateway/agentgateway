@@ -2407,8 +2407,10 @@ async fn make_backend_call(
 			}
 		} else {
 			(
-				// Clearing extensions is fine; the HTTP codepath doesn't require usage after this point.
-				req.take_and_snapshot_clearing_extensions(log.as_mut())?,
+				// Extensions must stay on the request through 'apply_late_backend_auth':
+				// AWS signing evaluates dynamic session tag expressions against them
+				// (JWT claims, etc.) at signing time.
+				req.take_and_snapshot_without_clearing_extensions(log.as_mut())?,
 				LLMResponsePolicies::default(),
 				None,
 			)

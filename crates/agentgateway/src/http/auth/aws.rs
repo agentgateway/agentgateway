@@ -331,20 +331,14 @@ fn validate_session_tag_value(key: &str, value: &str) -> anyhow::Result<()> {
 	Ok(())
 }
 
-/// Coerces a CEL evaluation result into a tag value. Strings pass through;
-/// numbers and booleans (common JWT claim types) are stringified; anything else
-/// (null, lists, maps, missing values) is an error so misattribution fails closed.
+/// Coerces a CEL evaluation result into a tag value. Strings, numbers, and
+/// booleans (common JWT claim types) stringify via [`cel::Value::as_string`];
+/// anything else (null, lists, maps) is an error so misattribution fails closed.
 fn session_tag_value(v: cel::Value) -> anyhow::Result<String> {
 	// Materialize Dynamic so nested lookups (e.g. JWT claims) are concrete values.
-	let v = v.always_materialize_owned();
-	match &v {
-		cel::Value::String(s) => Ok(s.as_ref().to_string()),
-		cel::Value::Int(i) => Ok(i.to_string()),
-		cel::Value::UInt(u) => Ok(u.to_string()),
-		cel::Value::Float(f) => Ok(f.to_string()),
-		cel::Value::Bool(b) => Ok(b.to_string()),
-		_ => anyhow::bail!("expression produced {:?}, expected a string", v.type_of()),
-	}
+	v.always_materialize_owned()
+		.as_string()
+		.map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 fn de_session_tags<'de, D>(deserializer: D) -> Result<AwsSessionTags, D::Error>
@@ -373,27 +367,6 @@ where
 			expression: Some(expression.clone()),
 		});
 	serializer.collect_seq(static_entries.chain(dynamic_entries))
-}
-
-/// Session tags fully resolved for one request, stored as a request extension so
-/// the late signing step can consume them after the CEL request context (JWT
-/// claims, etc.) is no longer available on the request.
-#[derive(Clone, Debug)]
-pub struct ResolvedSessionTags(Arc<[(String, String)]>);
-
-/// Evaluates any dynamic (CEL) session tags against the request and stashes the
-/// resolved tag set for [`sign_request`]. Must run while the CEL request context
-/// (JWT claims, etc.) is still on the request, i.e. before extensions are cleared.
-pub(super) fn resolve_session_tags(aws: &AwsAuth, req: &mut http::Request) -> anyhow::Result<()> {
-	let Some(assume_role) = aws.assume_role() else {
-		return Ok(());
-	};
-	if !assume_role.tags.has_dynamic() {
-		return Ok(());
-	}
-	let resolved = assume_role.tags.resolve(req)?;
-	req.extensions_mut().insert(ResolvedSessionTags(resolved));
-	Ok(())
 }
 
 impl AwsAuth {
@@ -457,6 +430,14 @@ pub(super) async fn sign_request(
 	req: &mut http::Request,
 	aws_auth: &AwsAuth,
 ) -> anyhow::Result<()> {
+	// Resolve any dynamic (CEL) session tags first, while the request is intact.
+	// The CEL context reads headers and extensions (JWT claims, etc.), which the
+	// proxy keeps on the request until after late backend auth. Fails closed: an
+	// expression that cannot produce a valid tag value rejects the request.
+	let resolved_tags = match aws_auth.assume_role() {
+		Some(assume_role) if assume_role.tags.has_dynamic() => Some(assume_role.tags.resolve(req)?),
+		_ => None,
+	};
 	let lim = crate::http::buffer_limit(req);
 	let orig_body = std::mem::take(req.body_mut());
 	// Get the region based on auth mode
@@ -478,8 +459,7 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
-	let resolved_tags = req.extensions().get::<ResolvedSessionTags>().cloned();
-	let creds = Box::pin(load_credentials(aws_auth, region, resolved_tags.as_ref()))
+	let creds = Box::pin(load_credentials(aws_auth, region, resolved_tags))
 		.await?
 		.into();
 
@@ -544,7 +524,7 @@ async fn sdk_config<'a>() -> &'a SdkConfig {
 async fn load_credentials(
 	aws_auth: &AwsAuth,
 	signing_region: &str,
-	resolved_tags: Option<&ResolvedSessionTags>,
+	resolved_tags: Option<Arc<[(String, String)]>>,
 ) -> anyhow::Result<Credentials> {
 	if let (Some(assume_role), Some(cache)) = (aws_auth.assume_role(), aws_auth.assume_role_cache()) {
 		load_assumed_credentials(assume_role, cache, signing_region, resolved_tags).await
@@ -610,8 +590,7 @@ struct AssumeRoleCacheKey {
 	role_arn: String,
 	resolved_sts_region: String,
 	session_name: Option<String>,
-	/// Pre-sorted (key, value) pairs (see [`sorted_session_tags`]) so the cache key
-	/// is stable regardless of tag order.
+	/// Sorted (key, value) pairs so the cache key is stable regardless of tag order.
 	tags: Arc<[(String, String)]>,
 }
 
@@ -621,16 +600,12 @@ async fn load_assumed_credentials(
 	assume_role: &AwsAssumeRole,
 	cache: &AwsAssumeRoleCache,
 	signing_region: &str,
-	resolved_tags: Option<&ResolvedSessionTags>,
+	resolved_tags: Option<Arc<[(String, String)]>>,
 ) -> anyhow::Result<Credentials> {
 	let sts_region = resolve_sts_region(assume_role, signing_region).await?;
-	let tags = match (assume_role.tags.has_dynamic(), resolved_tags) {
-		(true, Some(resolved)) => resolved.0.clone(),
-		// Dynamic tags are resolved in apply_backend_auth; refuse to assume the role
-		// without them rather than send unattributed traffic (fail closed).
-		(true, None) => anyhow::bail!("dynamic session tags were not resolved for this request"),
-		(false, _) => assume_role.tags.static_tags(),
-	};
+	// resolved_tags is Some iff dynamic tags are configured (see sign_request);
+	// static-only configs use the pre-sorted static set via a cheap Arc clone.
+	let tags = resolved_tags.unwrap_or_else(|| assume_role.tags.static_tags());
 	let key = AssumeRoleCacheKey {
 		role_arn: assume_role.role_arn.clone(),
 		resolved_sts_region: sts_region.clone(),
@@ -885,38 +860,58 @@ mod resolve_tags_tests {
 		assert!(err.to_string().contains("exceeds"), "got: {err}");
 	}
 
-	#[test]
-	fn static_only_auth_skips_resolution() {
+	#[tokio::test]
+	async fn sign_request_fails_closed_when_dynamic_tag_cannot_resolve() {
 		let auth = AwsAuth::Implicit {
 			service_name: None,
 			assume_role: Some(AwsAssumeRole {
 				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 				session_name: None,
-				tags: session_tags(vec![tag("Team", Some("acme"), None)]),
+				tags: session_tags(vec![tag("App", None, Some(r#"request.headers["x-app"]"#))]),
 			}),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		};
+		// No x-app header: resolution fails before any credential loading or STS call.
 		let mut req = request(&[], None);
-		resolve_session_tags(&auth, &mut req).expect("static tags need no resolution");
+		let err = sign_request(&mut req, &auth)
+			.await
+			.expect_err("must reject the request rather than sign it unattributed");
 		assert!(
-			req.extensions().get::<ResolvedSessionTags>().is_none(),
-			"static-only configs should not pay for per-request resolution"
+			err.to_string().contains("App"),
+			"error names the tag: {err}"
 		);
 	}
 
 	#[tokio::test]
-	async fn unresolved_dynamic_tags_fail_closed_at_signing() {
-		let assume_role = AwsAssumeRole {
-			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
-			session_name: None,
-			tags: session_tags(vec![tag("App", None, Some(r#"request.headers["x-app"]"#))]),
+	async fn sign_request_fails_closed_when_expression_did_not_compile() {
+		// xds compiles expressions permissively: a bad expression becomes one that
+		// always fails at evaluation, so only requests hitting this tag fail.
+		let (expression, err) = cel::Expression::new_permissive("this is not cel (");
+		assert!(err.is_some(), "expression should fail to compile");
+		let auth = AwsAuth::Implicit {
+			service_name: None,
+			assume_role: Some(AwsAssumeRole {
+				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+				session_name: None,
+				tags: AwsSessionTags::try_new(vec![AwsSessionTag {
+					key: "App".to_string(),
+					value: None,
+					expression: Some(Arc::new(expression)),
+				}])
+				.expect("permissive expression should pass config validation"),
+			}),
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
 		};
-		let cache = AwsAssumeRoleCache::default();
-		let err = load_assumed_credentials(&assume_role, &cache, "us-east-1", None)
+		let mut req = request(&[("x-app", "invoicer")], None);
+		let err = sign_request(&mut req, &auth)
 			.await
-			.expect_err("must not assume the role without resolved tags");
-		assert!(err.to_string().contains("not resolved"), "got: {err}");
+			.expect_err("uncompilable expression must fail the request");
+		assert!(
+			err.to_string().contains("App"),
+			"error names the tag: {err}"
+		);
 	}
 }
 

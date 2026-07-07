@@ -151,11 +151,8 @@ pub async fn apply_backend_auth(
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
-		BackendAuth::Aws(aws) => {
-			// Signing happens in 'apply_late_backend_auth' since it must come at the end
-			// (due to request signing), but dynamic session tags are resolved here, while
-			// the CEL request context (JWT claims, etc.) is still on the request.
-			aws::resolve_session_tags(aws, req).map_err(ProxyError::BackendAuthenticationFailed)?;
+		BackendAuth::Aws(_) => {
+			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
 		},
 		BackendAuth::Azure(azure_auth) => {
 			let token = azure::get_token(
