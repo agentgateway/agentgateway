@@ -345,6 +345,7 @@ pub struct LocalConfig {
 pub struct LocalLLMConfig {
 	/// gateways attaches the LLM API routes to named gateways. When set, port and tls must be configured on the gateway.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
+	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
@@ -483,6 +484,7 @@ pub struct LocalLLMConditionalTarget {
 pub struct LocalSimpleMcpConfig {
 	/// gateways attaches the MCP routes to named gateways. When set, port must be configured on the gateway.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
+	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
@@ -496,6 +498,7 @@ pub struct LocalSimpleMcpConfig {
 pub struct LocalUIConfig {
 	/// gateways exposes the UI and required UI API routes on named gateways.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
+	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
 	/// policies defines route-level policies for the UI and required UI API routes.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1061,6 +1064,7 @@ fn custom_provider_format(
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(untagged)]
 enum LocalGatewayRefs {
 	One(Strng),
@@ -1100,6 +1104,7 @@ struct LocalGateway {
 struct LocalAttachedRoute {
 	/// gateways attaches this route to named gateways or gateway listeners.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
+	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
 	#[serde(flatten)]
 	route: LocalRoute,

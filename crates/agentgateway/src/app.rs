@@ -169,123 +169,69 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 
 #[cfg(feature = "ui")]
 async fn ui_url(config: &Config) -> String {
-	#[derive(serde::Deserialize)]
-	#[serde(rename_all = "camelCase")]
-	struct UiConfig {
-		#[serde(default, deserialize_with = "deserialize_gateway_refs")]
-		gateways: Vec<String>,
-	}
-
-	#[derive(serde::Deserialize)]
-	#[serde(rename_all = "camelCase")]
-	struct Gateway {
-		#[serde(default)]
-		listeners: Vec<GatewayListener>,
-		port: Option<u16>,
-		hostname: Option<String>,
-		tls: Option<serde_json::Value>,
-	}
-
-	#[derive(serde::Deserialize)]
-	#[serde(rename_all = "camelCase")]
-	struct GatewayListener {
-		name: Option<String>,
-		port: Option<u16>,
-		hostname: Option<String>,
-		tls: Option<serde_json::Value>,
-	}
-
-	#[derive(serde::Deserialize)]
-	#[serde(rename_all = "camelCase")]
-	struct LocalConfigSummary {
-		#[serde(default)]
-		gateways: IndexMap<String, Gateway>,
-		ui: Option<UiConfig>,
-	}
-
-	fn deserialize_gateway_refs<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		#[derive(serde::Deserialize)]
-		#[serde(untagged)]
-		enum GatewayRefs {
-			One(String),
-			Many(Vec<String>),
-		}
-
-		Ok(
-			<Option<GatewayRefs> as serde::Deserialize>::deserialize(deserializer)?
-				.map(|refs| match refs {
-					GatewayRefs::One(reference) => vec![reference],
-					GatewayRefs::Many(references) => references,
-				})
-				.unwrap_or_default(),
-		)
-	}
-
-	fn host(hostname: Option<&str>) -> &str {
-		match hostname {
-			Some(hostname) if hostname != "*" => hostname,
-			_ => "localhost",
-		}
-	}
-
-	fn gateway_url(gateway: &Gateway, listener_name: Option<&str>) -> Option<String> {
-		let listener = match listener_name {
-			Some(name) => Some(
-				gateway
-					.listeners
-					.iter()
-					.find(|listener| listener.name.as_deref() == Some(name))?,
-			),
-			None => gateway.listeners.first(),
-		};
-		let (port, hostname, tls) = match listener {
-			Some(listener) => (
-				listener.port?,
-				listener.hostname.as_deref(),
-				listener.tls.is_some(),
-			),
-			None => (
-				gateway.port?,
-				gateway.hostname.as_deref(),
-				gateway.tls.is_some(),
-			),
-		};
-		Some(format!(
-			"{}://{}:{port}/ui",
-			if tls { "https" } else { "http" },
-			host(hostname)
-		))
-	}
-
+	let admin_url = || format!("http://{}/ui", config.admin_addr);
 	let Some(local_config) = &config.xds.local_config else {
-		return format!("http://{}/ui", config.admin_addr);
+		return admin_url();
 	};
 	let Ok(contents) = local_config.read_to_string().await else {
-		return format!("http://{}/ui", config.admin_addr);
+		return admin_url();
 	};
-	let Ok(summary) = crate::serdes::yamlviajson::from_str::<LocalConfigSummary>(&contents) else {
-		return format!("http://{}/ui", config.admin_addr);
+	let Ok(local) = crate::serdes::yamlviajson::from_str::<serde_json::Value>(&contents) else {
+		return admin_url();
 	};
-	let Some(ui) = summary.ui else {
-		return format!("http://{}/ui", config.admin_addr);
+	let gateway_ref = match local.pointer("/ui/gateways") {
+		Some(serde_json::Value::String(reference)) => reference.as_str(),
+		Some(serde_json::Value::Array(references)) => {
+			let Some(reference) = references.iter().find_map(serde_json::Value::as_str) else {
+				return admin_url();
+			};
+			reference
+		},
+		_ => return admin_url(),
 	};
-	for reference in ui.gateways {
-		let (gateway_name, listener_name) = reference
-			.split_once('/')
-			.map(|(gateway, listener)| (gateway, Some(listener)))
-			.unwrap_or((reference.as_str(), None));
-		if let Some(url) = summary
-			.gateways
-			.get(gateway_name)
-			.and_then(|gateway| gateway_url(gateway, listener_name))
-		{
-			return url;
-		}
-	}
-	format!("http://{}/ui", config.admin_addr)
+	let (gateway_name, listener_name) = gateway_ref
+		.split_once('/')
+		.map(|(gateway, listener)| (gateway, Some(listener)))
+		.unwrap_or((gateway_ref, None));
+	let Some(gateway) = local.get("gateways").and_then(|g| g.get(gateway_name)) else {
+		return admin_url();
+	};
+	let endpoint = match listener_name {
+		Some(listener_name) => gateway
+			.get("listeners")
+			.and_then(serde_json::Value::as_array)
+			.and_then(|listeners| {
+				listeners
+					.iter()
+					.find(|listener| listener.get("name").and_then(serde_json::Value::as_str) == Some(listener_name))
+			}),
+		None => gateway
+			.get("listeners")
+			.and_then(serde_json::Value::as_array)
+			.and_then(|listeners| listeners.first())
+			.or(Some(gateway)),
+	};
+	let Some(endpoint) = endpoint else {
+		return admin_url();
+	};
+	let Some(port) = endpoint
+		.get("port")
+		.and_then(serde_json::Value::as_u64)
+		.and_then(|port| u16::try_from(port).ok())
+	else {
+		return admin_url();
+	};
+	let hostname = endpoint
+		.get("hostname")
+		.and_then(serde_json::Value::as_str)
+		.filter(|hostname| *hostname != "*")
+		.unwrap_or("localhost");
+	let scheme = if endpoint.get("tls").is_some_and(|tls| !tls.is_null()) {
+		"https"
+	} else {
+		"http"
+	};
+	format!("{scheme}://{hostname}:{port}/ui")
 }
 
 pub struct Bound {

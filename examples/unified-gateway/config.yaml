@@ -1,10 +1,13 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
 gateways:
   public:
-    port: 3000
-
+    port: 443
+    tls:
+      cert: $HOME/.secrets/localhost-lo.pem
+      key: $HOME/.secrets/localhost-lo-key.pem
 llm:
-  gateways: [public]
+  gateways:
+  - public
   policies:
     apiKey:
       keys:
@@ -16,7 +19,7 @@ llm:
       location:
         header:
           name: authorization
-          prefix: "Bearer "
+          prefix: 'Bearer '
   providers:
   - name: openai
     provider: openAI
@@ -28,9 +31,9 @@ llm:
       reference: openai
     params:
       model: gpt-4o-mini
-
 mcp:
-  gateways: [public]
+  gateways:
+  - public
   policies:
     mcpAuthentication:
       mode: strict
@@ -55,16 +58,18 @@ mcp:
       cmd: npx
       args:
       - '@modelcontextprotocol/server-everything'
-
 ui:
-  gateways: [public]
+  gateways:
+  - public
   policies:
     oidc:
-#      issuer: http://localhost:7080/realms/agentgateway
       issuer: http://dex.local
       clientId: local
       clientSecret: local-secret
-      redirectURI: http://localhost:3000/oauth/callback
+      redirectURI: https://localhost/oauth/callback
       scopes:
       - profile
       - email
+config:
+  modelCatalog:
+  - file: examples/unified-gateway/base-costs.json

@@ -9803,10 +9803,7 @@
       "properties": {
         "gateways": {
           "description": "gateways attaches this route to named gateways or gateway listeners.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
         "name": {
@@ -9869,15 +9866,25 @@
       },
       "additionalProperties": false
     },
+    "LocalGatewayRefs": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "LocalLLMConfig": {
       "type": "object",
       "properties": {
         "gateways": {
           "description": "gateways attaches the LLM API routes to named gateways. When set, port and tls must be configured on the gateway.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
         "port": {
@@ -10811,10 +10818,7 @@
       "properties": {
         "gateways": {
           "description": "gateways attaches the MCP routes to named gateways. When set, port must be configured on the gateway.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
         "port": {
@@ -10877,10 +10881,7 @@
       "properties": {
         "gateways": {
           "description": "gateways exposes the UI and required UI API routes on named gateways.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
         "policies": {
