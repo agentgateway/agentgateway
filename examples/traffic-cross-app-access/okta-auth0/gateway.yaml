@@ -12,7 +12,7 @@
 #
 # All deployment-specific values come from environment variables (expanded at load time).
 # Export them first (see README.md), then run from THIS directory:
-#   cargo run --release --bin agentgateway -- -f ./config.yaml
+#   cargo run --release --bin agentgateway -- -f ./gateway.yaml
 #
 #   OKTA_DOMAIN         e.g. dev-12345.okta.com          (no scheme)
 #   OKTA_CLIENT_ID      requesting-app client id (also the ID-token audience)

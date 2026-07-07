@@ -70,7 +70,7 @@ You also need: an Okta org, an Auth0 tenant, and a downstream "resource" API to 
 
 ## 3. Export the config values as environment variables
 
-`config.yaml` reads all deployment-specific values from env vars (expanded at load time) — nothing
+`gateway.yaml` reads all deployment-specific values from env vars (expanded at load time) — nothing
 is hardcoded and there are no secret files. Export them in the shell you'll run the gateway from:
 
 ```bash
@@ -93,7 +93,7 @@ Run **from this directory**, in the **same shell** where you exported the vars (
 **`:3032`**). Validate first with `--validate-only`:
 
 ```bash
-cargo run --release --bin agentgateway -- -f ./config.yaml
+cargo run --release --bin agentgateway -- -f ./gateway.yaml
 ```
 
 (Or use a released agentgateway binary of `v1.4.0-alpha.1`+ — the first release that includes
