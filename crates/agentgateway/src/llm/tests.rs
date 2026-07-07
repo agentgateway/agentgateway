@@ -573,8 +573,6 @@ mod response {
 		// reasoning_signature on the completions path), `reasoning_unsigned` does not.
 		("reasoning", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
-		// Prompt-cache write: cacheWriteInputTokens must reach the access-log usage
-		// (cache_creation_input_tokens) on the completions path, not just the body.
 		("cache_write", &[BEDROCK_TO_COMPLETIONS]),
 	];
 	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[

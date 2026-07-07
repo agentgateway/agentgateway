@@ -143,6 +143,10 @@ pub struct Usage {
 	/// Breakdown of tokens used in the prompt.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub prompt_tokens_details: Option<UsagePromptDetails>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_read_input_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_creation_input_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -177,11 +181,16 @@ impl ResponseType for Response {
 					.and_then(|d| d.reasoning_tokens)
 			}),
 			cached_input_tokens: self.usage.as_ref().and_then(|u| {
-				u.prompt_tokens_details
-					.as_ref()
-					.and_then(|d| d.cached_tokens)
+				u.cache_read_input_tokens.or_else(|| {
+					u.prompt_tokens_details
+						.as_ref()
+						.and_then(|d| d.cached_tokens)
+				})
 			}),
-			cache_creation_input_tokens: None,
+			cache_creation_input_tokens: self
+				.usage
+				.as_ref()
+				.and_then(|u| u.cache_creation_input_tokens),
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
 			completion: if include_completion_in_log {
