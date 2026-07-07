@@ -7,8 +7,10 @@
 #   leg 2  :  jwt-bearer at Keycloak (resource-client)     -> Bearer access token
 #   upstream: GET localhost:9000  with Authorization: Bearer <access token>
 #
-# Run Keycloak (configured) and the echo backend first, then:
-#   ../../../target/release/agentgateway -f ./gateway.yaml
+# The client secrets come from env vars (expanded at load time), matching what the setup
+# scripts create. Run Keycloak (configured) and the echo backend first, then:
+#   export KC_AGENT_SECRET=agent-secret KC_RESOURCE_SECRET=resource-secret
+#   cargo run --release --bin agentgateway -- -f ./gateway.yaml
 binds:
 - port: 3030
   listeners:
@@ -33,7 +35,7 @@ binds:
               clientAuth:
                 clientId: agent-client
                 method: clientSecretBasic
-                clientSecret: agent-secret
+                clientSecret: $KC_AGENT_SECRET
             # Leg 2 — the resource authorization server, authenticated as the resource client.
             resourceAuthorizationServer:
               host: localhost:8480
@@ -41,7 +43,7 @@ binds:
               clientAuth:
                 clientId: resource-client
                 method: clientSecretBasic
-                clientSecret: resource-secret
+                clientSecret: $KC_RESOURCE_SECRET
             # Must equal the resource client's configured resource-server identifier;
             # becomes the ID-JAG audience.
             audience: https://resource.idjag.demo

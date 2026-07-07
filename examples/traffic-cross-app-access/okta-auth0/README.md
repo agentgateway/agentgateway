@@ -37,8 +37,8 @@ You also need: an Okta org, an Auth0 tenant, and a downstream "resource" API to 
 
 1. **Register the requesting app** (what the gateway *is*). Fastest path uses the OIN
    placeholder **Agent0**: *Applications → Browse App Catalog →* search **Agent0** → add.
-   In the app's **Sign On** tab, copy the **Client ID** and **Client secret** — these become
-   `OKTA_REQUESTING_APP_CLIENT_ID` and the contents of `secrets/okta-client-secret`.
+   In the app's **Sign On** tab, copy the **Client ID** and **Client secret** — you'll export
+   these as `OKTA_CLIENT_ID` and `OKTA_CLIENT_SECRET` (step 3).
    Note the app's **token endpoint auth method** (Basic vs Post) — the config's
    `clientAuth.method` must match it.
 2. **Register the resource app** — OIN placeholder **Todo0** (*Browse App Catalog →* **Todo0**),
@@ -60,7 +60,7 @@ You also need: an Okta org, an Auth0 tenant, and a downstream "resource" API to 
 2. **Create the Resource Application** — *Applications → Create Application →* **Regular Web
    Application** (must be a confidential, first-party client; SPAs/native are unsupported).
    In **Settings**, enable the **Cross App Access** toggle. Copy its **Client ID** / **Client
-   Secret** → `AUTH0_RESOURCE_CLIENT_ID` and `secrets/auth0-client-secret`.
+   Secret** → you'll export these as `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` (step 3).
 3. **Trust the Okta IdP.** Create an **Okta Workforce** enterprise connection in Auth0:
    enter the resource app's Client ID/Secret and the Okta **Issuer URL**, and activate the
    **"Cross App Access – Resource Application"** role on the connection. Link it under the
@@ -68,48 +68,36 @@ You also need: an Okta org, an Auth0 tenant, and a downstream "resource" API to 
    URI on the Okta app.
 4. Auth0's token endpoint is `https://<AUTH0_DOMAIN>/oauth/token`.
 
-## 3. Fill in the config
+## 3. Export the config values as environment variables
 
-Edit [`config.yaml`](config.yaml) and replace every `<PLACEHOLDER>`:
-
-| Placeholder | Value |
-|---|---|
-| `<OKTA_DOMAIN>` | e.g. `dev-12345.okta.com` (no scheme) |
-| `<OKTA_REQUESTING_APP_CLIENT_ID>` | Agent0 client id (also the inbound ID token `aud`) |
-| `<AUTH0_DOMAIN>` | e.g. `your-tenant.us.auth0.com` (no scheme) |
-| `<AUTH0_RESOURCE_CLIENT_ID>` | Auth0 Regular Web App client id |
-| `audience:` | **`https://<AUTH0_DOMAIN>/`** — the Auth0 tenant issuer, **trailing slash required** |
-| `<SCOPE …>` | a scope defined on your Auth0 API (e.g. `todos.read`) |
-| `<RESOURCE_API_HOST>` | the downstream API host the agent calls |
-
-Put the two client secrets in files (use `printf`, **no trailing newline** — a trailing `\n`
-causes `401 invalid_client`). `secrets/` is git-ignored.
+`config.yaml` reads all deployment-specific values from env vars (expanded at load time) — nothing
+is hardcoded and there are no secret files. Export them in the shell you'll run the gateway from:
 
 ```bash
-cd examples/traffic-cross-app-access/okta-auth0
-printf '%s' 'REPLACE_WITH_OKTA_CLIENT_SECRET'  > secrets/okta-client-secret
-printf '%s' 'REPLACE_WITH_AUTH0_CLIENT_SECRET' > secrets/auth0-client-secret
+export OKTA_DOMAIN='dev-12345.okta.com'          # no scheme
+export OKTA_CLIENT_ID='0oa...'                   # requesting-app client id (also the ID-token aud)
+export OKTA_CLIENT_SECRET='...'                  # requesting-app client secret
+export AUTH0_DOMAIN='your-tenant.us.auth0.com'   # no scheme
+export AUTH0_CLIENT_ID='...'                     # Auth0 resource-application client id
+export AUTH0_CLIENT_SECRET='...'                 # Auth0 resource-application client secret
+export AUTH0_API='https://api.example.com'       # Auth0 API Identifier (RFC 8707 resource)
+export SCOPE='todos.read'                         # a scope defined on your Auth0 API
+export RESOURCE_API_HOST='api.example.com'       # downstream API host the agent calls
 ```
+
+The `audience` is derived in the config as `https://$AUTH0_DOMAIN/` (trailing slash required).
 
 ## 4. Run the gateway
 
-Run **from this directory** (the config uses relative `./secrets/...` paths). Validate first with
-`--validate-only`. It binds **`:3032`**. Pick either option:
+Run **from this directory**, in the **same shell** where you exported the vars (it binds
+**`:3032`**). Validate first with `--validate-only`:
 
-**a) From source with `cargo`** (cargo finds the workspace from here):
 ```bash
 cargo run --release --bin agentgateway -- -f ./config.yaml
 ```
 
-**b) Released binary — [`v1.4.0-alpha.1`](https://github.com/agentgateway/agentgateway/releases/tag/v1.4.0-alpha.1) or later** (this release includes Cross App Access):
-```bash
-# available: agentgateway-{darwin-arm64, linux-amd64, linux-arm64, windows-amd64.exe}
-curl -L -o agentgateway \
-  https://github.com/agentgateway/agentgateway/releases/download/v1.4.0-alpha.1/agentgateway-darwin-arm64
-chmod +x agentgateway
-./agentgateway -f ./config.yaml
-```
-> The v1.4.0-alpha.1 macOS binary is **arm64** (Apple Silicon) only; on Intel macOS use option (a).
+(Or use a released agentgateway binary of `v1.4.0-alpha.1`+ — the first release that includes
+Cross App Access.)
 
 ## 5. Get a user's Okta ID token (the subject)
 
@@ -117,8 +105,8 @@ The inbound request must carry the user's **Okta ID token**. Any standard OIDC
 Authorization-Code login against the requesting app works. Quick option using the Okta org
 authorization server:
 
-- authorize: `https://<OKTA_DOMAIN>/oauth2/v1/authorize?client_id=<OKTA_REQUESTING_APP_CLIENT_ID>&response_type=code&scope=openid%20profile%20email&redirect_uri=<REDIRECT>&state=xyz`
-- exchange the returned `code` at `https://<OKTA_DOMAIN>/oauth2/v1/token` (grant_type=authorization_code) and grab `id_token`.
+- authorize: `https://$OKTA_DOMAIN/oauth2/v1/authorize?client_id=$OKTA_CLIENT_ID&response_type=code&scope=openid%20profile%20email&redirect_uri=<REDIRECT>&state=xyz`
+- exchange the returned `code` at `https://$OKTA_DOMAIN/oauth2/v1/token` (grant_type=authorization_code) and grab `id_token`.
 
 The Auth0 sample [`auth0-cross-app-access-inspector`](https://github.com/auth0-samples/auth0-cross-app-access-inspector)
 does exactly this login (redirect URI `http://localhost:3000/login/callback`) and is a handy
@@ -144,7 +132,8 @@ To watch the two legs (and see why either side rejects a request), prefix your r
 
 - **`audience` needs the trailing slash** — for Auth0 it's the tenant issuer `https://<AUTH0_DOMAIN>/`.
   Getting this wrong is the #1 cause of Auth0 rejecting the ID-JAG on leg 2.
-- **Secret files: no trailing newline** (use `printf`, not `echo`) — otherwise leg 1 fails `401 invalid_client`.
+- **Export the vars in the same shell** that runs `cargo run`. Config load fails with
+  *"environment variable not found"* if any is unset.
 - **TLS on every HTTPS hop.** Okta, Auth0, and the resource API are all HTTPS on `:443`, so the config
   sets `backendTLS: {}` in **three** places (both exchange endpoints + the route-level backend). A
   missing one yields *"The plain HTTP request was sent to HTTPS port"*.

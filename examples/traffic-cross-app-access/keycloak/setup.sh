@@ -18,7 +18,10 @@ REALM="${REALM:-idjag-demo}"
 # `idjag.resource.authorization.server.identifier` attribute (set below). The minted
 # ID-JAG's `aud` claim is bound to this value.
 RESOURCE_ID="${RESOURCE_ID:-https://resource.idjag.demo}"
-AGENT_SECRET="${AGENT_SECRET:-agent-secret}"
+# Same env vars the gateway config reads (default to the demo values). Export them once to
+# drive both this setup and the gateway: export KC_AGENT_SECRET=... KC_RESOURCE_SECRET=...
+KC_AGENT_SECRET="${KC_AGENT_SECRET:-agent-secret}"
+KC_RESOURCE_SECRET="${KC_RESOURCE_SECRET:-resource-secret}"
 
 echo "== login as $ADMIN_USER =="
 $KCADM config credentials --server "$SERVER" --realm master --user "$ADMIN_USER" --password "$ADMIN_PASS"
@@ -39,7 +42,7 @@ $KCADM create clients -r "$REALM" \
   -s clientId=resource-client \
   -s enabled=true \
   -s publicClient=false \
-  -s secret="${RESOURCE_SECRET:-resource-secret}" \
+  -s secret="$KC_RESOURCE_SECRET" \
   -s "attributes.\"idjag.resource.authorization.server.identifier\"=$RESOURCE_ID"
 
 echo "== requesting client (the agent/gateway) =="
@@ -54,7 +57,7 @@ $KCADM create clients -r "$REALM" \
   -s publicClient=false \
   -s directAccessGrantsEnabled=true \
   -s standardFlowEnabled=true \
-  -s secret="$AGENT_SECRET" \
+  -s secret="$KC_AGENT_SECRET" \
   -s 'attributes."standard.token.exchange.enabled"=true' \
   -s 'attributes."idjag.clientid.at.resource-client"=resource-client' \
   -s 'attributes."idjag.permitted.scopes.at.resource-client"=todos.read todos.write'

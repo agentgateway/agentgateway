@@ -1,8 +1,9 @@
 # ID-JAG / Cross App Access against the xaa.dev playground
 
-An agentgateway Cross App Access demo / config that uses the public **xaa.dev** sandbox. 
+An agentgateway Cross App Access demo / config that uses the public **xaa.dev** sandbox.
 
-Agentgateway is the requesting app; xaa.dev's **IdenX** IdP issues the ID-JAG, its resource authorization server issues the access token, and it hosts the protected **Todo0** API.
+Agentgateway is the requesting app; xaa.dev's **IdenX** IdP issues the ID-JAG, its resource
+authorization server issues the access token, and it hosts the protected **Todo0** API.
 
 The fixed xaa.dev endpoints are:
 
@@ -26,30 +27,24 @@ You'll get two sets of credentials (see the app card's **Integration Guide**):
 - a **requesting-app** client — `client_id` + secret (used for leg 1, the IdP)
 - a **resource** client — `client_id` (looks like `<your-client-id>-at-todo0`) + secret (leg 2)
 
-Put your client ids into [`gateway.yaml`](gateway.yaml) (`identityProvider.clientAuth.clientId`,
-`resourceAuthorizationServer.clientAuth.clientId`, and the `jwtAuth.audiences` entry) — replacing
-the `REPLACE_WITH_YOUR_CLIENT_ID` placeholders.
+## 2. Export the credentials as environment variables
 
-> Tip: keep your filled-in config as **`gateway.local.yaml`** (git-ignored) so your real client
-> ids stay out of version control: `cp gateway.yaml gateway.local.yaml`, edit that, and run with
-> `-f ./gateway.local.yaml`.
-
-## 2. Fill in the two client secrets
-
-Reveal + copy each secret on the app card into a file. **Use `printf` (no trailing newline)** —
-a trailing `\n` will cause `401 invalid_client`:
+`gateway.yaml` reads these at load time (expanded via `shellexpand`), so nothing is hardcoded and
+there are no secret files to manage. Export them in the shell you'll run the gateway from:
 
 ```bash
-cd examples/traffic-cross-app-access/xaa-dev
-printf '%s' 'secret_...' > secrets/idp-client-secret        # requesting-app (IdP) secret
-printf '%s' 'secret_...' > secrets/resource-client-secret   # resource client secret
+export XAA_CLIENT_ID='client_...'        # requesting-app client id
+export XAA_IDP_SECRET='secret_...'       # requesting-app (IdP) client secret
+export XAA_RESOURCE_SECRET='secret_...'  # resource client secret
 ```
-(`secrets/` is git-ignored.)
+
+The resource client id is derived in the config as `${XAA_CLIENT_ID}-at-todo0`.
 
 ## 3. Get a user ID token from IdenX
 
-IdenX uses interactive Auth Code + PKCE login, so run the helper and follow the prompts (sign in
-with any email; the demo prompts for a 6-digit code — enter any 6 digits, e.g. `123456`):
+IdenX uses interactive Auth Code + PKCE login. Run the helper (it uses `XAA_CLIENT_ID` /
+`XAA_IDP_SECRET` from step 2); sign in with any email — the demo prompts for a 6-digit code, enter
+any 6 digits, e.g. `123456`:
 
 ```bash
 ./get-id-token.sh
@@ -60,26 +55,15 @@ export ID_TOKEN='<the printed id_token>'
 
 ## 4. Start agentgateway
 
-Pick any option below — all bind **`:3031`** (so it runs alongside the Keycloak demo's `:3030`).
-Because `gateway.yaml` references secrets as `./secrets/...`, run it **from this directory** — or
-point at a config with absolute paths (e.g. your `gateway.local.yaml`) to run from anywhere.
+Run **from this directory**, in the **same shell** where you exported the vars from step 2 (it
+binds **`:3031`**, so it runs alongside the Keycloak demo's `:3030`):
 
-**a) From source with `cargo`** (from the agentgateway repo root):
 ```bash
-# gateway.local.yaml uses absolute secret paths, so it resolves from the repo root
-cargo run --release --bin agentgateway -- -f examples/traffic-cross-app-access/xaa-dev/gateway.local.yaml
+cargo run --release --bin agentgateway -- -f ./gateway.yaml
 ```
 
-**b) Released binary — [`v1.4.0-alpha.1`](https://github.com/agentgateway/agentgateway/releases/tag/v1.4.0-alpha.1) or later** (this release includes Cross App Access):
-```bash
-# download the binary for your platform, then run it from this directory.
-# available: agentgateway-{darwin-arm64, linux-amd64, linux-arm64, windows-amd64.exe}
-curl -L -o agentgateway \
-  https://github.com/agentgateway/agentgateway/releases/download/v1.4.0-alpha.1/agentgateway-darwin-arm64
-chmod +x agentgateway
-./agentgateway -f ./gateway.yaml
-```
-> The v1.4.0-alpha.1 macOS binary is **arm64** (Apple Silicon) only; on Intel macOS use option (a) or (b).
+(Or use a released agentgateway binary of `v1.4.0-alpha.1`+ — the first release that includes
+Cross App Access. Validate without starting: append `--validate-only`.)
 
 ## 5. Drive the flow
 
@@ -93,13 +77,12 @@ that for an access token at `auth.resource.xaa.dev`, and calls the Todo0 API at
 
 ## Gotchas
 
+- **Export the vars in the same shell** that runs `cargo run` (and `get-id-token.sh`). Config load
+  fails with *"environment variable not found"* if any of the three is unset.
 - **TLS on every hop.** All xaa.dev endpoints are HTTPS on `:443`, but agentgateway does not
-  auto-enable TLS for `:443` here — you must set `backendTLS: {}` in **three** places (already in
-  `gateway.yaml`): on `identityProvider`, on `resourceAuthorizationServer`, and as a route-level
-  policy for the resource API backend. Missing any one yields nginx's
-  *"The plain HTTP request was sent to HTTPS port"*.
-- **Secret files must have no trailing newline** (use `printf`, not `echo`) — otherwise leg 1
-  fails `401 invalid_client`.
+  auto-enable TLS for `:443` here — `gateway.yaml` sets `backendTLS: {}` in **three** places:
+  `identityProvider`, `resourceAuthorizationServer`, and the route-level policy for the resource
+  API backend. Missing any one yields nginx's *"The plain HTTP request was sent to HTTPS port"*.
 - **Two different clients / secrets.** Leg 1 uses the requesting-app client; leg 2 uses the
   resource client (`...-at-todo0`). Mixing them up gives `401 invalid_client` on leg 2.
 - **`crossAppAccess.resources` is set here** (unlike the Keycloak demo): xaa.dev expects the
@@ -110,17 +93,17 @@ that for an access token at `auth.resource.xaa.dev`, and calls the Todo0 API at
 ## Appendix — the whole flow as raw `curl` (the gateway's manual equivalent)
 
 These reproduce, by hand, exactly what agentgateway's `crossAppAccess` policy does against
-xaa.dev. Run from this directory. Set `CLIENT_ID`/`RESOURCE_CLIENT_ID` to your registered app's
-values. Tokens are short-lived (the ID-JAG lasts ~300s), so run the chain promptly after step 0.
+xaa.dev — using the same env vars from step 2. Tokens are short-lived (the ID-JAG lasts ~300s),
+so run the chain promptly after step 0.
 
 ```bash
 IDP=https://idp.xaa.dev
 RS=https://auth.resource.xaa.dev
 API=https://api.resource.xaa.dev
-CLIENT_ID=<your-requesting-client-id>
-RESOURCE_CLIENT_ID=<your-requesting-client-id>-at-todo0
-IDP_SECRET=$(cat secrets/idp-client-secret)
-RESOURCE_SECRET=$(cat secrets/resource-client-secret)
+CLIENT_ID=$XAA_CLIENT_ID
+RESOURCE_CLIENT_ID=${XAA_CLIENT_ID}-at-todo0
+IDP_SECRET=$XAA_IDP_SECRET
+RESOURCE_SECRET=$XAA_RESOURCE_SECRET
 ```
 
 ### 0. Get the user's ID token (interactive, Auth Code + PKCE)

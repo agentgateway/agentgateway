@@ -75,10 +75,3 @@ READMEs.
 > The `jwtAuth` policy must validate an **OIDC ID token** (not an arbitrary access token), as
 > that is what the IdP expects as the `subject_token`.
 
-## Not yet supported
-
-The following parts of the draft are out of scope for the current implementation:
-
-- DPoP sender-constrained tokens (RFC 9449)
-- `.well-known` endpoint discovery (RFC 8414) — endpoints must be configured explicitly
-- SAML and refresh-token subject types (only OIDC ID tokens are used as the subject)

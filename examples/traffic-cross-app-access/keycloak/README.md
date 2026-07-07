@@ -71,24 +71,17 @@ python3 echo-backend.py       # listening on :9000
 ## 4. Start agentgateway — Terminal 3
 
 [`gateway.yaml`](gateway.yaml) validates the inbound Keycloak ID token and runs the Cross App
-Access two-leg exchange against Keycloak, forwarding to the echo backend. Run it in the
-**foreground in its own terminal** (it binds **`:3030`**). Pick either option:
+Access two-leg exchange against Keycloak, forwarding to the echo backend. The client secrets come
+from env vars (matching what the setup scripts create) — export them, then run it in the
+**foreground in its own terminal** (it binds **`:3030`**):
 
-**a) From source with `cargo`** (from the agentgateway repo root):
 ```bash
+export KC_AGENT_SECRET=agent-secret KC_RESOURCE_SECRET=resource-secret
 cargo run --release --bin agentgateway -- -f examples/traffic-cross-app-access/keycloak/gateway.yaml
 ```
 
-**b) Released binary — [`v1.4.0-alpha.1`](https://github.com/agentgateway/agentgateway/releases/tag/v1.4.0-alpha.1) or later** (this release includes Cross App Access):
-```bash
-# download the binary for your platform, then run it from this directory.
-# available: agentgateway-{darwin-arm64, linux-amd64, linux-arm64, windows-amd64.exe}
-curl -L -o agentgateway \
-  https://github.com/agentgateway/agentgateway/releases/download/v1.4.0-alpha.1/agentgateway-darwin-arm64
-chmod +x agentgateway
-./agentgateway -f ./gateway.yaml
-```
-> The v1.4.0-alpha.1 macOS binary is **arm64** (Apple Silicon) only; on Intel macOS use option (a).
+(Or use a released agentgateway binary of `v1.4.0-alpha.1`+, the first release with Cross App
+Access. Validate without starting: append `--validate-only`.)
 
 > **Port :3030.** agentgateway's usual default is `:3000`; this demo uses `:3030` so it won't
 > collide with any other agentgateway you already have running on `:3000`. Change the `port:` in
@@ -105,7 +98,7 @@ shortcut (which also creates the user session the exchange requires).
 ```bash
 TOKEN_URL=http://localhost:8480/realms/idjag-demo/protocol/openid-connect/token
 ID_TOKEN=$(curl -s -X POST "$TOKEN_URL" \
-  -d grant_type=password -d client_id=agent-client -d client_secret=agent-secret \
+  -d grant_type=password -d client_id=agent-client -d client_secret="$KC_AGENT_SECRET" \
   -d username=alice -d password=alice -d scope=openid \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["id_token"])')
 echo "${ID_TOKEN:0:40}..."

@@ -8,18 +8,15 @@
 #   3. you paste the `code` value back here,
 #   4. it exchanges the code for tokens and prints the id_token.
 #
-# Requires: openssl, curl, python3. Reads the IdP client secret from ./secrets/idp-client-secret.
+# Requires: openssl, curl, python3. Reads credentials from env vars:
+#   export XAA_CLIENT_ID=...  XAA_IDP_SECRET=...
 set -euo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
 
-CLIENT_ID="${CLIENT_ID:-client_411c671d8d1f8a69}"
+CLIENT_ID="${XAA_CLIENT_ID:?set XAA_CLIENT_ID (your registered requesting-app client id)}"
+CLIENT_SECRET="${XAA_IDP_SECRET:?set XAA_IDP_SECRET (the requesting-app client secret)}"
 REDIRECT_URI="${REDIRECT_URI:-http://localhost:8500/callback}"
 AUTHORIZE="https://idp.xaa.dev/authorize"
 TOKEN="https://idp.xaa.dev/token"
-SECRET_FILE="${SECRET_FILE:-$DIR/secrets/idp-client-secret}"
-CLIENT_SECRET="$(tr -d '\n' < "$SECRET_FILE")"
-
-[ "$CLIENT_SECRET" = "PASTE_IDP_CLIENT_SECRET_HERE" ] && { echo "ERROR: put the real IdP client secret in $SECRET_FILE first"; exit 1; }
 
 # PKCE
 verifier=$(openssl rand -base64 60 | tr -d '\n=+/' | cut -c1-64)

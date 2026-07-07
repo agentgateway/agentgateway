@@ -11,8 +11,9 @@
 #   leg 2  :  jwt-bearer at auth.resource.xaa.dev      -> Bearer access token
 #   upstream: GET api.resource.xaa.dev  with Authorization: Bearer <access token>
 #
-# Fill in ./secrets/* before running (see README.md), then:
-#   ../../../target/release/agentgateway -f ./gateway.yaml
+# Credentials come from environment variables (expanded at load time). Export them first
+# (see README.md): XAA_CLIENT_ID, XAA_IDP_SECRET, XAA_RESOURCE_SECRET. Then:
+#   cargo run --release --bin agentgateway -- -f ./gateway.yaml
 binds:
 - port: 3031
   listeners:
@@ -28,7 +29,7 @@ binds:
         jwtAuth:
           issuer: https://idp.xaa.dev
           audiences:
-          - REPLACE_WITH_YOUR_CLIENT_ID
+          - $XAA_CLIENT_ID
           jwks:
             url: https://idp.xaa.dev/jwks
 
@@ -42,10 +43,9 @@ binds:
               policies:
                 backendTLS: {}
               clientAuth:
-                clientId: REPLACE_WITH_YOUR_CLIENT_ID
+                clientId: $XAA_CLIENT_ID
                 method: clientSecretPost
-                clientSecret:
-                  file: ./secrets/idp-client-secret
+                clientSecret: $XAA_IDP_SECRET
             # Leg 2 — resource authorization server (resource-client credentials).
             resourceAuthorizationServer:
               host: auth.resource.xaa.dev:443
@@ -53,10 +53,9 @@ binds:
               policies:
                 backendTLS: {}
               clientAuth:
-                clientId: REPLACE_WITH_YOUR_CLIENT_ID-at-todo0
+                clientId: ${XAA_CLIENT_ID}-at-todo0
                 method: clientSecretPost
-                clientSecret:
-                  file: ./secrets/resource-client-secret
+                clientSecret: $XAA_RESOURCE_SECRET
             # The resource authorization server identifier; the ID-JAG is bound to it.
             audience: https://auth.resource.xaa.dev
             # RFC 8707 resource — the protected API (sent on the token-exchange leg).

@@ -8,7 +8,7 @@ set -euo pipefail
 
 SERVER="${SERVER:-http://localhost:8480}"
 REALM="${REALM:-idjag-demo}"
-AGENT_SECRET="${AGENT_SECRET:-agent-secret}"
+AGENT_SECRET="${KC_AGENT_SECRET:-agent-secret}"
 RESOURCE_ID="${RESOURCE_ID:-https://resource.idjag.demo}"
 SCOPE="${SCOPE:-todos.read}"
 TOKEN_URL="$SERVER/realms/$REALM/protocol/openid-connect/token"
