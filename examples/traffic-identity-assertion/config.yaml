@@ -37,9 +37,7 @@ binds:
           crossAppAccess:
             # The user's IdP authorization server (performs the RFC 8693 token exchange).
             identityProvider:
-              host: idp.example.com:443
-              policies:
-                backendTLS: {}
+              host: https://idp.example.com
               tokenEndpointPath: /oauth2/token
               clientAuth:
                 clientId: gateway-at-idp
@@ -48,9 +46,7 @@ binds:
             # The resource's authorization server (exchanges the ID-JAG for an access token).
             # Note this is a different client registration than the IdP one above.
             resourceAuthorizationServer:
-              host: chat.example.com:443
-              policies:
-                backendTLS: {}
+              host: https://chat.example.com
               tokenEndpointPath: /oauth2/token
               clientAuth:
                 clientId: gateway-at-chat

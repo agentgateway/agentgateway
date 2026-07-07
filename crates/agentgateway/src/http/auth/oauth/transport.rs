@@ -168,8 +168,8 @@ pub(super) struct TokenRequestSpec<'a> {
 impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
 	fn from(auth: &'a OAuthTokenExchangeAuth) -> Self {
 		Self {
-			target: auth.target.as_ref(),
-			policies: &auth.policies,
+			target: auth.target.target.as_ref(),
+			policies: &auth.target.policies,
 			token_endpoint_path: &auth.token_endpoint_path,
 			grant_type: auth.grant_type,
 			client_auth: auth.client_auth.as_ref(),
@@ -185,8 +185,8 @@ impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
 impl<'a> From<&'a ChainedExchange> for TokenRequestSpec<'a> {
 	fn from(auth: &'a ChainedExchange) -> Self {
 		Self {
-			target: auth.target.as_ref(),
-			policies: &auth.policies,
+			target: auth.target.target.as_ref(),
+			policies: &auth.target.policies,
 			token_endpoint_path: &auth.token_endpoint_path,
 			grant_type: OAuthGrantType::JwtBearer,
 			client_auth: auth.client_auth.as_ref(),

@@ -2049,10 +2049,12 @@ fn build_ext_proc_request_for_test(
 	let bind = setup_proxy_test("{}").unwrap().with_backend(ext_proc_addr);
 	let client = crate::proxy::httpproxy::PolicyClient::new(bind.inputs());
 	super::ExtProc {
-		target: Arc::new(crate::types::agent::SimpleBackendReference::Backend(
-			strng::format!("/{}", ext_proc_addr),
-		)),
-		policies: Vec::new(),
+		target: crate::types::agent::SimpleBackendReferenceWithPolicies {
+			target: Arc::new(crate::types::agent::SimpleBackendReference::Backend(
+				strng::format!("/{}", ext_proc_addr),
+			)),
+			policies: Vec::new(),
+		},
 		failure_mode: ext_proc::FailureMode::FailClosed,
 		metadata_context: None,
 		request_attributes: None,

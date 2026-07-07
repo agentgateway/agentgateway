@@ -2308,7 +2308,7 @@
           "type": "object",
           "properties": {
             "policies": {
-              "description": "Policies to connect to the backend.",
+              "description": "Backend policies used when connecting to the service.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -3263,7 +3263,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -3696,7 +3696,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -5012,7 +5012,7 @@
           "type": "string"
         },
         "policies": {
-          "description": "Backend policies used when connecting to the remote rate limit service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -5191,7 +5191,7 @@
           "type": "string"
         },
         "policies": {
-          "description": "Backend policies used when connecting to the remote rate limit service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -5687,7 +5687,7 @@
           "default": null
         },
         "policies": {
-          "description": "Backend policies used when connecting to the authorization service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -5990,7 +5990,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies used when connecting to the authorization service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -6141,7 +6141,7 @@
           "default": null
         },
         "policies": {
-          "description": "Backend policies used when connecting to the external processing service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -6370,7 +6370,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies used when connecting to the external processing service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"

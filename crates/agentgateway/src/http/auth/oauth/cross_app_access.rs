@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 #[cfg(feature = "schema")]
 use super::TokenCacheConfig;
@@ -9,7 +8,7 @@ use super::{
 	TokenSpec, default_token_cache, deserialize_token_cache,
 };
 use crate::http::auth::AuthorizationLocation;
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::{apply, schema};
 
 #[apply(schema!)]
@@ -61,7 +60,6 @@ impl CrossAppAccessAuth {
 	pub(crate) fn apply_local_defaults(&mut self) -> Result<(), String> {
 		self.oauth = Some(OAuthTokenExchangeAuth {
 			target: self.identity_provider.target.clone(),
-			policies: self.identity_provider.policies.clone(),
 			token_endpoint_path: self.identity_provider.token_endpoint_path.clone(),
 			grant_type: OAuthGrantType::TokenExchange,
 			subject_token: TokenSpec {
@@ -99,21 +97,9 @@ impl CrossAppAccessAuth {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub(super) struct CrossAppAccessEndpoint {
-	/// Token endpoint backend.
+	/// Token endpoint backend and policies used when connecting to it.
 	#[serde(flatten)]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "crate::types::local::SimpleLocalBackend")
-	)]
-	pub(super) target: Arc<SimpleBackendReference>,
-	/// Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub(super) policies: Vec<BackendTrafficPolicy>,
+	pub(super) target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
 	pub(super) token_endpoint_path: String,
@@ -140,7 +126,6 @@ impl CrossAppAccessEndpoint {
 	fn as_chained_exchange(&self, scopes: &[String]) -> ChainedExchange {
 		ChainedExchange {
 			target: self.target.clone(),
-			policies: self.policies.clone(),
 			token_endpoint_path: self.token_endpoint_path.clone(),
 			client_auth: Some(self.client_auth.clone()),
 			audiences: Vec::new(),

@@ -3434,7 +3434,9 @@ mod guardrails_test_support {
 	use rmcp::model::CallToolResult;
 
 	use crate::mcp::guardrails;
-	use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
+	use crate::types::agent::{
+		BackendTrafficPolicy, SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target,
+	};
 
 	// Default test allowlist: every method exercised in this module's tests,
 	// all at Phase::Full. Tests that need narrower coverage build their own.
@@ -3461,8 +3463,10 @@ mod guardrails_test_support {
 		metadata: HashMap<String, Arc<crate::cel::Expression>>,
 	) -> BackendTrafficPolicy {
 		let remote = guardrails::Remote {
-			target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(addr))),
-			policies: Vec::new(),
+			target: SimpleBackendReferenceWithPolicies {
+				target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(addr))),
+				policies: Vec::new(),
+			},
 			failure_mode,
 			metadata,
 			request_headers: Default::default(),
