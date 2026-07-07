@@ -640,11 +640,9 @@ endif
 # The controller consumes Istio's ambient collections (WorkloadEntry,
 # ServiceEntry, AuthorizationPolicy...) so these CRDs must exist for those
 # informers to receive objects.
-ISTIO_CRDS_FILE := $(shell go list -m -f '{{.Dir}}' istio.io/istio)/manifests/charts/base/files/crd-all.gen.yaml
-
 .PHONY: istio-crds
 istio-crds: ## Install Istio CRDs (WorkloadEntry, ServiceEntry, etc.) from the vendored istio module
-	kubectl apply --server-side -f "$(ISTIO_CRDS_FILE)"
+	kubectl apply --server-side -f "$$(go mod download -json istio.io/istio | awk -F'"' '/"Dir":/ {print $$4; exit}')/manifests/charts/base/files/crd-all.gen.yaml"
 
 .PHONY: metallb
 metallb: ## Install the MetalLB load balancer
