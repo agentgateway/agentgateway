@@ -9516,15 +9516,8 @@
     "LocalGateway": {
       "type": "object",
       "properties": {
-        "listeners": {
-          "description": "listeners defines multiple HTTP listeners under this gateway. When set, listener fields cannot be set on the gateway itself.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/LocalGatewayListener"
-          }
-        },
         "port": {
-          "description": "port is the downstream port to listen on for this gateway.",
+          "description": "port is the port to listen on for this gateway.",
           "type": [
             "integer",
             "null"
@@ -9533,15 +9526,15 @@
           "minimum": 0,
           "maximum": 65535
         },
-        "hostname": {
-          "description": "Can be a wildcard.",
-          "type": [
-            "string",
-            "null"
-          ]
+        "listeners": {
+          "description": "listeners defines multiple HTTP listeners under this gateway. When set, listener fields cannot be set on the gateway itself.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalGatewayListener"
+          }
         },
         "tls": {
-          "description": "tls enables HTTPS for this gateway.",
+          "description": "tls enables HTTPS for this gateway. Maybe not be set with `listeners`",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTLSServerConfig"
@@ -9665,16 +9658,6 @@
             "null"
           ],
           "default": null
-        },
-        "port": {
-          "description": "port is the downstream port to listen on for this listener.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint16",
-          "minimum": 0,
-          "maximum": 65535
         },
         "hostname": {
           "description": "Can be a wildcard.",

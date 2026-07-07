@@ -21,6 +21,7 @@ const pages = [
   ["/mcp/servers", "MCP Servers"],
   ["/mcp/policies", "MCP Policies"],
   ["/mcp/playground", "MCP Playground"],
+  ["/traffic/gateways", "Traffic Gateways"],
   ["/traffic/listeners", "Traffic Listeners"],
   ["/traffic/routes", "Traffic Routes"],
   ["/cel", "CEL Playground"],
@@ -86,6 +87,45 @@ test("onboards all surfaces from a completely empty config", async ({
   await expect(
     page.getByRole("heading", { name: "Gateway Overview" }),
   ).toBeVisible();
+});
+
+test("onboards LLM and MCP onto the UI gateway when present", async ({
+  page,
+}) => {
+  const gateway = await mockGateway(page, {
+    config: {},
+    gateways: {
+      default: {
+        port: 4000,
+      },
+    },
+    ui: {
+      gateways: "default",
+    },
+  });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /LLM/ }).click();
+  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+  expect(gateway.postedConfigs[0].llm).toMatchObject({
+    gateways: "default",
+    models: [],
+    providers: [],
+    virtualModels: [],
+  });
+  expect(gateway.postedConfigs[0].llm).not.toHaveProperty("port");
+
+  await page.getByRole("button", { name: /MCP/ }).click();
+  await expect.poll(() => gateway.postedConfigs.length).toBe(2);
+  expect(gateway.postedConfigs[1].mcp).toMatchObject({
+    gateways: "default",
+    targets: [],
+  });
+  expect(gateway.postedConfigs[1].mcp).not.toHaveProperty("port");
+
+  await page.getByRole("button", { name: /APIs/ }).click();
+  await expect.poll(() => gateway.postedConfigs.length).toBe(3);
+  expect(gateway.postedConfigs[2].binds).toEqual([]);
 });
 
 test("raw configuration editor shows schema diagnostics", async ({ page }) => {

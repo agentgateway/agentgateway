@@ -1084,16 +1084,14 @@ where
 
 #[apply(schema_de!)]
 struct LocalGateway {
+	/// port is the port to listen on for this gateway.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	port: Option<u16>,
 	/// listeners defines multiple HTTP listeners under this gateway. When set, listener fields cannot be set on the gateway itself.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	listeners: Vec<LocalGatewayListener>,
-	/// port is the downstream port to listen on for this gateway.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	port: Option<u16>,
-	/// Can be a wildcard.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	hostname: Option<Strng>,
-	/// tls enables HTTPS for this gateway.
+
+	/// tls enables HTTPS for this gateway. Maybe not be set with `listeners`
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	tls: Option<LocalTLSServerConfig>,
 	#[serde(flatten)]
@@ -1115,9 +1113,6 @@ struct LocalGatewayListener {
 	/// name identifies this listener for gateway references like gateway/listener.
 	#[serde(default)]
 	name: Option<Strng>,
-	/// port is the downstream port to listen on for this listener.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	port: Option<u16>,
 	/// Can be a wildcard.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	hostname: Option<Strng>,
@@ -2980,49 +2975,22 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 		}
 	}
 	let mut gateway_ports = HashMap::<u16, String>::new();
-	let mut gateway_port_tls = HashMap::<u16, bool>::new();
-	let mut insert_gateway_port = |port: u16, label: String, tls: bool| -> anyhow::Result<()> {
-		if let Some(existing_tls) = gateway_port_tls.insert(port, tls)
-			&& existing_tls != tls
-		{
-			bail!("gateway listeners on port {port} cannot mix TLS and plaintext");
-		}
-		gateway_ports.insert(port, label);
-		Ok(())
-	};
 	for (gateway_name, gateway_config) in &config.gateways {
-		if gateway_config.listeners.is_empty() {
-			if gateway_config.port.is_none() {
-				bail!("gateways.{gateway_name}.port is required");
-			}
-			if let Some(port) = gateway_config.port {
-				insert_gateway_port(
-					port,
-					format!("gateways.{gateway_name}"),
-					gateway_config.tls.is_some(),
-				)?;
-			}
-		} else {
-			if gateway_config.port.is_some()
-				|| gateway_config.hostname.is_some()
-				|| gateway_config.tls.is_some()
-				|| !gateway_config.policies.is_empty()
-			{
-				bail!(
-					"gateways.{gateway_name} cannot set port, hostname, tls, or policy fields when listeners are configured"
-				);
-			}
-			for (idx, listener) in gateway_config.listeners.iter().enumerate() {
-				let label = listener
-					.name
-					.as_ref()
-					.map(|name| format!("gateways.{gateway_name}.listeners.{name}"))
-					.unwrap_or_else(|| format!("gateways.{gateway_name}.listeners[{idx}]"));
-				let Some(port) = listener.port else {
-					bail!("{label}.port is required");
-				};
-				insert_gateway_port(port, label, listener.tls.is_some())?;
-			}
+		let Some(port) = gateway_config.port else {
+			bail!("gateways.{gateway_name}.port is required");
+		};
+		let label = format!("gateways.{gateway_name}");
+		if let Some(existing) = gateway_ports.insert(port, label.clone()) {
+			bail!(
+				"port {port} is configured by both {existing} and {label}; binds, llm, and mcp must use unique ports"
+			);
+		}
+		if !gateway_config.listeners.is_empty()
+			&& (gateway_config.tls.is_some() || !gateway_config.policies.is_empty())
+		{
+			bail!(
+				"gateways.{gateway_name} cannot set tls or policy fields when listeners are configured"
+			);
 		}
 	}
 	for (port, label) in gateway_ports {
@@ -3107,17 +3075,19 @@ async fn convert_gateways(
 	all_policies: &mut Vec<TargetedPolicy>,
 ) -> anyhow::Result<LocalGatewayReferences> {
 	let mut refs = LocalGatewayReferences::new();
-	let mut listeners_by_port = IndexMap::<u16, ListenerSet>::new();
 	for (gateway_name, gateway_config) in gateways {
+		let port = gateway_config
+			.port
+			.with_context(|| format!("gateways.{gateway_name}.port is required"))?;
+		let mut listeners = ListenerSet::default();
 		if gateway_config.listeners.is_empty() {
 			let listener = LocalGatewayListener {
 				name: Some(gateway_name.clone()),
-				port: gateway_config.port,
-				hostname: gateway_config.hostname,
+				hostname: None,
 				tls: gateway_config.tls,
 				policies: gateway_config.policies,
 			};
-			let (port, listener, policies) = Box::pin(convert_gateway_listener(
+			let (listener, policies) = Box::pin(convert_gateway_listener(
 				resources,
 				config,
 				gateway.clone(),
@@ -3129,7 +3099,7 @@ async fn convert_gateways(
 			all_listener_routes.push((listener.key.clone(), Vec::new()));
 			all_listener_tcp_routes.push((listener.key.clone(), Vec::new()));
 			all_policies.extend(policies);
-			listeners_by_port.entry(port).or_default().insert(listener);
+			listeners.insert(listener);
 		} else {
 			let mut listener_keys = Vec::new();
 			for (idx, listener_config) in gateway_config.listeners.into_iter().enumerate() {
@@ -3138,7 +3108,7 @@ async fn convert_gateways(
 					.clone()
 					.unwrap_or_else(|| strng::format!("listener{}", idx));
 				let reference = strng::format!("{gateway_name}/{listener_name}");
-				let (port, listener, policies) = Box::pin(convert_gateway_listener(
+				let (listener, policies) = Box::pin(convert_gateway_listener(
 					resources,
 					config,
 					gateway.clone(),
@@ -3151,12 +3121,10 @@ async fn convert_gateways(
 				all_listener_routes.push((listener.key.clone(), Vec::new()));
 				all_listener_tcp_routes.push((listener.key.clone(), Vec::new()));
 				all_policies.extend(policies);
-				listeners_by_port.entry(port).or_default().insert(listener);
+				listeners.insert(listener);
 			}
 			refs.insert(gateway_name, listener_keys);
 		}
-	}
-	for (port, listeners) in listeners_by_port {
 		let sockaddr = if cfg!(target_family = "unix") && config.ipv6_enabled {
 			SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), port)
 		} else {
@@ -3180,15 +3148,13 @@ async fn convert_gateway_listener(
 	gateway: ListenerTarget,
 	reference: Strng,
 	listener: LocalGatewayListener,
-) -> anyhow::Result<(u16, Listener, Vec<TargetedPolicy>)> {
+) -> anyhow::Result<(Listener, Vec<TargetedPolicy>)> {
 	let LocalGatewayListener {
 		name: _,
-		port,
 		hostname,
 		tls,
 		policies,
 	} = listener;
-	let port = port.with_context(|| format!("gateways.{reference}.port is required"))?;
 	let protocol = match tls {
 		Some(tls) => ListenerProtocol::HTTPS(
 			tls
@@ -3230,7 +3196,7 @@ async fn convert_gateway_listener(
 			});
 		}
 	}
-	Ok((port, listener, all_policies))
+	Ok((listener, all_policies))
 }
 
 fn resolve_gateway_references(

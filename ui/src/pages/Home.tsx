@@ -1,8 +1,15 @@
 import { Link } from "@tanstack/react-router";
-import { Bot, Network, Server } from "lucide-react";
+import { Bot, Network, Server, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { configWarnings, ensureLlmFrontendDefaults } from "../config";
+import {
+  configWarnings,
+  ensureLlm,
+  ensureLlmFrontendDefaults,
+  ensureMcp,
+  startupLlmConfig,
+  startupMcpConfig,
+} from "../config";
 import { refreshBaseCostsAndConfigure } from "../costs";
 import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
 import { PageHeader, StatusBanner } from "../components/Primitives";
@@ -11,6 +18,9 @@ import {
   ReadonlyModeBanner,
   TrafficDumpOverview,
 } from "./traffic/TrafficConfigDumpPanel";
+import { LlmSettingsDrawer } from "./models/LlmSettingsDrawer";
+import { useSchemaHelp } from "../schemaHelp";
+import { McpSettingsDrawer } from "./McpServers";
 
 export function HomePage() {
   const mode = useConfigDumpMode();
@@ -19,6 +29,7 @@ export function HomePage() {
     enabled: Boolean(mode.data && mode.data.mode !== "dump"),
   });
   const update = useUpdateConfig();
+  const help = useSchemaHelp();
   const [locallyEnabled, setLocallyEnabled] = useState<Set<StartupSurface>>(
     () => new Set(),
   );
@@ -34,6 +45,8 @@ export function HomePage() {
   const [startupEvaluated, setStartupEvaluated] = useState(false);
   const [startupFlow, setStartupFlow] = useState(false);
   const [costRefreshError, setCostRefreshError] = useState<string | null>(null);
+  const [llmSettingsOpen, setLlmSettingsOpen] = useState(false);
+  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
   const showStartup = Boolean(config.data && startupFlow);
   const selectedSurfaces =
     Number(hasLlm || locallyEnabled.has("llm")) +
@@ -51,15 +64,10 @@ export function HomePage() {
     try {
       await update.mutateAsync((next) => {
         if (surface === "llm") {
-          next.llm = {
-            port: 4000,
-            models: [],
-            providers: [],
-            virtualModels: [],
-          };
+          next.llm = startupLlmConfig(next, 4000);
           ensureLlmFrontendDefaults(next);
         } else if (surface === "mcp") {
-          next.mcp = { port: 3000, targets: [] };
+          next.mcp = startupMcpConfig(next, 3000);
         } else {
           next.binds = [];
         }
@@ -235,12 +243,31 @@ export function HomePage() {
             `${models.length} ${models.length === 1 ? "model" : "models"}`,
             `${virtualModels.length} virtual ${virtualModels.length === 1 ? "model" : "models"}`,
             `${config.data?.llm?.providers?.length ?? 0} shared ${config.data?.llm?.providers?.length === 1 ? "provider" : "providers"}`,
-            `Port ${config.data?.llm?.port ?? 4000}`,
+            surfaceEndpointLabel(
+              config.data?.llm?.gateways,
+              config.data?.llm?.port ?? 4000,
+            ),
           ]}
-          links={[
-            { to: "/llm/playground", label: "Open playground" },
-            { to: "/llm/analytics", label: "Analytics" },
-          ]}
+          actions={
+            <>
+              <button
+                className="button"
+                type="button"
+                disabled={update.isPending}
+                onClick={() => setLlmSettingsOpen(true)}
+              >
+                <Settings size={16} />
+                Settings
+              </button>
+              <Link
+                className="button primary"
+                to="/llm/models"
+                hash="add=model"
+              >
+                Setup models
+              </Link>
+            </>
+          }
         />
         <SurfaceRow
           title="MCP"
@@ -254,9 +281,27 @@ export function HomePage() {
           setupLabel="Set up servers"
           overview={[
             `${mcpServers.length} configured ${mcpServers.length === 1 ? "server" : "servers"}`,
-            `Port ${config.data?.mcp?.port ?? 3000}`,
+            surfaceEndpointLabel(
+              config.data?.mcp?.gateways,
+              config.data?.mcp?.port ?? 3000,
+            ),
           ]}
-          links={[{ to: "/mcp/playground", label: "Open playground" }]}
+          actions={
+            <>
+              <button
+                className="button"
+                type="button"
+                disabled={update.isPending}
+                onClick={() => setMcpSettingsOpen(true)}
+              >
+                <Settings size={16} />
+                Settings
+              </button>
+              <Link className="button primary" to="/mcp/servers">
+                Setup servers
+              </Link>
+            </>
+          }
         />
         <SurfaceRow
           title="Traffic"
@@ -276,8 +321,56 @@ export function HomePage() {
           links={[{ to: "/traffic/routes", label: "Manage routes" }]}
         />
       </section>
+      {llmSettingsOpen ? (
+        <LlmSettingsDrawer
+          config={config.data}
+          llm={config.data?.llm}
+          help={help}
+          saving={update.isPending}
+          saveError={update.isError ? update.error.message : null}
+          onClose={() => setLlmSettingsOpen(false)}
+          onSave={(settings) =>
+            update.mutate(
+              (next) => {
+                Object.assign(ensureLlm(next), settings);
+              },
+              {
+                onSuccess: () => setLlmSettingsOpen(false),
+              },
+            )
+          }
+        />
+      ) : null}
+      {mcpSettingsOpen ? (
+        <McpSettingsDrawer
+          config={config.data}
+          mcp={config.data?.mcp}
+          help={help}
+          saving={update.isPending}
+          saveError={update.isError ? update.error.message : null}
+          onClose={() => setMcpSettingsOpen(false)}
+          onSave={(settings) =>
+            update.mutate(
+              (next) => {
+                Object.assign(ensureMcp(next), settings);
+              },
+              {
+                onSuccess: () => setMcpSettingsOpen(false),
+              },
+            )
+          }
+        />
+      ) : null}
     </div>
   );
+}
+
+function surfaceEndpointLabel(
+  gateways: string | string[] | undefined,
+  port: number,
+) {
+  if (!gateways) return `Port ${port}`;
+  return `Gateway ${Array.isArray(gateways) ? gateways.join(", ") : gateways}`;
 }
 
 type StartupSurface = "llm" | "mcp" | "apis";
@@ -310,7 +403,8 @@ function SurfaceRow(props: {
   disabled: boolean;
   enabled: boolean;
   icon: ReactNode;
-  links: Array<{ label: string; to: string }>;
+  actions?: ReactNode;
+  links?: Array<{ label: string; to: string }>;
   onEnable: () => void;
   overview: string[];
   setupLabel: string;
@@ -361,7 +455,9 @@ function SurfaceRow(props: {
         )}
       </div>
       <div className="surface-row-actions">
-        {props.setupNeeded ? (
+        {props.actions ? (
+          props.actions
+        ) : props.setupNeeded ? (
           <Link
             className="button primary"
             to={props.setupTo}
@@ -370,7 +466,7 @@ function SurfaceRow(props: {
             {props.setupLabel}
           </Link>
         ) : (
-          props.links.map((link) => (
+          props.links?.map((link) => (
             <Link key={link.to} className="button" to={link.to}>
               {link.label}
             </Link>

@@ -35,26 +35,32 @@ export function mcpPlaygroundEndpoint(
 
 function playgroundEndpoint(
   config: GatewayConfig | null | undefined,
-  targetGateways: string[] | undefined,
+  targetGateways: string | string[] | undefined,
   defaultPort: number,
   sameOriginBaseUrl: string,
   path: string,
 ): PlaygroundEndpoint {
-  const uiGateways = config?.ui?.gateways ?? [];
+  const uiGateways = gatewayRefs(config?.ui?.gateways);
+  const targets = gatewayRefs(targetGateways);
   if (
     config &&
     uiGateways.length > 0 &&
-    targetGateways &&
-    gatewayRefsOverlap(config, uiGateways, targetGateways)
+    targets.length > 0 &&
+    gatewayRefsOverlap(config, uiGateways, targets)
   ) {
     return { baseUrl: sameOriginBaseUrl, sameOrigin: true };
   }
 
-  const gatewayPort = firstGatewayPort(config, targetGateways);
+  const gatewayPort = firstGatewayPort(config, targets);
   if (gatewayPort !== undefined) {
     return { baseUrl: gatewayEndpoint(gatewayPort, path), sameOrigin: false };
   }
   return { baseUrl: gatewayEndpoint(defaultPort, path), sameOrigin: false };
+}
+
+function gatewayRefs(refs: string | string[] | undefined) {
+  if (!refs) return [];
+  return Array.isArray(refs) ? refs : [refs];
 }
 
 function gatewayRefsOverlap(
@@ -96,20 +102,17 @@ function expandGatewayRef(
   }
 
   if (listenerName) {
-    const listener = gateway.listeners.find(
-      (item, index) => (item.name ?? `listener${index}`) === listenerName,
-    );
     return [
       {
         ref,
-        port: listener?.port ?? undefined,
+        port: gateway.port ?? undefined,
       },
     ];
   }
 
   return gateway.listeners.map((listener, index) => ({
     ref: `${gatewayName}/${listener.name ?? `listener${index}`}`,
-    port: listener.port ?? undefined,
+    port: gateway.port ?? undefined,
   }));
 }
 

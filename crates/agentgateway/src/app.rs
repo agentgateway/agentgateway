@@ -201,9 +201,9 @@ async fn ui_url(config: &Config) -> String {
 			.get("listeners")
 			.and_then(serde_json::Value::as_array)
 			.and_then(|listeners| {
-				listeners
-					.iter()
-					.find(|listener| listener.get("name").and_then(serde_json::Value::as_str) == Some(listener_name))
+				listeners.iter().find(|listener| {
+					listener.get("name").and_then(serde_json::Value::as_str) == Some(listener_name)
+				})
 			}),
 		None => gateway
 			.get("listeners")

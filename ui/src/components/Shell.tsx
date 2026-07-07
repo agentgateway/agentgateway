@@ -89,7 +89,9 @@ export function Shell() {
   const hasTraffic = dumpMode
     ? true
     : config.data
-      ? "binds" in config.data
+      ? "binds" in config.data ||
+        "gateways" in config.data ||
+        "routes" in config.data
       : true;
   const navGroups = navigationGroups({ hasLlm, hasMcp, hasTraffic, dumpMode });
   const nav = navGroups.flatMap((group) => group.items);
@@ -294,6 +296,7 @@ function navigationGroups(options: {
         ]
       : options.hasTraffic
         ? [
+            { to: "/traffic/gateways", label: "Gateways", icon: Network },
             { to: "/traffic/listeners", label: "Listeners", icon: Network },
             { to: "/traffic/routes", label: "Routes", icon: Route },
           ]

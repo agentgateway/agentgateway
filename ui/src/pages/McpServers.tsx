@@ -14,6 +14,10 @@ import {
   upsertMcpTarget,
 } from "../config";
 import { EnumSelector } from "../components/EnumSelector";
+import {
+  GatewayBindingEditor,
+  type GatewayBindingValue,
+} from "../components/GatewayBindingEditor";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
@@ -29,8 +33,10 @@ import {
   Tooltip,
 } from "../components/Primitives";
 import { parseYamlText, toYamlMappingText } from "../policies/policyUtils";
+import { PolicySection } from "../policies/PolicyLayout";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type {
+  GatewayConfig,
   McpConfig,
   McpFailureMode,
   McpPrefixMode,
@@ -40,6 +46,11 @@ import type {
 } from "../types";
 
 const targetKinds: McpTargetKind[] = ["mcp", "sse", "stdio"];
+
+type McpSettingsPatch = Partial<Omit<McpConfig, "gateways" | "port">> & {
+  gateways?: McpConfig["gateways"] | null;
+  port?: number | null;
+};
 
 export function McpServersPage() {
   const config = useGatewayConfig();
@@ -231,6 +242,7 @@ export function McpServersPage() {
       ) : null}
       {settingsOpen ? (
         <McpSettingsDrawer
+          config={config.data}
           mcp={mcp}
           help={help}
           saving={update.isPending}
@@ -252,17 +264,19 @@ export function McpServersPage() {
   );
 }
 
-function McpSettingsDrawer(props: {
+export function McpSettingsDrawer(props: {
+  config?: GatewayConfig | null;
   mcp?: McpConfig | null;
   help: SchemaHelp;
   saving: boolean;
   saveError?: string | null;
   onClose: () => void;
-  onSave: (settings: Partial<McpConfig>) => void;
+  onSave: (settings: McpSettingsPatch) => void;
 }) {
   return (
     <Drawer title="Settings" onClose={props.onClose}>
       <McpSettings
+        config={props.config}
         mcp={props.mcp}
         help={props.help}
         saving={props.saving}
@@ -278,12 +292,16 @@ function McpSettingsDrawer(props: {
 }
 
 function McpSettings(props: {
+  config?: GatewayConfig | null;
   mcp?: McpConfig | null;
   help: SchemaHelp;
   saving: boolean;
-  onSave: (settings: Partial<McpConfig>) => void;
+  onSave: (settings: McpSettingsPatch) => void;
 }) {
-  const [port, setPort] = useState(props.mcp?.port?.toString() ?? "");
+  const [binding, setBinding] = useState<GatewayBindingValue>({
+    gateways: props.mcp?.gateways ?? null,
+    port: props.mcp?.port ?? null,
+  });
   const [statefulMode, setStatefulMode] = useState<McpStatefulMode>(
     props.mcp?.statefulMode ?? "stateless",
   );
@@ -295,132 +313,145 @@ function McpSettings(props: {
   );
 
   return (
-    <div className="policy-controls api-key-policy-controls">
-      <Field
-        label="Port"
-        tooltip={props.help.field<McpConfig>(
-          "LocalSimpleMcpConfig",
-          "port",
-          "Gateway port for MCP traffic.",
-        )}
+    <form
+      className="policy-editor-stack"
+      onSubmit={(event) => {
+        event.preventDefault();
+        props.onSave({
+          gateways: binding.gateways ?? null,
+          port: binding.gateways ? null : (binding.port ?? null),
+          statefulMode,
+          prefixMode: prefixMode === "none" ? null : prefixMode,
+          failureMode,
+        });
+      }}
+    >
+      <PolicySection
+        icon={<Server size={17} />}
+        title="Gateway binding"
+        description="Choose how MCP is exposed."
       >
-        <input
-          value={port}
-          onChange={(event) => setPort(event.target.value)}
-          placeholder="3001"
-        />
-      </Field>
-      <FieldGroup
-        label="State mode"
-        tooltip={props.help.field<McpConfig>(
-          "LocalSimpleMcpConfig",
-          "statefulMode",
-          "Controls whether MCP sessions are preserved by the gateway.",
-        )}
+        <div className="form-grid">
+          <GatewayBindingEditor
+            config={props.config}
+            value={binding}
+            defaultPort={3000}
+            portLabel="Port"
+            portPlaceholder="3000"
+            portTooltip={props.help.field<McpConfig>(
+              "LocalSimpleMcpConfig",
+              "port",
+              "Gateway port for MCP traffic.",
+            )}
+            onChange={setBinding}
+          />
+        </div>
+      </PolicySection>
+      <PolicySection
+        icon={<SlidersHorizontal size={17} />}
+        title="MCP behavior"
+        description="Choose session, tool-prefix, and failure behavior."
       >
-        <EnumSelector
-          ariaLabel="State mode"
-          value={statefulMode}
-          options={[
-            {
-              value: "stateless",
-              label: "Stateless",
-              description:
-                "Do not preserve MCP session state between requests.",
-            },
-            {
-              value: "stateful",
-              label: "Stateful",
-              description:
-                "Preserve MCP sessions so targets can keep per-session context.",
-            },
-          ]}
-          schema={props.help.node([
-            "$defs",
-            "LocalSimpleMcpConfig",
-            "properties",
-            "statefulMode",
-          ])}
-          showSelectedDescription
-          onChange={setStatefulMode}
-        />
-      </FieldGroup>
-      <FieldGroup
-        label="Prefix mode"
-        tooltip={props.help.field<McpConfig>(
-          "LocalSimpleMcpConfig",
-          "prefixMode",
-          "Controls whether target names are prefixed when exposing tools.",
-        )}
-      >
-        <EnumSelector
-          ariaLabel="Prefix mode"
-          value={prefixMode}
-          options={[
-            {
-              value: "none",
-              label: "None",
-              description: "Expose tool names without adding the target name.",
-            },
-            {
-              value: "always",
-              label: "Always",
-              description:
-                "Always prefix exposed tool names with the target name.",
-            },
-            {
-              value: "conditional",
-              label: "Conditional",
-              description:
-                "Prefix only when needed to avoid tool-name conflicts.",
-            },
-          ]}
-          schema={props.help.node([
-            "$defs",
-            "LocalSimpleMcpConfig",
-            "properties",
-            "prefixMode",
-          ])}
-          showSelectedDescription
-          onChange={setPrefixMode}
-        />
-      </FieldGroup>
-      <FieldGroup
-        label="Failure mode"
-        tooltip={props.help.field<McpConfig>(
-          "LocalSimpleMcpConfig",
-          "failureMode",
-        )}
-      >
-        <EnumSelector
-          ariaLabel="Failure mode"
-          value={failureMode}
-          options={[
-            { value: "failClosed", label: "Fail closed" },
-            { value: "failOpen", label: "Fail open" },
-          ]}
-          schema={props.help.node(["$defs", "McpBackendFailureMode"])}
-          showSelectedDescription
-          onChange={setFailureMode}
-        />
-      </FieldGroup>
-      <button
-        className="button"
-        type="button"
-        disabled={props.saving}
-        onClick={() =>
-          props.onSave({
-            port: port.trim() ? Number(port) : null,
-            statefulMode,
-            prefixMode: prefixMode === "none" ? null : prefixMode,
-            failureMode,
-          })
-        }
-      >
+        <div className="form-grid">
+          <FieldGroup
+            label="State mode"
+            tooltip={props.help.field<McpConfig>(
+              "LocalSimpleMcpConfig",
+              "statefulMode",
+              "Controls whether MCP sessions are preserved by the gateway.",
+            )}
+          >
+            <EnumSelector
+              ariaLabel="State mode"
+              value={statefulMode}
+              options={[
+                {
+                  value: "stateless",
+                  label: "Stateless",
+                  description:
+                    "Do not preserve MCP session state between requests.",
+                },
+                {
+                  value: "stateful",
+                  label: "Stateful",
+                  description:
+                    "Preserve MCP sessions so targets can keep per-session context.",
+                },
+              ]}
+              schema={props.help.node([
+                "$defs",
+                "LocalSimpleMcpConfig",
+                "properties",
+                "statefulMode",
+              ])}
+              onChange={setStatefulMode}
+            />
+          </FieldGroup>
+          <FieldGroup
+            label="Prefix mode"
+            tooltip={props.help.field<McpConfig>(
+              "LocalSimpleMcpConfig",
+              "prefixMode",
+              "Controls whether target names are prefixed when exposing tools.",
+            )}
+          >
+            <EnumSelector
+              ariaLabel="Prefix mode"
+              value={prefixMode}
+              options={[
+                {
+                  value: "none",
+                  label: "None",
+                  description:
+                    "Expose tool names without adding the target name.",
+                },
+                {
+                  value: "always",
+                  label: "Always",
+                  description:
+                    "Always prefix exposed tool names with the target name.",
+                },
+                {
+                  value: "conditional",
+                  label: "Conditional",
+                  description:
+                    "Prefix only when needed to avoid tool-name conflicts.",
+                },
+              ]}
+              schema={props.help.node([
+                "$defs",
+                "LocalSimpleMcpConfig",
+                "properties",
+                "prefixMode",
+              ])}
+              onChange={setPrefixMode}
+            />
+          </FieldGroup>
+          <FieldGroup
+            label="Failure mode"
+            tooltip={props.help.field<McpConfig>(
+              "LocalSimpleMcpConfig",
+              "failureMode",
+            )}
+          >
+            <EnumSelector
+              ariaLabel="Failure mode"
+              value={failureMode}
+              options={[
+                { value: "failClosed", label: "Fail closed" },
+                { value: "failOpen", label: "Fail open" },
+              ]}
+              schema={props.help.node(["$defs", "McpBackendFailureMode"])}
+              onChange={setFailureMode}
+            />
+          </FieldGroup>
+        </div>
+      </PolicySection>
+      <button className="button" type="submit" disabled={props.saving}>
         <Save size={16} />
         Save settings
       </button>
-    </div>
+    </form>
   );
 }
 

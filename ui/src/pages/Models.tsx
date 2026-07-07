@@ -230,20 +230,20 @@ export function ModelsPage() {
         actions={
           <div className="button-row">
             <button
-              className="button primary"
-              type="button"
-              onClick={openNewModel}
-            >
-              <Plus size={16} />
-              Add model
-            </button>
-            <button
               className="button"
               type="button"
               onClick={openNewVirtualModel}
             >
               <GitBranch size={16} />
               Add virtual model
+            </button>
+            <button
+              className="button primary"
+              type="button"
+              onClick={openNewModel}
+            >
+              <Plus size={16} />
+              Add model
             </button>
           </div>
         }
