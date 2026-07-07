@@ -1763,6 +1763,28 @@ message OAuthTokenExchange {
         UNSPECIFIED         = 0; // defaults to CLIENT_SECRET_BASIC
         CLIENT_SECRET_BASIC = 1; // id:secret in the Authorization: Basic header
         CLIENT_SECRET_POST  = 2; // client_id/client_secret in the form body
+        PRIVATE_KEY_JWT     = 3; // private_key_jwt client assertion (RFC 7523)
+    }
+
+    message PrivateKeyJwt {
+      enum SigningAlg {
+        SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
+        RS256                   = 1;
+        RS384                   = 2;
+        RS512                   = 3;
+        ES256                   = 4;
+        ES384                   = 5;
+      }
+
+      // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
+      // EC keys are used with ES* algorithms.
+      string signing_key = 1;
+      // JWS signing algorithm. Defaults to RS256.
+      SigningAlg alg = 2;
+      // Optional JWS key ID header.
+      optional string kid = 3;
+      // Audience for the client assertion, typically the token endpoint URL.
+      string assertion_audience = 4;
     }
 
     // Required and non-empty when client_auth is set.
@@ -1773,6 +1795,8 @@ message OAuthTokenExchange {
     optional string client_secret = 2;
     // RFC 6749 §2.3 client authentication method.
     Method method = 3;
+    // Required when method is PRIVATE_KEY_JWT.
+    PrivateKeyJwt private_key_jwt = 4;
   }
 
   message TokenSpec {

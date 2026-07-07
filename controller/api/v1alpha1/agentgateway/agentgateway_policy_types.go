@@ -1310,7 +1310,7 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauth
 // +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
@@ -1352,11 +1352,204 @@ type BackendAuth struct {
 	// +optional
 	GCP *GcpAuth `json:"gcp,omitempty"`
 
+	// OAuth 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
+	// +optional
+	OAuth *OAuthTokenExchange `json:"oauth,omitempty"`
+
 	// Where backend credentials are inserted.
 	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
 	// This applies to `key`, `secretRef`, and `passthrough`.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+// OAuth token exchange settings for backend authentication.
+// +kubebuilder:validation:XValidation:rule="!(has(self.actorToken) && has(self.grantType) && self.grantType == 'JwtBearer')",message="actorToken is only valid with TokenExchange grantType"
+// +kubebuilder:validation:XValidation:rule="!(has(self.requestedTokenType) && has(self.grantType) && self.grantType == 'JwtBearer')",message="requestedTokenType is only valid with TokenExchange grantType"
+// +kubebuilder:validation:XValidation:rule="!has(self.requestedTokenType) || self.requestedTokenType != 'urn:ietf:params:oauth:token-type:id-jag'",message="requestedTokenType id-jag is only supported by crossAppAccess"
+type OAuthTokenExchange struct {
+	// RFC 8693 token endpoint backend.
+	// +required
+	TokenEndpoint gwv1.BackendObjectReference `json:"tokenEndpoint"`
+
+	// Token endpoint path; defaults to "/". Must start with "/".
+	// +kubebuilder:validation:Pattern=`^/`
+	// +optional
+	TokenEndpointPath *string `json:"tokenEndpointPath,omitempty"`
+
+	// RFC followed by the request. Defaults to TokenExchange (RFC 8693).
+	// +optional
+	GrantType *OAuthGrantType `json:"grantType,omitempty"`
+
+	// Subject token / assertion source + type. Defaults to Authorization Bearer, access_token.
+	// +optional
+	SubjectToken *OAuthTokenSpec `json:"subjectToken,omitempty"`
+
+	// RFC 8693 delegation actor token. TokenExchange grant only.
+	// +optional
+	ActorToken *OAuthActorToken `json:"actorToken,omitempty"`
+
+	// Audiences sent to the token endpoint.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Audiences []string `json:"audiences,omitempty"`
+
+	// Scopes sent to the token endpoint.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Scopes []string `json:"scopes,omitempty"`
+
+	// Resources sent to the token endpoint.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Resources []string `json:"resources,omitempty"`
+
+	// RFC 8693 requested_token_type.
+	// +optional
+	RequestedTokenType *OAuthTokenType `json:"requestedTokenType,omitempty"`
+
+	// Extra form params; values are CEL expressions over the incoming request.
+	// +kubebuilder:validation:MaxProperties=64
+	// +optional
+	AdditionalParams map[string]CELExpression `json:"additionalParams,omitempty"`
+
+	// Client authentication for the token endpoint. When unset, none is sent.
+	// +optional
+	ClientAuth *OAuthClientAuth `json:"clientAuth,omitempty"`
+
+	// Where the exchanged token is written to the backend request.
+	// Defaults to Authorization: Bearer.
+	// +optional
+	AuthorizationLocation *AuthorizationLocation `json:"authorizationLocation,omitempty"`
+
+	// Response cache configuration.
+	// +optional
+	Cache *OAuthTokenCache `json:"cache,omitempty"`
+}
+
+// +k8s:enum
+type OAuthGrantType string
+
+const (
+	OAuthGrantTypeTokenExchange OAuthGrantType = "TokenExchange"
+	OAuthGrantTypeJwtBearer     OAuthGrantType = "JwtBearer"
+)
+
+type OAuthTokenSpec struct {
+	// Where to read the token. CEL `expression` variant is permitted.
+	// +optional
+	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
+
+	// RFC 8693 token type URN. Empty defaults to access_token.
+	// +optional
+	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="!has(self.enforceMayAct) || !self.enforceMayAct || (has(self.tokenType) && self.tokenType == 'urn:ietf:params:oauth:token-type:jwt')",message="enforceMayAct requires tokenType urn:ietf:params:oauth:token-type:jwt"
+type OAuthActorToken struct {
+	// Where to read the actor token. Actor tokens have no default source.
+	// +required
+	Source AuthorizationExtractionLocation `json:"source"`
+
+	// RFC 8693 token type URN. Empty defaults to access_token.
+	// +optional
+	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
+
+	// Enforce the subject's may_act claim authorizes the actor.
+	// +optional
+	EnforceMayAct *bool `json:"enforceMayAct,omitempty"`
+}
+
+// +k8s:enum
+type OAuthTokenType string
+
+const (
+	OAuthTokenTypeAccessToken OAuthTokenType = "urn:ietf:params:oauth:token-type:access_token" // #nosec G101
+	OAuthTokenTypeJWT         OAuthTokenType = "urn:ietf:params:oauth:token-type:jwt"          // #nosec G101
+	OAuthTokenTypeIDToken     OAuthTokenType = "urn:ietf:params:oauth:token-type:id_token"     // #nosec G101
+	OAuthTokenTypeIDJAG       OAuthTokenType = "urn:ietf:params:oauth:token-type:id-jag"       // #nosec G101
+)
+
+// +k8s:enum
+type OAuthClientAuthMethod string
+
+const (
+	OAuthClientAuthMethodClientSecretBasic OAuthClientAuthMethod = "ClientSecretBasic"
+	OAuthClientAuthMethodClientSecretPost  OAuthClientAuthMethod = "ClientSecretPost"
+	OAuthClientAuthMethodPrivateKeyJWT     OAuthClientAuthMethod = "PrivateKeyJwt"
+)
+
+// OAuthClientAuth configures token endpoint client authentication.
+// +kubebuilder:validation:XValidation:rule="has(self.privateKeyJwt) == (has(self.method) && self.method == 'PrivateKeyJwt')",message="privateKeyJwt settings require method PrivateKeyJwt"
+// +kubebuilder:validation:XValidation:rule="!has(self.secretRef) || !has(self.method) || self.method != 'PrivateKeyJwt'",message="secretRef is not valid with method PrivateKeyJwt"
+// +kubebuilder:validation:XValidation:rule="has(self.secretRef) || has(self.privateKeyJwt) || (has(self.method) && self.method == 'ClientSecretPost')",message="clientAuth without secretRef requires method ClientSecretPost or PrivateKeyJwt"
+type OAuthClientAuth struct {
+	// Client ID sent to the token endpoint.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	ClientID string `json:"clientId"`
+
+	// Secret providing the `clientSecret` key. When omitted, client_id is sent
+	// without a secret, which is only valid with ClientSecretPost.
+	// +optional
+	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+
+	// privateKeyJwt client assertion settings. Required when method is PrivateKeyJwt.
+	// +optional
+	PrivateKeyJWT *OAuthPrivateKeyJWT `json:"privateKeyJwt,omitempty"`
+
+	// Defaults to ClientSecretBasic.
+	// +optional
+	Method *OAuthClientAuthMethod `json:"method,omitempty"`
+}
+
+// OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
+type OAuthPrivateKeyJWT struct {
+	// Secret providing the `signingKey` key with a PEM-encoded RSA or EC private key.
+	// +required
+	SigningKeyRef LocalSecretObjectRef `json:"signingKeyRef"`
+
+	// JWS signing algorithm. Defaults to RS256.
+	// +optional
+	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+
+	// Optional JWS key ID header.
+	// +optional
+	KeyID *string `json:"kid,omitempty"`
+
+	// Audience for the client assertion, typically the token endpoint URL.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	AssertionAudience string `json:"assertionAudience"`
+}
+
+// +k8s:enum
+type OAuthPrivateKeyJWTSigningAlgorithm string
+
+const (
+	OAuthPrivateKeyJWTSigningAlgorithmRS256 OAuthPrivateKeyJWTSigningAlgorithm = "RS256"
+	OAuthPrivateKeyJWTSigningAlgorithmRS384 OAuthPrivateKeyJWTSigningAlgorithm = "RS384"
+	OAuthPrivateKeyJWTSigningAlgorithmRS512 OAuthPrivateKeyJWTSigningAlgorithm = "RS512"
+	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
+	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
+)
+
+type OAuthTokenCache struct {
+	// +optional
+	InMemory *OAuthInMemoryTokenCache `json:"inMemory,omitempty"`
+}
+
+type OAuthInMemoryTokenCache struct {
+	// Default 8192; 0 disables the cache.
+	// +optional
+	MaxEntries *uint32 `json:"maxEntries,omitempty"`
+
+	// TTL used when the token endpoint omits expires_in. Default 300s.
+	// +optional
+	DefaultTTL *metav1.Duration `json:"defaultTtl,omitempty"`
 }
 
 // +k8s:enum
