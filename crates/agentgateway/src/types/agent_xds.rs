@@ -1003,12 +1003,33 @@ fn backend_auth_from_proto(
 					let tags = assume_role
 						.tags
 						.into_iter()
-						.map(|tag| auth::aws::AwsSessionTag {
-							key: tag.key,
-							value: Some(tag.value),
-							expression: None,
+						.map(|tag| -> Result<_, ProtoError> {
+							// A tag is dynamic iff expression is set; an unset proto value is
+							// indistinguishable from an empty one, and STS allows empty values.
+							if tag.expression.is_empty() {
+								return Ok(auth::aws::AwsSessionTag {
+									key: tag.key,
+									value: Some(tag.value),
+									expression: None,
+								});
+							}
+							if !tag.value.is_empty() {
+								return Err(ProtoError::Generic(format!(
+									"session tag {:?} sets both value and expression",
+									tag.key
+								)));
+							}
+							Ok(auth::aws::AwsSessionTag {
+								key: tag.key,
+								value: None,
+								expression: Some(Arc::new(
+									cel::Expression::new_strict(&tag.expression).map_err(|e| {
+										ProtoError::Generic(format!("invalid session tag expression: {e}"))
+									})?,
+								)),
+							})
 						})
-						.collect();
+						.collect::<Result<Vec<_>, _>>()?;
 					Ok(auth::AwsAssumeRole {
 						role_arn: assume_role.role_arn,
 						session_name: if assume_role.session_name.is_empty() {

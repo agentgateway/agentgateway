@@ -449,12 +449,17 @@ message AwsAssumeRole {
   repeated AwsSessionTag tags = 3;
 }
 
-// AWS STS session tag, a key/value pair passed to AssumeRole for cost attribution.
+// AWS STS session tag passed to AssumeRole for cost attribution.
+// Exactly one of value and expression may be set.
 message AwsSessionTag {
   // Tag key.
   string key = 1;
-  // Tag value.
+  // Static tag value.
   string value = 2;
+  // CEL expression evaluated against each request to produce the tag value,
+  // for example `jwt.sub` or `request.headers["x-app"]`. If the expression does
+  // not produce a valid tag value at request time, the request is rejected.
+  string expression = 3;
 }
 
 // Explicit Azure credentials configuration
