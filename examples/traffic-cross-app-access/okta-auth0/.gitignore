@@ -1,0 +1,3 @@
+# Never commit real client secrets used by the demo.
+secrets/*
+!secrets/.gitkeep
