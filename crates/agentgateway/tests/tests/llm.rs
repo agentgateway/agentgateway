@@ -8,7 +8,7 @@ use crate::common::prelude::*;
 #[tokio::test]
 async fn llm_openai() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let (_mock, _bind, io) = setup_llm_mock(
@@ -28,7 +28,7 @@ async fn llm_openai() {
 	});
 	assert_llm(
 		io,
-		include_bytes!("../../src/llm/tests/requests/completions/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
 		want,
 	)
 	.await;
@@ -37,7 +37,7 @@ async fn llm_openai() {
 #[tokio::test]
 async fn llm_openai_tokenize() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let (_mock, _bind, io) = setup_llm_mock(
@@ -57,7 +57,7 @@ async fn llm_openai_tokenize() {
 	});
 	assert_llm(
 		io,
-		include_bytes!("../../src/llm/tests/requests/completions/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
 		want,
 	)
 	.await;
@@ -66,7 +66,7 @@ async fn llm_openai_tokenize() {
 #[tokio::test]
 async fn llm_detect_mode_passthrough_without_rewrite() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
@@ -86,7 +86,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 		.unwrap(),
 	};
 	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
-	let body = include_bytes!("../../src/llm/tests/requests/completions/basic.json");
+	let body = include_bytes!("../../../llm/src/tests/requests/completions/basic.json");
 
 	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions?trace=repro")
 		.header(header::CONTENT_TYPE, "application/json")
@@ -131,7 +131,7 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 #[tokio::test]
 async fn llm_detect_mode_respects_model_rewrite() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
@@ -154,7 +154,7 @@ async fn llm_detect_mode_respects_model_rewrite() {
 		.unwrap(),
 	};
 	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
-	let body = include_bytes!("../../src/llm/tests/requests/completions/basic.json");
+	let body = include_bytes!("../../../llm/src/tests/requests/completions/basic.json");
 
 	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions?trace=rewrite")
 		.header(header::CONTENT_TYPE, "application/json")
@@ -221,7 +221,7 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 #[tokio::test]
 async fn llm_local_router_handles_models_virtual_model_and_missing_model() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let config = format!(
@@ -378,7 +378,7 @@ llm:
 #[tokio::test]
 async fn llm_conditional_virtual_model_no_match_returns_json_error() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let config = format!(
@@ -423,7 +423,7 @@ llm:
 #[tokio::test]
 async fn llm_model_router_handles_multipart_audio_detect_request() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let config = format!(
@@ -496,7 +496,7 @@ llm:
 #[tokio::test]
 async fn llm_custom_rerank() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/cohere/rerank.json"
+		"../../../llm/src/tests/response/cohere/rerank.json"
 	))
 	.await;
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
@@ -524,7 +524,7 @@ async fn llm_custom_rerank() {
 		io,
 		Method::POST,
 		"http://lo/v1/rerank",
-		include_bytes!("../../src/llm/tests/requests/rerank/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/rerank/basic.json"),
 	)
 	.await;
 	assert_eq!(res.status(), 200);
@@ -581,7 +581,7 @@ fn setup_custom_llm_provider_backend_mock_with_formats(
 #[tokio::test]
 async fn llm_custom_provider_routes_to_provider_backend() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let (mock, _bind, io) =
@@ -608,7 +608,7 @@ async fn llm_custom_provider_routes_to_provider_backend() {
 #[tokio::test]
 async fn llm_custom_provider_uses_upstream_route_fallback() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/anthropic/basic.json"
+		"../../../llm/src/tests/response/anthropic/basic.json"
 	))
 	.await;
 	let (mock, _bind, io) =
@@ -640,7 +640,7 @@ async fn llm_custom_provider_uses_upstream_route_fallback() {
 #[tokio::test]
 async fn llm_custom_provider_uses_format_path_override() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/anthropic/basic.json"
+		"../../../llm/src/tests/response/anthropic/basic.json"
 	))
 	.await;
 	let (mock, _bind, io) = setup_custom_llm_provider_backend_mock_with_formats(
@@ -669,7 +669,7 @@ async fn llm_custom_provider_uses_format_path_override() {
 #[tokio::test]
 async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let (mock, _bind, io) =
@@ -705,7 +705,7 @@ async fn recv_rate_limit_request(
 
 fn completions_request_body(streaming: bool) -> Vec<u8> {
 	let mut body: Value = serde_json::from_slice(include_bytes!(
-		"../../src/llm/tests/requests/completions/basic.json"
+		"../../../llm/src/tests/requests/completions/basic.json"
 	))
 	.expect("request fixture should be valid JSON");
 	if streaming {
@@ -716,7 +716,7 @@ fn completions_request_body(streaming: bool) -> Vec<u8> {
 
 fn completions_request_body_with_model(model: &str) -> Vec<u8> {
 	let mut body: Value = serde_json::from_slice(include_bytes!(
-		"../../src/llm/tests/requests/completions/basic.json"
+		"../../../llm/src/tests/requests/completions/basic.json"
 	))
 	.expect("request fixture should be valid JSON");
 	body["model"] = json!(model);
@@ -820,7 +820,7 @@ async fn assert_llm_remote_rate_limit_cost(
 #[tokio::test]
 async fn llm_remote_rate_limit_cost_amends_response_tokens() {
 	assert_llm_remote_rate_limit_cost(
-		include_bytes!("../../src/llm/tests/response/completions/basic.json"),
+		include_bytes!("../../../llm/src/tests/response/completions/basic.json"),
 		&completions_request_body(false),
 		23017,
 	)
@@ -830,7 +830,7 @@ async fn llm_remote_rate_limit_cost_amends_response_tokens() {
 #[tokio::test]
 async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
 	assert_llm_remote_rate_limit_cost(
-		include_bytes!("../../src/llm/tests/response/completions/stream.json"),
+		include_bytes!("../../../llm/src/tests/response/completions/stream.json"),
 		&completions_request_body(true),
 		286018,
 	)
@@ -848,7 +848,7 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	#[case] expected_url: &str,
 ) {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
@@ -877,7 +877,7 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 		io,
 		Method::POST,
 		"http://lo/v1/messages?trace=repro",
-		include_bytes!("../../src/llm/tests/requests/messages/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/messages/basic.json"),
 	)
 	.await;
 
@@ -993,7 +993,7 @@ async fn llm_non_openai_passthrough_prepends_path_prefix(
 #[tokio::test]
 async fn llm_log_body() {
 	let mock = body_mock(include_bytes!(
-		"../../src/llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let x = serde_json::to_string(&json!({
@@ -1031,7 +1031,7 @@ async fn llm_log_body() {
 	});
 	assert_llm(
 		io,
-		include_bytes!("../../src/llm/tests/requests/completions/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
 		want,
 	)
 	.await;

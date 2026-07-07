@@ -1,13 +1,12 @@
 use std::time::Instant;
 
 use agent_core::strng;
+use axum_core::body::Body;
 use bytes::Bytes;
 
-use crate::http::Body;
-use crate::llm::types::completions::typed as completions;
-use crate::llm::types::messages::typed as messages;
-use crate::llm::{AIError, AmendOnDrop};
-use crate::parse;
+use crate::types::completions::typed as completions;
+use crate::types::messages::typed as messages;
+use crate::{AIError, AmendOnDrop, parse};
 
 fn anthropic_error_type(status: ::http::StatusCode) -> &'static str {
 	match status {
@@ -58,16 +57,15 @@ pub mod from_completions {
 	use std::time::Instant;
 
 	use agent_core::strng;
+	use axum_core::body::Body;
 	use bytes::Bytes;
 
-	use crate::http::Body;
-	use crate::llm::conversion::completions::{extract_system_text, parse_data_url};
-	use crate::llm::types::ResponseType;
-	use crate::llm::types::completions::typed as completions;
-	use crate::llm::types::completions::typed::UsagePromptDetails;
-	use crate::llm::types::messages::typed as messages;
-	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
-	use crate::{json, parse};
+	use crate::conversion::completions::{extract_system_text, parse_data_url};
+	use crate::types::ResponseType;
+	use crate::types::completions::typed as completions;
+	use crate::types::completions::typed::UsagePromptDetails;
+	use crate::types::messages::typed as messages;
+	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
 
 	fn user_content_to_messages(
 		content: &completions::RequestUserMessageContent,

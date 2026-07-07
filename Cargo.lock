@@ -110,10 +110,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-http"
+version = "0.0.0"
+dependencies = [
+ "axum",
+ "axum-core",
+ "bytes",
+ "http 1.4.2",
+]
+
+[[package]]
 name = "agent-llm"
 version = "0.0.0"
 dependencies = [
  "agent-core",
+ "agent-http",
  "anyhow",
  "async-openai",
  "aws-credential-types",
@@ -206,6 +217,7 @@ dependencies = [
  "agent-celx",
  "agent-core",
  "agent-hbone",
+ "agent-http",
  "agent-llm",
  "agent-pool",
  "agent-xds",

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+pub use agent_llm::auth::{AssumeRoleCacheKey, AwsAssumeRoleCache, AwsCredentialsCache};
 use aws_config::sts::AssumeRoleProvider;
 use aws_config::{BehaviorVersion, SdkConfig};
 use aws_credential_types::Credentials;
@@ -13,7 +14,6 @@ use tokio::sync::OnceCell;
 
 use crate::llm::bedrock::AwsRegion;
 use crate::*;
-pub use agent_llm::auth::{AssumeRoleCacheKey, AwsAssumeRoleCache, AwsCredentialsCache};
 
 #[derive(Clone, Debug)]
 pub struct DefaultAwsServiceName(pub String);

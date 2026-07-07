@@ -31,11 +31,10 @@ pub mod sessionpersistence;
 pub mod tests_common;
 pub mod transformation_cel;
 
-pub type Error = axum_core::Error;
-pub type Body = axum_core::body::Body;
-pub type Request = ::http::Request<Body>;
-pub type Response = ::http::Response<Body>;
-
+pub use agent_http::{
+	Body, BufferLimit, Error, Request, Response, buffer_limit, read_body_with_limit,
+	response_buffer_limit, x_headers,
+};
 pub use recordbody::{RecordedBody, RecordedBodyHandle};
 
 pub(crate) fn iter_request_cookies<'a>(
@@ -250,7 +249,6 @@ use url::{Url, form_urlencoded};
 use crate::cel::{BackendContext, DestinationContext, LLMContext, RequestTime, SourceContext};
 use crate::client::PoolKey;
 use crate::proxy::{ProxyError, ProxyResponse};
-use crate::transport::BufferLimit;
 use crate::transport::stream::TCPConnectionInfo;
 use crate::types::agent::PathMatch;
 
@@ -489,59 +487,6 @@ pub fn get_request_pseudo_headers(req: &Request) -> Vec<(HeaderOrPseudo, String)
 	out
 }
 
-pub mod x_headers {
-	use http::uri::Scheme;
-	use http::{HeaderMap, HeaderName, HeaderValue, Uri};
-
-	pub const TRACEPARENT: HeaderName = HeaderName::from_static("traceparent");
-
-	pub const X_RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
-	pub const X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
-	pub const X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
-	pub const X_AMZN_REQUESTID: HeaderName = HeaderName::from_static("x-amzn-requestid");
-	pub const X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");
-
-	pub const RETRY_AFTER_MS: HeaderName = HeaderName::from_static("retry-after-ms");
-
-	pub const X_RATELIMIT_RESET_REQUESTS: HeaderName =
-		HeaderName::from_static("x-ratelimit-reset-requests");
-	pub const X_RATELIMIT_RESET_TOKENS: HeaderName =
-		HeaderName::from_static("x-ratelimit-reset-tokens");
-	pub const X_RATELIMIT_RESET_REQUESTS_DAY: HeaderName =
-		HeaderName::from_static("x-ratelimit-reset-requests-day");
-	pub const X_RATELIMIT_RESET_TOKENS_MINUTE: HeaderName =
-		HeaderName::from_static("x-ratelimit-reset-tokens-minute");
-
-	pub fn forwarded_proto(headers: &HeaderMap<HeaderValue>) -> Option<String> {
-		headers
-			.get_all(&X_FORWARDED_PROTO)
-			.iter()
-			.filter_map(|value| value.to_str().ok())
-			.flat_map(|value| value.split(','))
-			.map(str::trim)
-			.find(|value| !value.is_empty())
-			.map(|value| value.to_ascii_lowercase())
-	}
-
-	pub fn forwarded_scheme(headers: &HeaderMap<HeaderValue>) -> Option<Scheme> {
-		forwarded_proto(headers).and_then(|proto| proto.parse().ok())
-	}
-
-	pub fn apply_forwarded_scheme(uri: Uri, headers: &HeaderMap<HeaderValue>) -> Uri {
-		let Some(scheme) = forwarded_scheme(headers) else {
-			return uri;
-		};
-		if uri.authority().is_none() {
-			return uri;
-		}
-
-		let original = uri.clone();
-		let mut parts = uri.into_parts();
-		parts.scheme = Some(scheme);
-		Uri::from_parts(parts).unwrap_or(original)
-	}
-}
-
 pub fn modify_req(
 	req: &mut Request,
 	f: impl FnOnce(&mut ::http::request::Parts) -> anyhow::Result<()>,
@@ -764,22 +709,6 @@ pub fn get_host_with_port(req: &Request) -> Result<&str, ProxyError> {
 	Ok(host)
 }
 
-pub fn buffer_limit(req: &Request) -> usize {
-	req
-		.extensions()
-		.get::<BufferLimit>()
-		.map(|b| b.0)
-		.unwrap_or(2_097_152)
-}
-
-pub fn response_buffer_limit(resp: &Response) -> usize {
-	resp
-		.extensions()
-		.get::<BufferLimit>()
-		.map(|b| b.0)
-		.unwrap_or(2_097_152)
-}
-
 pub async fn read_req_body(req: Request) -> Result<Bytes, axum_core::Error> {
 	let lim = buffer_limit(&req);
 	read_body_with_limit(req.into_body(), lim).await
@@ -796,10 +725,6 @@ pub async fn read_response_body(
 	let lim = response_buffer_limit(&resp);
 	let (h, b) = resp.into_parts();
 	read_body_with_limit(b, lim).await.map(|b| (h, b))
-}
-
-pub async fn read_body_with_limit(body: Body, limit: usize) -> Result<Bytes, axum_core::Error> {
-	axum::body::to_bytes(body, limit).await
 }
 
 pub async fn inspect_body(req: &mut Request) -> anyhow::Result<Bytes> {

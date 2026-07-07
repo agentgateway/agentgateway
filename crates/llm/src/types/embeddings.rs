@@ -2,9 +2,10 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::{Deserialize, Serialize};
 
-use crate::json;
-use crate::llm::types::RequestType;
-use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage};
+use crate::types::RequestType;
+use crate::{
+	AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage, json,
+};
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
@@ -66,7 +67,7 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::Embeddings,
-			cache_convention: crate::llm::CacheTokenConvention::pending(),
+			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: false,
@@ -97,9 +98,9 @@ impl RequestType for Request {
 	}
 }
 
-impl crate::llm::types::ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::llm::LLMResponse {
-		crate::llm::LLMResponse {
+impl crate::types::ResponseType for Response {
+	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::LLMResponse {
+		crate::LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -114,13 +115,13 @@ impl crate::llm::types::ResponseType for Response {
 		}
 	}
 
-	fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice> {
+	fn to_webhook_choices(&self) -> Vec<crate::webhook::ResponseChoice> {
 		vec![]
 	}
 
 	fn set_webhook_choices(
 		&mut self,
-		_resp: Vec<crate::llm::policy::webhook::ResponseChoice>,
+		_resp: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()> {
 		Ok(())
 	}

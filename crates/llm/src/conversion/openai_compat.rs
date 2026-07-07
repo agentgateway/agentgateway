@@ -2,8 +2,7 @@ pub mod from_responses {
 	use types::completions::typed as completions;
 	use types::responses::typed as responses;
 
-	use crate::json;
-	use crate::llm::{AIError, types};
+	use crate::{AIError, json, types};
 
 	/// Translate an OpenAI Responses request into an OpenAI-compatible chat completions request.
 	pub fn translate(req: &types::responses::Request) -> Result<Vec<u8>, AIError> {
@@ -366,16 +365,15 @@ pub mod to_responses {
 	use std::time::Instant;
 
 	use agent_core::strng;
+	use axum_core::body::Body;
 	use bytes::Bytes;
 	use rand::RngExt;
 	use types::completions::typed as completions;
 	use types::responses::typed as responses;
 
-	use crate::http::Body;
-	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::parse::sse::SseJsonEvent;
-	use crate::{json, parse};
+	use crate::types::ResponseType;
+	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
 
 	/// Translate an OpenAI-compatible chat completions response into an OpenAI Responses response.
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {

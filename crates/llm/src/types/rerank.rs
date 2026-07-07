@@ -2,8 +2,8 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::types::RequestType;
-use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage};
+use crate::types::RequestType;
+use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatCompletionMessage};
 
 /// Canonical rerank request, modeled on the Cohere `/v2/rerank` API.
 /// Unknown fields are preserved via `rest` for passthrough to compatible providers.
@@ -108,7 +108,7 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Rerank,
-			cache_convention: crate::llm::CacheTokenConvention::pending(),
+			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: false,
@@ -127,8 +127,8 @@ impl RequestType for Request {
 	}
 }
 
-impl crate::llm::types::ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::llm::LLMResponse {
+impl crate::types::ResponseType for Response {
+	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::LLMResponse {
 		// Cohere reports counts in `meta.tokens`; fall back to `billed_units.total_tokens`
 		// (e.g. Voyage's usage normalized into meta).
 		let input_tokens = self.meta.as_ref().and_then(|m| {
@@ -143,20 +143,20 @@ impl crate::llm::types::ResponseType for Response {
 						.map(|t| t as u64)
 				})
 		});
-		crate::llm::LLMResponse {
+		crate::LLMResponse {
 			input_tokens,
 			total_tokens: input_tokens,
 			..Default::default()
 		}
 	}
 
-	fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice> {
+	fn to_webhook_choices(&self) -> Vec<crate::webhook::ResponseChoice> {
 		vec![]
 	}
 
 	fn set_webhook_choices(
 		&mut self,
-		_resp: Vec<crate::llm::policy::webhook::ResponseChoice>,
+		_resp: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()> {
 		Ok(())
 	}
@@ -238,7 +238,7 @@ mod tests {
 
 	#[test]
 	fn cohere_meta_tokens_populate_usage() {
-		use crate::llm::types::ResponseType;
+		use crate::types::ResponseType;
 		let raw = r#"{"results":[{"index":0,"relevance_score":0.9}],"meta":{"billed_units":{"search_units":1},"tokens":{"input_tokens":214.0,"output_tokens":2.0}}}"#;
 		let resp: Response = serde_json::from_str(raw).unwrap();
 		assert_eq!(resp.to_llm_response(false).input_tokens, Some(214));

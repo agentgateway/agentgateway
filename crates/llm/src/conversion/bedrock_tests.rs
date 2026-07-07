@@ -7,8 +7,8 @@ use http_body_util::BodyExt;
 use serde_json::json;
 
 use super::*;
-use crate::llm::bedrock::Provider;
-use crate::llm::types;
+use crate::bedrock::Provider;
+use crate::types;
 
 #[tokio::test]
 async fn test_append_done_on_success_omits_done_after_error() {
@@ -627,7 +627,7 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 	};
 
 	let err = super::from_messages::translate_internal(req, &provider, None).unwrap_err();
-	assert!(matches!(err, crate::llm::AIError::UnsupportedConversion(_)));
+	assert!(matches!(err, crate::AIError::UnsupportedConversion(_)));
 	assert!(
 		err
 			.to_string()

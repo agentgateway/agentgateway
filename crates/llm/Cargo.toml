@@ -13,6 +13,7 @@ schema = ["schemars", "agent-core/schema"]
 
 [dependencies]
 agent-core.workspace = true
+agent-http.workspace = true
 anyhow.workspace = true
 async-openai.workspace = true
 aws-credential-types.workspace = true

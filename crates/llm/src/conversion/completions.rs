@@ -1,26 +1,26 @@
 use std::time::Instant;
 
 use agent_core::strng;
+use axum_core::body::Body;
 use bytes::Bytes;
+use http::Response;
 use tracing::debug;
 
-use crate::http::Response;
-use crate::llm::{AmendOnDrop, logged_response_parsing, types};
-use crate::{llm, parse};
+use crate::{AmendOnDrop, logged_response_parsing, parse, types};
 
 /// Parse a Google error response, handling both single object and array-wrapped formats.
 /// Google's OpenAI-compatible endpoints consistently return `[{"error": {...}}]`
 /// rather than `{"error": {...}}` when using the Vertex AI shim.
 pub(crate) fn parse_google_error(
 	bytes: &Bytes,
-) -> Result<types::completions::typed::GoogleErrorResponse, llm::AIError> {
+) -> Result<types::completions::typed::GoogleErrorResponse, crate::AIError> {
 	serde_json::from_slice::<types::completions::typed::GoogleErrorResponse>(bytes).or_else(|_| {
 		serde_json::from_slice::<Vec<types::completions::typed::GoogleErrorResponse>>(bytes)
 			.map_err(logged_response_parsing(bytes))?
 			.into_iter()
 			.next()
 			.ok_or_else(|| {
-				llm::AIError::InvalidResponse(agent_core::strng::literal!(
+				crate::AIError::InvalidResponse(agent_core::strng::literal!(
 					"error response missing error details"
 				))
 			})
@@ -39,13 +39,13 @@ pub(crate) fn google_error_type(error: &types::completions::typed::GoogleError) 
 
 pub(crate) fn parse_chat_completion_error(
 	bytes: &Bytes,
-) -> Result<types::completions::typed::ChatCompletionErrorResponse, llm::AIError> {
+) -> Result<types::completions::typed::ChatCompletionErrorResponse, crate::AIError> {
 	serde_json::from_slice::<types::completions::typed::ChatCompletionErrorResponse>(bytes)
 		.map_err(logged_response_parsing(bytes))
 }
 
 /// Translate a Google error response into an OpenAI Chat Completions error response.
-pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, llm::AIError> {
+pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, crate::AIError> {
 	let res = parse_google_error(bytes)?;
 	let m = types::completions::typed::ChatCompletionErrorResponse {
 		event_id: None,
@@ -58,7 +58,7 @@ pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, llm::AIError> {
 		},
 	};
 	Ok(Bytes::from(
-		serde_json::to_vec(&m).map_err(llm::AIError::ResponseMarshal)?,
+		serde_json::to_vec(&m).map_err(crate::AIError::ResponseMarshal)?,
 	))
 }
 
@@ -125,6 +125,7 @@ pub mod from_messages {
 	use std::time::Instant;
 
 	use agent_core::strng;
+	use axum_core::body::Body;
 	use bytes::Bytes;
 	use itertools::Itertools;
 	use messages::{ToolResultContent, ToolResultContentPart};
@@ -132,10 +133,9 @@ pub mod from_messages {
 	use types::completions::typed as completions;
 	use types::messages::typed as messages;
 
-	use crate::json;
-	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
 	use crate::parse::sse::SseJsonEvent;
+	use crate::types::ResponseType;
+	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, types};
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
@@ -239,11 +239,7 @@ pub mod from_messages {
 		})
 	}
 
-	pub fn translate_stream(
-		b: crate::http::Body,
-		buffer_limit: usize,
-		log: AmendOnDrop,
-	) -> crate::http::Body {
+	pub fn translate_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
 		#[derive(Debug)]
 		struct PendingToolCall {
 			id: Option<String>,
@@ -963,10 +959,10 @@ pub mod from_messages {
 pub fn passthrough_stream(
 	mut log: AmendOnDrop,
 	include_completion_in_log: bool,
-	resp: Response,
-) -> Response {
+	resp: Response<Body>,
+) -> Response<Body> {
 	let mut completion = include_completion_in_log.then(String::new);
-	let buffer_limit = crate::http::response_buffer_limit(&resp);
+	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		let mut seen_provider = false;
 		let mut saw_token = false;

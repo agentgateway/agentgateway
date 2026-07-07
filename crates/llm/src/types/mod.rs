@@ -12,8 +12,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::Serialize;
 
-use crate::apply;
-use crate::llm::{AIError, LLMRequest, LLMResponse};
+use crate::{AIError, LLMRequest, LLMResponse, apply};
 
 pub enum ChatRequest<'a> {
 	Completions(&'a completions::Request),
@@ -25,10 +24,10 @@ pub enum ChatRequest<'a> {
 /// uniform policy enforcement and observability
 pub trait ResponseType: Send + Sync {
 	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse;
-	fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice>;
+	fn to_webhook_choices(&self) -> Vec<crate::webhook::ResponseChoice>;
 	fn set_webhook_choices(
 		&mut self,
-		resp: Vec<crate::llm::policy::webhook::ResponseChoice>,
+		resp: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()>;
 	fn serialize(&self) -> serde_json::Result<Vec<u8>>;
 }

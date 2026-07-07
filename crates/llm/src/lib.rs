@@ -3,13 +3,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use agent_core::prelude::Strng;
-use aws_credential_types::Credentials;
-use tiktoken_rs::CoreBPE;
-use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
-use tracing::warn;
-
 pub use agent_core::serdes;
 pub use agent_core::serdes::{JsonSchema, apply, attribute_alias, define_schema_aliases};
+use aws_credential_types::Credentials;
+use tracing::warn;
 
 define_schema_aliases!();
 
@@ -22,55 +19,15 @@ pub mod custom;
 pub mod gemini;
 pub mod openai;
 pub mod parse;
+pub mod tokenizer;
 pub mod types;
 pub mod vertex;
 
 #[cfg(test)]
 mod golden_tests;
 
-pub mod llm {
-	pub use crate::*;
-}
-
 pub trait Provider {
 	const NAME: Strng;
-}
-
-pub mod http {
-	pub type Error = axum_core::Error;
-	pub type Body = axum_core::body::Body;
-	pub type Request = ::http::Request<Body>;
-	pub type Response = ::http::Response<Body>;
-
-	pub use ::http::{HeaderMap, HeaderName, HeaderValue, header};
-
-	pub mod x_headers {
-		pub const TRACEPARENT: http::HeaderName = http::HeaderName::from_static("traceparent");
-		pub const X_AMZN_REQUESTID: http::HeaderName =
-			http::HeaderName::from_static("x-amzn-requestid");
-	}
-
-	pub mod auth {
-		pub mod aws {
-			pub use crate::auth::{AwsAssumeRoleCache, AwsCredentialsCache};
-		}
-
-		pub mod azure {
-			pub use crate::auth::AzureCredentialCache;
-		}
-	}
-
-	pub fn buffer_limit(_req: &Request) -> usize {
-		2_097_152
-	}
-
-	pub fn response_buffer_limit(_resp: &Response) -> usize {
-		2_097_152
-	}
-
-	pub async fn read_body_with_limit(body: Body, limit: usize) -> Result<bytes::Bytes, Error> {
-		axum::body::to_bytes(body, limit).await
-	}
 }
 
 pub mod json {
@@ -102,128 +59,16 @@ pub mod json {
 	}
 }
 
-pub mod policy {
-	pub use crate::PromptCachingConfig;
+pub mod webhook {
+	use serde::{Deserialize, Serialize};
 
-	pub mod webhook {
-		use serde::{Deserialize, Serialize};
+	pub type Message = crate::SimpleChatCompletionMessage;
 
-		pub type Message = crate::SimpleChatCompletionMessage;
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct GuardrailsPromptRequest {
-			/// body contains the object which is a list of the Message JSON objects from the prompts in the request
-			pub body: PromptMessages,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct GuardrailsPromptResponse {
-			/// action is the action to be taken based on the request.
-			/// The following actions are available on the response:
-			/// - PassAction: No action is required.
-			/// - MaskAction: Mask the response body.
-			/// - RejectAction: Reject the request.
-			pub action: RequestAction,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct GuardrailsResponseRequest {
-			/// body contains the object with a list of Choice that contains the response content from the LLM.
-			pub body: ResponseChoices,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct GuardrailsResponseResponse {
-			/// action is the action to be taken based on the request.
-			/// The following actions are available on the response:
-			/// - PassAction: No action is required.
-			/// - MaskAction: Mask the response body.
-			/// - RejectAction: Reject the response.
-			pub action: ResponseAction,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct PromptMessages {
-			/// List of prompt messages including role and content.
-			pub messages: Vec<Message>,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct ResponseChoice {
-			/// message contains the role and text content of the response from the LLM model.
-			pub message: Message,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct ResponseChoices {
-			/// list of possible independent responses from the LLM
-			pub choices: Vec<ResponseChoice>,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct PassAction {
-			/// reason is a human readable string that explains the reason for the action.
-			#[serde(skip_serializing_if = "Option::is_none")]
-			pub reason: Option<String>,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct MaskAction {
-			/// body contains the modified messages that masked out some of the original contents.
-			/// When used in a GuardrailPromptResponse, this should be PromptMessages.
-			/// When used in GuardrailResponseResponse, this should be ResponseChoices
-			pub body: MaskActionBody,
-			/// reason is a human readable string that explains the reason for the action.
-			#[serde(skip_serializing_if = "Option::is_none")]
-			pub reason: Option<String>,
-		}
-
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(rename_all = "snake_case")]
-		pub struct RejectAction {
-			/// body is the rejection message that will be used for HTTP error response body.
-			pub body: String,
-			/// status_code is the HTTP status code to be returned in the HTTP error response.
-			pub status_code: u16,
-			/// reason is a human readable string that explains the reason for the action.
-			#[serde(skip_serializing_if = "Option::is_none")]
-			pub reason: Option<String>,
-		}
-
-		/// Enum for actions available in prompt responses
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(untagged, rename_all = "snake_case")]
-		pub enum RequestAction {
-			Mask(MaskAction),
-			Reject(RejectAction),
-			Pass(PassAction),
-		}
-
-		/// Enum for actions available in response responses
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(untagged, rename_all = "snake_case")]
-		pub enum ResponseAction {
-			Mask(MaskAction),
-			Reject(RejectAction),
-			Pass(PassAction),
-		}
-
-		/// Enum for MaskAction body that can be either PromptMessages or ResponseChoices
-		#[derive(Debug, Clone, Serialize, Deserialize)]
-		#[serde(untagged)]
-		pub enum MaskActionBody {
-			PromptMessages(PromptMessages),
-			ResponseChoices(ResponseChoices),
-		}
+	#[derive(Debug, Clone, Serialize, Deserialize)]
+	#[serde(rename_all = "snake_case")]
+	pub struct ResponseChoice {
+		/// message contains the role and text content of the response from the LLM model.
+		pub message: Message,
 	}
 }
 
@@ -513,46 +358,6 @@ impl Default for AmendOnDrop {
 }
 
 pub use types::{RequestType, ResponseType, SimpleChatCompletionMessage};
-
-pub fn num_tokens_from_messages(
-	model: &str,
-	messages: &[SimpleChatCompletionMessage],
-) -> Result<u64, AIError> {
-	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
-	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
-		return Err(AIError::UnsupportedModel);
-	}
-	let bpe = get_bpe_from_tokenizer(tokenizer);
-	let tokens_per_message = 3;
-
-	let mut num_tokens: u64 = 0;
-	for message in messages {
-		num_tokens += tokens_per_message;
-		num_tokens += 1;
-		num_tokens += bpe
-			.encode_with_special_tokens(message.content.as_str())
-			.len() as u64;
-	}
-	num_tokens += 3;
-	Ok(num_tokens)
-}
-
-pub fn preload_tokenizers() {
-	let _ = tiktoken_rs::cl100k_base_singleton();
-	let _ = tiktoken_rs::o200k_base_singleton();
-}
-
-pub fn get_bpe_from_tokenizer<'a>(tokenizer: Tokenizer) -> &'a CoreBPE {
-	match tokenizer {
-		Tokenizer::O200kHarmony => tiktoken_rs::o200k_harmony_singleton(),
-		Tokenizer::O200kBase => tiktoken_rs::o200k_base_singleton(),
-		Tokenizer::Cl100kBase => tiktoken_rs::cl100k_base_singleton(),
-		Tokenizer::R50kBase => tiktoken_rs::r50k_base_singleton(),
-		Tokenizer::P50kBase => tiktoken_rs::r50k_base_singleton(),
-		Tokenizer::P50kEdit => tiktoken_rs::r50k_base_singleton(),
-		Tokenizer::Gpt2 => tiktoken_rs::r50k_base_singleton(),
-	}
-}
 
 pub fn logged_response_parsing(bytes: &[u8]) -> impl FnOnce(serde_json::Error) -> AIError + '_ {
 	|e| {

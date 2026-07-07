@@ -3,10 +3,9 @@ use agent_core::strng::Strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::policy::webhook::{Message, ResponseChoice};
-use crate::llm::types::{ResponseType, SimpleChatCompletionMessage};
-use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
-use crate::{json, llm};
+use crate::types::{ResponseType, SimpleChatCompletionMessage};
+use crate::webhook::{Message, ResponseChoice};
+use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, json};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
@@ -241,13 +240,13 @@ impl super::RequestType for Request {
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}
-	fn prepend_prompts(&mut self, prompts: Vec<llm::types::SimpleChatCompletionMessage>) {
+	fn prepend_prompts(&mut self, prompts: Vec<crate::types::SimpleChatCompletionMessage>) {
 		self
 			.messages
 			.splice(..0, prompts.into_iter().map(convert_message));
 	}
 
-	fn append_prompts(&mut self, prompts: Vec<llm::types::SimpleChatCompletionMessage>) {
+	fn append_prompts(&mut self, prompts: Vec<crate::types::SimpleChatCompletionMessage>) {
 		self
 			.messages
 			.extend(prompts.into_iter().map(convert_message));
@@ -257,7 +256,7 @@ impl super::RequestType for Request {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
 			let messages = self.get_messages();
-			let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
+			let tokens = crate::tokenizer::num_tokens_from_messages(&model, &messages)?;
 			Some(tokens)
 		} else {
 			None
@@ -266,7 +265,7 @@ impl super::RequestType for Request {
 		let llm = LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Completions,
-			cache_convention: crate::llm::CacheTokenConvention::pending(),
+			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: self.stream.unwrap_or_default(),

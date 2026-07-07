@@ -1,17 +1,16 @@
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 
+use axum_core::body::Body as AxumBody;
 use bytes::{Bytes, BytesMut};
-use http_body::Body;
+use http_body::Body as HttpBody;
 use pin_project_lite::pin_project;
 use tokio_util::codec::Decoder;
-
-use crate::http;
 
 pin_project! {
 	pub struct PassthroughBody<D, F> {
 		#[pin]
-		body: http::Body,
+		body: AxumBody,
 		decoder: D,
 		decode_buffer: BytesMut,
 		handler: F,
@@ -19,13 +18,13 @@ pin_project! {
 	}
 }
 
-pub fn parser<D, F>(body: http::Body, decoder: D, handler: F) -> http::Body
+pub fn parser<D, F>(body: AxumBody, decoder: D, handler: F) -> AxumBody
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
 	F: FnMut(D::Item) + Send + 'static,
 {
-	http::Body::new(PassthroughBody {
+	AxumBody::new(PassthroughBody {
 		body,
 		decoder,
 		handler,
@@ -34,14 +33,14 @@ where
 	})
 }
 
-impl<D, F> Body for PassthroughBody<D, F>
+impl<D, F> HttpBody for PassthroughBody<D, F>
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
 	F: FnMut(D::Item) + Send + 'static,
 {
 	type Data = Bytes;
-	type Error = http::Error;
+	type Error = axum_core::Error;
 
 	fn poll_frame(
 		self: Pin<&mut Self>,
@@ -69,7 +68,7 @@ where
 						return Ok(());
 					},
 					Err(e) => {
-						return Err(http::Error::new(e));
+						return Err(axum_core::Error::new(e));
 					},
 				}
 			}
@@ -117,7 +116,7 @@ where
 pin_project! {
 	pub struct FullPassthroughBody<D, F> {
 		#[pin]
-		body: http::Body,
+		body: AxumBody,
 		decoder: D,
 		decode_buffer: BytesMut,
 		handler: F,
@@ -129,13 +128,13 @@ pin_project! {
 // full_passthrough_parser is a complete passthrough, used in cases where we are not even sure SSE is returned
 // We optimistically handle SSE events, but never modify the body.
 // As a side effect, this means we may call the handler function after we send an SSE chunk through!
-pub fn full_passthrough_parser<D, F>(body: http::Body, decoder: D, handler: F) -> http::Body
+pub fn full_passthrough_parser<D, F>(body: AxumBody, decoder: D, handler: F) -> AxumBody
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
 	F: FnMut(D::Item) + Send + 'static,
 {
-	http::Body::new(FullPassthroughBody {
+	AxumBody::new(FullPassthroughBody {
 		body,
 		decoder,
 		handler,
@@ -145,14 +144,14 @@ where
 	})
 }
 
-impl<D, F> Body for FullPassthroughBody<D, F>
+impl<D, F> HttpBody for FullPassthroughBody<D, F>
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
 	F: FnMut(D::Item) + Send + 'static,
 {
 	type Data = Bytes;
-	type Error = http::Error;
+	type Error = axum_core::Error;
 
 	fn poll_frame(
 		self: Pin<&mut Self>,
@@ -180,7 +179,7 @@ where
 						return Ok(());
 					},
 					Err(e) => {
-						return Err(http::Error::new(e));
+						return Err(axum_core::Error::new(e));
 					},
 				}
 			}

@@ -7,7 +7,6 @@ use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::apply;
 use anyhow::anyhow;
 use hashbrown::Equivalent;
 use heck::ToSnakeCase;
@@ -39,7 +38,7 @@ use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::local::{InternalBackend, SimpleLocalBackend, TargetOrUri};
 use crate::types::{agent, backend, frontend};
-use crate::*;
+use crate::{apply, *};
 
 #[apply(schema_ser_schema!)]
 pub struct Bind {

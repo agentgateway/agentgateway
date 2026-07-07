@@ -23,6 +23,7 @@ assert_size_runtime = ["agent-core/assert_size_runtime"]
 agent-core.workspace = true
 agent-celx.workspace = true
 agent-hbone.workspace = true
+agent-http.workspace = true
 agent-llm.workspace = true
 agent-xds.workspace = true
 agent-pool.workspace = true

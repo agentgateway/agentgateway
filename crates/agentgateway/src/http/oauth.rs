@@ -1,11 +1,10 @@
 use std::io::Write;
 
-use crate::apply;
 use base64::prelude::BASE64_STANDARD;
 use base64::write::EncoderStringWriter;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::schema;
+use crate::{apply, schema};
 
 pub(crate) const GRANT_TYPE_TOKEN_EXCHANGE: &str =
 	"urn:ietf:params:oauth:grant-type:token-exchange";

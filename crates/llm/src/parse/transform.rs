@@ -2,17 +2,16 @@ use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 
 use ::http::HeaderMap;
+use axum_core::body::Body as AxumBody;
 use bytes::{Bytes, BytesMut};
-use http_body::Body;
+use http_body::Body as HttpBody;
 use pin_project_lite::pin_project;
 use tokio_util::codec::{Decoder, Encoder};
-
-use crate::http;
 
 pin_project! {
 	pub struct TransformedBody<D, E, F, T> {
 		#[pin]
-		body: http::Body,
+		body: AxumBody,
 		decoder: D,
 		decode_buffer: BytesMut,
 		buffered_trailers: Option<HeaderMap>,
@@ -23,7 +22,7 @@ pin_project! {
 	}
 }
 
-pub fn parser<D, E, F, I, T>(body: http::Body, decoder: D, encoder: E, handler: F) -> http::Body
+pub fn parser<D, E, F, I, T>(body: AxumBody, decoder: D, encoder: E, handler: F) -> AxumBody
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
@@ -33,7 +32,7 @@ where
 	E::Error: Send + Into<axum_core::BoxError> + 'static,
 	T: Send + 'static,
 {
-	http::Body::new(TransformedBody {
+	AxumBody::new(TransformedBody {
 		body,
 		decoder,
 		handler,
@@ -45,7 +44,7 @@ where
 	})
 }
 
-impl<D, E, F, I, T> Body for TransformedBody<D, E, F, T>
+impl<D, E, F, I, T> HttpBody for TransformedBody<D, E, F, T>
 where
 	D: Decoder + Send + 'static,
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
@@ -55,7 +54,7 @@ where
 	I: IntoIterator<Item = T>,
 {
 	type Data = Bytes;
-	type Error = http::Error;
+	type Error = axum_core::Error;
 
 	fn poll_frame(
 		self: Pin<&mut Self>,
@@ -90,7 +89,7 @@ where
 						for transformed_item in (handler)(decoded_item) {
 							match encoder.encode(transformed_item, encode_buf) {
 								Ok(()) => {},
-								Err(e) => return Err(http::Error::new(e)),
+								Err(e) => return Err(axum_core::Error::new(e)),
 							}
 						}
 					},
@@ -98,7 +97,7 @@ where
 						return Ok(());
 					},
 					Err(e) => {
-						return Err(http::Error::new(e));
+						return Err(axum_core::Error::new(e));
 					},
 				}
 			}

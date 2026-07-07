@@ -1,12 +1,12 @@
 use aws_smithy_eventstream::frame::{DecodedFrame, MessageFrameDecoder};
 pub use aws_smithy_types::event_stream::Message;
+use axum_core::body::Body;
 use bytes::{Bytes, BytesMut};
 use futures_util::StreamExt;
 use serde::Serialize;
 use tokio_util::codec::{BytesCodec, Decoder};
 
 use super::transform::parser as transform_parser;
-use crate::http;
 
 /// Error type for EventStream decoding.
 ///
@@ -136,10 +136,10 @@ impl Decoder for EventStreamCodec {
 }
 
 pub fn transform<O: Serialize>(
-	b: http::Body,
+	b: Body,
 	buffer_limit: usize,
 	mut f: impl FnMut(Message) -> Option<O> + Send + 'static,
-) -> http::Body {
+) -> Body {
 	let decoder = EventStreamCodec::with_max_size(buffer_limit);
 	let encoder = BytesCodec::new();
 
@@ -151,10 +151,10 @@ pub fn transform<O: Serialize>(
 }
 
 pub fn transform_multi<O: Serialize>(
-	b: http::Body,
+	b: Body,
 	buffer_limit: usize,
 	mut f: impl FnMut(Message) -> Vec<(&'static str, O)> + Send + 'static,
-) -> http::Body {
+) -> Body {
 	let decoder = EventStreamCodec::with_max_size(buffer_limit);
 	let encoder = BytesCodec::new();
 
@@ -170,11 +170,7 @@ pub fn transform_multi<O: Serialize>(
 	})
 }
 
-pub fn inspect(
-	b: http::Body,
-	buffer_limit: usize,
-	mut f: impl FnMut(Message) + Send + 'static,
-) -> http::Body {
+pub fn inspect(b: Body, buffer_limit: usize, mut f: impl FnMut(Message) + Send + 'static) -> Body {
 	let mut decoder = EventStreamCodec::with_max_size(buffer_limit);
 	let mut decode_buffer = BytesMut::new();
 	let mut inspect_failed = false;
@@ -184,7 +180,7 @@ pub fn inspect(
 			if decode_buffer.len().saturating_add(bytes.len()) > buffer_limit {
 				inspect_failed = true;
 				decode_buffer.clear();
-				return Ok::<Bytes, http::Error>(bytes);
+				return Ok::<Bytes, axum_core::Error>(bytes);
 			}
 			decode_buffer.extend_from_slice(&bytes);
 			loop {
@@ -199,9 +195,9 @@ pub fn inspect(
 				}
 			}
 		}
-		Ok::<Bytes, http::Error>(bytes)
+		Ok::<Bytes, axum_core::Error>(bytes)
 	});
-	http::Body::from_stream(stream)
+	Body::from_stream(stream)
 }
 
 #[cfg(test)]
@@ -277,7 +273,7 @@ mod tests {
 	#[tokio::test]
 	async fn inspect_passes_through_invalid_eventstream_bytes() {
 		let input = Bytes::from_static(b"not an aws eventstream");
-		let body = http::Body::from(input.clone());
+		let body = Body::from(input.clone());
 		let body = inspect(body, 1024, |_| {
 			panic!("invalid stream should not emit messages")
 		});
@@ -297,7 +293,7 @@ mod tests {
 		let mut encoded = BytesMut::new();
 		write_message_to(&message, &mut encoded).expect("message should encode");
 
-		let body = http::Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+		let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
 			vec![
 				Ok::<_, std::convert::Infallible>(http_body::Frame::data(Bytes::copy_from_slice(
 					&encoded[..EVENTSTREAM_PRELUDE_LEN],

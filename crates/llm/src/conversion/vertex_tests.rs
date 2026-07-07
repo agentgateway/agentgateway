@@ -1,7 +1,7 @@
 use serde_json::json;
 
 use super::*;
-use crate::llm::types;
+use crate::types;
 
 #[test]
 fn test_embeddings_translation_with_all_fields() {

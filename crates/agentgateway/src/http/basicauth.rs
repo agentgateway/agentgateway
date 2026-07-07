@@ -1,4 +1,3 @@
-use crate::apply;
 use base64::Engine;
 use htpasswd_verify_fork::Htpasswd;
 
@@ -6,7 +5,7 @@ use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::dtrace::{self};
 use crate::proxy::{ProxyError, ProxyResponse};
-use crate::*;
+use crate::{apply, *};
 
 #[cfg(test)]
 #[path = "basicauth_tests.rs"]

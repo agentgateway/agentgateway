@@ -4,6 +4,7 @@ use std::io;
 use std::sync::{Arc, Mutex};
 
 use ::http::HeaderMap;
+use axum_core::body::Body;
 use bytes::{Bytes, BytesMut};
 use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
@@ -11,14 +12,13 @@ use tokio_sse_codec::{Event, Frame, SseDecoder};
 use tokio_util::codec::Decoder;
 
 use super::{passthrough, sse};
-use crate::http;
 
 #[tokio::test]
 async fn test_parser() {
 	let msg1 = "data: msg1\n\n";
 	let msg2 = "data: msg2\n\n";
 	let trailers = HeaderMap::try_from(&HashMap::from([("k".to_string(), "v".to_string())])).unwrap();
-	let body = http::Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+	let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
 		vec![
 			Ok::<_, Infallible>(http_body::Frame::data(Bytes::copy_from_slice(
 				msg1.as_bytes(),
@@ -65,7 +65,7 @@ struct Test {
 async fn test_sse_json() {
 	let msg1 = "data: {\"msg\": 1}\n\n";
 	let msg2 = "data: {\"msg\": 2}\n\n";
-	let body = http::Body::from_stream(futures_util::stream::iter(vec![
+	let body = Body::from_stream(futures_util::stream::iter(vec![
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg2.as_bytes())),
 	]));
@@ -113,7 +113,7 @@ async fn test_full_passthrough_parser_flushes_decoder_on_eof() {
 	}
 
 	let msg = Bytes::from_static(b"tail");
-	let body = http::Body::from_stream(futures_util::stream::iter(vec![Ok::<_, io::Error>(
+	let body = Body::from_stream(futures_util::stream::iter(vec![Ok::<_, io::Error>(
 		msg.clone(),
 	)]));
 
@@ -133,7 +133,7 @@ async fn test_sse_json_transform() {
 	let msg2 = "data: {\"msg\": 2, \"type\": \"input\"}\n\n";
 	let msg3 = "data: [DONE]\n\n";
 	let trailers = HeaderMap::try_from(&HashMap::from([("k".to_string(), "v".to_string())])).unwrap();
-	let body = http::Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+	let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
 		vec![
 			Ok::<_, std::io::Error>(http_body::Frame::data(Bytes::copy_from_slice(
 				msg1.as_bytes(),
@@ -196,7 +196,7 @@ async fn test_sse_json_transform_multi_named_events_and_done() {
 	let msg1 = "data: {\"msg\": 1}\n\n";
 	let msg2 = "data: {\"msg\": 2}\n\n";
 	let done = "data: [DONE]\n\n";
-	let body = http::Body::from_stream(futures_util::stream::iter(vec![
+	let body = Body::from_stream(futures_util::stream::iter(vec![
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg2.as_bytes())),
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(done.as_bytes())),
@@ -266,7 +266,7 @@ async fn test_sse_json_transform_multi_parse_error_path() {
 	let msg1 = "data: {\"msg\": 1}\n\n";
 	let msg2 = "data: {\"msg\": \"bad\"}\n\n";
 	let done = "data: [DONE]\n\n";
-	let body = http::Body::from_stream(futures_util::stream::iter(vec![
+	let body = Body::from_stream(futures_util::stream::iter(vec![
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg2.as_bytes())),
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(done.as_bytes())),

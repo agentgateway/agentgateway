@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
+pub use agent_core::serdes::*;
 use openapiv3::OpenAPI;
 use serde::de::DeserializeOwned;
 
 use crate::resource_manager::{ResourceFetcher, ResourceKind, ResourceRef};
-pub use agent_core::serdes::*;
 
 define_schema_aliases!();
 

@@ -3,9 +3,9 @@ use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::policy::webhook::{Message, ResponseChoice};
-use crate::llm::types::{RequestType, ResponseType, SimpleChatCompletionMessage};
-use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
+use crate::types::{RequestType, ResponseType, SimpleChatCompletionMessage};
+use crate::webhook::{Message, ResponseChoice};
+use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
 
 #[derive(Debug, Deserialize, Clone, Serialize, Default)]
 pub struct Request {
@@ -196,7 +196,7 @@ impl RequestType for Request {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
 			let messages = self.get_messages();
-			let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
+			let tokens = crate::tokenizer::num_tokens_from_messages(&model, &messages)?;
 			Some(tokens)
 		} else {
 			None
@@ -205,7 +205,7 @@ impl RequestType for Request {
 		let llm = LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Messages,
-			cache_convention: crate::llm::CacheTokenConvention::pending(),
+			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: self.stream.unwrap_or_default(),
@@ -975,8 +975,8 @@ pub mod typed {
 	}
 
 	impl super::ResponseType for MessagesResponse {
-		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
-			crate::llm::LLMResponse {
+		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::LLMResponse {
+			crate::LLMResponse {
 				input_tokens: Some(self.usage.input_tokens as u64),
 				input_image_tokens: None,
 				input_text_tokens: None,
@@ -1012,7 +1012,7 @@ pub mod typed {
 
 		fn set_webhook_choices(
 			&mut self,
-			choices: Vec<crate::llm::policy::webhook::ResponseChoice>,
+			choices: Vec<crate::webhook::ResponseChoice>,
 		) -> anyhow::Result<()> {
 			if self.content.len() != choices.len() {
 				anyhow::bail!("webhook response message count mismatch");
@@ -1025,7 +1025,7 @@ pub mod typed {
 			Ok(())
 		}
 
-		fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice> {
+		fn to_webhook_choices(&self) -> Vec<crate::webhook::ResponseChoice> {
 			self
 				.content
 				.iter()
@@ -1034,8 +1034,8 @@ pub mod typed {
 						ContentBlock::Text(t) => t.text.clone(),
 						_ => String::new(),
 					};
-					crate::llm::policy::webhook::ResponseChoice {
-						message: crate::llm::policy::webhook::Message {
+					crate::webhook::ResponseChoice {
+						message: crate::webhook::Message {
 							role: "assistant".into(),
 							content: content.into(),
 						},

@@ -1,8 +1,7 @@
-use crate::apply;
 use agent_core::strng;
 use agent_core::strng::Strng;
 
-use crate::{ChatFormat, RouteType};
+use crate::{ChatFormat, RouteType, apply};
 
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "CopilotProvider"))]

@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
+use http::Response;
 use rand::RngExt;
 use tracing::trace;
 
-use crate::http::Response;
-use crate::llm::AIError;
-use crate::llm::types::completions::typed::UsagePromptDetails;
-use crate::llm::types::{bedrock, messages, responses};
+use crate::AIError;
+use crate::types::completions::typed::UsagePromptDetails;
+use crate::types::{bedrock, messages, responses};
 
 #[cfg(test)]
 #[path = "bedrock_tests.rs"]
@@ -138,9 +138,9 @@ fn error_message(bytes: &[u8]) -> String {
 /// Translate a Bedrock error body into the OpenAI-shaped error envelope clients expect.
 /// Bedrock returns the same error format across models, so every `from_*` module shares this.
 fn invalid_request_error(bytes: &[u8]) -> Result<bytes::Bytes, AIError> {
-	let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
+	let m = crate::types::completions::typed::ChatCompletionErrorResponse {
 		event_id: None,
-		error: crate::llm::types::completions::typed::ChatCompletionError {
+		error: crate::types::completions::typed::ChatCompletionError {
 			r#type: Some("invalid_request_error".to_string()),
 			message: error_message(bytes),
 			param: None,
@@ -154,9 +154,9 @@ fn invalid_request_error(bytes: &[u8]) -> Result<bytes::Bytes, AIError> {
 }
 
 pub mod from_rerank {
-	use crate::llm::bedrock::Provider;
-	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, logged_response_parsing, types};
+	use crate::bedrock::Provider;
+	use crate::types::ResponseType;
+	use crate::{AIError, logged_response_parsing, types};
 
 	/// Build a full Bedrock model ARN if the caller supplied a bare model id.
 	fn model_arn(model: &str, region: &str) -> String {
@@ -249,10 +249,9 @@ pub mod from_rerank {
 }
 
 pub mod from_embeddings {
-	use crate::json;
-	use crate::llm::bedrock::Provider;
-	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, logged_response_parsing, types};
+	use crate::bedrock::Provider;
+	use crate::types::ResponseType;
+	use crate::{AIError, json, logged_response_parsing, types};
 
 	pub fn translate(
 		req: &types::embeddings::Request,
@@ -394,6 +393,7 @@ pub mod from_completions {
 	use std::collections::HashMap;
 	use std::time::Instant;
 
+	use axum_core::body::Body;
 	use bytes::Bytes;
 	use futures_util::StreamExt;
 	use futures_util::stream::{self, BoxStream};
@@ -402,13 +402,11 @@ pub mod from_completions {
 	use types::completions::typed as completions;
 
 	use super::helpers;
-	use crate::http::Body;
-	use crate::llm::bedrock::Provider;
-	use crate::llm::conversion::completions::{extract_system_text, parse_data_url};
-	use crate::llm::types::ResponseType;
-	use crate::llm::types::completions::typed::UsagePromptDetails;
-	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
-	use crate::{json, parse};
+	use crate::bedrock::Provider;
+	use crate::conversion::completions::{extract_system_text, parse_data_url};
+	use crate::types::ResponseType;
+	use crate::types::completions::typed::UsagePromptDetails;
+	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
 
 	fn text_blocks_from_user_content(
 		content: &completions::RequestUserMessageContent,
@@ -1166,16 +1164,15 @@ pub mod from_messages {
 	use std::time::Instant;
 
 	use agent_core::strng;
+	use axum_core::body::Body;
 	use bytes::Bytes;
 	use types::bedrock;
 	use types::messages::typed as messages;
 
 	use super::helpers;
-	use crate::http::Body;
-	use crate::llm::bedrock::Provider;
-	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
-	use crate::{json, parse};
+	use crate::bedrock::Provider;
+	use crate::types::ResponseType;
+	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
 
 	/// translate an Anthropic messages request to a Bedrock converse request
 	pub fn translate(
@@ -1931,6 +1928,7 @@ pub mod from_responses {
 	use std::collections::{HashMap, HashSet};
 	use std::time::Instant;
 
+	use axum_core::body::Body;
 	use bytes::Bytes;
 	use helpers::*;
 	use rand::RngExt;
@@ -1946,11 +1944,9 @@ pub mod from_responses {
 	use types::responses::typed as responses;
 
 	use super::helpers;
-	use crate::http::Body;
-	use crate::llm::bedrock::Provider;
-	use crate::llm::types::ResponseType;
-	use crate::llm::{AIError, AmendOnDrop, logged_response_parsing, types};
-	use crate::{json, parse};
+	use crate::bedrock::Provider;
+	use crate::types::ResponseType;
+	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
 
 	/// translate an OpenAI responses request to a Bedrock converse request
 	pub fn translate(
@@ -2517,9 +2513,9 @@ pub mod from_responses {
 
 	pub fn translate_error(bytes: &Bytes) -> Result<Bytes, AIError> {
 		let message = super::error_message(bytes);
-		let m = crate::llm::types::completions::typed::ChatCompletionErrorResponse {
+		let m = crate::types::completions::typed::ChatCompletionErrorResponse {
 			event_id: None,
-			error: crate::llm::types::completions::typed::ChatCompletionError {
+			error: crate::types::completions::typed::ChatCompletionError {
 				r#type: Some("invalid_request_error".to_string()),
 				message,
 				param: None,
@@ -2560,7 +2556,7 @@ pub mod from_responses {
 		let message_item_id = format!("msg_{:016x}", rand::rng().random::<u64>());
 		let model = model.to_string();
 
-		let response_builder = crate::llm::types::responses::ResponseBuilder::new(response_id, model);
+		let response_builder = crate::types::responses::ResponseBuilder::new(response_id, model);
 
 		let make_output_part = |text: String| {
 			OutputContent::OutputText(OutputTextContent {
@@ -2880,7 +2876,7 @@ pub mod from_responses {
 }
 
 pub mod from_anthropic_token_count {
-	use crate::llm::{AIError, types};
+	use crate::{AIError, types};
 
 	pub fn translate(
 		req: &types::count_tokens::Request,
@@ -2925,7 +2921,7 @@ mod helpers {
 	use std::collections::HashMap;
 	use std::sync::LazyLock;
 
-	use crate::llm::AIError;
+	use crate::AIError;
 
 	// From https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages-request-response.html
 	const DEFAULT_ALLOWED_BETA_HEADERS: &[&str] = &[
@@ -2967,7 +2963,7 @@ mod helpers {
 			})
 			.collect()
 	});
-	use crate::llm::types::bedrock;
+	use crate::types::bedrock;
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {
@@ -3046,7 +3042,7 @@ mod helpers {
 	/// Extract metadata from x-bedrock-metadata header.
 	/// Gateway operators can use CEL transformation to populate this header with extauthz data.
 	pub fn extract_metadata_from_headers(
-		headers: Option<&crate::http::HeaderMap>,
+		headers: Option<&http::HeaderMap>,
 	) -> Option<HashMap<String, String>> {
 		const BEDROCK_METADATA_HEADER: &str = "x-bedrock-metadata";
 
@@ -3082,13 +3078,13 @@ mod helpers {
 	}
 
 	pub fn extract_beta_headers(
-		headers: &crate::http::HeaderMap,
+		headers: &http::HeaderMap,
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
 		extract_beta_headers_with_allowed(headers, &ALLOWED_BETA_HEADERS)
 	}
 
 	pub fn extract_beta_headers_with_allowed(
-		headers: &crate::http::HeaderMap,
+		headers: &http::HeaderMap,
 		allowed_beta_headers: &[String],
 	) -> Result<Option<Vec<serde_json::Value>>, AIError> {
 		let mut beta_features = Vec::new();
@@ -3181,8 +3177,8 @@ impl ConverseResponseAdapter {
 	fn to_completions(
 		&self,
 		tool_name_map: Option<&BedrockToolNameMap>,
-	) -> crate::llm::types::completions::typed::Response {
-		use crate::llm::types::completions::typed as completions;
+	) -> crate::types::completions::typed::Response {
+		use crate::types::completions::typed as completions;
 		let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 		let mut content = None;
 		let mut reasoning_content = None;
@@ -3295,10 +3291,10 @@ impl ConverseResponseAdapter {
 		&self,
 		tool_name_map: Option<&BedrockToolNameMap>,
 	) -> responses::typed::Response {
-		use crate::llm::types::responses::typed as responsest;
+		use crate::types::responses::typed as responsest;
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder =
-			crate::llm::types::responses::ResponseBuilder::new(response_id, self.model.clone());
+			crate::types::responses::ResponseBuilder::new(response_id, self.model.clone());
 
 		// Convert Bedrock content blocks to Responses OutputItem
 		let mut outputs: Vec<responsest::OutputItem> = Vec::new();
@@ -3423,7 +3419,7 @@ impl ConverseResponseAdapter {
 		&self,
 		tool_name_map: Option<&BedrockToolNameMap>,
 	) -> Result<messages::typed::MessagesResponse, AIError> {
-		use crate::llm::types::messages::typed as messagest;
+		use crate::types::messages::typed as messagest;
 		fn translate_content_block_to_anthropic(
 			block: &bedrock::ContentBlock,
 			tool_name_map: Option<&BedrockToolNameMap>,
@@ -3509,10 +3505,10 @@ impl ConverseResponseAdapter {
 	}
 }
 
-pub fn message_id(resp: &Response) -> String {
+pub fn message_id<T>(resp: &Response<T>) -> String {
 	resp
 		.headers()
-		.get(crate::http::x_headers::X_AMZN_REQUESTID)
+		.get(agent_http::x_headers::X_AMZN_REQUESTID)
 		.and_then(|s| s.to_str().ok().map(|s| s.to_owned()))
 		.unwrap_or_else(|| format!("{:016x}", rand::rng().random::<u64>()))
 }

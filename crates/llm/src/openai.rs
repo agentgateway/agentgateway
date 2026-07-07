@@ -1,8 +1,7 @@
-use crate::apply;
 use agent_core::strng;
 use agent_core::strng::Strng;
 
-use crate::RouteType;
+use crate::{RouteType, apply};
 
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "OpenAIProvider"))]

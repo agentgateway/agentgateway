@@ -6,7 +6,6 @@ use std::time::Duration;
 #[cfg(not(test))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::apply;
 use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Context, Error, anyhow, bail};
@@ -34,7 +33,7 @@ use crate::types::agent::{
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
-use crate::{agentcore, *};
+use crate::{agentcore, apply, *};
 
 type LocalExtAuthzPolicy = LocalExplicitOrConditional<crate::http::ext_authz::ExtAuthz>;
 type LocalDirectResponsePolicy = LocalExplicitOrConditional<filters::DirectResponse>;

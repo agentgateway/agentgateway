@@ -1,8 +1,7 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
 
-use crate::apply;
-use crate::llm::RouteType;
+use crate::{RouteType, apply};
 
 /// The type of Azure endpoint to connect to.
 #[apply(schema!)]

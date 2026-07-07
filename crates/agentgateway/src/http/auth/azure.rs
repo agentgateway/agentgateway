@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+pub use agent_llm::auth::AzureCredentialCache;
 use azure_core::credentials::{AccessToken, TokenCredential, TokenRequestOptions};
 use azure_identity::UserAssignedId;
 use secrecy::{ExposeSecret, SecretString};
@@ -8,7 +9,6 @@ use tracing::trace;
 
 use crate::serdes::schema;
 use crate::{apply, client, ser_redact};
-pub use agent_llm::auth::AzureCredentialCache;
 
 // The Rust sdk for Azure is the only one that requires users to manually specify their auth method
 // for all non-developer use-cases. Therefore, we have to carry these different options in our API....

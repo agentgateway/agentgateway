@@ -3,8 +3,8 @@ use agent_core::strng;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::types::{RequestType, messages};
-use crate::llm::{
+use crate::types::{RequestType, messages};
+use crate::{
 	AIError, InputFormat, LLMRequest, SimpleChatCompletionMessage, logged_response_parsing,
 };
 
@@ -38,7 +38,7 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::CountTokens,
-			cache_convention: crate::llm::CacheTokenConvention::pending(),
+			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: false,

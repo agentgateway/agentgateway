@@ -6,6 +6,13 @@ use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderMap, HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
+pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
+pub use agent_llm::{
+	AIError, CacheTokenConvention, ChatFormat, InputFormat, LLMInfo, LLMRequest, LLMRequestParams,
+	LLMResponse, PromptCachingConfig, Provider, ProviderState, RequestType, ResponseType, RouteType,
+	SimpleChatCompletionMessage, anthropic, conversion, copilot, custom, gemini,
+	logged_response_parsing, openai, types,
+};
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
@@ -21,17 +28,8 @@ use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
-
-pub use agent_llm::{
-	AIError, CacheTokenConvention, ChatFormat, InputFormat, LLMInfo, LLMRequest, LLMRequestParams,
-	LLMResponse, PromptCachingConfig, Provider, ProviderState, RequestType, ResponseType, RouteType,
-	SimpleChatCompletionMessage, anthropic, conversion, copilot, custom, gemini,
-	logged_response_parsing, num_tokens_from_messages, openai, preload_tokenizers, types,
-};
 pub mod model_router;
-pub use agent_llm::azure;
-pub use agent_llm::bedrock;
-pub use agent_llm::vertex;
+pub use agent_llm::{azure, bedrock, vertex};
 
 pub mod cost;
 pub mod policy;

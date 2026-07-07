@@ -1,3 +1,4 @@
+use axum_core::body::Body;
 use bytes::Bytes;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -6,13 +7,12 @@ use tokio_util::codec::BytesCodec;
 
 use super::passthrough::parser as passthrough_parser;
 use super::transform::parser as transform_parser;
-use crate::http;
 
 pub fn json_passthrough<F: DeserializeOwned>(
-	b: http::Body,
+	b: Body,
 	buffer_limit: usize,
 	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
-) -> http::Body {
+) -> Body {
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 
 	passthrough_parser(b, decoder, move |o| {
@@ -29,10 +29,10 @@ pub fn json_passthrough<F: DeserializeOwned>(
 }
 
 pub fn permissive_json_passthrough<F: DeserializeOwned>(
-	b: http::Body,
+	b: Body,
 	buffer_limit: usize,
 	mut f: impl FnMut(Option<anyhow::Result<F>>) + Send + 'static,
-) -> http::Body {
+) -> Body {
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 
 	crate::parse::passthrough::full_passthrough_parser(b, decoder, move |o| {
@@ -49,10 +49,10 @@ pub fn permissive_json_passthrough<F: DeserializeOwned>(
 }
 
 pub fn json_transform<I: DeserializeOwned, O: Serialize>(
-	b: http::Body,
+	b: Body,
 	buffer_limit: usize,
 	mut f: impl FnMut(anyhow::Result<I>) -> Option<O> + Send + 'static,
-) -> http::Body {
+) -> Body {
 	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
 	let encoder = BytesCodec::new();
 
@@ -78,10 +78,10 @@ pub enum SseJsonEvent<I> {
 }
 
 pub fn json_transform_multi<I: DeserializeOwned, O: Serialize, It>(
-	b: http::Body,
+	b: Body,
 	buffer_limit: usize,
 	mut f: impl FnMut(SseJsonEvent<I>) -> It + Send + 'static,
-) -> http::Body
+) -> Body
 where
 	It: IntoIterator<Item = (&'static str, O)>,
 	It::IntoIter: Send,

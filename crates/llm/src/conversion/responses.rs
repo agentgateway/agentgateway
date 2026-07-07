@@ -1,12 +1,11 @@
 use std::time::Instant;
 
 use agent_core::strng;
+use axum_core::body::Body;
 use serde::Deserialize;
 
-use crate::http::Body;
-use crate::llm::types::detect;
-use crate::llm::{AmendOnDrop, types};
-use crate::parse;
+use crate::types::detect;
+use crate::{AmendOnDrop, parse, types};
 
 #[allow(clippy::large_enum_variant)] // The large variant is used 99% of the time so just always use it.
 #[derive(Debug, Clone, Deserialize)]

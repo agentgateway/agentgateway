@@ -1,7 +1,6 @@
 use crate::http::auth::AppliedBackendAuthLocation;
-use crate::llm::anthropic;
 use crate::llm::anthropic::OAUTH_TOKEN_PREFIX;
-use crate::llm::{AIProvider, RouteType};
+use crate::llm::{AIProvider, RouteType, anthropic};
 
 // ── set_required_fields integration tests ───────────────────────────────────
 

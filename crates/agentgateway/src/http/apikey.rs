@@ -1,6 +1,5 @@
 use std::hash::Hash;
 
-use crate::apply;
 use ::cel::Value;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, Serializer};
@@ -11,7 +10,7 @@ use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::{ProxyError, ProxyResponse};
-use crate::*;
+use crate::{apply, *};
 
 #[cfg(test)]
 #[path = "apikey_tests.rs"]

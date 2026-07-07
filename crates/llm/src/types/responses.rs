@@ -7,7 +7,7 @@ use self::typed::{
 	Role,
 };
 use super::*;
-use crate::llm::{
+use crate::{
 	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType, ResponseType,
 };
 
@@ -327,7 +327,7 @@ impl RequestType for Request {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
 			let messages = self.get_messages();
-			let tokens = crate::llm::num_tokens_from_messages(&model, &messages)?;
+			let tokens = crate::tokenizer::num_tokens_from_messages(&model, &messages)?;
 			Some(tokens)
 		} else {
 			None
@@ -335,7 +335,7 @@ impl RequestType for Request {
 		Ok(LLMRequest {
 			input_tokens,
 			input_format: InputFormat::Responses,
-			cache_convention: crate::llm::CacheTokenConvention::pending(),
+			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: model,
 			provider,
 			streaming: self.stream.unwrap_or_default(),
@@ -435,7 +435,7 @@ impl ResponseType for Response {
 		}
 	}
 
-	fn to_webhook_choices(&self) -> Vec<crate::llm::policy::webhook::ResponseChoice> {
+	fn to_webhook_choices(&self) -> Vec<crate::webhook::ResponseChoice> {
 		self
 			.output
 			.iter()
@@ -452,8 +452,8 @@ impl ResponseType for Response {
 						.collect::<Vec<_>>()
 						.join("\n");
 
-					Some(crate::llm::policy::webhook::ResponseChoice {
-						message: crate::llm::policy::webhook::Message {
+					Some(crate::webhook::ResponseChoice {
+						message: crate::webhook::Message {
 							role: "assistant".into(),
 							content: content.into(),
 						},
@@ -466,7 +466,7 @@ impl ResponseType for Response {
 
 	fn set_webhook_choices(
 		&mut self,
-		choices: Vec<crate::llm::policy::webhook::ResponseChoice>,
+		choices: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()> {
 		// Filter only Message outputs (ignore tool calls, reasoning, etc.)
 		let message_outputs: Vec<_> = self

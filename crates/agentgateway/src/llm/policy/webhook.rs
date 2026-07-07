@@ -1,15 +1,124 @@
 use ::http::header::CONTENT_TYPE;
 use ::http::{HeaderMap, HeaderValue, header};
+pub use agent_llm::webhook::{Message, ResponseChoice};
+use serde::{Deserialize, Serialize};
 
 use crate::llm::policy::with_default_timeout;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
-pub use agent_llm::policy::webhook::*;
 
 const REQUEST_PATH: &str = "request";
 const RESPONSE_PATH: &str = "response";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct GuardrailsPromptRequest {
+	/// body contains the object which is a list of the Message JSON objects from the prompts in the request
+	pub body: PromptMessages,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct GuardrailsPromptResponse {
+	/// action is the action to be taken based on the request.
+	/// The following actions are available on the response:
+	/// - PassAction: No action is required.
+	/// - MaskAction: Mask the response body.
+	/// - RejectAction: Reject the request.
+	pub action: RequestAction,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct GuardrailsResponseRequest {
+	/// body contains the object with a list of Choice that contains the response content from the LLM.
+	pub body: ResponseChoices,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct GuardrailsResponseResponse {
+	/// action is the action to be taken based on the request.
+	/// The following actions are available on the response:
+	/// - PassAction: No action is required.
+	/// - MaskAction: Mask the response body.
+	/// - RejectAction: Reject the response.
+	pub action: ResponseAction,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PromptMessages {
+	/// List of prompt messages including role and content.
+	pub messages: Vec<Message>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ResponseChoices {
+	/// list of possible independent responses from the LLM
+	pub choices: Vec<ResponseChoice>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PassAction {
+	/// reason is a human readable string that explains the reason for the action.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct MaskAction {
+	/// body contains the modified messages that masked out some of the original contents.
+	/// When used in a GuardrailPromptResponse, this should be PromptMessages.
+	/// When used in GuardrailResponseResponse, this should be ResponseChoices
+	pub body: MaskActionBody,
+	/// reason is a human readable string that explains the reason for the action.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct RejectAction {
+	/// body is the rejection message that will be used for HTTP error response body.
+	pub body: String,
+	/// status_code is the HTTP status code to be returned in the HTTP error response.
+	pub status_code: u16,
+	/// reason is a human readable string that explains the reason for the action.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reason: Option<String>,
+}
+
+/// Enum for actions available in prompt responses
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged, rename_all = "snake_case")]
+pub enum RequestAction {
+	Mask(MaskAction),
+	Reject(RejectAction),
+	Pass(PassAction),
+}
+
+/// Enum for actions available in response responses
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged, rename_all = "snake_case")]
+pub enum ResponseAction {
+	Mask(MaskAction),
+	Reject(RejectAction),
+	Pass(PassAction),
+}
+
+/// Enum for MaskAction body that can be either PromptMessages or ResponseChoices
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MaskActionBody {
+	PromptMessages(PromptMessages),
+	ResponseChoices(ResponseChoices),
+}
 
 fn build_request_for_request(
 	http_headers: &HeaderMap,

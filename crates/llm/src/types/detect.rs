@@ -6,12 +6,11 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
-use crate::llm::policy::webhook::ResponseChoice;
-use crate::llm::{
+use crate::webhook::ResponseChoice;
+use crate::{
 	AIError, AmendOnDrop, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
-	ResponseType, SimpleChatCompletionMessage,
+	ResponseType, SimpleChatCompletionMessage, json, parse,
 };
-use crate::{json, llm, parse};
 
 fn lookup<'a, T, const C: usize>(
 	value: &'a Value,
@@ -78,7 +77,7 @@ impl RequestType for Request {
 			// We never tokenize these, so always empty
 			input_tokens: None,
 			input_format: InputFormat::Detect,
-			cache_convention: crate::llm::CacheTokenConvention::pending(),
+			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: self
 				.lookup(lookups::MODEL, |v| v.as_str())
 				.map(Into::into)
@@ -164,8 +163,8 @@ mod tests {
 	fn llm_request() -> LLMRequest {
 		LLMRequest {
 			input_tokens: None,
-			input_format: crate::llm::InputFormat::Detect,
-			cache_convention: crate::llm::CacheTokenConvention::pending(),
+			input_format: crate::InputFormat::Detect,
+			cache_convention: crate::CacheTokenConvention::pending(),
 			request_model: strng::new("unknown"),
 			provider: strng::new("aws.bedrock"),
 			streaming: false,
@@ -366,7 +365,7 @@ impl ResponseType for Response {
 		let input_tokens = self.lookup(lookups::USAGE_INPUT_TOKENS, |v| v.as_u64());
 		let output_tokens = self.lookup(lookups::USAGE_OUTPUT_TOKENS, |v| v.as_u64());
 		let total_tokens = self.lookup(lookups::USAGE_TOTAL_TOKENS, |v| v.as_u64());
-		crate::llm::LLMResponse {
+		crate::LLMResponse {
 			count_tokens: None, // We never tokenize these, so always empty
 			input_tokens,
 			input_image_tokens: self.lookup(lookups::INPUT_IMAGE_TOKENS, |v| v.as_u64()),
@@ -423,7 +422,7 @@ impl StreamResponse {
 		log: &AmendOnDrop,
 		paths: [&[&str]; C],
 		cvt: impl Fn(&'a Value) -> Option<T>,
-		apply: impl Fn(&mut llm::LLMInfo, T),
+		apply: impl Fn(&mut crate::LLMInfo, T),
 	) -> Option<T> {
 		if let Some(res) = lookup(&self.rest, paths, cvt) {
 			log.non_atomic_mutate(|l| apply(l, res));
@@ -531,9 +530,9 @@ pub fn amend_from_stream_response(log: &mut AmendOnDrop, f: &StreamResponse) {
 
 pub fn passthrough_stream(
 	mut log: AmendOnDrop,
-	resp: crate::http::Response,
-) -> crate::http::Response {
-	let buffer_limit = crate::http::response_buffer_limit(&resp);
+	resp: http::Response<axum_core::body::Body>,
+) -> http::Response<axum_core::body::Body> {
+	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		parse::sse::permissive_json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
 			Some(Ok(f)) => {
@@ -549,10 +548,10 @@ pub fn passthrough_stream(
 
 pub fn passthrough_aws_stream(
 	mut log: AmendOnDrop,
-	resp: crate::http::Response,
-) -> crate::http::Response {
+	resp: http::Response<axum_core::body::Body>,
+) -> http::Response<axum_core::body::Body> {
 	use base64::Engine;
-	let buffer_limit = crate::http::response_buffer_limit(&resp);
+	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		parse::aws_sse::inspect(b, buffer_limit, move |msg| {
 			if let Ok(parsed) = serde_json::from_slice::<StreamResponse>(msg.payload()) {
@@ -563,7 +562,7 @@ pub fn passthrough_aws_stream(
 					&& let Ok(by) = base64::prelude::BASE64_STANDARD.decode(s)
 					&& let Ok(v) = serde_json::from_slice(by.as_slice())
 				{
-					let ns = crate::llm::types::detect::StreamResponse { rest: v };
+					let ns = crate::types::detect::StreamResponse { rest: v };
 					amend_from_stream_response(&mut log, &ns);
 				} else {
 					amend_from_stream_response(&mut log, &parsed);

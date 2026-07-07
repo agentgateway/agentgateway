@@ -15,6 +15,7 @@ members = [
     "crates/celx",
     "crates/pool",
     "crates/core",
+    "crates/http",
     "crates/hbone",
     "crates/protos",
     "crates/xds",
@@ -44,6 +45,7 @@ publish = false
 agent-core = { path = "crates/core" }
 agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
+agent-http = { path = "crates/http" }
 agent-llm = { path = "crates/llm" }
 agent-pool = { path = "crates/pool" }
 agent-xds = { path = "crates/xds" }

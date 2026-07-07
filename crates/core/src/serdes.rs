@@ -3,13 +3,12 @@ use std::fmt::{Debug, Display};
 use std::io;
 use std::path::PathBuf;
 
+#[cfg(feature = "schema")]
+pub use schemars::JsonSchema;
 use secrecy::SecretString;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeSeq;
 use serde::{Deserialize, Deserializer, Serializer};
-
-#[cfg(feature = "schema")]
-pub use schemars::JsonSchema;
 #[cfg(not(feature = "schema"))]
 pub trait JsonSchema {}
 
@@ -94,9 +93,10 @@ where
 pub mod serde_instant_option {
 	use std::time::{Duration, Instant};
 
+	use serde::Serializer;
+
 	use crate::durfmt;
 	use crate::prelude::AtomicOption;
-	use serde::Serializer;
 
 	pub fn serialize<S: Serializer>(
 		t: &AtomicOption<Instant>,
@@ -117,8 +117,9 @@ pub mod serde_instant_option {
 pub mod serde_dur {
 	use std::time::Duration;
 
-	use crate::durfmt;
 	use serde::{Deserialize, Deserializer, Serializer};
+
+	use crate::durfmt;
 
 	pub fn serialize<S: Serializer>(t: &Duration, serializer: S) -> Result<S::Ok, S::Error> {
 		serializer.serialize_str(&durfmt::format(*t))
@@ -138,8 +139,9 @@ pub mod serde_dur {
 pub mod serde_dur_option {
 	use std::time::Duration;
 
-	use crate::durfmt;
 	use serde::{Deserialize, Deserializer, Serializer};
+
+	use crate::durfmt;
 
 	pub fn serialize<S: Serializer>(t: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error> {
 		match t {

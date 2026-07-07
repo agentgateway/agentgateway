@@ -1,5 +1,5 @@
-use crate::llm::types::ResponseType;
-use crate::llm::{AIError, logged_response_parsing, types};
+use crate::types::ResponseType;
+use crate::{AIError, logged_response_parsing, types};
 
 #[cfg(test)]
 #[path = "vertex_tests.rs"]
@@ -10,7 +10,7 @@ pub mod from_rerank {
 
 	pub fn translate(
 		req: &types::rerank::Request,
-		_provider: &crate::llm::vertex::Provider,
+		_provider: &crate::vertex::Provider,
 	) -> Result<Vec<u8>, AIError> {
 		if req.documents.is_empty() {
 			return Err(AIError::MissingField("rerank documents".into()));
@@ -72,7 +72,7 @@ pub mod from_rerank {
 
 	pub fn translate_error(bytes: &bytes::Bytes) -> Result<bytes::Bytes, AIError> {
 		// Reuse the Google error normalizer used by completions.
-		crate::llm::conversion::completions::translate_google_error(bytes)
+		crate::conversion::completions::translate_google_error(bytes)
 	}
 }
 
