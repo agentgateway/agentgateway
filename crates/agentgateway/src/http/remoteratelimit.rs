@@ -169,8 +169,22 @@ impl LLMResponseAmend {
 			.filter_map(|(mut d, cost)| {
 				d.hits_addend = if let Some(cost) = cost.as_ref() {
 					// if there is a cost expression, run it.
-					let Some(cost) = exec.eval(cost).ok().and_then(|v| v.as_unsigned().ok()) else {
-						// Failed to evaluate: skip descriptor
+					let eval_result = exec.eval(cost);
+					let Some(cost) = eval_result
+						.as_ref()
+						.ok()
+						.and_then(|v| v.as_unsigned().ok())
+					else {
+						// Failed to evaluate or result is not a uint. Common causes:
+						// - llm.inputTokens / llm.outputTokens are null (not populated
+						//   in the cost executor context for this backend/route)
+						// - integer literals without the `u` suffix cause type mismatch:
+						//   `uint * int` is invalid in CEL; use `3u` not `3`
+						tracing::warn!(
+							"ratelimit cost expression failed to evaluate as uint 							(descriptor will be skipped): {:?}",
+							eval_result.as_ref().err().map(|e| e.to_string())
+								.or_else(|| eval_result.ok().map(|v| format!("result type: {v:?}")))
+						);
 						return None;
 					};
 					Some(cost as u64)

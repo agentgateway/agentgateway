@@ -1311,6 +1311,7 @@ impl LLMContext {
 
 		let resp = value.response;
 		let mut base = LLMContext {
+			input_tokens: resp.input_tokens,
 			output_tokens: resp.output_tokens,
 			output_image_tokens: resp.output_image_tokens,
 			output_text_tokens: resp.output_text_tokens,
@@ -1332,11 +1333,6 @@ impl LLMContext {
 			completion: resp.completion.clone(),
 			..LLMContext::from(value.request)
 		};
-
-		if let Some(pt) = resp.input_tokens {
-			// Better info, override
-			base.input_tokens = Some(pt);
-		}
 
 		if let Some(projection) = projection {
 			base.cost = projection.cost;
