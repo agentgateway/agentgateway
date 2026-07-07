@@ -10,7 +10,7 @@ use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatC
 pub struct Response {
 	pub object: String,
 	pub model: String,
-	pub usage: Usage,
+	pub usage: Option<Usage>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -100,11 +100,11 @@ impl RequestType for Request {
 impl crate::llm::types::ResponseType for Response {
 	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::llm::LLMResponse {
 		crate::llm::LLMResponse {
-			input_tokens: Some(self.usage.prompt_tokens as u64),
+			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,
 			input_audio_tokens: None,
-			total_tokens: Some(self.usage.total_tokens as u64),
+			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
 			output_tokens: None,
 			output_image_tokens: None,
 			output_text_tokens: None,

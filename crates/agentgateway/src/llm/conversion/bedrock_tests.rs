@@ -1358,7 +1358,7 @@ fn test_embeddings_response_translation_titan() {
 		.unwrap();
 
 	assert_eq!(openai_resp.object, "list");
-	assert_eq!(openai_resp.usage.prompt_tokens, 3);
+	assert_eq!(openai_resp.usage.unwrap().prompt_tokens, 3);
 }
 
 #[test]
@@ -1379,7 +1379,7 @@ fn test_embeddings_response_titan_embeddings_by_type_fallback() {
 		.and_then(|b| serde_json::from_slice::<types::embeddings::Response>(&b))
 		.unwrap();
 
-	assert_eq!(openai_resp.usage.prompt_tokens, 5);
+	assert_eq!(openai_resp.usage.unwrap().prompt_tokens, 5);
 }
 
 #[test]
@@ -1401,7 +1401,7 @@ fn test_embeddings_response_translation_cohere() {
 		.unwrap();
 
 	assert_eq!(openai_resp.object, "list");
-	assert_eq!(openai_resp.usage.prompt_tokens, 10);
+	assert_eq!(openai_resp.usage.unwrap().prompt_tokens, 10);
 }
 
 #[test]

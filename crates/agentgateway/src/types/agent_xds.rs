@@ -625,8 +625,10 @@ fn convert_mcp_guardrails(
 			),
 		};
 		Ok(crate::mcp::guardrails::Remote {
-			target,
-			policies: Vec::new(),
+			target: SimpleBackendReferenceWithPolicies {
+				target,
+				policies: Vec::new(),
+			},
 			failure_mode,
 			metadata,
 			request_headers,
@@ -2105,9 +2107,11 @@ fn traffic_policy_from_proto(
 			TrafficPolicy::RemoteRateLimit(RequestPolicy::single(
 				http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),
-					target: Arc::new(target),
-					// Not supported inline from xDS
-					policies: Vec::new(),
+					target: SimpleBackendReferenceWithPolicies {
+						target: Arc::new(target),
+						// Not supported inline from xDS
+						policies: Vec::new(),
+					},
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
 					failure_mode,
 				},
@@ -2162,9 +2166,11 @@ fn traffic_policy_from_proto(
 				}
 			}
 			TrafficPolicy::ExtProc(RequestPolicy::single(http::ext_proc::ExtProc {
-				target: Arc::new(target),
-				// Not supported inline from xDS
-				policies: Vec::new(),
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
+				},
 				failure_mode,
 				request_attributes: to_cel_attrs(
 					diagnostics,
@@ -2549,8 +2555,10 @@ fn external_auth_from_proto(
 		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
 	Ok(http::ext_authz::ExtAuthz {
 		protocol,
-		target: Arc::new(target),
-		policies: Vec::new(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: Arc::new(target),
+			policies: Vec::new(),
+		},
 		failure_mode,
 		include_request_headers: ea
 			.include_request_headers

@@ -15,6 +15,8 @@ use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TO
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
+#[cfg(test)]
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::types::agent_xds::{
 	Diagnostics, authorization_location, optional_authorization_location,
@@ -44,17 +46,9 @@ use crate::serdes::FileOrInline;
 #[apply(schema!)]
 pub struct OAuthTokenExchangeAuth {
 	// ----- Token endpoint -----
-	/// Backend serving the RFC 8693 token endpoint.
+	/// Backend serving the RFC 8693 token endpoint and policies used when connecting to it.
 	#[serde(flatten)]
-	target: Arc<SimpleBackendReference>,
-	/// Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	policies: Vec<BackendTrafficPolicy>,
+	target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
 	token_endpoint_path: String,
@@ -122,13 +116,9 @@ pub struct OAuthTokenExchangeAuth {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ChainedExchange {
-	/// Backend serving the chained RFC 7523 token endpoint.
+	/// Backend serving the chained RFC 7523 token endpoint and policies used when connecting to it.
 	#[serde(flatten)]
-	target: Arc<SimpleBackendReference>,
-	/// Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	policies: Vec<BackendTrafficPolicy>,
+	target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
 	token_endpoint_path: String,
@@ -306,10 +296,12 @@ impl OAuthTokenExchangeAuth {
 		let cache = token_cache_from_proto(t.cache)?;
 
 		let auth = Self {
-			target: Arc::new(target),
-			// Inline connection policies are not supported from xDS;
-			// the backend resource carries its own policies there.
-			policies: Vec::new(),
+			target: SimpleBackendReferenceWithPolicies {
+				target: Arc::new(target),
+				// Inline connection policies are not supported from xDS;
+				// the backend resource carries its own policies there.
+				policies: Vec::new(),
+			},
 			token_endpoint_path,
 			grant_type,
 			subject_token,

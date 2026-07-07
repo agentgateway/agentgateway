@@ -25,16 +25,19 @@ use serde_json::Value;
 use crate::control::caclient::CaClient;
 use crate::http::auth::BackendAuth;
 use crate::http::authorization::RuleSet;
+use crate::http::backendtls::ResolvedBackendTLS;
+use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::{
 	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, health, remoteratelimit, retry,
 	timeout,
 };
 use crate::mcp::{FailureMode, McpAuthorization};
+use crate::proxy::httpproxy::PolicyClient;
 use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
 use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
-use crate::types::local::{InternalBackend, SimpleLocalBackend};
+use crate::types::local::{InternalBackend, SimpleLocalBackend, TargetOrUri};
 use crate::types::{agent, backend, frontend};
 use crate::*;
 
@@ -1355,6 +1358,146 @@ impl<'de> serde::Deserialize<'de> for SimpleBackendReference {
 			SimpleLocalBackend::Opaque(t) => Ok(SimpleBackendReference::InlineBackend(t)),
 			SimpleLocalBackend::Backend(n) => Ok(SimpleBackendReference::Backend(n)),
 			SimpleLocalBackend::Invalid => Ok(SimpleBackendReference::Invalid),
+		}
+	}
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+pub struct SimpleBackendReferenceWithPolicies {
+	#[serde(flatten)]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "crate::types::local::SimpleLocalBackend")
+	)]
+	pub target: Arc<SimpleBackendReference>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	/// Backend policies used when connecting to the service.
+	pub policies: Vec<BackendTrafficPolicy>,
+}
+
+impl<'de> serde::Deserialize<'de> for SimpleBackendReferenceWithPolicies {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		#[derive(Debug, Clone, serde::Deserialize)]
+		#[serde(rename_all = "camelCase", deny_unknown_fields)]
+		pub struct Input {
+			// Keep these wire fields explicit instead of flattening
+			// SimpleLocalBackendWithSchema. Outer structs may use
+			// deny_unknown_fields with #[serde(flatten)] target; if this helper
+			// hides `host` behind another flattened enum, serde can report `host`
+			// as unknown before this type gets to consume it.
+			#[serde(default)]
+			pub name: Option<NamespacedHostname>,
+			#[serde(default)]
+			pub port: Option<u16>,
+			#[serde(default)]
+			pub host: Option<TargetOrUri>,
+			#[serde(default)]
+			pub backend: Option<BackendKey>,
+
+			#[serde(default, skip_serializing_if = "Vec::is_empty")]
+			#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+			/// Backend policies used when connecting to the service.
+			pub policies: Vec<BackendTrafficPolicy>,
+		}
+
+		let Input {
+			name,
+			port,
+			host,
+			backend,
+			mut policies,
+		} = Input::deserialize(deserializer)?;
+
+		let service = match (name, port) {
+			(Some(name), Some(port)) => Some((name, port)),
+			(None, None) => None,
+			_ => {
+				return Err(serde::de::Error::custom(
+					"service backend requires both name and port",
+				));
+			},
+		};
+
+		let (target, tls) = match (service, host, backend) {
+			(Some((name, port)), None, None) => (SimpleBackendReference::Service { name, port }, false),
+			(None, Some(TargetOrUri::Target(t)), None) => {
+				(SimpleBackendReference::InlineBackend(t), false)
+			},
+			(None, Some(TargetOrUri::Uri(uri)), None) => {
+				let Some(uri_host) = uri.host() else {
+					return Err(serde::de::Error::custom(anyhow::anyhow!(
+						"backend URL must include a host"
+					)));
+				};
+				let path = uri.path();
+				if !path.is_empty() && path != "/" {
+					return Err(serde::de::Error::custom(anyhow::anyhow!(
+						"backend URL paths are not supported"
+					)));
+				}
+				let Some(scheme) = uri.scheme_str() else {
+					return Err(serde::de::Error::custom(anyhow::anyhow!(
+						"backend URL must include a scheme"
+					)));
+				};
+				let default_port = match scheme {
+					"http" => 80,
+					"https" => 443,
+					_ => {
+						return Err(serde::de::Error::custom(anyhow::anyhow!(
+							"backend URL scheme must be http or https"
+						)));
+					},
+				};
+				let port = uri.port_u16().unwrap_or(default_port);
+				(
+					SimpleBackendReference::InlineBackend(Target::from((uri_host, port))),
+					scheme == "https",
+				)
+			},
+			(None, None, Some(b)) => (SimpleBackendReference::Backend(b), false),
+			(None, None, None) => (SimpleBackendReference::Invalid, false),
+			_ => {
+				return Err(serde::de::Error::custom(
+					"backend must be exactly one of service, host, or backend",
+				));
+			},
+		};
+
+		if tls
+			&& !policies
+				.iter()
+				.any(|policy| matches!(policy, BackendTrafficPolicy::BackendTLS(_)))
+		{
+			policies.push(BackendTrafficPolicy::BackendTLS(
+				ResolvedBackendTLS::default()
+					.try_into()
+					.map_err(serde::de::Error::custom)?,
+			));
+		}
+
+		Ok(Self {
+			target: Arc::new(target),
+			policies,
+		})
+	}
+}
+
+impl SimpleBackendReferenceWithPolicies {
+	pub fn grpc_channel(&self, client: PolicyClient) -> GrpcReferenceChannel {
+		GrpcReferenceChannel {
+			target: self.target.clone(),
+			client,
+			policies: Arc::new(self.policies.clone()),
 		}
 	}
 }

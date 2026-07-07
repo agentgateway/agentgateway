@@ -1825,6 +1825,33 @@ pub struct LocalTCPRouteBackend {
 
 #[apply(schema_de!)]
 #[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackendSerde"))]
+pub enum SimpleLocalBackendWithSchema {
+	/// Service reference. Service must be defined in the top level services list.
+	Service { name: NamespacedHostname, port: u16 },
+	/// Hostname and port, with an optional scheme. Examples: `https://example.com`, `example.com:80`.
+	#[serde(rename = "host")]
+	Opaque(
+		/// Hostname and port, with an optional scheme. Examples: `https://example.com`, `example.com:80`.
+		TargetOrUri,
+	),
+	Backend(
+		/// Explicit backend reference. Backend must be defined in the top level backends list
+		BackendKey,
+	),
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	Invalid,
+}
+
+#[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(with = "String"))]
+#[serde(untagged)]
+pub enum TargetOrUri {
+	Target(Target),
+	Uri(#[serde(with = "http_serde::uri")] Uri),
+}
+
+#[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackendSerde"))]
 pub enum SimpleLocalBackend {
 	/// Service reference. Service must be defined in the top level services list.
 	Service { name: NamespacedHostname, port: u16 },

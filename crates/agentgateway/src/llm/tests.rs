@@ -573,6 +573,7 @@ mod response {
 		// reasoning_signature on the completions path), `reasoning_unsigned` does not.
 		("reasoning", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
+		("cache_write", &[BEDROCK_TO_COMPLETIONS]),
 	];
 	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_BEDROCK),
@@ -618,6 +619,8 @@ mod response {
 		("response/bedrock-cohere/embeddings.json", &[BEDROCK_COHERE]),
 		("response/vertex/embeddings.json", &[VERTEX]),
 		("response/openai/embeddings.json", &[OPENAI]),
+		// Has no `usage` importantly
+		("response/openai/gemini-embeddings.json", &[OPENAI]),
 	];
 	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
 	const RERANK_RESPONSES: &[(&str, &[&str])] = &[

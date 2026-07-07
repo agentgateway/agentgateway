@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -72,6 +73,7 @@ func TestSetAndReadConfigMapRoundTrip(t *testing.T) {
 }
 
 func TestPersistedEntriesLoadPrefersNewestKeysetAcrossDuplicates(t *testing.T) {
+	stop := test.NewStop(t)
 	requestKey := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}.Key()
 	canonical := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -102,9 +104,10 @@ func TestPersistedEntriesLoadPrefersNewestKeysetAcrossDuplicates(t *testing.T) {
 	}))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{legacy, canonical}, krt.WithName("jwks/PersistedKeysetsPreferNewestConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{legacy, canonical}, krt.WithName("jwks/PersistedKeysetsPreferNewestConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	reader := newPersistedKeysetReader(persisted)
 
@@ -118,6 +121,7 @@ func TestPersistedEntriesLoadPrefersNewestKeysetAcrossDuplicates(t *testing.T) {
 }
 
 func TestLoadPersistedKeysetsPrefersCanonicalEntryWhenFetchedAtTies(t *testing.T) {
+	stop := test.NewStop(t)
 	requestKey := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}.Key()
 	canonicalName := JwksConfigMapName(DefaultJwksStorePrefix, requestKey)
 
@@ -150,9 +154,10 @@ func TestLoadPersistedKeysetsPrefersCanonicalEntryWhenFetchedAtTies(t *testing.T
 	}))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{legacy, canonical}, krt.WithName("jwks/PersistedKeysetsCanonicalTieConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{legacy, canonical}, krt.WithName("jwks/PersistedKeysetsCanonicalTieConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	reader := newPersistedKeysetReader(persisted)
 
@@ -165,6 +170,7 @@ func TestLoadPersistedKeysetsPrefersCanonicalEntryWhenFetchedAtTies(t *testing.T
 }
 
 func TestLoadPersistedKeysetsUsesDeterministicNameTieBreakForNonCanonicalDuplicates(t *testing.T) {
+	stop := test.NewStop(t)
 	requestKey := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}.Key()
 
 	olderByName := &corev1.ConfigMap{
@@ -196,9 +202,10 @@ func TestLoadPersistedKeysetsUsesDeterministicNameTieBreakForNonCanonicalDuplica
 	}))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{laterByName, olderByName}, krt.WithName("jwks/PersistedKeysetsNameTieConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{laterByName, olderByName}, krt.WithName("jwks/PersistedKeysetsNameTieConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	reader := newPersistedKeysetReader(persisted)
 

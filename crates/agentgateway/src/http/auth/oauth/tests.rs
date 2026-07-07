@@ -52,8 +52,10 @@ fn endpoint(mock: &MockServer) -> Arc<SimpleBackendReference> {
 
 fn base_auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 	OAuthTokenExchangeAuth {
-		target: endpoint,
-		policies: vec![],
+		target: SimpleBackendReferenceWithPolicies {
+			target: endpoint,
+			policies: vec![],
+		},
 		token_endpoint_path: "/token".into(),
 		grant_type: OAuthGrantType::TokenExchange,
 		subject_token: TokenSpec::default(),
@@ -79,8 +81,10 @@ fn auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 
 fn cross_app_access_endpoint(endpoint: Arc<SimpleBackendReference>) -> CrossAppAccessEndpoint {
 	CrossAppAccessEndpoint {
-		target: endpoint,
-		policies: vec![],
+		target: SimpleBackendReferenceWithPolicies {
+			target: endpoint,
+			policies: vec![],
+		},
 		token_endpoint_path: "/token".into(),
 		client_auth: OAuthClientAuth {
 			client_id: "gateway-client".into(),
@@ -200,7 +204,7 @@ fn assert_proto_err_contains(proto: proto::OAuthTokenExchange, expected: &str) {
 fn deserializes_minimal_config() {
 	let a: OAuthTokenExchangeAuth = serde_json::from_str(r#"{"host": "localhost:8089"}"#).unwrap();
 	assert!(matches!(
-		a.target.as_ref(),
+		a.target.target.as_ref(),
 		SimpleBackendReference::InlineBackend(_)
 	));
 	assert!(a.token_endpoint_path.is_empty());
@@ -257,13 +261,11 @@ async fn fails_closed_on_slow_endpoint() {
 			.set_delay(Duration::from_secs(2)),
 	)
 	.await;
-	let a = OAuthTokenExchangeAuth {
-		policies: vec![BackendTrafficPolicy::HTTP(crate::types::backend::HTTP {
-			request_timeout: Some(Duration::from_millis(50)),
-			..Default::default()
-		})],
-		..base_auth(endpoint(&mock))
-	};
+	let mut a = base_auth(endpoint(&mock));
+	a.target.policies = vec![BackendTrafficPolicy::HTTP(crate::types::backend::HTTP {
+		request_timeout: Some(Duration::from_millis(50)),
+		..Default::default()
+	})];
 
 	let err = fetch_token(
 		&policy_client(),
