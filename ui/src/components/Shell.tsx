@@ -23,6 +23,7 @@ import {
   ScrollText,
   ShieldCheck,
   Shield,
+  SlidersHorizontal,
   Bolt,
   Moon,
   Play,
@@ -41,6 +42,7 @@ type NavItemConfig = {
   icon: React.ComponentType<{ size?: number }>;
   placeholder?: boolean;
   groupStart?: boolean;
+  exact?: boolean;
 };
 
 const projectLinks = [
@@ -96,11 +98,9 @@ export function Shell() {
   const navGroups = navigationGroups({ hasLlm, hasMcp, hasTraffic, dumpMode });
   const nav = navGroups.flatMap((group) => group.items);
   const currentNav =
-    nav.find((item) =>
-      item.to === "/"
-        ? router.location.pathname === "/"
-        : router.location.pathname.startsWith(item.to),
-    ) ?? nav[0];
+    nav
+      .filter((item) => navItemActive(item, router.location.pathname))
+      .sort((left, right) => right.to.length - left.to.length)[0] ?? nav[0];
   const CurrentIcon = currentNav.icon;
 
   useEffect(() => {
@@ -315,7 +315,17 @@ function navigationGroups(options: {
       ? [{ to: "/cel", label: "CEL Playground", icon: Braces }]
       : [
           { to: "/cel", label: "CEL Playground", icon: Braces },
-          { to: "/raw-config", label: "Raw Configuration", icon: FileCode2 },
+          {
+            to: "/raw-config",
+            label: "Raw Configuration",
+            icon: FileCode2,
+            exact: true,
+          },
+          {
+            to: "/settings",
+            label: "Settings",
+            icon: SlidersHorizontal,
+          },
         ],
   });
   return groups;
@@ -362,14 +372,13 @@ function MobileNavItem(props: {
   currentPath: string;
   placeholder?: boolean;
   groupStart?: boolean;
+  exact?: boolean;
 }) {
   const Icon = props.icon;
   const navigate = useNavigate();
   const active = props.placeholder
     ? false
-    : props.to === "/"
-      ? props.label === "Home" && props.currentPath === "/"
-      : props.currentPath.startsWith(props.to);
+    : navItemActive(props, props.currentPath);
   if (props.placeholder) {
     return (
       <button
@@ -403,7 +412,11 @@ function eyebrowForPath(path: string) {
   if (path === "/") return "Gateway overview";
   if (path.startsWith("/mcp")) return "MCP configuration";
   if (path.startsWith("/traffic")) return "Traffic configuration";
-  if (path.startsWith("/cel") || path.startsWith("/raw-config"))
+  if (
+    path.startsWith("/cel") ||
+    path.startsWith("/raw-config") ||
+    path.startsWith("/settings")
+  )
     return "Policy tools";
   return "LLM configuration";
 }
@@ -415,14 +428,13 @@ function NavItem(props: {
   currentPath: string;
   placeholder?: boolean;
   groupStart?: boolean;
+  exact?: boolean;
 }) {
   const Icon = props.icon;
   const navigate = useNavigate();
   const active = props.placeholder
     ? false
-    : props.to === "/"
-      ? props.label === "Home" && props.currentPath === "/"
-      : props.currentPath.startsWith(props.to);
+    : navItemActive(props, props.currentPath);
   if (props.placeholder) {
     return (
       <button
@@ -444,4 +456,10 @@ function NavItem(props: {
       <span>{props.label}</span>
     </Link>
   );
+}
+
+function navItemActive(item: { to: string; exact?: boolean }, path: string) {
+  if (item.to === "/") return path === "/";
+  if (item.exact) return path === item.to;
+  return path === item.to || path.startsWith(`${item.to}/`);
 }

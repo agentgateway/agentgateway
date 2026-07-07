@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Shield } from "lucide-react";
 import { ensureLlm, ensureMcp } from "../config";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
@@ -119,9 +119,11 @@ export function McpPoliciesPage() {
   );
 }
 
-function PolicyCatalogPage(props: {
+export function PolicyCatalogPage(props: {
   title: string;
   description: string;
+  actions?: ReactNode;
+  beforePolicies?: ReactNode;
   schemaRoot: string;
   sections: Array<{ title: string; keys: PolicyKey[] }>;
   policyKeys?: PolicyKey[];
@@ -242,7 +244,11 @@ function PolicyCatalogPage(props: {
 
   return (
     <div className="page-stack">
-      <PageHeader title={props.title} description={props.description} />
+      <PageHeader
+        title={props.title}
+        description={props.description}
+        actions={props.actions}
+      />
       {config.isError ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
           {config.error.message}
@@ -253,6 +259,7 @@ function PolicyCatalogPage(props: {
           {update.error.message}
         </StatusBanner>
       ) : null}
+      {props.beforePolicies}
 
       <div className="policy-section-list">
         {groupedPolicyItems.map((section) => (

@@ -28,6 +28,7 @@ import { ModelsPage } from "./pages/Models";
 import { McpPoliciesPage, PoliciesPage } from "./pages/Policies";
 import { PlaygroundPage } from "./pages/Playground";
 import { ProvidersPage } from "./pages/Providers";
+import { RawSettingsPage } from "./pages/RawSettings";
 import { TrafficGatewaysPage } from "./pages/TrafficGateways";
 import { TrafficListenersPage } from "./pages/TrafficListeners";
 import { TrafficRoutesPage } from "./pages/TrafficRoutes";
@@ -186,6 +187,12 @@ const rawConfigRoute = createRoute({
   component: RawConfigRoute,
 });
 
+const rawSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: RawSettingsPage,
+});
+
 function RawConfigRoute() {
   return (
     <React.Suspense
@@ -225,6 +232,7 @@ const router = createRouter({
     trafficListenersRoute,
     trafficRoutesRoute,
     celRoute,
+    rawSettingsRoute,
     rawConfigRoute,
   ]),
 });
