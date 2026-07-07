@@ -898,12 +898,11 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		if err != nil {
 			errs = append(errs, err)
 		}
-	} else if auth.OAuth != nil {
-		oauthAuth, err := buildOAuthTokenExchangePolicy(ctx, auth.OAuth, policy.Namespace)
+	} else if auth.OAuthTokenExchange != nil {
+		oauthAuth, err := buildOAuthTokenExchangePolicy(ctx, auth.OAuthTokenExchange, policy.Namespace)
+		translatedAuth = oauthAuth
 		if err != nil {
 			errs = append(errs, err)
-		} else {
-			translatedAuth = oauthAuth
 		}
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
@@ -956,7 +955,7 @@ var oauthReservedAdditionalParams = []string{
 func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string) (*api.BackendAuthPolicy, error) {
 	var errs []error
 
-	tokenEndpoint, err := BuildBackendRef(ctx, auth.TokenEndpoint, namespace)
+	tokenEndpoint, err := BuildBackendRef(ctx, auth.TokenEndpoint.BackendObjectReference, namespace)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -988,7 +987,7 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 
 	oauth := &api.OAuthTokenExchange{
 		TokenEndpoint:         tokenEndpoint,
-		TokenEndpointPath:     auth.TokenEndpointPath,
+		TokenEndpointPath:     auth.TokenEndpoint.Path,
 		GrantType:             translateOAuthGrantType(auth.GrantType),
 		SubjectToken:          translateOAuthTokenSpec(auth.SubjectToken),
 		ActorToken:            translateOAuthActorToken(auth.ActorToken),
@@ -998,11 +997,11 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 		RequestedTokenType:    translateOAuthTokenTypePtr(auth.RequestedTokenType),
 		AdditionalParams:      additionalParams,
 		ClientAuth:            clientAuth,
-		AuthorizationLocation: translateAuthorizationLocation(auth.AuthorizationLocation),
+		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
 		Cache:                 translateOAuthTokenCache(auth.Cache),
 	}
-	if auth.TokenEndpointPath != nil && !strings.HasPrefix(*auth.TokenEndpointPath, "/") {
-		errs = append(errs, fmt.Errorf("oauth tokenEndpointPath %q must start with /", *auth.TokenEndpointPath))
+	if auth.TokenEndpoint.Path != nil && !strings.HasPrefix(*auth.TokenEndpoint.Path, "/") {
+		errs = append(errs, fmt.Errorf("oauth tokenEndpoint.path %q must start with /", *auth.TokenEndpoint.Path))
 	}
 	if oauth.GrantType == api.OAuthTokenExchange_JWT_BEARER {
 		if oauth.ActorToken != nil {
@@ -1012,11 +1011,11 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 			errs = append(errs, errors.New("oauth requestedTokenType is only valid with TokenExchange grantType"))
 		}
 	}
-	if oauth.RequestedTokenType != nil && *oauth.RequestedTokenType == string(agentgateway.OAuthTokenTypeIDJAG) {
-		errs = append(errs, errors.New("oauth requestedTokenType id-jag is only supported by crossAppAccess"))
+	if auth.RequestedTokenType != nil && *auth.RequestedTokenType == agentgateway.OAuthTokenTypeIDJAG {
+		errs = append(errs, errors.New("oauth requestedTokenType IdJag is only supported by crossAppAccess"))
 	}
-	if auth.ActorToken != nil && ptr.OrDefault(auth.ActorToken.EnforceMayAct, false) && ptr.OrDefault(auth.ActorToken.TokenType, "") != agentgateway.OAuthTokenTypeJWT {
-		errs = append(errs, errors.New("oauth actorToken enforceMayAct requires tokenType urn:ietf:params:oauth:token-type:jwt"))
+	if auth.ActorToken != nil && ptr.OrDefault(auth.ActorToken.MayAct, "") == agentgateway.OAuthMayActValidationModeRequired && ptr.OrDefault(auth.ActorToken.TokenType, "") != agentgateway.OAuthTokenTypeJWT {
+		errs = append(errs, errors.New("oauth actorToken mayAct Required requires tokenType Jwt"))
 	}
 
 	return &api.BackendAuthPolicy{
@@ -1048,7 +1047,7 @@ func translateOAuthTokenSpec(spec *agentgateway.OAuthTokenSpec) *api.OAuthTokenE
 		Source: translateAuthorizationExtractionLocation(spec.Source),
 	}
 	if spec.TokenType != nil {
-		res.TokenType = string(*spec.TokenType)
+		res.TokenType = translateOAuthTokenType(*spec.TokenType)
 	}
 	return res
 }
@@ -1059,10 +1058,10 @@ func translateOAuthActorToken(actor *agentgateway.OAuthActorToken) *api.OAuthTok
 	}
 	res := &api.OAuthTokenExchange_ActorToken{
 		Source:        translateAuthorizationExtractionLocation(&actor.Source),
-		EnforceMayAct: ptr.OrDefault(actor.EnforceMayAct, false),
+		EnforceMayAct: ptr.OrDefault(actor.MayAct, "") == agentgateway.OAuthMayActValidationModeRequired,
 	}
 	if actor.TokenType != nil {
-		res.TokenType = string(*actor.TokenType)
+		res.TokenType = translateOAuthTokenType(*actor.TokenType)
 	}
 	return res
 }
@@ -1150,7 +1149,22 @@ func translateOAuthTokenTypePtr(tokenType *agentgateway.OAuthTokenType) *string 
 	if tokenType == nil {
 		return nil
 	}
-	return new(string(*tokenType))
+	return new(translateOAuthTokenType(*tokenType))
+}
+
+func translateOAuthTokenType(tokenType agentgateway.OAuthTokenType) string {
+	switch tokenType {
+	case agentgateway.OAuthTokenTypeAccessToken:
+		return "urn:ietf:params:oauth:token-type:access_token"
+	case agentgateway.OAuthTokenTypeJWT:
+		return "urn:ietf:params:oauth:token-type:jwt"
+	case agentgateway.OAuthTokenTypeIDToken:
+		return "urn:ietf:params:oauth:token-type:id_token"
+	case agentgateway.OAuthTokenTypeIDJAG:
+		return "urn:ietf:params:oauth:token-type:id-jag"
+	default:
+		return string(tokenType)
+	}
 }
 
 func translateOAuthClientAuthMethod(method *agentgateway.OAuthClientAuthMethod) api.OAuthTokenExchange_ClientAuth_Method {

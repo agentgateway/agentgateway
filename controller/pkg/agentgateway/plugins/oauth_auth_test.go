@@ -35,11 +35,13 @@ func oauthTestPolicyCtx(t *testing.T, secrets ...*corev1.Secret) PolicyCtx {
 	}
 }
 
-func oauthTokenEndpointRef() gwv1.BackendObjectReference {
-	return gwv1.BackendObjectReference{
-		Group: ptr.Of(gwv1.Group("agentgateway.dev")),
-		Kind:  ptr.Of(gwv1.Kind("AgentgatewayBackend")),
-		Name:  "token-endpoint",
+func oauthTokenEndpointRef() agentgateway.OAuthTokenEndpoint {
+	return agentgateway.OAuthTokenEndpoint{
+		BackendObjectReference: gwv1.BackendObjectReference{
+			Group: ptr.Of(gwv1.Group("agentgateway.dev")),
+			Kind:  ptr.Of(gwv1.Kind("AgentgatewayBackend")),
+			Name:  "token-endpoint",
+		},
 	}
 }
 
@@ -176,7 +178,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 				TokenEndpoint:      oauthTokenEndpointRef(),
 				RequestedTokenType: ptr.Of(agentgateway.OAuthTokenTypeIDJAG),
 			},
-			want: "id-jag is only supported by crossAppAccess",
+			want: "IdJag is only supported by crossAppAccess",
 		},
 		{
 			name: "jwt-bearer-actor-token",
@@ -212,11 +214,11 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 							Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Actor-Token"},
 						},
 					},
-					TokenType:     ptr.Of(agentgateway.OAuthTokenTypeAccessToken),
-					EnforceMayAct: new(true),
+					TokenType: ptr.Of(agentgateway.OAuthTokenTypeAccessToken),
+					MayAct:    ptr.Of(agentgateway.OAuthMayActValidationModeRequired),
 				},
 			},
-			want: "enforceMayAct requires tokenType urn:ietf:params:oauth:token-type:jwt",
+			want: "mayAct Required requires tokenType Jwt",
 		},
 		{
 			name: "invalid-subject-source-cel",
@@ -291,7 +293,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 	}
 }
 
-func TestTranslateBackendAuthOmitsInvalidOAuthPolicy(t *testing.T) {
+func TestTranslateBackendAuthPreservesInvalidOAuthPolicy(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 	policy := &agentgateway.AgentgatewayPolicy{
 		ObjectMeta: metav1.ObjectMeta{
@@ -302,7 +304,7 @@ func TestTranslateBackendAuthOmitsInvalidOAuthPolicy(t *testing.T) {
 			Backend: &agentgateway.BackendFull{
 				BackendSimple: agentgateway.BackendSimple{
 					Auth: &agentgateway.BackendAuth{
-						OAuth: &agentgateway.OAuthTokenExchange{
+						OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
 							TokenEndpoint: oauthTokenEndpointRef(),
 							SubjectToken: &agentgateway.OAuthTokenSpec{
 								Source: &agentgateway.AuthorizationExtractionLocation{
@@ -320,8 +322,8 @@ func TestTranslateBackendAuthOmitsInvalidOAuthPolicy(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "oauth subjectToken source expression is not a valid CEL expression") {
 		t.Fatalf("translateBackendAuth() error = %v, want invalid CEL error", err)
 	}
-	if p != nil {
-		t.Fatalf("translateBackendAuth() policy = %v, want nil", p)
+	if p.GetBackend().GetAuth().GetOauthTokenExchange() == nil {
+		t.Fatalf("translateBackendAuth() policy = %v, want oauth token exchange auth", p)
 	}
 }
 
@@ -355,5 +357,58 @@ func TestOAuthTokenExchangeEnumDefaulting(t *testing.T) {
 	}
 	if oauth.GetClientAuth().GetMethod() != api.OAuthTokenExchange_ClientAuth_UNSPECIFIED {
 		t.Fatalf("client auth method = %v, want UNSPECIFIED", oauth.GetClientAuth().GetMethod())
+	}
+}
+
+func TestOAuthTokenExchangeTokenTypeTranslation(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+
+	path := "/oauth/token"
+	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
+		TokenEndpoint: agentgateway.OAuthTokenEndpoint{
+			BackendObjectReference: oauthTokenEndpointRef().BackendObjectReference,
+			Path:                   &path,
+		},
+		SubjectToken: &agentgateway.OAuthTokenSpec{
+			TokenType: ptr.Of(agentgateway.OAuthTokenTypeAccessToken),
+		},
+		ActorToken: &agentgateway.OAuthActorToken{
+			Source: agentgateway.AuthorizationExtractionLocation{
+				AuthorizationLocationFields: agentgateway.AuthorizationLocationFields{
+					Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Actor-Token"},
+				},
+			},
+			TokenType: ptr.Of(agentgateway.OAuthTokenTypeJWT),
+			MayAct:    ptr.Of(agentgateway.OAuthMayActValidationModeRequired),
+		},
+		RequestedTokenType: ptr.Of(agentgateway.OAuthTokenTypeIDToken),
+		Location: &agentgateway.AuthorizationLocation{
+			AuthorizationLocationFields: agentgateway.AuthorizationLocationFields{
+				Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Exchanged-Token"},
+			},
+		},
+	}, "default")
+	if err != nil {
+		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want nil", err)
+	}
+
+	oauth := policy.GetOauthTokenExchange()
+	if oauth.GetTokenEndpointPath() != path {
+		t.Fatalf("token endpoint path = %q, want %q", oauth.GetTokenEndpointPath(), path)
+	}
+	if oauth.GetSubjectToken().GetTokenType() != "urn:ietf:params:oauth:token-type:access_token" {
+		t.Fatalf("subject token type = %q, want access_token URN", oauth.GetSubjectToken().GetTokenType())
+	}
+	if oauth.GetActorToken().GetTokenType() != "urn:ietf:params:oauth:token-type:jwt" {
+		t.Fatalf("actor token type = %q, want jwt URN", oauth.GetActorToken().GetTokenType())
+	}
+	if !oauth.GetActorToken().GetEnforceMayAct() {
+		t.Fatal("actor enforceMayAct = false, want true")
+	}
+	if oauth.GetRequestedTokenType() != "urn:ietf:params:oauth:token-type:id_token" {
+		t.Fatalf("requested token type = %q, want id_token URN", oauth.GetRequestedTokenType())
+	}
+	if oauth.GetAuthorizationLocation().GetHeader().GetName() != "X-Exchanged-Token" {
+		t.Fatalf("authorization location header = %q, want X-Exchanged-Token", oauth.GetAuthorizationLocation().GetHeader().GetName())
 	}
 }

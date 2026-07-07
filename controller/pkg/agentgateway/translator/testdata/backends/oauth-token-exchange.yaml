@@ -24,7 +24,7 @@ spec:
           group: agentgateway.dev
           kind: AgentgatewayBackend
           name: token-endpoint
-        tokenEndpointPath: /token
+          path: /token
         audiences:
         - api://payments
 ---

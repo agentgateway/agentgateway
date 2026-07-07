@@ -32,20 +32,20 @@ spec:
           group: agentgateway.dev
           kind: AgentgatewayBackend
           name: token-endpoint
-        tokenEndpointPath: /oauth/token
+          path: /oauth/token
         grantType: TokenExchange
         subjectToken:
           source:
             header:
               name: Authorization
               prefix: "Bearer "
-          tokenType: urn:ietf:params:oauth:token-type:access_token
+          tokenType: AccessToken
         actorToken:
           source:
             header:
               name: X-Actor-Token
-          tokenType: urn:ietf:params:oauth:token-type:jwt
-          enforceMayAct: true
+          tokenType: Jwt
+          mayAct: Required
         audiences:
         - api://payments
         scopes:
@@ -53,7 +53,7 @@ spec:
         - write:invoices
         resources:
         - https://payments.example.com
-        requestedTokenType: urn:ietf:params:oauth:token-type:access_token
+        requestedTokenType: AccessToken
         additionalParams:
           tenant: request.headers["x-tenant"]
         clientAuth:
@@ -61,7 +61,7 @@ spec:
           secretRef:
             name: oauth-client
           method: ClientSecretBasic
-        authorizationLocation:
+        location:
           header:
             name: X-Forwarded-Access-Token
         cache:

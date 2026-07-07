@@ -2805,12 +2805,12 @@
           "description": "Use OAuth token exchange flows to obtain a backend access token.",
           "type": "object",
           "properties": {
-            "oauth": {
+            "oauthTokenExchange": {
               "$ref": "#/$defs/OAuthTokenExchangeAuth"
             }
           },
           "required": [
-            "oauth"
+            "oauthTokenExchange"
           ],
           "additionalProperties": false
         },

@@ -607,20 +607,22 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuth 2.0 token exchange
-                                                (RFC 8693) / jwt-bearer (RFC 7523)
-                                                authentication.
+                                              description: OAuthTokenExchange 2.0
+                                                token exchange (RFC 8693) / jwt-bearer
+                                                (RFC 7523) authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
                                                     actor token. TokenExchange grant
                                                     only.
                                                   properties:
-                                                    enforceMayAct:
-                                                      description: Enforce the subject's
-                                                        may_act claim authorizes the
-                                                        actor.
-                                                      type: boolean
+                                                    mayAct:
+                                                      description: may_act claim validation
+                                                        mode. When omitted, may_act
+                                                        is not enforced.
+                                                      enum:
+                                                      - Required
+                                                      type: string
                                                     source:
                                                       description: Where to read the
                                                         actor token. Actor tokens
@@ -687,24 +689,23 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   required:
                                                   - source
                                                   type: object
                                                   x-kubernetes-validations:
-                                                  - message: enforceMayAct requires
-                                                      tokenType urn:ietf:params:oauth:token-type:jwt
-                                                    rule: '!has(self.enforceMayAct)
-                                                      || !self.enforceMayAct || (has(self.tokenType)
-                                                      && self.tokenType == ''urn:ietf:params:oauth:token-type:jwt'')'
+                                                  - message: mayAct Required requires
+                                                      tokenType Jwt
+                                                    rule: '!has(self.mayAct) || self.mayAct
+                                                      != ''Required'' || (has(self.tokenType)
+                                                      && self.tokenType == ''Jwt'')'
                                                 additionalParams:
                                                   additionalProperties:
                                                     description: A Common Expression
@@ -725,63 +726,6 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
-                                                authorizationLocation:
-                                                  description: |-
-                                                    Where the exchanged token is written to the backend request.
-                                                    Defaults to Authorization: Bearer.
-                                                  properties:
-                                                    cookie:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    header:
-                                                      properties:
-                                                        name:
-                                                          description: |-
-                                                            HTTPHeaderName is the name of an HTTP header.
-
-                                                            Valid values include:
-
-                                                            * "Authorization"
-                                                            * "Set-Cookie"
-
-                                                            Invalid values include:
-
-                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
-                                                                headers are not currently supported by this type.
-                                                              - "/invalid" - "/ " is an invalid character
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                          type: string
-                                                        prefix:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    queryParameter:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: exactly one of the fields
-                                                      in [header queryParameter cookie]
-                                                      must be set
-                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                      == 1'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -948,13 +892,70 @@ spec:
                                                   - JwtBearer
                                                   - TokenExchange
                                                   type: string
+                                                location:
+                                                  description: |-
+                                                    Where the exchanged token is written to the backend request.
+                                                    Defaults to Authorization: Bearer.
+                                                  properties:
+                                                    cookie:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    header:
+                                                      properties:
+                                                        name:
+                                                          description: |-
+                                                            HTTPHeaderName is the name of an HTTP header.
+
+                                                            Valid values include:
+
+                                                            * "Authorization"
+                                                            * "Set-Cookie"
+
+                                                            Invalid values include:
+
+                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                                headers are not currently supported by this type.
+                                                              - "/invalid" - "/ " is an invalid character
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                          type: string
+                                                        prefix:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    queryParameter:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: exactly one of the fields
+                                                      in [header queryParameter cookie]
+                                                      must be set
+                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                      == 1'
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
-                                                  - urn:ietf:params:oauth:token-type:access_token
-                                                  - urn:ietf:params:oauth:token-type:id-jag
-                                                  - urn:ietf:params:oauth:token-type:id_token
-                                                  - urn:ietf:params:oauth:token-type:jwt
+                                                  - AccessToken
+                                                  - IdJag
+                                                  - IdToken
+                                                  - Jwt
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -974,8 +975,8 @@ spec:
                                                   type: array
                                                 subjectToken:
                                                   description: Subject token / assertion
-                                                    source + type. Defaults to Authorization
-                                                    Bearer, access_token.
+                                                    source and type. Defaults to Authorization
+                                                    Bearer, AccessToken.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -1043,19 +1044,18 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   type: object
                                                 tokenEndpoint:
                                                   description: RFC 8693 token endpoint
-                                                    backend.
+                                                    backend and path.
                                                   properties:
                                                     group:
                                                       default: ""
@@ -1107,6 +1107,12 @@ spec:
                                                       minLength: 1
                                                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                       type: string
+                                                    path:
+                                                      description: Token endpoint
+                                                        path; defaults to "/". Must
+                                                        start with "/".
+                                                      pattern: ^/
+                                                      type: string
                                                     port:
                                                       description: |-
                                                         Port specifies the destination port number to use for this resource.
@@ -1127,12 +1133,6 @@ spec:
                                                     rule: '(size(self.group) == 0
                                                       && self.kind == ''Service'')
                                                       ? has(self.port) : true'
-                                                tokenEndpointPath:
-                                                  description: Token endpoint path;
-                                                    defaults to "/". Must start with
-                                                    "/".
-                                                  pattern: ^/
-                                                  type: string
                                               required:
                                               - tokenEndpoint
                                               type: object
@@ -1146,10 +1146,10 @@ spec:
                                                 rule: '!(has(self.requestedTokenType)
                                                   && has(self.grantType) && self.grantType
                                                   == ''JwtBearer'')'
-                                              - message: requestedTokenType id-jag
+                                              - message: requestedTokenType IdJag
                                                   is only supported by crossAppAccess
                                                 rule: '!has(self.requestedTokenType)
-                                                  || self.requestedTokenType != ''urn:ietf:params:oauth:token-type:id-jag'''
+                                                  || self.requestedTokenType != ''IdJag'''
                                             passthrough:
                                               description: |-
                                                 Passes through an existing token that has been sent by the
@@ -1882,20 +1882,22 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuth 2.0 token exchange
-                                                (RFC 8693) / jwt-bearer (RFC 7523)
-                                                authentication.
+                                              description: OAuthTokenExchange 2.0
+                                                token exchange (RFC 8693) / jwt-bearer
+                                                (RFC 7523) authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
                                                     actor token. TokenExchange grant
                                                     only.
                                                   properties:
-                                                    enforceMayAct:
-                                                      description: Enforce the subject's
-                                                        may_act claim authorizes the
-                                                        actor.
-                                                      type: boolean
+                                                    mayAct:
+                                                      description: may_act claim validation
+                                                        mode. When omitted, may_act
+                                                        is not enforced.
+                                                      enum:
+                                                      - Required
+                                                      type: string
                                                     source:
                                                       description: Where to read the
                                                         actor token. Actor tokens
@@ -1962,24 +1964,23 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   required:
                                                   - source
                                                   type: object
                                                   x-kubernetes-validations:
-                                                  - message: enforceMayAct requires
-                                                      tokenType urn:ietf:params:oauth:token-type:jwt
-                                                    rule: '!has(self.enforceMayAct)
-                                                      || !self.enforceMayAct || (has(self.tokenType)
-                                                      && self.tokenType == ''urn:ietf:params:oauth:token-type:jwt'')'
+                                                  - message: mayAct Required requires
+                                                      tokenType Jwt
+                                                    rule: '!has(self.mayAct) || self.mayAct
+                                                      != ''Required'' || (has(self.tokenType)
+                                                      && self.tokenType == ''Jwt'')'
                                                 additionalParams:
                                                   additionalProperties:
                                                     description: A Common Expression
@@ -2000,63 +2001,6 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
-                                                authorizationLocation:
-                                                  description: |-
-                                                    Where the exchanged token is written to the backend request.
-                                                    Defaults to Authorization: Bearer.
-                                                  properties:
-                                                    cookie:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    header:
-                                                      properties:
-                                                        name:
-                                                          description: |-
-                                                            HTTPHeaderName is the name of an HTTP header.
-
-                                                            Valid values include:
-
-                                                            * "Authorization"
-                                                            * "Set-Cookie"
-
-                                                            Invalid values include:
-
-                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
-                                                                headers are not currently supported by this type.
-                                                              - "/invalid" - "/ " is an invalid character
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                          type: string
-                                                        prefix:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    queryParameter:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: exactly one of the fields
-                                                      in [header queryParameter cookie]
-                                                      must be set
-                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                      == 1'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -2223,13 +2167,70 @@ spec:
                                                   - JwtBearer
                                                   - TokenExchange
                                                   type: string
+                                                location:
+                                                  description: |-
+                                                    Where the exchanged token is written to the backend request.
+                                                    Defaults to Authorization: Bearer.
+                                                  properties:
+                                                    cookie:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    header:
+                                                      properties:
+                                                        name:
+                                                          description: |-
+                                                            HTTPHeaderName is the name of an HTTP header.
+
+                                                            Valid values include:
+
+                                                            * "Authorization"
+                                                            * "Set-Cookie"
+
+                                                            Invalid values include:
+
+                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                                headers are not currently supported by this type.
+                                                              - "/invalid" - "/ " is an invalid character
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                          type: string
+                                                        prefix:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    queryParameter:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: exactly one of the fields
+                                                      in [header queryParameter cookie]
+                                                      must be set
+                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                      == 1'
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
-                                                  - urn:ietf:params:oauth:token-type:access_token
-                                                  - urn:ietf:params:oauth:token-type:id-jag
-                                                  - urn:ietf:params:oauth:token-type:id_token
-                                                  - urn:ietf:params:oauth:token-type:jwt
+                                                  - AccessToken
+                                                  - IdJag
+                                                  - IdToken
+                                                  - Jwt
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -2249,8 +2250,8 @@ spec:
                                                   type: array
                                                 subjectToken:
                                                   description: Subject token / assertion
-                                                    source + type. Defaults to Authorization
-                                                    Bearer, access_token.
+                                                    source and type. Defaults to Authorization
+                                                    Bearer, AccessToken.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -2318,19 +2319,18 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   type: object
                                                 tokenEndpoint:
                                                   description: RFC 8693 token endpoint
-                                                    backend.
+                                                    backend and path.
                                                   properties:
                                                     group:
                                                       default: ""
@@ -2382,6 +2382,12 @@ spec:
                                                       minLength: 1
                                                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                       type: string
+                                                    path:
+                                                      description: Token endpoint
+                                                        path; defaults to "/". Must
+                                                        start with "/".
+                                                      pattern: ^/
+                                                      type: string
                                                     port:
                                                       description: |-
                                                         Port specifies the destination port number to use for this resource.
@@ -2402,12 +2408,6 @@ spec:
                                                     rule: '(size(self.group) == 0
                                                       && self.kind == ''Service'')
                                                       ? has(self.port) : true'
-                                                tokenEndpointPath:
-                                                  description: Token endpoint path;
-                                                    defaults to "/". Must start with
-                                                    "/".
-                                                  pattern: ^/
-                                                  type: string
                                               required:
                                               - tokenEndpoint
                                               type: object
@@ -2421,10 +2421,10 @@ spec:
                                                 rule: '!(has(self.requestedTokenType)
                                                   && has(self.grantType) && self.grantType
                                                   == ''JwtBearer'')'
-                                              - message: requestedTokenType id-jag
+                                              - message: requestedTokenType IdJag
                                                   is only supported by crossAppAccess
                                                 rule: '!has(self.requestedTokenType)
-                                                  || self.requestedTokenType != ''urn:ietf:params:oauth:token-type:id-jag'''
+                                                  || self.requestedTokenType != ''IdJag'''
                                             passthrough:
                                               description: |-
                                                 Passes through an existing token that has been sent by the
@@ -3152,20 +3152,22 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuth 2.0 token exchange
-                                                (RFC 8693) / jwt-bearer (RFC 7523)
-                                                authentication.
+                                              description: OAuthTokenExchange 2.0
+                                                token exchange (RFC 8693) / jwt-bearer
+                                                (RFC 7523) authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
                                                     actor token. TokenExchange grant
                                                     only.
                                                   properties:
-                                                    enforceMayAct:
-                                                      description: Enforce the subject's
-                                                        may_act claim authorizes the
-                                                        actor.
-                                                      type: boolean
+                                                    mayAct:
+                                                      description: may_act claim validation
+                                                        mode. When omitted, may_act
+                                                        is not enforced.
+                                                      enum:
+                                                      - Required
+                                                      type: string
                                                     source:
                                                       description: Where to read the
                                                         actor token. Actor tokens
@@ -3232,24 +3234,23 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   required:
                                                   - source
                                                   type: object
                                                   x-kubernetes-validations:
-                                                  - message: enforceMayAct requires
-                                                      tokenType urn:ietf:params:oauth:token-type:jwt
-                                                    rule: '!has(self.enforceMayAct)
-                                                      || !self.enforceMayAct || (has(self.tokenType)
-                                                      && self.tokenType == ''urn:ietf:params:oauth:token-type:jwt'')'
+                                                  - message: mayAct Required requires
+                                                      tokenType Jwt
+                                                    rule: '!has(self.mayAct) || self.mayAct
+                                                      != ''Required'' || (has(self.tokenType)
+                                                      && self.tokenType == ''Jwt'')'
                                                 additionalParams:
                                                   additionalProperties:
                                                     description: A Common Expression
@@ -3270,63 +3271,6 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
-                                                authorizationLocation:
-                                                  description: |-
-                                                    Where the exchanged token is written to the backend request.
-                                                    Defaults to Authorization: Bearer.
-                                                  properties:
-                                                    cookie:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    header:
-                                                      properties:
-                                                        name:
-                                                          description: |-
-                                                            HTTPHeaderName is the name of an HTTP header.
-
-                                                            Valid values include:
-
-                                                            * "Authorization"
-                                                            * "Set-Cookie"
-
-                                                            Invalid values include:
-
-                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
-                                                                headers are not currently supported by this type.
-                                                              - "/invalid" - "/ " is an invalid character
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                          type: string
-                                                        prefix:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    queryParameter:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: exactly one of the fields
-                                                      in [header queryParameter cookie]
-                                                      must be set
-                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                      == 1'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -3493,13 +3437,70 @@ spec:
                                                   - JwtBearer
                                                   - TokenExchange
                                                   type: string
+                                                location:
+                                                  description: |-
+                                                    Where the exchanged token is written to the backend request.
+                                                    Defaults to Authorization: Bearer.
+                                                  properties:
+                                                    cookie:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    header:
+                                                      properties:
+                                                        name:
+                                                          description: |-
+                                                            HTTPHeaderName is the name of an HTTP header.
+
+                                                            Valid values include:
+
+                                                            * "Authorization"
+                                                            * "Set-Cookie"
+
+                                                            Invalid values include:
+
+                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                                headers are not currently supported by this type.
+                                                              - "/invalid" - "/ " is an invalid character
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                          type: string
+                                                        prefix:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    queryParameter:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: exactly one of the fields
+                                                      in [header queryParameter cookie]
+                                                      must be set
+                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                      == 1'
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
-                                                  - urn:ietf:params:oauth:token-type:access_token
-                                                  - urn:ietf:params:oauth:token-type:id-jag
-                                                  - urn:ietf:params:oauth:token-type:id_token
-                                                  - urn:ietf:params:oauth:token-type:jwt
+                                                  - AccessToken
+                                                  - IdJag
+                                                  - IdToken
+                                                  - Jwt
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -3519,8 +3520,8 @@ spec:
                                                   type: array
                                                 subjectToken:
                                                   description: Subject token / assertion
-                                                    source + type. Defaults to Authorization
-                                                    Bearer, access_token.
+                                                    source and type. Defaults to Authorization
+                                                    Bearer, AccessToken.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -3588,19 +3589,18 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   type: object
                                                 tokenEndpoint:
                                                   description: RFC 8693 token endpoint
-                                                    backend.
+                                                    backend and path.
                                                   properties:
                                                     group:
                                                       default: ""
@@ -3652,6 +3652,12 @@ spec:
                                                       minLength: 1
                                                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                       type: string
+                                                    path:
+                                                      description: Token endpoint
+                                                        path; defaults to "/". Must
+                                                        start with "/".
+                                                      pattern: ^/
+                                                      type: string
                                                     port:
                                                       description: |-
                                                         Port specifies the destination port number to use for this resource.
@@ -3672,12 +3678,6 @@ spec:
                                                     rule: '(size(self.group) == 0
                                                       && self.kind == ''Service'')
                                                       ? has(self.port) : true'
-                                                tokenEndpointPath:
-                                                  description: Token endpoint path;
-                                                    defaults to "/". Must start with
-                                                    "/".
-                                                  pattern: ^/
-                                                  type: string
                                               required:
                                               - tokenEndpoint
                                               type: object
@@ -3691,10 +3691,10 @@ spec:
                                                 rule: '!(has(self.requestedTokenType)
                                                   && has(self.grantType) && self.grantType
                                                   == ''JwtBearer'')'
-                                              - message: requestedTokenType id-jag
+                                              - message: requestedTokenType IdJag
                                                   is only supported by crossAppAccess
                                                 rule: '!has(self.requestedTokenType)
-                                                  || self.requestedTokenType != ''urn:ietf:params:oauth:token-type:id-jag'''
+                                                  || self.requestedTokenType != ''IdJag'''
                                             passthrough:
                                               description: |-
                                                 Passes through an existing token that has been sent by the
@@ -4648,20 +4648,22 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuth 2.0 token exchange
-                                                (RFC 8693) / jwt-bearer (RFC 7523)
-                                                authentication.
+                                              description: OAuthTokenExchange 2.0
+                                                token exchange (RFC 8693) / jwt-bearer
+                                                (RFC 7523) authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
                                                     actor token. TokenExchange grant
                                                     only.
                                                   properties:
-                                                    enforceMayAct:
-                                                      description: Enforce the subject's
-                                                        may_act claim authorizes the
-                                                        actor.
-                                                      type: boolean
+                                                    mayAct:
+                                                      description: may_act claim validation
+                                                        mode. When omitted, may_act
+                                                        is not enforced.
+                                                      enum:
+                                                      - Required
+                                                      type: string
                                                     source:
                                                       description: Where to read the
                                                         actor token. Actor tokens
@@ -4728,24 +4730,23 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   required:
                                                   - source
                                                   type: object
                                                   x-kubernetes-validations:
-                                                  - message: enforceMayAct requires
-                                                      tokenType urn:ietf:params:oauth:token-type:jwt
-                                                    rule: '!has(self.enforceMayAct)
-                                                      || !self.enforceMayAct || (has(self.tokenType)
-                                                      && self.tokenType == ''urn:ietf:params:oauth:token-type:jwt'')'
+                                                  - message: mayAct Required requires
+                                                      tokenType Jwt
+                                                    rule: '!has(self.mayAct) || self.mayAct
+                                                      != ''Required'' || (has(self.tokenType)
+                                                      && self.tokenType == ''Jwt'')'
                                                 additionalParams:
                                                   additionalProperties:
                                                     description: A Common Expression
@@ -4766,63 +4767,6 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
-                                                authorizationLocation:
-                                                  description: |-
-                                                    Where the exchanged token is written to the backend request.
-                                                    Defaults to Authorization: Bearer.
-                                                  properties:
-                                                    cookie:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    header:
-                                                      properties:
-                                                        name:
-                                                          description: |-
-                                                            HTTPHeaderName is the name of an HTTP header.
-
-                                                            Valid values include:
-
-                                                            * "Authorization"
-                                                            * "Set-Cookie"
-
-                                                            Invalid values include:
-
-                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
-                                                                headers are not currently supported by this type.
-                                                              - "/invalid" - "/ " is an invalid character
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                          type: string
-                                                        prefix:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    queryParameter:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: exactly one of the fields
-                                                      in [header queryParameter cookie]
-                                                      must be set
-                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                      == 1'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -4989,13 +4933,70 @@ spec:
                                                   - JwtBearer
                                                   - TokenExchange
                                                   type: string
+                                                location:
+                                                  description: |-
+                                                    Where the exchanged token is written to the backend request.
+                                                    Defaults to Authorization: Bearer.
+                                                  properties:
+                                                    cookie:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    header:
+                                                      properties:
+                                                        name:
+                                                          description: |-
+                                                            HTTPHeaderName is the name of an HTTP header.
+
+                                                            Valid values include:
+
+                                                            * "Authorization"
+                                                            * "Set-Cookie"
+
+                                                            Invalid values include:
+
+                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                                headers are not currently supported by this type.
+                                                              - "/invalid" - "/ " is an invalid character
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                          type: string
+                                                        prefix:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    queryParameter:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: exactly one of the fields
+                                                      in [header queryParameter cookie]
+                                                      must be set
+                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                      == 1'
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
-                                                  - urn:ietf:params:oauth:token-type:access_token
-                                                  - urn:ietf:params:oauth:token-type:id-jag
-                                                  - urn:ietf:params:oauth:token-type:id_token
-                                                  - urn:ietf:params:oauth:token-type:jwt
+                                                  - AccessToken
+                                                  - IdJag
+                                                  - IdToken
+                                                  - Jwt
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -5015,8 +5016,8 @@ spec:
                                                   type: array
                                                 subjectToken:
                                                   description: Subject token / assertion
-                                                    source + type. Defaults to Authorization
-                                                    Bearer, access_token.
+                                                    source and type. Defaults to Authorization
+                                                    Bearer, AccessToken.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -5084,19 +5085,18 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   type: object
                                                 tokenEndpoint:
                                                   description: RFC 8693 token endpoint
-                                                    backend.
+                                                    backend and path.
                                                   properties:
                                                     group:
                                                       default: ""
@@ -5148,6 +5148,12 @@ spec:
                                                       minLength: 1
                                                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                       type: string
+                                                    path:
+                                                      description: Token endpoint
+                                                        path; defaults to "/". Must
+                                                        start with "/".
+                                                      pattern: ^/
+                                                      type: string
                                                     port:
                                                       description: |-
                                                         Port specifies the destination port number to use for this resource.
@@ -5168,12 +5174,6 @@ spec:
                                                     rule: '(size(self.group) == 0
                                                       && self.kind == ''Service'')
                                                       ? has(self.port) : true'
-                                                tokenEndpointPath:
-                                                  description: Token endpoint path;
-                                                    defaults to "/". Must start with
-                                                    "/".
-                                                  pattern: ^/
-                                                  type: string
                                               required:
                                               - tokenEndpoint
                                               type: object
@@ -5187,10 +5187,10 @@ spec:
                                                 rule: '!(has(self.requestedTokenType)
                                                   && has(self.grantType) && self.grantType
                                                   == ''JwtBearer'')'
-                                              - message: requestedTokenType id-jag
+                                              - message: requestedTokenType IdJag
                                                   is only supported by crossAppAccess
                                                 rule: '!has(self.requestedTokenType)
-                                                  || self.requestedTokenType != ''urn:ietf:params:oauth:token-type:id-jag'''
+                                                  || self.requestedTokenType != ''IdJag'''
                                             passthrough:
                                               description: |-
                                                 Passes through an existing token that has been sent by the
@@ -5923,20 +5923,22 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuth 2.0 token exchange
-                                                (RFC 8693) / jwt-bearer (RFC 7523)
-                                                authentication.
+                                              description: OAuthTokenExchange 2.0
+                                                token exchange (RFC 8693) / jwt-bearer
+                                                (RFC 7523) authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
                                                     actor token. TokenExchange grant
                                                     only.
                                                   properties:
-                                                    enforceMayAct:
-                                                      description: Enforce the subject's
-                                                        may_act claim authorizes the
-                                                        actor.
-                                                      type: boolean
+                                                    mayAct:
+                                                      description: may_act claim validation
+                                                        mode. When omitted, may_act
+                                                        is not enforced.
+                                                      enum:
+                                                      - Required
+                                                      type: string
                                                     source:
                                                       description: Where to read the
                                                         actor token. Actor tokens
@@ -6003,24 +6005,23 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   required:
                                                   - source
                                                   type: object
                                                   x-kubernetes-validations:
-                                                  - message: enforceMayAct requires
-                                                      tokenType urn:ietf:params:oauth:token-type:jwt
-                                                    rule: '!has(self.enforceMayAct)
-                                                      || !self.enforceMayAct || (has(self.tokenType)
-                                                      && self.tokenType == ''urn:ietf:params:oauth:token-type:jwt'')'
+                                                  - message: mayAct Required requires
+                                                      tokenType Jwt
+                                                    rule: '!has(self.mayAct) || self.mayAct
+                                                      != ''Required'' || (has(self.tokenType)
+                                                      && self.tokenType == ''Jwt'')'
                                                 additionalParams:
                                                   additionalProperties:
                                                     description: A Common Expression
@@ -6041,63 +6042,6 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
-                                                authorizationLocation:
-                                                  description: |-
-                                                    Where the exchanged token is written to the backend request.
-                                                    Defaults to Authorization: Bearer.
-                                                  properties:
-                                                    cookie:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    header:
-                                                      properties:
-                                                        name:
-                                                          description: |-
-                                                            HTTPHeaderName is the name of an HTTP header.
-
-                                                            Valid values include:
-
-                                                            * "Authorization"
-                                                            * "Set-Cookie"
-
-                                                            Invalid values include:
-
-                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
-                                                                headers are not currently supported by this type.
-                                                              - "/invalid" - "/ " is an invalid character
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                          type: string
-                                                        prefix:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                    queryParameter:
-                                                      properties:
-                                                        name:
-                                                          maxLength: 256
-                                                          minLength: 1
-                                                          type: string
-                                                      required:
-                                                      - name
-                                                      type: object
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: exactly one of the fields
-                                                      in [header queryParameter cookie]
-                                                      must be set
-                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                                      == 1'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -6264,13 +6208,70 @@ spec:
                                                   - JwtBearer
                                                   - TokenExchange
                                                   type: string
+                                                location:
+                                                  description: |-
+                                                    Where the exchanged token is written to the backend request.
+                                                    Defaults to Authorization: Bearer.
+                                                  properties:
+                                                    cookie:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    header:
+                                                      properties:
+                                                        name:
+                                                          description: |-
+                                                            HTTPHeaderName is the name of an HTTP header.
+
+                                                            Valid values include:
+
+                                                            * "Authorization"
+                                                            * "Set-Cookie"
+
+                                                            Invalid values include:
+
+                                                              - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                                                headers are not currently supported by this type.
+                                                              - "/invalid" - "/ " is an invalid character
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                          type: string
+                                                        prefix:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                    queryParameter:
+                                                      properties:
+                                                        name:
+                                                          maxLength: 256
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: exactly one of the fields
+                                                      in [header queryParameter cookie]
+                                                      must be set
+                                                    rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                      == 1'
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
-                                                  - urn:ietf:params:oauth:token-type:access_token
-                                                  - urn:ietf:params:oauth:token-type:id-jag
-                                                  - urn:ietf:params:oauth:token-type:id_token
-                                                  - urn:ietf:params:oauth:token-type:jwt
+                                                  - AccessToken
+                                                  - IdJag
+                                                  - IdToken
+                                                  - Jwt
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -6290,8 +6291,8 @@ spec:
                                                   type: array
                                                 subjectToken:
                                                   description: Subject token / assertion
-                                                    source + type. Defaults to Authorization
-                                                    Bearer, access_token.
+                                                    source and type. Defaults to Authorization
+                                                    Bearer, AccessToken.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -6359,19 +6360,18 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: RFC 8693 token
-                                                        type URN. Empty defaults to
-                                                        access_token.
+                                                      description: OAuth token type.
+                                                        Empty defaults to AccessToken.
                                                       enum:
-                                                      - urn:ietf:params:oauth:token-type:access_token
-                                                      - urn:ietf:params:oauth:token-type:id-jag
-                                                      - urn:ietf:params:oauth:token-type:id_token
-                                                      - urn:ietf:params:oauth:token-type:jwt
+                                                      - AccessToken
+                                                      - IdJag
+                                                      - IdToken
+                                                      - Jwt
                                                       type: string
                                                   type: object
                                                 tokenEndpoint:
                                                   description: RFC 8693 token endpoint
-                                                    backend.
+                                                    backend and path.
                                                   properties:
                                                     group:
                                                       default: ""
@@ -6423,6 +6423,12 @@ spec:
                                                       minLength: 1
                                                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                       type: string
+                                                    path:
+                                                      description: Token endpoint
+                                                        path; defaults to "/". Must
+                                                        start with "/".
+                                                      pattern: ^/
+                                                      type: string
                                                     port:
                                                       description: |-
                                                         Port specifies the destination port number to use for this resource.
@@ -6443,12 +6449,6 @@ spec:
                                                     rule: '(size(self.group) == 0
                                                       && self.kind == ''Service'')
                                                       ? has(self.port) : true'
-                                                tokenEndpointPath:
-                                                  description: Token endpoint path;
-                                                    defaults to "/". Must start with
-                                                    "/".
-                                                  pattern: ^/
-                                                  type: string
                                               required:
                                               - tokenEndpoint
                                               type: object
@@ -6462,10 +6462,10 @@ spec:
                                                 rule: '!(has(self.requestedTokenType)
                                                   && has(self.grantType) && self.grantType
                                                   == ''JwtBearer'')'
-                                              - message: requestedTokenType id-jag
+                                              - message: requestedTokenType IdJag
                                                   is only supported by crossAppAccess
                                                 rule: '!has(self.requestedTokenType)
-                                                  || self.requestedTokenType != ''urn:ietf:params:oauth:token-type:id-jag'''
+                                                  || self.requestedTokenType != ''IdJag'''
                                             passthrough:
                                               description: |-
                                                 Passes through an existing token that has been sent by the
@@ -7464,17 +7464,19 @@ spec:
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                             == 1'
                       oauth:
-                        description: OAuth 2.0 token exchange (RFC 8693) / jwt-bearer
-                          (RFC 7523) authentication.
+                        description: OAuthTokenExchange 2.0 token exchange (RFC 8693)
+                          / jwt-bearer (RFC 7523) authentication.
                         properties:
                           actorToken:
                             description: RFC 8693 delegation actor token. TokenExchange
                               grant only.
                             properties:
-                              enforceMayAct:
-                                description: Enforce the subject's may_act claim authorizes
-                                  the actor.
-                                type: boolean
+                              mayAct:
+                                description: may_act claim validation mode. When omitted,
+                                  may_act is not enforced.
+                                enum:
+                                - Required
+                                type: string
                               source:
                                 description: Where to read the actor token. Actor
                                   tokens have no default source.
@@ -7537,21 +7539,20 @@ spec:
                                   rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                     == 1'
                               tokenType:
-                                description: RFC 8693 token type URN. Empty defaults
-                                  to access_token.
+                                description: OAuth token type. Empty defaults to AccessToken.
                                 enum:
-                                - urn:ietf:params:oauth:token-type:access_token
-                                - urn:ietf:params:oauth:token-type:id-jag
-                                - urn:ietf:params:oauth:token-type:id_token
-                                - urn:ietf:params:oauth:token-type:jwt
+                                - AccessToken
+                                - IdJag
+                                - IdToken
+                                - Jwt
                                 type: string
                             required:
                             - source
                             type: object
                             x-kubernetes-validations:
-                            - message: enforceMayAct requires tokenType urn:ietf:params:oauth:token-type:jwt
-                              rule: '!has(self.enforceMayAct) || !self.enforceMayAct
-                                || (has(self.tokenType) && self.tokenType == ''urn:ietf:params:oauth:token-type:jwt'')'
+                            - message: mayAct Required requires tokenType Jwt
+                              rule: '!has(self.mayAct) || self.mayAct != ''Required''
+                                || (has(self.tokenType) && self.tokenType == ''Jwt'')'
                           additionalParams:
                             additionalProperties:
                               description: A Common Expression Language (CEL) expression.
@@ -7569,62 +7570,6 @@ spec:
                             maxItems: 64
                             minItems: 1
                             type: array
-                          authorizationLocation:
-                            description: |-
-                              Where the exchanged token is written to the backend request.
-                              Defaults to Authorization: Bearer.
-                            properties:
-                              cookie:
-                                properties:
-                                  name:
-                                    maxLength: 256
-                                    minLength: 1
-                                    type: string
-                                required:
-                                - name
-                                type: object
-                              header:
-                                properties:
-                                  name:
-                                    description: |-
-                                      HTTPHeaderName is the name of an HTTP header.
-
-                                      Valid values include:
-
-                                      * "Authorization"
-                                      * "Set-Cookie"
-
-                                      Invalid values include:
-
-                                        - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
-                                          headers are not currently supported by this type.
-                                        - "/invalid" - "/ " is an invalid character
-                                    maxLength: 256
-                                    minLength: 1
-                                    pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                    type: string
-                                  prefix:
-                                    maxLength: 256
-                                    minLength: 1
-                                    type: string
-                                required:
-                                - name
-                                type: object
-                              queryParameter:
-                                properties:
-                                  name:
-                                    maxLength: 256
-                                    minLength: 1
-                                    type: string
-                                required:
-                                - name
-                                type: object
-                            type: object
-                            x-kubernetes-validations:
-                            - message: exactly one of the fields in [header queryParameter
-                                cookie] must be set
-                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
-                                == 1'
                           cache:
                             description: Response cache configuration.
                             properties:
@@ -7763,13 +7708,69 @@ spec:
                             - JwtBearer
                             - TokenExchange
                             type: string
+                          location:
+                            description: |-
+                              Where the exchanged token is written to the backend request.
+                              Defaults to Authorization: Bearer.
+                            properties:
+                              cookie:
+                                properties:
+                                  name:
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              header:
+                                properties:
+                                  name:
+                                    description: |-
+                                      HTTPHeaderName is the name of an HTTP header.
+
+                                      Valid values include:
+
+                                      * "Authorization"
+                                      * "Set-Cookie"
+
+                                      Invalid values include:
+
+                                        - ":method" - ":" is an invalid character. This means that HTTP/2 pseudo
+                                          headers are not currently supported by this type.
+                                        - "/invalid" - "/ " is an invalid character
+                                    maxLength: 256
+                                    minLength: 1
+                                    pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                    type: string
+                                  prefix:
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              queryParameter:
+                                properties:
+                                  name:
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                            type: object
+                            x-kubernetes-validations:
+                            - message: exactly one of the fields in [header queryParameter
+                                cookie] must be set
+                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                == 1'
                           requestedTokenType:
                             description: RFC 8693 requested_token_type.
                             enum:
-                            - urn:ietf:params:oauth:token-type:access_token
-                            - urn:ietf:params:oauth:token-type:id-jag
-                            - urn:ietf:params:oauth:token-type:id_token
-                            - urn:ietf:params:oauth:token-type:jwt
+                            - AccessToken
+                            - IdJag
+                            - IdToken
+                            - Jwt
                             type: string
                           resources:
                             description: Resources sent to the token endpoint.
@@ -7786,8 +7787,8 @@ spec:
                             minItems: 1
                             type: array
                           subjectToken:
-                            description: Subject token / assertion source + type.
-                              Defaults to Authorization Bearer, access_token.
+                            description: Subject token / assertion source and type.
+                              Defaults to Authorization Bearer, AccessToken.
                             properties:
                               source:
                                 description: Where to read the token. CEL `expression`
@@ -7851,17 +7852,16 @@ spec:
                                   rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                     == 1'
                               tokenType:
-                                description: RFC 8693 token type URN. Empty defaults
-                                  to access_token.
+                                description: OAuth token type. Empty defaults to AccessToken.
                                 enum:
-                                - urn:ietf:params:oauth:token-type:access_token
-                                - urn:ietf:params:oauth:token-type:id-jag
-                                - urn:ietf:params:oauth:token-type:id_token
-                                - urn:ietf:params:oauth:token-type:jwt
+                                - AccessToken
+                                - IdJag
+                                - IdToken
+                                - Jwt
                                 type: string
                             type: object
                           tokenEndpoint:
-                            description: RFC 8693 token endpoint backend.
+                            description: RFC 8693 token endpoint backend and path.
                             properties:
                               group:
                                 default: ""
@@ -7912,6 +7912,11 @@ spec:
                                 minLength: 1
                                 pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                 type: string
+                              path:
+                                description: Token endpoint path; defaults to "/".
+                                  Must start with "/".
+                                pattern: ^/
+                                type: string
                               port:
                                 description: |-
                                   Port specifies the destination port number to use for this resource.
@@ -7930,11 +7935,6 @@ spec:
                             - message: Must have port for Service reference
                               rule: '(size(self.group) == 0 && self.kind == ''Service'')
                                 ? has(self.port) : true'
-                          tokenEndpointPath:
-                            description: Token endpoint path; defaults to "/". Must
-                              start with "/".
-                            pattern: ^/
-                            type: string
                         required:
                         - tokenEndpoint
                         type: object
@@ -7946,10 +7946,9 @@ spec:
                             grantType
                           rule: '!(has(self.requestedTokenType) && has(self.grantType)
                             && self.grantType == ''JwtBearer'')'
-                        - message: requestedTokenType id-jag is only supported by
-                            crossAppAccess
+                        - message: requestedTokenType IdJag is only supported by crossAppAccess
                           rule: '!has(self.requestedTokenType) || self.requestedTokenType
-                            != ''urn:ietf:params:oauth:token-type:id-jag'''
+                            != ''IdJag'''
                       passthrough:
                         description: |-
                           Passes through an existing token that has been sent by the

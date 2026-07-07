@@ -1586,7 +1586,7 @@ binds:
       - host: 127.0.0.1:8080
         policies:
           backendAuth:
-            oauth:
+            oauthTokenExchange:
               host: 127.0.0.1:9000
               clientAuth:
                 clientId: gateway-client

@@ -1352,9 +1352,9 @@ type BackendAuth struct {
 	// +optional
 	GCP *GcpAuth `json:"gcp,omitempty"`
 
-	// OAuth 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
+	// OAuthTokenExchange 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
 	// +optional
-	OAuth *OAuthTokenExchange `json:"oauth,omitempty"`
+	OAuthTokenExchange *OAuthTokenExchange `json:"oauth,omitempty"`
 
 	// Where backend credentials are inserted.
 	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
@@ -1366,22 +1366,17 @@ type BackendAuth struct {
 // OAuth token exchange settings for backend authentication.
 // +kubebuilder:validation:XValidation:rule="!(has(self.actorToken) && has(self.grantType) && self.grantType == 'JwtBearer')",message="actorToken is only valid with TokenExchange grantType"
 // +kubebuilder:validation:XValidation:rule="!(has(self.requestedTokenType) && has(self.grantType) && self.grantType == 'JwtBearer')",message="requestedTokenType is only valid with TokenExchange grantType"
-// +kubebuilder:validation:XValidation:rule="!has(self.requestedTokenType) || self.requestedTokenType != 'urn:ietf:params:oauth:token-type:id-jag'",message="requestedTokenType id-jag is only supported by crossAppAccess"
+// +kubebuilder:validation:XValidation:rule="!has(self.requestedTokenType) || self.requestedTokenType != 'IdJag'",message="requestedTokenType IdJag is only supported by crossAppAccess"
 type OAuthTokenExchange struct {
-	// RFC 8693 token endpoint backend.
+	// RFC 8693 token endpoint backend and path.
 	// +required
-	TokenEndpoint gwv1.BackendObjectReference `json:"tokenEndpoint"`
-
-	// Token endpoint path; defaults to "/". Must start with "/".
-	// +kubebuilder:validation:Pattern=`^/`
-	// +optional
-	TokenEndpointPath *string `json:"tokenEndpointPath,omitempty"`
+	TokenEndpoint OAuthTokenEndpoint `json:"tokenEndpoint"`
 
 	// RFC followed by the request. Defaults to TokenExchange (RFC 8693).
 	// +optional
 	GrantType *OAuthGrantType `json:"grantType,omitempty"`
 
-	// Subject token / assertion source + type. Defaults to Authorization Bearer, access_token.
+	// Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
 	// +optional
 	SubjectToken *OAuthTokenSpec `json:"subjectToken,omitempty"`
 
@@ -1423,11 +1418,21 @@ type OAuthTokenExchange struct {
 	// Where the exchanged token is written to the backend request.
 	// Defaults to Authorization: Bearer.
 	// +optional
-	AuthorizationLocation *AuthorizationLocation `json:"authorizationLocation,omitempty"`
+	Location *AuthorizationLocation `json:"location,omitempty"`
 
 	// Response cache configuration.
 	// +optional
 	Cache *OAuthTokenCache `json:"cache,omitempty"`
+}
+
+// OAuthTokenEndpoint references a token endpoint backend and optional path.
+type OAuthTokenEndpoint struct {
+	gwv1.BackendObjectReference `json:",inline"`
+
+	// Token endpoint path; defaults to "/". Must start with "/".
+	// +kubebuilder:validation:Pattern=`^/`
+	// +optional
+	Path *string `json:"path,omitempty"`
 }
 
 // +k8s:enum
@@ -1443,34 +1448,42 @@ type OAuthTokenSpec struct {
 	// +optional
 	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
 
-	// RFC 8693 token type URN. Empty defaults to access_token.
+	// OAuth token type. Empty defaults to AccessToken.
 	// +optional
 	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!has(self.enforceMayAct) || !self.enforceMayAct || (has(self.tokenType) && self.tokenType == 'urn:ietf:params:oauth:token-type:jwt')",message="enforceMayAct requires tokenType urn:ietf:params:oauth:token-type:jwt"
+// +kubebuilder:validation:XValidation:rule="!has(self.mayAct) || self.mayAct != 'Required' || (has(self.tokenType) && self.tokenType == 'Jwt')",message="mayAct Required requires tokenType Jwt"
 type OAuthActorToken struct {
 	// Where to read the actor token. Actor tokens have no default source.
 	// +required
 	Source AuthorizationExtractionLocation `json:"source"`
 
-	// RFC 8693 token type URN. Empty defaults to access_token.
+	// OAuth token type. Empty defaults to AccessToken.
 	// +optional
 	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
 
-	// Enforce the subject's may_act claim authorizes the actor.
+	// may_act claim validation mode. When omitted, may_act is not enforced.
 	// +optional
-	EnforceMayAct *bool `json:"enforceMayAct,omitempty"`
+	MayAct *OAuthMayActValidationMode `json:"mayAct,omitempty"`
 }
 
 // +k8s:enum
 type OAuthTokenType string
 
 const (
-	OAuthTokenTypeAccessToken OAuthTokenType = "urn:ietf:params:oauth:token-type:access_token" // #nosec G101
-	OAuthTokenTypeJWT         OAuthTokenType = "urn:ietf:params:oauth:token-type:jwt"          // #nosec G101
-	OAuthTokenTypeIDToken     OAuthTokenType = "urn:ietf:params:oauth:token-type:id_token"     // #nosec G101
-	OAuthTokenTypeIDJAG       OAuthTokenType = "urn:ietf:params:oauth:token-type:id-jag"       // #nosec G101
+	OAuthTokenTypeAccessToken OAuthTokenType = "AccessToken"
+	OAuthTokenTypeJWT         OAuthTokenType = "Jwt"
+	OAuthTokenTypeIDToken     OAuthTokenType = "IdToken"
+	OAuthTokenTypeIDJAG       OAuthTokenType = "IdJag"
+)
+
+// +k8s:enum
+type OAuthMayActValidationMode string
+
+const (
+	// Require the subject's may_act claim to authorize the actor.
+	OAuthMayActValidationModeRequired OAuthMayActValidationMode = "Required"
 )
 
 // +k8s:enum
