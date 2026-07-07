@@ -1443,8 +1443,10 @@ type AwsAssumeRole struct {
 	Tags []AwsSessionTag `json:"tags,omitempty"`
 }
 
-// AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
-// for cost attribution.
+// AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
+// attribution. Exactly one of value and expression must be set.
+//
+// +kubebuilder:validation:XValidation:rule="has(self.value) != has(self.expression)",message="exactly one of value or expression must be set"
 type AwsSessionTag struct {
 	// Key is the tag key.
 	//
@@ -1453,11 +1455,19 @@ type AwsSessionTag struct {
 	// +required
 	Key string `json:"key"`
 
-	// Value is the tag value.
+	// Value is a static tag value.
 	//
+	// +optional
 	// +kubebuilder:validation:MaxLength=256
-	// +required
-	Value string `json:"value"`
+	Value *string `json:"value,omitempty"`
+
+	// Expression is a CEL expression evaluated against each request to produce
+	// the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
+	// expression does not produce a valid tag value at request time, the request
+	// is rejected.
+	//
+	// +optional
+	Expression *CELExpression `json:"expression,omitempty"`
 }
 
 // AzureAuth configures authentication to Azure services. At most one explicit

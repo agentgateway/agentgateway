@@ -43,10 +43,14 @@ func translateAwsSessionTags(tags []agentgateway.AwsSessionTag) []*api.AwsSessio
 		return nil
 	}
 	return slices.Map(tags, func(t agentgateway.AwsSessionTag) *api.AwsSessionTag {
-		return &api.AwsSessionTag{
-			Key:   t.Key,
-			Value: t.Value,
+		out := &api.AwsSessionTag{Key: t.Key}
+		if t.Value != nil {
+			out.Value = *t.Value
 		}
+		if t.Expression != nil {
+			out.Expression = string(*t.Expression)
+		}
+		return out
 	})
 }
 
