@@ -134,9 +134,11 @@ To watch the two legs (and see why either side rejects a request), prefix your r
   Getting this wrong is the #1 cause of Auth0 rejecting the ID-JAG on leg 2.
 - **Export the vars in the same shell** that runs `cargo run`. Config load fails with
   *"environment variable not found"* if any is unset.
-- **TLS on every HTTPS hop.** Okta, Auth0, and the resource API are all HTTPS on `:443`, so the config
-  sets `backendTLS: {}` in **three** places (both exchange endpoints + the route-level backend). A
-  missing one yields *"The plain HTTP request was sent to HTTPS port"*.
+- **TLS: two styles, by position.** The two `crossAppAccess` exchange endpoints use the `https://host`
+  form (`https://$OKTA_DOMAIN`, `https://$AUTH0_DOMAIN`), which auto-configures TLS — no `:443` +
+  `backendTLS`. The **route backend** (the resource API) takes a plain `host:port`, so HTTPS there
+  still needs `$RESOURCE_API_HOST:443` plus a route-level `backendTLS: {}`. Get either wrong and you
+  hit *"The plain HTTP request was sent to HTTPS port"*.
 - **The `resource` binding.** Per the ID-JAG draft (RFC 8707), `resource` is sent on leg 1 (to Okta)
   and embedded in the ID-JAG; leg 2 sends only the assertion + scope. Set `resources` to your Auth0
   API Identifier to bind the token's target, or omit it and rely on the Auth0 API's Default Audience.

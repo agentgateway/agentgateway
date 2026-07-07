@@ -79,10 +79,12 @@ that for an access token at `auth.resource.xaa.dev`, and calls the Todo0 API at
 
 - **Export the vars in the same shell** that runs `cargo run` (and `get-id-token.sh`). Config load
   fails with *"environment variable not found"* if any of the three is unset.
-- **TLS on every hop.** All xaa.dev endpoints are HTTPS on `:443`, but agentgateway does not
-  auto-enable TLS for `:443` here — `gateway.yaml` sets `backendTLS: {}` in **three** places:
-  `identityProvider`, `resourceAuthorizationServer`, and the route-level policy for the resource
-  API backend. Missing any one yields nginx's *"The plain HTTP request was sent to HTTPS port"*.
+- **TLS: two styles, by position.** The two `crossAppAccess` exchange endpoints
+  (`identityProvider`, `resourceAuthorizationServer`) use the `https://host` form (e.g.
+  `https://idp.xaa.dev`), which auto-configures TLS — no `:443` + `backendTLS`. The **route
+  backend** (the resource API) takes a plain `host:port` with no scheme, so HTTPS there still
+  needs `api.resource.xaa.dev:443` plus a route-level `backendTLS: {}`. Get either wrong and
+  you hit *"The plain HTTP request was sent to HTTPS port"*.
 - **Two different clients / secrets.** Leg 1 uses the requesting-app client; leg 2 uses the
   resource client (`...-at-todo0`). Mixing them up gives `401 invalid_client` on leg 2.
 - **`crossAppAccess.resources` is set here** (unlike the Keycloak demo): xaa.dev expects the

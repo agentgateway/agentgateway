@@ -20,9 +20,9 @@ binds:
   - protocol: HTTP
     routes:
     - policies:
-        # TLS to the upstream resource API (api.resource.xaa.dev is HTTPS). This is the
-        # route backend connection (leg 4), separate from the per-endpoint TLS on the
-        # exchange legs above.
+        # TLS to the upstream resource API. Route backends take a `host:port` (no scheme),
+        # so HTTPS on the backend still needs an explicit backendTLS (unlike the crossAppAccess
+        # endpoints below, which accept the `https://` host form).
         backendTLS: {}
 
         # Validate the inbound IdenX ID token. Its audience is the registered client_id.
@@ -37,21 +37,17 @@ binds:
           crossAppAccess:
             # Leg 1 — IdenX token endpoint (requesting-app client credentials).
             identityProvider:
-              host: idp.xaa.dev:443
+              # `https://` host = HTTPS with TLS auto-configured (no :443 + backendTLS needed).
+              host: https://idp.xaa.dev
               tokenEndpointPath: /token
-              # xaa.dev endpoints are HTTPS; enable TLS to the token endpoint.
-              policies:
-                backendTLS: {}
               clientAuth:
                 clientId: $XAA_CLIENT_ID
                 method: clientSecretPost
                 clientSecret: $XAA_IDP_SECRET
             # Leg 2 — resource authorization server (resource-client credentials).
             resourceAuthorizationServer:
-              host: auth.resource.xaa.dev:443
+              host: https://auth.resource.xaa.dev
               tokenEndpointPath: /token
-              policies:
-                backendTLS: {}
               clientAuth:
                 clientId: ${XAA_CLIENT_ID}-at-todo0
                 method: clientSecretPost
