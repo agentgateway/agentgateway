@@ -1,3 +1,4 @@
+mod apps;
 pub(crate) mod auth;
 pub(crate) mod guardrails;
 mod handler;

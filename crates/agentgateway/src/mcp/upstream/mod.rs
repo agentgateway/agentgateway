@@ -4,12 +4,13 @@ mod sse;
 mod stdio;
 mod streamablehttp;
 
+use std::collections::HashMap;
 use std::io;
 
 use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 pub use openapi::ParseError as OpenAPIParseError;
-use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
+use rmcp::model::{ClientNotification, ClientRequest, ExtensionCapabilities, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::common::http_header::HEADER_SESSION_ID;
 use thiserror::Error;
@@ -258,6 +259,10 @@ pub(crate) struct UpstreamGroup {
 	client: PolicyClient,
 	by_name: IndexMap<Strng, Arc<upstream::Upstream>>,
 
+	// per-target set of capabilities; we record the capabilites from a legacy
+	// target's initialize response so a modern client can see them in discover.
+	extensions: RwLock<HashMap<Strng, ExtensionCapabilities>>,
+
 	// If we have 1 target only, we don't prefix everything with 'target_'.
 	// Else this is empty
 	pub default_target_name: Option<String>,
@@ -285,6 +290,7 @@ impl UpstreamGroup {
 			backend,
 			client,
 			by_name: IndexMap::new(),
+			extensions: RwLock::new(HashMap::new()),
 			default_target_name,
 			is_multiplexing,
 		};
@@ -341,6 +347,41 @@ impl UpstreamGroup {
 
 	pub(crate) fn stateful(&self) -> bool {
 		self.backend.stateful
+	}
+
+	pub(crate) fn record_extensions(&self, target: &str, extensions: Option<&ExtensionCapabilities>) {
+		let Some(ext) = extensions else {
+			return;
+		};
+		if ext.is_empty() {
+			return;
+		}
+		let mut store = self.extensions.write().expect("write lock");
+		store.insert(strng::new(target), ext.clone());
+	}
+
+	/// merged view of all target's per-extension capabilities, combining the
+	/// results in hand from the current fanout with those recorded at initialize
+	pub(crate) fn merged_extensions(
+		&self,
+		fresh: &HashMap<Strng, ExtensionCapabilities>,
+	) -> Option<ExtensionCapabilities> {
+		let store = self.extensions.read().expect("read lock");
+		let mut merged = ExtensionCapabilities::new();
+		// in config order, first target takes precedence if there is overlap
+		// TODO should we warn on divergence? or merge/intersect the capabilities?
+		for name in self.by_name.keys() {
+			if let Some(ext) = fresh.get(name).or_else(|| store.get(name)) {
+				for (k, v) in ext {
+					merged.entry(k.clone()).or_insert_with(|| v.clone());
+				}
+			}
+		}
+		if merged.is_empty() {
+			None
+		} else {
+			Some(merged)
+		}
 	}
 
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {

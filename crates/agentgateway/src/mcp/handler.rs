@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use agent_core::prelude::AssertSize;
+use agent_core::prelude::{AssertSize, Strng};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
 use http::StatusCode;
@@ -10,16 +10,18 @@ use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	CacheScope, ClientNotification, ClientRequest, DiscoverResult, Implementation,
-	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
-	ListResourcesResult, ListToolsResult, Meta, ProtocolVersion, RequestId, ServerCapabilities,
-	ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerResult, SubscriptionsListenResult,
+	CacheScope, ClientNotification, ClientRequest, DiscoverResult, ExtensionCapabilities,
+	Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
+	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Meta, ProtocolVersion,
+	RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification,
+	ServerResult, SubscriptionsListenResult,
 };
 use tracing::{debug, warn};
 
 use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
+use crate::mcp::apps;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
@@ -41,6 +43,11 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 
 fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
 	if default_target_name.is_none() {
+		// Apps UI resources must keep their ui:// scheme so hosts still
+		// recognize them; the target is carried in the authority instead.
+		if let Some(rewritten) = apps::encode_ui_uri(target, uri) {
+			return rewritten;
+		}
 		// Transform URI to service+scheme:// format for multiplexing
 		// e.g., "http://example.com" becomes "service+http://example.com"
 		if let Some(scheme_end) = uri.find("://") {
@@ -55,6 +62,7 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 	}
 }
 
+// TODO should we also rewrite the URL in resources/read response `.contents[].uri`?
 fn rewrite_resource_update_message(
 	default_target_name: Option<&String>,
 	target: &str,
@@ -135,11 +143,32 @@ impl Relay {
 		}
 	}
 
-	fn rewrite_outbound_server_messages(&self, target: &str, stream: Messages) -> Messages {
+	fn rewrite_outbound_server_messages(
+		&self,
+		target: &str,
+		stream: Messages,
+		cel: CelExecWrapper,
+	) -> Messages {
 		let target = target.to_string();
 		let default_target_name = self.upstreams.default_target_name.clone();
+		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
-			rewrite_resource_update_message(default_target_name.as_ref(), &target, message)
+			let message = rewrite_resource_update_message(default_target_name.as_ref(), &target, message);
+
+			let mut resource_allowed = |uri: &str| {
+				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against
+				// these UI resources
+				policies.validate(
+					&rbac::ResourceType::Resource(rbac::ResourceId::new(target.clone(), uri.to_string())),
+					&cel,
+				)
+			};
+			apps::rewrite_tool_list_ui_meta(
+				default_target_name.is_none(),
+				&target,
+				&mut resource_allowed,
+				message,
+			)
 		})
 	}
 
@@ -159,10 +188,19 @@ impl Relay {
 	}
 
 	/// Reverse of `resource_uri`: extracts the service name and original URI from a
-	/// multiplexed URI of the form `service+scheme://rest`.
+	/// multiplexed URI of the form `service+scheme://rest` (or `ui://service+rest`
+	/// for Apps UI resources).
 	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
 		if let Some(default) = self.upstreams.default_target_name.as_ref() {
 			Ok((default.as_str(), uri.to_string()))
+		} else if apps::is_ui_uri(uri) {
+			let (service_name, original_uri) = apps::decode_ui_uri(uri)
+				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
+			let validated_name = self
+				.upstreams
+				.get_name(service_name)
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+			Ok((validated_name, original_uri))
 		} else {
 			// URI format: "service+scheme://rest"
 			let plus_pos = uri
@@ -170,6 +208,12 @@ impl Relay {
 				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
 			let service_name = &uri[..plus_pos];
 			let original_uri = &uri[plus_pos + 1..];
+			// ui:// resources use the ui://service+rest namespace exclusively
+			if apps::is_ui_uri(original_uri) {
+				return Err(UpstreamError::InvalidRequest(
+					"invalid resource URI".to_string(),
+				));
+			}
 			// Validate that the extracted service name corresponds to a known upstream
 			let validated_name = self
 				.upstreams
@@ -376,19 +420,29 @@ impl Relay {
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
 		let resource_subscribe = self.upstreams.stateful();
+		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
 			if !multiplexing {
 				// Happy case: we can forward everything
-				let res = s.into_iter().next().and_then(|(_, r)| match r {
-					ServerResult::InitializeResult(ir) => Some(ir),
+				let res = s.into_iter().next().and_then(|(name, r)| match r {
+					ServerResult::InitializeResult(ir) => Some((name, ir)),
 					_ => None,
 				});
-				if let Some(ir) = res {
+				if let Some((name, ir)) = res {
+					upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
 					return Ok(ir.into());
 				}
 				// If we got here in FailOpen mode, it means the only target failed.
 				// Return a default info response to keep the client session alive.
-				return Ok(Self::get_info(pv, resource_subscribe, Vec::new()).into());
+				return Ok(
+					Self::get_info(
+						pv,
+						resource_subscribe,
+						Vec::new(),
+						upstreams.merged_extensions(&HashMap::new()),
+					)
+					.into(),
+				);
 			}
 
 			// Multiplexing is more complex. We need to find the lowest protocol version
@@ -398,6 +452,7 @@ impl Relay {
 
 			for (server_name, v) in s {
 				if let ServerResult::InitializeResult(r) = v {
+					upstreams.record_extensions(server_name.as_str(), r.capabilities.extensions.as_ref());
 					if r.protocol_version.to_string() < lowest_version.to_string() {
 						lowest_version = r.protocol_version;
 					}
@@ -409,12 +464,21 @@ impl Relay {
 				}
 			}
 
-			Ok(Self::get_info(lowest_version, resource_subscribe, upstream_instructions).into())
+			Ok(
+				Self::get_info(
+					lowest_version,
+					resource_subscribe,
+					upstream_instructions,
+					upstreams.merged_extensions(&HashMap::new()),
+				)
+				.into(),
+			)
 		})
 	}
 
 	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
 		let resource_subscribe = self.upstreams.stateful();
+		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
 			if !multiplexing {
 				let res = s.into_iter().next().and_then(|(_, r)| match r {
@@ -426,15 +490,30 @@ impl Relay {
 					// Gateway routing/backend config can change without client invalidation.
 					return Ok(dr.with_cache(0, CacheScope::Private).into());
 				}
+
 				// If we got here in FailOpen mode, it means the only target failed.
 				// Return a default discovery response so clients can continue negotiation.
-				return Ok(Self::get_discovery(resource_subscribe, Vec::new()).into());
+				// Include the recorded extensions from initialize responses.
+				return Ok(
+					Self::get_discovery(
+						resource_subscribe,
+						Vec::new(),
+						upstreams.merged_extensions(&HashMap::new()),
+					)
+					.into(),
+				);
 			}
 
 			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
 			let mut supported_versions = ProtocolVersion::KNOWN_VERSIONS.to_vec();
+			let mut upstream_extensions: HashMap<Strng, ExtensionCapabilities> = HashMap::new();
 			for (server_name, v) in s {
-				if let ServerResult::DiscoverResult(r) = v {
+				if let ServerResult::DiscoverResult(mut r) = v {
+					if let Some(ext) = r.capabilities.extensions.take()
+						&& !ext.is_empty()
+					{
+						upstream_extensions.insert(server_name.clone(), ext);
+					}
 					supported_versions.retain(|version| r.supported_versions.contains(version));
 					if let Some(instructions) = r.instructions
 						&& !instructions.is_empty()
@@ -444,7 +523,11 @@ impl Relay {
 				}
 			}
 
-			let mut discover = Self::get_discovery(resource_subscribe, upstream_instructions);
+			let mut discover = Self::get_discovery(
+				resource_subscribe,
+				upstream_instructions,
+				upstreams.merged_extensions(&upstream_extensions),
+			);
 			discover.supported_versions = supported_versions;
 			Ok(discover.into())
 		})
@@ -597,9 +680,11 @@ impl Relay {
 			)));
 		};
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
+		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(us.generic_stream(r, &ctx).assert_size::<{ 3 * 1024 }>()).await?,
+			cel,
 		);
 
 		match guardrails {
@@ -662,10 +747,11 @@ impl Relay {
 
 		let fut_results = futures::future::join_all(futs).await;
 
+		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
-					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
 					streams.push((name, s));
 				},
 				Err(e) => {
@@ -803,7 +889,7 @@ impl Relay {
 		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
-					let mut s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					let mut s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
 					if let Some(subscription_id) = subscription_id.clone() {
 						s = s.map_server_messages(move |message| {
 							set_subscription_ack_id(message, &subscription_id)
@@ -901,6 +987,7 @@ impl Relay {
 		pv: ProtocolVersion,
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
+		extensions: Option<ExtensionCapabilities>,
 	) -> ServerInfo {
 		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
@@ -915,7 +1002,9 @@ impl Relay {
 			if resource_subscribe {
 				builder = builder.enable_resources_subscribe();
 			}
-			builder.build()
+			let mut capabilities = builder.build();
+			capabilities.extensions = extensions;
+			capabilities
 		};
 		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
 		let instructions = if upstream_instructions.is_empty() {
@@ -939,11 +1028,13 @@ impl Relay {
 	fn get_discovery(
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
+		extensions: Option<ExtensionCapabilities>,
 	) -> DiscoverResult {
 		let info = Self::get_info(
 			ProtocolVersion::default(),
 			resource_subscribe,
 			upstream_instructions,
+			extensions,
 		);
 		DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
 			.with_server_info(info.server_info)

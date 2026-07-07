@@ -228,6 +228,273 @@ async fn stream_to_multiplex_resources() {
 	);
 }
 
+const UI_EXTENSION_ID: &str = "io.modelcontextprotocol/ui";
+
+fn multiplex_apps_proxy(
+	apps: &MockServer,
+	other: &MockServer,
+	policies: Vec<BackendTrafficPolicy>,
+) -> TestBind {
+	setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_policies(
+			"mcp",
+			vec![("a", apps.addr, false), ("b", other.addr, false)],
+			true,
+			policies,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")))
+}
+
+#[tokio::test]
+async fn apps_ui_meta_and_resources_multiplexed() {
+	let apps = mock_apps_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let t = multiplex_apps_proxy(&apps, &other, vec![]);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client_with_ui(io).await;
+
+	// tools/list: the UI entrypoint is rewritten into the mux namespace
+	let tools = client.list_tools(None).await.unwrap();
+	let show = tools
+		.tools
+		.iter()
+		.find(|t| t.name == "a_show_dashboard")
+		.expect("show_dashboard tool should be listed");
+	let ui = show
+		.meta
+		.as_ref()
+		.and_then(|m| m.0.get("ui"))
+		.expect("tool should keep _meta.ui");
+	assert_eq!(
+		ui.get("resourceUri").and_then(|v| v.as_str()),
+		Some("ui://a+apps-mock/dashboard.html")
+	);
+	// The deprecated flat key is rewritten in tandem
+	assert_eq!(
+		show
+			.meta
+			.as_ref()
+			.and_then(|m| m.0.get("ui/resourceUri"))
+			.and_then(|v| v.as_str()),
+		Some("ui://a+apps-mock/dashboard.html")
+	);
+
+	// resources/list: uri rewritten into the mux namespace
+	let resources = client.list_resources(None).await.unwrap();
+	assert!(
+		resources
+			.resources
+			.iter()
+			.any(|r| r.uri == "ui://a+apps-mock/dashboard.html"),
+		"dashboard resource should be listed with rewritten uri"
+	);
+
+	// resources/read: the rewritten uri resolves through the mux
+	let read = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"ui://a+apps-mock/dashboard.html",
+		))
+		.await
+		.unwrap();
+	let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read.contents[0] else {
+		panic!("expected text contents, got {:?}", read.contents);
+	};
+	assert_eq!(text, appsmockserver::DASHBOARD_HTML);
+
+	// Hostile client URIs are rejected
+	for bad in [
+		"ui://apps-mock/dashboard.html",
+		"ui://nope+apps-mock/dashboard.html",
+		"a+ui://apps-mock/dashboard.html",
+	] {
+		assert!(
+			client
+				.read_resource(rmcp::model::ReadResourceRequestParams::new(bad))
+				.await
+				.is_err(),
+			"expected read of {bad:?} to fail"
+		);
+	}
+}
+
+#[tokio::test]
+async fn apps_initialize_advertises_upstream_ui_extension() {
+	let apps = mock_apps_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let t = multiplex_apps_proxy(&apps, &other, vec![]);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client_with_ui(io).await;
+
+	let peer_info = client.peer_info().unwrap();
+	let extensions = peer_info
+		.capabilities
+		.extensions
+		.as_ref()
+		.expect("merged initialize should advertise upstream extensions");
+	assert_eq!(
+		serde_json::to_value(extensions.get(UI_EXTENSION_ID).unwrap()).unwrap(),
+		serde_json::json!({"mimeTypes": ["text/html;profile=mcp-app"]})
+	);
+}
+
+#[tokio::test]
+async fn apps_single_target_passthrough_keeps_upstream_uris() {
+	let apps = mock_apps_streamable_http_server().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(apps.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(apps.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = mcp_streamable_client_with_ui(io).await;
+
+	let tools = client.list_tools(None).await.unwrap();
+	let show = tools
+		.tools
+		.iter()
+		.find(|t| t.name == "show_dashboard")
+		.expect("show_dashboard tool should be listed");
+	assert_eq!(
+		show
+			.meta
+			.as_ref()
+			.and_then(|m| m.0.get("ui"))
+			.and_then(|ui| ui.get("resourceUri"))
+			.and_then(|v| v.as_str()),
+		Some(appsmockserver::DASHBOARD_URI)
+	);
+
+	let read = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			appsmockserver::DASHBOARD_URI,
+		))
+		.await
+		.unwrap();
+	let rmcp::model::ResourceContents::TextResourceContents { uri, .. } = &read.contents[0] else {
+		panic!("expected text contents");
+	};
+	assert_eq!(uri, appsmockserver::DASHBOARD_URI);
+}
+
+#[tokio::test]
+async fn apps_rbac_denied_ui_resource_strips_tool_meta() {
+	let apps = mock_apps_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let deny_dashboard = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.resource.name == "ui://apps-mock/dashboard.html""#)
+				.unwrap(),
+		)],
+		vec![],
+	)));
+	let t = multiplex_apps_proxy(
+		&apps,
+		&other,
+		vec![BackendTrafficPolicy::McpAuthorization(deny_dashboard)],
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client_with_ui(io).await;
+
+	// The tool is still listed, but its UI entrypoint is stripped
+	let tools = client.list_tools(None).await.unwrap();
+	let show = tools
+		.tools
+		.iter()
+		.find(|t| t.name == "a_show_dashboard")
+		.expect("tool should still be listed when its UI resource is denied");
+	assert!(
+		show.meta.as_ref().and_then(|m| m.0.get("ui")).is_none(),
+		"denied UI resource must strip _meta.ui"
+	);
+	assert!(
+		show
+			.meta
+			.as_ref()
+			.and_then(|m| m.0.get("ui/resourceUri"))
+			.is_none(),
+		"denied UI resource must strip the deprecated flat key too"
+	);
+
+	// The resource itself is hidden and unreadable
+	let resources = client.list_resources(None).await.unwrap();
+	assert!(
+		!resources
+			.resources
+			.iter()
+			.any(|r| r.uri == "ui://a+apps-mock/dashboard.html"),
+		"denied resource should not be listed"
+	);
+	assert!(
+		client
+			.read_resource(rmcp::model::ReadResourceRequestParams::new(
+				"ui://a+apps-mock/dashboard.html",
+			))
+			.await
+			.is_err()
+	);
+}
+
+fn sse_first_data_message(body: &str) -> serde_json::Value {
+	let data = body
+		.lines()
+		.find_map(|l| l.strip_prefix("data: "))
+		.expect("SSE response should contain a data line");
+	serde_json::from_str(data).unwrap()
+}
+
+#[tokio::test]
+async fn apps_stateless_synthetic_initialize_forwards_meta_capabilities() {
+	let (apps, init) = mock_apps_streamable_http_server_with_init_capture().await;
+	let (_bind, io) = setup_proxy(&apps, false, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/list",
+		"params": { "_meta": {
+			"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+			"io.modelcontextprotocol/clientInfo": {"name": "test-host", "version": "9.9.9"},
+			"io.modelcontextprotocol/clientCapabilities": {
+				"roots": {"listChanged": true},
+				"extensions": {
+					UI_EXTENSION_ID: {"mimeTypes": ["text/html;profile=mcp-app"]}
+				}
+			}
+		} }
+	});
+	let resp = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/list")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let msg = sse_first_data_message(&resp.text().await.unwrap());
+	assert!(msg["result"]["tools"].is_array());
+
+	let init = init
+		.lock()
+		.unwrap()
+		.clone()
+		.expect("stateless gateway should synthesize an initialize");
+	let extensions = init.capabilities.extensions.as_ref().unwrap();
+	assert_eq!(
+		extensions[UI_EXTENSION_ID]["mimeTypes"],
+		serde_json::json!(["text/html;profile=mcp-app"]),
+		"per-request _meta capabilities must reach the upstream initialize"
+	);
+	assert!(
+		init.capabilities.roots.is_none(),
+		"capabilities requiring server-to-client routing are still scrubbed"
+	);
+	assert_eq!(init.client_info.name, "test-host");
+}
+
 #[tokio::test]
 async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
 	let mock_a = mock_streamable_http_server(true).await;
@@ -1941,6 +2208,217 @@ async fn mock_streamable_http_server_inner(
 	}
 }
 
+async fn mock_apps_streamable_http_server() -> MockServer {
+	mock_apps_streamable_http_server_with_init_capture().await.0
+}
+
+async fn mock_apps_streamable_http_server_with_init_capture()
+-> (MockServer, appsmockserver::InitCapture) {
+	use appsmockserver::AppsServer;
+	use rmcp::transport::streamable_http_server::StreamableHttpService;
+	use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
+	agent_core::telemetry::testing::setup_test_logging();
+
+	let capture: appsmockserver::InitCapture = Default::default();
+	let service = StreamableHttpService::new(
+		{
+			let capture = capture.clone();
+			move || Ok(AppsServer::new(capture.clone()))
+		},
+		LocalSessionManager::default().into(),
+		StreamableHttpServerConfig::default()
+			.with_sse_retry(None)
+			.with_sse_keep_alive(None)
+			.with_stateful_mode(true)
+			.with_json_response(false),
+	);
+
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let router = axum::Router::new().nest_service("/mcp", service);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	(
+		MockServer {
+			addr,
+			init_counter: std::sync::Arc::new(tokio::sync::Mutex::new(0)),
+			_cancel: tx,
+		},
+		capture,
+	)
+}
+
+pub async fn mcp_streamable_client_with_ui(
+	s: SocketAddr,
+) -> RunningService<RoleClient, InitializeRequestParams> {
+	use rmcp::ServiceExt;
+	use rmcp::model::{ClientCapabilities, ClientInfo, ExtensionCapabilities, Implementation};
+	use rmcp::transport::StreamableHttpClientTransport;
+	let transport =
+		StreamableHttpClientTransport::<reqwest::Client>::from_uri(format!("http://{s}/mcp"));
+	let mut extensions = ExtensionCapabilities::new();
+	extensions.insert(
+		UI_EXTENSION_ID.to_string(),
+		serde_json::json!({"mimeTypes": ["text/html;profile=mcp-app"]})
+			.as_object()
+			.cloned()
+			.unwrap(),
+	);
+	let client_info = ClientInfo::new(
+		ClientCapabilities::builder()
+			.enable_extensions_with(extensions)
+			.build(),
+		Implementation::new("test client".to_string(), "0.0.1".to_string()),
+	);
+
+	Box::pin(client_info.serve(transport))
+		.await
+		.inspect_err(|e| {
+			tracing::error!("client error: {:?}", e);
+		})
+		.unwrap()
+}
+
+mod appsmockserver {
+	use std::sync::Arc;
+
+	use rmcp::model::*;
+	use rmcp::service::RequestContext;
+	use rmcp::{ErrorData as McpError, RoleServer, ServerHandler};
+	use serde_json::json;
+
+	pub const DASHBOARD_URI: &str = "ui://apps-mock/dashboard.html";
+	pub const DASHBOARD_HTML: &str = "<html>dashboard</html>";
+	pub const UI_MIME_TYPE: &str = "text/html;profile=mcp-app";
+
+	fn meta(v: serde_json::Value) -> Meta {
+		Meta(v.as_object().cloned().expect("meta must be an object"))
+	}
+
+	fn schema() -> Arc<JsonObject> {
+		Arc::new(json!({"type": "object"}).as_object().cloned().unwrap())
+	}
+
+	pub type InitCapture = Arc<std::sync::Mutex<Option<InitializeRequestParams>>>;
+
+	#[derive(Clone)]
+	pub struct AppsServer {
+		init: InitCapture,
+	}
+
+	impl AppsServer {
+		pub fn new(init: InitCapture) -> Self {
+			Self { init }
+		}
+	}
+
+	impl ServerHandler for AppsServer {
+		async fn initialize(
+			&self,
+			request: InitializeRequestParams,
+			context: RequestContext<RoleServer>,
+		) -> Result<InitializeResult, McpError> {
+			*self.init.lock().unwrap() = Some(request.clone());
+			context.peer.set_peer_info(request);
+			Ok(self.get_info())
+		}
+
+		fn get_info(&self) -> ServerInfo {
+			let mut extensions = ExtensionCapabilities::new();
+			extensions.insert(
+				"io.modelcontextprotocol/ui".to_string(),
+				json!({"mimeTypes": [UI_MIME_TYPE]})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			);
+			ServerInfo::new(
+				ServerCapabilities::builder()
+					.enable_tools()
+					.enable_resources()
+					.enable_extensions_with(extensions)
+					.build(),
+			)
+			.with_protocol_version(ProtocolVersion::V_2025_06_18)
+		}
+
+		async fn list_tools(
+			&self,
+			_request: Option<PaginatedRequestParams>,
+			_: RequestContext<RoleServer>,
+		) -> Result<ListToolsResult, McpError> {
+			let mut show_dashboard = Tool::new("show_dashboard", "Show the dashboard", schema());
+			// Real SDKs emit the deprecated flat key alongside the nested one.
+			show_dashboard.meta = Some(meta(json!({
+				"ui": {"resourceUri": DASHBOARD_URI, "visibility": ["model", "app"]},
+				"ui/resourceUri": DASHBOARD_URI
+			})));
+			let plain = Tool::new("plain", "No UI", schema());
+			Ok(ListToolsResult::with_all_items(vec![show_dashboard, plain]))
+		}
+
+		async fn call_tool(
+			&self,
+			request: CallToolRequestParams,
+			_: RequestContext<RoleServer>,
+		) -> Result<CallToolResult, McpError> {
+			match request.name.as_ref() {
+				"show_dashboard" => Ok(CallToolResult::success(vec![ContentBlock::text(
+					"dashboard data",
+				)])),
+				"plain" => Ok(CallToolResult::success(vec![ContentBlock::text("ok")])),
+				_ => Err(McpError::invalid_params("unknown tool", None)),
+			}
+		}
+
+		async fn list_resources(
+			&self,
+			_request: Option<PaginatedRequestParams>,
+			_: RequestContext<RoleServer>,
+		) -> Result<ListResourcesResult, McpError> {
+			Ok(ListResourcesResult {
+				resources: vec![
+					Resource::new(DASHBOARD_URI, "dashboard")
+						.with_mime_type(UI_MIME_TYPE)
+						.with_meta(meta(json!({
+							"ui": {
+								"csp": {"connectDomains": ["https://api.example.com"]},
+								"prefersBorder": true
+							}
+						}))),
+				],
+				..Default::default()
+			})
+		}
+
+		async fn read_resource(
+			&self,
+			ReadResourceRequestParams { uri, .. }: ReadResourceRequestParams,
+			_: RequestContext<RoleServer>,
+		) -> Result<ReadResourceResult, McpError> {
+			match uri.as_str() {
+				DASHBOARD_URI => Ok(ReadResourceResult::new(vec![
+					ResourceContents::text(DASHBOARD_HTML, uri)
+						.with_mime_type(UI_MIME_TYPE)
+						.with_meta(meta(json!({
+							"ui": {"csp": {"connectDomains": ["https://api.example.com"]}}
+						}))),
+				])),
+				_ => Err(McpError::resource_not_found(
+					"resource_not_found",
+					Some(json!({"uri": uri})),
+				)),
+			}
+		}
+	}
+}
+
 async fn mock_sse_server() -> MockServer {
 	use legacy_rmcp::transport::sse_server::{SseServer, SseServerConfig};
 	use tokio_util::sync::CancellationToken;
@@ -3117,6 +3595,128 @@ fn test_merge_initialize_forwards_single_backend_without_multiplexing() {
 		"non-multiplexing should forward upstream instructions unchanged"
 	);
 	assert_eq!(info.server_info.name, "solo-server");
+}
+
+fn extension_caps(entries: &[(&str, serde_json::Value)]) -> rmcp::model::ExtensionCapabilities {
+	entries
+		.iter()
+		.map(|(k, v)| (k.to_string(), v.as_object().cloned().unwrap()))
+		.collect()
+}
+
+#[test]
+fn test_merge_discover_unions_extensions_recorded_at_initialize() {
+	use rmcp::model::{
+		DiscoverResult, Implementation, InitializeResult, ProtocolVersion, ServerCapabilities,
+		ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("legacy", SocketAddr::from(([127, 0, 0, 1], 30112))),
+				fake_streamable_target("modern", SocketAddr::from(([127, 0, 0, 1], 30113))),
+			],
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	// The legacy target declares its extensions in its initialize result only
+	// (it never answers server/discover); merging the initialize records them.
+	let mut legacy_caps = ServerCapabilities::default();
+	legacy_caps.extensions = Some(extension_caps(&[(
+		"io.modelcontextprotocol/ui",
+		serde_json::json!({"mimeTypes": ["text/html;profile=mcp-app"]}),
+	)]));
+	let init_merge = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+	init_merge(
+		vec![(
+			"legacy".into(),
+			ServerResult::InitializeResult(
+				InitializeResult::new(legacy_caps)
+					.with_protocol_version(ProtocolVersion::V_2025_06_18)
+					.with_server_info(Implementation::new("legacy-server", "1.0")),
+			),
+		)],
+		&empty_cel(),
+	)
+	.unwrap();
+
+	// A discover fanout where only the modern target answered must still
+	// advertise the legacy target's extensions.
+	let mut modern_caps = ServerCapabilities::default();
+	modern_caps.extensions = Some(extension_caps(&[(
+		"example.com/other",
+		serde_json::json!({}),
+	)]));
+	let discover_merge = relay.merge_discover(true);
+	let result = discover_merge(
+		vec![(
+			"modern".into(),
+			ServerResult::DiscoverResult(
+				DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), modern_caps)
+					.with_server_info(Implementation::new("modern-server", "1.0")),
+			),
+		)],
+		&empty_cel(),
+	)
+	.unwrap();
+	let discover = match result {
+		ServerResult::DiscoverResult(dr) => dr,
+		other => panic!("expected DiscoverResult, got: {:?}", other),
+	};
+	let extensions = discover
+		.capabilities
+		.extensions
+		.expect("merged discover should advertise extensions");
+	assert!(
+		extensions.contains_key("io.modelcontextprotocol/ui"),
+		"discover must include extensions recorded from the legacy target's initialize"
+	);
+	assert!(extensions.contains_key("example.com/other"));
+}
+
+#[test]
+fn test_parse_resource_uri_ui_scheme() {
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30109))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30110))),
+			],
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	// ui:// resolves to its target; non-ui keeps the target+scheme:// form.
+	assert_eq!(
+		relay
+			.parse_resource_uri("ui://alpha+weather/dashboard.html")
+			.unwrap(),
+		("alpha", "ui://weather/dashboard.html".to_string())
+	);
+	assert_eq!(
+		relay.parse_resource_uri("beta+memo://insights").unwrap(),
+		("beta", "memo://insights".to_string())
+	);
+	// Unknown target is rejected; ui:// validity itself is covered by apps unit tests.
+	assert!(
+		relay
+			.parse_resource_uri("ui://unknown+weather/dash.html")
+			.is_err()
+	);
+	// A ui:// URI must not be smuggled through the generic service+scheme namespace.
+	assert!(
+		relay
+			.parse_resource_uri("alpha+ui://weather/dash.html")
+			.is_err()
+	);
 }
 
 #[tokio::test]
