@@ -53,6 +53,21 @@ fn ext_authz_https_host_defaults_port_and_tls_policy() {
 }
 
 #[test]
+fn ext_authz_url_host_rejects_unknown_scheme_with_explicit_port() {
+	let err = serde_json::from_value::<ExtAuthz>(serde_json::json!({
+		"host": "foo://example.com:123",
+	}))
+	.expect_err("unsupported scheme should be rejected");
+
+	assert!(
+		err
+			.to_string()
+			.contains("backend URL scheme must be http or https"),
+		"got: {err}"
+	);
+}
+
+#[test]
 fn test_process_headers_with_allowlist() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example.com")

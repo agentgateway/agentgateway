@@ -1449,16 +1449,16 @@ impl<'de> serde::Deserialize<'de> for SimpleBackendReferenceWithPolicies {
 						"backend URL must include a scheme"
 					)));
 				};
-				let port = uri.port_u16().or(match scheme {
-					"http" => Some(80),
-					"https" => Some(443),
-					_ => None,
-				});
-				let Some(port) = port else {
-					return Err(serde::de::Error::custom(anyhow::anyhow!(
-						"backend URL scheme must be http, https, or unset"
-					)));
+				let default_port = match scheme {
+					"http" => 80,
+					"https" => 443,
+					_ => {
+						return Err(serde::de::Error::custom(anyhow::anyhow!(
+							"backend URL scheme must be http or https"
+						)));
+					},
 				};
+				let port = uri.port_u16().unwrap_or(default_port);
 				(
 					SimpleBackendReference::InlineBackend(Target::from((uri_host, port))),
 					scheme == "https",
