@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  readinessAddr: 127.0.0.1:19001
+  statsAddr: 127.0.0.1:19002
+
+frontendPolicies:
+  http:
+    maxBufferSize: 20971520
+
+llm:
+  port: 4000
+  models:
+  # Map an explicit model name to another explicit model name
+  - name: smart
+    provider: openAI
+    params:
+      model: gpt-5.5
+      apiKey: $OPENAI_API_KEY
+  # Map `anthropic/<model>` to `<model>`
+  - name: anthropic/*
+    provider: anthropic
+    params:
+      apiKey: $ANTHROPIC_API_KEY
+    transformation:
+      model: llmRequest.model.stripPrefix("anthropic/")

@@ -3166,6 +3166,53 @@ async fn test_runtime_fanout_fail_open() {
 }
 
 #[tokio::test]
+async fn test_runtime_fanout_fail_open_skips_jsonrpc_error_frames() {
+	use futures_util::StreamExt;
+	use rmcp::model::{ErrorData, ListToolsResult, RequestId, ServerJsonRpcMessage};
+
+	use crate::mcp::mergestream::{MergeStream, Messages};
+
+	let ok_msg = ServerJsonRpcMessage::response(
+		rmcp::model::ServerResult::ListToolsResult(ListToolsResult {
+			tools: vec![],
+			..Default::default()
+		}),
+		RequestId::Number(1),
+	);
+	let ok_stream = Messages::from(ok_msg);
+	let err_stream = Messages::from(Ok(ServerJsonRpcMessage::error(
+		ErrorData::internal_error("failed to unmarshal response: no result in response", None),
+		Some(RequestId::Number(1)),
+	)));
+
+	let streams = vec![("ok".into(), ok_stream), ("bad".into(), err_stream)];
+
+	let merge = Box::new(
+		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
+			assert_eq!(results.len(), 1);
+			Ok(results.into_iter().next().unwrap().1)
+		},
+	);
+
+	let mut ms = MergeStream::new(
+		streams,
+		RequestId::Number(1),
+		merge,
+		empty_cel(),
+		FailureMode::FailOpen,
+	);
+
+	let res = ms.next().await;
+	assert!(res.is_some());
+	let res = res.unwrap();
+	assert!(
+		res.is_ok(),
+		"expected merged success with FailOpen when one upstream returns a JSON-RPC error frame: {:?}",
+		res.err()
+	);
+}
+
+#[tokio::test]
 async fn test_runtime_fanout_fail_open_all_fail() {
 	use futures_util::StreamExt;
 	use rmcp::model::{ListToolsResult, RequestId};

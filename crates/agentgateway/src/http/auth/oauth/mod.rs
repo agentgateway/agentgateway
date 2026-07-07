@@ -6,12 +6,12 @@ use std::time::Duration;
 use secrecy::{ExposeSecret, SecretString};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use super::AuthorizationLocation;
 use crate::http::Request;
 use crate::http::jwt::Claims;
-use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_JWT};
+use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
@@ -21,13 +21,25 @@ use crate::types::agent_xds::{
 	permissive_cel_expression_arc, resolve_simple_reference,
 };
 use crate::types::proto::{ProtoError, agent as proto};
-use crate::{apply, cel, schema_enum, ser_redact};
+use crate::{apply, cel, schema_enum};
 
 mod cache;
+mod client_auth;
+mod cross_app_access;
 mod transport;
 
 use cache::{InMemoryTokenCache, TokenCacheResult};
+#[cfg(test)]
+use client_auth::RawPrivateKeyJwt;
+use client_auth::sign_client_assertion;
+pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt, SigningAlg};
+pub use cross_app_access::CrossAppAccessAuth;
+#[cfg(test)]
+use cross_app_access::CrossAppAccessEndpoint;
 pub(super) use transport::FetchError;
+
+#[cfg(test)]
+use crate::serdes::FileOrInline;
 
 #[apply(schema!)]
 pub struct OAuthTokenExchangeAuth {
@@ -99,6 +111,63 @@ pub struct OAuthTokenExchangeAuth {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<TokenCacheConfig>"))]
 	cache: Option<InMemoryTokenCache>,
+
+	// --- internal ---
+	// Optional RFC 7523 jwt-bearer hop used internally by ID-JAG.
+	#[serde(skip)]
+	chained_exchange: Option<ChainedExchange>,
+}
+
+#[serde_with::serde_as]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChainedExchange {
+	/// Backend serving the chained RFC 7523 token endpoint.
+	#[serde(flatten)]
+	target: Arc<SimpleBackendReference>,
+	/// Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	policies: Vec<BackendTrafficPolicy>,
+	/// Token endpoint path on the backend; defaults to "/".
+	#[serde(default, skip_serializing_if = "String::is_empty")]
+	token_endpoint_path: String,
+	/// Client authentication used when calling the chained token endpoint.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	client_auth: Option<OAuthClientAuth>,
+	/// `audience` parameters naming the target services at the authorization server.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	audiences: Vec<String>,
+	/// `scope` values for the requested token, sent space-delimited.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	scopes: Vec<String>,
+	/// `resource` parameters with the target service URIs.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	resources: Vec<String>,
+	/// Extra form parameters appended to the chained token request.
+	/// Values are CEL expressions evaluated against the incoming request.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	additional_params: BTreeMap<String, Arc<cel::Expression>>,
+}
+
+impl ChainedExchange {
+	fn validate_load(&self) -> Result<(), String> {
+		if !self.token_endpoint_path.is_empty() && !self.token_endpoint_path.starts_with('/') {
+			return Err(format!(
+				"chained_exchange.token_endpoint_path {:?} must start with /",
+				self.token_endpoint_path
+			));
+		}
+		if let Some(client_auth) = &self.client_auth {
+			client_auth.validate_load()?;
+		}
+		validate_additional_params(&self.additional_params)?;
+		Ok(())
+	}
+
+	fn evaluate_additional_params(&self, req: &Request) -> anyhow::Result<Vec<(String, String)>> {
+		evaluate_additional_params(&self.additional_params, req)
+	}
 }
 
 /// Spec-defined form parameters that `additional_params` must not override.
@@ -142,14 +211,30 @@ impl OAuthTokenExchangeAuth {
 			client_auth.validate_load()?;
 		}
 
-		for key in self.additional_params.keys() {
-			if RESERVED_FORM_PARAMS
-				.iter()
-				.any(|reserved| reserved.eq_ignore_ascii_case(key))
-			{
-				return Err(format!(
-					"additional parameter {key:?} overrides a reserved OAuth parameter"
-				));
+		validate_additional_params(&self.additional_params)?;
+
+		if let Some(chained_exchange) = &self.chained_exchange {
+			chained_exchange.validate_load()?;
+			if self.grant_type != OAuthGrantType::TokenExchange {
+				return Err("chained_exchange is only valid with the token-exchange grant".into());
+			}
+			if self.requested_token_type != Some(OAuthTokenType::IdJag) {
+				return Err("chained_exchange currently requires requested_token_type id-jag".into());
+			}
+		}
+		if self.requested_token_type == Some(OAuthTokenType::IdJag) {
+			if self.chained_exchange.is_none() {
+				return Err(
+					"requested_token_type id-jag is only supported by backendAuth.crossAppAccess".into(),
+				);
+			}
+			if self.audiences.is_empty() {
+				return Err("requested_token_type id-jag requires at least one audience".into());
+			}
+			if self.subject_token.token_type == OAuthTokenType::AccessToken {
+				warn!(
+					"oauth token exchange requested_token_type id-jag is configured with an access_token subject; the ID-JAG draft expects an ID token subject"
+				);
 			}
 		}
 
@@ -194,6 +279,11 @@ impl OAuthTokenExchangeAuth {
 			},
 			_ => None,
 		};
+		if requested_token_type == Some(OAuthTokenType::IdJag) {
+			return Err(ProtoError::Generic(
+				"requested_token_type id-jag is only supported by local backendAuth.crossAppAccess".into(),
+			));
+		}
 
 		let client_auth = t.client_auth.map(OAuthClientAuth::try_from).transpose()?;
 
@@ -230,6 +320,7 @@ impl OAuthTokenExchangeAuth {
 			requested_token_type,
 			client_auth,
 			additional_params,
+			chained_exchange: None,
 			authorization_location,
 			cache,
 		};
@@ -247,23 +338,7 @@ impl OAuthTokenExchangeAuth {
 	/// Evaluate the configured `additional_params` CEL expressions against the
 	/// incoming request. Fails closed if any expression errors or is not a string.
 	fn evaluate_additional_params(&self, req: &Request) -> anyhow::Result<Vec<(String, String)>> {
-		self
-			.additional_params
-			.iter()
-			.map(|(k, expr)| {
-				let exec = cel::Executor::new_request(req);
-				let value = exec
-					.eval(expr)
-					.ok()
-					.ok_or_else(|| anyhow::anyhow!("additional parameter {k} CEL evaluation failed"))?;
-				let value = value
-					.as_str()
-					.ok()
-					.ok_or_else(|| anyhow::anyhow!("additional parameter {k} did not evaluate to a string"))?
-					.into_owned();
-				Ok((k.clone(), value))
-			})
-			.collect()
+		evaluate_additional_params(&self.additional_params, req)
 	}
 
 	fn build_exchange_request(&self, req: &Request) -> Result<ExchangeRequest, ProxyError> {
@@ -282,12 +357,23 @@ impl OAuthTokenExchangeAuth {
 			debug!("oauth token exchange additional parameter evaluation failed: {e}");
 			ProxyError::InvalidRequest
 		})?;
+		let chained_extra_params = self
+			.chained_exchange
+			.as_ref()
+			.map(|chained_exchange| chained_exchange.evaluate_additional_params(req))
+			.transpose()
+			.map_err(|e| {
+				debug!("oauth chained token exchange additional parameter evaluation failed: {e}");
+				ProxyError::InvalidRequest
+			})?
+			.unwrap_or_default();
 
 		Ok(ExchangeRequest {
 			subject_token: subject_token.into(),
 			subject_token_type: self.subject_token.token_type,
 			actor,
 			extra_params,
+			chained_extra_params,
 		})
 	}
 
@@ -307,93 +393,6 @@ impl OAuthTokenExchangeAuth {
 
 		Ok(true)
 	}
-}
-
-#[apply(schema!)]
-pub struct OAuthClientAuth {
-	/// `client_id` parameter identifying the gateway at the authorization server.
-	client_id: String,
-	/// Client secret. When absent the client is public, which is only valid with `ClientSecretPost`.
-	#[serde(
-		default,
-		skip_serializing_if = "Option::is_none",
-		serialize_with = "ser_redact"
-	)]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	client_secret: Option<SecretString>,
-	/// RFC 6749 §2.3 client authentication method.
-	#[serde(default)]
-	method: OAuthClientAuthMethod,
-}
-
-impl OAuthClientAuth {
-	pub fn new(
-		client_id: String,
-		client_secret: Option<SecretString>,
-		method: OAuthClientAuthMethod,
-	) -> Self {
-		Self {
-			client_id,
-			client_secret,
-			method,
-		}
-	}
-
-	fn validate_load(&self) -> Result<(), String> {
-		if self.client_id.is_empty() {
-			return Err("oauth token exchange client_id must not be empty".into());
-		}
-		if self
-			.client_secret
-			.as_ref()
-			.is_some_and(|secret| secret.expose_secret().is_empty())
-		{
-			return Err("oauth token exchange client_secret must not be empty".into());
-		}
-		if self.client_secret.is_none() && self.method == OAuthClientAuthMethod::ClientSecretBasic {
-			return Err(
-				"oauth token exchange client_secret is required with the client_secret_basic method".into(),
-			);
-		}
-		Ok(())
-	}
-}
-
-impl TryFrom<proto::o_auth_token_exchange::ClientAuth> for OAuthClientAuth {
-	type Error = ProtoError;
-
-	fn try_from(c: proto::o_auth_token_exchange::ClientAuth) -> Result<Self, Self::Error> {
-		use proto::o_auth_token_exchange::client_auth::Method;
-
-		let method = match Method::try_from(c.method) {
-			Ok(Method::Unspecified | Method::ClientSecretBasic) => {
-				OAuthClientAuthMethod::ClientSecretBasic
-			},
-			Ok(Method::ClientSecretPost) => OAuthClientAuthMethod::ClientSecretPost,
-			Err(_) => {
-				return Err(ProtoError::EnumParse(
-					"unknown oauth client auth method".into(),
-				));
-			},
-		};
-		let auth = Self {
-			client_id: c.client_id,
-			client_secret: c.client_secret.map(Into::into),
-			method,
-		};
-		auth.validate_load().map_err(ProtoError::Generic)?;
-		Ok(auth)
-	}
-}
-
-#[apply(schema_enum!)]
-#[derive(Default)]
-pub enum OAuthClientAuthMethod {
-	/// `client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).
-	#[default]
-	ClientSecretBasic,
-	/// `client_id`/`client_secret` sent in the request form body.
-	ClientSecretPost,
 }
 
 #[apply(schema_enum!)]
@@ -417,6 +416,8 @@ enum OAuthTokenType {
 	Jwt,
 	#[serde(rename = "urn:ietf:params:oauth:token-type:id_token")]
 	IdToken,
+	#[serde(rename = "urn:ietf:params:oauth:token-type:id-jag")]
+	IdJag,
 }
 
 impl OAuthTokenType {
@@ -425,6 +426,7 @@ impl OAuthTokenType {
 			TOKEN_TYPE_ACCESS => Some(Self::AccessToken),
 			TOKEN_TYPE_JWT => Some(Self::Jwt),
 			TOKEN_TYPE_ID => Some(Self::IdToken),
+			TOKEN_TYPE_ID_JAG => Some(Self::IdJag),
 			_ => None,
 		}
 	}
@@ -434,6 +436,7 @@ impl OAuthTokenType {
 			Self::AccessToken => TOKEN_TYPE_ACCESS,
 			Self::Jwt => TOKEN_TYPE_JWT,
 			Self::IdToken => TOKEN_TYPE_ID,
+			Self::IdJag => TOKEN_TYPE_ID_JAG,
 		}
 	}
 }
@@ -591,6 +594,44 @@ fn actor_token_from_proto(
 	})
 }
 
+fn validate_additional_params(
+	params: &BTreeMap<String, Arc<cel::Expression>>,
+) -> Result<(), String> {
+	for key in params.keys() {
+		if RESERVED_FORM_PARAMS
+			.iter()
+			.any(|reserved| reserved.eq_ignore_ascii_case(key))
+		{
+			return Err(format!(
+				"additional parameter {key:?} overrides a reserved OAuth parameter"
+			));
+		}
+	}
+	Ok(())
+}
+
+fn evaluate_additional_params(
+	params: &BTreeMap<String, Arc<cel::Expression>>,
+	req: &Request,
+) -> anyhow::Result<Vec<(String, String)>> {
+	let exec = cel::Executor::new_request(req);
+	params
+		.iter()
+		.map(|(k, expr)| {
+			let value = exec
+				.eval(expr)
+				.ok()
+				.ok_or_else(|| anyhow::anyhow!("additional parameter {k} CEL evaluation failed"))?;
+			let value = value
+				.as_str()
+				.ok()
+				.ok_or_else(|| anyhow::anyhow!("additional parameter {k} did not evaluate to a string"))?
+				.into_owned();
+			Ok((k.clone(), value))
+		})
+		.collect()
+}
+
 /// Per-request inputs to a token exchange, assembled by the dispatch layer so the
 /// exchange itself stays request-free.
 #[derive(Clone, Default)]
@@ -600,6 +641,17 @@ struct ExchangeRequest {
 	/// RFC 8693 delegation actor token and its token type, when configured.
 	actor: Option<(SecretString, OAuthTokenType)>,
 	extra_params: Vec<(String, String)>,
+	chained_extra_params: Vec<(String, String)>,
+}
+
+impl ExchangeRequest {
+	fn jwt_bearer_assertion(assertion: SecretString, extra_params: Vec<(String, String)>) -> Self {
+		Self {
+			subject_token: assertion,
+			extra_params,
+			..Default::default()
+		}
+	}
 }
 
 pub(super) async fn apply_token_exchange(
@@ -613,7 +665,27 @@ pub(super) async fn apply_token_exchange(
 		.await
 		.map_err(FetchError::into_proxy_error)?;
 
-	auth.insert_exchanged_token(req, access_token.expose_secret())
+	let explicit = auth.insert_exchanged_token(req, access_token.expose_secret())?;
+	trace!("attached oauth exchanged access token");
+	Ok(explicit)
+}
+
+pub(super) async fn apply_identity_assertion(
+	inputs: &Arc<crate::ProxyInputs>,
+	auth: &CrossAppAccessAuth,
+	req: &mut Request,
+) -> Result<bool, ProxyError> {
+	let oauth = auth.oauth_token_exchange();
+	let client = PolicyClient::new(inputs.clone());
+
+	trace!(audience = %auth.audience, "performing ID-JAG identity assertion exchange");
+	let access_token = fetch_token(&client, oauth, oauth.build_exchange_request(req)?)
+		.await
+		.map_err(FetchError::into_proxy_error)?;
+
+	let explicit = oauth.insert_exchanged_token(req, access_token.expose_secret())?;
+	trace!("attached ID-JAG exchanged access token");
+	Ok(explicit)
 }
 
 /// Read a subject token for exchange. A JWT auth policy may have already stripped
@@ -625,7 +697,9 @@ pub(super) fn extract_subject_token(
 	source
 		.extract(req)
 		.map(|token| token.into_owned())
+		.filter(|token| !token.trim().is_empty())
 		.or_else(|| extract_validated_claims_token(req))
+		.filter(|token| !token.trim().is_empty())
 }
 
 fn extract_validated_claims_token(req: &Request) -> Option<String> {
@@ -729,12 +803,12 @@ async fn fetch_token(
 	let result = match auth.cache.as_ref() {
 		Some(cache) => {
 			cache
-				.get_or_insert_with(&req, || transport::request_token(client, auth, &req))
+				.get_or_insert_with(&req, || fetch_token_uncached(client, auth, &req))
 				.await?
 		},
 		None => {
 			let transport::TokenEndpointResponse { access_token, .. } =
-				transport::request_token(client, auth, &req).await?;
+				fetch_token_uncached(client, auth, &req).await?;
 			TokenCacheResult::Miss(access_token)
 		},
 	};
@@ -745,6 +819,27 @@ async fn fetch_token(
 		TokenCacheResult::Miss(_) => trace!("token exchange succeeded"),
 	}
 	Ok(result.into_token())
+}
+
+async fn fetch_token_uncached(
+	client: &PolicyClient,
+	auth: &OAuthTokenExchangeAuth,
+	req: &ExchangeRequest,
+) -> Result<transport::TokenEndpointResponse, FetchError> {
+	let first =
+		transport::request_token(client, &transport::TokenRequestSpec::from(auth), req).await?;
+	let Some(chained_exchange) = &auth.chained_exchange else {
+		return Ok(first);
+	};
+	let chained_req =
+		ExchangeRequest::jwt_bearer_assertion(first.access_token, req.chained_extra_params.clone());
+	transport::request_token(
+		client,
+		&transport::TokenRequestSpec::from(chained_exchange),
+		&chained_req,
+	)
+	.await
+	.map_err(FetchError::chained_exchange)
 }
 
 #[cfg(test)]

@@ -160,7 +160,8 @@ binds:
             #       issuer: https://dev-y6sikgx3n3shy7ci.eu.auth0.com
             #       audiences:
             #       - urn:agent-gateway
-            #       jwksUrl: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
+            #       jwks:
+            #         url: https://dev-y6sikgx3n3shy7ci.eu.auth0.com/.well-known/jwks.json
             #       provider:
             #         auth0: {}
             #       resourceMetadata:
@@ -204,7 +205,8 @@ binds:
             #       issuer: https://dev-123456.okta.com/oauth2/default
             #       audiences:
             #       - api://default
-            #       jwksUrl: https://dev-123456.okta.com/oauth2/default/.well-known/jwks.json
+            #       jwks:
+            #         url: https://dev-123456.okta.com/oauth2/default/.well-known/jwks.json
             #       provider:
             #         okta: {}
             #       resourceMetadata:

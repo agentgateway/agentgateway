@@ -1921,6 +1921,16 @@ where
 				auth.validate_load().map_err(serde::de::Error::custom)?;
 				Ok(BackendAuth::OAuthTokenExchange(auth))
 			},
+			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
+				// Cross App Access is backed by the OAuth exchange implementation but has its own
+				// focused config shape and cross-field checks.
+				let mut auth = auth;
+				auth
+					.apply_local_defaults()
+					.map_err(serde::de::Error::custom)?;
+				auth.validate_load().map_err(serde::de::Error::custom)?;
+				Ok(BackendAuth::CrossAppAccess(auth))
+			},
 			BackendAuthCompat::Full(auth) => Ok(auth),
 			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
 				value: key,

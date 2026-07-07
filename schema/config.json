@@ -2813,6 +2813,19 @@
             "oauth"
           ],
           "additionalProperties": false
+        },
+        {
+          "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
+          "type": "object",
+          "properties": {
+            "crossAppAccess": {
+              "$ref": "#/$defs/CrossAppAccessAuth"
+            }
+          },
+          "required": [
+            "crossAppAccess"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -3478,6 +3491,120 @@
       ]
     },
     "OAuthClientAuth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawOAuthClientAuth"
+        },
+        {
+          "$ref": "#/$defs/RawDefaultClientSecretBasicAuth"
+        }
+      ]
+    },
+    "RawOAuthClientAuth": {
+      "oneOf": [
+        {
+          "description": "`client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientSecret": {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            "method": {
+              "type": "string",
+              "const": "clientSecretBasic"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "clientSecret"
+          ]
+        },
+        {
+          "description": "`client_id`/`client_secret` sent in the request form body.",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientSecret": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "const": "clientSecretPost"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId"
+          ]
+        },
+        {
+          "description": "`privateKeyJwt` client assertion (RFC 7523).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "signingKey": {
+              "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
+              "$ref": "#/$defs/FileOrInline"
+            },
+            "alg": {
+              "$ref": "#/$defs/SigningAlg",
+              "default": "RS256"
+            },
+            "kid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "assertionAudience": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string",
+              "const": "privateKeyJwt"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "signingKey",
+            "assertionAudience"
+          ]
+        }
+      ]
+    },
+    "SigningAlg": {
+      "type": "string",
+      "enum": [
+        "RS256",
+        "RS384",
+        "RS512",
+        "ES256",
+        "ES384"
+      ]
+    },
+    "RawDefaultClientSecretBasicAuth": {
       "type": "object",
       "properties": {
         "clientId": {
@@ -3485,35 +3612,13 @@
           "type": "string"
         },
         "clientSecret": {
-          "description": "Client secret. When absent the client is public, which is only valid with `ClientSecretPost`.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "method": {
-          "description": "RFC 6749 §2.3 client authentication method.",
-          "$ref": "#/$defs/OAuthClientAuthMethod",
-          "default": "clientSecretBasic"
+          "$ref": "#/$defs/FileOrInline"
         }
       },
       "additionalProperties": false,
       "required": [
-        "clientId"
-      ]
-    },
-    "OAuthClientAuthMethod": {
-      "oneOf": [
-        {
-          "description": "`client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).",
-          "type": "string",
-          "const": "clientSecretBasic"
-        },
-        {
-          "description": "`client_id`/`client_secret` sent in the request form body.",
-          "type": "string",
-          "const": "clientSecretPost"
-        }
+        "clientId",
+        "clientSecret"
       ]
     },
     "TokenCacheConfig": {
@@ -3537,6 +3642,138 @@
         }
       },
       "additionalProperties": false
+    },
+    "CrossAppAccessAuth": {
+      "type": "object",
+      "properties": {
+        "identityProvider": {
+          "description": "The user's IdP authorization server, used for the RFC 8693 token exchange.",
+          "$ref": "#/$defs/CrossAppAccessEndpoint"
+        },
+        "resourceAuthorizationServer": {
+          "description": "The resource authorization server, which exchanges the ID-JAG for an access token.",
+          "$ref": "#/$defs/CrossAppAccessEndpoint"
+        },
+        "audience": {
+          "description": "Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.",
+          "type": "string"
+        },
+        "resources": {
+          "description": "`resource` parameters naming the protected resource APIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "description": "`scope` values for the requested token, sent space-delimited.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cache": {
+          "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "writeOnly": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "identityProvider",
+        "resourceAuthorizationServer",
+        "audience"
+      ]
+    },
+    "CrossAppAccessEndpoint": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenEndpointPath": {
+          "description": "Token endpoint path on the backend; defaults to \"/\".",
+          "type": "string"
+        },
+        "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint.",
+          "$ref": "#/$defs/OAuthClientAuth"
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ],
+      "required": [
+        "clientAuth"
+      ]
     },
     "HTTP": {
       "type": "object",

@@ -494,6 +494,34 @@ fn extract_subject_token_uses_authorization_header_without_claims() {
 }
 
 #[test]
+fn extract_subject_token_empty_authorization_header_falls_back_to_claims() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.header(::http::header::AUTHORIZATION, "Bearer ")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::from("claims-jwt"),
+	});
+
+	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
+	assert_eq!(token.as_deref(), Some("claims-jwt"));
+}
+
+#[test]
+fn extract_subject_token_empty_authorization_header_is_missing() {
+	let req = ::http::Request::builder()
+		.uri("http://example/")
+		.header(::http::header::AUTHORIZATION, "Bearer ")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
+	assert_eq!(token, None);
+}
+
+#[test]
 fn extract_subject_token_prefers_authorization_header_over_claims() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")

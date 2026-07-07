@@ -2,7 +2,7 @@
 
 This example shows how to protect MCP servers with agentgateway using the MCP Authorization spec.
 
-> Note: The current MCP Authorization spec focuses on authentication; m
+> Note: The current MCP Authorization spec primarily covers authentication and protected resource metadata.
 
 ### Running the example
 
@@ -50,10 +50,15 @@ Taken from `examples/mcp-authentication/config.yaml`:
       - content-type
       allowOrigins:
       - '*'
+      exposeHeaders:
+      - "Mcp-Session-Id"
     mcpAuthentication:
+      mode: strict
       issuer: http://localhost:9000
-      jwksUrl: http://localhost:9000/.well-known/jwks.json
-      audience: http://localhost:3000/stdio/mcp
+      audiences:
+      - http://localhost:3000/stdio/mcp
+      jwks:
+        url: http://localhost:9000/.well-known/jwks.json
       resourceMetadata:
         resource: http://localhost:3000/stdio/mcp
         scopesSupported:
@@ -90,17 +95,20 @@ Also in `examples/mcp-authentication/config.yaml`:
   - path:
       exact: /.well-known/oauth-protected-resource/remote/mcp
   policies:
-    backendTLS: {}
     cors:
       allowHeaders:
       - mcp-protocol-version
       - content-type
       allowOrigins:
       - '*'
+      exposeHeaders:
+      - "Mcp-Session-Id"
     mcpAuthentication:
       issuer: http://localhost:9000
-      jwksUrl: http://localhost:9000/.well-known/jwks.json
-      audience: http://localhost:3000/remote/mcp
+      audiences:
+      - http://localhost:3000/remote/mcp
+      jwks:
+        url: http://localhost:9000/.well-known/jwks.json
       resourceMetadata:
         resource: http://localhost:3000/remote/mcp
         scopesSupported:
@@ -136,15 +144,16 @@ Excerpt from `examples/mcp-authentication/config.yaml`:
   - path: { exact: /.well-known/oauth-protected-resource/keycloak/mcp }
   - path: { exact: /.well-known/oauth-authorization-server/keycloak/mcp }
   - path: { exact: /.well-known/oauth-authorization-server/keycloak/mcp/client-registration }
-  - path: { exact: /realms/mcp/protocol/openid-connect/certs }
   policies:
     cors:
       allowHeaders: [mcp-protocol-version, content-type]
       allowOrigins: ['*']
     mcpAuthentication:
       issuer: http://localhost:7080/realms/mcp
-      jwksUrl: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
-      audience: mcp_proxy
+      audiences:
+      - mcp_proxy
+      jwks:
+        url: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
       provider:
         keycloak: {}
       resourceMetadata:

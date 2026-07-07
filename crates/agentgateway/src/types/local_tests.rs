@@ -244,10 +244,9 @@ binds:
 fn test_local_backend_policies_reject_unknown_fields() {
 	// serde(flatten) disables deny_unknown_fields on the outer struct, but the
 	// flattened SimpleLocalBackendPolicies still rejects leftover unknown keys.
-	let err = crate::serdes::yamlviajson::from_str::<super::LocalBackendPolicies>(
-		"mcpAuthorizatoin: {}",
-	)
-	.unwrap_err();
+	let err =
+		crate::serdes::yamlviajson::from_str::<super::LocalBackendPolicies>("mcpAuthorizatoin: {}")
+			.unwrap_err();
 	assert!(err.to_string().contains("unknown field"), "{err}");
 }
 
@@ -1657,10 +1656,11 @@ binds:
               host: 127.0.0.1:9000
               clientAuth:
                 clientId: gateway-client
+                clientSecret: ""
 "#,
 	)
 	.await
-	.expect_err("missing client secret should fail at config load");
+	.expect_err("empty client secret should fail at config load");
 
 	assert!(
 		err.to_string().contains("client_secret"),

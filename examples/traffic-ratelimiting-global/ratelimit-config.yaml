@@ -1,0 +1,15 @@
+domain: agentgateway
+descriptors:
+  - key: method
+    value: "GET"
+    descriptors:
+      - key: path
+        value: "/"
+        rate_limit:
+          unit: minute
+          requests_per_unit: 5
+  - key: method
+    value: "POST"
+    rate_limit:
+      unit: minute
+      requests_per_unit: 10
