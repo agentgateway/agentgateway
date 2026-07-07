@@ -10,7 +10,8 @@ use crate::llm::{AIError, InputFormat, LLMRequest, LLMRequestParams, SimpleChatC
 pub struct Response {
 	pub object: String,
 	pub model: String,
-	pub usage: Usage,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub usage: Option<Usage>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -100,11 +101,11 @@ impl RequestType for Request {
 impl crate::llm::types::ResponseType for Response {
 	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::llm::LLMResponse {
 		crate::llm::LLMResponse {
-			input_tokens: Some(self.usage.prompt_tokens as u64),
+			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
 			input_text_tokens: None,
 			input_audio_tokens: None,
-			total_tokens: Some(self.usage.total_tokens as u64),
+			total_tokens: self.usage.as_ref().map(|u| u.total_tokens as u64),
 			output_tokens: None,
 			output_image_tokens: None,
 			output_text_tokens: None,
@@ -199,5 +200,54 @@ pub mod typed {
 	pub struct Usage {
 		pub prompt_tokens: u32,
 		pub total_tokens: u32,
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::llm::types::ResponseType;
+
+	#[test]
+	fn response_parses_without_usage_field() {
+		let raw = r#"{
+			"object": "list",
+			"model": "gemini-embedding-001",
+			"data": [{
+				"object": "embedding",
+				"index": 0,
+				"embedding": [0.1, 0.2, 0.3]
+			}]
+		}"#;
+		let resp: Response = serde_json::from_str(raw).unwrap();
+		assert_eq!(resp.model, "gemini-embedding-001");
+		assert!(resp.usage.is_none());
+		let llm_resp = resp.to_llm_response(false);
+		assert!(llm_resp.input_tokens.is_none());
+		assert!(llm_resp.total_tokens.is_none());
+	}
+
+	#[test]
+	fn response_parses_with_usage_field() {
+		let raw = r#"{
+			"object": "list",
+			"model": "text-embedding-3-small",
+			"data": [{
+				"object": "embedding",
+				"index": 0,
+				"embedding": [0.1, 0.2]
+			}],
+			"usage": {
+				"prompt_tokens": 8,
+				"total_tokens": 8
+			}
+		}"#;
+		let resp: Response = serde_json::from_str(raw).unwrap();
+		let usage = resp.usage.as_ref().unwrap();
+		assert_eq!(usage.prompt_tokens, 8);
+		assert_eq!(usage.total_tokens, 8);
+		let llm_resp = resp.to_llm_response(false);
+		assert_eq!(llm_resp.input_tokens, Some(8));
+		assert_eq!(llm_resp.total_tokens, Some(8));
 	}
 }
