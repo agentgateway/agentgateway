@@ -1630,3 +1630,333 @@ fn fixed_providers_classify_by_family() {
 		CacheTokenConvention::InputIncludesCache,
 	);
 }
+
+mod raw_message_round_trip {
+	use super::*;
+
+	// Provider-specific blocks (cache_control, tool calls) must survive get -> set unchanged.
+	#[test]
+	fn anthropic_messages_preserve_unknown_fields() {
+		let mut req: types::messages::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-5",
+			"max_tokens": 1024,
+			"system": "be brief",
+			"messages": [
+				{"role": "user", "content": [
+					{"type": "text", "text": "big doc", "cache_control": {"type": "ephemeral"}}
+				]},
+				{"role": "assistant", "content": [
+					{"type": "tool_use", "id": "t1", "name": "lookup", "input": {"q": "x"}}
+				]},
+				{"role": "user", "content": [
+					{"type": "tool_result", "tool_use_id": "t1", "content": "found"}
+				]}
+			]
+		}))
+		.unwrap();
+
+		let raw = req
+			.raw_messages()
+			.expect("messages format exposes raw messages");
+		assert_eq!(raw.len(), 3);
+		assert_eq!(raw[0]["content"][0]["cache_control"]["type"], "ephemeral");
+		assert_eq!(raw[1]["content"][0]["type"], "tool_use");
+
+		req.set_raw_messages(raw.clone()).unwrap();
+		let after = req.raw_messages().unwrap();
+		assert_eq!(raw, after);
+		// system is not part of the raw message view and stays untouched
+		assert!(req.system.is_some());
+	}
+
+	#[test]
+	fn completions_preserve_tool_calls_and_unknown_fields() {
+		let mut req: types::completions::Request = serde_json::from_value(json!({
+			"model": "gpt-4o",
+			"messages": [
+				{"role": "user", "content": "hi", "custom_field": {"a": 1}},
+				{"role": "assistant", "tool_calls": [
+					{"id": "c1", "type": "function", "function": {"name": "f", "arguments": "{}"}}
+				]},
+				{"role": "tool", "tool_call_id": "c1", "content": "ok"}
+			]
+		}))
+		.unwrap();
+
+		let raw = req.raw_messages().unwrap();
+		assert_eq!(raw[0]["custom_field"]["a"], 1);
+		assert_eq!(raw[1]["tool_calls"][0]["id"], "c1");
+		req.set_raw_messages(raw.clone()).unwrap();
+		assert_eq!(req.raw_messages().unwrap(), raw);
+	}
+
+	// A message that doesn't fit the typed format errors and leaves the request unchanged.
+	#[test]
+	fn set_raw_messages_is_atomic_on_error() {
+		let mut req: types::completions::Request = serde_json::from_value(json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "hi"}]
+		}))
+		.unwrap();
+		let before = req.raw_messages().unwrap();
+		// missing required `role`
+		let err = req.set_raw_messages(vec![json!({"content": "no role"})]);
+		assert!(err.is_err());
+		assert_eq!(req.raw_messages().unwrap(), before);
+	}
+
+	#[test]
+	fn responses_items_round_trip_including_non_message_items() {
+		let mut req: types::responses::Request = serde_json::from_value(json!({
+			"model": "gpt-4o",
+			"input": [
+				{"role": "user", "content": [{"type": "input_text", "text": "hi"}]},
+				{"type": "function_call", "call_id": "c1", "name": "f", "arguments": "{}"},
+				{"type": "function_call_output", "call_id": "c1", "output": "ok"}
+			]
+		}))
+		.unwrap();
+		let raw = req.raw_messages().unwrap();
+		assert_eq!(raw.len(), 3);
+		req.set_raw_messages(raw.clone()).unwrap();
+		assert_eq!(req.raw_messages().unwrap(), raw);
+	}
+
+	#[test]
+	fn responses_text_input_becomes_user_item() {
+		let req: types::responses::Request = serde_json::from_value(json!({
+			"model": "gpt-4o",
+			"input": "just text"
+		}))
+		.unwrap();
+		let raw = req.raw_messages().unwrap();
+		assert_eq!(raw.len(), 1);
+		assert_eq!(raw[0]["role"], "user");
+	}
+
+	#[test]
+	fn embeddings_have_no_raw_messages() {
+		let mut req: types::embeddings::Request = serde_json::from_value(json!({
+			"model": "text-embedding-3-small",
+			"input": "hello"
+		}))
+		.unwrap();
+		assert!(req.raw_messages().is_none());
+		assert!(req.set_raw_messages(vec![]).is_err());
+	}
+}
+
+mod context_compression {
+	use super::*;
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::compression::{
+		BYPASS_HEADER, CompressionEngine, ContextCompression, ExternalCompressionEngine,
+	};
+	use crate::llm::policy::{FailureMode, Policy};
+	use crate::test_helpers::proxymock::{body_mock, setup_proxy_test};
+	use crate::types::agent::{BackendTarget, SimpleBackendReference};
+
+	fn policy(target: Target, failure_mode: FailureMode, min_size_bytes: usize) -> Policy {
+		Policy {
+			context_compression: Some(ContextCompression {
+				engine: CompressionEngine::External(ExternalCompressionEngine {
+					target: SimpleBackendReference::InlineBackend(target),
+					path: "/v1/compress".to_string(),
+				}),
+				failure_mode,
+				min_size_bytes,
+			}),
+			..Default::default()
+		}
+	}
+
+	fn backend_info() -> BackendInfo {
+		BackendInfo {
+			target: BackendTarget::Invalid,
+			call_target: Target::from(("localhost", 443)),
+			inputs: setup_proxy_test("{}").unwrap().pi,
+		}
+	}
+
+	fn messages_request(extra_headers: &[(&str, &str)], body: serde_json::Value) -> Request {
+		let mut rb = ::http::Request::builder()
+			.uri("/v1/messages")
+			.header(::http::header::CONTENT_TYPE, "application/json");
+		for (k, v) in extra_headers {
+			rb = rb.header(*k, *v);
+		}
+		rb.body(Body::from(serde_json::to_vec(&body).unwrap()))
+			.unwrap()
+	}
+
+	fn simple_body() -> serde_json::Value {
+		json!({
+			"model": "claude-sonnet-4-5",
+			"max_tokens": 16,
+			"messages": [{"role": "user", "content": "hello hello hello"}]
+		})
+	}
+
+	async fn process(
+		policy: &Policy,
+		req: Request,
+		tokenize: bool,
+	) -> Result<RequestResult, AIError> {
+		AIProvider::Anthropic(anthropic::Provider { model: None })
+			.process_messages_request(&backend_info(), Some(policy), req, tokenize, &mut None)
+			.await
+	}
+
+	async fn forwarded_body(result: RequestResult) -> (serde_json::Value, LLMRequest) {
+		let RequestResult::Success {
+			request,
+			llm_request,
+			..
+		} = result
+		else {
+			panic!("expected forwarded request");
+		};
+		let body = request.into_body().collect().await.unwrap().to_bytes();
+		(serde_json::from_slice(&body).unwrap(), llm_request)
+	}
+
+	#[tokio::test]
+	async fn replaces_messages_with_engine_output() {
+		let mock = body_mock(br#"{"messages":[{"role":"user","content":"compressed"}]}"#).await;
+		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
+
+		let result = process(&policy, messages_request(&[], simple_body()), false)
+			.await
+			.unwrap();
+		let (body, _) = forwarded_body(result).await;
+		assert_eq!(body["messages"][0]["content"], json!("compressed"));
+		// non-message fields are untouched
+		assert_eq!(body["max_tokens"], json!(16));
+	}
+
+	#[tokio::test]
+	async fn bypass_header_skips_and_is_consumed() {
+		let mock = body_mock(br#"{"messages":[{"role":"user","content":"compressed"}]}"#).await;
+		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
+
+		let req = messages_request(&[(BYPASS_HEADER, "true")], simple_body());
+		let RequestResult::Success { request, .. } = process(&policy, req, false).await.unwrap() else {
+			panic!("expected forwarded request");
+		};
+		assert!(request.headers().get(BYPASS_HEADER).is_none());
+		let body = request.into_body().collect().await.unwrap().to_bytes();
+		let body: Value = serde_json::from_slice(&body).unwrap();
+		assert_eq!(body["messages"][0]["content"], json!("hello hello hello"));
+	}
+
+	#[tokio::test]
+	async fn below_size_threshold_skips() {
+		let mock = body_mock(br#"{"messages":[{"role":"user","content":"compressed"}]}"#).await;
+		let policy = policy(
+			Target::Address(*mock.address()),
+			FailureMode::FailOpen,
+			1024 * 1024,
+		);
+
+		let result = process(&policy, messages_request(&[], simple_body()), false)
+			.await
+			.unwrap();
+		let (body, _) = forwarded_body(result).await;
+		assert_eq!(body["messages"][0]["content"], json!("hello hello hello"));
+	}
+
+	#[tokio::test]
+	async fn unreachable_engine_fails_open() {
+		// nothing listens here
+		let policy = policy(
+			Target::Address("127.0.0.1:1".parse().unwrap()),
+			FailureMode::FailOpen,
+			0,
+		);
+		let result = process(&policy, messages_request(&[], simple_body()), false)
+			.await
+			.unwrap();
+		let (body, _) = forwarded_body(result).await;
+		assert_eq!(body["messages"][0]["content"], json!("hello hello hello"));
+	}
+
+	#[tokio::test]
+	async fn unreachable_engine_fails_closed_when_configured() {
+		let policy = policy(
+			Target::Address("127.0.0.1:1".parse().unwrap()),
+			FailureMode::FailClosed,
+			0,
+		);
+		let RequestResult::Rejected(resp) =
+			process(&policy, messages_request(&[], simple_body()), false)
+				.await
+				.unwrap()
+		else {
+			panic!("expected rejection");
+		};
+		assert_eq!(resp.status(), ::http::StatusCode::INTERNAL_SERVER_ERROR);
+	}
+
+	#[tokio::test]
+	async fn malformed_engine_output_fails_open() {
+		let mock = body_mock(br#"{"messages":["not an object"]}"#).await;
+		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
+		let result = process(&policy, messages_request(&[], simple_body()), false)
+			.await
+			.unwrap();
+		let (body, _) = forwarded_body(result).await;
+		assert_eq!(body["messages"][0]["content"], json!("hello hello hello"));
+	}
+
+	#[tokio::test]
+	async fn broken_tool_pairing_fails_open() {
+		// engine drops the tool_result half of an intact pair
+		let mock = body_mock(
+			br#"{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"f","input":{}}]}]}"#,
+		)
+		.await;
+		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
+		let body = json!({
+			"model": "claude-sonnet-4-5",
+			"max_tokens": 16,
+			"messages": [
+				{"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "f", "input": {}}]},
+				{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]}
+			]
+		});
+		let result = process(&policy, messages_request(&[], body), false)
+			.await
+			.unwrap();
+		let (body, _) = forwarded_body(result).await;
+		// original pair forwarded, engine output discarded
+		assert_eq!(body["messages"].as_array().unwrap().len(), 2);
+	}
+
+	// Rate limiting and cost accounting must reflect what is actually sent upstream.
+	#[tokio::test]
+	async fn token_counts_reflect_compressed_messages() {
+		let mock = body_mock(br#"{"messages":[{"role":"user","content":"tiny"}]}"#).await;
+		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
+
+		let big = "long message content ".repeat(200);
+		let body = json!({
+			"model": "claude-sonnet-4-5",
+			"max_tokens": 16,
+			"messages": [{"role": "user", "content": big}]
+		});
+		let result = process(&policy, messages_request(&[], body), true)
+			.await
+			.unwrap();
+		let (body, llm_request) = forwarded_body(result).await;
+		assert_eq!(body["messages"][0]["content"], json!("tiny"));
+		let expected = num_tokens_from_messages(
+			"claude-sonnet-4-5",
+			&[SimpleChatCompletionMessage {
+				role: strng::literal!("user"),
+				content: strng::literal!("tiny"),
+			}],
+		)
+		.unwrap();
+		assert_eq!(llm_request.input_tokens, Some(expected));
+	}
+}

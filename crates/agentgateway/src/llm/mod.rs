@@ -672,7 +672,12 @@ pub enum RequestResult {
 }
 
 enum PreparedRequest {
-	Ready(LLMRequest),
+	Ready {
+		llm_info: LLMRequest,
+		/// Pre-compression message snapshot when context compression was applied; used to
+		/// revert and retry if the compressed request fails to render for the provider.
+		compression_snapshot: Option<Vec<serde_json::Value>>,
+	},
 	Rejected(Response),
 }
 
@@ -1611,6 +1616,18 @@ impl AIProvider {
 			}
 		}
 
+		// Compression runs after the prompt guard (guards must see the original content) and
+		// before token counting (rate limiting and cost should reflect what is actually sent).
+		let mut compression_snapshot = None;
+		if let Some(cc) = policies.and_then(|p| p.context_compression.as_ref()) {
+			use crate::llm::policy::compression::CompressionOutcome;
+			match cc.apply(backend_info, req, parts).await {
+				CompressionOutcome::Applied { original } => compression_snapshot = Some(original),
+				CompressionOutcome::Rejected(resp) => return Ok(PreparedRequest::Rejected(*resp)),
+				CompressionOutcome::Skipped | CompressionOutcome::FailedOpen => {},
+			}
+		}
+
 		let mut llm_info = req.to_llm_request(self.provider(), tokenize)?;
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
@@ -1624,7 +1641,10 @@ impl AIProvider {
 			llm_info.prompt = Some(req.get_messages().into());
 		}
 
-		Ok(PreparedRequest::Ready(llm_info))
+		Ok(PreparedRequest::Ready {
+			llm_info,
+			compression_snapshot,
+		})
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -1641,7 +1661,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError>
 	where
 		T: RequestType,
-		F: for<'a> FnOnce(&'a T) -> types::ChatRequest<'a>,
+		F: for<'a> Fn(&'a T) -> types::ChatRequest<'a>,
 	{
 		let request_model = if req.supports_model() {
 			req.model().as_deref().map(str::to_string)
@@ -1662,19 +1682,39 @@ impl AIProvider {
 				log,
 			)
 			.await?;
-		let mut llm_info = match prepared {
-			PreparedRequest::Ready(llm_info) => llm_info,
+		let (mut llm_info, compression_snapshot) = match prepared {
+			PreparedRequest::Ready {
+				llm_info,
+				compression_snapshot,
+			} => (llm_info, compression_snapshot),
 			PreparedRequest::Rejected(resp) => return Ok(RequestResult::Rejected(resp)),
 		};
 
-		let rendered = chat_translation.render_request(
-			chat_request(&req),
-			&ChatRequestContext {
-				provider: self,
-				headers: &parts.headers,
-				prompt_caching: policies.and_then(|p| p.prompt_caching.as_ref()),
+		let render_ctx = ChatRequestContext {
+			provider: self,
+			headers: &parts.headers,
+			prompt_caching: policies.and_then(|p| p.prompt_caching.as_ref()),
+		};
+		let rendered = match chat_translation.render_request(chat_request(&req), &render_ctx) {
+			Ok(rendered) => rendered,
+			Err(e) => {
+				// Compression is an optimization: if the compressed messages can't be rendered
+				// into the provider format, restore the original messages and retry once.
+				let Some(original) = compression_snapshot else {
+					return Err(e);
+				};
+				warn!("compressed request failed to render ({e}); retrying with original messages");
+				if req.set_raw_messages(original).is_err() {
+					return Err(e);
+				}
+				// Token counts and the logged prompt reflected the compressed messages; recompute.
+				llm_info.input_tokens = req.to_llm_request(self.provider(), tokenize)?.input_tokens;
+				if llm_info.prompt.is_some() {
+					llm_info.prompt = Some(req.get_messages().into());
+				}
+				chat_translation.render_request(chat_request(&req), &render_ctx)?
 			},
-		)?;
+		};
 		llm_info.provider_state = rendered.provider_state;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		let req = Request::from_parts(parts, Body::from(rendered.body));
@@ -1732,7 +1772,7 @@ impl AIProvider {
 			)
 			.await?;
 		let llm_info = match prepared {
-			PreparedRequest::Ready(llm_info) => llm_info,
+			PreparedRequest::Ready { llm_info, .. } => llm_info,
 			PreparedRequest::Rejected(resp) => return Ok(RequestResult::Rejected(resp)),
 		};
 		let request_model = llm_info.request_model.as_str();

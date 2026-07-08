@@ -948,6 +948,8 @@ fn convert_backend_ai_policy(
 			.collect(),
 		wildcard_patterns: Arc::new(Vec::new()), // Will be populated by compile_model_alias_patterns()
 		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
+		// TODO: xds proto for context compression config
+		context_compression: None,
 		routes: ai
 			.routes
 			.iter()

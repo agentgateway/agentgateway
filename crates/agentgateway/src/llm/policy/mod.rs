@@ -24,6 +24,7 @@ fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
 	req
 }
 
+pub mod compression;
 pub mod webhook;
 
 mod azure_content_safety;
@@ -147,6 +148,9 @@ pub struct Policy {
 	/// Prompt caching settings for providers that support cache markers.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompt_caching: Option<PromptCachingConfig>,
+	/// Context compression applied to request messages before they reach the provider.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub context_compression: Option<compression::ContextCompression>,
 	/// Route type overrides selected by request path suffix.
 	#[serde(default, skip_serializing_if = "SortedRoutes::is_empty")]
 	#[cfg_attr(

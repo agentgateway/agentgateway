@@ -4158,6 +4158,17 @@
             }
           ]
         },
+        "contextCompression": {
+          "description": "Context compression applied to request messages before they reach the provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextCompression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "routes": {
           "description": "Route type overrides selected by request path suffix.",
           "type": "object",
@@ -4805,6 +4816,68 @@
         }
       },
       "additionalProperties": false
+    },
+    "ContextCompression": {
+      "description": "Context compression shrinks request messages before they reach the LLM to reduce token\nspend. Compression is an optimization: by default failures are ignored and the original\nrequest is forwarded unchanged.",
+      "type": "object",
+      "properties": {
+        "engine": {
+          "description": "Engine that performs the compression.",
+          "$ref": "#/$defs/CompressionEngine"
+        },
+        "failureMode": {
+          "description": "Behavior when the engine is unreachable, errors, or returns unusable messages.\nDefaults to `failOpen` (forward the original request unchanged).",
+          "$ref": "#/$defs/WebhookFailureMode",
+          "default": "failOpen"
+        },
+        "minSizeBytes": {
+          "description": "Minimum serialized size of the message array, in bytes, before compression is attempted.\nRequests below the threshold are forwarded untouched. Defaults to 16384.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 16384
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "engine"
+      ]
+    },
+    "CompressionEngine": {
+      "oneOf": [
+        {
+          "description": "External compression service implementing the gateway's compression wire contract.",
+          "type": "object",
+          "properties": {
+            "external": {
+              "$ref": "#/$defs/ExternalCompressionEngine"
+            }
+          },
+          "required": [
+            "external"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ExternalCompressionEngine": {
+      "description": "External service speaking the gateway compression API (see module docs).",
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Backend serving the compression endpoint.",
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "path": {
+          "description": "Request path of the compression endpoint. Defaults to `/v1/compress`.",
+          "type": "string",
+          "default": "/v1/compress"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target"
+      ]
     },
     "RouteType": {
       "description": "The HTTP endpoint class, such as `/v1/chat/completions` or `/v1/messages`.\n\nThis is used both for the client route we matched and for the upstream route\nwe finally send to. For chat, those can differ: a client Anthropic\n`/v1/messages` request is `RouteType::Messages` and `InputFormat::Messages`,\nbut it may be translated and sent upstream as `RouteType::Completions`.\n\n`RouteType` is about the HTTP endpoint. `InputFormat` is about the parsed\nclient payload and the response shape we owe back to that client. The main\ndifference is this type includes things like Detect and Passthrough.",
@@ -9863,6 +9936,16 @@
               "type": "null"
             }
           ]
+        },
+        "contextCompression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextCompression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -10041,6 +10124,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contextCompression": {
+          "description": "contextCompression shrinks request messages through a compression engine before they\nreach the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextCompression"
             },
             {
               "type": "null"
