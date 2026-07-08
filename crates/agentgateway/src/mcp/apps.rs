@@ -6,7 +6,7 @@
 //! `{target}+{scheme}://rest`.
 
 use rmcp::model::{ServerJsonRpcMessage, ServerResult};
-use tracing::warn;
+use tracing::debug;
 
 const UI_META_KEY: &str = "ui";
 const UI_RESOURCE_URI_KEY: &str = "resourceUri";
@@ -74,18 +74,21 @@ pub(crate) fn rewrite_tool_list_ui_meta(
 			if !m.0.contains_key(UI_META_KEY) && !m.0.contains_key(UI_FLAT_RESOURCE_URI_KEY) {
 				continue;
 			}
-			let strip_ui = match m.0.get_mut(UI_META_KEY).and_then(|ui| ui.as_object_mut()) {
-				Some(obj) => !validate_and_rewrite_uri_value(
+			if let Some(obj) = m.0.get_mut(UI_META_KEY).and_then(|ui| ui.as_object_mut()) {
+				if !validate_and_rewrite_uri_value(
 					obj.get_mut(UI_RESOURCE_URI_KEY),
 					multiplexing,
 					target,
 					&mut *resource_allowed,
-				),
-				None => false,
-			};
-			if strip_ui {
-				warn!(%target, tool = %t.name, "stripping denied _meta.ui");
-				m.0.remove(UI_META_KEY);
+				) {
+					// do not strip the whole `_meta.ui` object, so we preserve the visibility of the tool
+					// e.g. visibility: ["app"] should not go to the model
+					debug!(%target, tool = %t.name, "stripping denied _meta.ui.resourceUri");
+					obj.remove(UI_RESOURCE_URI_KEY);
+				}
+				if obj.is_empty() {
+					m.0.remove(UI_META_KEY);
+				}
 			}
 			if !validate_and_rewrite_uri_value(
 				m.0.get_mut(UI_FLAT_RESOURCE_URI_KEY),

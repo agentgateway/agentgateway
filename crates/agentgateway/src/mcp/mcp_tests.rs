@@ -405,9 +405,19 @@ async fn apps_rbac_denied_ui_resource_strips_tool_meta() {
 		.iter()
 		.find(|t| t.name == "a_show_dashboard")
 		.expect("tool should still be listed when its UI resource is denied");
+	let ui = show
+		.meta
+		.as_ref()
+		.and_then(|m| m.0.get("ui"))
+		.expect("denial strips the resourceUri, not the whole _meta.ui");
 	assert!(
-		show.meta.as_ref().and_then(|m| m.0.get("ui")).is_none(),
-		"denied UI resource must strip _meta.ui"
+		ui.get("resourceUri").is_none(),
+		"denied UI resource must strip _meta.ui.resourceUri"
+	);
+	assert_eq!(
+		ui.get("visibility"),
+		Some(&serde_json::json!(["model", "app"])),
+		"visibility must survive the strip; dropping it would widen the tool's exposure"
 	);
 	assert!(
 		show
