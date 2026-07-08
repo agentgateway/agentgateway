@@ -70,23 +70,18 @@ pub enum BackendAuth {
 	CrossAppAccess(Box<CrossAppAccessAuth>),
 }
 
-/// A single secret-sourced header to inject on the backend request.
+/// A single additional credential to inject on the backend request.
 #[apply(schema!)]
-pub struct BackendAuthHeader {
-	/// HTTP header name to set.
-	#[serde(with = "http_serde::header_name")]
-	#[cfg_attr(feature = "schema", schemars(with = "String"))]
-	pub name: http::HeaderName,
-	/// Optional prefix prepended to the secret value (e.g. "Bearer ").
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub prefix: Option<String>,
-	/// Resolved secret value (resolved controller-side; runtime sees the value, not the ref).
+pub struct BackendAuthCredential {
+	/// Where the credential is inserted on the backend request.
+	pub location: AuthorizationLocation,
+	/// Credential value (resolved controller-side; runtime sees the value, not the ref).
 	#[serde(
 		serialize_with = "ser_redact",
 		deserialize_with = "deser_key_from_file"
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-	pub value: SecretString,
+	pub key: SecretString,
 }
 
 /// Records whether the backend auth location was explicitly configured by the user
@@ -108,11 +103,11 @@ pub struct BackendInfo {
 
 pub fn apply_tunnel_auth(
 	auth: &BackendAuth,
-	headers: &[BackendAuthHeader],
+	credentials: &[BackendAuthCredential],
 ) -> Result<HeaderValue, ProxyError> {
-	if !headers.is_empty() {
+	if !credentials.is_empty() {
 		return Err(ProcessingString(
-			"backendAuth.headers is not supported on tunnel-bound backends".to_string(),
+			"backendAuth.credentials is not supported on tunnel-bound backends".to_string(),
 		));
 	}
 	match auth {
@@ -146,22 +141,16 @@ pub fn apply_tunnel_auth(
 pub async fn apply_backend_auth(
 	backend_info: &BackendInfo,
 	auth: Option<&BackendAuth>,
-	headers: &[BackendAuthHeader],
+	credentials: &[BackendAuthCredential],
 	req: &mut Request,
 ) -> Result<(), ProxyError> {
 	if let Some(auth) = auth {
 		apply_backend_auth_kind(backend_info, auth, req).await?;
 	}
-	for h in headers {
-		let raw = h.value.expose_secret();
-		let value = match h.prefix.as_deref() {
-			Some(prefix) => Cow::Owned(format!("{prefix}{raw}")),
-			None => Cow::Borrowed(raw),
-		};
-		let mut header_value =
-			HeaderValue::from_str(&value).map_err(|e| ProxyError::Processing(e.into()))?;
-		header_value.set_sensitive(true);
-		req.headers_mut().insert(&h.name, header_value);
+	for credential in credentials {
+		credential
+			.location
+			.insert(req, credential.key.expose_secret())?;
 	}
 	Ok(())
 }

@@ -1433,7 +1433,7 @@ const (
 )
 
 // +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
-// +kubebuilder:validation:XValidation:rule="has(self.headers) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)",message="must specify headers, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess (headers may be combined with one of the primary auth kinds)"
+// +kubebuilder:validation:XValidation:rule="has(self.credentials) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)",message="must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess (credentials may be combined with a primary auth kind)"
 // +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key, secretRef, or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
@@ -1483,47 +1483,39 @@ type BackendAuth struct {
 
 	// Where backend credentials are inserted.
 	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
-	// This applies to `key`, `secretRef`, and `passthrough`. Does not apply to entries in `headers`,
-	// which carry their own per-entry header name and prefix.
+	// This applies to `key`, `secretRef`, and `passthrough`. Entries in `credentials` carry their own location.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
 
-	// Headers is a list of additional secret-sourced headers to inject on the
-	// backend request. Each entry resolves a Secret + key and writes its value to
-	// the named HTTP header. `headers` is independent of the primary `key`/`secretRef`/
-	// `passthrough` mechanism and may be set on its own (to inject N headers
-	// with no primary credential) or alongside it.
+	// Credentials is a list of additional credentials to inject on the
+	// backend request. Each entry resolves a Secret key and writes its value
+	// to the entry's location. `credentials` is independent of the primary
+	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+	// alongside it.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=16
-	// +listType=map
-	// +listMapKey=name
-	Headers []BackendAuthHeader `json:"headers,omitempty"`
+	// +listType=atomic
+	Credentials []BackendAuthCredential `json:"credentials,omitempty"`
 }
 
-// BackendAuthHeader specifies one secret-sourced header to inject on the
+// BackendAuthCredential specifies one additional credential to inject on the
 // backend request.
-type BackendAuthHeader struct {
-	// Name of the HTTP request header to set.
+type BackendAuthCredential struct {
+	// Where the credential is inserted on the backend request.
 	// +required
-	Name gwv1.HTTPHeaderName `json:"name"`
+	Location AuthorizationLocation `json:"location"`
 
-	// Optional prefix prepended to the secret value (e.g. "Bearer ").
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=256
-	// +optional
-	Prefix *string `json:"prefix,omitempty"`
-
-	// SecretRef references a Kubernetes Secret. The key to read from the Secret
-	// is given by `key` (defaults to the header `name`).
+	// SecretRef references a Kubernetes Secret holding the credential value.
 	// +required
 	SecretRef LocalSecretObjectRef `json:"secretRef"`
 
-	// Key in the referenced Secret whose value is used. Defaults to `name`.
+	// SecretKey is the key in the referenced Secret whose value is used.
+	// Defaults to the location's name (for example the header name).
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=253
 	// +optional
-	Key *string `json:"key,omitempty"`
+	SecretKey *string `json:"secretKey,omitempty"`
 }
 
 // OpenAIModerationAuth configures credentials for OpenAI Moderation requests.

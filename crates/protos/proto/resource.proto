@@ -353,13 +353,15 @@ message BackendAuthPolicy {
     CrossAppAccessAuth cross_app_access = 7;
   }
 
-  repeated BackendAuthHeader headers = 8;
+  // Additional credentials to inject on the backend request, independent of `kind`.
+  repeated BackendAuthCredential credentials = 8;
 }
 
-message BackendAuthHeader {
-  string header_name = 1;
-  optional string prefix = 2;
-  string value = 3;
+message BackendAuthCredential {
+  // Where the credential is inserted. Required; `expression` locations are not valid here.
+  AuthorizationLocation location = 1;
+  // Credential value, resolved controller-side (the runtime sees the value, not the ref).
+  string value = 2;
 }
 
 message AuthorizationLocation {

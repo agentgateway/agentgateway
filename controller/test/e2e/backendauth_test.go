@@ -16,15 +16,15 @@ import (
 func TestBackendAuth(tt *testing.T) {
 	t := New(tt)
 
-	t.Run("MultiHeader", func(t base.Test) {
-		testBackendAuthMultiHeader(t)
+	t.Run("Credentials", func(t base.Test) {
+		testBackendAuthCredentials(t)
 	})
 }
 
-func testBackendAuthMultiHeader(t base.Test) {
-	t.Apply(manifest("backendauth", "multi-header.yaml"))
+func testBackendAuthCredentials(t base.Test) {
+	t.Apply(manifest("backendauth", "credentials.yaml"))
 
-	t.Send("multi-header-auth.example.com", &testmatchers.HttpResponse{
+	t.Send("credentials-auth.example.com", &testmatchers.HttpResponse{
 		StatusCode: http.StatusOK,
 		Body: gomega.WithTransform(transforms.WithEchoHeaders(),
 			gomega.And(

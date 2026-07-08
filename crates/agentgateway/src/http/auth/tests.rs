@@ -830,16 +830,18 @@ fn extract_subject_token_expression_falls_back_to_claims() {
 	assert_eq!(token.as_deref(), Some("claims-jwt"));
 }
 
-fn header(name: &'static str, value: &str, prefix: Option<&str>) -> BackendAuthHeader {
-	BackendAuthHeader {
-		name: ::http::HeaderName::from_static(name),
-		prefix: prefix.map(|s| s.to_string()),
-		value: SecretString::new(value.to_string().into()),
+fn credential(name: &'static str, value: &str, prefix: Option<&str>) -> BackendAuthCredential {
+	BackendAuthCredential {
+		location: AuthorizationLocation::Header {
+			name: ::http::HeaderName::from_static(name),
+			prefix: prefix.map(Into::into),
+		},
+		key: SecretString::new(value.to_string().into()),
 	}
 }
 
 #[tokio::test]
-async fn test_backend_auth_headers_only_injects_all_headers() {
+async fn test_backend_auth_credentials_only_injects_all() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
 	let inputs = t.inputs();
@@ -853,12 +855,12 @@ async fn test_backend_auth_headers_only_injects_all_headers() {
 		inputs,
 	};
 
-	let headers = vec![
-		header("dd-api-key", "primary-api-key", None),
-		header("dd-application-key", "application-key", None),
+	let credentials = vec![
+		credential("dd-api-key", "primary-api-key", None),
+		credential("dd-application-key", "application-key", None),
 	];
 
-	apply_backend_auth(&backend_info, None, &headers, &mut req)
+	apply_backend_auth(&backend_info, None, &credentials, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -873,12 +875,12 @@ async fn test_backend_auth_headers_only_injects_all_headers() {
 	assert!(dd_app_key.is_sensitive());
 	assert!(
 		h.get(::http::header::AUTHORIZATION).is_none(),
-		"headers-only must not set Authorization"
+		"credentials-only must not set Authorization"
 	);
 }
 
 #[tokio::test]
-async fn test_backend_auth_header_with_prefix() {
+async fn test_backend_auth_credential_with_prefix() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
 	let inputs = t.inputs();
@@ -892,9 +894,9 @@ async fn test_backend_auth_header_with_prefix() {
 		inputs,
 	};
 
-	let headers = vec![header("x-auth-token", "token-value", Some("Bearer "))];
+	let credentials = vec![credential("x-auth-token", "token-value", Some("Bearer "))];
 
-	apply_backend_auth(&backend_info, None, &headers, &mut req)
+	apply_backend_auth(&backend_info, None, &credentials, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -907,7 +909,38 @@ async fn test_backend_auth_header_with_prefix() {
 }
 
 #[tokio::test]
-async fn test_backend_auth_combined_key_and_headers() {
+async fn test_backend_auth_credential_query_parameter() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	*req.uri_mut() = "http://example.com/search?keep=yes".parse().unwrap();
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let credentials = vec![BackendAuthCredential {
+		location: AuthorizationLocation::QueryParameter { name: "key".into() },
+		key: SecretString::new("my-secret-key".into()),
+	}];
+
+	apply_backend_auth(&backend_info, None, &credentials, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	assert_eq!(
+		req.uri().to_string(),
+		"http://example.com/search?keep=yes&key=my-secret-key"
+	);
+}
+
+#[tokio::test]
+async fn test_backend_auth_combined_key_and_credentials() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
 	let inputs = t.inputs();
@@ -925,9 +958,9 @@ async fn test_backend_auth_combined_key_and_headers() {
 		value: SecretString::new("primary".into()),
 		location: None,
 	};
-	let headers = vec![header("x-auth-email", "user@example.com", None)];
+	let credentials = vec![credential("x-auth-email", "user@example.com", None)];
 
-	apply_backend_auth(&backend_info, Some(&key_auth), &headers, &mut req)
+	apply_backend_auth(&backend_info, Some(&key_auth), &credentials, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -943,7 +976,7 @@ async fn test_backend_auth_combined_key_and_headers() {
 }
 
 #[tokio::test]
-async fn test_backend_auth_headers_invalid_value_errors() {
+async fn test_backend_auth_credentials_invalid_value_errors() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
 	let inputs = t.inputs();
@@ -958,28 +991,28 @@ async fn test_backend_auth_headers_invalid_value_errors() {
 	};
 
 	// Newlines are invalid in HTTP header values.
-	let headers = vec![header("x-bad", "value\nwith\nnewlines", None)];
-	let err = apply_backend_auth(&backend_info, None, &headers, &mut req).await;
+	let credentials = vec![credential("x-bad", "value\nwith\nnewlines", None)];
+	let err = apply_backend_auth(&backend_info, None, &credentials, &mut req).await;
 	assert!(err.is_err(), "invalid header value must error");
 }
 
 #[test]
-fn test_apply_tunnel_auth_rejects_headers() {
+fn test_apply_tunnel_auth_rejects_credentials() {
 	let key_auth = BackendAuth::Key {
 		value: SecretString::new("primary".into()),
 		location: None,
 	};
-	let headers = vec![header("x-extra", "v", None)];
-	let err = apply_tunnel_auth(&key_auth, &headers).expect_err("tunnel must reject headers");
+	let credentials = vec![credential("x-extra", "v", None)];
+	let err = apply_tunnel_auth(&key_auth, &credentials).expect_err("tunnel must reject credentials");
 	let msg = format!("{err}");
 	assert!(
-		msg.contains("backendAuth.headers"),
-		"tunnel-rejection message should mention backendAuth.headers, got {msg}"
+		msg.contains("backendAuth.credentials"),
+		"tunnel-rejection message should mention backendAuth.credentials, got {msg}"
 	);
 }
 
 #[test]
-fn test_backend_auth_serde_backward_compat_no_headers() {
+fn test_backend_auth_serde_backward_compat_no_credentials() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let policy = BackendTrafficPolicy::backend_auth(BackendAuth::Key {
@@ -991,13 +1024,13 @@ fn test_backend_auth_serde_backward_compat_no_headers() {
 		yaml.contains("backendAuth")
 			&& yaml.contains("key:")
 			&& !yaml.contains("auth:")
-			&& !yaml.contains("headers:"),
-		"legacy serialization must remain headers-free and unwrapped: {yaml}"
+			&& !yaml.contains("credentials:"),
+		"legacy serialization must remain credentials-free and unwrapped: {yaml}"
 	);
 }
 
 #[test]
-fn test_backend_auth_serde_with_headers_includes_field() {
+fn test_backend_auth_serde_with_credentials_includes_field() {
 	use crate::types::agent::BackendTrafficPolicy;
 
 	let policy = BackendTrafficPolicy::BackendAuth {
@@ -1005,11 +1038,11 @@ fn test_backend_auth_serde_with_headers_includes_field() {
 			value: SecretString::new("primary".into()),
 			location: None,
 		}),
-		headers: vec![header("x-extra", "v", None)],
+		credentials: vec![credential("x-extra", "v", None)],
 	};
 	let yaml = serde_yaml::to_string(&policy).expect("serialize");
 	assert!(
-		yaml.contains("headers:") && yaml.contains("x-extra"),
-		"headers should appear in serialized output: {yaml}"
+		yaml.contains("credentials:") && yaml.contains("x-extra"),
+		"credentials should appear in serialized output: {yaml}"
 	);
 }

@@ -967,18 +967,17 @@ fn convert_backend_ai_policy(
 	Ok(policy)
 }
 
-fn backend_auth_headers_from_proto(
-	headers: Vec<proto::agent::BackendAuthHeader>,
-) -> Result<Vec<crate::http::auth::BackendAuthHeader>, ProtoError> {
-	headers
+fn backend_auth_credentials_from_proto(
+	credentials: Vec<proto::agent::BackendAuthCredential>,
+) -> Result<Vec<crate::http::auth::BackendAuthCredential>, ProtoError> {
+	credentials
 		.into_iter()
-		.map(|h| {
-			let name = ::http::HeaderName::from_bytes(h.header_name.as_bytes())
-				.map_err(|e| ProtoError::Generic(format!("invalid header name: {e}")))?;
-			Ok(crate::http::auth::BackendAuthHeader {
-				name,
-				prefix: h.prefix,
-				value: h.value.into(),
+		.map(|c| {
+			let location = optional_authorization_location(c.location.as_ref())?
+				.ok_or(ProtoError::MissingRequiredField)?;
+			Ok(crate::http::auth::BackendAuthCredential {
+				location,
+				key: c.value.into(),
 			})
 		})
 		.collect()
@@ -1845,16 +1844,16 @@ fn backend_policy_from_proto(
 			BackendTrafficPolicy::BackendTLS(tls)
 		},
 		Some(bps::Kind::Auth(auth)) => {
-			let headers = backend_auth_headers_from_proto(auth.headers.clone())?;
+			let credentials = backend_auth_credentials_from_proto(auth.credentials.clone())?;
 			let auth_kind = backend_auth_from_proto(auth.clone(), diagnostics)?;
-			if auth_kind.is_none() && headers.is_empty() {
+			if auth_kind.is_none() && credentials.is_empty() {
 				return Err(ProtoError::MissingRequiredField);
 			}
 			BackendTrafficPolicy::BackendAuth {
 				auth: auth_kind,
-				headers,
+				credentials,
 			}
-		}, // BackendAuth with optional kind + headers
+		},
 		Some(bps::Kind::McpAuthorization(rbac)) => {
 			BackendTrafficPolicy::McpAuthorization(mcp_authorization_from_proto(rbac, diagnostics))
 		},
@@ -4230,7 +4229,7 @@ mod tests {
 						region: "us-east-1".to_string(),
 					},
 				)),
-				headers: vec![],
+				credentials: vec![],
 			},
 			&mut Diagnostics::default(),
 		)?;

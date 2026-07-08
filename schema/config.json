@@ -2860,10 +2860,10 @@
         {
           "type": "object",
           "properties": {
-            "headers": {
+            "credentials": {
               "type": "array",
               "items": {
-                "$ref": "#/$defs/BackendAuthHeader"
+                "$ref": "#/$defs/BackendAuthCredential"
               }
             }
           },
@@ -2994,21 +2994,21 @@
             }
           ],
           "required": [
-            "headers"
+            "credentials"
           ]
         },
         {
           "type": "object",
           "properties": {
-            "headers": {
+            "credentials": {
               "type": "array",
               "items": {
-                "$ref": "#/$defs/BackendAuthHeader"
+                "$ref": "#/$defs/BackendAuthCredential"
               }
             }
           },
           "required": [
-            "headers"
+            "credentials"
           ]
         },
         {
@@ -4059,30 +4059,23 @@
       },
       "additionalProperties": false
     },
-    "BackendAuthHeader": {
-      "description": "A single secret-sourced header to inject on the backend request.",
+    "BackendAuthCredential": {
+      "description": "A single additional credential to inject on the backend request.",
       "type": "object",
       "properties": {
-        "name": {
-          "description": "HTTP header name to set.",
-          "type": "string"
+        "location": {
+          "description": "Where the credential is inserted on the backend request.",
+          "$ref": "#/$defs/AuthorizationLocation"
         },
-        "prefix": {
-          "description": "Optional prefix prepended to the secret value (e.g. \"Bearer \").",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "value": {
-          "description": "Resolved secret value (resolved controller-side; runtime sees the value, not the ref).",
+        "key": {
+          "description": "Credential value (resolved controller-side; runtime sees the value, not the ref).",
           "$ref": "#/$defs/FileOrInline"
         }
       },
       "additionalProperties": false,
       "required": [
-        "name",
-        "value"
+        "location",
+        "key"
       ]
     },
     "BackendAuth": {

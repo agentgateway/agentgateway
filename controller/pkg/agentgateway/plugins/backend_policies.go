@@ -946,13 +946,13 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		}
 	}
 
-	translatedHeaders, headerErrs := translateBackendAuthHeaders(ctx, auth.Headers, policy.Namespace)
-	errs = append(errs, headerErrs...)
-	if len(translatedHeaders) > 0 {
+	translatedCredentials, credErrs := translateBackendAuthCredentials(ctx, auth.Credentials, policy.Namespace)
+	errs = append(errs, credErrs...)
+	if len(translatedCredentials) > 0 {
 		if translatedAuth == nil {
 			translatedAuth = &api.BackendAuthPolicy{}
 		}
-		translatedAuth.Headers = translatedHeaders
+		translatedAuth.Credentials = translatedCredentials
 	}
 
 	if translatedAuth == nil {
@@ -1381,42 +1381,62 @@ func isOAuthReservedAdditionalParam(key string) bool {
 	return false
 }
 
-// translateBackendAuthHeaders resolves each entry in the BackendAuth.Headers
-// list and returns the api.BackendAuthHeader slice. On any per-entry failure,
+// translateBackendAuthCredentials resolves each entry in the BackendAuth.Credentials
+// list and returns the api.BackendAuthCredential slice. On any per-entry failure,
 // it returns an empty slice along with the joined errors (fail-closed: never
 // ship a partial credential set to the runtime).
-func translateBackendAuthHeaders(ctx PolicyCtx, headers []agentgateway.BackendAuthHeader, namespace string) ([]*api.BackendAuthHeader, []error) {
-	if len(headers) == 0 {
+func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.BackendAuthCredential, namespace string) ([]*api.BackendAuthCredential, []error) {
+	if len(creds) == 0 {
 		return nil, nil
 	}
 	var errs []error
-	translated := make([]*api.BackendAuthHeader, 0, len(headers))
-	for _, h := range headers {
-		secretKey := string(h.Name)
-		if h.Key != nil {
-			secretKey = *h.Key
+	translated := make([]*api.BackendAuthCredential, 0, len(creds))
+	for _, c := range creds {
+		locName := credentialLocationName(c.Location)
+		secretKey := locName
+		if c.SecretKey != nil {
+			secretKey = *c.SecretKey
 		}
-		data, err := ctx.ResolveCredentialRef(h.SecretRef, namespace)
+		data, err := ctx.ResolveCredentialRef(c.SecretRef, namespace)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("backendAuth header %q: %w", h.Name, err))
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
 			continue
 		}
 		val, ok := data[secretKey]
 		if !ok {
-			errs = append(errs, fmt.Errorf("backendAuth header %q: secret %s/%s missing key %q",
-				h.Name, namespace, h.SecretRef.Name, secretKey))
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: secret %s/%s missing key %q",
+				locName, namespace, c.SecretRef.Name, secretKey))
 			continue
 		}
-		translated = append(translated, &api.BackendAuthHeader{
-			HeaderName: string(h.Name),
-			Prefix:     h.Prefix,
-			Value:      string(val),
+		loc := translateAuthorizationLocation(&c.Location)
+		if loc == nil {
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: invalid location", locName))
+			continue
+		}
+		translated = append(translated, &api.BackendAuthCredential{
+			Location: loc,
+			Value:    string(val),
 		})
 	}
 	if len(errs) > 0 {
 		return nil, errs
 	}
 	return translated, nil
+}
+
+// credentialLocationName returns the name field of whichever location variant is set.
+// AuthorizationLocation is guaranteed by CEL to have exactly one of header/queryParameter/cookie set.
+func credentialLocationName(loc agentgateway.AuthorizationLocation) string {
+	if loc.Header != nil {
+		return string(loc.Header.Name)
+	}
+	if loc.QueryParameter != nil {
+		return loc.QueryParameter.Name
+	}
+	if loc.Cookie != nil {
+		return loc.Cookie.Name
+	}
+	return ""
 }
 
 // translateRouteType converts RouteType to agentgateway proto RouteType

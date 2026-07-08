@@ -455,8 +455,8 @@ async fn test_llm_virtual_model_conditional_config() {
 }
 
 #[tokio::test]
-async fn test_backend_auth_multi_header_config() {
-	test_config_parsing("backend_auth_multi_header").await;
+async fn test_backend_auth_credentials_config() {
+	test_config_parsing("backend_auth_credentials").await;
 }
 
 #[tokio::test]
@@ -2187,8 +2187,9 @@ binds:
 
 #[test]
 fn test_de_backend_auth_accepts_each_shape() {
-	use crate::http::auth::BackendAuth;
 	use serde::de::IntoDeserializer;
+
+	use crate::http::auth::BackendAuth;
 
 	let parse = |v: serde_json::Value| -> super::LocalBackendAuth {
 		super::de_backend_auth::<serde_json::Value>(v.into_deserializer())
@@ -2198,29 +2199,32 @@ fn test_de_backend_auth_accepts_each_shape() {
 
 	let copilot_scalar = parse(serde_json::json!("copilot"));
 	assert!(matches!(copilot_scalar.auth, Some(BackendAuth::Copilot)));
-	assert!(copilot_scalar.headers.is_empty());
+	assert!(copilot_scalar.credentials.is_empty());
 
 	let plain_key = parse(serde_json::json!({"key": "plain-secret"}));
 	assert!(matches!(
 		plain_key.auth,
 		Some(BackendAuth::Key { location: None, .. })
 	));
-	assert!(plain_key.headers.is_empty());
+	assert!(plain_key.credentials.is_empty());
 
 	let full_key = parse(serde_json::json!({"key": {"value": "explicit-secret"}}));
 	assert!(matches!(full_key.auth, Some(BackendAuth::Key { .. })));
-	assert!(full_key.headers.is_empty());
+	assert!(full_key.credentials.is_empty());
 
-	let full_with_headers = parse(serde_json::json!({
+	let full_with_credentials = parse(serde_json::json!({
 		"key": {"value": "explicit-secret"},
-		"headers": [{"name": "x-token", "value": "tok"}],
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
 	}));
-	assert!(matches!(full_with_headers.auth, Some(BackendAuth::Key { .. })));
-	assert_eq!(full_with_headers.headers.len(), 1);
+	assert!(matches!(
+		full_with_credentials.auth,
+		Some(BackendAuth::Key { .. })
+	));
+	assert_eq!(full_with_credentials.credentials.len(), 1);
 
-	let headers_only = parse(serde_json::json!({
-		"headers": [{"name": "x-token", "value": "tok"}],
+	let credentials_only = parse(serde_json::json!({
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
 	}));
-	assert!(headers_only.auth.is_none());
-	assert_eq!(headers_only.headers.len(), 1);
+	assert!(credentials_only.auth.is_none());
+	assert_eq!(credentials_only.credentials.len(), 1);
 }

@@ -2223,19 +2223,19 @@ where
 					value: key,
 					location: None,
 				}),
-				headers: Vec::new(),
+				credentials: Vec::new(),
 			}),
-			BackendAuthCompat::FullWithHeaders { auth, headers } => Ok(LocalBackendAuth {
+			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(LocalBackendAuth {
 				auth: Some(validate_auth::<D::Error>(auth)?),
-				headers,
+				credentials,
 			}),
-			BackendAuthCompat::HeadersOnly { headers } => Ok(LocalBackendAuth {
+			BackendAuthCompat::CredentialsOnly { credentials } => Ok(LocalBackendAuth {
 				auth: None,
-				headers,
+				credentials,
 			}),
 			BackendAuthCompat::Full(auth) => Ok(LocalBackendAuth {
 				auth: Some(validate_auth::<D::Error>(auth)?),
-				headers: Vec::new(),
+				credentials: Vec::new(),
 			}),
 		})
 		.transpose()
@@ -2244,7 +2244,7 @@ where
 #[derive(Debug, Clone, Default)]
 pub struct LocalBackendAuth {
 	pub auth: Option<BackendAuth>,
-	pub headers: Vec<crate::http::auth::BackendAuthHeader>,
+	pub credentials: Vec<crate::http::auth::BackendAuthCredential>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -2256,13 +2256,13 @@ enum BackendAuthCompat {
 		#[serde(deserialize_with = "deser_key_from_file")]
 		key: SecretString,
 	},
-	FullWithHeaders {
+	FullWithCredentials {
 		#[serde(flatten)]
 		auth: BackendAuth,
-		headers: Vec<crate::http::auth::BackendAuthHeader>,
+		credentials: Vec<crate::http::auth::BackendAuthCredential>,
 	},
-	HeadersOnly {
-		headers: Vec<crate::http::auth::BackendAuthHeader>,
+	CredentialsOnly {
+		credentials: Vec<crate::http::auth::BackendAuthCredential>,
 	},
 	Full(BackendAuth),
 }
@@ -2597,7 +2597,7 @@ impl LocalBackendPolicies {
 		if let Some(p) = backend_auth {
 			pols.push(BackendTrafficPolicy::BackendAuth {
 				auth: p.auth,
-				headers: p.headers,
+				credentials: p.credentials,
 			})
 		}
 		if let Some(p) = ext_authz {
@@ -4434,7 +4434,7 @@ async fn convert_llm_config(
 		if let Some(p) = model_config.auth.clone() {
 			pols.push(BackendTrafficPolicy::BackendAuth {
 				auth: p.auth,
-				headers: p.headers,
+				credentials: p.credentials,
 			});
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
@@ -5259,7 +5259,7 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = backend_auth {
 		backend_policies.push(BackendTrafficPolicy::BackendAuth {
 			auth: p.auth,
-			headers: p.headers,
+			credentials: p.credentials,
 		})
 	}
 

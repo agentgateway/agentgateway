@@ -23,7 +23,7 @@ use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::control::caclient::CaClient;
-use crate::http::auth::{BackendAuth, BackendAuthHeader};
+use crate::http::auth::{BackendAuth, BackendAuthCredential};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
 use crate::http::ext_proc::GrpcReferenceChannel;
@@ -2690,7 +2690,7 @@ pub enum BackendTrafficPolicy {
 		#[serde(flatten)]
 		auth: Option<BackendAuth>,
 		#[serde(default, skip_serializing_if = "Vec::is_empty")]
-		headers: Vec<BackendAuthHeader>,
+		credentials: Vec<BackendAuthCredential>,
 	},
 	InferenceRouting(ext_proc::InferenceRouting),
 	#[serde(rename = "ai")]
@@ -2710,13 +2710,13 @@ impl BackendTrafficPolicy {
 	pub fn backend_auth(auth: BackendAuth) -> Self {
 		Self::BackendAuth {
 			auth: Some(auth),
-			headers: Vec::new(),
+			credentials: Vec::new(),
 		}
 	}
-	pub fn backend_auth_headers(headers: Vec<BackendAuthHeader>) -> Self {
+	pub fn backend_auth_credentials(credentials: Vec<BackendAuthCredential>) -> Self {
 		Self::BackendAuth {
 			auth: None,
-			headers,
+			credentials,
 		}
 	}
 }

@@ -270,14 +270,14 @@ func (this *BackendAuthPolicy) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
-// MarshalJSON is a custom marshaler for BackendAuthHeader
-func (this *BackendAuthHeader) MarshalJSON() ([]byte, error) {
+// MarshalJSON is a custom marshaler for BackendAuthCredential
+func (this *BackendAuthCredential) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
 	return []byte(str), err
 }
 
-// UnmarshalJSON is a custom unmarshaler for BackendAuthHeader
-func (this *BackendAuthHeader) UnmarshalJSON(b []byte) error {
+// UnmarshalJSON is a custom unmarshaler for BackendAuthCredential
+func (this *BackendAuthCredential) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
