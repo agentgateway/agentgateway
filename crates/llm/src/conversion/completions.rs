@@ -1008,10 +1008,8 @@ pub(crate) fn build_output_messages(
 	tool_parts: Option<Vec<crate::OutputMessagePart>>,
 ) {
 	let mut content = Vec::new();
-	if let Some(t) = text {
-		if !t.is_empty() {
-			content.push(crate::OutputMessagePart::Text { text: t });
-		}
+	if let Some(t) = text && !t.is_empty() {
+		content.push(crate::OutputMessagePart::Text { text: t });
 	}
 	if let Some(parts) = tool_parts {
 		content.extend(parts);
@@ -1124,7 +1122,7 @@ pub fn passthrough_stream(
 								}
 								let tool_parts = pending_tool_calls
 									.as_mut()
-									.and_then(|p| finalize_tool_calls(p));
+									.and_then(finalize_tool_calls);
 								build_output_messages(&mut r.response, text_part, tool_parts);
 							});
 
@@ -1144,7 +1142,7 @@ pub fn passthrough_stream(
 							}
 							let tool_parts = pending_tool_calls
 								.as_mut()
-								.and_then(|p| finalize_tool_calls(p));
+								.and_then(finalize_tool_calls);
 							build_output_messages(&mut r.response, text_part, tool_parts);
 						});
 					},
