@@ -151,56 +151,40 @@ mod base64 {
 }
 
 mod aes {
-	use aws_lc_rs::aead::{AES_256_GCM, Aad, Nonce, RandomizedNonceKey};
 	use base64::Engine;
 	use base64::engine::general_purpose::STANDARD;
 
+	use crate::crypto::aead::{AeadError, Aes256Gcm};
+
 	#[derive(Debug)]
 	pub struct Encoder {
-		key: RandomizedNonceKey,
+		key: Aes256Gcm,
 	}
 
 	impl Encoder {
 		/// Create from a 32-byte key
 		pub fn new(key: &[u8]) -> Result<Self, Error> {
-			let key = RandomizedNonceKey::new(&AES_256_GCM, key).map_err(|_| Error::InvalidKey)?;
+			let key = Aes256Gcm::new(key).map_err(|_| Error::InvalidKey)?;
 			Ok(Self { key })
 		}
 
 		/// Encrypt and base64 encode
 		pub fn encrypt(&self, plaintext: &str) -> Result<String, Error> {
-			let mut in_out: Vec<u8> = plaintext.as_bytes().to_vec();
-			// Seal automatically generates a random nonce and prepends it
-			let nonce = self
+			let sealed = self
 				.key
-				.seal_in_place_append_tag(Aad::empty(), &mut in_out)
+				.seal(plaintext.as_bytes())
 				.map_err(|_| Error::EncryptionFailed)?;
-
-			// Format: nonce || ciphertext+tag
-			let mut result = nonce.as_ref().to_vec();
-			result.extend_from_slice(&in_out);
-			// Base64 encode
-			Ok(STANDARD.encode(&result))
+			// Format: nonce || ciphertext+tag, base64 encoded
+			Ok(STANDARD.encode(&sealed))
 		}
 
 		/// Decode and decrypt
 		pub fn decrypt(&self, encoded: &str) -> Result<Vec<u8>, Error> {
-			// Base64 decode
 			let data = STANDARD.decode(encoded).map_err(|_| Error::InvalidFormat)?;
-			if data.len() < 12 {
-				return Err(Error::InvalidFormat);
-			}
-
-			// Extract nonce and ciphertext
-			let (nonce_bytes, ciphertext) = data.split_at(12);
-			let nonce =
-				Nonce::try_assume_unique_for_key(nonce_bytes).map_err(|_| Error::InvalidFormat)?;
-			let mut in_out = ciphertext.to_vec();
-			let plaintext = self
-				.key
-				.open_in_place(nonce, Aad::empty(), &mut in_out)
-				.map_err(|_| Error::DecryptionFailed)?;
-			Ok(plaintext.to_vec())
+			self.key.open(&data).map_err(|e| match e {
+				AeadError::InvalidFormat => Error::InvalidFormat,
+				_ => Error::DecryptionFailed,
+			})
 		}
 	}
 

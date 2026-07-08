@@ -51,8 +51,8 @@ pub(super) fn start_login(
 	let nonce = generate_nonce();
 	let pkce_verifier = generate_pkce_verifier();
 	let code_challenge = {
-		let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, pkce_verifier.as_bytes());
-		base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest.as_ref())
+		let digest = crate::crypto::digest::sha256(pkce_verifier.as_bytes());
+		base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest)
 	};
 	let original_uri = normalize_original_uri(req.uri().path_and_query());
 	let transaction = TransactionState {

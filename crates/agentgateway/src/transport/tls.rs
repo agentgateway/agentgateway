@@ -7,7 +7,7 @@ use std::sync::Arc;
 use agent_core::strng;
 use agent_core::strng::Strng;
 use futures_util::TryFutureExt;
-use rustls::crypto::{CryptoProvider, SupportedKxGroup};
+use rustls::crypto::SupportedKxGroup;
 use rustls::server::ParsedCertificate;
 use rustls::{ServerConfig, SupportedCipherSuite};
 use rustls_pki_types::{CertificateDer, InvalidDnsNameError, ServerName};
@@ -18,6 +18,10 @@ use crate::apply;
 use crate::serdes::schema;
 use crate::transport::stream::Socket;
 use crate::types::discovery::Identity;
+
+// Provider construction lives in the central `crypto` module; re-export here so
+// existing `transport::tls::provider*` call sites keep working unchanged.
+pub use crate::crypto::provider::{provider, provider_with_cipher_suites, provider_with_options};
 
 pub static ALL_TLS_VERSIONS: &[&rustls::SupportedProtocolVersion] =
 	&[&rustls::version::TLS12, &rustls::version::TLS13];
@@ -258,10 +262,6 @@ impl KeyExchangeGroup {
 	}
 }
 
-pub fn provider() -> Arc<CryptoProvider> {
-	provider_with_options(&[], &[])
-}
-
 /// Returns a shared rustls `KeyLog`. On release builds this always returns
 /// `NoKeyLog` so TLS session secrets can never be logged in production. On
 /// debug builds, honors `SSLKEYLOGFILE` (NSS keylog format) for use with
@@ -293,49 +293,6 @@ pub fn warn_if_key_log_enabled() {
 	{
 		warn!("SSLKEYLOGFILE={path}; TLS session secrets will be written to disk (debug build only).");
 	}
-}
-
-pub fn provider_with_options(
-	cipher_suites: &[CipherSuite],
-	key_exchange_groups: &[KeyExchangeGroup],
-) -> Arc<CryptoProvider> {
-	let cipher_suites = if cipher_suites.is_empty() {
-		DEFAULT_CIPHER_SUITES.to_vec()
-	} else {
-		cipher_suites
-			.iter()
-			.map(CipherSuite::to_supported_cipher_suite)
-			.collect()
-	};
-
-	let key_exchange_groups = if key_exchange_groups.is_empty() {
-		DEFAULT_KEY_EXCHANGE_GROUPS.to_vec()
-	} else {
-		key_exchange_groups
-			.iter()
-			.map(KeyExchangeGroup::to_supported_kx_group)
-			.collect()
-	};
-
-	let mut provider = default_crypto_provider();
-	// Restrict negotiation to our allowlist.
-	provider.cipher_suites = cipher_suites;
-	provider.kx_groups = key_exchange_groups;
-	Arc::new(provider)
-}
-
-#[cfg(feature = "tls-aws-lc")]
-fn default_crypto_provider() -> CryptoProvider {
-	rustls::crypto::aws_lc_rs::default_provider()
-}
-
-#[cfg(feature = "tls-openssl")]
-fn default_crypto_provider() -> CryptoProvider {
-	rustls_openssl::default_provider()
-}
-
-pub fn provider_with_cipher_suites(cipher_suites: &[CipherSuite]) -> Arc<CryptoProvider> {
-	provider_with_options(cipher_suites, &[])
 }
 
 #[derive(thiserror::Error, Debug)]

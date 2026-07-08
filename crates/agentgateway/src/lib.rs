@@ -29,6 +29,7 @@ pub mod client;
 pub mod config;
 pub mod config_store;
 pub mod control;
+pub mod crypto;
 pub mod database;
 pub mod http;
 pub mod json;

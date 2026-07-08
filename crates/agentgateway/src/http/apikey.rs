@@ -3,7 +3,6 @@ use std::hash::Hash;
 use ::cel::Value;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, Serializer};
-use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
 use crate::http::Request;
@@ -111,7 +110,7 @@ pub struct APIKeyHash(
 
 impl APIKeyHash {
 	pub fn from_raw_key(key: &str) -> Self {
-		let digest = Sha256::digest(key.as_bytes());
+		let digest = crate::crypto::digest::sha256(key.as_bytes());
 		APIKeyHash(hex::encode(digest))
 	}
 

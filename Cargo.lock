@@ -328,7 +328,6 @@ dependencies = [
  "serde_urlencoded",
  "serde_with",
  "serde_yaml",
- "sha2 0.11.0",
  "shellexpand",
  "socket2",
  "sqlx",
