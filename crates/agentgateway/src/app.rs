@@ -196,6 +196,13 @@ async fn ui_url(config: &Config) -> String {
 	let Some(gateway) = local.get("gateways").and_then(|g| g.get(gateway_name)) else {
 		return admin_url();
 	};
+	let Some(port) = gateway
+		.get("port")
+		.and_then(serde_json::Value::as_u64)
+		.and_then(|port| u16::try_from(port).ok())
+	else {
+		return admin_url();
+	};
 	let endpoint = match listener_name {
 		Some(listener_name) => gateway
 			.get("listeners")
@@ -212,13 +219,6 @@ async fn ui_url(config: &Config) -> String {
 			.or(Some(gateway)),
 	};
 	let Some(endpoint) = endpoint else {
-		return admin_url();
-	};
-	let Some(port) = endpoint
-		.get("port")
-		.and_then(serde_json::Value::as_u64)
-		.and_then(|port| u16::try_from(port).ok())
-	else {
 		return admin_url();
 	};
 	let hostname = endpoint

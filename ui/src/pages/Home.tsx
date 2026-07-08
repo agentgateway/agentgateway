@@ -37,11 +37,11 @@ export function HomePage() {
   const hasMcp = Boolean(config.data?.mcp);
   const hasTraffic = Boolean(
     config.data &&
-    ("binds" in config.data ||
+    (Boolean(config.data.binds?.length) ||
       "gateways" in config.data ||
       "routes" in config.data),
   );
-  const hasBinds = Boolean(config.data && "binds" in config.data);
+  const hasBinds = Boolean(config.data?.binds?.length);
   const models = config.data?.llm?.models ?? [];
   const virtualModels = config.data?.llm?.virtualModels ?? [];
   const mcpServers = config.data?.mcp?.targets ?? [];

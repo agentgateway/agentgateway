@@ -91,14 +91,14 @@ export function Shell() {
   const hasTraffic = dumpMode
     ? true
     : config.data
-      ? "binds" in config.data ||
+      ? Boolean(config.data.binds?.length) ||
         "gateways" in config.data ||
         "routes" in config.data
       : true;
   const hasBinds = dumpMode
     ? true
     : config.data
-      ? "binds" in config.data
+      ? Boolean(config.data.binds?.length)
       : false;
   const navGroups = navigationGroups({
     hasLlm,

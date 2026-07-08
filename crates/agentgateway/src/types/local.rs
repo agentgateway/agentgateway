@@ -3033,6 +3033,18 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 				"gateways.{gateway_name} cannot set tls or policy fields when listeners are configured"
 			);
 		}
+		if !gateway_config.listeners.is_empty() {
+			let mut listener_tls = None;
+			for listener in &gateway_config.listeners {
+				let tls = listener.tls.is_some();
+				if let Some(existing_tls) = listener_tls
+					&& existing_tls != tls
+				{
+					bail!("gateway listeners on port {port} cannot mix TLS and plaintext");
+				}
+				listener_tls = Some(tls);
+			}
+		}
 	}
 	for (port, label) in gateway_ports {
 		insert_local_listener_port(port, label)?;

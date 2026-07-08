@@ -91,7 +91,7 @@ function TrafficRoutesEditorPage() {
   const config = useGatewayConfig();
   const update = useUpdateConfig();
   const help = useSchemaHelp();
-  const hasLegacyBinds = Boolean(config.data && "binds" in config.data);
+  const hasLegacyBinds = Boolean(config.data?.binds?.length);
   const routes = useMemo(() => routeContexts(config.data), [config.data]);
   const listeners = useMemo(
     () =>
@@ -680,7 +680,11 @@ function GatewayRouteEditor(props: {
           </Field>
         </div>
 
-        <HttpMatchEditor route={route} help={props.help} onChange={setRoute} />
+        <HttpMatchEditor
+          route={route}
+          help={props.help}
+          onChange={(nextRoute) => setRoute({ ...route, ...nextRoute })}
+        />
 
         <RouteBackendsEditor
           kind="http"
