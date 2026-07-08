@@ -66,7 +66,7 @@
       }
     },
     "routes": {
-      "description": "routes defines HTTP routes attached to one or more named gateways.",
+      "description": "routes defines HTTP routes attached to one or more named gateways. When a gateway named `default` exists,\nroutes without gateways attach to it.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/LocalAttachedRoute"
@@ -9846,8 +9846,7 @@
             "$ref": "#/$defs/LocalRouteBackend"
           }
         }
-      },
-      "additionalProperties": false
+      }
     },
     "LocalGatewayRefs": {
       "anyOf": [
@@ -9866,7 +9865,7 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways attaches the LLM API routes to named gateways. When set, port and tls must be configured on the gateway.",
+          "description": "gateways attaches the LLM API routes to named gateways. When omitted and a gateway named `default` exists,\nthe LLM API routes attach to it unless port or tls is set. When set, port and tls must be configured on the gateway.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
@@ -10800,7 +10799,7 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways attaches the MCP routes to named gateways. When set, port must be configured on the gateway.",
+          "description": "gateways attaches the MCP routes to named gateways. When omitted and a gateway named `default` exists,\nthe MCP routes attach to it unless port is set. When set, port must be configured on the gateway.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
@@ -10863,7 +10862,7 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways exposes the UI and required UI API routes on named gateways.",
+          "description": "gateways exposes the UI and required UI API routes on named gateways. When omitted and a gateway named\n`default` exists, the UI routes attach to it.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
