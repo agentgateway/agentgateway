@@ -1767,6 +1767,12 @@ type BackendAI struct {
 	// +optional
 	PromptCaching *PromptCachingConfig `json:"promptCaching,omitempty"`
 
+	// Context compression shrinks request messages through an external compression
+	// engine before they reach the LLM provider, to reduce token spend.
+	// Note: This field is only applicable when using the agentgateway data plane.
+	// +optional
+	ContextCompression *ContextCompressionConfig `json:"contextCompression,omitempty"`
+
 	// Rules for identifying the type of traffic to handle.
 	// The keys are URL path suffixes matched using ends-with comparison, for
 	// example `"/v1/chat/completions"`.

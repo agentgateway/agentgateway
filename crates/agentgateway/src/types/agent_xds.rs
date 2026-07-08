@@ -948,8 +948,10 @@ fn convert_backend_ai_policy(
 			.collect(),
 		wildcard_patterns: Arc::new(Vec::new()), // Will be populated by compile_model_alias_patterns()
 		prompt_caching: ai.prompt_caching.as_ref().map(convert_prompt_caching),
-		// TODO: xds proto for context compression config
-		context_compression: None,
+		context_compression: ai
+			.context_compression
+			.as_ref()
+			.and_then(convert_context_compression),
 		routes: ai
 			.routes
 			.iter()
@@ -3353,6 +3355,42 @@ fn convert_prompt_caching(
 	}
 }
 
+fn convert_context_compression(
+	cc: &proto::agent::backend_policy_spec::ai::ContextCompression,
+) -> Option<llm::policy::compression::ContextCompression> {
+	use proto::agent::backend_policy_spec::ai::context_compression::{FailureMode, engine};
+
+	// Only the external engine is defined today; without one, there's nothing to configure.
+	let engine::Kind::External(external) = cc.engine.as_ref()?.kind.as_ref()?;
+	let target = resolve_simple_reference(external.backend.as_ref());
+	if matches!(target, SimpleBackendReference::Invalid) {
+		return None;
+	}
+
+	let failure_mode = match FailureMode::try_from(cc.failure_mode) {
+		Ok(FailureMode::FailClosed) => llm::policy::FailureMode::FailClosed,
+		// Proto default (0) is FAIL_OPEN, matching the local-config default.
+		_ => llm::policy::FailureMode::FailOpen,
+	};
+
+	Some(llm::policy::compression::ContextCompression {
+		engine: llm::policy::compression::CompressionEngine::External(
+			llm::policy::compression::ExternalCompressionEngine {
+				target,
+				path: external
+					.path
+					.clone()
+					.unwrap_or_else(llm::policy::compression::default_compress_path),
+			},
+		),
+		failure_mode,
+		min_size_bytes: cc
+			.min_size_bytes
+			.map(|b| b as usize)
+			.unwrap_or_else(llm::policy::compression::default_min_size_bytes),
+	})
+}
+
 fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
@@ -3985,6 +4023,7 @@ mod tests {
 				prompts: None,
 				model_aliases: Default::default(),
 				prompt_caching: None,
+				context_compression: None,
 				routes: vec![
 					(
 						"/v1/chat/completions".to_string(),
@@ -4057,6 +4096,147 @@ mod tests {
 		}
 
 		Ok(())
+	}
+
+	fn ai_with_context_compression(
+		cc: Option<proto::agent::backend_policy_spec::ai::ContextCompression>,
+	) -> proto::agent::BackendPolicySpec {
+		proto::agent::BackendPolicySpec {
+			kind: Some(proto::agent::backend_policy_spec::Kind::Ai(Ai {
+				defaults: Default::default(),
+				overrides: Default::default(),
+				transformations: Default::default(),
+				prompt_guard: None,
+				prompts: None,
+				model_aliases: Default::default(),
+				prompt_caching: None,
+				context_compression: cc,
+				routes: Default::default(),
+			})),
+		}
+	}
+
+	fn compression_of(
+		spec: &proto::agent::BackendPolicySpec,
+	) -> Option<llm::policy::compression::ContextCompression> {
+		let policy = backend_policy_from_proto(spec, &mut Diagnostics::default()).ok()?;
+		match policy {
+			BackendTrafficPolicy::AI(ai) => ai.context_compression.clone(),
+			_ => None,
+		}
+	}
+
+	#[test]
+	fn context_compression_from_proto_resolves_defaults() {
+		use proto::agent::backend_policy_spec::ai::context_compression::{Engine, External, engine};
+		use proto::agent::backend_reference;
+
+		let cc = proto::agent::backend_policy_spec::ai::ContextCompression {
+			engine: Some(Engine {
+				kind: Some(engine::Kind::External(External {
+					backend: Some(proto::agent::BackendReference {
+						port: 8787,
+						kind: Some(backend_reference::Kind::Service(
+							backend_reference::Service {
+								namespace: "default".to_string(),
+								hostname: "compressor.default.svc.cluster.local".to_string(),
+							},
+						)),
+					}),
+					// path unset -> policy default
+					path: None,
+				})),
+			}),
+			// failure_mode unset (0) -> FAIL_OPEN, matching local-config default
+			failure_mode: 0,
+			// min_size_bytes unset -> policy default
+			min_size_bytes: None,
+		};
+
+		let got = compression_of(&ai_with_context_compression(Some(cc)))
+			.expect("context compression should convert");
+		assert!(matches!(
+			got.failure_mode,
+			llm::policy::FailureMode::FailOpen
+		));
+		assert_eq!(
+			got.min_size_bytes,
+			llm::policy::compression::default_min_size_bytes()
+		);
+		let llm::policy::compression::CompressionEngine::External(external) = got.engine;
+		assert_eq!(
+			external.path,
+			llm::policy::compression::default_compress_path()
+		);
+		assert!(matches!(
+			external.target,
+			SimpleBackendReference::Service { port, .. } if port == 8787
+		));
+	}
+
+	#[test]
+	fn context_compression_from_proto_honors_explicit_fields() {
+		use proto::agent::backend_policy_spec::ai::context_compression::{
+			Engine, External, FailureMode, engine,
+		};
+		use proto::agent::backend_reference;
+
+		let cc = proto::agent::backend_policy_spec::ai::ContextCompression {
+			engine: Some(Engine {
+				kind: Some(engine::Kind::External(External {
+					backend: Some(proto::agent::BackendReference {
+						port: 0,
+						kind: Some(backend_reference::Kind::Backend("my-backend".to_string())),
+					}),
+					path: Some("/compress".to_string()),
+				})),
+			}),
+			failure_mode: FailureMode::FailClosed as i32,
+			min_size_bytes: Some(4096),
+		};
+
+		let got = compression_of(&ai_with_context_compression(Some(cc)))
+			.expect("context compression should convert");
+		assert!(matches!(
+			got.failure_mode,
+			llm::policy::FailureMode::FailClosed
+		));
+		assert_eq!(got.min_size_bytes, 4096);
+		let llm::policy::compression::CompressionEngine::External(external) = got.engine;
+		assert_eq!(external.path, "/compress");
+		assert!(matches!(
+			external.target,
+			SimpleBackendReference::Backend(_)
+		));
+	}
+
+	#[test]
+	fn context_compression_from_proto_drops_invalid_target_and_missing_engine() {
+		use proto::agent::backend_policy_spec::ai::context_compression::{Engine, External, engine};
+
+		// Engine present but backend reference missing -> Invalid target -> dropped.
+		let no_backend = proto::agent::backend_policy_spec::ai::ContextCompression {
+			engine: Some(Engine {
+				kind: Some(engine::Kind::External(External {
+					backend: None,
+					path: None,
+				})),
+			}),
+			failure_mode: 0,
+			min_size_bytes: None,
+		};
+		assert!(compression_of(&ai_with_context_compression(Some(no_backend))).is_none());
+
+		// No engine at all -> dropped.
+		let no_engine = proto::agent::backend_policy_spec::ai::ContextCompression {
+			engine: None,
+			failure_mode: 0,
+			min_size_bytes: None,
+		};
+		assert!(compression_of(&ai_with_context_compression(Some(no_engine))).is_none());
+
+		// No context compression -> None.
+		assert!(compression_of(&ai_with_context_compression(None)).is_none());
 	}
 
 	#[test]

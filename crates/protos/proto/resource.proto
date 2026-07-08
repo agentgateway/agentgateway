@@ -1335,6 +1335,35 @@ message BackendPolicySpec {
     map<string, string> model_aliases = 5;
     PromptCaching prompt_caching = 6;
 
+    // Context compression shrinks request messages through a compression engine
+    // before they reach the LLM provider, to reduce token spend.
+    message ContextCompression {
+      // External compression service implementing the gateway compression wire contract.
+      message External {
+        BackendReference backend = 1;
+        // Request path of the compression endpoint. Defaults to "/v1/compress".
+        optional string path = 2;
+      }
+      // Engine that performs the compression.
+      message Engine {
+        oneof kind {
+          External external = 1;
+        }
+      }
+      // Behavior when the engine is unreachable, errors, or returns unusable messages.
+      // Defaults to FAIL_OPEN (forward the original request unchanged).
+      enum FailureMode {
+        FAIL_OPEN = 0;
+        FAIL_CLOSED = 1;
+      }
+      Engine engine = 1;
+      FailureMode failure_mode = 2;
+      // Minimum serialized size of the message array, in bytes, before compression is
+      // attempted. Requests below the threshold are forwarded untouched. Defaults to 16384.
+      optional uint32 min_size_bytes = 3;
+    }
+    ContextCompression context_compression = 9;
+
     // RouteType specifies how incoming requests should be processed
     // based on the URL path.
     enum RouteType {

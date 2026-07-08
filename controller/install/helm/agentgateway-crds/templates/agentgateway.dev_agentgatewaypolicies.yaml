@@ -84,6 +84,124 @@ spec:
                       Settings for AI workloads. This is only applicable when
                       connecting to a `Backend` of type `ai`.
                     properties:
+                      contextCompression:
+                        description: |-
+                          Context compression shrinks request messages through an external compression
+                          engine before they reach the LLM provider, to reduce token spend.
+                          Note: This field is only applicable when using the agentgateway data plane.
+                        properties:
+                          engine:
+                            description: Engine that performs the compression.
+                            properties:
+                              external:
+                                description: External compression service implementing
+                                  the gateway compression wire contract.
+                                properties:
+                                  backendRef:
+                                    description: |-
+                                      Compression server to reach.
+
+                                      Supported types: Service and Backend.
+                                    properties:
+                                      group:
+                                        default: ""
+                                        description: |-
+                                          Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                          When unspecified or empty string, core API group is inferred.
+                                        maxLength: 253
+                                        pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                        type: string
+                                      kind:
+                                        default: Service
+                                        description: |-
+                                          Kind is the Kubernetes resource kind of the referent. For example
+                                          "Service".
+
+                                          Defaults to "Service" when not specified.
+
+                                          ExternalName services can refer to CNAME DNS records that may live
+                                          outside of the cluster and as such are difficult to reason about in
+                                          terms of conformance. They also may not be safe to forward to (see
+                                          CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                          support ExternalName Services.
+
+                                          Support: Core (Services with a type other than ExternalName)
+
+                                          Support: Implementation-specific (Services with type ExternalName)
+                                        maxLength: 63
+                                        minLength: 1
+                                        pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                        type: string
+                                      name:
+                                        description: Name is the name of the referent.
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                      namespace:
+                                        description: |-
+                                          Namespace is the namespace of the backend. When unspecified, the local
+                                          namespace is inferred.
+
+                                          Note that when a namespace different than the local namespace is specified,
+                                          a ReferenceGrant object is required in the referent namespace to allow that
+                                          namespace's owner to accept the reference. See the ReferenceGrant
+                                          documentation for details.
+
+                                          Support: Core
+                                        maxLength: 63
+                                        minLength: 1
+                                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                        type: string
+                                      port:
+                                        description: |-
+                                          Port specifies the destination port number to use for this resource.
+                                          Port is required when the referent is a Kubernetes Service. In this
+                                          case, the port number is the service port number, not the target port.
+                                          For other resources, destination port might be derived from the referent
+                                          resource or this field.
+                                        format: int32
+                                        maximum: 65535
+                                        minimum: 1
+                                        type: integer
+                                    required:
+                                    - name
+                                    type: object
+                                    x-kubernetes-validations:
+                                    - message: Must have port for Service reference
+                                      rule: '(size(self.group) == 0 && self.kind ==
+                                        ''Service'') ? has(self.port) : true'
+                                  path:
+                                    description: Request path of the compression endpoint.
+                                      Defaults to `/v1/compress`.
+                                    type: string
+                                required:
+                                - backendRef
+                                type: object
+                            type: object
+                            x-kubernetes-validations:
+                            - message: exactly one of the fields in [external] must
+                                be set
+                              rule: '[has(self.external)].filter(x,x==true).size()
+                                == 1'
+                          failureMode:
+                            default: FailOpen
+                            description: |-
+                              Behavior when the engine is unreachable, errors, or returns unusable messages.
+                              `FailOpen` (default) forwards the original request unchanged; `FailClosed` rejects it.
+                            enum:
+                            - FailClosed
+                            - FailOpen
+                            type: string
+                          minSizeBytes:
+                            default: 16384
+                            description: |-
+                              Minimum serialized size of the message array, in bytes, before compression is
+                              attempted. Requests below the threshold are forwarded untouched.
+                            minimum: 0
+                            type: integer
+                        required:
+                        - engine
+                        type: object
                       defaults:
                         description: Defaults to merge with user input fields. If
                           the field is already set, the field in the request is used.
@@ -7158,10 +7276,10 @@ spec:
                         type: array
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [defaults modelAliases
-                        overrides prompt promptCaching promptGuard routes transformations]
-                        must be set
-                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
+                    - message: at least one of the fields in [contextCompression defaults
+                        modelAliases overrides prompt promptCaching promptGuard routes
+                        transformations] must be set
+                      rule: '[has(self.contextCompression),has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
                         >= 1'
                   auth:
                     description: Settings for managing authentication to the backend.

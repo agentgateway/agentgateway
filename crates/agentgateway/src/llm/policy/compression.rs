@@ -46,12 +46,12 @@ fn default_failure_mode() -> FailureMode {
 	FailureMode::FailOpen
 }
 
-fn default_min_size_bytes() -> usize {
+pub fn default_min_size_bytes() -> usize {
 	// Compression only pays for itself on large contexts; skip the callout for small requests.
 	16 * 1024
 }
 
-fn default_compress_path() -> String {
+pub fn default_compress_path() -> String {
 	"/v1/compress".to_string()
 }
 

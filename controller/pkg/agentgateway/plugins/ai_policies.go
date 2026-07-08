@@ -158,6 +158,49 @@ func webhookFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_
 	return api.BackendPolicySpec_Ai_Webhook_FAIL_CLOSED
 }
 
+func processContextCompression(ctx PolicyCtx, namespace string, cc *agentgateway.ContextCompressionConfig) (*api.BackendPolicySpec_Ai_ContextCompression, error) {
+	if cc == nil {
+		return nil, nil
+	}
+	// Only the external engine is defined today; kubebuilder ExactlyOneOf guarantees it is set.
+	if cc.Engine.External == nil {
+		return nil, fmt.Errorf("context compression requires an external engine")
+	}
+
+	be, err := BuildBackendRef(ctx, cc.Engine.External.BackendRef, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build context compression engine backend: %v", err)
+	}
+
+	external := &api.BackendPolicySpec_Ai_ContextCompression_External{
+		Backend: be,
+	}
+	if cc.Engine.External.Path != "" {
+		external.Path = new(cc.Engine.External.Path)
+	}
+
+	out := &api.BackendPolicySpec_Ai_ContextCompression{
+		Engine: &api.BackendPolicySpec_Ai_ContextCompression_Engine{
+			Kind: &api.BackendPolicySpec_Ai_ContextCompression_Engine_External{
+				External: external,
+			},
+		},
+		FailureMode: contextCompressionFailureMode(cc.FailureMode),
+	}
+	if cc.MinSizeBytes > 0 {
+		out.MinSizeBytes = new(uint32(cc.MinSizeBytes)) //nolint:gosec // G115: MinSizeBytes is validated by kubebuilder to be >= 0
+	}
+	return out, nil
+}
+
+func contextCompressionFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_ContextCompression_FailureMode {
+	if mode == agentgateway.FailClosed {
+		return api.BackendPolicySpec_Ai_ContextCompression_FAIL_CLOSED
+	}
+	// Default (empty or FailOpen) maps to FAIL_OPEN.
+	return api.BackendPolicySpec_Ai_ContextCompression_FAIL_OPEN
+}
+
 func processBuiltinRegexRule(builtin agentgateway.BuiltIn, logger *slog.Logger) *api.BackendPolicySpec_Ai_RegexRule {
 	v := api.BackendPolicySpec_Ai_BUILTIN_UNSPECIFIED
 	switch builtin {

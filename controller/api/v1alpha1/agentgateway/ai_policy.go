@@ -426,3 +426,45 @@ type PromptCachingConfig struct {
 	// +kubebuilder:default=0
 	CacheMessageOffset int `json:"cacheMessageOffset,omitempty"`
 }
+
+// ContextCompressionConfig configures compression of request messages through an external
+// compression engine before they reach the LLM provider.
+type ContextCompressionConfig struct {
+	// Engine that performs the compression.
+	// +required
+	Engine ContextCompressionEngine `json:"engine"`
+
+	// Behavior when the engine is unreachable, errors, or returns unusable messages.
+	// `FailOpen` (default) forwards the original request unchanged; `FailClosed` rejects it.
+	// +kubebuilder:default=FailOpen
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// Minimum serialized size of the message array, in bytes, before compression is
+	// attempted. Requests below the threshold are forwarded untouched.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=16384
+	// +optional
+	MinSizeBytes int `json:"minSizeBytes,omitempty"`
+}
+
+// ContextCompressionEngine selects the compression engine implementation.
+// +kubebuilder:validation:ExactlyOneOf=external
+type ContextCompressionEngine struct {
+	// External compression service implementing the gateway compression wire contract.
+	// +optional
+	External *ExternalCompressionEngine `json:"external,omitempty"`
+}
+
+// ExternalCompressionEngine is an external service speaking the gateway compression API.
+type ExternalCompressionEngine struct {
+	// Compression server to reach.
+	//
+	// Supported types: Service and Backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Request path of the compression endpoint. Defaults to `/v1/compress`.
+	// +optional
+	Path string `json:"path,omitempty"`
+}
