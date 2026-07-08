@@ -16,7 +16,7 @@ const noneGateway = "__none__";
 
 const uiPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
   {
-    title: "Access",
+    title: "UI access policies",
     keys: [
       "oidc",
       "jwtAuth",
@@ -33,16 +33,16 @@ const uiPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
 export function RawSettingsPage() {
   return (
     <PolicyCatalogPage
-      title="Top-level Settings"
-      description="Configure UI exposure and UI policies."
+      title="UI Settings"
+      description="Expose the UI on a traffic gateway and configure policies that protect the UI."
       schemaRoot="LocalUIPolicy"
       sections={uiPolicySections}
-      yamlDescription="Read-only view of ui.policies."
+      yamlDescription="Read-only view of UI policies from ui.policies."
       policies={(config) =>
         config.data?.ui?.policies as Record<string, unknown> | null | undefined
       }
       policiesDisabled={(config) => !uiGateway(config.data)}
-      policiesDisabledReason="UI policies require a public UI gateway."
+      policiesDisabledReason="UI policies require the UI to be exposed on a gateway."
       beforePolicies={<UiGatewayPanel />}
       onSavePolicy={(next, key, value) => {
         next.ui ??= {};
@@ -94,11 +94,11 @@ function UiGatewayPanel() {
     <Panel>
       <div className="form-grid">
         <FieldGroup
-          label="UI gateway"
-          tooltip="Which gateway to expose the UI on."
+          label="Public UI gateway"
+          tooltip="Which traffic gateway exposes the UI."
         >
           <Dropdown
-            ariaLabel="UI gateway"
+            ariaLabel="Public UI gateway"
             value={draftGateway}
             options={[
               {

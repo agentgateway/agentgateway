@@ -26,7 +26,7 @@ const pages = [
   ["/traffic/listeners", "Traffic Listeners"],
   ["/traffic/routes", "Traffic Routes"],
   ["/cel", "CEL Playground"],
-  ["/settings", "Top-level Settings"],
+  ["/settings", "UI Settings"],
 ] as const;
 
 test("core pages render with mocked gateway data", async ({ page }) => {

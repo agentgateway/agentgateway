@@ -21,6 +21,16 @@ import {
 import { LlmSettingsDrawer } from "./models/LlmSettingsDrawer";
 import { useSchemaHelp } from "../schemaHelp";
 import { McpSettingsDrawer } from "./McpServers";
+import type { GatewayConfig } from "../types";
+
+const uiAuthPolicyKeys = [
+  "oidc",
+  "jwtAuth",
+  "extAuthz",
+  "basicAuth",
+  "apiKey",
+  "authorization",
+];
 
 export function HomePage() {
   const mode = useConfigDumpMode();
@@ -46,6 +56,7 @@ export function HomePage() {
   const virtualModels = config.data?.llm?.virtualModels ?? [];
   const mcpServers = config.data?.mcp?.targets ?? [];
   const warnings = config.data ? configWarnings(config.data) : [];
+  const uiGatewayNeedsAuthWarning = uiExposedWithoutAuth(config.data);
   const callableModels = models.length + virtualModels.length;
   const traffic = trafficStats(config.data);
   const [startupEvaluated, setStartupEvaluated] = useState(false);
@@ -232,6 +243,20 @@ export function HomePage() {
           </ul>
         </StatusBanner>
       ) : null}
+      {uiGatewayNeedsAuthWarning ? (
+        <StatusBanner
+          state="warn"
+          title="UI is exposed without authentication"
+          action={
+            <Link className="button" to="/settings">
+              Configure UI policies
+            </Link>
+          }
+        >
+          Unauthenticated users can access the UI; consider adding
+          authentication or authorization policies to secure the UI.
+        </StatusBanner>
+      ) : null}
 
       <section className="surface-overview-list" aria-label="Gateway surfaces">
         <SurfaceRow
@@ -390,6 +415,19 @@ function surfaceEndpointLabel(
 ) {
   if (!gateways) return `Port ${port}`;
   return `Gateway ${Array.isArray(gateways) ? gateways.join(", ") : gateways}`;
+}
+
+function uiExposedWithoutAuth(config: GatewayConfig | null | undefined) {
+  if (!uiGateway(config)) return false;
+  const policies = config?.ui?.policies as Record<string, unknown> | undefined;
+  return !uiAuthPolicyKeys.some((key) => Boolean(policies?.[key]));
+}
+
+function uiGateway(config: GatewayConfig | null | undefined) {
+  const gateways = config?.ui?.gateways;
+  if (Array.isArray(gateways)) return gateways[0];
+  if (gateways) return gateways;
+  return config?.ui && config.gateways?.default ? "default" : undefined;
 }
 
 type StartupSurface = "llm" | "mcp" | "apis";

@@ -1,128 +1,86 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
-llm:
-  port: 4000
-  models:
-  - name: anthropic/*
-    provider: anthropic
-    transformation:
-      model: llmRequest.model.stripPrefix("anthropic/")
-  - name: ollama/*
-    provider: ollama
-    transformation:
-      temperature: 'null'
-      model: llmRequest.model.stripPrefix("ollama/")
-  - name: openai/*
-    provider: openai
-    transformation:
-      model: llmRequest.model.stripPrefix("openai/")
-  providers: []
-  virtualModels: []
-  policies:
-    guardrails:
-      request:
-      - regex:
-          action: reject
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTP
+    routes:
+    # Test with: curl '127.0.0.1:3000/match?param=hello' -H "x-header: test-0"
+    - name: match-example
+      matches:
+      - path:
+          pathPrefix: /match
+        method: GET
+        query:
+        - name: param
+          value:
+            exact: hello
+        headers:
+        - name: x-header
+          value:
+            regex: "test-[0-9]"
+      backends:
+      - host: 127.0.0.1:8080
+    - name: policy-example
+      policies:
+        # CORS headers to set
+        # See https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS#the_http_response_headers
+        cors:
+          allowHeaders: ["header"]
+          allowOrigins: ["*"]
+          allowCredentials: true
+          allowMethods: ["GET"]
+          exposeHeaders: ["header2"]
+          maxAge: 100s
+        # Modify request headers
+        requestHeaderModifier:
+          add:
+            x-req-added: value
+          remove:
+          - x-illegal-header
+        # Modify response headers
+        responseHeaderModifier:
+          set:
+            x-req-added: value
+        # Rewrite url/hostname
+        urlRewrite:
+          path:
+            full: "/new-path"
+          authority:
+            full: "custom-host-header"
+        # Allow 10 RPS
+        localRateLimit:
+        - maxTokens: 10
+          tokensPerFill: 1
+          fillInterval: 1s
+        # Mirror 50% of requests
+        requestMirror:
+          backend:
+            host: 127.0.0.1:8081
+          percentage: .5
+        retry:
+          attempts: 2
+          codes: [429]
+        timeout:
+          requestTimeout: 1s
+      backends:
+      - host: 127.0.0.1:8080
+    - name: direct-response
+      matches:
+      - path:
+          pathPrefix: /direct
+      policies:
+        directResponse:
+          body: "hello!"
+          status: 200
+    - name: ip-rules
+      matches:
+      - path:
+          pathPrefix: /ips
+      policies:
+        authorization:
           rules:
-          - builtin: email
-          - builtin: ssn
-frontendPolicies:
-  http:
-    maxBufferSize: 33554432
-config:
-  modelCatalog:
-  - file: examples/traffic-http/base-costs.json
-gateways:
-  default:
-    port: 3000
-    cors:
-      allowMethods:
-      - GET
-      - POST
-      allowHeaders:
-      - '*'
-  tcp:
-    port: 9090
-    protocol: TCP
-routes:
-- name: match-example
-  matches:
-  - path:
-      pathPrefix: /match
-    method: GET
-    query:
-    - name: param
-      value:
-        exact: hello
-    headers:
-    - name: x-header
-      value:
-        regex: test-[0-9]
-  backends:
-  - host: 127.0.0.1:8080
-- name: policy-example
-  policies:
-    cors:
-      allowHeaders:
-      - header
-      allowOrigins:
-      - '*'
-      allowCredentials: true
-      allowMethods:
-      - GET
-      exposeHeaders:
-      - header2
-      maxAge: 100s
-    requestHeaderModifier:
-      add:
-        x-req-added: value
-      remove:
-      - x-illegal-header
-    responseHeaderModifier:
-      set:
-        x-req-added: value
-    urlRewrite:
-      path:
-        full: /new-path
-      authority:
-        full: custom-host-header
-    localRateLimit:
-    - maxTokens: 10
-      tokensPerFill: 1
-      fillInterval: 1s
-    requestMirror:
-      backend:
-        host: 127.0.0.1:8081
-      percentage: 0.5
-    retry:
-      attempts: 2
-      codes:
-      - 429
-    timeout:
-      requestTimeout: 1s
-  backends:
-  - host: 127.0.0.1:8080
-- name: direct-response
-  matches:
-  - path:
-      pathPrefix: /directx
-  policies:
-    directResponse:
-      body: hello!
-      status: 200
-- name: ip-rules
-  matches:
-  - path:
-      pathPrefix: /ips
-  policies:
-    authorization:
-      rules:
-      - |
-        cidr("127.0.0.1/8").containsIP(source.address)
-    directResponse:
-      body: hello!
-      status: 200
-tcpRoutes:
-- backends:
-  - host: localhost:8080
-  name: hellox
-  gateways: tcp
+          - |
+            cidr("127.0.0.1/8").containsIP(source.address)
+        directResponse:
+          body: "hello!"
+          status: 200
