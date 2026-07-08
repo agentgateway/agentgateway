@@ -320,7 +320,7 @@ impl LoggingPolicy {
 
 #[apply(schema!)]
 pub struct OtlpLoggingConfig {
-	/// Backend that receives OTLP logs.policies used when connecting to it.
+	/// Backend that receives OTLP logs and policies used when connecting to it.
 	#[serde(flatten)]
 	pub(super) target: SimpleBackendReferenceWithPolicies,
 	/// CEL expression that decides whether a request is exported over OTLP.

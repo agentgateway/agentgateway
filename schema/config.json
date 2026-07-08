@@ -8835,6 +8835,17 @@
     "OtlpLoggingConfig": {
       "type": "object",
       "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "filter": {
           "description": "CEL expression that decides whether a request is exported over OTLP.",
           "anyOf": [
@@ -8851,17 +8862,6 @@
           "anyOf": [
             {
               "$ref": "#/$defs/AccessLogFields"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "policies": {
-          "description": "Backend policies used when exporting OTLP logs.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SimpleLocalBackendPolicies"
             },
             {
               "type": "null"
@@ -8981,7 +8981,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies used when exporting traces.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
