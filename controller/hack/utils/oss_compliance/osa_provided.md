@@ -4,6 +4,7 @@ Name|Version|License
 [retry-go/v4](https://github.com/avast/retry-go)|v4.7.0|MIT License
 [xds/go](https://github.com/cncf/xds)|v0.0.0-20260202195803-dba9d589def2|Apache License 2.0
 [go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.37.1-0.20260627225610-70ff85c381ff|Apache License 2.0
+[felixge/fgprof](https://github.com/felixge/fgprof)|v0.9.5|MIT License
 [tcell/v2](https://github.com/gdamore/tcell)|v2.13.10|Apache License 2.0
 [ghodss/yaml](https://github.com/ghodss/yaml)|v1.0.1-0.20190212211648-25d852aebe32|MIT License
 [go-jose/v4](https://github.com/go-jose/go-jose)|v4.1.4|Apache License 2.0
