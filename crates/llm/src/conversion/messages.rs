@@ -6,7 +6,7 @@ use bytes::Bytes;
 
 use crate::types::completions::typed as completions;
 use crate::types::messages::typed as messages;
-use crate::{AIError, AmendOnDrop, parse};
+use crate::{AIError, StreamingUsageGuard, parse};
 
 fn anthropic_error_type(status: ::http::StatusCode) -> &'static str {
 	match status {
@@ -65,7 +65,7 @@ pub mod from_completions {
 	use crate::types::completions::typed as completions;
 	use crate::types::completions::typed::UsagePromptDetails;
 	use crate::types::messages::typed as messages;
-	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	fn user_content_to_messages(
 		content: &completions::RequestUserMessageContent,
@@ -544,7 +544,7 @@ pub mod from_completions {
 		))
 	}
 
-	pub fn translate_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
+	pub fn translate_stream(b: Body, buffer_limit: usize, log: StreamingUsageGuard) -> Body {
 		let mut message_id = None;
 		let mut model = String::new();
 		let mut service_tier = None;
@@ -581,7 +581,7 @@ pub mod from_completions {
 						message_id = Some(message.id);
 						model = message.model.clone();
 						service_tier = message.usage.service_tier.clone();
-						log.non_atomic_mutate(|r| {
+						log.update(|r| {
 							r.response.output_tokens = Some(message.usage.output_tokens as u64);
 							r.response.input_tokens = Some(message.usage.input_tokens as u64);
 							r.response.cached_input_tokens =
@@ -629,7 +629,7 @@ pub mod from_completions {
 					messages::MessagesStreamEvent::ContentBlockDelta { delta, index } => {
 						if !saw_token {
 							saw_token = true;
-							log.non_atomic_mutate(|r| {
+							log.update(|r| {
 								r.response.first_token = Some(Instant::now());
 							});
 						}
@@ -676,7 +676,7 @@ pub mod from_completions {
 					},
 					messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
 						let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
-						log.non_atomic_mutate(|r| {
+						log.update(|r| {
 							if let Some(crt) = usage.cache_read_input_tokens {
 								r.response.cached_input_tokens = Some(crt as u64);
 							}
@@ -748,7 +748,7 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 pub fn passthrough_stream(
 	b: Body,
 	buffer_limit: usize,
-	log: AmendOnDrop,
+	log: StreamingUsageGuard,
 	include_completion_in_log: bool,
 ) -> Body {
 	let mut saw_token = false;
@@ -759,7 +759,7 @@ pub fn passthrough_stream(
 		let Some(Ok(f)) = f else {
 			// Stream ended ([DONE]): flush completion if not already set via MessageDelta
 			if f.is_none() {
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					if let Some(c) = completion.take() {
 						r.response.completion = Some(vec![c]);
 					}
@@ -771,7 +771,7 @@ pub fn passthrough_stream(
 		// Extract info we need
 		match f {
 			messages::MessagesStreamEvent::MessageStart { message } => {
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					r.response.output_tokens = Some(message.usage.output_tokens as u64);
 					r.response.input_tokens = Some(message.usage.input_tokens as u64);
 					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
@@ -784,7 +784,7 @@ pub fn passthrough_stream(
 			messages::MessagesStreamEvent::ContentBlockDelta { delta, .. } => {
 				if !saw_token {
 					saw_token = true;
-					log.non_atomic_mutate(|r| {
+					log.update(|r| {
 						r.response.first_token = Some(Instant::now());
 					});
 				}
@@ -795,7 +795,7 @@ pub fn passthrough_stream(
 				}
 			},
 			messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					if let Some(o) = usage.output_tokens {
 						r.response.output_tokens = Some(o as u64);
 					}

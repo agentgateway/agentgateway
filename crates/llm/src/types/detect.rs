@@ -8,8 +8,8 @@ use tracing::debug;
 
 use crate::webhook::ResponseChoice;
 use crate::{
-	AIError, AmendOnDrop, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
-	ResponseType, SimpleChatCompletionMessage, json, parse,
+	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType, ResponseType,
+	SimpleChatCompletionMessage, StreamingUsageGuard, json, parse,
 };
 
 fn lookup<'a, T, const C: usize>(
@@ -419,13 +419,13 @@ pub struct StreamResponse {
 impl StreamResponse {
 	fn set_if<'a, T: Copy, const C: usize>(
 		&'a self,
-		log: &AmendOnDrop,
+		log: &StreamingUsageGuard,
 		paths: [&[&str]; C],
 		cvt: impl Fn(&'a Value) -> Option<T>,
 		apply: impl Fn(&mut crate::LLMInfo, T),
 	) -> Option<T> {
 		if let Some(res) = lookup(&self.rest, paths, cvt) {
-			log.non_atomic_mutate(|l| apply(l, res));
+			log.update(|l| apply(l, res));
 			Some(res)
 		} else {
 			None
@@ -433,7 +433,7 @@ impl StreamResponse {
 	}
 }
 
-pub fn amend_from_stream_response(log: &mut AmendOnDrop, f: &StreamResponse) {
+pub fn amend_from_stream_response(log: &mut StreamingUsageGuard, f: &StreamResponse) {
 	let input_tokens = f.set_if(
 		log,
 		lookups::USAGE_INPUT_TOKENS,
@@ -521,15 +521,15 @@ pub fn amend_from_stream_response(log: &mut AmendOnDrop, f: &StreamResponse) {
 	if total_tokens.is_none()
 		&& let (Some(input), Some(output)) = (input_tokens, output_tokens)
 	{
-		log.non_atomic_mutate(|l| l.response.total_tokens = Some(input + output));
+		log.update(|l| l.response.total_tokens = Some(input + output));
 	}
 	if input_tokens.is_some() || output_tokens.is_some() || total_tokens.is_some() {
-		log.report_rate_limit();
+		log.report_usage();
 	}
 }
 
 pub fn passthrough_stream(
-	mut log: AmendOnDrop,
+	mut log: StreamingUsageGuard,
 	resp: http::Response<axum_core::body::Body>,
 ) -> http::Response<axum_core::body::Body> {
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
@@ -547,7 +547,7 @@ pub fn passthrough_stream(
 }
 
 pub fn passthrough_aws_stream(
-	mut log: AmendOnDrop,
+	mut log: StreamingUsageGuard,
 	resp: http::Response<axum_core::body::Body>,
 ) -> http::Response<axum_core::body::Body> {
 	use base64::Engine;

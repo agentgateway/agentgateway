@@ -5,7 +5,7 @@ use axum_core::body::Body;
 use serde::Deserialize;
 
 use crate::types::detect;
-use crate::{AmendOnDrop, parse, types};
+use crate::{StreamingUsageGuard, parse, types};
 
 #[allow(clippy::large_enum_variant)] // The large variant is used 99% of the time so just always use it.
 #[derive(Debug, Clone, Deserialize)]
@@ -21,7 +21,7 @@ enum StreamResponse {
 pub fn passthrough_stream(
 	b: Body,
 	buffer_limit: usize,
-	mut log: AmendOnDrop,
+	mut log: StreamingUsageGuard,
 	include_completion_in_log: bool,
 ) -> Body {
 	let mut saw_token = false;
@@ -30,7 +30,7 @@ pub fn passthrough_stream(
 		let Some(Ok(event)) = event else {
 			// Stream ended ([DONE]): flush completion if not already set via ResponseCompleted
 			if event.is_none() {
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					if let Some(c) = completion.take() {
 						r.response.completion = Some(vec![c]);
 					}
@@ -47,7 +47,7 @@ pub fn passthrough_stream(
 		};
 		match event {
 			types::responses::typed::ResponseStreamEvent::ResponseCreated(created) => {
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					r.response.provider_model = Some(strng::new(&created.response.model));
 					r.response.service_tier = created
 						.response
@@ -66,7 +66,7 @@ pub fn passthrough_stream(
 			types::responses::typed::ResponseStreamEvent::ResponseOutputTextDelta(ref delta) => {
 				if !saw_token {
 					saw_token = true;
-					log.non_atomic_mutate(|r| {
+					log.update(|r| {
 						r.response.first_token = Some(Instant::now());
 					});
 				}
@@ -75,7 +75,7 @@ pub fn passthrough_stream(
 				}
 			},
 			types::responses::typed::ResponseStreamEvent::ResponseCompleted(completed) => {
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					r.response.provider_model = Some(strng::new(&completed.response.model));
 					r.response.service_tier = completed
 						.response

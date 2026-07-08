@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 
 use agent_core::prelude::Strng;
@@ -116,18 +116,39 @@ pub mod auth {
 	}
 }
 
+/// The HTTP endpoint class, such as `/v1/chat/completions` or `/v1/messages`.
+///
+/// This is used both for the client route we matched and for the upstream route
+/// we finally send to. For chat, those can differ: a client Anthropic
+/// `/v1/messages` request is `RouteType::Messages` and `InputFormat::Messages`,
+/// but it may be translated and sent upstream as `RouteType::Completions`.
+///
+/// `RouteType` is about the HTTP endpoint. `InputFormat` is about the parsed
+/// client payload and the response shape we owe back to that client. The main
+/// difference is this type includes things like Detect and Passthrough.
 #[apply(schema!)]
 #[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RouteType {
+	/// OpenAI /v1/chat/completions
 	Completions,
+	/// Anthropic /v1/messages
 	Messages,
+	/// OpenAI /v1/models
 	Models,
+	/// Send the request to the upstream LLM provider as-is
 	Passthrough,
+	/// Send the request to the upstream LLM provider as-is but attempt to extract information from it
+	/// and apply a subset of policies (rate limit and telemetry; no guardrails).
 	Detect,
+	/// OpenAI /responses
 	Responses,
+	/// OpenAI /embeddings
 	Embeddings,
+	/// OpenAI /realtime (websockets)
 	Realtime,
+	/// Anthropic /v1/messages/count_tokens
 	AnthropicTokenCount,
+	/// Cohere /v2/rerank (document reranking)
 	Rerank,
 }
 
@@ -292,68 +313,39 @@ pub struct LLMResponse {
 	pub first_token: Option<Instant>,
 }
 
-#[derive(Clone)]
-pub struct AsyncLog<T>(Arc<Mutex<Option<T>>>);
+pub trait StreamingUsageReporter: Send {
+	fn update(&self, f: &mut dyn FnMut(&mut LLMInfo));
+	fn report_usage(&mut self);
+}
 
-impl<T> AsyncLog<T> {
-	pub fn non_atomic_mutate(&self, f: impl FnOnce(&mut T)) {
-		let mut lock = self.0.lock().expect("async log mutex poisoned");
-		if let Some(cur) = lock.as_mut() {
-			f(cur);
-		}
+pub struct StreamingUsageGuard {
+	reporter: Box<dyn StreamingUsageReporter>,
+}
+
+impl StreamingUsageGuard {
+	pub fn new(reporter: Box<dyn StreamingUsageReporter>) -> Self {
+		Self { reporter }
 	}
 
-	pub fn store(&self, v: Option<T>) {
-		*self.0.lock().expect("async log mutex poisoned") = v;
+	pub fn update(&self, mut f: impl FnMut(&mut LLMInfo)) {
+		self.reporter.update(&mut f);
 	}
 
-	pub fn take(&self) -> Option<T> {
-		self.0.lock().expect("async log mutex poisoned").take()
+	pub fn report_usage(&mut self) {
+		self.reporter.report_usage();
 	}
 }
 
-impl<T> Default for AsyncLog<T> {
+impl Default for StreamingUsageGuard {
 	fn default() -> Self {
-		Self(Arc::new(Mutex::new(None)))
-	}
-}
+		struct NoopReporter;
 
-#[derive(Clone)]
-pub struct AmendOnDrop {
-	mutate: Arc<dyn Fn(&mut dyn FnMut(&mut LLMInfo)) + Send + Sync>,
-	report: Arc<dyn Fn() + Send + Sync>,
-}
-
-impl AmendOnDrop {
-	pub fn new(log: AsyncLog<LLMInfo>) -> Self {
-		Self {
-			mutate: Arc::new(move |f| log.non_atomic_mutate(f)),
-			report: Arc::new(|| {}),
+		impl StreamingUsageReporter for NoopReporter {
+			fn update(&self, _f: &mut dyn FnMut(&mut LLMInfo)) {}
+			fn report_usage(&mut self) {}
 		}
-	}
 
-	pub fn from_callbacks(
-		mutate: impl Fn(&mut dyn FnMut(&mut LLMInfo)) + Send + Sync + 'static,
-		report: impl Fn() + Send + Sync + 'static,
-	) -> Self {
-		Self {
-			mutate: Arc::new(mutate),
-			report: Arc::new(report),
-		}
-	}
-
-	pub fn non_atomic_mutate(&self, mut f: impl FnMut(&mut LLMInfo)) {
-		(self.mutate)(&mut f);
-	}
-
-	pub fn report_rate_limit(&mut self) {
-		(self.report)();
-	}
-}
-
-impl Default for AmendOnDrop {
-	fn default() -> Self {
-		Self::new(AsyncLog::default())
+		Self::new(Box::new(NoopReporter))
 	}
 }
 
@@ -419,14 +411,23 @@ pub enum AIError {
 #[apply(schema!)]
 #[serde(default)]
 pub struct PromptCachingConfig {
+	/// Add cache markers to system prompts when supported by the provider.
 	#[serde(rename = "cacheSystem")]
 	pub cache_system: bool,
+
+	/// Add cache markers to chat messages when supported by the provider.
 	#[serde(rename = "cacheMessages")]
 	pub cache_messages: bool,
+
+	/// Add cache markers to tool definitions when supported by the provider.
 	#[serde(rename = "cacheTools")]
 	pub cache_tools: bool,
+
+	/// Minimum prompt size required before cache markers are added.
 	#[serde(rename = "minTokens")]
 	pub min_tokens: Option<usize>,
+
+	/// Message offset used when choosing where to place cache markers.
 	#[serde(rename = "cacheMessageOffset")]
 	pub cache_message_offset: usize,
 }

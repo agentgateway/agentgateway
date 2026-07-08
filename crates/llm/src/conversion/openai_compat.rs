@@ -373,7 +373,7 @@ pub mod to_responses {
 
 	use crate::parse::sse::SseJsonEvent;
 	use crate::types::ResponseType;
-	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	/// Translate an OpenAI-compatible chat completions response into an OpenAI Responses response.
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
@@ -492,7 +492,7 @@ pub mod to_responses {
 		response
 	}
 
-	pub fn translate_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
+	pub fn translate_stream(b: Body, buffer_limit: usize, log: StreamingUsageGuard) -> Body {
 		use responses::{
 			AssistantRole, FunctionToolCall, OutputContent, OutputItem, OutputMessage, OutputStatus,
 			OutputTextContent, ResponseContentPartAddedEvent, ResponseFunctionCallArgumentsDeltaEvent,
@@ -573,7 +573,7 @@ pub mod to_responses {
 								}),
 							));
 
-							log.non_atomic_mutate(|r| {
+							log.update(|r| {
 								r.response.provider_model = Some(strng::new(&chunk.model));
 								if let Some(st) = &chunk.service_tier {
 									r.response.service_tier = Some(strng::new(st));
@@ -608,7 +608,7 @@ pub mod to_responses {
 
 								if !saw_token {
 									saw_token = true;
-									log.non_atomic_mutate(|r| {
+									log.update(|r| {
 										r.response.first_token = Some(Instant::now());
 									});
 								}
@@ -652,7 +652,7 @@ pub mod to_responses {
 									if is_new {
 										if !saw_token {
 											saw_token = true;
-											log.non_atomic_mutate(|r| {
+											log.update(|r| {
 												r.response.first_token = Some(Instant::now());
 											});
 										}
@@ -739,7 +739,7 @@ pub mod to_responses {
 		pending_usage: &mut Option<completions::Usage>,
 		message_item_id: &str,
 		sent_content_part: &bool,
-		log: &AmendOnDrop,
+		log: &StreamingUsageGuard,
 		response_id: &str,
 		model: &str,
 	) {
@@ -824,7 +824,7 @@ pub mod to_responses {
 		));
 
 		if let Some(ref u) = usage {
-			log.non_atomic_mutate(|r| {
+			log.update(|r| {
 				r.response.input_tokens = Some(u.prompt_tokens as u64);
 				r.response.output_tokens = Some(usage_output_tokens(u) as u64);
 				r.response.total_tokens = Some(u.total_tokens as u64);

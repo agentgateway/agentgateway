@@ -6,7 +6,7 @@ use bytes::Bytes;
 use http::Response;
 use tracing::debug;
 
-use crate::{AmendOnDrop, logged_response_parsing, parse, types};
+use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
 
 /// Parse a Google error response, handling both single object and array-wrapped formats.
 /// Google's OpenAI-compatible endpoints consistently return `[{"error": {...}}]`
@@ -135,7 +135,7 @@ pub mod from_messages {
 
 	use crate::parse::sse::SseJsonEvent;
 	use crate::types::ResponseType;
-	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, types};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, types};
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
@@ -239,7 +239,7 @@ pub mod from_messages {
 		})
 	}
 
-	pub fn translate_stream(b: Body, buffer_limit: usize, log: AmendOnDrop) -> Body {
+	pub fn translate_stream(b: Body, buffer_limit: usize, log: StreamingUsageGuard) -> Body {
 		#[derive(Debug)]
 		struct PendingToolCall {
 			id: Option<String>,
@@ -366,12 +366,12 @@ pub mod from_messages {
 			index
 		}
 
-		fn maybe_set_first_token(state: &mut StreamState, log: &AmendOnDrop) {
+		fn maybe_set_first_token(state: &mut StreamState, log: &StreamingUsageGuard) {
 			if state.sent_first_token {
 				return;
 			}
 			state.sent_first_token = true;
-			log.non_atomic_mutate(|r| {
+			log.update(|r| {
 				r.response.first_token = Some(Instant::now());
 			});
 		}
@@ -379,7 +379,7 @@ pub mod from_messages {
 		fn flush_message_end(
 			state: &mut StreamState,
 			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
-			log: &AmendOnDrop,
+			log: &StreamingUsageGuard,
 			force: bool,
 		) {
 			if state.sent_message_stop {
@@ -426,7 +426,7 @@ pub mod from_messages {
 			state.sent_message_stop = true;
 
 			if let Some(usage) = usage {
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					r.response.input_tokens = Some(usage.prompt_tokens as u64);
 					r.response.output_tokens = Some(usage.completion_tokens as u64);
 					r.response.total_tokens = Some(usage.total_tokens as u64);
@@ -481,7 +481,7 @@ pub mod from_messages {
 							},
 						);
 
-						log.non_atomic_mutate(|r| r.response.provider_model = Some(strng::new(&f.model)));
+						log.update(|r| r.response.provider_model = Some(strng::new(&f.model)));
 					}
 
 					if let Some(usage) = f.usage {
@@ -957,7 +957,7 @@ pub mod from_messages {
 }
 
 pub fn passthrough_stream(
-	mut log: AmendOnDrop,
+	mut log: StreamingUsageGuard,
 	include_completion_in_log: bool,
 	resp: Response<Body>,
 ) -> Response<Body> {
@@ -979,19 +979,19 @@ pub fn passthrough_stream(
 						}
 						if !saw_token {
 							saw_token = true;
-							log.non_atomic_mutate(|r| {
+							log.update(|r| {
 								r.response.first_token = Some(Instant::now());
 							});
 						}
 						if !seen_provider {
 							seen_provider = true;
-							log.non_atomic_mutate(|r| {
+							log.update(|r| {
 								r.response.provider_model = Some(strng::new(&f.model));
 								r.response.service_tier = f.service_tier.as_deref().map(Into::into);
 							});
 						}
 						if let Some(u) = f.usage {
-							log.non_atomic_mutate(|r| {
+							log.update(|r| {
 								r.response.input_tokens = Some(u.prompt_tokens as u64);
 								r.response.input_audio_tokens = u
 									.prompt_tokens_details
@@ -1017,7 +1017,7 @@ pub fn passthrough_stream(
 								}
 							});
 
-							log.report_rate_limit();
+							log.report_usage();
 						}
 					},
 					Some(Err(e)) => {
@@ -1026,7 +1026,7 @@ pub fn passthrough_stream(
 					None => {
 						// We are done, try to set completion if we haven't already
 						// This is useful in case we never see "usage"
-						log.non_atomic_mutate(|r| {
+						log.update(|r| {
 							if let Some(c) = completion.take() {
 								r.response.completion = Some(vec![c]);
 							}

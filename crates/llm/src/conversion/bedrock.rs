@@ -406,7 +406,7 @@ pub mod from_completions {
 	use crate::conversion::completions::{extract_system_text, parse_data_url};
 	use crate::types::ResponseType;
 	use crate::types::completions::typed::UsagePromptDetails;
-	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	fn text_blocks_from_user_content(
 		content: &completions::RequestUserMessageContent,
@@ -917,7 +917,7 @@ pub mod from_completions {
 	pub fn translate_stream(
 		b: Body,
 		buffer_limit: usize,
-		log: AmendOnDrop,
+		log: StreamingUsageGuard,
 		model: &str,
 		message_id: &str,
 		tool_name_map: Option<super::BedrockToolNameMap>,
@@ -977,7 +977,7 @@ pub mod from_completions {
 				bedrock::ConverseStreamOutput::ContentBlockDelta(d) => {
 					if !saw_token {
 						saw_token = true;
-						log.non_atomic_mutate(|r| {
+						log.update(|r| {
 							r.response.first_token = Some(Instant::now());
 						});
 					}
@@ -1080,7 +1080,7 @@ pub mod from_completions {
 				},
 				bedrock::ConverseStreamOutput::Metadata(metadata) => {
 					if let Some(usage) = metadata.usage {
-						log.non_atomic_mutate(|r| {
+						log.update(|r| {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
@@ -1172,7 +1172,7 @@ pub mod from_messages {
 	use super::helpers;
 	use crate::bedrock::Provider;
 	use crate::types::ResponseType;
-	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	/// translate an Anthropic messages request to a Bedrock converse request
 	pub fn translate(
@@ -1672,7 +1672,7 @@ pub mod from_messages {
 	pub fn translate_stream(
 		b: Body,
 		buffer_limit: usize,
-		log: AmendOnDrop,
+		log: StreamingUsageGuard,
 		model: &str,
 		_message_id: &str,
 		include_completion_in_log: bool,
@@ -1796,7 +1796,7 @@ pub mod from_messages {
 					if let Some(d) = delta.delta {
 						if !saw_token {
 							saw_token = true;
-							log.non_atomic_mutate(|r| {
+							log.update(|r| {
 								r.response.first_token = Some(Instant::now());
 							});
 						}
@@ -1858,7 +1858,7 @@ pub mod from_messages {
 				bedrock::ConverseStreamOutput::Metadata(meta) => {
 					if let Some(usage) = meta.usage {
 						pending_usage = Some(usage);
-						log.non_atomic_mutate(|r| {
+						log.update(|r| {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);
@@ -1946,7 +1946,7 @@ pub mod from_responses {
 	use super::helpers;
 	use crate::bedrock::Provider;
 	use crate::types::ResponseType;
-	use crate::{AIError, AmendOnDrop, json, logged_response_parsing, parse, types};
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
 	/// translate an OpenAI responses request to a Bedrock converse request
 	pub fn translate(
@@ -2531,7 +2531,7 @@ pub mod from_responses {
 	pub fn translate_stream(
 		b: Body,
 		buffer_limit: usize,
-		log: AmendOnDrop,
+		log: StreamingUsageGuard,
 		model: &str,
 		_message_id: &str,
 		tool_name_map: Option<super::BedrockToolNameMap>,
@@ -2670,7 +2670,7 @@ pub mod from_responses {
 
 					if !saw_token {
 						saw_token = true;
-						log.non_atomic_mutate(|r| {
+						log.update(|r| {
 							r.response.first_token = Some(Instant::now());
 						});
 					}
@@ -2798,7 +2798,7 @@ pub mod from_responses {
 				bedrock::ConverseStreamOutput::Metadata(meta) => {
 					if let Some(usage) = meta.usage {
 						pending_usage = Some(usage);
-						log.non_atomic_mutate(|r| {
+						log.update(|r| {
 							r.response.output_tokens = Some(usage.output_tokens as u64);
 							r.response.input_tokens = Some(usage.input_tokens as u64);
 							r.response.total_tokens = Some(usage.total_tokens as u64);

@@ -281,7 +281,7 @@ struct ChatResponseContext<'a> {
 // Context provider to each response translation (streaming)
 struct ChatStreamContext {
 	buffer_limit: usize,
-	logger: agent_llm::AmendOnDrop,
+	logger: agent_llm::StreamingUsageGuard,
 	model: String,
 	include_completion_in_log: bool,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
@@ -2464,7 +2464,7 @@ impl AmendOnDrop {
 	pub fn non_atomic_mutate(&self, f: impl FnOnce(&mut llm::LLMInfo)) {
 		self.log.non_atomic_mutate(f);
 	}
-	pub fn report_rate_limit(&mut self) {
+	pub fn report_usage(&mut self) {
 		if let Some(pol) = self.pol.take()
 			&& (!pol.local_rate_limit.is_empty() || pol.remote_rate_limit.is_some())
 		{
@@ -2476,40 +2476,23 @@ impl AmendOnDrop {
 		}
 	}
 
-	pub fn into_llm(mut self) -> agent_llm::AmendOnDrop {
-		let log = self.log.clone();
-		let mutate_log = log.clone();
-		let pol = Arc::new(std::sync::Mutex::new(Some(
-			self.pol.take().unwrap_or_default(),
-		)));
-		let req = self.req.clone();
-		let catalog = self.catalog.clone();
-		let reported = Arc::new(std::sync::atomic::AtomicBool::new(false));
-		let report_reported = reported.clone();
-		agent_llm::AmendOnDrop::from_callbacks(
-			move |f| mutate_log.non_atomic_mutate(|info| f(info)),
-			move || {
-				if report_reported.swap(true, std::sync::atomic::Ordering::AcqRel) {
-					return;
-				}
-				let Some(pol) = pol.lock().expect("rate limit policy mutex poisoned").take() else {
-					return;
-				};
-				if pol.local_rate_limit.is_empty() && pol.remote_rate_limit.is_none() {
-					return;
-				}
-				log.non_atomic_mutate(|r| {
-					let ctx = LLMContext::from_llm_info(r.clone(), catalog.as_deref());
-					let exec = cel::Executor::new_llm_rate_limit_streaming(req.as_deref(), &ctx);
-					amend_tokens(pol, r, exec)
-				});
-			},
-		)
+	pub fn into_llm(self) -> agent_llm::StreamingUsageGuard {
+		agent_llm::StreamingUsageGuard::new(Box::new(self))
+	}
+}
+
+impl agent_llm::StreamingUsageReporter for AmendOnDrop {
+	fn update(&self, f: &mut dyn FnMut(&mut llm::LLMInfo)) {
+		self.log.non_atomic_mutate(|info| f(info));
+	}
+
+	fn report_usage(&mut self) {
+		AmendOnDrop::report_usage(self);
 	}
 }
 
 impl Drop for AmendOnDrop {
 	fn drop(&mut self) {
-		self.report_rate_limit();
+		self.report_usage();
 	}
 }

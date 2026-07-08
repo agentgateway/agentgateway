@@ -51,7 +51,7 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 		None,
 		None,
 	);
-	amend.report_rate_limit();
+	amend.report_usage();
 
 	assert!(
 		rate_limit
