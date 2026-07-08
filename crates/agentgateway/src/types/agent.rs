@@ -268,7 +268,7 @@ impl ServerTLSConfig {
 	}
 
 	#[allow(clippy::too_many_arguments)]
-	pub(crate) fn dynamic_ca_with_profile(
+	pub fn dynamic_ca_with_profile(
 		ca_cert_pem: Vec<u8>,
 		ca_key_pem: Vec<u8>,
 		default_alpns: Vec<Vec<u8>>,
@@ -779,7 +779,6 @@ pub struct ListenerName {
 	pub listener_set: Option<ResourceName>,
 }
 
-#[cfg(any(test, feature = "internal_benches"))]
 impl Default for ListenerName {
 	fn default() -> Self {
 		Self {

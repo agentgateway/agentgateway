@@ -487,7 +487,6 @@ pub struct TraceReceiver {
 }
 
 impl TraceReceiver {
-	#[cfg(test)]
 	pub async fn recv(&mut self) -> Option<Message> {
 		self.receiver.recv().await
 	}

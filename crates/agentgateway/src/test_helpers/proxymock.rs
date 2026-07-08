@@ -35,14 +35,15 @@ use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::transport::tls;
 use crate::types::agent::{
 	Backend, BackendReference, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind,
-	BindKey, BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget,
-	McpTargetSpec, PathMatch, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference,
-	RouteMatch, RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, Target, TargetedPolicy,
+	BindKey, BindProtocol, FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget,
+	McpBackend, McpTarget, McpTargetSpec, PathMatch, PolicyInheritance, PolicyPhase, PolicyTarget,
+	ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, SimpleBackendReference,
+	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target,
+	TargetedPolicy,
 };
 use crate::types::loadbalancer::EndpointSet;
-use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
+use crate::types::{frontend, local};
 use crate::{ProxyInputs, client, mcp};
 
 pub async fn send_request(
@@ -979,6 +980,35 @@ impl TestBind {
 	pub fn with_policy(&mut self, p: TargetedPolicy) {
 		self.pi.stores.binds.write().insert_policy(p);
 	}
+
+	pub fn with_connect_enabled(self) -> Self {
+		self.with_connect_mode(frontend::ConnectMode::Route)
+	}
+
+	pub fn with_connect_mode(self, mode: frontend::ConnectMode) -> Self {
+		self.with_connect_policy(mode, None)
+	}
+
+	pub fn with_connect_mode_on_port(self, mode: frontend::ConnectMode, port: u16) -> Self {
+		self.with_connect_policy(mode, Some(port))
+	}
+
+	pub fn with_connect_policy(mut self, mode: frontend::ConnectMode, port: Option<u16>) -> Self {
+		self.with_policy(TargetedPolicy {
+			key: strng::literal!("pol/frontend-connect"),
+			name: None,
+			inheritance: PolicyInheritance::default(),
+			target: PolicyTarget::Gateway(ListenerTarget {
+				gateway_name: strng::literal!("default"),
+				gateway_namespace: strng::literal!("default"),
+				listener_name: None,
+				port,
+			}),
+			policy: FrontendPolicy::Connect(frontend::Connect { mode }).into(),
+		});
+		self
+	}
+
 	fn memory_client(io: DuplexStream) -> Client<MemoryConnector, Body> {
 		::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())

@@ -1,1746 +1,1073 @@
-use agent_core::telemetry::testing;
-use agentgateway::http::Response;
-use http::StatusCode;
-use serde_json::json;
-use tracing::warn;
-
-use crate::common::gateway::AgentGateway;
-
-// This module provides real LLM integration tests. These require API keys!
-// Note: AGENTGATEWAY_E2E=true must be set to run any of these tests.
-//
-// Required Environment Variables (per provider):
-// - OpenAI: OPENAI_API_KEY
-// - Anthropic: ANTHROPIC_API_KEY
-// - Gemini: GEMINI_API_KEY
-// - Vertex: VERTEX_PROJECT (requires GCP implicit auth)
-//   - Optional: VERTEX_ANTHROPIC_MODEL to run Anthropic-on-Vertex specific tests
-// - Bedrock: (requires AWS implicit auth)
-// - Azure OpenAI: AZURE_HOST (requires implicit auth)
-//
-// Examples:
-//
-// 1. Run all E2E tests for all providers:
-//    AGENTGATEWAY_E2E=true ANTHROPIC_API_KEY=... OPENAI_API_KEY=... cargo test --test integration tests::llm::
-//
-// 2. Run all tests for a specific provider (e.g., OpenAI):
-//    AGENTGATEWAY_E2E=true OPENAI_API_KEY=... cargo test --test integration tests::llm::openai::
-//
-// 3. Run a specific targeted test case (e.g., Bedrock messages):
-//    AGENTGATEWAY_E2E=true cargo test --test integration tests::llm::bedrock::messages
-//
-// DNS configuration can be overridden via environment variables, for example:
-//    IPV6_ENABLED=false DNS_LOOKUP_FAMILY=V4Only DNS_EDNS0=true \
-//    AGENTGATEWAY_E2E=true cargo test --test integration tests::llm::gemini::
-// This will disable IPv6 and enable EDNS0 for the Gemini tests.
-//
-// Note: Some providers (Bedrock, Vertex) use implicit environment auth (AWS/GCP) instead of explicit keys.
-
-macro_rules! send_completions_tests {
-	($provider:expr, $env:expr, $model:expr) => {
-		#[tokio::test]
-		async fn completions() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_completions(&gw, false).await;
-		}
-
-		#[tokio::test]
-		async fn completions_streaming() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_completions(&gw, true).await;
-		}
-	};
-}
-
-macro_rules! send_messages_tests {
-	($provider:expr, $env:expr, $model:expr) => {
-		#[tokio::test]
-		async fn messages() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_messages(&gw, false).await;
-		}
-
-		#[tokio::test]
-		async fn messages_streaming() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_messages(&gw, true).await;
-		}
-	};
-}
-
-macro_rules! send_messages_image_tests {
-	($provider:expr, $env:expr, $model:expr, $send_fn:ident) => {
-		#[tokio::test]
-		async fn messages_image() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			$send_fn(&gw).await;
-		}
-	};
-}
-
-macro_rules! send_messages_tool_tests {
-	($provider:expr, $env:expr, $model:expr) => {
-		#[tokio::test]
-		async fn messages_tool_use() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_messages_with_tools(&gw).await;
-		}
-
-		#[tokio::test]
-		async fn messages_parallel_tool_use() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_messages_with_parallel_tools(&gw).await;
-		}
-
-		#[tokio::test]
-		async fn messages_multi_turn_tool_use() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_messages_multi_turn_tool_use(&gw).await;
-		}
-	};
-}
-
-macro_rules! send_completions_tool_tests {
-	($provider:expr, $env:expr, $model:expr) => {
-		#[tokio::test]
-		async fn completions_tool_use() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_completions_with_tools(&gw).await;
-		}
-	};
-}
-
-macro_rules! send_responses_tests {
-	($provider:expr, $env:expr, $model:expr) => {
-		#[tokio::test]
-		async fn responses() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_responses(&gw, false).await;
-		}
-
-		#[tokio::test]
-		async fn responses_streaming() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_responses(&gw, true).await;
-		}
-	};
-}
-
-macro_rules! send_embeddings_tests {
-	($(#[$meta:meta])* $name:ident, $provider:expr, $env:expr, $model:expr, $expected_dimensions:expr) => {
-		$(#[$meta])*
-		#[tokio::test]
-		async fn $name() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			send_embeddings(&gw, $expected_dimensions).await;
-		}
-	};
-}
-
-macro_rules! provider_model_test {
-	($(#[$meta:meta])* $name:ident, $provider:expr, $env:expr, $model:expr, $send_fn:ident $(, $arg:expr)* $(,)?) => {
-		$(#[$meta])*
-		#[tokio::test]
-		async fn $name() {
-			let Some(gw) = setup($provider, $env, $model).await else {
-				return;
-			};
-			$send_fn(&gw $(, $arg)*).await;
-		}
-	};
-}
-
-macro_rules! provider_env_model_test {
-	($(#[$meta:meta])* $name:ident, $provider:expr, $env:expr, $model_env:expr, $send_fn:ident $(, $arg:expr)* $(,)?) => {
-		$(#[$meta])*
-		#[tokio::test]
-		async fn $name() {
-			let Some(model) = require_env_value($model_env) else {
-				return;
-			};
-			let Some(gw) = setup($provider, $env, &model).await else {
-				return;
-			};
-			$send_fn(&gw $(, $arg)*).await;
-		}
-	};
-}
-
-// Pins the Discovery Engine location to `global` in `llm_config` (ranking is not served from the
-// Vertex AI regions used for chat/embeddings).
-const VERTEX_RERANK_MODEL: &str = "semantic-ranker-default@latest";
-
-fn llm_config(provider: &str, env: &str, model: &str) -> String {
-	let policies = if provider == "azure" || provider == "foundry" {
-		r#"
-      policies:
-        backendAuth:
-          azure:
-            developerImplicit: {}
-"#
-		.to_string()
-	} else if !env.is_empty() {
-		format!(
-			r#"
-      policies:
-        backendAuth:
-          key: ${env}
-"#
-		)
-	} else {
-		"".to_string()
-	};
-	let extra = if provider == "bedrock" {
-		r#"
-              region: us-west-2
-              "#
-		.to_string()
-	} else if provider == "vertex" {
-		// Discovery Engine ranking (rerank) is only served from `global`/`us`/`eu`, not the Vertex AI
-		// regions used for chat/embeddings, so the rerank model pins the location to `global`.
-		let region = if model == VERTEX_RERANK_MODEL {
-			"global"
-		} else {
-			"us-east5"
-		};
-		format!(
-			r#"
-              projectId: $VERTEX_PROJECT
-              region: {region}
-              "#
-		)
-	} else if provider == "azure" {
-		r#"
-              resourceName: $AZURE_RESOURCE_NAME
-              resourceType: $AZURE_RESOURCE_TYPE
-              "#
-		.to_string()
-	} else if provider == "foundry" {
-		r#"
-              resourceName: $FOUNDRY_RESOURCE_NAME
-              resourceType: foundry
-              "#
-		.to_string()
-	} else {
-		String::new()
-	};
-	// "foundry" is an alias for the "azure" YAML provider key with Foundry-specific config.
-	let yaml_provider = if provider == "foundry" {
-		"azure"
-	} else {
-		provider
-	};
-	format!(
-		r#"
-config: {{}}
-frontendPolicies:
-  accessLog:
-    add:
-      streaming: llm.streaming
-      # body: string(response.body)
-      req.id: request.headers["x-test-id"]
-      token.count: llm.countTokens
-      embeddings: json(response.body).data[0].embedding.size()
-binds:
-- port: $PORT
-  listeners:
-  - name: default
-    protocol: HTTP
-    routes:
-    - name: llm
-{policies}
-      backends:
-      - ai:
-          name: llm
-          policies:
-            ai:
-              routes:
-                /v1/chat/completions: completions
-                /v1/messages: messages
-                /v1/messages/count_tokens: anthropicTokenCount
-                /v1/responses: responses
-                /v1/embeddings: embeddings
-                /v1/rerank: rerank
-                "*": passthrough
-          provider:
-            {yaml_provider}:
-              model: {model}
-{extra}
-"#
-	)
-}
-
-// === Provider-Specific E2E Test Suites ===
-// Each module below instantiates the test macros for a specific backend provider.
-
-mod openai {
-	use super::*;
-	send_responses_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
-	send_completions_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
-	send_completions_tool_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
-	send_messages_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
-	send_messages_image_tests!(
-		"openAI",
-		"OPENAI_API_KEY",
-		"gpt-4o-mini",
-		send_messages_with_image_url
-	);
-	send_messages_tool_tests!("openAI", "OPENAI_API_KEY", "gpt-4o-mini");
-	send_embeddings_tests!(
-		embeddings,
-		"openAI",
-		"OPENAI_API_KEY",
-		"text-embedding-3-small",
-		None
-	);
-	provider_model_test!(
-		messages_count_tokens_completions_backend,
-		"openAI",
-		"OPENAI_API_KEY",
-		"gpt-4o-mini",
-		send_messages_count_tokens
-	);
-}
-
-mod bedrock {
-	use super::*;
-
-	const MODEL_NOVA_PRO: &str = "us.amazon.nova-pro-v1:0";
-	const MODEL_TITAN_EMBED: &str = "amazon.titan-embed-text-v2:0";
-	const MODEL_COHERE_EMBED: &str = "cohere.embed-english-v3";
-	const MODEL_COHERE_RERANK: &str = "cohere.rerank-v3-5:0";
-	const MODEL_HAIKU_45_PROFILE: &str = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
-	const MODEL_HAIKU_45_BASE: &str = "anthropic.claude-haiku-4-5-20251001-v1:0";
-	const MODEL_OPUS_46_PROFILE: &str = "us.anthropic.claude-opus-4-6-v1";
-
-	provider_model_test!(
-		completions,
-		"bedrock",
-		"",
-		MODEL_NOVA_PRO,
-		send_completions,
-		false
-	);
-	provider_model_test!(
-		completions_streaming,
-		"bedrock",
-		"",
-		MODEL_NOVA_PRO,
-		send_completions,
-		true
-	);
-	provider_model_test!(
-		responses,
-		"bedrock",
-		"",
-		MODEL_NOVA_PRO,
-		send_responses,
-		false
-	);
-	provider_model_test!(
-		responses_streaming,
-		"bedrock",
-		"",
-		MODEL_NOVA_PRO,
-		send_responses,
-		true
-	);
-	provider_model_test!(
-		messages,
-		"bedrock",
-		"",
-		MODEL_NOVA_PRO,
-		send_messages,
-		false
-	);
-	provider_model_test!(
-		messages_streaming,
-		"bedrock",
-		"",
-		MODEL_NOVA_PRO,
-		send_messages,
-		true
-	);
-	provider_model_test!(
-		messages_image,
-		"bedrock",
-		"",
-		MODEL_NOVA_PRO,
-		send_messages_with_image_base64
-	);
-	provider_model_test!(
-		embeddings_titan,
-		"bedrock",
-		"",
-		MODEL_TITAN_EMBED,
-		send_embeddings,
-		None
-	);
-	// Cohere does not respect overriding the dimension count.
-	provider_model_test!(
-		embeddings_cohere,
-		"bedrock",
-		"",
-		MODEL_COHERE_EMBED,
-		send_embeddings,
-		Some(1024)
-	);
-	provider_model_test!(rerank, "bedrock", "", MODEL_COHERE_RERANK, send_rerank);
-	provider_model_test!(
-		messages_count_tokens,
-		"bedrock",
-		"",
-		MODEL_HAIKU_45_BASE,
-		send_messages_count_tokens
-	);
-	provider_model_test!(
-		messages_count_tokens_completions_backend,
-		"bedrock",
-		"",
-		MODEL_NOVA_PRO,
-		send_messages_count_tokens
-	);
-	provider_model_test!(
-		structured_output_haiku_45,
-		"bedrock",
-		"",
-		MODEL_HAIKU_45_PROFILE,
-		send_completions_structured_json
-	);
-	provider_model_test!(
-		thinking_haiku_45,
-		"bedrock",
-		"",
-		MODEL_HAIKU_45_PROFILE,
-		send_messages_thinking_enabled
-	);
-	provider_model_test!(
-		adaptive_thinking_rejected_haiku_45,
-		"bedrock",
-		"",
-		MODEL_HAIKU_45_PROFILE,
-		send_messages_adaptive_thinking_rejected
-	);
-	provider_model_test!(
-		completions_reasoning_effort_opus_46,
-		"bedrock",
-		"",
-		MODEL_OPUS_46_PROFILE,
-		send_completions_reasoning_effort
-	);
-	provider_model_test!(
-		responses_reasoning_effort_opus_46,
-		"bedrock",
-		"",
-		MODEL_OPUS_46_PROFILE,
-		send_responses_reasoning_effort
-	);
-	provider_model_test!(
-		responses_thinking_budget_opus_46,
-		"bedrock",
-		"",
-		MODEL_OPUS_46_PROFILE,
-		send_responses_thinking_budget
-	);
-	provider_model_test!(
-		adaptive_thinking_opus_46,
-		"bedrock",
-		"",
-		MODEL_OPUS_46_PROFILE,
-		send_messages_adaptive_thinking
-	);
-	provider_model_test!(
-		output_config_effort_opus_46,
-		"bedrock",
-		"",
-		MODEL_OPUS_46_PROFILE,
-		send_messages_output_config_effort
-	);
-}
-
-mod anthropic {
-	use super::*;
-	send_completions_tests!(
-		"anthropic",
-		"ANTHROPIC_API_KEY",
-		"claude-haiku-4-5-20251001"
-	);
-	send_messages_tests!(
-		"anthropic",
-		"ANTHROPIC_API_KEY",
-		"claude-haiku-4-5-20251001"
-	);
-	send_messages_image_tests!(
-		"anthropic",
-		"ANTHROPIC_API_KEY",
-		"claude-haiku-4-5-20251001",
-		send_messages_with_image_url
-	);
-
-	#[tokio::test]
-	#[ignore]
-	async fn responses() {
-		let Some(gw) = setup(
-			"anthropic",
-			"ANTHROPIC_API_KEY",
-			"claude-haiku-4-5-20251001",
-		)
-		.await
-		else {
-			return;
-		};
-		send_responses(&gw, false).await;
-	}
-
-	#[tokio::test]
-	#[ignore]
-	async fn responses_streaming() {
-		let Some(gw) = setup(
-			"anthropic",
-			"ANTHROPIC_API_KEY",
-			"claude-haiku-4-5-20251001",
-		)
-		.await
-		else {
-			return;
-		};
-		send_responses(&gw, true).await;
-	}
-
-	#[tokio::test]
-	async fn messages_count_tokens() {
-		let Some(gw) = setup(
-			"anthropic",
-			"ANTHROPIC_API_KEY",
-			"claude-haiku-4-5-20251001",
-		)
-		.await
-		else {
-			return;
-		};
-		send_messages_count_tokens(&gw).await;
-	}
-}
-
-mod gemini {
-	use super::*;
-	send_completions_tests!("gemini", "GEMINI_API_KEY", "gemini-2.5-flash");
-	send_completions_tool_tests!("gemini", "GEMINI_API_KEY", "gemini-2.5-flash");
-	send_messages_tests!("gemini", "GEMINI_API_KEY", "gemini-2.5-flash");
-	send_messages_image_tests!(
-		"gemini",
-		"GEMINI_API_KEY",
-		"gemini-2.5-flash",
-		send_messages_with_image_url
-	);
-	send_messages_tool_tests!("gemini", "GEMINI_API_KEY", "gemini-2.5-flash");
-	provider_model_test!(
-		messages_count_tokens_completions_backend,
-		"gemini",
-		"GEMINI_API_KEY",
-		"gemini-2.5-flash",
-		send_messages_count_tokens
-	);
-	provider_model_test!(
-		responses,
-		"gemini",
-		"GEMINI_API_KEY",
-		"gemini-2.5-flash",
-		send_responses,
-		false
-	);
-	provider_model_test!(
-		responses_streaming,
-		"gemini",
-		"GEMINI_API_KEY",
-		"gemini-2.5-flash",
-		send_streaming_responses_and_drain,
-	);
-
-	// NOTE: AsyncLog::non_atomic_mutate is racey be design.
-	// We need to drain the response to ensure flush is called.
-	async fn send_streaming_responses_and_drain(gw: &AgentGateway) {
-		use http_body_util::BodyExt;
-
-		let resp = gw
-			.send_request_json(
-				"http://localhost/v1/responses",
-				json!({
-					"max_output_tokens": 16,
-					"input": "give me a 1 word answer",
-					"stream": true,
-				}),
-			)
-			.await;
-
-		let test_id = test_id_from_response(&resp);
-		assert_eq!(resp.status(), StatusCode::OK);
-		// drain response
-		resp
-			.into_body()
-			.collect()
-			.await
-			.expect("collect streaming responses body")
-			.to_bytes();
-		assert_request_log("/v1/responses", true, &test_id).await;
-	}
-}
-
-mod vertex {
-	use super::*;
-	send_completions_tests!("vertex", "", "google/gemini-2.5-flash-lite");
-	send_completions_tool_tests!("vertex", "", "google/gemini-2.5-flash-lite");
-	send_messages_tests!("vertex", "", "google/gemini-2.5-flash-lite");
-	send_messages_image_tests!(
-		"vertex",
-		"",
-		"google/gemini-2.5-flash-lite",
-		send_messages_with_image_url
-	);
-	send_messages_tool_tests!("vertex", "", "google/gemini-2.5-flash-lite");
-
-	// TODO(https://github.com/agentgateway/agentgateway/pull/909) support this
-	provider_env_model_test!(
-		completions_to_anthropic,
-		"vertex",
-		"",
-		"VERTEX_ANTHROPIC_MODEL",
-		send_completions,
-		false
-	);
-	provider_env_model_test!(
-		#[ignore]
-		completions_streaming_to_anthropic,
-		"vertex",
-		"",
-		"VERTEX_ANTHROPIC_MODEL",
-		send_completions,
-		true
-	);
-	provider_env_model_test!(
-		messages_anthropic,
-		"vertex",
-		"",
-		"VERTEX_ANTHROPIC_MODEL",
-		send_messages,
-		false
-	);
-	provider_env_model_test!(
-		messages_streaming_anthropic,
-		"vertex",
-		"",
-		"VERTEX_ANTHROPIC_MODEL",
-		send_messages,
-		true
-	);
-	provider_model_test!(
-		embeddings,
-		"vertex",
-		"",
-		"text-embedding-004",
-		send_embeddings,
-		None
-	);
-	provider_model_test!(rerank, "vertex", "", VERTEX_RERANK_MODEL, send_rerank);
-	provider_env_model_test!(
-		messages_count_tokens,
-		"vertex",
-		"",
-		"VERTEX_ANTHROPIC_MODEL",
-		send_messages_count_tokens
-	);
-	provider_model_test!(
-		messages_count_tokens_completions_backend,
-		"vertex",
-		"",
-		"google/gemini-2.5-flash-lite",
-		send_messages_count_tokens
-	);
-}
-
-mod azure {
-	use super::*;
-	send_completions_tests!("azure", "", "gpt-4o-mini");
-	send_completions_tool_tests!("azure", "", "gpt-4o-mini");
-	send_messages_tests!("azure", "", "gpt-4o-mini");
-	send_messages_image_tests!("azure", "", "gpt-4o-mini", send_messages_with_image_url);
-	send_messages_tool_tests!("azure", "", "gpt-4o-mini");
-	send_responses_tests!("azure", "", "gpt-4o-mini");
-	send_embeddings_tests!(embeddings, "azure", "", "text-embedding-3-small", None);
-	provider_model_test!(
-		messages_count_tokens_completions_backend,
-		"azure",
-		"",
-		"gpt-4o-mini",
-		send_messages_count_tokens
-	);
-}
-
-// Azure AI Foundry tests.
-//
-// Required env vars:
-//   AGENTGATEWAY_E2E=true
-//   FOUNDRY_RESOURCE_NAME   — Foundry resource/workspace name (e.g. my-foundry-resource)
-//   FOUNDRY_ANTHROPIC_MODEL — Anthropic model deployed in Foundry (e.g. claude-3-5-haiku-20241022)
-//   FOUNDRY_OPENAI_MODEL    — OpenAI-compatible model deployed in Foundry (e.g. gpt-4o-mini)
-//
-// Example:
-//   AGENTGATEWAY_E2E=true \
-//   FOUNDRY_RESOURCE_NAME=my-resource \
-//   FOUNDRY_ANTHROPIC_MODEL=claude-3-5-haiku-20241022 \
-//   FOUNDRY_OPENAI_MODEL=gpt-4o-mini \
-//   cargo test --test integration tests::llm::foundry::
-mod foundry {
-	use super::*;
-
-	// Messages route hits the Anthropic-native endpoint (/anthropic/v1/messages).
-	provider_env_model_test!(
-		messages,
-		"foundry",
-		"",
-		"FOUNDRY_ANTHROPIC_MODEL",
-		send_messages,
-		false
-	);
-	provider_env_model_test!(
-		messages_streaming,
-		"foundry",
-		"",
-		"FOUNDRY_ANTHROPIC_MODEL",
-		send_messages,
-		true
-	);
-	provider_env_model_test!(
-		messages_tool_use,
-		"foundry",
-		"",
-		"FOUNDRY_ANTHROPIC_MODEL",
-		send_messages_with_tools
-	);
-	provider_env_model_test!(
-		messages_count_tokens,
-		"foundry",
-		"",
-		"FOUNDRY_ANTHROPIC_MODEL",
-		send_messages_count_tokens
-	);
-
-	// Completions route hits the OpenAI-compatible endpoint (/api/projects/{name}/openai/v1/...).
-	provider_env_model_test!(
-		completions,
-		"foundry",
-		"",
-		"FOUNDRY_OPENAI_MODEL",
-		send_completions,
-		false
-	);
-	provider_env_model_test!(
-		completions_streaming,
-		"foundry",
-		"",
-		"FOUNDRY_OPENAI_MODEL",
-		send_completions,
-		true
-	);
-}
-
-pub async fn setup(provider: &str, env: &str, model: &str) -> Option<AgentGateway> {
-	// Explicitly opt in to avoid accidentally using implicit configs
-	if !require_env("AGENTGATEWAY_E2E") {
-		return None;
-	}
-	if !env.is_empty() && !require_env(env) {
-		return None;
-	}
-	if provider == "vertex" && !require_env("VERTEX_PROJECT") {
-		return None;
-	}
-	if provider == "azure" && !require_env("AZURE_RESOURCE_NAME") {
-		return None;
-	}
-	if provider == "azure" && !require_env("AZURE_RESOURCE_TYPE") {
-		return None;
-	}
-	if provider == "foundry" && !require_env("FOUNDRY_RESOURCE_NAME") {
-		return None;
-	}
-	let gw = AgentGateway::new(llm_config(provider, env, model))
-		.await
-		.unwrap();
-	Some(gw)
-}
-
-async fn assert_log(path: &str, streaming: bool, test_id: &str) {
-	assert_log_with_output_range(path, streaming, test_id, 1, 100).await;
-}
-
-async fn assert_request_log(path: &str, streaming: bool, test_id: &str) {
-	let log = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("http.path", path),
-		("req.id", test_id),
-	])
-	.await
-	.unwrap();
-	let stream = log.get("streaming").unwrap().as_bool().unwrap();
-	assert_eq!(stream, streaming, "unexpected streaming value: {stream}");
-}
-
-async fn assert_log_with_output_range(
-	path: &str,
-	streaming: bool,
-	test_id: &str,
-	min: i64,
-	max: i64,
-) {
-	let log = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("http.path", path),
-		("req.id", test_id),
-	])
-	.await
-	.unwrap();
-	let output = log
-		.get("gen_ai.usage.output_tokens")
-		.unwrap()
-		.as_i64()
-		.unwrap();
-	assert!(
-		(min..max).contains(&output),
-		"unexpected output tokens: {output}; expected [{min}, {max})"
-	);
-	let stream = log.get("streaming").unwrap().as_bool().unwrap();
-	assert_eq!(stream, streaming, "unexpected streaming value: {stream}");
-}
-
-async fn assert_count_log(path: &str, test_id: &str) {
-	let log = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("http.path", path),
-		("req.id", test_id),
-	])
-	.await
-	.unwrap();
-	if let Some(stream) = log.get("streaming").and_then(serde_json::Value::as_bool) {
-		assert!(!stream, "unexpected streaming value: {stream}");
-	}
-	if let Some(count) = log.get("token.count").and_then(serde_json::Value::as_u64) {
-		assert!(count > 1 && count < 100, "unexpected count tokens: {count}");
-	}
-}
-
-async fn assert_embeddings_log(
-	path: &str,
-	test_id: &str,
-	expected: u64,
-	expected_input_tokens: u64,
-) {
-	let log = agent_core::telemetry::testing::eventually_find(&[
-		("scope", "request"),
-		("http.path", path),
-		("req.id", test_id),
-	])
-	.await
-	.unwrap();
-	let count = log.get("embeddings").unwrap().as_i64().unwrap();
-	assert_eq!(count, expected as i64, "unexpected count tokens: {count}");
-	let got_token_count = log
-		.get("gen_ai.usage.input_tokens")
-		.unwrap()
-		.as_i64()
-		.unwrap();
-	assert_eq!(
-		got_token_count, expected_input_tokens as i64,
-		"unexpected input tokens: {expected_input_tokens}"
-	);
-	let stream = log.get("streaming").unwrap().as_bool().unwrap();
-	assert!(!stream, "unexpected streaming value: {stream}");
-	let dim_count = log
-		.get("gen_ai.embeddings.dimension.count")
-		.unwrap()
-		.as_u64()
-		.unwrap();
-	assert_eq!(dim_count, 256, "unexpected dimension count: {dim_count}");
-	let enc_format = log
-		.get("gen_ai.request.encoding_formats")
-		.unwrap()
-		.as_str()
-		.unwrap();
-	assert_eq!(
-		enc_format, "float",
-		"unexpected encoding format: {enc_format}"
-	);
-}
-
-fn require_env(var: &str) -> bool {
-	testing::setup_test_logging();
-	let found = std::env::var(var).is_ok();
-	if !found {
-		warn!("environment variable {} not set, skipping test", var);
-	}
-	found
-}
-
-fn require_env_value(var: &str) -> Option<String> {
-	testing::setup_test_logging();
-	let Ok(value) = std::env::var(var) else {
-		warn!("environment variable {} not set, skipping test", var);
-		return None;
-	};
-
-	if value.trim().is_empty() {
-		warn!("environment variable {} is empty, skipping test", var);
-		return None;
-	}
-
-	Some(value)
-}
-
-fn test_id_from_response(resp: &Response) -> String {
-	resp
-		.headers()
-		.get("x-test-id")
-		.and_then(|v| v.to_str().ok())
-		.expect("response should include x-test-id header")
-		.to_string()
-}
-
-async fn send_completions(gw: &AgentGateway, stream: bool) {
-	send_completions_request(gw, stream, None, None, "give me a 1 word answer").await;
-}
-
-async fn send_completions_request(
-	gw: &AgentGateway,
-	stream: bool,
-	max_tokens: Option<u32>,
-	reasoning_effort: Option<&str>,
-	prompt: &str,
-) {
-	let mut req = json!({
-		"stream": stream,
-		"messages": [{
-			"role": "user",
-			"content": prompt
-		}]
-	});
-
-	if let Some(max_tokens) = max_tokens {
-		req["max_tokens"] = json!(max_tokens);
-	}
-	if let Some(reasoning_effort) = reasoning_effort {
-		req["reasoning_effort"] = json!(reasoning_effort);
-	}
-
-	let resp = gw
-		.send_request_json("http://localhost/v1/chat/completions", req)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-
-	if status != StatusCode::OK {
-		let body = resp.into_body();
-		let bytes = http_body_util::BodyExt::collect(body)
-			.await
-			.unwrap()
-			.to_bytes();
-		println!("Error response body: {:?}", String::from_utf8_lossy(&bytes));
-		panic!("Request failed with status {status}");
-	}
-
-	let body = resp.into_body();
-	let bytes = http_body_util::BodyExt::collect(body)
-		.await
-		.unwrap()
-		.to_bytes();
-	let body_str = String::from_utf8_lossy(&bytes);
-	if stream {
-		assert!(
-			body_str.contains("data: "),
-			"Streaming response missing 'data: ' prefix: {}",
-			body_str
-		);
-	} else {
-		assert!(
-			!body_str.contains("data: "),
-			"Non-streaming response contains 'data: ' prefix: {}",
-			body_str
-		);
-	}
-
-	assert_log("/v1/chat/completions", stream, &test_id).await;
-}
-
-pub async fn send_completions_with_tools(gw: &AgentGateway) {
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/chat/completions",
-			json!({
-				"messages": [{
-					"role": "user",
-					"content": "What is the weather in New York?"
-				}],
-				"tool_choice": "required",
-				"tools": [{
-					"type": "function",
-					"function": {
-						"name": "get_weather",
-						"description": "Get the current weather in a given location",
-						"parameters": {
-							"type": "object",
-							"properties": {
-								"location": {
-									"type": "string",
-									"description": "The city and state, e.g. San Francisco, CA"
-								},
-								"unit": { "type": "string", "enum": ["celsius", "fahrenheit"] }
-							},
-							"required": ["location"]
-						}
-					}
-				}]
-			}),
-		)
-		.await;
-
-	assert_eq!(resp.status(), StatusCode::OK);
-}
-
-pub async fn send_messages_with_tools(gw: &AgentGateway) {
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 1024,
-				"messages": [{
-					"role": "user",
-					"content": "What is the weather in New York?"
-				}],
-				"tool_choice": {"type": "any"},
-				"tools": [{
-					"name": "get_weather",
-					"description": "Get the current weather in a given location",
-					"input_schema": {
-						"type": "object",
-						"properties": {
-							"location": {
-								"type": "string",
-								"description": "The city and state, e.g. San Francisco, CA"
-							},
-							"unit": { "type": "string", "enum": ["celsius", "fahrenheit"] }
-						},
-						"required": ["location"]
-					}
-				}]
-			}),
-		)
-		.await;
-
-	assert_eq!(resp.status(), StatusCode::OK);
-	let body = resp.into_body();
-	let bytes = http_body_util::BodyExt::collect(body)
-		.await
-		.unwrap()
-		.to_bytes();
-	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-
-	// Verify Anthropic Response Schema
-	// Expectation: {"content": [{"type": "tool_use", "name": "get_weather", ...}], ...}
-	let content = body_json
-		.get("content")
-		.expect("Response missing 'content'")
-		.as_array()
-		.expect("content should be array");
-
-	// Find the tool_use block
-	let tool_use = content
-		.iter()
-		.find(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"));
-	assert!(
-		tool_use.is_some(),
-		"Response should contain a tool_use block: {:?}",
-		body_json
-	);
-
-	let tool_use = tool_use.unwrap();
-	assert_eq!(tool_use.get("name").unwrap(), "get_weather");
-	assert!(
-		tool_use.get("input").is_some(),
-		"tool_use should have input"
-	);
-}
-
-pub async fn send_messages_with_parallel_tools(gw: &AgentGateway) {
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 1024,
-				"messages": [{
-					"role": "user",
-					"content": "What is the weather in New York and London? Use the `get_weather` tool for each."
-				}],
-				"tools": [{
-					"name": "get_weather",
-					"description": "Get the current weather in a given location",
-					"input_schema": {
-						"type": "object",
-						"properties": {
-							"location": {
-								"type": "string",
-								"description": "The city and state, e.g. San Francisco, CA"
-							}
-						},
-						"required": ["location"]
-					}
-				}]
-			}),
-		)
-		.await;
-
-	assert_eq!(resp.status(), StatusCode::OK);
-	let body = resp.into_body();
-	let bytes = http_body_util::BodyExt::collect(body)
-		.await
-		.unwrap()
-		.to_bytes();
-	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-
-	// Verify Anthropic Response Schema for Parallel Tools
-	let content = body_json
-		.get("content")
-		.expect("Response missing 'content'")
-		.as_array()
-		.expect("content should be array");
-
-	// Count tool_use blocks
-	let tool_calls: Vec<_> = content
-		.iter()
-		.filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
-		.collect();
-
-	// Tool-call cardinality is model-dependent; verify schema/shape instead of exact count.
-	assert!(
-		!tool_calls.is_empty(),
-		"Response should contain at least one tool_use block for parallel request: {}",
-		body_json
-	);
-
-	for tc in tool_calls {
-		assert!(tc.get("name").is_some());
-		assert!(tc.get("input").is_some());
-	}
-}
-
-pub async fn send_messages_multi_turn_tool_use(gw: &AgentGateway) {
-	// Turn 1: Request tool use
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 1024,
-				"messages": [{
-					"role": "user",
-					"content": "What is the weather in New York?"
-				}],
-				"tool_choice": {"type": "any"},
-				"tools": [{
-					"name": "get_weather",
-					"description": "Get the current weather in a given location",
-					"input_schema": {
-						"type": "object",
-						"properties": {
-							"location": { "type": "string" }
-						},
-						"required": ["location"]
-					}
-				}]
-			}),
-		)
-		.await;
-
-	assert_eq!(resp.status(), StatusCode::OK);
-	let bytes = http_body_util::BodyExt::collect(resp.into_body())
-		.await
-		.unwrap()
-		.to_bytes();
-	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-
-	let content = body_json
-		.get("content")
-		.unwrap()
-		.as_array()
-		.expect("content should be array");
-	let tool_use = content
-		.iter()
-		.find(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
-		.expect("Response should contain a tool_use block");
-	let tool_use_id = tool_use.get("id").unwrap().as_str().unwrap().to_string();
-
-	// Turn 2: Send tool result
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-			"max_tokens": 1024,
-			"messages": [
-				{
-					"role": "user",
-					"content": "What is the weather in New York?"
-				},
-				{
-					"role": "assistant",
-					"content": [tool_use]
-				},
-				{
-					"role": "user",
-					"content": [
-						{
-							"type": "tool_result",
-							"tool_use_id": tool_use_id,
-							"content": "The weather is sunny and 75 degrees."
-						}
-					]
-				}
-			],
-				"tools": [{
-					"name": "get_weather",
-					"description": "Get the current weather in a given location",
-					"input_schema": {
-						"type": "object",
-					"properties": {
-						"location": { "type": "string" }
-					},
-						"required": ["location"]
-					}
-				}],
-				"tool_choice": {"type": "none"}
-			}),
-		)
-		.await;
-
-	assert_eq!(resp.status(), StatusCode::OK);
-	let bytes = http_body_util::BodyExt::collect(resp.into_body())
-		.await
-		.unwrap()
-		.to_bytes();
-	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-
-	let content = body_json
-		.get("content")
-		.unwrap()
-		.as_array()
-		.expect("content should be array");
-	let text = content
-		.iter()
-		.find(|b| b.get("type").and_then(|t| t.as_str()) == Some("text"))
-		.expect("Final response should contain a text block");
-	let text_val = text.get("text").unwrap().as_str().unwrap();
-	assert!(
-		!text_val.trim().is_empty(),
-		"Final response should contain non-empty text: {}",
-		text_val
-	);
-}
-
-async fn send_responses(gw: &AgentGateway, stream: bool) {
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/responses",
-			json!({
-				"max_output_tokens": 16,
-				"input": "give me a 1 word answer",
-				"stream": stream,
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/responses", stream, &test_id).await;
-}
-
-pub async fn send_messages(gw: &AgentGateway, stream: bool) {
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 1024,
-				"messages": [
-					{"role": "user", "content": "give me a 1 word answer"}
-				],
-				"stream": stream
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	assert_log("/v1/messages", stream, &test_id).await;
-}
-
-async fn send_messages_with_image_base64(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	const ONE_BY_ONE_PNG_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4//8/AwAI/AL+X0N5WQAAAABJRU5ErkJggg==";
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 128,
-				"messages": [
-					{
-						"role": "user",
-						"content": [
-							{"type": "text", "text": "Describe the image briefly."},
-							{
-								"type": "image",
-								"source": {
-									"type": "base64",
-									"media_type": "image/png",
-									"data": ONE_BY_ONE_PNG_B64
-								}
-							}
-						]
-					}
-				]
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert_eq!(status, StatusCode::OK, "response: {body}");
-	assert_log_with_output_range("/v1/messages", false, &test_id, 1, 300).await;
-}
-
-async fn send_messages_with_image_url(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 128,
-				"messages": [
-					{
-						"role": "user",
-						"content": [
-							{"type": "text", "text": "Describe the image briefly."},
-							{
-								"type": "image",
-								"source": {
-									"type": "url",
-									"url": "https://cdn.prod.website-files.com/68a44d4040f98a4adf2207b6/6a26f71ab79bc169ff9bdec4_8dfc12d1.png"
-								}
-							}
-						]
-					}
-				]
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert_eq!(status, StatusCode::OK, "response: {body}");
-	assert_log_with_output_range("/v1/messages", false, &test_id, 1, 300).await;
-}
-
-async fn send_messages_count_tokens(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages/count_tokens",
-			json!({
-				"messages": [
-					{"role": "user", "content": "give me a 1 word answer"}
-				],
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert_eq!(status, StatusCode::OK, "response: {body}");
-	let count = body
-		.get("input_tokens")
-		.or_else(|| body.get("inputTokens"))
-		.and_then(serde_json::Value::as_u64)
-		.expect("input_tokens/inputTokens should be a positive integer");
-	assert!(
-		(1..100).contains(&count),
-		"unexpected input_tokens in response body: {count}"
-	);
-	assert_count_log("/v1/messages/count_tokens", &test_id).await;
-}
-
-async fn send_embeddings(gw: &AgentGateway, expected_dimensions: Option<usize>) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/embeddings",
-			json!({
-				"dimensions": 256,
-				"encoding_format": "float",
-				"input": "banana"
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert_eq!(status, StatusCode::OK, "response: {body}");
-
-	assert_eq!(body["object"], "list");
-	let data = body["data"].as_array().expect("data array");
-	assert_eq!(data.len(), 1, "expected one embedding");
-	assert_eq!(data[0]["object"], "embedding");
-	assert_eq!(data[0]["index"], 0);
-	let embedding = data[0]["embedding"].as_array().expect("embedding array");
-	assert_eq!(
-		embedding.len(),
-		expected_dimensions.unwrap_or(256),
-		"expected {} dimensions",
-		expected_dimensions.unwrap_or(256)
-	);
-	assert!(body["model"].is_string(), "expected model in response");
-	let prompt_tokens = body["usage"]["prompt_tokens"].as_u64().unwrap();
-	let total_tokens = body["usage"]["total_tokens"].as_u64().unwrap();
-	assert!(prompt_tokens > 0, "expected non-zero prompt_tokens");
-	assert_eq!(
-		prompt_tokens, total_tokens,
-		"embeddings should have prompt_tokens == total_tokens"
-	);
-
-	assert_embeddings_log(
-		"/v1/embeddings",
-		&test_id,
-		expected_dimensions.unwrap_or(256) as u64,
-		prompt_tokens,
-	)
+use agentgateway::llm::{AIProvider, custom, gemini, openai};
+use agentgateway::test_helpers::ratelimitmock;
+use tokio::sync::mpsc;
+use url::Position;
+
+use crate::common::prelude::*;
+
+#[tokio::test]
+async fn llm_openai() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
 	.await;
-}
-
-// The query has exactly one correct answer (document index 2), so a working rerank ranks it first.
-async fn send_rerank(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/rerank",
-			json!({
-				"query": "what is the capital of the United States?",
-				"documents": [
-					"Paris is the capital of France.",
-					"The sky is blue on a clear day.",
-					"Washington, D.C. is the capital of the United States."
-				],
-				"top_n": 2
-			}),
-		)
-		.await;
-
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert_eq!(status, StatusCode::OK, "response: {body}");
-
-	let results = body["results"].as_array().expect("results array");
-	assert!(!results.is_empty(), "expected at least one result: {body}");
-	assert!(results.len() <= 2, "top_n=2 must cap results: {body}");
-
-	for r in results {
-		let index = r["index"].as_u64().expect("result index");
-		assert!(index < 3, "index out of document range: {r}");
-		assert!(
-			r["relevance_score"].as_f64().is_some(),
-			"missing relevance_score: {r}"
-		);
-	}
-
-	assert_eq!(
-		results[0]["index"], 2,
-		"best document must rank first: {body}"
-	);
-	let scores: Vec<f64> = results
-		.iter()
-		.map(|r| r["relevance_score"].as_f64().unwrap())
-		.collect();
-	assert!(
-		scores.windows(2).all(|w| w[0] >= w[1]),
-		"results must be ranked best-first: {scores:?}"
-	);
-}
-
-async fn send_messages_adaptive_thinking(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 4096,
-				"thinking": {
-					"type": "adaptive"
-				},
-				"output_config": {
-					"effort": "high"
-				},
-				"messages": [{
-					"role": "user",
-					"content": "Summarize the benefits of automated testing in one sentence."
-				}]
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	let content = body.get("content").unwrap().as_array().unwrap();
-	assert!(!content.is_empty(), "content should not be empty");
-
-	assert_log_with_output_range("/v1/messages", false, &test_id, 1, 3000).await;
-}
-
-async fn send_completions_structured_json(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/chat/completions",
-			json!({
-				"stream": false,
-				"messages": [{
-					"role": "user",
-					"content": "Return valid JSON with exactly one key named answer and a short string value."
-				}],
-				"response_format": {
-					"type": "json_schema",
-					"json_schema": {
-						"name": "answer_schema",
-						"strict": true,
-						"schema": {
-							"type": "object",
-							"additionalProperties": false,
-							"properties": {
-								"answer": {
-									"type": "string"
-								}
-							},
-							"required": ["answer"]
-						}
-					}
-				}
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert_eq!(status, StatusCode::OK, "response: {body}");
-
-	let content = body["choices"][0]["message"]["content"]
-		.as_str()
-		.expect("structured output content should be a string");
-	let parsed_content: serde_json::Value =
-		serde_json::from_str(content).expect("structured output content should be valid json");
-	let answer = parsed_content["answer"]
-		.as_str()
-		.expect("structured output should include answer string");
-	assert!(
-		!answer.is_empty(),
-		"structured output answer should not be empty"
-	);
-
-	assert_log_with_output_range("/v1/chat/completions", false, &test_id, 1, 1000).await;
-}
-
-async fn send_messages_thinking_enabled(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 4096,
-				"thinking": {
-					"type": "enabled",
-					"budget_tokens": 1024
-				},
-				"messages": [{
-					"role": "user",
-					"content": "Summarize the benefits of automated testing in one sentence."
-				}]
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	let content = body.get("content").unwrap().as_array().unwrap();
-	assert!(!content.is_empty(), "content should not be empty");
-
-	assert_log_with_output_range("/v1/messages", false, &test_id, 1, 1000).await;
-}
-
-async fn send_messages_output_config_effort(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 4096,
-				"output_config": {
-					"effort": "high"
-				},
-				"messages": [{
-					"role": "user",
-					"content": "Summarize the benefits of automated testing in one sentence."
-				}]
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	let content = body.get("content").unwrap().as_array().unwrap();
-	assert!(!content.is_empty(), "content should not be empty");
-
-	assert_log_with_output_range("/v1/messages", false, &test_id, 1, 1000).await;
-}
-
-async fn send_completions_reasoning_effort(gw: &AgentGateway) {
-	send_completions_request(
-		gw,
+	let (_mock, _bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
 		false,
-		Some(2048),
-		Some("low"),
-		"Summarize the benefits of automated testing in one sentence.",
+		"{}",
+	);
+
+	let want = json!({
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
+	});
+	assert_llm(
+		io,
+		include_bytes!("../../src/llm/tests/requests/completions/basic.json"),
+		want,
 	)
 	.await;
 }
 
-async fn send_responses_reasoning_effort(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/responses",
-			json!({
-				"max_output_tokens": 2048,
-				"input": "Summarize the benefits of automated testing in one sentence.",
-				"reasoning": {
-					"effort": "low"
-				}
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert_eq!(status, StatusCode::OK, "response: {body}");
-
-	assert_log_with_output_range("/v1/responses", false, &test_id, 1, 2000).await;
-}
-
-async fn send_responses_thinking_budget(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/responses",
-			json!({
-				"max_output_tokens": 4096,
-				"input": "Summarize the benefits of automated testing in one sentence.",
-				"reasoning": {
-					"effort": "high"
-				},
-				"vendor_extensions": {
-					"thinking_budget_tokens": 3072
-				}
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert_eq!(status, StatusCode::OK, "response: {body}");
-
-	assert_log_with_output_range("/v1/responses", false, &test_id, 1, 2000).await;
-}
-
-async fn send_messages_adaptive_thinking_rejected(gw: &AgentGateway) {
-	use http_body_util::BodyExt;
-
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/messages",
-			json!({
-				"max_tokens": 4096,
-				"thinking": {
-					"type": "adaptive"
-				},
-				"messages": [{
-					"role": "user",
-					"content": "Summarize the benefits of automated testing in one sentence."
-				}]
-			}),
-		)
-		.await;
-	let status = resp.status();
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
-	assert!(
-		status.is_client_error(),
-		"expected client error for unsupported adaptive thinking, got status={status}, body={body}"
+#[tokio::test]
+async fn llm_openai_tokenize() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (_mock, _bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		true,
+		"{}",
 	);
+
+	let want = json!({
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
+	});
+	assert_llm(
+		io,
+		include_bytes!("../../src/llm/tests/requests/completions/basic.json"),
+		want,
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn llm_detect_mode_passthrough_without_rewrite() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = agentgateway::types::local::LocalNamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::OpenAI(openai::Provider { model: None }),
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		policies: serde_json::from_value(json!({
+			"ai": {
+				"routes": {
+					"/v1/chat/completions": "detect"
+				}
+			}
+		}))
+		.unwrap(),
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let body = include_bytes!("../../src/llm/tests/requests/completions/basic.json");
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions?trace=repro")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(body.to_vec()))
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		"/v1/chat/completions?trace=repro"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	let original_body: Value = serde_json::from_slice(body).expect("original request should be JSON");
+	assert_eq!(upstream_body, original_body);
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", "/v1/chat/completions?trace=repro"),
+	])
+	.await
+	.unwrap();
+	let want = json!({
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
+	});
+	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
+#[tokio::test]
+async fn llm_detect_mode_respects_model_rewrite() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = agentgateway::types::local::LocalNamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::OpenAI(openai::Provider { model: None }),
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		policies: serde_json::from_value(json!({
+			"ai": {
+				"routes": {
+					"/v1/chat/completions": "detect"
+				},
+				"overrides": {
+					"model": "replaceme-overwrite"
+				}
+			}
+		}))
+		.unwrap(),
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	let body = include_bytes!("../../src/llm/tests/requests/completions/basic.json");
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions?trace=rewrite")
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(Body::from(body.to_vec()))
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		"/v1/chat/completions?trace=rewrite"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["model"], "replaceme-overwrite");
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", "/v1/chat/completions?trace=rewrite"),
+	])
+	.await
+	.unwrap();
+	let want = json!({
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme-overwrite",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
+	});
+	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
+async fn setup_local_llm_config(yaml: &str) -> TestBind {
+	let t = setup_proxy_test("{}").unwrap();
+	let resources = agentgateway::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
+	let normalized = agentgateway::types::local::NormalizedLocalConfig::from(
+		t.pi.cfg.as_ref(),
+		&resources,
+		t.pi.cfg.gateway(),
+		yaml,
+	)
+	.await
+	.expect("local config normalizes");
+	t.pi.stores.binds.sync_local(
+		normalized.binds,
+		normalized.listener_routes,
+		normalized.listener_tcp_routes,
+		normalized.policies,
+		normalized.backends,
+		normalized.route_groups,
+		Default::default(),
+	);
+	t
+}
+
+#[tokio::test]
+async fn llm_local_router_handles_models_virtual_model_and_missing_model() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 4000
+  models:
+  - name: real-model
+    visibility: internal
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-model-auth"] == "yes"'
+    params:
+      baseUrl: http://{}
+    health:
+      eviction: {{}}
+      unhealthyExpression: 'response.code == 403'
+  - name: prefix/*
+    visibility: internal
+    provider: openai
+    params:
+      baseUrl: http://{}
+    transformation:
+      model: llmRequest.model.stripPrefix("prefix/")
+  - name: direct-model
+    provider: openAI
+    authorization:
+      rules:
+      - 'request.headers["x-model-auth"] == "yes"'
+    params:
+      baseUrl: http://{}
+  virtualModels:
+  - name: virtual-model
+    routing:
+      failover:
+        targets:
+        - model: real-model
+          priority: 0
+  - name: failover
+    routing:
+      failover:
+        targets:
+        - model: real-model
+          priority: 0
+        - model: prefix/without-prefix
+          priority: 1
+"#,
+		mock.address(),
+		mock.address(),
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/4000"));
+
+	// check model list respects authorization
+	{
+		let model_ids = list_models(io.clone(), &[]).await;
+		assert_eq!(model_ids, vec!["virtual-model", "failover"]);
+		let model_ids = list_models(io.clone(), &[("x-model-auth", "yes")]).await;
+		assert_eq!(model_ids, vec!["direct-model", "virtual-model", "failover"]);
+	}
+
+	// Virtual model
+	{
+		let res = send_completions_with_model(io.clone(), "virtual-model", &[]).await;
+		assert_eq!(res.status(), StatusCode::FORBIDDEN);
+		assert_eq!(
+			mock
+				.received_requests()
+				.await
+				.expect("upstream requests")
+				.len(),
+			0
+		);
+
+		let res =
+			send_completions_with_model(io.clone(), "virtual-model", &[("x-model-auth", "yes")]).await;
+		assert_eq!(res.status(), StatusCode::OK);
+
+		let upstream_requests = mock.received_requests().await.expect("upstream requests");
+		assert_eq!(upstream_requests.len(), 1);
+		let upstream_body: Value =
+			serde_json::from_slice(&upstream_requests[0].body).expect("upstream request JSON");
+		assert_eq!(upstream_body["model"], "real-model");
+	}
+
+	// Direct model
+	{
+		let res = send_completions_with_model(io.clone(), "direct-model", &[]).await;
+		assert_eq!(res.status(), StatusCode::FORBIDDEN);
+		assert_eq!(
+			mock
+				.received_requests()
+				.await
+				.expect("upstream requests")
+				.len(),
+			1
+		);
+
+		let res =
+			send_completions_with_model(io.clone(), "direct-model", &[("x-model-auth", "yes")]).await;
+		assert_eq!(res.status(), StatusCode::OK);
+		let upstream_requests = mock.received_requests().await.expect("upstream requests");
+		assert_eq!(upstream_requests.len(), 2);
+		let upstream_body: Value =
+			serde_json::from_slice(&upstream_requests[1].body).expect("upstream request JSON");
+		assert_eq!(upstream_body["model"], "direct-model");
+	}
+
+	// Failover model
+	{
+		// First attempt: fails
+		let res = send_completions_with_model(io.clone(), "failover", &[]).await;
+		assert_eq!(res.status(), StatusCode::FORBIDDEN);
+		assert_eq!(
+			mock
+				.received_requests()
+				.await
+				.expect("upstream requests")
+				.len(),
+			2
+		);
+
+		// Second attempt: failover to model without authz
+		let res = send_completions_with_model(io.clone(), "failover", &[]).await;
+		assert_eq!(res.status(), StatusCode::OK);
+		let upstream_requests = mock.received_requests().await.expect("upstream requests");
+		assert_eq!(upstream_requests.len(), 3);
+		let upstream_body: Value =
+			serde_json::from_slice(&upstream_requests[2].body).expect("upstream request JSON");
+		// Model should be explicitly rewritten and have the prefix removed
+		assert_eq!(upstream_body["model"], "without-prefix");
+	}
+
+	// Missing model
+	{
+		let res = send_completions_with_model(io, "missing-model", &[]).await;
+		assert_eq!(res.status(), StatusCode::NOT_FOUND);
+		let missing_body: Value =
+			serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("missing model JSON");
+		assert_eq!(missing_body["error"]["code"], "model_not_found");
+		assert_eq!(
+			mock
+				.received_requests()
+				.await
+				.expect("upstream requests")
+				.len(),
+			3
+		);
+	}
+}
+
+#[tokio::test]
+async fn llm_conditional_virtual_model_no_match_returns_json_error() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 4000
+  models:
+  - name: real-model
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{}
+  virtualModels:
+  - name: public-model
+    routing:
+      conditional:
+        targets:
+        - model: real-model
+          when: request.headers["x-use-model"] == "true"
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/4000"));
+	let res = send_completions_with_model(io, "public-model", &[]).await;
+
+	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+	let body: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("error JSON");
+	assert_eq!(body["error"]["code"], "virtual_model_no_matching_target");
+	assert_eq!(body["error"]["type"], "invalid_request_error");
+	assert_eq!(
+		mock
+			.received_requests()
+			.await
+			.expect("upstream requests")
+			.len(),
+		0
+	);
+}
+
+#[tokio::test]
+async fn llm_model_router_handles_multipart_audio_detect_request() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 4000
+  models:
+  - name: real-model
+    provider: openAI
+    params:
+      baseUrl: http://{}
+    passthrough: detect
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/4000"));
+	let body = concat!(
+		"--audio-boundary\r\n",
+		"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
+		"Content-Type: audio/wav\r\n",
+		"\r\n",
+		"fake-audio-bytes\r\n",
+		"--audio-boundary\r\n",
+		"Content-Disposition: form-data; name=\"model\"\r\n",
+		"\r\n",
+		"real-model\r\n",
+		"--audio-boundary--\r\n",
+	)
+	.as_bytes();
+
+	let res = RequestBuilder::new(Method::POST, "http://lo/v1/audio/transcriptions")
+		.header(
+			header::CONTENT_TYPE,
+			"multipart/form-data; boundary=audio-boundary",
+		)
+		.body(Body::from(body.to_vec()))
+		.send(io.clone())
+		.await
+		.unwrap();
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/audio/transcriptions"
+	);
+	assert_eq!(requests[0].body, body);
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", "/v1/audio/transcriptions"),
+	])
+	.await
+	.unwrap();
+	let want = json!({
+		"gen_ai.provider.name": "openai",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23
+	});
+	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
+#[tokio::test]
+async fn llm_custom_rerank() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/cohere/rerank.json"
+	))
+	.await;
+	let provider = agentgateway::types::local::LocalNamedAIProvider {
+		name: "default".into(),
+		provider: AIProvider::Custom(custom::Provider {
+			model: None,
+			provider_override: None,
+			formats: vec![custom::ProviderFormatConfig {
+				format: custom::ProviderFormat::Rerank,
+				path: None,
+			}],
+		}),
+		host_override: Some(Target::Address(*mock.address())),
+		path_override: None,
+		path_prefix: None,
+		tokenize: false,
+		policies: serde_json::from_value(json!({
+			"ai": {"routes": {"/v1/rerank": "rerank"}}
+		}))
+		.unwrap(),
+	};
+	let (mock, _bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/rerank",
+		include_bytes!("../../src/llm/tests/requests/rerank/basic.json"),
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	let body: Value =
+		serde_json::from_slice(&res.into_body().collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["results"][0]["index"], 2);
+	assert_eq!(body["results"][0]["relevance_score"], 0.91);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(
+		upstream_body["query"],
+		"What is the capital of the United States?"
+	);
+	assert_eq!(upstream_body["documents"].as_array().unwrap().len(), 3);
+}
+
+fn setup_custom_llm_provider_backend_mock(
+	mock: MockServer,
+	supported_formats: Vec<custom::ProviderFormat>,
+) -> (MockServer, TestBind, MemoryClient) {
+	setup_custom_llm_provider_backend_mock_with_formats(
+		mock,
+		supported_formats
+			.into_iter()
+			.map(|format| custom::ProviderFormatConfig { format, path: None })
+			.collect(),
+	)
+}
+
+fn setup_custom_llm_provider_backend_mock_with_formats(
+	mock: MockServer,
+	formats: Vec<custom::ProviderFormatConfig>,
+) -> (MockServer, TestBind, MemoryClient) {
+	let backend_name = "custom-ai";
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_bind(simple_bind())
+		.with_raw_backend(custom_llm_backend_with_formats(
+			backend_name,
+			SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
+			formats,
+		))
+		.with_route(basic_named_route(strng::format!("/{backend_name}")));
+	let io = t.serve_http(BIND_KEY);
+	(mock, t, io)
+}
+
+#[tokio::test]
+async fn llm_custom_provider_routes_to_provider_backend() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Completions]);
+
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/chat/completions"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["model"], "replaceme");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_uses_upstream_route_fallback() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/anthropic/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Messages]);
+
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
+	assert_eq!(res.status(), 200);
+	let response_body: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("response is JSON");
+	assert_eq!(response_body["object"], "chat.completion");
+	assert_eq!(response_body["usage"]["prompt_tokens"], 15);
+	assert_eq!(response_body["usage"]["completion_tokens"], 21);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/messages"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["system"], "You are a helpful assistant.");
+	assert_eq!(upstream_body["messages"][0]["role"], "user");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_uses_format_path_override() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/anthropic/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) = setup_custom_llm_provider_backend_mock_with_formats(
+		mock,
+		vec![custom::ProviderFormatConfig {
+			format: custom::ProviderFormat::Messages,
+			path: Some(strng::literal!("/api/messages")),
+		}],
+	);
+
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/api/messages"
+	);
+}
+
+#[tokio::test]
+async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Embeddings]);
+
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
+	assert_eq!(res.status(), 503);
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	assert!(
+		String::from_utf8_lossy(&body)
+			.contains("unsupported conversion: from Completions to provider custom"),
+		"unexpected response body: {}",
+		String::from_utf8_lossy(&body)
+	);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 0);
+}
+
+async fn recv_rate_limit_request(
+	requests: &mut mpsc::UnboundedReceiver<
+		agentgateway::http::remoteratelimit::proto::RateLimitRequest,
+	>,
+) -> agentgateway::http::remoteratelimit::proto::RateLimitRequest {
+	tokio::time::timeout(Duration::from_secs(1), requests.recv())
+		.await
+		.expect("timed out waiting for rate limit request")
+		.expect("rate limit request sender should be open")
+}
+
+fn completions_request_body(streaming: bool) -> Vec<u8> {
+	let mut body: Value = serde_json::from_slice(include_bytes!(
+		"../../src/llm/tests/requests/completions/basic.json"
+	))
+	.expect("request fixture should be valid JSON");
+	if streaming {
+		body["stream"] = json!(true);
+	}
+	serde_json::to_vec(&body).expect("request fixture should serialize")
+}
+
+fn completions_request_body_with_model(model: &str) -> Vec<u8> {
+	let mut body: Value = serde_json::from_slice(include_bytes!(
+		"../../src/llm/tests/requests/completions/basic.json"
+	))
+	.expect("request fixture should be valid JSON");
+	body["model"] = json!(model);
+	serde_json::to_vec(&body).expect("request fixture should serialize")
+}
+
+async fn send_completions_with_model(
+	io: MemoryClient,
+	model: &str,
+	headers: &[(&str, &str)],
+) -> Response {
+	let request_body = completions_request_body_with_model(model);
+	let mut request = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions");
+	for (key, value) in headers {
+		request = request.header(*key, *value);
+	}
+	request
+		.body(Body::from(request_body))
+		.send(io)
+		.await
+		.expect("completions request")
+}
+
+async fn list_models(io: MemoryClient, headers: &[(&str, &str)]) -> Vec<String> {
+	let res = if headers.is_empty() {
+		send_request(io, Method::GET, "http://lo/v1/models").await
+	} else {
+		send_request_headers(io, Method::GET, "http://lo/v1/models", headers).await
+	};
+	assert_eq!(res.status(), StatusCode::OK);
+	let models: Value =
+		serde_json::from_slice(&read_body_raw(res.into_body()).await).expect("models JSON");
+	assert_eq!(models["object"], "list");
+	models["data"]
+		.as_array()
+		.expect("model list")
+		.iter()
+		.map(|model| model["id"].as_str().expect("model id").to_string())
+		.collect()
+}
+
+async fn assert_llm_remote_rate_limit_cost(
+	response_body: &[u8],
+	request_body: &[u8],
+	expected_cost: u64,
+) {
+	let (rate_limit_tx, mut rate_limit_rx) = mpsc::unbounded_channel();
+	let rate_limit = ratelimitmock::RateLimitMock::new({
+		let rate_limit_tx = rate_limit_tx.clone();
+		move || RecordingRateLimit {
+			requests: rate_limit_tx.clone(),
+		}
+	})
+	.spawn()
+	.await;
+
+	let mock = body_mock(response_body).await;
+	let (_mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"remoteRateLimit": {
+				"domain": "llm",
+				"host": rate_limit.address.to_string(),
+				"descriptors": [{
+					"entries": [{
+						"key": "model",
+						"value": "\"model\"",
+					}],
+					"type": "tokens",
+					"cost": "llm.outputTokens * uint(1000) + llm.inputTokens",
+				}],
+			},
+		}))
+		.await;
+
+	let res = send_request_body(io, Method::POST, "http://lo", request_body).await;
+	assert_eq!(res.status(), 200);
+	let _ = res.into_body().collect().await.unwrap();
+
+	let initial_request = recv_rate_limit_request(&mut rate_limit_rx).await;
+	let amend_request = recv_rate_limit_request(&mut rate_limit_rx).await;
+	assert_eq!(initial_request.domain, "llm");
+	assert_eq!(amend_request.domain, "llm");
+
+	let initial = initial_request.descriptors.first().unwrap();
+	assert_eq!(initial.entries[0].key, "model");
+	assert_eq!(initial.entries[0].value, "model");
+	assert_eq!(initial.hits_addend, Some(0));
+
+	let amend = amend_request.descriptors.first().unwrap();
+	assert_eq!(amend.entries[0].key, "model");
+	assert_eq!(amend.entries[0].value, "model");
+	assert_eq!(amend.hits_addend, Some(expected_cost));
+}
+
+#[tokio::test]
+async fn llm_remote_rate_limit_cost_amends_response_tokens() {
+	assert_llm_remote_rate_limit_cost(
+		include_bytes!("../../src/llm/tests/response/completions/basic.json"),
+		&completions_request_body(false),
+		23017,
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn llm_streaming_remote_rate_limit_cost_amends_response_tokens() {
+	assert_llm_remote_rate_limit_cost(
+		include_bytes!("../../src/llm/tests/response/completions/stream.json"),
+		&completions_request_body(true),
+		286018,
+	)
+	.await;
+}
+
+#[rstest::rstest]
+#[case::preserves_path(None, None, "/v1/messages?trace=repro")]
+#[case::path_override(Some("/custom/chat/completions"), None, "/custom/chat/completions")]
+#[case::path_prefix(None, Some("/v1/custom/"), "/v1/custom/chat/completions?trace=repro")]
+#[tokio::test]
+async fn llm_openai_messages_translation_with_host_override_path_behavior(
+	#[case] path_override: Option<&str>,
+	#[case] path_prefix: Option<&str>,
+	#[case] expected_url: &str,
+) {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+	);
+	let provider = agentgateway::types::local::LocalNamedAIProvider {
+		path_override: path_override.map(strng::new),
+		path_prefix: path_prefix.map(strng::new),
+		..provider
+	};
+	let (mock, mut bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/v1/chat/completions": "completions",
+					"/v1/messages": "messages"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/messages?trace=repro",
+		include_bytes!("../../src/llm/tests/requests/messages/basic.json"),
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream = &requests[0];
+	assert_eq!(
+		&upstream.url[Position::BeforePath..Position::AfterQuery],
+		expected_url
+	);
+}
+
+#[rstest::rstest]
+#[case::preserves_path(None, "/v1/models", "/v1/models")]
+#[case::path_prefix(Some("/openai/v1"), "/v1/models", "/openai/v1/models")]
+#[case::path_prefix_with_query(
+	Some("/openai/v1"),
+	"/v1/models?foo=bar",
+	"/openai/v1/models?foo=bar"
+)]
+#[case::path_prefix_non_default_path(Some("/openai/v1"), "/foo", "/openai/v1/foo")]
+#[tokio::test]
+async fn llm_openai_passthrough_applies_path_prefix(
+	#[case] path_prefix: Option<&str>,
+	#[case] request_path: &str,
+	#[case] expected_url: &str,
+) {
+	let mock = body_mock(b"{}").await;
+	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
+		&mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		false,
+	);
+	let provider = agentgateway::types::local::LocalNamedAIProvider {
+		path_prefix: path_prefix.map(strng::new),
+		..provider
+	};
+	let (mock, mut bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"*": "passthrough"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, &format!("http://lo{request_path}")).await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		expected_url
+	);
+}
+
+// Providers without a DEFAULT_BASE_PATH (e.g. Gemini) prepend pathPrefix to the
+// full incoming path rather than replacing /v1.
+#[rstest::rstest]
+#[case::preserves_path(None, "/some/path", "/some/path")]
+#[case::path_prefix(Some("/my/prefix"), "/some/path", "/my/prefix/some/path")]
+#[tokio::test]
+async fn llm_non_openai_passthrough_prepends_path_prefix(
+	#[case] path_prefix: Option<&str>,
+	#[case] request_path: &str,
+	#[case] expected_url: &str,
+) {
+	let mock = body_mock(b"{}").await;
+	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
+		&mock,
+		AIProvider::Gemini(gemini::Provider { model: None }),
+		false,
+	);
+	let provider = agentgateway::types::local::LocalNamedAIProvider {
+		path_prefix: path_prefix.map(strng::new),
+		..provider
+	};
+	let (mock, mut bind, io) = setup_llm_named_provider_mock(mock, provider, "{}");
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": {
+					"/some/path": "passthrough"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io, Method::GET, &format!("http://lo{request_path}")).await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterQuery],
+		expected_url
+	);
+}
+
+#[tokio::test]
+async fn llm_log_body() {
+	let mock = body_mock(include_bytes!(
+		"../../src/llm/tests/response/completions/basic.json"
+	))
+	.await;
+	let x = serde_json::to_string(&json!({
+		"config": {
+			"logging": {
+				"fields": {
+					"add": {
+						"prompt": "llm.prompt",
+						"completion": "llm.completion"
+					}
+				}
+			}
+		}
+	}))
+	.unwrap();
+	let (_mock, _bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider { model: None }),
+		true,
+		x.as_str(),
+	);
+
+	let want = json!({
+		"gen_ai.operation.name": "chat",
+		"gen_ai.provider.name": "openai",
+		"gen_ai.request.model": "replaceme",
+		"gen_ai.response.model": "gpt-3.5-turbo-0125",
+		"gen_ai.usage.input_tokens": 17,
+		"gen_ai.usage.output_tokens": 23,
+		"completion": ["Sorry, I couldn't find the name of the LLM provider. Could you please provide more information or context?"],
+		"prompt": [
+			{"role":"system","content":"You are a helpful assistant."},
+			{"role":"user","content":"What is the name of the LLM provider?"},
+		]
+	});
+	assert_llm(
+		io,
+		include_bytes!("../../src/llm/tests/requests/completions/basic.json"),
+		want,
+	)
+	.await;
+}
+
+async fn assert_llm(io: MemoryClient, body: &[u8], want: Value) {
+	let r = rand::rng().random::<u128>();
+	let res = send_request_body(io.clone(), Method::POST, &format!("http://lo/{r}"), body).await;
+
+	// Ensure body finishes
+	let _ = res.into_body().collect().await.unwrap();
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("http.path", &format!("/{r}")),
+	])
+	.await
+	.unwrap();
+	let valid = is_json_subset(&want, &log);
+	assert!(valid, "want={want:#?} got={log:#?}");
+}
+
+#[derive(Clone)]
+struct RecordingRateLimit {
+	requests: mpsc::UnboundedSender<agentgateway::http::remoteratelimit::proto::RateLimitRequest>,
+}
+
+#[async_trait::async_trait]
+impl ratelimitmock::Handler for RecordingRateLimit {
+	async fn should_rate_limit(
+		&mut self,
+		request: &agentgateway::http::remoteratelimit::proto::RateLimitRequest,
+	) -> Result<agentgateway::http::remoteratelimit::proto::RateLimitResponse, tonic::Status> {
+		self
+			.requests
+			.send(request.clone())
+			.expect("rate limit request receiver should be open");
+		ratelimitmock::ok_response()
+	}
 }
