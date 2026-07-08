@@ -129,7 +129,7 @@ Production config, pointed at real Entra:
 
 ```yaml
 backendAuth:
-  oauth:
+  oauthTokenExchange:
     host: login.microsoftonline.com:443            # :443 auto-enables backendTLS
     tokenEndpointPath: /<TENANT_ID>/oauth2/v2.0/token
     grantType: jwtBearer

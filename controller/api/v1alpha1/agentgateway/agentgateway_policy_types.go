@@ -1352,7 +1352,7 @@ type BackendAuth struct {
 	// +optional
 	GCP *GcpAuth `json:"gcp,omitempty"`
 
-	// OAuthTokenExchange 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
+	// OAuth 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
 	// +optional
 	OAuthTokenExchange *OAuthTokenExchange `json:"oauth,omitempty"`
 

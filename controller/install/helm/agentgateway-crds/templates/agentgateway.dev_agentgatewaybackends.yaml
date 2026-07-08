@@ -999,9 +999,9 @@ spec:
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
                                                             oauth:
-                                                              description: OAuthTokenExchange
-                                                                2.0 token exchange
-                                                                (RFC 8693) / jwt-bearer
+                                                              description: OAuth 2.0
+                                                                token exchange (RFC
+                                                                8693) / jwt-bearer
                                                                 (RFC 7523) authentication.
                                                               properties:
                                                                 actorToken:
@@ -2484,9 +2484,9 @@ spec:
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
                                                             oauth:
-                                                              description: OAuthTokenExchange
-                                                                2.0 token exchange
-                                                                (RFC 8693) / jwt-bearer
+                                                              description: OAuth 2.0
+                                                                token exchange (RFC
+                                                                8693) / jwt-bearer
                                                                 (RFC 7523) authentication.
                                                               properties:
                                                                 actorToken:
@@ -3965,9 +3965,9 @@ spec:
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
                                                             oauth:
-                                                              description: OAuthTokenExchange
-                                                                2.0 token exchange
-                                                                (RFC 8693) / jwt-bearer
+                                                              description: OAuth 2.0
+                                                                token exchange (RFC
+                                                                8693) / jwt-bearer
                                                                 (RFC 7523) authentication.
                                                               properties:
                                                                 actorToken:
@@ -5678,9 +5678,9 @@ spec:
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
                                                             oauth:
-                                                              description: OAuthTokenExchange
-                                                                2.0 token exchange
-                                                                (RFC 8693) / jwt-bearer
+                                                              description: OAuth 2.0
+                                                                token exchange (RFC
+                                                                8693) / jwt-bearer
                                                                 (RFC 7523) authentication.
                                                               properties:
                                                                 actorToken:
@@ -7163,9 +7163,9 @@ spec:
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
                                                             oauth:
-                                                              description: OAuthTokenExchange
-                                                                2.0 token exchange
-                                                                (RFC 8693) / jwt-bearer
+                                                              description: OAuth 2.0
+                                                                token exchange (RFC
+                                                                8693) / jwt-bearer
                                                                 (RFC 7523) authentication.
                                                               properties:
                                                                 actorToken:
@@ -8894,9 +8894,8 @@ spec:
                                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                             == 1'
                                       oauth:
-                                        description: OAuthTokenExchange 2.0 token
-                                          exchange (RFC 8693) / jwt-bearer (RFC 7523)
-                                          authentication.
+                                        description: OAuth 2.0 token exchange (RFC
+                                          8693) / jwt-bearer (RFC 7523) authentication.
                                         properties:
                                           actorToken:
                                             description: RFC 8693 delegation actor
@@ -11082,8 +11081,8 @@ spec:
                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                           == 1'
                                     oauth:
-                                      description: OAuthTokenExchange 2.0 token exchange
-                                        (RFC 8693) / jwt-bearer (RFC 7523) authentication.
+                                      description: OAuth 2.0 token exchange (RFC 8693)
+                                        / jwt-bearer (RFC 7523) authentication.
                                       properties:
                                         actorToken:
                                           description: RFC 8693 delegation actor token.
@@ -12544,9 +12543,9 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuthTokenExchange 2.0
-                                                token exchange (RFC 8693) / jwt-bearer
-                                                (RFC 7523) authentication.
+                                              description: OAuth 2.0 token exchange
+                                                (RFC 8693) / jwt-bearer (RFC 7523)
+                                                authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
@@ -13819,9 +13818,9 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuthTokenExchange 2.0
-                                                token exchange (RFC 8693) / jwt-bearer
-                                                (RFC 7523) authentication.
+                                              description: OAuth 2.0 token exchange
+                                                (RFC 8693) / jwt-bearer (RFC 7523)
+                                                authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
@@ -15089,9 +15088,9 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuthTokenExchange 2.0
-                                                token exchange (RFC 8693) / jwt-bearer
-                                                (RFC 7523) authentication.
+                                              description: OAuth 2.0 token exchange
+                                                (RFC 8693) / jwt-bearer (RFC 7523)
+                                                authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
@@ -16585,9 +16584,9 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuthTokenExchange 2.0
-                                                token exchange (RFC 8693) / jwt-bearer
-                                                (RFC 7523) authentication.
+                                              description: OAuth 2.0 token exchange
+                                                (RFC 8693) / jwt-bearer (RFC 7523)
+                                                authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
@@ -17860,9 +17859,9 @@ spec:
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
                                             oauth:
-                                              description: OAuthTokenExchange 2.0
-                                                token exchange (RFC 8693) / jwt-bearer
-                                                (RFC 7523) authentication.
+                                              description: OAuth 2.0 token exchange
+                                                (RFC 8693) / jwt-bearer (RFC 7523)
+                                                authentication.
                                               properties:
                                                 actorToken:
                                                   description: RFC 8693 delegation
@@ -19401,8 +19400,8 @@ spec:
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                             == 1'
                       oauth:
-                        description: OAuthTokenExchange 2.0 token exchange (RFC 8693)
-                          / jwt-bearer (RFC 7523) authentication.
+                        description: OAuth 2.0 token exchange (RFC 8693) / jwt-bearer
+                          (RFC 7523) authentication.
                         properties:
                           actorToken:
                             description: RFC 8693 delegation actor token. TokenExchange

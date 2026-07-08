@@ -2191,6 +2191,9 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 	if s.ExtAuth != nil && s.ExtAuth.BackendRef != nil {
 		app(*s.ExtAuth.BackendRef)
 	}
+	if s.Auth != nil && s.Auth.OAuthTokenExchange != nil {
+		app(s.Auth.OAuthTokenExchange.TokenEndpoint.BackendObjectReference)
+	}
 	if s.MCP != nil && s.MCP.Authentication != nil {
 		app(s.MCP.Authentication.JWKS.BackendRef)
 	}

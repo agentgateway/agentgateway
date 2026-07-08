@@ -20,7 +20,7 @@ binds:
       - host: localhost:18080
         policies:
           backendAuth:
-            oauth:
+            oauthTokenExchange:
               host: localhost:7090           # stands in for login.microsoftonline.com:443
               tokenEndpointPath: /token       # stands in for /<TENANT_ID>/oauth2/v2.0/token
               grantType: jwtBearer
@@ -42,7 +42,7 @@ binds:
       - host: localhost:18080
         policies:
           backendAuth:
-            oauth:
+            oauthTokenExchange:
               host: localhost:7090
               tokenEndpointPath: /token
               grantType: jwtBearer
@@ -58,7 +58,7 @@ binds:
       - host: localhost:18080
         policies:
           backendAuth:
-            oauth:
+            oauthTokenExchange:
               host: localhost:7080
               tokenEndpointPath: /realms/backend-oauth/protocol/openid-connect/token
               grantType: jwtBearer

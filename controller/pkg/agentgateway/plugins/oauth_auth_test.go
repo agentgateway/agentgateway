@@ -45,6 +45,33 @@ func oauthTokenEndpointRef() agentgateway.OAuthTokenEndpoint {
 	}
 }
 
+func TestOAuthTokenExchangeTokenEndpointIsReferencedBackend(t *testing.T) {
+	policy := &agentgateway.AgentgatewayPolicy{
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Backend: &agentgateway.BackendFull{
+				BackendSimple: agentgateway.BackendSimple{
+					Auth: &agentgateway.BackendAuth{
+						OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
+							TokenEndpoint: oauthTokenEndpointRef(),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	refs := referencedBackendRefsFromPolicy(policy)
+	if len(refs) != 1 {
+		t.Fatalf("referenced backend refs length = %d, want 1", len(refs))
+	}
+	ref := refs[0]
+	if ref.Name != "token-endpoint" ||
+		ref.Group == nil || *ref.Group != "agentgateway.dev" ||
+		ref.Kind == nil || *ref.Kind != "AgentgatewayBackend" {
+		t.Fatalf("referenced backend ref = %+v, want token endpoint AgentgatewayBackend", ref)
+	}
+}
+
 func TestOAuthTokenExchangeClientAuthPublicClientRequiresPost(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 
