@@ -399,7 +399,7 @@ pub mod typed {
 	#[allow(deprecated_in_future)]
 	pub use async_openai::types::chat::{
 		ChatCompletionAudio, ChatCompletionFunctionCall, ChatCompletionFunctions,
-		ChatCompletionMessageToolCall as MessageToolCall, ChatCompletionMessageToolCallChunk,
+		ChatCompletionMessageToolCall as MessageToolCall,
 		ChatCompletionMessageToolCalls as MessageToolCalls,
 		ChatCompletionNamedToolChoice as NamedToolChoice,
 		ChatCompletionRequestAssistantMessageAudio as RequestAssistantMessageAudio,
@@ -428,6 +428,18 @@ pub mod typed {
 		StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
 	};
 	use serde::{Deserialize, Serialize};
+
+	#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+	pub struct ChatCompletionMessageToolCallChunk {
+		#[serde(default)]
+		pub index: u32,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub id: Option<String>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub r#type: Option<FunctionType>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub function: Option<FunctionCallStream>,
+	}
 
 	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.
 	///

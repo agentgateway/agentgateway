@@ -1,0 +1,25 @@
+{
+  "model": "gpt-5.5",
+  "input": [
+    {
+      "content": [
+        {
+          "text": "hello",
+          "type": "output_text"
+        }
+      ],
+      "role": "assistant",
+      "type": "message"
+    },
+    {
+      "content": [
+        {
+          "text": "what did you say to me last?",
+          "type": "input_text"
+        }
+      ],
+      "role": "user",
+      "type": "message"
+    }
+  ]
+}

@@ -510,11 +510,23 @@ pub mod typed {
 		ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
 		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseIncompleteEvent, ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextParam, ResponseUsage, Role, Status,
-		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
+		ResponseIncompleteEvent, ResponseLogProb, ResponseOutputItemAddedEvent,
+		ResponseOutputItemDoneEvent, ResponseTextDeltaEvent, ResponseTextParam, ResponseUsage, Role,
+		Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions,
+		ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
+
+	#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+	pub struct ResponseTextDoneEvent {
+		pub sequence_number: u64,
+		pub item_id: String,
+		pub output_index: u32,
+		pub content_index: u32,
+		pub text: String,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub logprobs: Option<Vec<ResponseLogProb>>,
+	}
 
 	/// Event types for streaming responses from the Responses API (minimal strict subset).
 	#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -533,6 +545,9 @@ pub mod typed {
 		/// Emitted when there is an additional text delta.
 		#[serde(rename = "response.output_text.delta")]
 		ResponseOutputTextDelta(openai_responses::ResponseTextDeltaEvent),
+		/// Emitted when output text is finalized.
+		#[serde(rename = "response.output_text.done")]
+		ResponseOutputTextDone(ResponseTextDoneEvent),
 		/// Emitted when there is a partial function-call arguments delta.
 		#[serde(rename = "response.function_call_arguments.delta")]
 		ResponseFunctionCallArgumentsDelta(openai_responses::ResponseFunctionCallArgumentsDeltaEvent),
