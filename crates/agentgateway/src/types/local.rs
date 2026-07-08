@@ -27,9 +27,10 @@ use crate::types::agent::{
 	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName,
 	McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
 	Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName,
-	ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendWithPolicies, SseTargetSpec,
-	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target, TargetedPolicy,
-	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName, validate_mcp_target_name,
+	ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendReferenceWithPolicies,
+	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, Target, TargetedPolicy, TracingConfig, TrafficPolicy, TunnelProtocol,
+	TypedResourceName, validate_mcp_target_name,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -227,8 +228,10 @@ fn merge_deprecated_frontend_policies(
 				));
 			}
 			frontend_policies.tracing = Some(TracingConfig {
-				provider_backend: SimpleBackendReference::InlineBackend(backend),
-				policies,
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(SimpleBackendReference::InlineBackend(backend)),
+					policies,
+				},
 				attributes: Arc::unwrap_or_clone(fields.add),
 				resources: Default::default(), // Not supported in the old config
 				filter: None,                  // Not supported in the old config

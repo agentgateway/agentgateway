@@ -2277,17 +2277,9 @@ impl PolicyInheritance {
 /// Configuration for dynamic tracing policy
 #[apply(schema!)]
 pub struct TracingConfig {
-	/// Backend that receives exported traces.
+	/// Backend that receives exported traces and policies used when connecting to it.
 	#[serde(flatten)]
-	pub provider_backend: SimpleBackendReference,
-	/// Backend policies used when exporting traces.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<BackendTrafficPolicy>,
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Span attributes to add, keyed by attribute name.
 	#[serde(default)]
 	pub attributes: OrderedStringMap<Arc<cel::Expression>>,
@@ -2399,10 +2391,11 @@ impl AccessLogPolicy {
 		policy_client: crate::proxy::httpproxy::PolicyClient,
 	) -> anyhow::Result<&Arc<crate::telemetry::log::OtelAccessLogger>> {
 		self.logger.get_or_try_init(|| {
+			let target = &self.config.target;
 			let logger = crate::telemetry::log::OtelAccessLogger::new(
 				policy_client,
-				self.config.provider_backend.clone(),
-				self.config.policies.clone(),
+				target.target.as_ref().clone(),
+				target.policies.clone(),
 				self.config.protocol,
 				self.config.path.clone(),
 			)?;

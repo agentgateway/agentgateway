@@ -2838,12 +2838,14 @@ fn frontend_policy_from_proto(
 						})
 						.transpose()?;
 					Ok(frontend::OtlpLoggingConfig {
-						provider_backend,
+						target: SimpleBackendReferenceWithPolicies {
+							target: Arc::new(provider_backend),
+							policies,
+						},
 						filter: oal.filter.as_ref().map(|expr| {
 							permissive_cel_expression_arc(diagnostics, "frontend.logging.otlp.filter", expr)
 						}),
 						fields,
-						policies,
 						protocol,
 						path,
 					})
@@ -2967,9 +2969,11 @@ fn tracing_config_from_proto(
 		};
 
 	types::agent::TracingConfig {
-		provider_backend,
-		// Not supported inline from xDS
-		policies: Vec::new(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: Arc::new(provider_backend),
+			// Not supported inline from xDS
+			policies: Vec::new(),
+		},
 		attributes,
 		resources,
 		remove: t.remove.clone(),
