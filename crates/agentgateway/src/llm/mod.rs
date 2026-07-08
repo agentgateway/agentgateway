@@ -40,6 +40,8 @@ use crate::cel::{Executor, LLMContext, RequestSnapshot};
 use crate::proxy::dtrace;
 use crate::store;
 
+pub const LOCAL_LISTENER_NAME: &str = "llm";
+
 #[cfg(test)]
 mod anthropic_tests;
 

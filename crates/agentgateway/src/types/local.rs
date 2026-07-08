@@ -2589,8 +2589,8 @@ async fn convert(
 			let (_mcp_bind, mcp_routes, mcp_policies, mcp_backends) =
 				convert_mcp_config(resources, config, gateway.clone(), mcp_config, true).await?;
 			llm_routes.extend(mcp_routes);
-			all_listener_routes.push((strng::new("llm"), llm_routes));
-			all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
+			all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
+			all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
 			all_binds.push(llm_bind);
 			all_policies.extend_from_slice(&llm_policies);
 			all_policies.extend_from_slice(&mcp_policies);
@@ -2601,8 +2601,8 @@ async fn convert(
 			if let Some(llm_config) = llm {
 				let (llm_bind, llm_routes, llm_policies, llm_backends) =
 					convert_llm_config(resources, config, gateway.clone(), llm_config).await?;
-				all_listener_routes.push((strng::new("llm"), llm_routes));
-				all_listener_tcp_routes.push((strng::new("llm"), Vec::new()));
+				all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
+				all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
 				all_binds.push(llm_bind);
 				all_policies.extend_from_slice(&llm_policies);
 				all_backends.extend_from_slice(&llm_backends);
@@ -3523,11 +3523,11 @@ async fn convert_llm_config(
 	});
 
 	// Create listener
-	let listener_key: ListenerKey = strng::new("llm");
+	let listener_key: ListenerKey = strng::new(llm::LOCAL_LISTENER_NAME);
 	let listener_name = ListenerName {
 		gateway_name: gateway.gateway_name.clone(),
 		gateway_namespace: gateway.gateway_namespace.clone(),
-		listener_name: strng::new("llm"),
+		listener_name: strng::new(llm::LOCAL_LISTENER_NAME),
 		listener_set: None,
 	};
 	let tls_enabled = tls.is_some();

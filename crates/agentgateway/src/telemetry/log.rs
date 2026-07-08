@@ -1217,7 +1217,12 @@ impl Drop for DropOnLog {
 			let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
 			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
-			let log_store_enabled = log_store::enabled() && llm_response.is_some();
+			let log_store_enabled = log_store::enabled()
+				&& (llm_response.is_some()
+					|| log
+						.listener_name
+						.as_ref()
+						.is_some_and(|listener| listener.listener_name.as_str() == llm::LOCAL_LISTENER_NAME));
 			if !maybe_enable_log && !enable_trace && !log_store_enabled && !otlp_log_enabled {
 				return;
 			}

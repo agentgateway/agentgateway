@@ -129,7 +129,6 @@ export function LogsPage() {
       response.logs.some((entry) => entry.id === expandedId)
     )
       return response.logs;
-    if (!isLlmLogEntry(expanded)) return response.logs;
     return [expanded, ...response.logs];
   }, [expanded, expandedId, response.logs]);
 
@@ -145,7 +144,7 @@ export function LogsPage() {
         includeAttributes: true,
       });
       if (loadSeq !== loadSeqRef.current) return;
-      setResponse(llmLogsResponse(logs));
+      setResponse(logs);
     } catch (err) {
       if (loadSeq !== loadSeqRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load logs");
@@ -202,7 +201,6 @@ export function LogsPage() {
           { limit: 100, filters },
           controller.signal,
         )) {
-          if (!isLlmLogEntry(event.entry)) continue;
           setResponse((current) => ({
             ...current,
             logs: [event.entry, ...current.logs].slice(0, 200),
@@ -261,7 +259,7 @@ export function LogsPage() {
       const detail = await getLog(logId);
       if (detailSeq !== detailSeqRef.current) return;
       const nextLog = detail.log ?? fallback ?? null;
-      setExpanded(nextLog && isLlmLogEntry(nextLog) ? nextLog : null);
+      setExpanded(nextLog);
     } catch (err) {
       if (detailSeq !== detailSeqRef.current) return;
       setError(
@@ -571,17 +569,6 @@ function LogsSettingsDrawer(props: {
       ) : null}
     </Drawer>
   );
-}
-
-function isLlmLogEntry(entry: LogEntry | null | undefined) {
-  return Boolean(entry?.genAi?.providerName);
-}
-
-function llmLogsResponse(response: SearchLogsResponse): SearchLogsResponse {
-  return {
-    ...response,
-    logs: response.logs.filter(isLlmLogEntry),
-  };
 }
 
 function hasAnalyticsFilters(filters: Record<AnalyticsDimension, string[]>) {
