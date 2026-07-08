@@ -1,11 +1,9 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
 use agent_core::prelude::Strng;
 pub use agent_core::serdes;
 pub use agent_core::serdes::{JsonSchema, apply, attribute_alias, define_schema_aliases};
-use aws_credential_types::Credentials;
 use tracing::warn;
 
 define_schema_aliases!();
@@ -69,50 +67,6 @@ pub mod webhook {
 	pub struct ResponseChoice {
 		/// message contains the role and text content of the response from the LLM model.
 		pub message: Message,
-	}
-}
-
-pub mod auth {
-	use super::*;
-
-	#[derive(Default, Clone)]
-	pub struct AwsCredentialsCache(pub Arc<tokio::sync::Mutex<Option<Credentials>>>);
-
-	impl std::fmt::Debug for AwsCredentialsCache {
-		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-			f.write_str("AwsCredentialsCache")
-		}
-	}
-
-	#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-	pub struct AssumeRoleCacheKey {
-		pub role_arn: String,
-		pub resolved_sts_region: String,
-		pub session_name: Option<String>,
-		/// Pre-sorted (key, value) pairs so the cache key is stable regardless of tag order.
-		pub tags: Arc<[(String, String)]>,
-	}
-
-	#[derive(Default, Clone)]
-	pub struct AwsAssumeRoleCache(
-		pub Arc<tokio::sync::Mutex<HashMap<AssumeRoleCacheKey, Credentials>>>,
-	);
-
-	impl std::fmt::Debug for AwsAssumeRoleCache {
-		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-			f.write_str("AwsAssumeRoleCache")
-		}
-	}
-
-	#[derive(Default, Clone)]
-	pub struct AzureCredentialCache(
-		pub Arc<tokio::sync::OnceCell<Arc<dyn azure_core::credentials::TokenCredential>>>,
-	);
-
-	impl std::fmt::Debug for AzureCredentialCache {
-		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-			f.write_str("AzureCredentialCache")
-		}
 	}
 }
 

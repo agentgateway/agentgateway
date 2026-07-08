@@ -1,7 +1,7 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-pub use agent_llm::auth::{AssumeRoleCacheKey, AwsAssumeRoleCache, AwsCredentialsCache};
 use aws_config::sts::AssumeRoleProvider;
 use aws_config::{BehaviorVersion, SdkConfig};
 use aws_credential_types::Credentials;
@@ -10,7 +10,7 @@ use aws_sigv4::http_request::{SignableBody, sign};
 use aws_sigv4::sign::v4::SigningParams;
 use aws_types::region::Region;
 use secrecy::{ExposeSecret, SecretString};
-use tokio::sync::OnceCell;
+use tokio::sync::{Mutex, OnceCell};
 
 use crate::llm::bedrock::AwsRegion;
 use crate::*;
@@ -56,6 +56,24 @@ pub enum AwsAuth {
 		#[cfg_attr(feature = "schema", schemars(skip))]
 		assume_role_cache: AwsAssumeRoleCache,
 	},
+}
+
+#[derive(Default, Clone)]
+pub struct AwsCredentialsCache(Arc<Mutex<Option<Credentials>>>);
+
+impl std::fmt::Debug for AwsCredentialsCache {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("AwsCredentialsCache")
+	}
+}
+
+#[derive(Default, Clone)]
+pub struct AwsAssumeRoleCache(Arc<Mutex<HashMap<AssumeRoleCacheKey, Credentials>>>);
+
+impl std::fmt::Debug for AwsAssumeRoleCache {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("AwsAssumeRoleCache")
+	}
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -314,6 +332,16 @@ async fn load_source_credentials(aws_auth: &AwsAuth) -> anyhow::Result<Credentia
 			Ok(creds)
 		},
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct AssumeRoleCacheKey {
+	role_arn: String,
+	resolved_sts_region: String,
+	session_name: Option<String>,
+	/// Pre-sorted (key, value) pairs (see [`sorted_session_tags`]) so the cache key
+	/// is stable regardless of tag order.
+	tags: Arc<[(String, String)]>,
 }
 
 const ASSUMED_CREDENTIAL_REFRESH_BUFFER: Duration = Duration::from_secs(60);
