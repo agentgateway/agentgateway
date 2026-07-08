@@ -77,7 +77,7 @@ spec:
     name: oauth-token-exchange-backend
   backend:
     auth:
-      oauth:
+      oauthTokenExchange:
         tokenEndpoint:
           group: agentgateway.dev
           kind: AgentgatewayBackend
@@ -118,7 +118,7 @@ spec:
     name: oauth-jwt-bearer-backend
   backend:
     auth:
-      oauth:
+      oauthTokenExchange:
         tokenEndpoint:
           group: agentgateway.dev
           kind: AgentgatewayBackend

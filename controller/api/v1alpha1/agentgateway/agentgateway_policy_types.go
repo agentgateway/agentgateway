@@ -1310,7 +1310,7 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauth
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange
 // +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
@@ -1354,7 +1354,7 @@ type BackendAuth struct {
 
 	// OAuth 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523) authentication.
 	// +optional
-	OAuthTokenExchange *OAuthTokenExchange `json:"oauth,omitempty"`
+	OAuthTokenExchange *OAuthTokenExchange `json:"oauthTokenExchange,omitempty"`
 
 	// Where backend credentials are inserted.
 	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.

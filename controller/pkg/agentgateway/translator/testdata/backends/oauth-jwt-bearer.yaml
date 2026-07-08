@@ -19,7 +19,7 @@ spec:
     port: 8888
   policies:
     auth:
-      oauth:
+      oauthTokenExchange:
         tokenEndpoint:
           group: agentgateway.dev
           kind: AgentgatewayBackend

@@ -998,7 +998,7 @@ spec:
                                                                   set
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
-                                                            oauth:
+                                                            oauthTokenExchange:
                                                               description: OAuth 2.0
                                                                 token exchange (RFC
                                                                 8693) / jwt-bearer
@@ -1724,8 +1724,9 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [key secretRef
                                                               passthrough aws azure
-                                                              gcp oauth] must be set
-                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                                              gcp oauthTokenExchange]
+                                                              must be set
+                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                                               == 1'
                                                         http:
                                                           description: Settings for
@@ -2483,7 +2484,7 @@ spec:
                                                                   set
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
-                                                            oauth:
+                                                            oauthTokenExchange:
                                                               description: OAuth 2.0
                                                                 token exchange (RFC
                                                                 8693) / jwt-bearer
@@ -3209,8 +3210,9 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [key secretRef
                                                               passthrough aws azure
-                                                              gcp oauth] must be set
-                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                                              gcp oauthTokenExchange]
+                                                              must be set
+                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                                               == 1'
                                                         http:
                                                           description: Settings for
@@ -3964,7 +3966,7 @@ spec:
                                                                   set
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
-                                                            oauth:
+                                                            oauthTokenExchange:
                                                               description: OAuth 2.0
                                                                 token exchange (RFC
                                                                 8693) / jwt-bearer
@@ -4690,8 +4692,9 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [key secretRef
                                                               passthrough aws azure
-                                                              gcp oauth] must be set
-                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                                              gcp oauthTokenExchange]
+                                                              must be set
+                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                                               == 1'
                                                         http:
                                                           description: Settings for
@@ -5677,7 +5680,7 @@ spec:
                                                                   set
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
-                                                            oauth:
+                                                            oauthTokenExchange:
                                                               description: OAuth 2.0
                                                                 token exchange (RFC
                                                                 8693) / jwt-bearer
@@ -6403,8 +6406,9 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [key secretRef
                                                               passthrough aws azure
-                                                              gcp oauth] must be set
-                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                                              gcp oauthTokenExchange]
+                                                              must be set
+                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                                               == 1'
                                                         http:
                                                           description: Settings for
@@ -7162,7 +7166,7 @@ spec:
                                                                   set
                                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                   == 1'
-                                                            oauth:
+                                                            oauthTokenExchange:
                                                               description: OAuth 2.0
                                                                 token exchange (RFC
                                                                 8693) / jwt-bearer
@@ -7888,8 +7892,9 @@ spec:
                                                           - message: exactly one of
                                                               the fields in [key secretRef
                                                               passthrough aws azure
-                                                              gcp oauth] must be set
-                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                                              gcp oauthTokenExchange]
+                                                              must be set
+                                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                                               == 1'
                                                         http:
                                                           description: Settings for
@@ -8893,7 +8898,7 @@ spec:
                                             queryParameter cookie] must be set
                                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                             == 1'
-                                      oauth:
+                                      oauthTokenExchange:
                                         description: OAuth 2.0 token exchange (RFC
                                           8693) / jwt-bearer (RFC 7523) authentication.
                                         properties:
@@ -9472,8 +9477,9 @@ spec:
                                         has(self.secretRef) || has(self.passthrough)
                                         : true'
                                     - message: exactly one of the fields in [key secretRef
-                                        passthrough aws azure gcp oauth] must be set
-                                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                        passthrough aws azure gcp oauthTokenExchange]
+                                        must be set
+                                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                         == 1'
                                   health:
                                     description: Settings for passive and active health
@@ -11080,7 +11086,7 @@ spec:
                                           queryParameter cookie] must be set
                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                           == 1'
-                                    oauth:
+                                    oauthTokenExchange:
                                       description: OAuth 2.0 token exchange (RFC 8693)
                                         / jwt-bearer (RFC 7523) authentication.
                                       properties:
@@ -11649,8 +11655,9 @@ spec:
                                     rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
                                       || has(self.passthrough) : true'
                                   - message: exactly one of the fields in [key secretRef
-                                      passthrough aws azure gcp oauth] must be set
-                                    rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                      passthrough aws azure gcp oauthTokenExchange]
+                                      must be set
+                                    rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                       == 1'
                                 http:
                                   description: Settings for managing HTTP requests
@@ -12542,7 +12549,7 @@ spec:
                                                   must be set
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
-                                            oauth:
+                                            oauthTokenExchange:
                                               description: OAuth 2.0 token exchange
                                                 (RFC 8693) / jwt-bearer (RFC 7523)
                                                 authentication.
@@ -13138,8 +13145,8 @@ spec:
                                               : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
-                                              gcp oauth] must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                              gcp oauthTokenExchange] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: Settings for managing HTTP
@@ -13817,7 +13824,7 @@ spec:
                                                   must be set
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
-                                            oauth:
+                                            oauthTokenExchange:
                                               description: OAuth 2.0 token exchange
                                                 (RFC 8693) / jwt-bearer (RFC 7523)
                                                 authentication.
@@ -14413,8 +14420,8 @@ spec:
                                               : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
-                                              gcp oauth] must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                              gcp oauthTokenExchange] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: Settings for managing HTTP
@@ -15087,7 +15094,7 @@ spec:
                                                   must be set
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
-                                            oauth:
+                                            oauthTokenExchange:
                                               description: OAuth 2.0 token exchange
                                                 (RFC 8693) / jwt-bearer (RFC 7523)
                                                 authentication.
@@ -15683,8 +15690,8 @@ spec:
                                               : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
-                                              gcp oauth] must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                              gcp oauthTokenExchange] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: Settings for managing HTTP
@@ -16583,7 +16590,7 @@ spec:
                                                   must be set
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
-                                            oauth:
+                                            oauthTokenExchange:
                                               description: OAuth 2.0 token exchange
                                                 (RFC 8693) / jwt-bearer (RFC 7523)
                                                 authentication.
@@ -17179,8 +17186,8 @@ spec:
                                               : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
-                                              gcp oauth] must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                              gcp oauthTokenExchange] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: Settings for managing HTTP
@@ -17858,7 +17865,7 @@ spec:
                                                   must be set
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
-                                            oauth:
+                                            oauthTokenExchange:
                                               description: OAuth 2.0 token exchange
                                                 (RFC 8693) / jwt-bearer (RFC 7523)
                                                 authentication.
@@ -18454,8 +18461,8 @@ spec:
                                               : true'
                                           - message: exactly one of the fields in
                                               [key secretRef passthrough aws azure
-                                              gcp oauth] must be set
-                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                                              gcp oauthTokenExchange] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                                               == 1'
                                         http:
                                           description: Settings for managing HTTP
@@ -19399,7 +19406,7 @@ spec:
                             cookie] must be set
                           rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                             == 1'
-                      oauth:
+                      oauthTokenExchange:
                         description: OAuth 2.0 token exchange (RFC 8693) / jwt-bearer
                           (RFC 7523) authentication.
                         properties:
@@ -19931,8 +19938,8 @@ spec:
                       rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
                         || has(self.passthrough) : true'
                     - message: exactly one of the fields in [key secretRef passthrough
-                        aws azure gcp oauth] must be set
-                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauth)].filter(x,x==true).size()
+                        aws azure gcp oauthTokenExchange] must be set
+                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange)].filter(x,x==true).size()
                         == 1'
                   extAuth:
                     description: |-
