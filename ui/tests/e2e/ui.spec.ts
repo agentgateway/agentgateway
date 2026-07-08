@@ -109,6 +109,13 @@ test("onboards LLM and MCP onto the UI gateway when present", async ({
   });
   await page.goto("/");
 
+  await expect(
+    page.getByRole("heading", { name: "Welcome to Agentgateway" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /APIs enabled/ }),
+  ).toBeDisabled();
+
   await page.getByRole("button", { name: /LLM/ }).click();
   await expect.poll(() => gateway.postedConfigs.length).toBe(1);
   expect(gateway.postedConfigs[0].llm).toMatchObject({
@@ -127,7 +134,7 @@ test("onboards LLM and MCP onto the UI gateway when present", async ({
   });
   expect(gateway.postedConfigs[1].mcp).not.toHaveProperty("port");
 
-  await expect(page.getByRole("button", { name: /APIs/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /APIs enabled/ })).toBeVisible();
   await expect(
     page.locator(".nav-list").getByRole("link", { name: "Gateways" }),
   ).toBeVisible();

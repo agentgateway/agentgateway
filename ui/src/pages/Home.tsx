@@ -49,7 +49,8 @@ export function HomePage() {
     config.data &&
     (Boolean(config.data.binds?.length) ||
       "gateways" in config.data ||
-      "routes" in config.data),
+      "routes" in config.data ||
+      "tcpRoutes" in config.data),
   );
   const hasBinds = Boolean(config.data?.binds?.length);
   const models = config.data?.llm?.models ?? [];
@@ -72,7 +73,11 @@ export function HomePage() {
 
   useEffect(() => {
     if (!config.data || startupEvaluated) return;
-    setStartupFlow(!hasLlm && !hasMcp && !hasTraffic);
+    setStartupFlow(
+      !hasLlm &&
+        !hasMcp &&
+        (!hasTraffic || isDefaultUiGatewayScaffold(config.data)),
+    );
     setStartupEvaluated(true);
   }, [config.data, hasLlm, hasMcp, hasTraffic, startupEvaluated]);
 
@@ -428,6 +433,19 @@ function uiGateway(config: GatewayConfig | null | undefined) {
   if (Array.isArray(gateways)) return gateways[0];
   if (gateways) return gateways;
   return config?.ui && config.gateways?.default ? "default" : undefined;
+}
+
+function isDefaultUiGatewayScaffold(config: GatewayConfig) {
+  if (!config.ui || uiGateway(config) !== "default") return false;
+  if (
+    config.binds?.length ||
+    config.routes?.length ||
+    config.tcpRoutes?.length
+  ) {
+    return false;
+  }
+  const gatewayNames = Object.keys(config.gateways ?? {});
+  return gatewayNames.length === 1 && gatewayNames[0] === "default";
 }
 
 type StartupSurface = "llm" | "mcp" | "apis";
