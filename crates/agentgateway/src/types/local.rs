@@ -10,7 +10,6 @@ use ::http::Uri;
 use agent_core::prelude::Strng;
 use anyhow::{Context, Error, anyhow, bail};
 use itertools::Itertools;
-use macro_rules_attribute::apply;
 use secrecy::SecretString;
 
 use crate::http::auth::BackendAuth;
@@ -34,7 +33,7 @@ use crate::types::agent::{
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
-use crate::{agentcore, *};
+use crate::{agentcore, apply, *};
 
 type LocalExtAuthzPolicy = LocalExplicitOrConditional<crate::http::ext_authz::ExtAuthz>;
 type LocalDirectResponsePolicy = LocalExplicitOrConditional<filters::DirectResponse>;
@@ -1825,6 +1824,33 @@ pub struct LocalTCPRouteBackend {
 
 #[apply(schema_de!)]
 #[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackendSerde"))]
+pub enum SimpleLocalBackendWithSchema {
+	/// Service reference. Service must be defined in the top level services list.
+	Service { name: NamespacedHostname, port: u16 },
+	/// Hostname and port, with an optional scheme. Examples: `https://example.com`, `example.com:80`.
+	#[serde(rename = "host")]
+	Opaque(
+		/// Hostname and port, with an optional scheme. Examples: `https://example.com`, `example.com:80`.
+		TargetOrUri,
+	),
+	Backend(
+		/// Explicit backend reference. Backend must be defined in the top level backends list
+		BackendKey,
+	),
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	Invalid,
+}
+
+#[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(with = "String"))]
+#[serde(untagged)]
+pub enum TargetOrUri {
+	Target(Target),
+	Uri(#[serde(with = "http_serde::uri")] Uri),
+}
+
+#[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(with = "SimpleLocalBackendSerde"))]
 pub enum SimpleLocalBackend {
 	/// Service reference. Service must be defined in the top level services list.
 	Service { name: NamespacedHostname, port: u16 },
@@ -1909,6 +1935,16 @@ where
 				// Keep them here so untagged compat parsing still returns the real error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
 				Ok(BackendAuth::OAuthTokenExchange(auth))
+			},
+			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
+				// Cross App Access is backed by the OAuth exchange implementation but has its own
+				// focused config shape and cross-field checks.
+				let mut auth = auth;
+				auth
+					.apply_local_defaults()
+					.map_err(serde::de::Error::custom)?;
+				auth.validate_load().map_err(serde::de::Error::custom)?;
+				Ok(BackendAuth::CrossAppAccess(auth))
 			},
 			BackendAuthCompat::Full(auth) => Ok(auth),
 			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
@@ -3247,15 +3283,13 @@ async fn convert_llm_config(
 				region: p.vertex_region,
 				project_id: p.vertex_project.context("vertex requires vertex_project")?,
 			}),
-			LocalModelAIProvider::Bedrock => AIProvider::Bedrock(crate::llm::bedrock::Provider {
+			LocalModelAIProvider::Bedrock => AIProvider::bedrock(crate::llm::bedrock::Provider {
 				model,
 				region: p.aws_region.context("bedrock requires aws_region")?,
 				guardrail_identifier: None,
 				guardrail_version: None,
-				source_credentials_cache: Default::default(),
-				assume_role_cache: Default::default(),
 			}),
-			LocalModelAIProvider::Azure => AIProvider::Azure(crate::llm::azure::Provider {
+			LocalModelAIProvider::Azure => AIProvider::azure(crate::llm::azure::Provider {
 				model,
 				resource_name: p
 					.azure_resource_name
@@ -3265,7 +3299,6 @@ async fn convert_llm_config(
 					.context("azure requires azureResourceType")?,
 				api_version: p.azure_api_version,
 				project_name: p.azure_project_name,
-				cached_cred: Default::default(),
 			}),
 		};
 

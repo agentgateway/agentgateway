@@ -11,7 +11,10 @@ pub use aws::{AwsAssumeRole, AwsAuth};
 pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;
-pub use oauth::{OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType, OAuthTokenExchangeAuth};
+pub use oauth::{
+	CrossAppAccessAuth, OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType,
+	OAuthTokenExchangeAuth, PrivateKeyJwt,
+};
 use secrecy::{ExposeSecret, SecretString};
 use url::form_urlencoded;
 
@@ -58,7 +61,10 @@ pub enum BackendAuth {
 	Copilot,
 	/// Use OAuth token exchange flows to obtain a backend access token.
 	#[serde(rename = "oauth")]
-	OAuthTokenExchange(Box<OAuthTokenExchangeAuth>), /* Boxed because this variant is much larger than the others */
+	OAuthTokenExchange(Box<OAuthTokenExchangeAuth>),
+	/// Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.
+	#[serde(rename = "crossAppAccess")]
+	CrossAppAccess(Box<CrossAppAccessAuth>),
 }
 
 /// Records whether the backend auth location was explicitly configured by the user
@@ -165,6 +171,12 @@ pub async fn apply_backend_auth(
 		},
 		BackendAuth::OAuthTokenExchange(te_auth) => {
 			let explicit = oauth::apply_token_exchange(&backend_info.inputs, te_auth, req).await?;
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
+		},
+		BackendAuth::CrossAppAccess(auth) => {
+			let explicit = oauth::apply_identity_assertion(&backend_info.inputs, auth, req).await?;
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });

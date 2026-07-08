@@ -7,6 +7,7 @@ import (
 
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/test"
 	"istio.io/istio/pkg/test/util/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,7 +26,8 @@ func simpleAuthPolicyCtx(col *AgwCollections, res kubeutils.CredentialResolver) 
 }
 
 func TestAwsAuthResolvesConfiguredCredentialRef(t *testing.T) {
-	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthResolvesConfiguredCredentialRef"))
+	stop := test.NewStop(t)
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthResolvesConfiguredCredentialRef"), krt.WithStop(stop))
 	ctx := simpleAuthPolicyCtx(
 		&AgwCollections{
 			Secrets: secrets,
@@ -100,7 +102,8 @@ func TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags(t *testing.T) {
 }
 
 func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
-	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthResolvesConfiguredCredentialRef"))
+	stop := test.NewStop(t)
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthResolvesConfiguredCredentialRef"), krt.WithStop(stop))
 	ctx := simpleAuthPolicyCtx(&AgwCollections{
 		Secrets: secrets,
 	}, kubeutils.NewSecretCredentialResolver(secrets))
@@ -118,7 +121,8 @@ func TestAzureAuthResolvesConfiguredCredentialRef(t *testing.T) {
 }
 
 func TestAzureAuthBuildsExplicitAndImplicitConfigs(t *testing.T) {
-	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthBuildsExplicitAndImplicitConfigs"))
+	stop := test.NewStop(t)
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAzureAuthBuildsExplicitAndImplicitConfigs"), krt.WithStop(stop))
 	ctx := simpleAuthPolicyCtx(&AgwCollections{
 		Secrets: secrets,
 	}, kubeutils.NewSecretCredentialResolver(secrets))
@@ -141,6 +145,7 @@ func TestAzureAuthBuildsExplicitAndImplicitConfigs(t *testing.T) {
 }
 
 func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
+	stop := test.NewStop(t)
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -150,7 +155,7 @@ func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
 			".htaccess": "alice:hash",
 		},
 	}
-	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, []*corev1.ConfigMap{configMap}, krt.WithName("plugins/TestBasicAuthCanUseInjectedCredentialResolver"))
+	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, []*corev1.ConfigMap{configMap}, krt.WithName("plugins/TestBasicAuthCanUseInjectedCredentialResolver"), krt.WithStop(stop))
 	ctx := simpleAuthPolicyCtx(nil, configMapCredentialResolver{configMaps: configMaps})
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
@@ -169,6 +174,7 @@ func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
 }
 
 func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *testing.T) {
+	stop := test.NewStop(t)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -178,7 +184,7 @@ func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *tes
 			".htaccess": []byte("bob:hash"),
 		},
 	}
-	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver"))
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver"), krt.WithStop(stop))
 	ctx := simpleAuthPolicyCtx(
 		&AgwCollections{
 			Secrets: secrets,
@@ -204,6 +210,7 @@ func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *tes
 }
 
 func TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret(t *testing.T) {
+	stop := test.NewStop(t)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -213,7 +220,7 @@ func TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret(t *testing.T) 
 			".htaccess": []byte("bob:hash"),
 		},
 	}
-	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret"))
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret"), krt.WithStop(stop))
 	ctx := simpleAuthPolicyCtx(&AgwCollections{
 		Secrets: secrets,
 	}, configMapCredentialResolver{})

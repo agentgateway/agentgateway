@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# agentgateway Cross App Access (ID-JAG) policy pointed at the local Keycloak (both legs).
+#
+#   inbound:  Authorization: Bearer <alice's Keycloak ID token>   (validated by jwtAuth)
+#   leg 1  :  token exchange at Keycloak (agent-client)   -> ID-JAG
+#   leg 2  :  jwt-bearer at Keycloak (resource-client)     -> Bearer access token
+#   upstream: GET localhost:9000  with Authorization: Bearer <access token>
+#
+# The client secrets come from env vars (expanded at load time), matching what the setup
+# scripts create. Run Keycloak (configured) and the echo backend first, then:
+#   export KC_AGENT_SECRET=agent-secret KC_RESOURCE_SECRET=resource-secret
+#   cargo run --release --bin agentgateway -- -f ./gateway.yaml
+binds:
+- port: 3030
+  listeners:
+  - protocol: HTTP
+    routes:
+    - policies:
+        # Validate alice's Keycloak OIDC ID token. This validated token becomes the
+        # subject of the exchange below.
+        jwtAuth:
+          issuer: http://localhost:8480/realms/idjag-demo
+          audiences:
+          - agent-client
+          jwks:
+            url: http://localhost:8480/realms/idjag-demo/protocol/openid-connect/certs
+
+        backendAuth:
+          crossAppAccess:
+            # Leg 1 — the user's IdP token endpoint, authenticated as the requesting client.
+            identityProvider:
+              host: localhost:8480
+              tokenEndpointPath: /realms/idjag-demo/protocol/openid-connect/token
+              clientAuth:
+                clientId: agent-client
+                method: clientSecretBasic
+                clientSecret: $KC_AGENT_SECRET
+            # Leg 2 — the resource authorization server, authenticated as the resource client.
+            resourceAuthorizationServer:
+              host: localhost:8480
+              tokenEndpointPath: /realms/idjag-demo/protocol/openid-connect/token
+              clientAuth:
+                clientId: resource-client
+                method: clientSecretBasic
+                clientSecret: $KC_RESOURCE_SECRET
+            # Must equal the resource client's configured resource-server identifier;
+            # becomes the ID-JAG audience.
+            audience: https://resource.idjag.demo
+            scopes:
+            - todos.read
+
+      backends:
+      # The downstream API the agent calls on alice's behalf (local echo server).
+      - host: localhost:9000

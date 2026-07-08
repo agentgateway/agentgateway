@@ -40,7 +40,6 @@ pub mod serdes;
 pub mod state_manager;
 pub mod store;
 pub mod telemetry;
-#[cfg(any(test, feature = "internal_benches"))]
 pub mod test_helpers;
 pub mod transport;
 pub mod types;

@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [features]
 assert_size_runtime = []
+schema = ["schemars"]
 
 [dependencies]
 go-parse-duration.workspace = true
@@ -17,17 +18,27 @@ durationfmt.workspace = true
 arc-swap.workspace = true
 anyhow.workspace = true
 arcstr.workspace = true
+base64.workspace = true
 bytes.workspace = true
+fs-err.workspace = true
+hex.workspace = true
 http.workspace = true
 hyper-util.workspace = true
 itertools.workspace = true
+macro_rules_attribute.workspace = true
 once_cell.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry_sdk.workspace = true
 pin-project-lite.workspace = true
 prometheus-client.workspace = true
+schemars = { workspace = true, optional = true }
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_json_path_to_error.workspace = true
+serde-transcode.workspace = true
+serde_with.workspace = true
+serde_yaml.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

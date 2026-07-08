@@ -204,41 +204,7 @@ impl ModelAliasPattern {
 	}
 }
 
-#[apply(schema!)]
-#[serde(default)]
-pub struct PromptCachingConfig {
-	/// Add cache markers to system prompts when supported by the provider.
-	#[serde(rename = "cacheSystem")]
-	pub cache_system: bool,
-
-	/// Add cache markers to chat messages when supported by the provider.
-	#[serde(rename = "cacheMessages")]
-	pub cache_messages: bool,
-
-	/// Add cache markers to tool definitions when supported by the provider.
-	#[serde(rename = "cacheTools")]
-	pub cache_tools: bool,
-
-	/// Minimum prompt size required before cache markers are added.
-	#[serde(rename = "minTokens")]
-	pub min_tokens: Option<usize>,
-
-	/// Message offset used when choosing where to place cache markers.
-	#[serde(rename = "cacheMessageOffset")]
-	pub cache_message_offset: usize,
-}
-
-impl Default for PromptCachingConfig {
-	fn default() -> Self {
-		Self {
-			cache_system: true,
-			cache_messages: true,
-			cache_tools: false,
-			min_tokens: Some(1024),
-			cache_message_offset: 0,
-		}
-	}
-}
+pub use agent_llm::PromptCachingConfig;
 
 #[apply(schema!)]
 pub struct PromptEnrichment {
@@ -1131,8 +1097,7 @@ impl Policy {
 				let MaskActionBody::ResponseChoices(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
-				let msgs = body.choices;
-				resp.set_webhook_choices(msgs)?;
+				resp.set_webhook_choices(body.choices)?;
 				Ok(GuardrailOutcome::Masked)
 			},
 			ResponseAction::Reject(rej) => {

@@ -2,17 +2,20 @@ use std::io::Write;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::write::EncoderStringWriter;
-use macro_rules_attribute::apply;
 use secrecy::{ExposeSecret, SecretString};
 
-use crate::schema;
+use crate::{apply, schema};
 
 pub(crate) const GRANT_TYPE_TOKEN_EXCHANGE: &str =
 	"urn:ietf:params:oauth:grant-type:token-exchange";
 pub(crate) const GRANT_TYPE_JWT_BEARER: &str = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
+pub(crate) const CLIENT_ASSERTION_TYPE_JWT_BEARER: &str =
+	"urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+
 pub(crate) const TOKEN_TYPE_ACCESS: &str = "urn:ietf:params:oauth:token-type:access_token";
 pub(crate) const TOKEN_TYPE_ID: &str = "urn:ietf:params:oauth:token-type:id_token";
+pub(crate) const TOKEN_TYPE_ID_JAG: &str = "urn:ietf:params:oauth:token-type:id-jag";
 pub(crate) const TOKEN_TYPE_JWT: &str = "urn:ietf:params:oauth:token-type:jwt";
 
 #[apply(schema!)]

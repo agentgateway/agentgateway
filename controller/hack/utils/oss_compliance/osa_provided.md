@@ -27,6 +27,7 @@ Name|Version|License
 [spf13/pflag](https://github.com/spf13/pflag)|v1.0.10|BSD 3-clause "New" or "Revised" License
 [stretchr/testify](https://github.com/stretchr/testify)|v1.11.1|MIT License
 [go.uber.org/atomic](https://go.uber.org/atomic)|v1.11.0|MIT License
+[go.uber.org/goleak](https://go.uber.org/goleak)|v1.3.0|MIT License
 [go.uber.org/zap](https://go.uber.org/zap)|v1.28.0|MIT License
 [x/clipboard](https://golang.design/x/clipboard)|v0.8.0|MIT License
 [x/net](https://golang.org/x/net)|v0.56.0|BSD 3-clause "New" or "Revised" License
@@ -52,7 +53,7 @@ Name|Version|License
 [sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.6.0|Apache License 2.0
 [sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v1.5.0|Apache License 2.0
 [gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260610234253-d7447d7420de|Apache License 2.0
-[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.6.0|Apache License 2.0
+[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.6.1-0.20260702135020-8e96714756a4|Apache License 2.0
 [sigs.k8s.io/yaml](https://sigs.k8s.io/yaml)|v1.6.0|MIT License
 [cmd/goimports](https://golang.org/x/tools/cmd/goimports)|latest|MIT License
 [gogo/protobuf](https://github.com/gogo/protobuf)|latest|MIT License

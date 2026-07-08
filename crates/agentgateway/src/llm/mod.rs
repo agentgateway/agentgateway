@@ -6,46 +6,43 @@ use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderMap, HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
+pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
+pub use agent_llm::{
+	AIError, CacheTokenConvention, ChatFormat, InputFormat, LLMInfo, LLMRequest, LLMRequestParams,
+	LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState, RequestType,
+	ResponseType, RouteType, SimpleChatCompletionMessage, anthropic, conversion, copilot, custom,
+	gemini, logged_response_parsing, openai, types,
+};
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
-use tiktoken_rs::CoreBPE;
-use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
 use crate::http::auth::{AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
-pub use crate::llm::types::{RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
-
-pub mod anthropic;
-pub mod azure;
-pub mod bedrock;
-pub mod copilot;
-pub mod custom;
-pub mod gemini;
 pub mod model_router;
-pub mod openai;
-pub mod vertex;
+pub use agent_llm::{azure, bedrock, vertex};
 
-mod conversion;
 pub mod cost;
 pub mod policy;
-mod types;
 
 use policy::streaming_guardrails::GuardedSseBody;
-pub use types::{OutputMessage, OutputMessagePart, SimpleChatCompletionMessage, ToolCall};
+pub use types::{OutputMessage, OutputMessagePart, ToolCall};
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
 use crate::proxy::dtrace;
 use crate::store;
+
+#[cfg(test)]
+mod anthropic_tests;
 
 #[cfg(test)]
 mod tests;
@@ -109,109 +106,114 @@ pub struct NamedAIProvider {
 	pub inline_policies: Vec<BackendTrafficPolicy>,
 }
 
-/// The HTTP endpoint class, such as `/v1/chat/completions` or `/v1/messages`.
-///
-/// This is used both for the client route we matched and for the upstream route
-/// we finally send to. For chat, those can differ: a client Anthropic
-/// `/v1/messages` request is `RouteType::Messages` and `InputFormat::Messages`,
-/// but it may be translated and sent upstream as `RouteType::Completions`.
-///
-/// `RouteType` is about the HTTP endpoint. `InputFormat` is about the parsed
-/// client payload and the response shape we owe back to that client. The main
-/// difference is this type includes things like Detect and Passthrough.
-#[apply(schema!)]
-#[derive(Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum RouteType {
-	/// OpenAI /v1/chat/completions
-	Completions,
-	/// Anthropic /v1/messages
-	Messages,
-	/// OpenAI /v1/models
-	Models,
-	/// Send the request to the upstream LLM provider as-is
-	Passthrough,
-	/// Send the request to the upstream LLM provider as-is but attempt to extract information from it
-	/// and apply a subset of policies (rate limit and telemetry; no guardrails).
-	Detect,
-	/// OpenAI /responses
-	Responses,
-	/// OpenAI /embeddings
-	Embeddings,
-	/// OpenAI /realtime (websockets)
-	Realtime,
-	/// Anthropic /v1/messages/count_tokens
-	AnthropicTokenCount,
-	/// Cohere /v2/rerank (document reranking)
-	Rerank,
-}
-
 #[apply(schema!)]
 pub enum AIProvider {
 	OpenAI(openai::Provider),
 	Gemini(gemini::Provider),
 	Vertex(vertex::Provider),
 	Anthropic(anthropic::Provider),
-	Bedrock(bedrock::Provider),
-	Azure(azure::Provider),
+	Bedrock(BedrockProvider),
+	Azure(AzureProvider),
 	Copilot(copilot::Provider),
 	Custom(custom::Provider),
 }
 
-#[apply(schema!)]
-pub enum LocalModelAIProvider {
-	OpenAI,
-	Gemini,
-	Vertex,
-	Anthropic,
-	Bedrock,
-	Azure,
-	Copilot,
-	Custom(custom::Provider),
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BedrockProvider {
+	#[serde(flatten)]
+	pub provider: bedrock::Provider,
+	#[serde(skip)]
+	pub source_credentials_cache: crate::http::auth::aws::AwsCredentialsCache,
+	#[serde(skip)]
+	pub assume_role_cache: crate::http::auth::aws::AwsAssumeRoleCache,
 }
 
-trait Provider {
-	const NAME: Strng;
+impl BedrockProvider {
+	pub fn new(provider: bedrock::Provider) -> Self {
+		Self {
+			provider,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
+		}
+	}
 }
 
-#[derive(Debug, Clone)]
-pub struct LLMRequest {
-	/// Input tokens derived by tokenizing the request. Not always enabled
-	pub input_tokens: Option<u64>,
-	/// The parsed client payload format, kept as the response contract even when
-	/// the upstream route/wire format differs.
-	pub input_format: InputFormat,
-	pub cache_convention: CacheTokenConvention,
-	pub request_model: Strng,
-	pub provider: Strng,
-	pub streaming: bool,
-	pub params: LLMRequestParams,
-	pub prompt: Option<Arc<Vec<SimpleChatCompletionMessage>>>,
-	pub provider_state: Option<ProviderState>,
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for BedrockProvider {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		std::borrow::Cow::Borrowed("BedrockProvider")
+	}
+
+	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		<bedrock::Provider as schemars::JsonSchema>::json_schema(generator)
+	}
 }
 
-#[derive(Debug, Clone)]
-pub enum ProviderState {
-	Bedrock {
-		/// Reverse mapping from Bedrock-safe tool names back to client tool names.
-		tool_names: Arc<conversion::bedrock::BedrockToolNameMap>,
-	},
+impl std::ops::Deref for BedrockProvider {
+	type Target = bedrock::Provider;
+
+	fn deref(&self) -> &Self::Target {
+		&self.provider
+	}
 }
 
-/// Whether an upstream's reported `input_tokens` already includes cached tokens.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CacheTokenConvention {
-	/// OpenAI-style: cached tokens are a subset of `input_tokens`
-	#[default]
-	InputIncludesCache,
-	/// Anthropic-style: `input_tokens` is already fresh
-	InputExcludesCache,
+impl std::ops::DerefMut for BedrockProvider {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.provider
+	}
 }
 
-impl CacheTokenConvention {
-	/// Placeholder used while request conversion lacks provider format
-	/// context. `process_request` replaces this with the classified convention.
-	pub(crate) fn pending() -> Self {
-		Self::InputIncludesCache
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AzureProvider {
+	#[serde(flatten)]
+	pub provider: azure::Provider,
+	#[serde(skip)]
+	pub cached_cred: crate::http::auth::azure::AzureCredentialCache,
+}
+
+impl AzureProvider {
+	pub fn new(provider: azure::Provider) -> Self {
+		Self {
+			provider,
+			cached_cred: Default::default(),
+		}
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for AzureProvider {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		std::borrow::Cow::Borrowed("AzureProvider")
+	}
+
+	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		<azure::Provider as schemars::JsonSchema>::json_schema(generator)
+	}
+}
+
+impl std::ops::Deref for AzureProvider {
+	type Target = azure::Provider;
+
+	fn deref(&self) -> &Self::Target {
+		&self.provider
+	}
+}
+
+impl std::ops::DerefMut for AzureProvider {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.provider
+	}
+}
+
+impl AIProvider {
+	pub fn bedrock(provider: bedrock::Provider) -> Self {
+		Self::Bedrock(BedrockProvider::new(provider))
+	}
+
+	pub fn azure(provider: azure::Provider) -> Self {
+		Self::Azure(AzureProvider::new(provider))
 	}
 }
 
@@ -237,58 +239,6 @@ fn cache_convention_for(
 		},
 		_ => InputIncludesCache, // openai, azure, gemini, copilot/vertex non-anthropic
 	}
-}
-
-/// The parsed client request/response family accepted by the gateway.
-///
-/// For chat, this is the API contract the client used: OpenAI chat completions,
-/// Anthropic messages, or OpenAI responses. It stays stable for policy,
-/// telemetry, and response translation. The upstream may use a different
-/// `RouteType`/`ChatFormat`, but the response is translated back to this shape.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum InputFormat {
-	Completions,
-	Messages,
-	Responses,
-	Embeddings,
-	Realtime,
-	CountTokens,
-	Detect,
-	Rerank,
-}
-
-impl InputFormat {
-	fn is_chat(&self) -> bool {
-		matches!(
-			self,
-			InputFormat::Completions | InputFormat::Messages | InputFormat::Responses
-		)
-	}
-
-	pub fn supports_prompt_guard(&self) -> bool {
-		match self {
-			InputFormat::Completions => true,
-			InputFormat::Messages => true,
-			InputFormat::Responses => true,
-			InputFormat::Realtime => false,
-			InputFormat::Embeddings => false,
-			InputFormat::CountTokens => false,
-			InputFormat::Detect => false,
-			InputFormat::Rerank => false,
-		}
-	}
-}
-
-/// The concrete upstream chat wire format selected by the conversion table.
-///
-/// This is intentionally narrower than `ProviderFormat`: it only covers chat
-/// conversions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ChatFormat {
-	OpenAICompletions,
-	OpenAIResponses,
-	AnthropicMessages,
-	BedrockConverse,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -332,7 +282,7 @@ struct ChatResponseContext<'a> {
 // Context provider to each response translation (streaming)
 struct ChatStreamContext {
 	buffer_limit: usize,
-	logger: AmendOnDrop,
+	logger: agent_llm::StreamingUsageGuard,
 	model: String,
 	log_content: LogContentFields,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
@@ -369,80 +319,72 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	]
 };
 
-impl types::ChatRequest<'_> {
-	fn render_openai_completions(self) -> Result<Vec<u8>, AIError> {
-		match self {
-			types::ChatRequest::Completions(req) => {
-				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
-			},
-			types::ChatRequest::Messages(req) => conversion::completions::from_messages::translate(req),
-			types::ChatRequest::Responses(req) => {
-				conversion::openai_compat::from_responses::translate(req)
-			},
-		}
+fn render_openai_completions(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+	match req {
+		types::ChatRequest::Completions(req) => {
+			serde_json::to_vec(req).map_err(AIError::RequestMarshal)
+		},
+		types::ChatRequest::Messages(req) => conversion::completions::from_messages::translate(req),
+		types::ChatRequest::Responses(req) => conversion::openai_compat::from_responses::translate(req),
 	}
+}
 
-	fn render_openai_responses(self) -> Result<Vec<u8>, AIError> {
-		match self {
-			types::ChatRequest::Responses(req) => {
-				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
-			},
-			_ => Err(AIError::UnsupportedConversion(strng::literal!(
-				"expected responses request"
-			))),
-		}
+fn render_openai_responses(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+	match req {
+		types::ChatRequest::Responses(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+		_ => Err(AIError::UnsupportedConversion(strng::literal!(
+			"expected responses request"
+		))),
 	}
+}
 
-	fn render_anthropic_messages(self) -> Result<Vec<u8>, AIError> {
-		match self {
-			types::ChatRequest::Completions(req) => {
-				conversion::messages::from_completions::translate(req)
-			},
-			types::ChatRequest::Messages(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
-			types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
-				"responses to messages"
-			))),
-		}
+fn render_anthropic_messages(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+	match req {
+		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(req),
+		types::ChatRequest::Messages(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
+			"responses to messages"
+		))),
 	}
+}
 
-	fn render_bedrock_converse(
-		self,
-		ctx: &ChatRequestContext<'_>,
-	) -> Result<RenderedChatRequest, AIError> {
-		let AIProvider::Bedrock(provider) = ctx.provider else {
-			return Err(AIError::UnsupportedConversion(strng::literal!(
-				"expected bedrock provider"
-			)));
-		};
-		let bedrock = match self {
-			types::ChatRequest::Completions(req) => conversion::bedrock::from_completions::translate(
-				req,
-				provider,
-				Some(ctx.headers),
-				ctx.prompt_caching,
-			),
-			types::ChatRequest::Messages(req) => {
-				conversion::bedrock::from_messages::translate(req, provider, Some(ctx.headers))
-			},
-			types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
-				req,
-				provider,
-				Some(ctx.headers),
-				ctx.prompt_caching,
-			),
-		}?;
-		let provider_state = if bedrock.tool_name_map.is_empty() {
-			None
-		} else {
-			Some(ProviderState::Bedrock {
-				tool_names: Arc::new(bedrock.tool_name_map),
-			})
-		};
-		Ok(RenderedChatRequest {
-			body: bedrock.body,
-			provider_state,
+fn render_bedrock_converse(
+	req: types::ChatRequest<'_>,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<RenderedChatRequest, AIError> {
+	let AIProvider::Bedrock(provider) = ctx.provider else {
+		return Err(AIError::UnsupportedConversion(strng::literal!(
+			"expected bedrock provider"
+		)));
+	};
+	let bedrock = match req {
+		types::ChatRequest::Completions(req) => conversion::bedrock::from_completions::translate(
+			req,
+			provider,
+			Some(ctx.headers),
+			ctx.prompt_caching,
+		),
+		types::ChatRequest::Messages(req) => {
+			conversion::bedrock::from_messages::translate(req, provider, Some(ctx.headers))
+		},
+		types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
+			req,
+			provider,
+			Some(ctx.headers),
+			ctx.prompt_caching,
+		),
+	}?;
+	let provider_state = if bedrock.tool_name_map.is_empty() {
+		None
+	} else {
+		Some(ProviderState::Bedrock {
+			tool_names: Arc::new(bedrock.tool_name_map),
 		})
-	}
+	};
+	Ok(RenderedChatRequest {
+		body: bedrock.body,
+		provider_state,
+	})
 }
 
 impl ChatTranslation {
@@ -469,13 +411,13 @@ impl ChatTranslation {
 		ctx: &ChatRequestContext<'_>,
 	) -> Result<RenderedChatRequest, AIError> {
 		let body = match self.output {
-			ChatFormat::OpenAICompletions => req.render_openai_completions(),
-			ChatFormat::OpenAIResponses => req.render_openai_responses(),
+			ChatFormat::OpenAICompletions => render_openai_completions(req),
+			ChatFormat::OpenAIResponses => render_openai_responses(req),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(req.render_anthropic_messages()?)
+				vertex::prepare_anthropic_message_body(render_anthropic_messages(req)?)
 			},
-			ChatFormat::AnthropicMessages => req.render_anthropic_messages(),
-			ChatFormat::BedrockConverse => return req.render_bedrock_converse(ctx),
+			ChatFormat::AnthropicMessages => render_anthropic_messages(req),
+			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 		}?;
 		Ok(RenderedChatRequest {
 			body,
@@ -550,11 +492,9 @@ impl ChatTranslation {
 	fn stream(&self, resp: Response, ctx: ChatStreamContext) -> Response {
 		match self.output {
 			ChatFormat::OpenAICompletions => match self.input {
-				InputFormat::Completions => conversion::completions::passthrough_stream(
-					ctx.logger,
-					ctx.log_content,
-					resp,
-				),
+				InputFormat::Completions => {
+					conversion::completions::passthrough_stream(ctx.logger, ctx.log_content, resp)
+				},
 				InputFormat::Messages => resp.map(|b| {
 					conversion::completions::from_messages::translate_stream(
 						b,
@@ -583,12 +523,7 @@ impl ChatTranslation {
 
 			ChatFormat::AnthropicMessages => match self.input {
 				InputFormat::Messages => resp.map(|b| {
-					conversion::messages::passthrough_stream(
-						b,
-						ctx.buffer_limit,
-						ctx.logger,
-						ctx.log_content,
-					)
+					conversion::messages::passthrough_stream(b, ctx.buffer_limit, ctx.logger, ctx.log_content)
 				}),
 				InputFormat::Completions => resp.map(|b| {
 					conversion::messages::from_completions::translate_stream(b, ctx.buffer_limit, ctx.logger)
@@ -720,103 +655,6 @@ impl ChatTranslation {
 			},
 		}
 	}
-}
-
-#[derive(Default, Clone, Debug, Serialize, Deserialize, ::cel::DynamicType)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
-pub struct LLMRequestParams {
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub temperature: Option<f64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub top_p: Option<f64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub frequency_penalty: Option<f64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub presence_penalty: Option<f64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub seed: Option<i64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub max_tokens: Option<u64>,
-	// Embeddings
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub encoding_format: Option<Strng>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub dimensions: Option<u64>,
-}
-impl PartialEq for LLMRequestParams {
-	fn eq(&self, _: &Self) -> bool {
-		// ignore for now since we have f64
-		false
-	}
-}
-impl Eq for LLMRequestParams {}
-
-#[derive(Debug, Clone)]
-pub struct LLMInfo {
-	pub request: LLMRequest,
-	pub response: LLMResponse,
-}
-
-impl LLMInfo {
-	pub fn new(req: LLMRequest, resp: LLMResponse) -> Self {
-		Self {
-			request: req,
-			response: resp,
-		}
-	}
-	pub fn input_tokens(&self) -> Option<u64> {
-		self.response.input_tokens.or(self.request.input_tokens)
-	}
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct LogContentFields {
-	pub completion: bool,
-	pub tool_calls: bool,
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct LLMResponse {
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub input_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub input_image_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub input_text_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub input_audio_tokens: Option<u64>,
-	/// count_tokens contains the number of tokens in the request, when using the token counting endpoint
-	/// These are not counted as 'input tokens' since they do not consume input tokens.
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub count_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub output_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub output_image_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub output_text_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub output_audio_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub total_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub reasoning_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub cache_creation_input_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub cached_input_tokens: Option<u64>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub service_tier: Option<Strng>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub provider_model: Option<Strng>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub completion: Option<Vec<String>>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub output_messages: Option<Vec<OutputMessage>>,
-
-	#[serde(skip)]
-	// Time to get the first token. Only used for streaming.
-	pub first_token: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -2359,7 +2197,7 @@ impl AIProvider {
 			vec![]
 		};
 
-		let logger = AmendOnDrop::new(log, response_policies, req_snapshot, model_catalog);
+		let logger = AmendOnDrop::new(log, response_policies, req_snapshot, model_catalog).into_llm();
 		let stream_format = match self {
 			AIProvider::Bedrock(_) => "awsEventStream",
 			_ => "sseJson",
@@ -2418,10 +2256,26 @@ impl AIProvider {
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<(Parts, T), AIError> {
 		let buffer = http::buffer_limit(&hreq);
-		let (parts, body) = hreq.into_parts();
-		let Ok(bytes) = http::read_body_with_limit(body, buffer).await else {
-			return Err(AIError::RequestTooLarge);
-		};
+		let (mut parts, body) = hreq.into_parts();
+		// Decode Content-Encoding (gzip/deflate/br/zstd) before parsing the body as
+		// JSON. Clients such as the Claude Code harness gzip-compress request bodies
+		// above a size threshold; without decoding, the reader would hand the
+		// compressed bytes straight to serde_json and fail with a misleading
+		// "LLM request body must be valid JSON" 400, even for tiny payloads. This
+		// mirrors the response path, which already decompresses via the same helper.
+		let ce = parts.headers.typed_get::<ContentEncoding>();
+		let (encoding, bytes) =
+			match http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer).await {
+				Ok(v) => v,
+				Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
+				Err(e) => return Err(map_compression_error(e, &parts.headers)),
+			};
+		// Strip encoding headers now that the body is plaintext so downstream
+		// translation/marshalling and upstream forwarding see a consistent body.
+		if encoding.is_some() {
+			parts.headers.remove(header::CONTENT_ENCODING);
+			parts.headers.remove(header::TRANSFER_ENCODING);
+		}
 
 		if self.override_model().is_none()
 			&& types::detect::extract_model_from_path(parts.uri.path()).is_none()
@@ -2567,113 +2421,6 @@ fn map_compression_error(e: http::compression::Error, headers: &::http::HeaderMa
 	}
 }
 
-fn num_tokens_from_messages(
-	model: &str,
-	messages: &[SimpleChatCompletionMessage],
-) -> Result<u64, AIError> {
-	// NOTE: This estimator only accounts for textual content in normalized messages.
-	// Non-text items in Responses inputs (e.g., tool calls, images, files) are ignored here.
-	// Use provider token counting endpoints if you need precise totals for those cases.
-	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
-	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
-		// Chat completion is only supported chat models
-		return Err(AIError::UnsupportedModel);
-	}
-	let bpe = get_bpe_from_tokenizer(tokenizer);
-
-	let tokens_per_message = 3;
-
-	let mut num_tokens: u64 = 0;
-	for message in messages {
-		num_tokens += tokens_per_message;
-		// Role is always 1 token
-		num_tokens += 1;
-		num_tokens += bpe
-			.encode_with_special_tokens(message.content.as_str())
-			.len() as u64;
-	}
-	num_tokens += 3; // every reply is primed with <|start|>assistant<|message|>
-	Ok(num_tokens)
-}
-
-/// Tokenizers take about 200ms to load and are lazy loaded. This loads them on demand, outside the
-/// request path
-pub fn preload_tokenizers() {
-	let _ = tiktoken_rs::cl100k_base_singleton();
-	let _ = tiktoken_rs::o200k_base_singleton();
-}
-
-pub fn get_bpe_from_tokenizer<'a>(tokenizer: Tokenizer) -> &'a CoreBPE {
-	match tokenizer {
-		Tokenizer::O200kHarmony => tiktoken_rs::o200k_harmony_singleton(),
-		Tokenizer::O200kBase => tiktoken_rs::o200k_base_singleton(),
-		Tokenizer::Cl100kBase => tiktoken_rs::cl100k_base_singleton(),
-		Tokenizer::R50kBase => tiktoken_rs::r50k_base_singleton(),
-		Tokenizer::P50kBase => tiktoken_rs::r50k_base_singleton(),
-		Tokenizer::P50kEdit => tiktoken_rs::r50k_base_singleton(),
-		Tokenizer::Gpt2 => tiktoken_rs::r50k_base_singleton(),
-	}
-}
-
-pub(crate) fn logged_response_parsing(
-	bytes: &[u8],
-) -> impl FnOnce(serde_json::Error) -> AIError + '_ {
-	|e| {
-		const LOGGED_BODY_LIMIT: usize = 1024;
-		let body = &bytes[..bytes.len().min(LOGGED_BODY_LIMIT)];
-		warn!(
-			error = %e,
-			body = %String::from_utf8_lossy(body),
-			"failed to parse response"
-		);
-		AIError::ResponseParsing(e)
-	}
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum AIError {
-	#[error("missing field: {0}")]
-	MissingField(Strng),
-	#[error("model not found")]
-	ModelNotFound,
-	#[error("message not found")]
-	MessageNotFound,
-	#[error("response was missing fields")]
-	IncompleteResponse,
-	#[error("unknown model")]
-	UnknownModel,
-	#[error("todo: streaming is not currently supported for this provider")]
-	StreamingUnsupported,
-	#[error("unsupported model")]
-	UnsupportedModel,
-	#[error("unsupported content")]
-	UnsupportedContent,
-	#[error("unsupported conversion: {0}")]
-	UnsupportedConversion(Strng),
-	#[error("request was too large")]
-	RequestTooLarge,
-	#[error("response was too large")]
-	ResponseTooLarge,
-	#[error("prompt guard failed")]
-	PromptWebhookError,
-	#[error("failed to parse request: {0}")]
-	RequestParsing(serde_json::Error),
-	#[error("failed to marshal request: {0}")]
-	RequestMarshal(serde_json::Error),
-	#[error("failed to parse response: {0}")]
-	ResponseParsing(serde_json::Error),
-	#[error("invalid response: {0}")]
-	InvalidResponse(Strng),
-	#[error("failed to marshal response: {0}")]
-	ResponseMarshal(serde_json::Error),
-	#[error("unsupported content encoding: {0}")]
-	UnsupportedEncoding(Strng),
-	#[error("failed to encode response: {0}")]
-	Encoding(axum_core::Error),
-	#[error("error computing tokens")]
-	JoinError(#[from] tokio::task::JoinError),
-}
-
 fn response_prompt_guard_headers(
 	response_headers: &HeaderMap,
 	request_traceparent: Option<&HeaderValue>,
@@ -2732,7 +2479,7 @@ impl AmendOnDrop {
 	pub fn non_atomic_mutate(&self, f: impl FnOnce(&mut llm::LLMInfo)) {
 		self.log.non_atomic_mutate(f);
 	}
-	pub fn report_rate_limit(&mut self) {
+	pub fn report_usage(&mut self) {
 		if let Some(pol) = self.pol.take()
 			&& (!pol.local_rate_limit.is_empty() || pol.remote_rate_limit.is_some())
 		{
@@ -2743,10 +2490,24 @@ impl AmendOnDrop {
 			});
 		}
 	}
+
+	pub fn into_llm(self) -> agent_llm::StreamingUsageGuard {
+		agent_llm::StreamingUsageGuard::new(Box::new(self))
+	}
+}
+
+impl agent_llm::StreamingUsageReporter for AmendOnDrop {
+	fn update(&self, f: &mut dyn FnMut(&mut llm::LLMInfo)) {
+		self.log.non_atomic_mutate(|info| f(info));
+	}
+
+	fn report_usage(&mut self) {
+		AmendOnDrop::report_usage(self);
+	}
 }
 
 impl Drop for AmendOnDrop {
 	fn drop(&mut self) {
-		self.report_rate_limit();
+		self.report_usage();
 	}
 }

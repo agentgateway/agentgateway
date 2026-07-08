@@ -70,6 +70,7 @@ func NewFakeDiscoveryServerWith(t *testing.T, initialAddress []syncer.Address, i
 		}
 	}()
 	t.Cleanup(func() {
+		s.Shutdown()
 		grpcServer.Stop()
 		_ = listener.Close()
 	})

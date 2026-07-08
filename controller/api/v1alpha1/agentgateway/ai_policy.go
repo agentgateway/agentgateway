@@ -352,7 +352,6 @@ type AIPromptGuard struct {
 // Note: The `field` values correspond to keys in the JSON request body, not fields in this CRD.
 type FieldDefault struct {
 	// Name of the field.
-	// +kubebuilder:validation:MinLength=1
 	// +required
 	Field ShortString `json:"field"`
 
@@ -367,7 +366,6 @@ type FieldDefault struct {
 // is assigned to the configured field.
 type FieldTransformation struct {
 	// Name of the field to set.
-	// +kubebuilder:validation:MinLength=1
 	// +required
 	Field ShortString `json:"field"`
 

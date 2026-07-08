@@ -625,8 +625,10 @@ fn convert_mcp_guardrails(
 			),
 		};
 		Ok(crate::mcp::guardrails::Remote {
-			target,
-			policies: Vec::new(),
+			target: SimpleBackendReferenceWithPolicies {
+				target,
+				policies: Vec::new(),
+			},
 			failure_mode,
 			metadata,
 			request_headers,
@@ -1358,13 +1360,11 @@ pub(crate) fn backend_with_policies_from_proto(
 							})
 						},
 						Some(provider::Provider::Bedrock(bedrock)) => {
-							AIProvider::Bedrock(llm::bedrock::Provider {
+							AIProvider::bedrock(llm::bedrock::Provider {
 								model: bedrock.model.as_deref().map(strng::new),
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								source_credentials_cache: Default::default(),
-								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
@@ -1374,13 +1374,12 @@ pub(crate) fn backend_with_policies_from_proto(
 								},
 								_ => llm::azure::AzureResourceType::OpenAI,
 							};
-							AIProvider::Azure(llm::azure::Provider {
+							AIProvider::azure(llm::azure::Provider {
 								model: azure.model.as_deref().map(strng::new),
 								resource_name: strng::new(&azure.resource_name),
 								resource_type,
 								api_version: azure.api_version.as_deref().map(strng::new),
 								project_name: azure.project_name.as_deref().map(strng::new),
-								cached_cred: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azureopenai(_)) => {
@@ -2105,9 +2104,11 @@ fn traffic_policy_from_proto(
 			TrafficPolicy::RemoteRateLimit(RequestPolicy::single(
 				http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),
-					target: Arc::new(target),
-					// Not supported inline from xDS
-					policies: Vec::new(),
+					target: SimpleBackendReferenceWithPolicies {
+						target: Arc::new(target),
+						// Not supported inline from xDS
+						policies: Vec::new(),
+					},
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
 					failure_mode,
 				},
@@ -2162,9 +2163,11 @@ fn traffic_policy_from_proto(
 				}
 			}
 			TrafficPolicy::ExtProc(RequestPolicy::single(http::ext_proc::ExtProc {
-				target: Arc::new(target),
-				// Not supported inline from xDS
-				policies: Vec::new(),
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
+				},
 				failure_mode,
 				request_attributes: to_cel_attrs(
 					diagnostics,
@@ -2549,8 +2552,10 @@ fn external_auth_from_proto(
 		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
 	Ok(http::ext_authz::ExtAuthz {
 		protocol,
-		target: Arc::new(target),
-		policies: Vec::new(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: Arc::new(target),
+			policies: Vec::new(),
+		},
 		failure_mode,
 		include_request_headers: ea
 			.include_request_headers

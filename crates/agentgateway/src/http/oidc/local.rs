@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use jsonwebtoken::jwk::JwkSet;
-use macro_rules_attribute::apply;
 use secrecy::SecretString;
 
 use super::{
@@ -11,8 +10,8 @@ use super::{
 use crate::http::oauth::{
 	TokenEndpointAuth, openid_configuration_metadata_url, parse_token_endpoint_auth_methods,
 };
-use crate::schema_de;
 use crate::serdes::FileInlineOrRemote;
+use crate::{apply, schema_de};
 
 #[derive(Debug, serde::Deserialize)]
 struct OidcDiscoveryDocument {

@@ -1,0 +1,97 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Cross App Access (ID-JAG) demo: Okta = Enterprise IdP, Auth0 = Resource AS.
+#
+# Flow (per backend call, no interactive second login):
+#   1. Inbound request carries the user's OKTA OIDC ID token -> validated by `jwtAuth`.
+#   2. crossAppAccess leg 1 (RFC 8693) at the Okta org token endpoint
+#        grant_type=token-exchange, requested_token_type=...:id-jag  => an ID-JAG.
+#   3. crossAppAccess leg 2 (RFC 7523) at the Auth0 token endpoint
+#        grant_type=jwt-bearer, assertion=<ID-JAG>  => an Auth0 access token.
+#   4. Access token attached as `Authorization: Bearer <token>` to the backend call.
+#
+# All deployment-specific values come from environment variables (expanded at load time).
+# Export them first (see README.md), then run from THIS directory:
+#   cargo run --release --bin agentgateway -- -f ./gateway.yaml
+#
+#   OKTA_DOMAIN         e.g. dev-12345.okta.com          (no scheme)
+#   OKTA_CLIENT_ID      requesting-app client id (also the ID-token audience)
+#   OKTA_CLIENT_SECRET  requesting-app client secret
+#   AUTH0_DOMAIN        e.g. your-tenant.us.auth0.com    (no scheme)
+#   AUTH0_CLIENT_ID     Auth0 resource-application client id
+#   AUTH0_CLIENT_SECRET Auth0 resource-application client secret
+#   AUTH0_API           Auth0 API Identifier (RFC 8707 resource)
+#   SCOPE               scope to request, e.g. todos.read
+#   RESOURCE_API_HOST   downstream API host, e.g. api.example.com
+binds:
+- port: 3032
+  listeners:
+  - protocol: HTTP
+    routes:
+    - policies:
+        # TLS to the upstream resource API. Route backends take a `host:port` (no scheme),
+        # so HTTPS on the backend still needs an explicit backendTLS (unlike the crossAppAccess
+        # endpoints below, which accept the `https://` host form).
+        backendTLS: {}
+
+        # --- Step 1: authenticate the end user (the Okta ID token) -------------
+        # The Okta ORG authorization server issues the user's ID token:
+        #   iss  = https://OKTA_DOMAIN, aud = the requesting app's client_id,
+        #   jwks = https://OKTA_DOMAIN/oauth2/v1/keys
+        jwtAuth:
+          issuer: https://$OKTA_DOMAIN
+          audiences:
+          - $OKTA_CLIENT_ID
+          jwks:
+            url: https://$OKTA_DOMAIN/oauth2/v1/keys
+
+        # --- Steps 2-4: exchange identity for a backend token and attach it ----
+        backendAuth:
+          crossAppAccess:
+            # Leg 1: the user's Okta IdP (org authorization server).
+            # Performs the RFC 8693 token exchange that mints the ID-JAG.
+            identityProvider:
+              # `https://` host = HTTPS with TLS auto-configured (no :443 + backendTLS needed).
+              host: https://$OKTA_DOMAIN
+              tokenEndpointPath: /oauth2/v1/token
+              clientAuth:
+                clientId: $OKTA_CLIENT_ID
+                # Must match the app's token_endpoint_auth_method in Okta
+                # (switch to clientSecretBasic if the app is set to Basic).
+                method: clientSecretPost
+                clientSecret: $OKTA_CLIENT_SECRET
+
+            # Leg 2: the Auth0 resource authorization server.
+            # Accepts the ID-JAG via the RFC 7523 jwt-bearer grant.
+            resourceAuthorizationServer:
+              host: https://$AUTH0_DOMAIN
+              tokenEndpointPath: /oauth/token
+              clientAuth:
+                clientId: $AUTH0_CLIENT_ID
+                method: clientSecretPost
+                clientSecret: $AUTH0_CLIENT_SECRET
+
+            # REQUIRED. Identifier of the resource authorization server; the ID-JAG's
+            # `aud` is bound to this. For Auth0 it is the tenant issuer URL WITH the
+            # trailing slash -- getting this wrong is the #1 cause of Auth0 rejecting
+            # the ID-JAG.
+            audience: https://$AUTH0_DOMAIN/
+
+            # Scopes to request (the AS may grant a subset). Match an Auth0 API scope.
+            # Sent on both legs: to Okta (the ID-JAG's `scope` claim) and to Auth0.
+            scopes:
+            - $SCOPE
+
+            # OPTIONAL. The RFC 8707 `resource` identifier of the target API -- for Auth0
+            # this is the API Identifier you created. Sent to Okta on leg 1, so the issued
+            # ID-JAG is bound to the resource. Omit to rely on the Auth0 API Default Audience.
+            resources:
+            - $AUTH0_API
+
+            cache:
+              defaultTtl: 1h
+
+      backends:
+      # The downstream resource API the agent calls on the user's behalf, using the
+      # Auth0 access token minted above.
+      - host: $RESOURCE_API_HOST:443

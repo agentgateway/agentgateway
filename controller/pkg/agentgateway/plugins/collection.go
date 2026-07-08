@@ -206,8 +206,8 @@ func NewAgwCollections(
 		InferencePools: krt.NewStaticCollection[*inf.InferencePool](nil, nil, krtOptions.ToOptions("disable/inferencepools")...),
 
 		// agentgateway-specific CRDs
-		AgentgatewayPolicies: krt.NewInformer[*agentgateway.AgentgatewayPolicy](client, krtOptions.ToOptions("informer/AgentgatewayPolicies")...),
-		Backends:             krt.NewInformer[*agentgateway.AgentgatewayBackend](client, krtOptions.ToOptions("informer/AgentgatewayBackends")...),
+		AgentgatewayPolicies: krt.NewFilteredInformer[*agentgateway.AgentgatewayPolicy](client, filter, krtOptions.ToOptions("informer/AgentgatewayPolicies")...),
+		Backends:             krt.NewFilteredInformer[*agentgateway.AgentgatewayBackend](client, filter, krtOptions.ToOptions("informer/AgentgatewayBackends")...),
 	}
 
 	if settings.EnableInferExt {

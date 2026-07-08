@@ -24,7 +24,7 @@ use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
+use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
 use crate::{http, *};
 
 /// The namespace key used for ext_proc attributes in ProcessingRequest.attributes
@@ -180,8 +180,10 @@ impl InferenceRouting {
 			destination_mode: self.destination_mode,
 			ext_proc: Some(ExtProcInstance::new(
 				client,
-				Vec::new(),
-				self.target.clone(),
+				SimpleBackendReferenceWithPolicies {
+					target: self.target.clone(),
+					policies: Vec::new(),
+				},
 				self.failure_mode,
 				None,
 				None,
@@ -246,17 +248,9 @@ impl InferencePoolRouter {
 
 #[apply(schema!)]
 pub struct ExtProc {
-	/// Backend that receives external processing calls.
+	/// Backend that receives external processing calls and policies used when connecting to it.
 	#[serde(flatten)]
-	pub target: Arc<SimpleBackendReference>,
-	/// Backend policies used when connecting to the external processing service.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<BackendTrafficPolicy>,
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Behavior when the external processing service is unavailable or returns an error.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
@@ -282,7 +276,6 @@ impl ExtProc {
 		ExtProcRequest {
 			ext_proc: Some(ExtProcInstance::new(
 				client,
-				self.policies.clone(),
 				self.target.clone(),
 				self.failure_mode,
 				self.metadata_context.clone(),
@@ -398,20 +391,16 @@ impl ExtProcInstance {
 	#[allow(clippy::too_many_arguments)]
 	fn new(
 		client: PolicyClient,
-		policies: Vec<BackendTrafficPolicy>,
-		target: Arc<SimpleBackendReference>,
+		target: SimpleBackendReferenceWithPolicies,
 		failure_mode: FailureMode,
 		metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 		req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 		resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 		processing_options: ProcessingOptions,
 	) -> ExtProcInstance {
-		trace!("connecting to {:?}", target);
-		let chan = GrpcReferenceChannel {
-			target,
-			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtProc),
-			policies: Arc::new(policies),
-		};
+		trace!("connecting to {:?}", target.target);
+		let chan = target
+			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtProc));
 		Self {
 			skipped: Default::default(),
 			request_body_immediate_response: Arc::new(Mutex::new(None)),

@@ -1590,10 +1590,11 @@ binds:
               host: 127.0.0.1:9000
               clientAuth:
                 clientId: gateway-client
+                clientSecret: ""
 "#,
 	)
 	.await
-	.expect_err("missing client secret should fail at config load");
+	.expect_err("empty client secret should fail at config load");
 
 	assert!(
 		err.to_string().contains("client_secret"),
