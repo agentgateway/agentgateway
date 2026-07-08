@@ -320,8 +320,6 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		};
 
 		let bedrock = |i| {
@@ -356,8 +354,6 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		};
 		let vertex_provider = vertex::Provider {
 			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
@@ -393,8 +389,6 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		};
 
 		for (name, providers) in RESPONSES_REQUESTS {
@@ -421,8 +415,6 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		};
 
 		let cohere_provider = bedrock::Provider {
@@ -430,8 +422,6 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		};
 
 		let titan_request = |i| conversion::bedrock::from_embeddings::translate(&i, &titan_provider);
@@ -482,8 +472,6 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		};
 		let vertex_provider = vertex::Provider {
 			model: Some(strng::new("semantic-ranker-default@latest")),
@@ -750,13 +738,11 @@ mod response {
 	}
 
 	fn build_provider_request(provider: &str) -> (AIProvider, LLMRequest) {
-		let bedrock_provider = AIProvider::Bedrock(bedrock::Provider {
+		let bedrock_provider = AIProvider::bedrock(bedrock::Provider {
 			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		});
 		let (p, r) = match provider {
 			RESPONSES_TO_RESPONSES => (
@@ -1709,13 +1695,11 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 
-	let bedrock = AIProvider::Bedrock(bedrock::Provider {
+	let bedrock = AIProvider::bedrock(bedrock::Provider {
 		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		source_credentials_cache: Default::default(),
-		assume_role_cache: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -1818,13 +1802,12 @@ fn custom_messages_error_translates_to_completions_client() {
 
 #[test]
 fn foundry_claude_messages_error_uses_anthropic_shape() {
-	let provider = AIProvider::Azure(azure::Provider {
+	let provider = AIProvider::azure(azure::Provider {
 		model: None,
 		resource_name: strng::new("example"),
 		resource_type: azure::AzureResourceType::Foundry,
 		api_version: None,
 		project_name: Some(strng::new("project")),
-		cached_cred: Default::default(),
 	});
 	let mut req = llm_request_with_tokens(None);
 	req.input_format = InputFormat::Messages;
@@ -1847,13 +1830,11 @@ fn foundry_claude_messages_error_uses_anthropic_shape() {
 async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done() {
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
-	let bedrock = AIProvider::Bedrock(bedrock::Provider {
+	let bedrock = AIProvider::bedrock(bedrock::Provider {
 		model: Some(strng::new("openai.gpt-oss-120b-1:0")),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		source_credentials_cache: Default::default(),
-		assume_role_cache: Default::default(),
 	});
 
 	let body = Body::from(
@@ -2075,13 +2056,11 @@ fn setup_request_vertex_applies_path_prefix_with_host_override() {
 #[test]
 fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
-		AIProvider::Bedrock(bedrock::Provider {
+		AIProvider::bedrock(bedrock::Provider {
 			model: None,
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
@@ -2092,13 +2071,12 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 #[test]
 fn setup_request_azure_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
-		AIProvider::Azure(azure::Provider {
+		AIProvider::azure(azure::Provider {
 			model: None,
 			resource_name: strng::new("example"),
 			resource_type: azure::AzureResourceType::OpenAI,
 			api_version: Some(strng::new("2024-02-15-preview")),
 			project_name: None,
-			cached_cred: Default::default(),
 		}),
 		"gpt-4.1",
 		"/proxy/openai/deployments/gpt-4.1/chat/completions",

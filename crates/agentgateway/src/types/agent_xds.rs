@@ -1360,13 +1360,11 @@ pub(crate) fn backend_with_policies_from_proto(
 							})
 						},
 						Some(provider::Provider::Bedrock(bedrock)) => {
-							AIProvider::Bedrock(llm::bedrock::Provider {
+							AIProvider::bedrock(llm::bedrock::Provider {
 								model: bedrock.model.as_deref().map(strng::new),
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								source_credentials_cache: Default::default(),
-								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
@@ -1376,13 +1374,12 @@ pub(crate) fn backend_with_policies_from_proto(
 								},
 								_ => llm::azure::AzureResourceType::OpenAI,
 							};
-							AIProvider::Azure(llm::azure::Provider {
+							AIProvider::azure(llm::azure::Provider {
 								model: azure.model.as_deref().map(strng::new),
 								resource_name: strng::new(&azure.resource_name),
 								resource_type,
 								api_version: azure.api_version.as_deref().map(strng::new),
 								project_name: azure.project_name.as_deref().map(strng::new),
-								cached_cred: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azureopenai(_)) => {

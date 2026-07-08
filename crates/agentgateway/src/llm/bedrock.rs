@@ -1,7 +1,6 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
 
-use crate::http::auth::aws::{AwsAssumeRoleCache, AwsCredentialsCache};
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -10,7 +9,7 @@ pub struct AwsRegion {
 }
 
 #[apply(schema!)]
-#[cfg_attr(feature = "schema", schemars(rename = "BedrockProvider"))]
+#[cfg_attr(feature = "schema", schemars(rename = "BedrockProviderConfig"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>, // Optional: model override for Bedrock API path
@@ -19,14 +18,6 @@ pub struct Provider {
 	pub guardrail_identifier: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub guardrail_version: Option<Strng>,
-	/// Per-provider AWS source credential cache, shared across requests via Arc.
-	#[serde(skip)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
-	pub source_credentials_cache: AwsCredentialsCache,
-	/// Per-provider AWS AssumeRole credential cache, shared across requests via Arc.
-	#[serde(skip)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
-	pub assume_role_cache: AwsAssumeRoleCache,
 }
 
 impl super::Provider for Provider {

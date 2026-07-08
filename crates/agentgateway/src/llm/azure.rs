@@ -1,7 +1,6 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
 
-use crate::http::auth::azure::AzureCredentialCache;
 use crate::llm::RouteType;
 use crate::*;
 
@@ -17,7 +16,7 @@ pub enum AzureResourceType {
 }
 
 #[apply(schema!)]
-#[cfg_attr(feature = "schema", schemars(rename = "AzureProvider"))]
+#[cfg_attr(feature = "schema", schemars(rename = "AzureProviderConfig"))]
 pub struct Provider {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
@@ -32,10 +31,6 @@ pub struct Provider {
 	/// This is distinct from `resourceName` which is used for the host.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub project_name: Option<Strng>,
-	/// Per-provider credential cache, shared across requests via Arc.
-	#[serde(skip)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
-	pub cached_cred: AzureCredentialCache,
 }
 
 impl super::Provider for Provider {
@@ -128,7 +123,6 @@ mod tests {
 			resource_type,
 			api_version: None,
 			project_name: None,
-			cached_cred: AzureCredentialCache::default(),
 		}
 	}
 

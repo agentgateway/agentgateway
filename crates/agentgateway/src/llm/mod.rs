@@ -151,10 +151,109 @@ pub enum AIProvider {
 	Gemini(gemini::Provider),
 	Vertex(vertex::Provider),
 	Anthropic(anthropic::Provider),
-	Bedrock(bedrock::Provider),
-	Azure(azure::Provider),
+	Bedrock(BedrockProvider),
+	Azure(AzureProvider),
 	Copilot(copilot::Provider),
 	Custom(custom::Provider),
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BedrockProvider {
+	#[serde(flatten)]
+	pub provider: bedrock::Provider,
+	#[serde(skip)]
+	pub source_credentials_cache: crate::http::auth::aws::AwsCredentialsCache,
+	#[serde(skip)]
+	pub assume_role_cache: crate::http::auth::aws::AwsAssumeRoleCache,
+}
+
+impl BedrockProvider {
+	pub fn new(provider: bedrock::Provider) -> Self {
+		Self {
+			provider,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
+		}
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for BedrockProvider {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		std::borrow::Cow::Borrowed("BedrockProvider")
+	}
+
+	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		<bedrock::Provider as schemars::JsonSchema>::json_schema(generator)
+	}
+}
+
+impl std::ops::Deref for BedrockProvider {
+	type Target = bedrock::Provider;
+
+	fn deref(&self) -> &Self::Target {
+		&self.provider
+	}
+}
+
+impl std::ops::DerefMut for BedrockProvider {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.provider
+	}
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AzureProvider {
+	#[serde(flatten)]
+	pub provider: azure::Provider,
+	#[serde(skip)]
+	pub cached_cred: crate::http::auth::azure::AzureCredentialCache,
+}
+
+impl AzureProvider {
+	pub fn new(provider: azure::Provider) -> Self {
+		Self {
+			provider,
+			cached_cred: Default::default(),
+		}
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for AzureProvider {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		std::borrow::Cow::Borrowed("AzureProvider")
+	}
+
+	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		<azure::Provider as schemars::JsonSchema>::json_schema(generator)
+	}
+}
+
+impl std::ops::Deref for AzureProvider {
+	type Target = azure::Provider;
+
+	fn deref(&self) -> &Self::Target {
+		&self.provider
+	}
+}
+
+impl std::ops::DerefMut for AzureProvider {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.provider
+	}
+}
+
+impl AIProvider {
+	pub fn bedrock(provider: bedrock::Provider) -> Self {
+		Self::Bedrock(BedrockProvider::new(provider))
+	}
+
+	pub fn azure(provider: azure::Provider) -> Self {
+		Self::Azure(AzureProvider::new(provider))
+	}
 }
 
 #[apply(schema!)]

@@ -10,8 +10,6 @@ fn bedrock_provider(model: &str, region: &str) -> crate::llm::bedrock::Provider 
 		region: agent_core::strng::new(region),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		source_credentials_cache: Default::default(),
-		assume_role_cache: Default::default(),
 	}
 }
 
@@ -57,7 +55,7 @@ fn test_bedrock_connection_target_is_route_aware() {
 	use crate::llm::{AIProvider, RouteType};
 	use crate::types::agent::Target;
 
-	let provider = AIProvider::Bedrock(bedrock_provider("cohere.rerank-v3-5:0", "us-west-2"));
+	let provider = AIProvider::bedrock(bedrock_provider("cohere.rerank-v3-5:0", "us-west-2"));
 
 	let resolved_host = |route: RouteType| -> String {
 		match provider

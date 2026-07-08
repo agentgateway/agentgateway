@@ -3284,15 +3284,13 @@ async fn convert_llm_config(
 				region: p.vertex_region,
 				project_id: p.vertex_project.context("vertex requires vertex_project")?,
 			}),
-			LocalModelAIProvider::Bedrock => AIProvider::Bedrock(crate::llm::bedrock::Provider {
+			LocalModelAIProvider::Bedrock => AIProvider::bedrock(crate::llm::bedrock::Provider {
 				model,
 				region: p.aws_region.context("bedrock requires aws_region")?,
 				guardrail_identifier: None,
 				guardrail_version: None,
-				source_credentials_cache: Default::default(),
-				assume_role_cache: Default::default(),
 			}),
-			LocalModelAIProvider::Azure => AIProvider::Azure(crate::llm::azure::Provider {
+			LocalModelAIProvider::Azure => AIProvider::azure(crate::llm::azure::Provider {
 				model,
 				resource_name: p
 					.azure_resource_name
@@ -3302,7 +3300,6 @@ async fn convert_llm_config(
 					.context("azure requires azureResourceType")?,
 				api_version: p.azure_api_version,
 				project_name: p.azure_project_name,
-				cached_cred: Default::default(),
 			}),
 		};
 
