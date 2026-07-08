@@ -18,9 +18,9 @@
 llm:
   models:
   - name: "*"
-    provider: openAI
+    provider: anthropic
     params:
-      apiKey: "$OPENAI_API_KEY"
+      apiKey: "$ANTHROPIC_API_KEY"
     contextCompression:
       engine:
         external:

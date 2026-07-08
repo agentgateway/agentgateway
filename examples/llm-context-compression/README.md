@@ -50,7 +50,7 @@ Or, you can use docker compose `docker compose -f examples/llm-context-compressi
 Then run the gateway:
 
 ```bash
-export OPENAI_API_KEY=...
+export ANTHROPIC_API_KEY=sk-ant-...
 cargo run -- -f examples/llm-context-compression/config.yaml
 ```
 
