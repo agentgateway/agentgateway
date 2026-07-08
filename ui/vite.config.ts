@@ -16,7 +16,9 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: "out",
     emptyOutDir: true,
+    reportCompressedSize: false,
     sourcemap: false,
+    chunkSizeWarningLimit: 5000,
   },
   server: {
     port: 19000,
