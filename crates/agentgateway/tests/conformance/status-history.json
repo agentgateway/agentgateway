@@ -1,0 +1,291 @@
+[
+  {
+    "date": "2026-06-25",
+    "suites": {
+      "active": {
+        "passing": 25,
+        "total": 30,
+        "gaps": 5,
+        "regressions": 0,
+        "stale": 0
+      }
+    }
+  },
+  {
+    "date": "2026-07-01",
+    "gateway": {
+      "sha": "97ab2f5e4",
+      "ref": "main"
+    },
+    "framework": "0.2.0-alpha.9 (1ca3bc3)",
+    "suites": {
+      "active": {
+        "passing": 25,
+        "total": 30,
+        "gaps": 5,
+        "regressions": 0,
+        "stale": 0,
+        "failing": {
+          "dns-rebinding-protection": [
+            "DNSRebindingRejected"
+          ],
+          "elicitation-sep1034-defaults": [
+            "ElicitationSEP1034General"
+          ],
+          "elicitation-sep1330-enums": [
+            "ElicitationSEP1330General"
+          ],
+          "tools-call-elicitation": [
+            "ToolsCallElicitation"
+          ],
+          "tools-call-sampling": [
+            "ToolsCallSampling"
+          ]
+        }
+      },
+      "modern-draft": {
+        "passing": 7,
+        "total": 19,
+        "gaps": 11,
+        "regressions": 1,
+        "stale": 0,
+        "failing": {
+          "input-required-result-basic-elicitation": [
+            "InputRequiredResultElicitationIncomplete"
+          ],
+          "input-required-result-basic-list-roots": [
+            "InputRequiredResultListRootsIncomplete"
+          ],
+          "input-required-result-basic-sampling": [
+            "InputRequiredResultSamplingIncomplete"
+          ],
+          "input-required-result-capability-check": [
+            "RespectClientCapabilities"
+          ],
+          "input-required-result-missing-input-response": [
+            "InputRequiredResultMissingResponseRerequests"
+          ],
+          "input-required-result-multi-round": [
+            "InputRequiredResultMultiRoundR1"
+          ],
+          "input-required-result-multiple-input-requests": [
+            "InputRequiredResultMultipleInputsIncomplete"
+          ],
+          "input-required-result-non-tool-request": [
+            "InputRequiredResultNonToolIncomplete"
+          ],
+          "input-required-result-request-state": [
+            "InputRequiredResultRequestStateIncomplete"
+          ],
+          "input-required-result-result-type": [
+            "ResultTypeIncluded"
+          ],
+          "input-required-result-tampered-state": [
+            "RejectTamperedState"
+          ],
+          "server-stateless": [
+            "RequestMetaInvalid",
+            "RequestMetaInvalid",
+            "ServerUnsupportedVersionError",
+            "HttpServerMethodNotFound404initialize",
+            "HttpServerMethodNotFound404ping",
+            "HttpServerMethodNotFound404loggingsetLevel",
+            "HttpServerMethodNotFound404resourcessubscribe",
+            "HttpServerMethodNotFound404resourcesunsubscribe",
+            "HttpServerMethodNotFound404",
+            "ServerTagsSubscriptionId"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "date": "2026-07-02",
+    "gateway": {
+      "sha": "58dfe7ce5",
+      "ref": "filintod/mcp-2026-sep2575-conformance-harness"
+    },
+    "framework": "0.2.0-alpha.9 (1ca3bc3)",
+    "suites": {
+      "active": {
+        "passing": 25,
+        "total": 30,
+        "gaps": 5,
+        "regressions": 0,
+        "stale": 0,
+        "failing": {
+          "dns-rebinding-protection": [
+            "DNSRebindingRejected"
+          ],
+          "elicitation-sep1034-defaults": [
+            "ElicitationSEP1034General"
+          ],
+          "elicitation-sep1330-enums": [
+            "ElicitationSEP1330General"
+          ],
+          "tools-call-elicitation": [
+            "ToolsCallElicitation"
+          ],
+          "tools-call-sampling": [
+            "ToolsCallSampling"
+          ]
+        }
+      },
+      "modern-draft": {
+        "passing": 8,
+        "total": 19,
+        "gaps": 11,
+        "regressions": 0,
+        "stale": 0,
+        "failing": {
+          "input-required-result-basic-elicitation": [
+            "InputRequiredResultElicitationIncomplete"
+          ],
+          "input-required-result-basic-list-roots": [
+            "InputRequiredResultListRootsIncomplete"
+          ],
+          "input-required-result-basic-sampling": [
+            "InputRequiredResultSamplingIncomplete"
+          ],
+          "input-required-result-capability-check": [
+            "RespectClientCapabilities"
+          ],
+          "input-required-result-missing-input-response": [
+            "InputRequiredResultMissingResponseRerequests"
+          ],
+          "input-required-result-multi-round": [
+            "InputRequiredResultMultiRoundR1"
+          ],
+          "input-required-result-multiple-input-requests": [
+            "InputRequiredResultMultipleInputsIncomplete"
+          ],
+          "input-required-result-non-tool-request": [
+            "InputRequiredResultNonToolIncomplete"
+          ],
+          "input-required-result-request-state": [
+            "InputRequiredResultRequestStateIncomplete"
+          ],
+          "input-required-result-result-type": [
+            "ResultTypeIncluded"
+          ],
+          "input-required-result-tampered-state": [
+            "RejectTamperedState"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "date": "2026-07-06",
+    "gateway": {
+      "sha": "e14906800",
+      "ref": "filintod/mcp-2026-sep2575-conformance-harness"
+    },
+    "framework": "0.2.0-alpha.9 + #392 (f2fa81f)",
+    "suites": {
+      "active": {
+        "passing": 25,
+        "total": 30,
+        "gaps": 5,
+        "regressions": 0,
+        "stale": 0,
+        "failing": {
+          "dns-rebinding-protection": [
+            "DNSRebindingRejected"
+          ],
+          "elicitation-sep1034-defaults": [
+            "ElicitationSEP1034General"
+          ],
+          "elicitation-sep1330-enums": [
+            "ElicitationSEP1330General"
+          ],
+          "tools-call-elicitation": [
+            "ToolsCallElicitation"
+          ],
+          "tools-call-sampling": [
+            "ToolsCallSampling"
+          ]
+        }
+      },
+      "modern-draft": {
+        "passing": 7,
+        "total": 19,
+        "gaps": 12,
+        "regressions": 0,
+        "stale": 0,
+        "failing": {
+          "input-required-result-basic-elicitation": [
+            "InputRequiredResultElicitationIncomplete"
+          ],
+          "input-required-result-basic-list-roots": [
+            "InputRequiredResultListRootsIncomplete"
+          ],
+          "input-required-result-basic-sampling": [
+            "InputRequiredResultSamplingIncomplete"
+          ],
+          "input-required-result-capability-check": [
+            "RespectClientCapabilities"
+          ],
+          "input-required-result-missing-input-response": [
+            "InputRequiredResultMissingResponseRerequests"
+          ],
+          "input-required-result-multi-round": [
+            "InputRequiredResultMultiRoundR1"
+          ],
+          "input-required-result-multiple-input-requests": [
+            "InputRequiredResultMultipleInputsIncomplete"
+          ],
+          "input-required-result-non-tool-request": [
+            "InputRequiredResultNonToolIncomplete"
+          ],
+          "input-required-result-request-state": [
+            "InputRequiredResultRequestStateIncomplete"
+          ],
+          "input-required-result-result-type": [
+            "ResultTypeIncluded"
+          ],
+          "input-required-result-tampered-state": [
+            "RejectTamperedState"
+          ],
+          "server-stateless": [
+            "ServerUnsupportedVersionError"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "date": "2026-07-08",
+    "gateway": {
+      "sha": "3a24315da+dirty",
+      "ref": "filintod/mcp-2026-sep2322-mrtr-routing"
+    },
+    "framework": "f2fa81f",
+    "suites": {
+      "active": {
+        "passing": 29,
+        "total": 30,
+        "gaps": 1,
+        "regressions": 0,
+        "stale": 0,
+        "failing": {
+          "dns-rebinding-protection": [
+            "DNSRebindingRejected"
+          ]
+        }
+      },
+      "modern-draft": {
+        "passing": 18,
+        "total": 19,
+        "gaps": 1,
+        "regressions": 0,
+        "stale": 0,
+        "failing": {
+          "server-stateless": [
+            "ServerUnsupportedVersionError"
+          ]
+        }
+      }
+    }
+  }
+]

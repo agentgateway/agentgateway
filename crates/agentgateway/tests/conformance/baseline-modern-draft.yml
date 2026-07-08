@@ -1,0 +1,26 @@
+# MCP conformance baseline for the "modern-draft" suite, the 2026-07-28 release
+# candidate. (Our label; the framework runs it as `--suite draft`.)
+#
+# The modern-draft suite runs against the vendored strict v2 everything-server
+# (examples/mcp-conformance/everything-server-v2), not the framework clone's v1
+# reference. The v1 server does not enforce SEP-2243/SEP-2322 prerequisites, so
+# it passed input-required flows that still fail against the stricter v2 server.
+#
+# Server-mode, so failures live under the `server:` key. A scenario counts as failing
+# if any of its checks is FAILURE or WARNING, so every entry below must keep failing
+# for the run to stay green. A newly passing entry is "stale" and fails the run until
+# removed. See README.md to regenerate.
+#
+# Every entry is a gateway-side gap; the reference upstream behaves correctly
+# (verified: each entry passes when its scenario is run directly against the v2
+# server, no gateway).
+#
+# Root cause of `server-stateless` (one check, sep-2575-server-unsupported-version-error):
+# single-server `server/discover` forwards the upstream's advertised versions (the v2
+# server advertises only 2026-07-28), while the UnsupportedProtocolVersionError fires at
+# the transport gate before backend selection and reports the gateway's full
+# KNOWN_VERSIONS set. The check requires error `supported` ⊆ discover `supportedVersions`,
+# which a proxy cannot satisfy against a narrower upstream without per-backend version
+# state or gateway-owned discover advertising (both rejected in PR #2417 review).
+server:
+  - server-stateless

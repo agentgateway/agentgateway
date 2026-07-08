@@ -1,0 +1,22 @@
+{
+  "name": "mcp-everything-server-v2",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Vendored v2-SDK MCP conformance everything-server (2026-07-28), used as an alternate agentgateway conformance upstream that bundles the SEP-2243 x-mcp-header and SEP-2575 diagnostic fixtures.",
+  "scripts": {
+    "start": "tsx everything-server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/express": "2.0.0-beta.2",
+    "@modelcontextprotocol/node": "2.0.0-beta.2",
+    "@modelcontextprotocol/server": "2.0.0-beta.2",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.5.4"
+  }
+}

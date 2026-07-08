@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Fronts the MCP Conformance Test Framework's reference upstream
+# (examples/servers/typescript/everything-server.ts) so the suite can grade the
+# gateway-as-proxy composite. See crates/agentgateway/tests/conformance/README.md
+# for how to run the everything-server and the conformance CLI against this gateway.
+#
+# Single MCP target, default (Conditional) prefix mode: with one target, tool
+# names pass through unprefixed, so the suite's Mcp-Name matches the body cleanly.
+binds:
+- listeners:
+  - routes:
+    - backends:
+      - mcp:
+          targets:
+          - name: everything
+            mcp:
+              # everything-server started with PORT=3001 (gateway owns 3000).
+              host: http://localhost:3001/mcp
+      matches:
+      - path:
+          exact: /mcp
+  # Gateway listens here; point the conformance CLI at http://localhost:3000/mcp.
+  port: 3000
