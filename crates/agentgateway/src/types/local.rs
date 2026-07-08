@@ -299,6 +299,7 @@ pub struct LocalConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
 	config: Arc<Option<serde_json::Value>>,
+	/// binds defines the low-level API for configuring the proxy. Usage of `gateways` and `routes` is recommended.
 	#[serde(default)]
 	binds: Vec<LocalBind>,
 	#[serde(default)]
@@ -323,17 +324,19 @@ pub struct LocalConfig {
 	backends: Vec<FullLocalBackend>,
 	#[serde(default, rename = "routeGroups")]
 	route_groups: Vec<LocalRouteGroup>,
-	/// gateways defines named HTTP listeners that features and routes can attach to without using low-level binds.
+	/// gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.
 	#[serde(default)]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "std::collections::HashMap<String, LocalGateway>")
 	)]
 	gateways: IndexMap<Strng, LocalGateway>,
-	/// routes defines HTTP routes attached to one or more named gateways. When a gateway named `default` exists,
-	/// routes without gateways attach to it.
+	/// routes defines HTTP routes attached to one or more named gateways.
 	#[serde(default)]
 	routes: Vec<LocalAttachedRoute>,
+	/// tcpRoutes defines TCP routes attached to one or more named TCP/TLS gateways.
+	#[serde(default)]
+	tcp_routes: Vec<LocalAttachedTCPRoute>,
 	#[serde(default)]
 	llm: Option<LocalLLMConfig>,
 	#[serde(default)]
@@ -1091,7 +1094,11 @@ struct LocalGateway {
 	/// port is the port to listen on for this gateway.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
-	/// listeners defines multiple HTTP listeners under this gateway. When set, listener fields cannot be set on the gateway itself.
+	/// protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways
+	/// default to HTTP, or HTTPS when tls is set.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	protocol: Option<LocalGatewayProtocol>,
+	/// listeners defines multiple named listeners under this gateway. When set, listener fields cannot be set on the gateway itself.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	listeners: Vec<LocalGatewayListener>,
 
@@ -1107,11 +1114,25 @@ struct LocalGateway {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 struct LocalAttachedRoute {
 	/// gateways attaches this route to named gateways or gateway listeners.
+	/// If unset, the 'default' gateway will be used.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
 	#[serde(flatten)]
 	route: LocalRoute,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+struct LocalAttachedTCPRoute {
+	/// gateways attaches this route to named TCP/TLS gateways or gateway listeners.
+	/// If unset, the 'default' gateway will be used.
+	#[serde(default, deserialize_with = "de_gateway_refs")]
+	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
+	gateways: Vec<Strng>,
+	#[serde(flatten)]
+	route: LocalTCPRoute,
 }
 
 #[apply(schema_de!)]
@@ -1122,11 +1143,25 @@ struct LocalGatewayListener {
 	/// Can be a wildcard.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	hostname: Option<Strng>,
+	/// protocol controls whether this listener accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, listeners
+	/// default to HTTP, or HTTPS when tls is set.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	protocol: Option<LocalGatewayProtocol>,
 	/// tls enables HTTPS for this listener.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	tls: Option<LocalTLSServerConfig>,
 	#[serde(flatten)]
 	policies: LocalGatewayPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "UPPERCASE", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+enum LocalGatewayProtocol {
+	HTTP,
+	HTTPS,
+	TCP,
+	TLS,
 }
 
 #[apply(schema_de!)]
@@ -2660,6 +2695,7 @@ async fn convert(
 		route_groups,
 		gateways,
 		routes,
+		tcp_routes,
 		llm,
 		mcp,
 		ui,
@@ -2798,7 +2834,8 @@ async fn convert(
 				route.route.name.name.as_deref().unwrap_or("<unnamed>")
 			);
 		}
-		let listeners = resolve_gateway_references(&gateway_refs, &route.gateways)?;
+		let listeners =
+			resolve_gateway_references(&gateway_refs, &route.gateways, GatewayRouteKind::Http)?;
 		for listener_key in listeners {
 			let idx = listener_route_count(&all_listener_routes, &listener_key);
 			let (route, backends) = Box::pin(convert_route(
@@ -2810,6 +2847,30 @@ async fn convert(
 			))
 			.await?;
 			push_listener_routes(&mut all_listener_routes, listener_key, vec![route]);
+			all_backends.extend_from_slice(&backends);
+		}
+	}
+
+	for route in tcp_routes {
+		if route.gateways.is_empty() {
+			bail!(
+				"tcpRoutes.{} must set gateways",
+				route.route.name.name.as_deref().unwrap_or("<unnamed>")
+			);
+		}
+		let listeners =
+			resolve_gateway_references(&gateway_refs, &route.gateways, GatewayRouteKind::Tcp)?;
+		for listener_key in listeners {
+			let idx = listener_tcp_route_count(&all_listener_tcp_routes, &listener_key);
+			let (route, policies, backends) = Box::pin(convert_tcp_route(
+				route.route.clone(),
+				idx,
+				listener_key.clone(),
+				resources,
+			))
+			.await?;
+			push_listener_tcp_routes(&mut all_listener_tcp_routes, listener_key, vec![route]);
+			all_policies.extend_from_slice(&policies);
 			all_backends.extend_from_slice(&backends);
 		}
 	}
@@ -2960,23 +3021,32 @@ async fn convert(
 
 fn apply_implicit_default_gateway(config: &mut LocalConfig) {
 	let default_gateway = strng::literal!("default");
-	if !config.gateways.contains_key(&default_gateway) {
+	let Some(gateway) = config.gateways.get(&default_gateway) else {
 		return;
-	}
+	};
+	let default_has_http = gateway_config_has_route_kind(gateway, GatewayRouteKind::Http);
+	let default_has_tcp = gateway_config_has_route_kind(gateway, GatewayRouteKind::Tcp);
 
 	for route in &mut config.routes {
-		if route.gateways.is_empty() {
+		if default_has_http && route.gateways.is_empty() {
+			route.gateways.push(default_gateway.clone());
+		}
+	}
+	for route in &mut config.tcp_routes {
+		if default_has_tcp && route.gateways.is_empty() {
 			route.gateways.push(default_gateway.clone());
 		}
 	}
 
 	if let Some(ui) = &mut config.ui
+		&& default_has_http
 		&& ui.gateways.is_empty()
 	{
 		ui.gateways.push(default_gateway.clone());
 	}
 
 	if let Some(llm) = &mut config.llm
+		&& default_has_http
 		&& llm.gateways.is_empty()
 		&& llm.port.is_none()
 		&& llm.tls.is_none()
@@ -2985,11 +3055,25 @@ fn apply_implicit_default_gateway(config: &mut LocalConfig) {
 	}
 
 	if let Some(mcp) = &mut config.mcp
+		&& default_has_http
 		&& mcp.gateways.is_empty()
 		&& mcp.port.is_none()
 	{
 		mcp.gateways.push(default_gateway);
 	}
+}
+
+fn gateway_config_has_route_kind(gateway: &LocalGateway, kind: GatewayRouteKind) -> bool {
+	if gateway.listeners.is_empty() {
+		return effective_gateway_protocol(gateway.protocol, gateway.tls.is_some())
+			.map(|protocol| gateway_route_kind(protocol) == kind)
+			.unwrap_or(false);
+	}
+	gateway.listeners.iter().any(|listener| {
+		effective_gateway_protocol(listener.protocol, listener.tls.is_some())
+			.map(|protocol| gateway_route_kind(protocol) == kind)
+			.unwrap_or(false)
+	})
 }
 
 fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
@@ -3027,16 +3111,31 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 			);
 		}
 		if !gateway_config.listeners.is_empty()
-			&& (gateway_config.tls.is_some() || !gateway_config.policies.is_empty())
+			&& (gateway_config.protocol.is_some()
+				|| gateway_config.tls.is_some()
+				|| !gateway_config.policies.is_empty())
 		{
 			bail!(
-				"gateways.{gateway_name} cannot set tls or policy fields when listeners are configured"
+				"gateways.{gateway_name} cannot set protocol, tls, or policy fields when listeners are configured"
 			);
 		}
 		if !gateway_config.listeners.is_empty() {
 			let mut listener_tls = None;
-			for listener in &gateway_config.listeners {
-				let tls = listener.tls.is_some();
+			let mut listener_kind = None;
+			for (idx, listener) in gateway_config.listeners.iter().enumerate() {
+				let protocol = effective_gateway_protocol(listener.protocol, listener.tls.is_some())
+					.with_context(|| format!("gateways.{gateway_name}.listeners[{idx}]"))?;
+				let kind = gateway_route_kind(protocol);
+				if let Some(existing_kind) = listener_kind
+					&& existing_kind != kind
+				{
+					bail!("gateway listeners on port {port} cannot mix HTTP and TCP protocols");
+				}
+				listener_kind = Some(kind);
+				let tls = matches!(
+					protocol,
+					LocalGatewayProtocol::HTTPS | LocalGatewayProtocol::TLS
+				);
 				if let Some(existing_tls) = listener_tls
 					&& existing_tls != tls
 				{
@@ -3044,6 +3143,9 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 				}
 				listener_tls = Some(tls);
 			}
+		} else {
+			effective_gateway_protocol(gateway_config.protocol, gateway_config.tls.is_some())
+				.with_context(|| format!("gateways.{gateway_name}"))?;
 		}
 	}
 	for (port, label) in gateway_ports {
@@ -3114,7 +3216,28 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 	Ok(())
 }
 
-type LocalGatewayReferences = HashMap<Strng, Vec<ListenerKey>>;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GatewayRouteKind {
+	Http,
+	Tcp,
+}
+
+impl GatewayRouteKind {
+	fn label(self) -> &'static str {
+		match self {
+			Self::Http => "HTTP",
+			Self::Tcp => "TCP",
+		}
+	}
+}
+
+#[derive(Clone)]
+struct LocalGatewayReference {
+	listener: ListenerKey,
+	kind: GatewayRouteKind,
+}
+
+type LocalGatewayReferences = HashMap<Strng, Vec<LocalGatewayReference>>;
 
 #[allow(clippy::too_many_arguments)]
 async fn convert_gateways(
@@ -3137,6 +3260,7 @@ async fn convert_gateways(
 			let listener = LocalGatewayListener {
 				name: Some(gateway_name.clone()),
 				hostname: None,
+				protocol: gateway_config.protocol,
 				tls: gateway_config.tls,
 				policies: gateway_config.policies,
 			};
@@ -3148,7 +3272,13 @@ async fn convert_gateways(
 				listener,
 			))
 			.await?;
-			refs.insert(gateway_name, vec![listener.key.clone()]);
+			refs.insert(
+				gateway_name,
+				vec![LocalGatewayReference {
+					listener: listener.key.clone(),
+					kind: gateway_listener_route_kind(&listener.protocol),
+				}],
+			);
 			all_listener_routes.push((listener.key.clone(), Vec::new()));
 			all_listener_tcp_routes.push((listener.key.clone(), Vec::new()));
 			all_policies.extend(policies);
@@ -3169,8 +3299,12 @@ async fn convert_gateways(
 					listener_config,
 				))
 				.await?;
-				refs.insert(reference, vec![listener.key.clone()]);
-				listener_keys.push(listener.key.clone());
+				let gateway_ref = LocalGatewayReference {
+					listener: listener.key.clone(),
+					kind: gateway_listener_route_kind(&listener.protocol),
+				};
+				refs.insert(reference, vec![gateway_ref.clone()]);
+				listener_keys.push(gateway_ref);
 				all_listener_routes.push((listener.key.clone(), Vec::new()));
 				all_listener_tcp_routes.push((listener.key.clone(), Vec::new()));
 				all_policies.extend(policies);
@@ -3205,16 +3339,27 @@ async fn convert_gateway_listener(
 	let LocalGatewayListener {
 		name: _,
 		hostname,
+		protocol,
 		tls,
 		policies,
 	} = listener;
-	let protocol = match tls {
-		Some(tls) => ListenerProtocol::HTTPS(
+	let protocol = match effective_gateway_protocol(protocol, tls.is_some())? {
+		LocalGatewayProtocol::HTTP => ListenerProtocol::HTTP,
+		LocalGatewayProtocol::HTTPS => ListenerProtocol::HTTPS(
 			tls
+				.ok_or(anyhow!("HTTPS gateway listener requires 'tls'"))?
 				.into_server_tls_config_with_resources(config.dynamic_ca_cert_cache.clone(), resources)
 				.await?,
 		),
-		None => ListenerProtocol::HTTP,
+		LocalGatewayProtocol::TCP => ListenerProtocol::TCP,
+		LocalGatewayProtocol::TLS => ListenerProtocol::TLS(match tls {
+			Some(tls) => Some(
+				tls
+					.into_server_tls_config_with_resources(config.dynamic_ca_cert_cache.clone(), resources)
+					.await?,
+			),
+			None => None,
+		}),
 	};
 	let name = ListenerName {
 		gateway_name: gateway.gateway_name.clone(),
@@ -3252,19 +3397,64 @@ async fn convert_gateway_listener(
 	Ok((listener, all_policies))
 }
 
+fn effective_gateway_protocol(
+	protocol: Option<LocalGatewayProtocol>,
+	tls: bool,
+) -> anyhow::Result<LocalGatewayProtocol> {
+	let protocol = protocol.unwrap_or(if tls {
+		LocalGatewayProtocol::HTTPS
+	} else {
+		LocalGatewayProtocol::HTTP
+	});
+	match protocol {
+		LocalGatewayProtocol::HTTP if tls => bail!("protocol HTTP cannot set tls"),
+		LocalGatewayProtocol::HTTPS if !tls => bail!("protocol HTTPS requires tls"),
+		LocalGatewayProtocol::TCP if tls => bail!("protocol TCP cannot set tls"),
+		_ => Ok(protocol),
+	}
+}
+
+fn gateway_route_kind(protocol: LocalGatewayProtocol) -> GatewayRouteKind {
+	match protocol {
+		LocalGatewayProtocol::HTTP | LocalGatewayProtocol::HTTPS => GatewayRouteKind::Http,
+		LocalGatewayProtocol::TCP | LocalGatewayProtocol::TLS => GatewayRouteKind::Tcp,
+	}
+}
+
+fn gateway_listener_route_kind(protocol: &ListenerProtocol) -> GatewayRouteKind {
+	match protocol {
+		ListenerProtocol::HTTP | ListenerProtocol::HTTPS(_) => GatewayRouteKind::Http,
+		ListenerProtocol::TCP | ListenerProtocol::TLS(_) => GatewayRouteKind::Tcp,
+		ListenerProtocol::HBONE => GatewayRouteKind::Tcp,
+	}
+}
+
 fn resolve_gateway_references(
 	gateway_refs: &LocalGatewayReferences,
 	references: &[Strng],
+	route_kind: GatewayRouteKind,
 ) -> anyhow::Result<Vec<ListenerKey>> {
 	let mut listeners = Vec::new();
 	for reference in references {
 		let Some(resolved) = gateway_refs.get(reference) else {
 			bail!("unknown gateway reference {reference}");
 		};
-		for listener in resolved {
+		let mut matched = false;
+		for resolved in resolved {
+			if resolved.kind != route_kind {
+				continue;
+			}
+			matched = true;
+			let listener = &resolved.listener;
 			if !listeners.contains(listener) {
 				listeners.push(listener.clone());
 			}
+		}
+		if !matched {
+			bail!(
+				"gateway reference {reference} has no {} listeners",
+				route_kind.label()
+			);
 		}
 	}
 	Ok(listeners)
@@ -3275,6 +3465,17 @@ fn listener_route_count(
 	listener_key: &ListenerKey,
 ) -> usize {
 	all_listener_routes
+		.iter()
+		.find(|(key, _)| key == listener_key)
+		.map(|(_, routes)| routes.len())
+		.unwrap_or_default()
+}
+
+fn listener_tcp_route_count(
+	all_listener_tcp_routes: &[(ListenerKey, Vec<TCPRoute>)],
+	listener_key: &ListenerKey,
+) -> usize {
+	all_listener_tcp_routes
 		.iter()
 		.find(|(key, _)| key == listener_key)
 		.map(|(_, routes)| routes.len())
@@ -3293,6 +3494,21 @@ fn push_listener_routes(
 		existing.extend(routes);
 	} else {
 		all_listener_routes.push((listener_key, routes));
+	}
+}
+
+fn push_listener_tcp_routes(
+	all_listener_tcp_routes: &mut Vec<(ListenerKey, Vec<TCPRoute>)>,
+	listener_key: ListenerKey,
+	routes: Vec<TCPRoute>,
+) {
+	if let Some((_, existing)) = all_listener_tcp_routes
+		.iter_mut()
+		.find(|(key, _)| key == &listener_key)
+	{
+		existing.extend(routes);
+	} else {
+		all_listener_tcp_routes.push((listener_key, routes));
 	}
 }
 
@@ -3366,7 +3582,8 @@ async fn convert_attached_llm(
 	all_policies: &mut Vec<TargetedPolicy>,
 	all_backends: &mut Vec<BackendWithPolicies>,
 ) -> anyhow::Result<()> {
-	let listeners = resolve_gateway_references(gateway_refs, &llm_config.gateways)?;
+	let listeners =
+		resolve_gateway_references(gateway_refs, &llm_config.gateways, GatewayRouteKind::Http)?;
 	let (_bind, routes, policies, backends) = Box::pin(convert_llm_config(
 		resources, config, gateway, llm_config, true,
 	))
@@ -3392,7 +3609,8 @@ async fn convert_attached_mcp(
 	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
 	all_backends: &mut Vec<BackendWithPolicies>,
 ) -> anyhow::Result<()> {
-	let listeners = resolve_gateway_references(gateway_refs, &mcp_config.gateways)?;
+	let listeners =
+		resolve_gateway_references(gateway_refs, &mcp_config.gateways, GatewayRouteKind::Http)?;
 	let (_bind, routes, policies, backends) = Box::pin(convert_mcp_config(
 		resources, config, gateway, mcp_config, true,
 	))
@@ -3419,7 +3637,8 @@ async fn convert_attached_ui(
 	all_listener_routes: &mut Vec<(ListenerKey, Vec<Route>)>,
 	all_backends: &mut Vec<BackendWithPolicies>,
 ) -> anyhow::Result<()> {
-	let listeners = resolve_gateway_references(gateway_refs, &ui_config.gateways)?;
+	let listeners =
+		resolve_gateway_references(gateway_refs, &ui_config.gateways, GatewayRouteKind::Http)?;
 	let route_key = strng::new("ui");
 	let route_matches = ui_matches(ui_oidc_redirect_path(ui_config.policies.as_ref())?);
 	let resolved_policies = if let Some(pol) = ui_config.policies {

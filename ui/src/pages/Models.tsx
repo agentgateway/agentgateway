@@ -1147,7 +1147,7 @@ function VirtualModelEditor(props: {
   const weightedTargets = model.routing.weighted?.targets ?? [];
   const failoverTargets = model.routing.failover?.targets ?? [];
   const conditionalTargets = model.routing.conditional?.targets ?? [];
-  const targetOptions = modelTargetOptions(props.baseModels);
+  const targetOptions = modelTargetOptions(props.baseModels, props.providers);
   const preview = cleanEmpty(model) as LlmVirtualModel | undefined;
   const activeTargets =
     strategy === "weighted"

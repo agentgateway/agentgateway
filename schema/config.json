@@ -15,6 +15,7 @@
       "default": null
     },
     "binds": {
+      "description": "binds defines the low-level API for configuring the proxy. Usage of `gateways` and `routes` is recommended.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/LocalBind"
@@ -59,17 +60,24 @@
       }
     },
     "gateways": {
-      "description": "gateways defines named HTTP listeners that features and routes can attach to without using low-level binds.",
+      "description": "gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.",
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/LocalGateway"
       }
     },
     "routes": {
-      "description": "routes defines HTTP routes attached to one or more named gateways. When a gateway named `default` exists,\nroutes without gateways attach to it.",
+      "description": "routes defines HTTP routes attached to one or more named gateways.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/LocalAttachedRoute"
+      }
+    },
+    "tcpRoutes": {
+      "description": "tcpRoutes defines TCP routes attached to one or more named TCP/TLS gateways.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LocalAttachedTCPRoute"
       }
     },
     "llm": {
@@ -9526,8 +9534,19 @@
           "minimum": 0,
           "maximum": 65535
         },
+        "protocol": {
+          "description": "protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways\ndefault to HTTP, or HTTPS when tls is set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalGatewayProtocol"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "listeners": {
-          "description": "listeners defines multiple HTTP listeners under this gateway. When set, listener fields cannot be set on the gateway itself.",
+          "description": "listeners defines multiple named listeners under this gateway. When set, listener fields cannot be set on the gateway itself.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalGatewayListener"
@@ -9648,6 +9667,15 @@
       },
       "additionalProperties": false
     },
+    "LocalGatewayProtocol": {
+      "type": "string",
+      "enum": [
+        "HTTP",
+        "HTTPS",
+        "TCP",
+        "TLS"
+      ]
+    },
     "LocalGatewayListener": {
       "type": "object",
       "properties": {
@@ -9664,6 +9692,17 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "protocol": {
+          "description": "protocol controls whether this listener accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, listeners\ndefault to HTTP, or HTTPS when tls is set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalGatewayProtocol"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "tls": {
@@ -9785,7 +9824,7 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways attaches this route to named gateways or gateway listeners.",
+          "description": "gateways attaches this route to named gateways or gateway listeners.\nIf unset, the 'default' gateway will be used.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
@@ -9860,6 +9899,60 @@
           }
         }
       ]
+    },
+    "LocalAttachedTCPRoute": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways attaches this route to named TCP/TLS gateways or gateway listeners.\nIf unset, the 'default' gateway will be used.",
+          "$ref": "#/$defs/LocalGatewayRefs",
+          "default": []
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "namespace": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "ruleName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "hostnames": {
+          "description": "Can be a wildcard",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TCPFilterOrPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalTCPRouteBackend"
+          }
+        }
+      }
     },
     "LocalLLMConfig": {
       "type": "object",

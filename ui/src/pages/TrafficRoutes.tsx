@@ -40,6 +40,7 @@ import type {
 } from "../types";
 import type {
   LocalAttachedRoute,
+  LocalAttachedTCPRoute,
   RouteMatch as GeneratedRouteMatch,
 } from "../gateway-config";
 import {
@@ -52,6 +53,7 @@ const pathTypes = ["pathPrefix", "exact", "regex"] as const;
 type HttpMatch = NonNullable<TrafficRoute["matches"]>[number];
 type HeaderMatch = NonNullable<HttpMatch["headers"]>[number];
 type QueryMatch = NonNullable<HttpMatch["query"]>[number];
+type LocalAttachedGatewayRoute = LocalAttachedRoute | LocalAttachedTCPRoute;
 
 export function TrafficRoutesPage() {
   const mode = useConfigDumpMode();
@@ -323,7 +325,7 @@ function TrafficRoutesEditorPage() {
                     </td>
                     <td>
                       {context.kind === "http"
-                        ? pathSummary(context.route)
+                        ? httpPathSummary(context.route)
                         : "TCP"}
                     </td>
                     <td>{backendListSummary(context.route.backends)}</td>
@@ -401,19 +403,37 @@ function GatewayRoutesEditorPage() {
   const config = useGatewayConfig();
   const update = useUpdateConfig();
   const help = useSchemaHelp();
-  const routes = config.data?.routes ?? [];
-  const gatewayOptions = gatewayReferenceOptions(config.data);
+  const routes = [
+    ...(config.data?.routes ?? []).map((route, routeIndex) => ({
+      kind: "http" as const,
+      route,
+      routeIndex,
+    })),
+    ...(config.data?.tcpRoutes ?? []).map((route, routeIndex) => ({
+      kind: "tcp" as const,
+      route,
+      routeIndex,
+    })),
+  ];
+  const httpGatewayOptions = gatewayReferenceOptions(config.data, "http");
+  const tcpGatewayOptions = gatewayReferenceOptions(config.data, "tcp");
+  const hasGatewayOptions = Boolean(
+    httpGatewayOptions.length || tcpGatewayOptions.length,
+  );
   const [editing, setEditing] = useState<{
+    kind: RouteKind;
     routeIndex?: number;
-    route: LocalAttachedRoute;
+    route: LocalAttachedGatewayRoute;
   } | null>(null);
 
-  function openAddRoute() {
+  function openAddRoute(kind: RouteKind) {
+    const gatewayOptions =
+      kind === "http" ? httpGatewayOptions : tcpGatewayOptions;
     setEditing({
+      kind,
       route: {
         gateways: gatewayOptions[0]?.value,
-        matches: [{ path: { pathPrefix: "/" } }],
-        backends: [],
+        ...(makeRoute(kind) as LocalAttachedGatewayRoute),
       },
     });
   }
@@ -426,13 +446,15 @@ function GatewayRoutesEditorPage() {
     <div className="page-stack">
       <PageHeader
         title="Traffic Routes"
-        description="Attach HTTP routes to traffic gateways."
+        description="Attach HTTP and TCP routes to traffic gateways."
         actions={
           <button
             className="button primary"
             type="button"
-            disabled={!gatewayOptions.length}
-            onClick={openAddRoute}
+            disabled={!hasGatewayOptions}
+            onClick={() =>
+              openAddRoute(httpGatewayOptions.length ? "http" : "tcp")
+            }
           >
             <Plus size={16} />
             Add route
@@ -456,7 +478,7 @@ function GatewayRoutesEditorPage() {
           <StatusBanner state="bad" title="Configuration API unavailable">
             {config.error.message}
           </StatusBanner>
-        ) : !gatewayOptions.length ? (
+        ) : !hasGatewayOptions ? (
           <EmptyState
             title="No traffic gateways configured"
             description="Add a gateway before attaching routes."
@@ -475,7 +497,9 @@ function GatewayRoutesEditorPage() {
               <button
                 className="button primary"
                 type="button"
-                onClick={openAddRoute}
+                onClick={() =>
+                  openAddRoute(httpGatewayOptions.length ? "http" : "tcp")
+                }
               >
                 <RouteIcon size={16} />
                 Add route
@@ -488,6 +512,7 @@ function GatewayRoutesEditorPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Kind</th>
                   <th>Gateway</th>
                   <th>Match</th>
                   <th>Backends</th>
@@ -495,13 +520,21 @@ function GatewayRoutesEditorPage() {
                 </tr>
               </thead>
               <tbody>
-                {routes.map((route, routeIndex) => (
-                  <tr key={`${gatewayRouteRef(route)}-${routeIndex}`}>
+                {routes.map(({ kind, route, routeIndex }) => (
+                  <tr
+                    key={`${kind}-${effectiveGatewayRouteRef(route, config.data, kind)}-${routeIndex}`}
+                  >
                     <td className="strong">
                       {routeDisplayName(route, routeIndex)}
                     </td>
-                    <td>{gatewayRouteRef(route) || "Unassigned"}</td>
-                    <td>{pathSummary(route)}</td>
+                    <td>
+                      <span className="badge">{kind.toUpperCase()}</span>
+                    </td>
+                    <td>
+                      {effectiveGatewayRouteRef(route, config.data, kind) ||
+                        "Unassigned"}
+                    </td>
+                    <td>{kind === "http" ? httpPathSummary(route) : "TCP"}</td>
                     <td>{backendListSummary(route.backends)}</td>
                     <td className="row-actions">
                       <Tooltip content="Edit route">
@@ -511,6 +544,7 @@ function GatewayRoutesEditorPage() {
                           aria-label="Edit route"
                           onClick={() =>
                             setEditing({
+                              kind,
                               routeIndex,
                               route: structuredClone(route),
                             })
@@ -526,10 +560,18 @@ function GatewayRoutesEditorPage() {
                           aria-label="Delete route"
                           onClick={() =>
                             update.mutate((next) => {
-                              next.routes = (next.routes ?? []).filter(
-                                (_, index) => index !== routeIndex,
-                              );
-                              if (!next.routes.length) delete next.routes;
+                              if (kind === "http") {
+                                next.routes = (next.routes ?? []).filter(
+                                  (_, index) => index !== routeIndex,
+                                );
+                                if (!next.routes.length) delete next.routes;
+                              } else {
+                                next.tcpRoutes = (next.tcpRoutes ?? []).filter(
+                                  (_, index) => index !== routeIndex,
+                                );
+                                if (!next.tcpRoutes.length)
+                                  delete next.tcpRoutes;
+                              }
                             })
                           }
                         >
@@ -548,7 +590,6 @@ function GatewayRoutesEditorPage() {
       {editing ? (
         <GatewayRouteEditor
           config={config.data}
-          gatewayOptions={gatewayOptions}
           editing={editing}
           help={help}
           saving={update.isPending}
@@ -556,10 +597,23 @@ function GatewayRoutesEditorPage() {
           onSave={(nextEditing) =>
             update.mutate(
               (next) => {
-                if (!Array.isArray(next.routes)) next.routes = [];
-                if (typeof nextEditing.routeIndex === "number")
-                  next.routes[nextEditing.routeIndex] = nextEditing.route;
-                else next.routes.push(nextEditing.route);
+                if (nextEditing.kind === "http") {
+                  if (!Array.isArray(next.routes)) next.routes = [];
+                  if (typeof nextEditing.routeIndex === "number")
+                    next.routes[nextEditing.routeIndex] =
+                      nextEditing.route as LocalAttachedRoute;
+                  else
+                    next.routes.push(nextEditing.route as LocalAttachedRoute);
+                } else {
+                  if (!Array.isArray(next.tcpRoutes)) next.tcpRoutes = [];
+                  if (typeof nextEditing.routeIndex === "number")
+                    next.tcpRoutes[nextEditing.routeIndex] =
+                      nextEditing.route as LocalAttachedTCPRoute;
+                  else
+                    next.tcpRoutes.push(
+                      nextEditing.route as LocalAttachedTCPRoute,
+                    );
+                }
               },
               { onSuccess: closeEditor },
             )
@@ -572,20 +626,38 @@ function GatewayRoutesEditorPage() {
 
 function GatewayRouteEditor(props: {
   config?: GatewayConfig;
-  gatewayOptions: Array<{ value: string; label: string; description?: string }>;
   editing: {
+    kind: RouteKind;
     routeIndex?: number;
-    route: LocalAttachedRoute;
+    route: LocalAttachedGatewayRoute;
   };
   help: SchemaHelp;
   saving: boolean;
   onCancel: () => void;
-  onSave: (editing: { routeIndex?: number; route: LocalAttachedRoute }) => void;
+  onSave: (editing: {
+    kind: RouteKind;
+    routeIndex?: number;
+    route: LocalAttachedGatewayRoute;
+  }) => void;
 }) {
-  const [route, setRoute] = useState<LocalAttachedRoute>(props.editing.route);
-  const [gateway, setGateway] = useState(gatewayRouteRef(props.editing.route));
+  const [kind, setKind] = useState<RouteKind>(props.editing.kind);
+  const [route, setRoute] = useState<LocalAttachedGatewayRoute>(
+    props.editing.route,
+  );
+  const gatewayOptions = gatewayReferenceOptions(props.config, kind);
+  const [gateway, setGateway] = useState(
+    effectiveGatewayRouteRef(props.editing.route, props.config, kind),
+  );
   const [error, setError] = useState<string | null>(null);
-  const preview = cleanGatewayRoute({ ...route, gateways: gateway });
+  const preview = cleanGatewayRoute(
+    {
+      ...route,
+      gateways: implicitDefaultRouteGateway(route, props.config, gateway, kind)
+        ? undefined
+        : gateway,
+    } as LocalAttachedGatewayRoute,
+    kind,
+  );
 
   function save() {
     if (!gateway) {
@@ -593,6 +665,7 @@ function GatewayRouteEditor(props: {
       return;
     }
     props.onSave({
+      kind,
       routeIndex: props.editing.routeIndex,
       route: preview,
     });
@@ -622,11 +695,22 @@ function GatewayRouteEditor(props: {
             return true;
           }}
           applyDiff={(next) => {
-            if (!Array.isArray(next.routes)) next.routes = [];
-            if (typeof props.editing.routeIndex === "number") {
-              next.routes[props.editing.routeIndex] = preview;
+            if (kind === "http") {
+              if (!Array.isArray(next.routes)) next.routes = [];
+              if (typeof props.editing.routeIndex === "number") {
+                next.routes[props.editing.routeIndex] =
+                  preview as LocalAttachedRoute;
+              } else {
+                next.routes.push(preview as LocalAttachedRoute);
+              }
             } else {
-              next.routes.push(preview);
+              if (!Array.isArray(next.tcpRoutes)) next.tcpRoutes = [];
+              if (typeof props.editing.routeIndex === "number") {
+                next.tcpRoutes[props.editing.routeIndex] =
+                  preview as LocalAttachedTCPRoute;
+              } else {
+                next.tcpRoutes.push(preview as LocalAttachedTCPRoute);
+              }
             }
           }}
         />
@@ -634,6 +718,29 @@ function GatewayRouteEditor(props: {
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}
       <div className="route-editor-stack">
+        {typeof props.editing.routeIndex !== "number" ? (
+          <FieldGroup label="Kind" tooltip="Route protocol family.">
+            <EnumSelector
+              ariaLabel="Route kind"
+              value={kind}
+              options={[
+                { value: "http", label: "HTTP" },
+                { value: "tcp", label: "TCP" },
+              ]}
+              onChange={(value) => {
+                const nextKind = value as RouteKind;
+                const nextOptions = gatewayReferenceOptions(
+                  props.config,
+                  nextKind,
+                );
+                setKind(nextKind);
+                setGateway(nextOptions[0]?.value ?? "");
+                setRoute(makeRoute(nextKind) as LocalAttachedGatewayRoute);
+                if (error) setError(null);
+              }}
+            />
+          </FieldGroup>
+        ) : null}
         <FieldGroup
           label="Gateway"
           tooltip="Gateway or gateway listener that owns this route."
@@ -641,7 +748,7 @@ function GatewayRouteEditor(props: {
           <Dropdown
             ariaLabel="Gateway"
             value={gateway}
-            options={props.gatewayOptions}
+            options={gatewayOptions}
             onChange={(value) => {
               setGateway(value);
               if (error) setError(null);
@@ -652,7 +759,11 @@ function GatewayRouteEditor(props: {
         <div className="form-grid">
           <Field
             label="Name"
-            tooltip={props.help.field<TrafficRoute>("LocalRoute", "name")}
+            tooltip={
+              kind === "http"
+                ? props.help.field<TrafficRoute>("LocalRoute", "name")
+                : props.help.field<TrafficTcpRoute>("LocalTCPRoute", "name")
+            }
           >
             <input
               value={route.name ?? ""}
@@ -664,11 +775,19 @@ function GatewayRouteEditor(props: {
           </Field>
           <Field
             label="Hostnames"
-            tooltip={props.help.field<TrafficRoute>(
-              "LocalRoute",
-              "hostnames",
-              "Comma-separated hostnames. Wildcards are allowed.",
-            )}
+            tooltip={
+              kind === "http"
+                ? props.help.field<TrafficRoute>(
+                    "LocalRoute",
+                    "hostnames",
+                    "Comma-separated hostnames. Wildcards are allowed.",
+                  )
+                : props.help.field<TrafficTcpRoute>(
+                    "LocalTCPRoute",
+                    "hostnames",
+                    "Comma-separated hostnames. Wildcards are allowed.",
+                  )
+            }
           >
             <input
               value={(route.hostnames ?? []).join(", ")}
@@ -680,22 +799,30 @@ function GatewayRouteEditor(props: {
           </Field>
         </div>
 
-        <HttpMatchEditor
-          route={route}
-          help={props.help}
-          onChange={(nextRoute) => setRoute({ ...route, ...nextRoute })}
-        />
+        {kind === "http" ? (
+          <HttpMatchEditor
+            route={route as TrafficRoute}
+            help={props.help}
+            onChange={(nextRoute) => setRoute({ ...route, ...nextRoute })}
+          />
+        ) : null}
 
         <RouteBackendsEditor
-          kind="http"
+          kind={kind}
           help={props.help}
-          backends={(route.backends ?? []) as TrafficRouteBackend[]}
-          onChange={(backends) => setRoute({ ...route, backends })}
+          backends={
+            (route.backends ?? []) as Array<
+              TrafficRouteBackend | TrafficTcpRouteBackend
+            >
+          }
+          onChange={(backends) =>
+            setRoute({ ...route, backends: backends as never })
+          }
         />
 
         <TrafficPolicySection
           title="Route policies"
-          schemaRoot="FilterOrPolicy"
+          schemaRoot={kind === "http" ? "FilterOrPolicy" : "TCPFilterOrPolicy"}
           policies={
             route.policies as Record<string, unknown> | null | undefined
           }
@@ -1617,12 +1744,6 @@ function cleanRoute(route: TrafficRoute | TrafficTcpRoute, kind: RouteKind) {
   if (backends.length) next.backends = backends as never;
   else delete next.backends;
   if (!next.policies) delete next.policies;
-  if (kind === "http" && !("matches" in next)) {
-    return {
-      ...next,
-      matches: [{ path: { pathPrefix: "/" } }],
-    } as TrafficRoute;
-  }
   if (kind === "http" && "matches" in next && next.matches) {
     next.matches = next.matches.map(cleanHttpMatch);
   }
@@ -1850,6 +1971,14 @@ function backendListSummary(
   return backends.map(backendSummary).join(", ");
 }
 
+function httpPathSummary(
+  route: TrafficRoute | TrafficTcpRoute | LocalAttachedGatewayRoute,
+) {
+  const matches = (route as TrafficRoute).matches;
+  if (!matches?.length) return "/";
+  return pathSummary(route as TrafficRoute);
+}
+
 function listenerRouteKind(listener: TrafficListener): RouteKind {
   return listener.protocol === "TCP" || listener.protocol === "TLS"
     ? "tcp"
@@ -1913,10 +2042,14 @@ function routeSearchValue(context: ReturnType<typeof routeContexts>[number]) {
   return `${context.bindIndex}:${context.listenerIndex}:${context.kind}:${context.routeIndex}`;
 }
 
-function gatewayReferenceOptions(config: GatewayConfig | null | undefined) {
+function gatewayReferenceOptions(
+  config: GatewayConfig | null | undefined,
+  kind: RouteKind,
+) {
   return Object.entries(config?.gateways ?? {}).flatMap(([name, gateway]) => {
     const listeners = gateway.listeners ?? [];
     if (!listeners.length) {
+      if (gatewayRouteKind(gateway) !== kind) return [];
       return [
         {
           value: name,
@@ -1925,14 +2058,19 @@ function gatewayReferenceOptions(config: GatewayConfig | null | undefined) {
         },
       ];
     }
+    const compatibleListeners = listeners.filter(
+      (listener) => gatewayRouteKind(listener) === kind,
+    );
+    if (!compatibleListeners.length) return [];
     return [
       {
         value: name,
-        label: `${name} (all listeners)`,
+        label: `${name} (all ${kind.toUpperCase()} listeners)`,
         description: gateway.port ? `Port ${gateway.port}` : undefined,
       },
-      ...listeners.map((listener, index) => {
-        const listenerName = listener.name ?? `listener${index}`;
+      ...compatibleListeners.map((listener) => {
+        const listenerIndex = listeners.indexOf(listener);
+        const listenerName = listener.name ?? `listener${listenerIndex}`;
         return {
           value: `${name}/${listenerName}`,
           label: `${name}/${listenerName}`,
@@ -1943,13 +2081,66 @@ function gatewayReferenceOptions(config: GatewayConfig | null | undefined) {
   });
 }
 
-function gatewayRouteRef(route: Pick<LocalAttachedRoute, "gateways">) {
+function gatewayRouteKind(
+  value:
+    | NonNullable<GatewayConfig["gateways"]>[string]
+    | {
+        protocol?: "HTTP" | "HTTPS" | "TCP" | "TLS" | null;
+        tls?: unknown;
+      },
+): RouteKind {
+  const protocol = value.protocol ?? (value.tls ? "HTTPS" : "HTTP");
+  return protocol === "TCP" || protocol === "TLS" ? "tcp" : "http";
+}
+
+function gatewayRouteRef(route: Pick<LocalAttachedGatewayRoute, "gateways">) {
   if (Array.isArray(route.gateways)) return route.gateways[0] ?? "";
   return route.gateways ?? "";
 }
 
-function cleanGatewayRoute(route: LocalAttachedRoute): LocalAttachedRoute {
-  const next = cleanRoute(route, "http") as LocalAttachedRoute;
+function effectiveGatewayRouteRef(
+  route: Pick<LocalAttachedGatewayRoute, "gateways">,
+  config: GatewayConfig | null | undefined,
+  kind: RouteKind,
+) {
+  return (
+    gatewayRouteRef(route) ||
+    (config?.gateways?.default &&
+    gatewayHasRouteKind(config.gateways.default, kind)
+      ? "default"
+      : "")
+  );
+}
+
+function implicitDefaultRouteGateway(
+  route: Pick<LocalAttachedGatewayRoute, "gateways">,
+  config: GatewayConfig | null | undefined,
+  gateway: string,
+  kind: RouteKind,
+) {
+  const defaultGateway = config?.gateways?.default;
+  return (
+    !gatewayRouteRef(route) &&
+    gateway === "default" &&
+    defaultGateway &&
+    gatewayHasRouteKind(defaultGateway, kind)
+  );
+}
+
+function gatewayHasRouteKind(
+  gateway: NonNullable<GatewayConfig["gateways"]>[string],
+  kind: RouteKind,
+) {
+  const listeners = gateway.listeners ?? [];
+  if (!listeners.length) return gatewayRouteKind(gateway) === kind;
+  return listeners.some((listener) => gatewayRouteKind(listener) === kind);
+}
+
+function cleanGatewayRoute(
+  route: LocalAttachedGatewayRoute,
+  kind: RouteKind,
+): LocalAttachedGatewayRoute {
+  const next = cleanRoute(route, kind) as LocalAttachedGatewayRoute;
   if (Array.isArray(next.gateways)) {
     next.gateways = next.gateways.filter(Boolean);
     if (next.gateways.length === 1) next.gateways = next.gateways[0];

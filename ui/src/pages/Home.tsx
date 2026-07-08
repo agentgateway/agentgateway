@@ -337,7 +337,7 @@ export function HomePage() {
                   `${traffic.httpRoutes} ${traffic.httpRoutes === 1 ? "route" : "routes"}`,
                 ]
           }
-          links={[{ to: "/traffic/gateways", label: "Manage gateways" }]}
+          links={[{ to: "/traffic/gateways", label: "Setup gateways" }]}
         />
       </section>
       {llmSettingsOpen ? (
@@ -486,7 +486,7 @@ function SurfaceRow(props: {
           </Link>
         ) : (
           props.links?.map((link) => (
-            <Link key={link.to} className="button" to={link.to}>
+            <Link key={link.to} className="button primary" to={link.to}>
               {link.label}
             </Link>
           ))

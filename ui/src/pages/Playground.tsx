@@ -590,15 +590,9 @@ export function PlaygroundPage() {
                   searchable
                   options={modelOptions.map((item) => ({
                     value: item.name,
-                    label:
-                      item.kind === "virtual" ? (
-                        <span className="select-option-copy">
-                          <strong>{item.name}</strong>
-                          <small>Virtual model</small>
-                        </span>
-                      ) : (
-                        item.name
-                      ),
+                    label: item.name,
+                    description:
+                      item.kind === "virtual" ? "Virtual model" : undefined,
                     icon: item.icon,
                     searchText: item.searchText,
                   }))}

@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import {
-  configWithClaudeSubscriptionKey,
-  emptyConfig,
-  mockGateway,
-  populatedConfig,
-  sameOriginGatewayConfig,
+	configWithClaudeSubscriptionKey,
+	emptyConfig,
+	implicitDefaultGatewayConfig,
+	mockGateway,
+	populatedConfig,
+	sameOriginGatewayConfig,
 } from "./fixtures";
 
 const pages = [
@@ -180,6 +181,47 @@ test("attaches traffic routes to gateways", async ({ page }) => {
   ]);
 });
 
+test("migrates legacy HTTP binds to gateways", async ({ page }) => {
+  const gateway = await mockGateway(page, populatedConfig());
+  await page.goto("/traffic/gateways");
+
+  await page.getByRole("button", { name: "Review migration" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Migrate binds to gateways" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+  const saved = gateway.postedConfigs[0] as {
+    binds?: Array<{ port?: number }>;
+    gateways?: Record<
+      string,
+      {
+        port?: number;
+        listeners?: Array<{ name?: string; hostname?: string }>;
+      }
+    >;
+    routes?: Array<{ gateways?: string; name?: string }>;
+  };
+  expect(saved.gateways?.["port-8080"]).toMatchObject({
+    port: 8080,
+    listeners: [{ name: "public-http", hostname: "example.com" }],
+  });
+  expect(saved.routes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        gateways: "port-8080/public-http",
+        name: "api",
+      }),
+      expect.objectContaining({
+        gateways: "port-8080/public-http",
+        name: "legacy-ai",
+      }),
+    ]),
+  );
+  expect(saved.binds).toEqual([expect.objectContaining({ port: 9090 })]);
+});
+
 test("raw configuration editor shows schema diagnostics", async ({ page }) => {
   await mockGateway(page);
   await page.goto("/raw-config");
@@ -352,9 +394,9 @@ test("LLM playground sends selected virtual model name", async ({ page }) => {
 });
 
 test("LLM playground uses relative requests when UI shares the gateway", async ({
-  page,
+	page,
 }) => {
-  const gateway = await mockGateway(page, sameOriginGatewayConfig());
+	const gateway = await mockGateway(page, sameOriginGatewayConfig());
   await page.goto("/llm/playground");
 
   await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
@@ -367,13 +409,32 @@ test("LLM playground uses relative requests when UI shares the gateway", async (
   const pageOrigin = await page.evaluate(() => window.location.origin);
   const requestUrl = new URL(gateway.chatUrls[0]);
   expect(requestUrl.origin).toBe(pageOrigin);
-  expect(requestUrl.pathname).toBe("/v1/chat/completions");
+	expect(requestUrl.pathname).toBe("/v1/chat/completions");
+});
+
+test("LLM playground uses relative requests with implicit default gateway", async ({
+	page,
+}) => {
+	const gateway = await mockGateway(page, implicitDefaultGatewayConfig());
+	await page.goto("/llm/playground");
+
+	await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
+	await page.getByRole("combobox", { name: "Model" }).click();
+	await page.getByRole("option", { name: /resilient/ }).click();
+	await page.getByLabel("User message").fill("ping");
+	await page.getByRole("button", { name: "Send" }).click();
+
+	await expect.poll(() => gateway.chatUrls.length).toBe(1);
+	const pageOrigin = await page.evaluate(() => window.location.origin);
+	const requestUrl = new URL(gateway.chatUrls[0]);
+	expect(requestUrl.origin).toBe(pageOrigin);
+	expect(requestUrl.pathname).toBe("/v1/chat/completions");
 });
 
 test("MCP playground initializes, lists tools, and calls a tool", async ({
-  page,
+	page,
 }) => {
-  const gateway = await mockGateway(page);
+	const gateway = await mockGateway(page);
   await page.goto("/mcp/playground");
 
   await expect(page.getByRole("textbox", { name: "Bearer token" })).toHaveCount(
@@ -420,12 +481,43 @@ test("MCP playground uses relative requests when UI shares the gateway", async (
   const pageOrigin = await page.evaluate(() => window.location.origin);
   const requestUrl = new URL(gateway.mcpUrls[0]);
   expect(requestUrl.origin).toBe(pageOrigin);
-  expect(requestUrl.pathname).toBe("/mcp");
+	expect(requestUrl.pathname).toBe("/mcp");
+});
+
+test("MCP playground uses relative requests with implicit default gateway", async ({
+	page,
+}) => {
+	const gateway = await mockGateway(page, implicitDefaultGatewayConfig());
+	await page.goto("/mcp/playground");
+
+	await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
+	await page.getByRole("button", { name: "Initialize", exact: true }).click();
+	await expect(page.getByText("initialized")).toBeVisible();
+
+	await expect.poll(() => gateway.mcpUrls.length).toBeGreaterThan(0);
+	const pageOrigin = await page.evaluate(() => window.location.origin);
+	const requestUrl = new URL(gateway.mcpUrls[0]);
+	expect(requestUrl.origin).toBe(pageOrigin);
+	expect(requestUrl.pathname).toBe("/mcp");
+});
+
+test("Client Setup uses implicit default gateway port", async ({ page }) => {
+	await mockGateway(page, implicitDefaultGatewayConfig());
+	await page.goto("/llm/client-setup");
+
+	const hostname = await page.evaluate(() => window.location.hostname);
+	const baseUrl = `http://${hostname}:8080`;
+	await expect(page.getByRole("textbox", { name: "Gateway base URL" })).toHaveValue(
+		baseUrl,
+	);
+	await expect(page.locator(".client-setup-summary")).toContainText(
+		`${baseUrl}/v1`,
+	);
 });
 
 test("edits top-level MCP policies", async ({ page }) => {
-  const gateway = await mockGateway(page, emptyConfig());
-  await page.goto("/mcp/policies");
+	const gateway = await mockGateway(page, emptyConfig());
+	await page.goto("/mcp/policies");
 
   await page.getByRole("button", { name: /CORS/ }).click();
   await page.getByRole("button", { name: "Add current origin" }).click();

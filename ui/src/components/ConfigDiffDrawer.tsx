@@ -8,6 +8,22 @@ import { toYamlText } from "../policies/policyUtils";
 import type { GatewayConfig } from "../types";
 import { Drawer } from "./Primitives";
 
+const configTopLevelOrder = [
+  "config",
+  "binds",
+  "frontendPolicies",
+  "policies",
+  "workloads",
+  "services",
+  "backends",
+  "routeGroups",
+  "gateways",
+  "routes",
+  "llm",
+  "mcp",
+  "ui",
+];
+
 export function ConfigDiffDrawer(props: {
   title: string;
   original: string;
@@ -99,10 +115,7 @@ export function ConfigDiffSaveActions(props: {
     if (props.beforeDiff && !props.beforeDiff()) return;
     const modified = cloneConfig(props.config);
     props.applyDiff(modified);
-    setDiff({
-      original: toYamlText(props.config),
-      modified: toYamlText(modified),
-    });
+    setDiff(configDiffText(props.config, modified));
   }
 
   return (
@@ -149,4 +162,37 @@ export function ConfigDiffSaveActions(props: {
       ) : null}
     </>
   );
+}
+
+export function configDiffText(
+  original: GatewayConfig,
+  modified: GatewayConfig,
+) {
+  return {
+    original: toYamlText(original),
+    modified: toYamlText(orderConfigForDiff(original, modified)),
+  };
+}
+
+function orderConfigForDiff(original: GatewayConfig, modified: GatewayConfig) {
+  const remaining = new Set(Object.keys(modified));
+  const ordered: Record<string, unknown> = {};
+
+  function add(key: string) {
+    if (!remaining.has(key)) return;
+    ordered[key] = (modified as Record<string, unknown>)[key];
+    remaining.delete(key);
+  }
+
+  for (const key of Object.keys(original)) {
+    add(key);
+    if (key === "binds") {
+      add("gateways");
+      add("routes");
+    }
+  }
+  for (const key of configTopLevelOrder) add(key);
+  for (const key of Object.keys(modified)) add(key);
+
+  return ordered as GatewayConfig;
 }

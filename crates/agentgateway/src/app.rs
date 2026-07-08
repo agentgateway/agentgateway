@@ -180,14 +180,21 @@ async fn ui_url(config: &Config) -> String {
 		return admin_url();
 	};
 	let gateway_ref = match local.pointer("/ui/gateways") {
-		Some(serde_json::Value::String(reference)) => reference.as_str(),
+		Some(serde_json::Value::String(reference)) => Some(reference.as_str()),
 		Some(serde_json::Value::Array(references)) => {
-			let Some(reference) = references.iter().find_map(serde_json::Value::as_str) else {
-				return admin_url();
-			};
-			reference
+			references.iter().find_map(serde_json::Value::as_str)
 		},
-		_ => return admin_url(),
+		_ => None,
+	}
+	.or_else(|| {
+		if local.get("ui").is_some() && local.pointer("/gateways/default").is_some() {
+			Some("default")
+		} else {
+			None
+		}
+	});
+	let Some(gateway_ref) = gateway_ref else {
+		return admin_url();
 	};
 	let (gateway_name, listener_name) = gateway_ref
 		.split_once('/')

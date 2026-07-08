@@ -139,6 +139,7 @@ async fn normalize_test_policies(
 			route_groups: vec![],
 			gateways: Default::default(),
 			routes: vec![],
+			tcp_routes: vec![],
 			llm: None,
 			mcp: None,
 			ui: None,

@@ -381,7 +381,16 @@ export function OidcPolicyEditor(props: {
           hint={fieldErrors.clientSecret}
         >
           <input
-            type="password"
+            type="text"
+            className="masked-secret-input"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-form-type="other"
+            name="agw-oidc-client-secret"
+            spellCheck={false}
             value={clientSecret}
             aria-invalid={Boolean(fieldErrors.clientSecret)}
             onChange={(event) => {

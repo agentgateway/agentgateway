@@ -1,7 +1,8 @@
-import { Network, Pencil, Plus, Trash2 } from "lucide-react";
+import { GitBranch, Network, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   Drawer,
+  Dropdown,
   EmptyState,
   Field,
   PageHeader,
@@ -10,16 +11,28 @@ import {
   Tooltip,
   YamlBlock,
 } from "../components/Primitives";
-import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
+import {
+  ConfigDiffDrawer,
+  ConfigDiffSaveActions,
+  configDiffText,
+} from "../components/ConfigDiffDrawer";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type {
   GatewayConfig,
+  TrafficBind,
   TrafficGateway,
   TrafficGatewayListener,
+  TrafficListener,
+  TrafficRoute,
+  TrafficTcpRoute,
 } from "../types";
 import type { LocalTLSServerConfig } from "../gateway-config";
+import type {
+  LocalAttachedRoute,
+  LocalAttachedTCPRoute,
+} from "../gateway-config";
 import { TrafficPolicySection } from "./traffic/TrafficPolicySection";
 
 type GatewayRow = {
@@ -39,11 +52,21 @@ type GatewayListenerEditorState = {
   listener: TrafficGatewayListener;
 };
 
+type GatewayProtocol = "HTTP" | "HTTPS" | "TCP" | "TLS";
+
+const gatewayProtocolOptions = [
+  { value: "HTTP", label: "HTTP" },
+  { value: "HTTPS", label: "HTTPS" },
+  { value: "TCP", label: "TCP" },
+  { value: "TLS", label: "TLS" },
+];
+
 export function TrafficGatewaysPage() {
   const config = useGatewayConfig();
   const update = useUpdateConfig();
   const help = useSchemaHelp();
   const [drawer, setDrawer] = useStickyQueryParam("gateway");
+  const [migrationOpen, setMigrationOpen] = useState(false);
   const gateways = useMemo<GatewayRow[]>(
     () =>
       Object.entries(config.data?.gateways ?? {}).map(([name, gateway]) => ({
@@ -54,6 +77,7 @@ export function TrafficGatewaysPage() {
   );
   const hasLegacyBinds = Boolean(config.data?.binds?.length);
   const showLegacyBindsWarning = hasLegacyBinds && gateways.length === 0;
+  const migration = useMemo(() => bindMigration(config.data), [config.data]);
   const activeGateway =
     drawer === "new"
       ? { name: "public", gateway: { port: 8080 } }
@@ -95,7 +119,22 @@ export function TrafficGatewaysPage() {
         <StatusBanner state="ok" title="Configuration saved" />
       ) : null}
       {showLegacyBindsWarning ? (
-        <StatusBanner state="warn" title="Detected legacy binds config">
+        <StatusBanner
+          state="warn"
+          title="Detected legacy binds config"
+          action={
+            migration ? (
+              <button
+                className="button"
+                type="button"
+                onClick={() => setMigrationOpen(true)}
+              >
+                <GitBranch size={16} />
+                Review migration
+              </button>
+            ) : null
+          }
+        >
           This configuration uses legacy <code>binds</code> and has no{" "}
           <code>gateways</code>. Consider moving listener ownership to{" "}
           <code>gateways</code>.
@@ -140,6 +179,9 @@ export function TrafficGatewaysPage() {
                     </p>
                   </div>
                   <div className="button-row">
+                    <span className="badge">
+                      {gatewayProtocolLabel(gateway)}
+                    </span>
                     <span
                       className={gatewayHasTls(gateway) ? "badge ok" : "badge"}
                     >
@@ -194,6 +236,7 @@ export function TrafficGatewaysPage() {
                         <tr>
                           <th>Name</th>
                           <th>Hostname</th>
+                          <th>Protocol</th>
                           <th>TLS</th>
                           <th>Policies</th>
                           <th />
@@ -206,6 +249,7 @@ export function TrafficGatewaysPage() {
                               {gatewayListenerName(listener, listenerIndex)}
                             </td>
                             <td>{listener.hostname || "*"}</td>
+                            <td>{gatewayProtocolLabel(listener)}</td>
                             <td>
                               <span
                                 className={listener.tls ? "badge ok" : "badge"}
@@ -312,6 +356,25 @@ export function TrafficGatewaysPage() {
           }
         />
       ) : null}
+
+      {migrationOpen && config.data && migration ? (
+        <ConfigDiffDrawer
+          title="Migrate binds to gateways"
+          {...configDiffText(config.data, migration.config)}
+          saving={update.isPending}
+          onClose={() => setMigrationOpen(false)}
+          onSave={() =>
+            update.mutate(
+              (next) => {
+                applyBindMigration(next);
+              },
+              {
+                onSuccess: () => setMigrationOpen(false),
+              },
+            )
+          }
+        />
+      ) : null}
     </div>
   );
 }
@@ -334,7 +397,8 @@ function GatewayEditor(props: {
   const [cert, setCert] = useState(gateway.tls?.cert ?? "");
   const [key, setKey] = useState(gateway.tls?.key ?? "");
   const policyCount = gatewayPolicyCount(gateway);
-  const hasTls = Boolean(cert.trim() || key.trim() || gateway.tls);
+  const protocol = effectiveGatewayProtocol(gateway);
+  const hasTls = protocol === "HTTPS" || protocol === "TLS";
   const canEnableMultipleListeners = !hasTls && policyCount === 0;
   const preview: TrafficGateway = cleanGateway({
     ...(multipleListeners ? withoutGatewayPolicies(gateway) : gateway),
@@ -344,7 +408,9 @@ function GatewayEditor(props: {
         : [{ name: "listener1" }]
       : [],
     tls:
-      !multipleListeners && (cert.trim() || key.trim())
+      !multipleListeners &&
+      (protocol === "HTTPS" || protocol === "TLS") &&
+      (cert.trim() || key.trim())
         ? { ...(gateway.tls ?? {}), cert: cert.trim(), key: key.trim() }
         : null,
   });
@@ -407,6 +473,36 @@ function GatewayEditor(props: {
             placeholder="443"
           />
         </Field>
+        {!multipleListeners ? (
+          <Field
+            label="Protocol"
+            tooltip={props.help.field<TrafficGateway>(
+              "LocalGateway",
+              "protocol",
+            )}
+          >
+            <Dropdown
+              ariaLabel="Protocol"
+              value={protocol}
+              options={gatewayProtocolOptions}
+              onChange={(value) => {
+                const nextProtocol = value as GatewayProtocol;
+                setGateway({
+                  ...gateway,
+                  protocol: nextProtocol,
+                  tls:
+                    nextProtocol === "HTTPS" || nextProtocol === "TLS"
+                      ? gateway.tls
+                      : null,
+                });
+                if (nextProtocol === "HTTP" || nextProtocol === "TCP") {
+                  setCert("");
+                  setKey("");
+                }
+              }}
+            />
+          </Field>
+        ) : null}
       </div>
 
       <div className="form-grid">
@@ -421,6 +517,7 @@ function GatewayEditor(props: {
               if (enabled) {
                 setGateway((current) => ({
                   ...withoutGatewayPolicies(current),
+                  protocol: null,
                   tls: null,
                   listeners: current.listeners?.length
                     ? current.listeners
@@ -445,13 +542,15 @@ function GatewayEditor(props: {
       </div>
 
       {!multipleListeners ? (
-        <GatewayTLSFields
-          cert={cert}
-          keyValue={key}
-          help={props.help}
-          onCertChange={setCert}
-          onKeyChange={setKey}
-        />
+        protocol === "HTTPS" || protocol === "TLS" ? (
+          <GatewayTLSFields
+            cert={cert}
+            keyValue={key}
+            help={props.help}
+            onCertChange={setCert}
+            onKeyChange={setKey}
+          />
+        ) : null
       ) : null}
 
       {!multipleListeners ? (
@@ -532,10 +631,12 @@ function GatewayListenerEditor(props: {
   );
   const [cert, setCert] = useState(listener.tls?.cert ?? "");
   const [key, setKey] = useState(listener.tls?.key ?? "");
+  const protocol = effectiveGatewayProtocol(listener);
   const preview = cleanGatewayListener({
     ...listener,
     tls:
-      cert.trim() || key.trim()
+      (protocol === "HTTPS" || protocol === "TLS") &&
+      (cert.trim() || key.trim())
         ? { ...(listener.tls ?? {}), cert: cert.trim(), key: key.trim() }
         : null,
   });
@@ -592,6 +693,34 @@ function GatewayListenerEditor(props: {
           />
         </Field>
         <Field
+          label="Protocol"
+          tooltip={props.help.field<TrafficGatewayListener>(
+            "LocalGatewayListener",
+            "protocol",
+          )}
+        >
+          <Dropdown
+            ariaLabel="Protocol"
+            value={protocol}
+            options={gatewayProtocolOptions}
+            onChange={(value) => {
+              const nextProtocol = value as GatewayProtocol;
+              setListener({
+                ...listener,
+                protocol: nextProtocol,
+                tls:
+                  nextProtocol === "HTTPS" || nextProtocol === "TLS"
+                    ? listener.tls
+                    : null,
+              });
+              if (nextProtocol === "HTTP" || nextProtocol === "TCP") {
+                setCert("");
+                setKey("");
+              }
+            }}
+          />
+        </Field>
+        <Field
           label="Hostname"
           tooltip={props.help.field<TrafficGatewayListener>(
             "LocalGatewayListener",
@@ -608,37 +737,15 @@ function GatewayListenerEditor(props: {
           />
         </Field>
       </div>
-      <details>
-        <summary>TLS</summary>
-        <div className="form-grid">
-          <Field
-            label="Certificate"
-            tooltip={props.help.field<LocalTLSServerConfig>(
-              "LocalTLSServerConfig",
-              "cert",
-            )}
-          >
-            <input
-              value={cert}
-              onChange={(event) => setCert(event.target.value)}
-              placeholder="/etc/certs/tls.crt"
-            />
-          </Field>
-          <Field
-            label="Key"
-            tooltip={props.help.field<LocalTLSServerConfig>(
-              "LocalTLSServerConfig",
-              "key",
-            )}
-          >
-            <input
-              value={key}
-              onChange={(event) => setKey(event.target.value)}
-              placeholder="/etc/certs/tls.key"
-            />
-          </Field>
-        </div>
-      </details>
+      {protocol === "HTTPS" || protocol === "TLS" ? (
+        <GatewayTLSFields
+          cert={cert}
+          keyValue={key}
+          help={props.help}
+          onCertChange={setCert}
+          onKeyChange={setKey}
+        />
+      ) : null}
       <TrafficPolicySection
         title="Listener policies"
         schemaRoot="LocalGatewayPolicy"
@@ -712,6 +819,7 @@ function cleanGateway(gateway: TrafficGateway): TrafficGateway {
   }
   if (!next.port) delete next.port;
   if (!next.tls) delete next.tls;
+  cleanProtocol(next);
   return Object.fromEntries(
     Object.entries(next).filter(
       ([, value]) => value !== null && value !== undefined,
@@ -725,11 +833,286 @@ function cleanGatewayListener(
   const { port: _port, ...next } = listener as TrafficGatewayListener & {
     port?: number | null;
   };
+  cleanProtocol(next);
   return Object.fromEntries(
     Object.entries(next).filter(
       ([, value]) => value !== null && value !== undefined,
     ),
   ) as TrafficGatewayListener;
+}
+
+function cleanProtocol(
+  value: (TrafficGateway | TrafficGatewayListener) & {
+    protocol?: GatewayProtocol | null;
+  },
+) {
+  if (value.protocol === "HTTP" && !value.tls) delete value.protocol;
+  if (value.protocol === "HTTPS" && value.tls) delete value.protocol;
+}
+
+function effectiveGatewayProtocol(
+  value: (TrafficGateway | TrafficGatewayListener) & {
+    protocol?: GatewayProtocol | null;
+  },
+): GatewayProtocol {
+  return value.protocol ?? (value.tls ? "HTTPS" : "HTTP");
+}
+
+function bindMigration(config: GatewayConfig | null | undefined) {
+  if (!config?.binds?.length) return null;
+  const next = structuredClone(config);
+  const convertedListeners = applyBindMigration(next);
+  return convertedListeners > 0 ? { config: next, convertedListeners } : null;
+}
+
+function applyBindMigration(config: GatewayConfig) {
+  if (!config.binds?.length) return 0;
+  config.gateways ??= {};
+  const remainingBinds: TrafficBind[] = [];
+  let convertedListeners = 0;
+  const migratableBinds = config.binds.filter((bind) => {
+    if (!bindIsMigratable(bind)) return false;
+    const convertible = bind.listeners.filter(listenerIsMigratable);
+    return (
+      convertible.length > 0 &&
+      convertible.length === bind.listeners.length &&
+      hasOneRouteKind(convertible) &&
+      !hasMixedTls(convertible)
+    );
+  });
+  const useDefaultGateway =
+    migratableBinds.length === 1 && !config.gateways.default;
+
+  for (const bind of config.binds) {
+    if (!bindIsMigratable(bind)) {
+      remainingBinds.push(bind);
+      continue;
+    }
+    const convertible = bind.listeners.filter(listenerIsMigratable);
+    if (
+      !convertible.length ||
+      convertible.length !== bind.listeners.length ||
+      !hasOneRouteKind(convertible) ||
+      hasMixedTls(convertible)
+    ) {
+      remainingBinds.push(bind);
+      continue;
+    }
+
+    const gatewayName = useDefaultGateway
+      ? "default"
+      : uniqueGatewayName(config.gateways, `port-${bind.port}`);
+    const gateway: TrafficGateway =
+      convertible.length === 1
+        ? migratedSingleListenerGateway(convertible[0], bind.port)
+        : {
+            port: bind.port,
+            listeners: convertible.map((listener, listenerIndex) =>
+              migratedGatewayListener(listener, listenerIndex),
+            ),
+          };
+    config.gateways[gatewayName] = cleanGateway(gateway);
+
+    const migratedRoutes = convertible.flatMap((listener, listenerIndex) =>
+      (listener.routes ?? []).map((route) =>
+        migratedRoute(
+          route,
+          convertedRouteGatewayRef(
+            gatewayName,
+            listener,
+            listenerIndex,
+            convertible.length === 1,
+            useDefaultGateway,
+          ),
+        ),
+      ),
+    );
+    if (migratedRoutes.length) {
+      config.routes = [...(config.routes ?? []), ...migratedRoutes];
+    }
+    const migratedTcpRoutes = convertible.flatMap((listener, listenerIndex) =>
+      (listener.tcpRoutes ?? []).map((route) =>
+        migratedTcpRoute(
+          route,
+          convertedRouteGatewayRef(
+            gatewayName,
+            listener,
+            listenerIndex,
+            convertible.length === 1,
+            useDefaultGateway,
+          ),
+        ),
+      ),
+    );
+    if (migratedTcpRoutes.length) {
+      config.tcpRoutes = [...(config.tcpRoutes ?? []), ...migratedTcpRoutes];
+    }
+
+    convertedListeners += convertible.length;
+  }
+
+  if (remainingBinds.length) config.binds = remainingBinds;
+  else delete config.binds;
+  if (config.routes?.length === 0) delete config.routes;
+  if (config.tcpRoutes?.length === 0) delete config.tcpRoutes;
+  return convertedListeners;
+}
+
+function bindIsMigratable(bind: TrafficBind) {
+  return (
+    Boolean(bind.port) &&
+    (!bind.mode || bind.mode === "standard") &&
+    (!bind.tunnelProtocol || bind.tunnelProtocol === "direct") &&
+    Array.isArray(bind.listeners)
+  );
+}
+
+function listenerIsMigratable(listener: TrafficListener) {
+  const protocol = listener.protocol ?? "HTTP";
+  if (protocol === "HTTP" || protocol === "HTTPS") {
+    return (
+      (protocol === "HTTP" || Boolean(listener.tls)) &&
+      Array.isArray(listener.routes)
+    );
+  }
+  return (
+    (protocol === "TCP" || protocol === "TLS") &&
+    Array.isArray(listener.tcpRoutes)
+  );
+}
+
+function hasOneRouteKind(listeners: TrafficListener[]) {
+  const first = legacyListenerRouteKind(listeners[0]);
+  return listeners.every(
+    (listener) => legacyListenerRouteKind(listener) === first,
+  );
+}
+
+function hasMixedTls(listeners: TrafficListener[]) {
+  const first = legacyListenerUsesTls(listeners[0]);
+  return listeners.some(
+    (listener) => legacyListenerUsesTls(listener) !== first,
+  );
+}
+
+function legacyListenerRouteKind(listener: TrafficListener) {
+  return listener.protocol === "TCP" || listener.protocol === "TLS"
+    ? "tcp"
+    : "http";
+}
+
+function legacyListenerUsesTls(listener: TrafficListener | undefined) {
+  return listener?.protocol === "HTTPS" || listener?.protocol === "TLS";
+}
+
+function migratedGatewayListener(
+  listener: TrafficListener,
+  listenerIndex: number,
+): TrafficGatewayListener {
+  const {
+    routes: _routes,
+    tcpRoutes: _tcpRoutes,
+    protocol,
+    ...rest
+  } = listener;
+  const policies =
+    rest.policies && typeof rest.policies === "object" ? rest.policies : {};
+  const {
+    policies: _policies,
+    namespace: _namespace,
+    tls,
+    ...listenerFields
+  } = rest;
+  return cleanGatewayListener({
+    ...listenerFields,
+    protocol: gatewayProtocolFromLegacyListener(protocol),
+    tls: protocol === "HTTPS" || protocol === "TLS" ? tls : null,
+    ...policies,
+    name: migratedListenerName(listener, listenerIndex),
+  } as TrafficGatewayListener);
+}
+
+function migratedSingleListenerGateway(
+  listener: TrafficListener,
+  port: number | null | undefined,
+): TrafficGateway {
+  const {
+    routes: _routes,
+    tcpRoutes: _tcpRoutes,
+    protocol,
+    name: _name,
+    namespace: _namespace,
+    hostname: _hostname,
+    ...rest
+  } = listener;
+  const policies =
+    rest.policies && typeof rest.policies === "object" ? rest.policies : {};
+  const { policies: _policies, tls, ...gatewayFields } = rest;
+  return cleanGateway({
+    ...gatewayFields,
+    port,
+    protocol: gatewayProtocolFromLegacyListener(protocol),
+    tls: protocol === "HTTPS" || protocol === "TLS" ? tls : null,
+    ...policies,
+  } as TrafficGateway);
+}
+
+function migratedRoute(
+  route: TrafficRoute,
+  gatewayRef: string | undefined,
+): LocalAttachedRoute {
+  const migrated = {
+    ...structuredClone(route),
+  } as LocalAttachedRoute;
+  if (gatewayRef) migrated.gateways = gatewayRef;
+  return migrated;
+}
+
+function migratedTcpRoute(
+  route: TrafficTcpRoute,
+  gatewayRef: string | undefined,
+): LocalAttachedTCPRoute {
+  const migrated = {
+    ...structuredClone(route),
+  } as LocalAttachedTCPRoute;
+  if (gatewayRef) migrated.gateways = gatewayRef;
+  return migrated;
+}
+
+function gatewayProtocolFromLegacyListener(
+  protocol: TrafficListener["protocol"] | undefined,
+) {
+  return protocol === "TCP" || protocol === "TLS" ? protocol : null;
+}
+
+function migratedListenerName(
+  listener: TrafficListener,
+  listenerIndex: number,
+) {
+  return listener.name?.trim() || `listener${listenerIndex}`;
+}
+
+function convertedRouteGatewayRef(
+  gatewayName: string,
+  listener: TrafficListener,
+  listenerIndex: number,
+  listenerlessGateway: boolean,
+  implicitDefaultGateway: boolean,
+) {
+  if (implicitDefaultGateway) return undefined;
+  if (listenerlessGateway) return gatewayName;
+  return `${gatewayName}/${migratedListenerName(listener, listenerIndex)}`;
+}
+
+function uniqueGatewayName(
+  gateways: NonNullable<GatewayConfig["gateways"]>,
+  base: string,
+) {
+  if (!gateways[base]) return base;
+  for (let index = 2; ; index += 1) {
+    const candidate = `${base}-${index}`;
+    if (!gateways[candidate]) return candidate;
+  }
 }
 
 function gatewayPortLabel(gateway: TrafficGateway) {
@@ -738,9 +1121,19 @@ function gatewayPortLabel(gateway: TrafficGateway) {
 
 function gatewayHasTls(gateway: TrafficGateway) {
   if (gateway.listeners?.length) {
-    return gateway.listeners.some((listener) => Boolean(listener.tls));
+    return gateway.listeners.some((listener) => {
+      const protocol = effectiveGatewayProtocol(listener);
+      return protocol === "HTTPS" || protocol === "TLS";
+    });
   }
-  return Boolean(gateway.tls);
+  const protocol = effectiveGatewayProtocol(gateway);
+  return protocol === "HTTPS" || protocol === "TLS";
+}
+
+function gatewayProtocolLabel(
+  gateway: TrafficGateway | TrafficGatewayListener,
+) {
+  return effectiveGatewayProtocol(gateway);
 }
 
 function gatewayPolicyCount(gateway: TrafficGateway) {

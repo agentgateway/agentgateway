@@ -1,15 +1,18 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dropdown,
   FieldGroup,
   Panel,
   StatusBanner,
 } from "../components/Primitives";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import type { LocalUIConfig } from "../gateway-config";
 import type { GatewayConfig, TrafficGateway } from "../types";
 import type { PolicyKey } from "../policies/types";
 import { PolicyCatalogPage } from "./Policies";
+
+const noneGateway = "__none__";
 
 const uiPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
   {
@@ -38,6 +41,8 @@ export function RawSettingsPage() {
       policies={(config) =>
         config.data?.ui?.policies as Record<string, unknown> | null | undefined
       }
+      policiesDisabled={(config) => !uiGateway(config.data)}
+      policiesDisabledReason="UI policies require a public UI gateway."
       beforePolicies={<UiGatewayPanel />}
       onSavePolicy={(next, key, value) => {
         next.ui ??= {};
@@ -63,18 +68,26 @@ function UiGatewayPanel() {
     () => gatewayReferenceOptions(config.data),
     [config.data],
   );
-  const initialGateway = useMemo(
-    () =>
-      firstGatewayRef(config.data?.ui?.gateways) ?? gatewayOptions[0]?.value,
-    [config.data?.ui?.gateways, gatewayOptions],
+  const selectedGateway = uiGateway(config.data);
+  const [draftGateway, setDraftGateway] = useState(
+    selectedGateway ?? noneGateway,
   );
 
-  function setGateway(gateway: string) {
-    update.mutate((next) => {
-      next.ui ??= {};
-      if (gateway) next.ui.gateways = gateway;
-      else delete next.ui.gateways;
-    });
+  useEffect(() => {
+    setDraftGateway(selectedGateway ?? noneGateway);
+  }, [selectedGateway]);
+
+  function applyUiGateway(next: GatewayConfig) {
+    if (draftGateway === noneGateway) {
+      delete next.ui;
+      return;
+    }
+    next.ui ??= {};
+    if (implicitDefaultUiGateway(next, draftGateway)) {
+      delete next.ui.gateways;
+    } else {
+      next.ui.gateways = draftGateway;
+    }
   }
 
   return (
@@ -82,18 +95,40 @@ function UiGatewayPanel() {
       <div className="form-grid">
         <FieldGroup
           label="UI gateway"
-          tooltip="Gateway reference used to expose the UI and required UI API routes."
+          tooltip="Which gateway to expose the UI on."
         >
           <Dropdown
             ariaLabel="UI gateway"
-            value={initialGateway ?? ""}
-            options={gatewayOptions}
-            disabled={!gatewayOptions.length || update.isPending}
-            placeholder="No gateways configured"
-            allowEmpty
-            onChange={setGateway}
+            value={draftGateway}
+            options={[
+              {
+                value: noneGateway,
+                label: "None (admin interface only)",
+                description: "Do not expose the UI on a traffic gateway.",
+              },
+              ...gatewayOptions,
+            ]}
+            disabled={update.isPending}
+            onChange={setDraftGateway}
           />
         </FieldGroup>
+      </div>
+      <div className="button-row">
+        <ConfigDiffSaveActions
+          config={config.data}
+          diffTitle="UI gateway config diff"
+          saveLabel="Save UI gateway"
+          saving={update.isPending}
+          saveDisabled={
+            !config.data || draftGateway === (selectedGateway ?? noneGateway)
+          }
+          onSave={() =>
+            update.mutate((next) => {
+              applyUiGateway(next);
+            })
+          }
+          applyDiff={applyUiGateway}
+        />
       </div>
       {!gatewayOptions.length ? (
         <StatusBanner state="warn" title="No gateways configured">
@@ -149,4 +184,18 @@ function gatewayDescription(gateway: TrafficGateway) {
 function firstGatewayRef(gateways: LocalUIConfig["gateways"] | undefined) {
   if (Array.isArray(gateways)) return gateways[0];
   return gateways;
+}
+
+function uiGateway(config: GatewayConfig | null | undefined) {
+  return (
+    firstGatewayRef(config?.ui?.gateways) ?? implicitDefaultUiGatewayRef(config)
+  );
+}
+
+function implicitDefaultUiGatewayRef(config: GatewayConfig | null | undefined) {
+  return config?.ui && config.gateways?.default ? "default" : undefined;
+}
+
+function implicitDefaultUiGateway(config: GatewayConfig, gateway: string) {
+  return Boolean(config.gateways?.default) && gateway === "default";
 }

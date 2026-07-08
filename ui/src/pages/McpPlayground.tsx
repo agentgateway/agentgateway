@@ -251,7 +251,7 @@ export function McpPlaygroundPage() {
             <Field label="Bearer token">
               <input
                 value={bearerToken}
-                type="password"
+                type="text"
                 className="masked-secret-input"
                 autoComplete="off"
                 autoCorrect="off"

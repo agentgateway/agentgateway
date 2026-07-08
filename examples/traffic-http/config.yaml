@@ -1,86 +1,4 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
-binds:
-- port: 3000
-  listeners:
-  - protocol: HTTP
-    routes:
-    - name: match-example
-      matches:
-      - path:
-          pathPrefix: /match
-        method: GET
-        query:
-        - name: param
-          value:
-            exact: hello
-        headers:
-        - name: x-header
-          value:
-            regex: test-[0-9]
-      backends:
-      - host: 127.0.0.1:8080
-    - name: policy-example
-      policies:
-        cors:
-          allowHeaders:
-          - header
-          allowOrigins:
-          - '*'
-          allowCredentials: true
-          allowMethods:
-          - GET
-          exposeHeaders:
-          - header2
-          maxAge: 100s
-        requestHeaderModifier:
-          add:
-            x-req-added: value
-          remove:
-          - x-illegal-header
-        responseHeaderModifier:
-          set:
-            x-req-added: value
-        urlRewrite:
-          path:
-            full: /new-path
-          authority:
-            full: custom-host-header
-        localRateLimit:
-        - maxTokens: 10
-          tokensPerFill: 1
-          fillInterval: 1s
-        requestMirror:
-          backend:
-            host: 127.0.0.1:8081
-          percentage: 0.5
-        retry:
-          attempts: 2
-          codes:
-          - 429
-        timeout:
-          requestTimeout: 1s
-      backends:
-      - host: 127.0.0.1:8080
-    - name: direct-response
-      matches:
-      - path:
-          pathPrefix: /direct
-      policies:
-        directResponse:
-          body: hello!
-          status: 200
-    - name: ip-rules
-      matches:
-      - path:
-          pathPrefix: /ips
-      policies:
-        authorization:
-          rules:
-          - |
-            cidr("127.0.0.1/8").containsIP(source.address)
-        directResponse:
-          body: hello!
-          status: 200
 llm:
   port: 4000
   models:
@@ -113,3 +31,98 @@ frontendPolicies:
 config:
   modelCatalog:
   - file: examples/traffic-http/base-costs.json
+gateways:
+  default:
+    port: 3000
+    cors:
+      allowMethods:
+      - GET
+      - POST
+      allowHeaders:
+      - '*'
+  tcp:
+    port: 9090
+    protocol: TCP
+routes:
+- name: match-example
+  matches:
+  - path:
+      pathPrefix: /match
+    method: GET
+    query:
+    - name: param
+      value:
+        exact: hello
+    headers:
+    - name: x-header
+      value:
+        regex: test-[0-9]
+  backends:
+  - host: 127.0.0.1:8080
+- name: policy-example
+  policies:
+    cors:
+      allowHeaders:
+      - header
+      allowOrigins:
+      - '*'
+      allowCredentials: true
+      allowMethods:
+      - GET
+      exposeHeaders:
+      - header2
+      maxAge: 100s
+    requestHeaderModifier:
+      add:
+        x-req-added: value
+      remove:
+      - x-illegal-header
+    responseHeaderModifier:
+      set:
+        x-req-added: value
+    urlRewrite:
+      path:
+        full: /new-path
+      authority:
+        full: custom-host-header
+    localRateLimit:
+    - maxTokens: 10
+      tokensPerFill: 1
+      fillInterval: 1s
+    requestMirror:
+      backend:
+        host: 127.0.0.1:8081
+      percentage: 0.5
+    retry:
+      attempts: 2
+      codes:
+      - 429
+    timeout:
+      requestTimeout: 1s
+  backends:
+  - host: 127.0.0.1:8080
+- name: direct-response
+  matches:
+  - path:
+      pathPrefix: /directx
+  policies:
+    directResponse:
+      body: hello!
+      status: 200
+- name: ip-rules
+  matches:
+  - path:
+      pathPrefix: /ips
+  policies:
+    authorization:
+      rules:
+      - |
+        cidr("127.0.0.1/8").containsIP(source.address)
+    directResponse:
+      body: hello!
+      status: 200
+tcpRoutes:
+- backends:
+  - host: localhost:8080
+  name: hellox
+  gateways: tcp

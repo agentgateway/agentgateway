@@ -131,6 +131,8 @@ export function PolicyCatalogPage(props: {
   policies: (
     config: ReturnType<typeof useGatewayConfig>,
   ) => Record<string, unknown> | null | undefined;
+  policiesDisabled?: (config: ReturnType<typeof useGatewayConfig>) => boolean;
+  policiesDisabledReason?: string;
   managedLinks?: Partial<Record<PolicyKey, { to: string; summary: string }>>;
   onSavePolicy: (config: GatewayConfig, key: PolicyKey, value: unknown) => void;
   onDisablePolicy: (config: GatewayConfig, key: PolicyKey) => void;
@@ -138,6 +140,7 @@ export function PolicyCatalogPage(props: {
   const config = useGatewayConfig();
   const update = useUpdateConfig();
   const policies = props.policies(config);
+  const policiesDisabled = props.policiesDisabled?.(config) ?? false;
   const [selected, setSelected] = useState<PolicyKey | null>(() =>
     policyKeyFromHash(),
   );
@@ -260,6 +263,12 @@ export function PolicyCatalogPage(props: {
         </StatusBanner>
       ) : null}
       {props.beforePolicies}
+      {policiesDisabled ? (
+        <StatusBanner
+          state="warn"
+          title={props.policiesDisabledReason ?? "Policies disabled"}
+        />
+      ) : null}
 
       <div className="policy-section-list">
         {groupedPolicyItems.map((section) => (
@@ -271,6 +280,7 @@ export function PolicyCatalogPage(props: {
                   key={policy.key}
                   policy={policy}
                   managedLink={props.managedLinks?.[policy.key]}
+                  disabled={policiesDisabled}
                   onOpen={openPolicy}
                 />
               ))}
@@ -289,7 +299,7 @@ export function PolicyCatalogPage(props: {
         </Panel>
       </details>
 
-      {selected && selectedMeta ? (
+      {selected && selectedMeta && !policiesDisabled ? (
         <PolicyDrawer
           key={selected}
           policyKey={selected}
@@ -301,7 +311,14 @@ export function PolicyCatalogPage(props: {
           schemaRoot={props.schemaRoot}
           saving={update.isPending}
           saveError={update.isError ? update.error.message : null}
+          config={config.data}
           onClose={closePolicy}
+          applySaveDiff={(next, value) => {
+            props.onSavePolicy(next, selected, value);
+          }}
+          applyDisableDiff={(next) => {
+            props.onDisablePolicy(next, selected);
+          }}
           onSave={(value) =>
             update.mutate(
               (next) => {
@@ -334,6 +351,7 @@ function PolicyTile(props: {
     icon: ComponentType<{ size?: number }>;
   };
   managedLink?: { to: string; summary: string };
+  disabled?: boolean;
   onOpen: (policyKey: PolicyKey) => void;
 }) {
   const className = props.policy.enabled
@@ -353,6 +371,7 @@ function PolicyTile(props: {
     <button
       className={className}
       type="button"
+      disabled={props.disabled}
       onClick={() => props.onOpen(props.policy.key)}
     >
       <PolicyTileContent policy={props.policy} />
