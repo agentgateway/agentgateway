@@ -62,10 +62,12 @@ import {
   normalizeMatches,
 } from "./models/ModelMatchesEditor";
 import {
+  ContextCompressionEditor,
   HeaderModifierEditor,
   HealthPolicyEditor,
   PromptCachingEditor,
   YamlMappingEditor,
+  contextCompressionSummary,
   healthSummary,
   headerModifierSummary,
   promptCachingSummary,
@@ -521,6 +523,9 @@ function ModelEditor(props: {
   const [promptCaching, setPromptCaching] = useState<LlmModel["promptCaching"]>(
     () => props.initial.promptCaching ?? null,
   );
+  const [contextCompression, setContextCompression] = useState<
+    LlmModel["contextCompression"]
+  >(() => props.initial.contextCompression ?? null);
   const [authorization, setAuthorization] = useState<AuthorizationDraft | null>(
     () => (props.initial.authorization as AuthorizationDraft | null) ?? null,
   );
@@ -538,6 +543,7 @@ function ModelEditor(props: {
     requestHeaders,
     responseHeaders,
     promptCaching,
+    contextCompression,
     authorization,
   });
   const preview = cleanEmpty(
@@ -717,6 +723,7 @@ function ModelEditor(props: {
                 requestHeaders={requestHeaders}
                 responseHeaders={responseHeaders}
                 promptCaching={promptCaching}
+                contextCompression={contextCompression}
                 authorization={authorization}
                 setTransformation={setTransformation}
                 setHealth={setHealth}
@@ -725,6 +732,7 @@ function ModelEditor(props: {
                 setRequestHeaders={setRequestHeaders}
                 setResponseHeaders={setResponseHeaders}
                 setPromptCaching={setPromptCaching}
+                setContextCompression={setContextCompression}
                 setAuthorization={setAuthorization}
               />
             </div>
@@ -864,6 +872,7 @@ function ModelPoliciesInline(props: {
   requestHeaders: LlmModel["requestHeaders"];
   responseHeaders: LlmModel["responseHeaders"];
   promptCaching: LlmModel["promptCaching"];
+  contextCompression: LlmModel["contextCompression"];
   authorization: AuthorizationDraft | null;
   setTransformation: (value: Record<string, string>) => void;
   setHealth: (value: LlmModel["health"] | null) => void;
@@ -872,6 +881,7 @@ function ModelPoliciesInline(props: {
   setRequestHeaders: (value: LlmModel["requestHeaders"] | null) => void;
   setResponseHeaders: (value: LlmModel["responseHeaders"] | null) => void;
   setPromptCaching: (value: LlmModel["promptCaching"] | null) => void;
+  setContextCompression: (value: LlmModel["contextCompression"] | null) => void;
   setAuthorization: (value: AuthorizationDraft | null) => void;
 }) {
   const patch = buildModelPolicyPatch(props);
@@ -1021,6 +1031,18 @@ function ModelPoliciesInline(props: {
             onChange={props.setPromptCaching}
           />
         </CollapsiblePolicySection>
+        <CollapsiblePolicySection
+          icon={<SlidersHorizontal size={17} />}
+          title="Context compression"
+          description={contextCompressionSummary(props.contextCompression)}
+          defaultOpen={Boolean(props.model.contextCompression)}
+        >
+          <ContextCompressionEditor
+            value={props.contextCompression}
+            help={props.help}
+            onChange={props.setContextCompression}
+          />
+        </CollapsiblePolicySection>
         <ResultingYaml value={patch.value} />
       </div>
     </CollapsiblePolicySection>
@@ -1035,6 +1057,7 @@ function buildModelPolicyPatch(args: {
   requestHeaders: LlmModel["requestHeaders"];
   responseHeaders: LlmModel["responseHeaders"];
   promptCaching: LlmModel["promptCaching"];
+  contextCompression: LlmModel["contextCompression"];
   authorization: AuthorizationDraft | null;
 }) {
   try {
@@ -1052,6 +1075,9 @@ function buildModelPolicyPatch(args: {
       | undefined;
     const promptCaching = cleanEmpty(args.promptCaching) as
       | LlmModel["promptCaching"]
+      | undefined;
+    const contextCompression = cleanEmpty(args.contextCompression) as
+      | LlmModel["contextCompression"]
       | undefined;
     const authorization = cleanEmpty(args.authorization) as
       | LlmModel["authorization"]
@@ -1077,6 +1103,9 @@ function buildModelPolicyPatch(args: {
           promptCaching && Object.keys(promptCaching).length
             ? promptCaching
             : null,
+        contextCompression: contextCompression?.engine
+          ? contextCompression
+          : null,
         authorization:
           authorization && Object.keys(authorization).length
             ? authorization
@@ -1105,6 +1134,7 @@ function modelPolicySummary(model: Partial<LlmModel>) {
     model.health ? "health" : null,
     model.authorization ? "authorization" : null,
     model.promptCaching ? "prompt caching" : null,
+    model.contextCompression ? "context compression" : null,
   ].filter(Boolean);
   return policies.length
     ? `${policies.length} configured`
@@ -1780,6 +1810,7 @@ function ModelPolicyState(props: { model: LlmModel; warnings: number }) {
     props.model.health ? "health" : null,
     props.model.authorization ? "authorization" : null,
     props.model.promptCaching ? "promptCaching" : null,
+    props.model.contextCompression ? "contextCompression" : null,
   ].filter(Boolean);
   if (props.warnings > 0)
     return <span className="badge warn">{props.warnings} warnings</span>;
