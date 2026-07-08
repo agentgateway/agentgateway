@@ -4,13 +4,15 @@ mod sse;
 mod stdio;
 mod streamablehttp;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap, btree_map};
 use std::io;
 
 use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 pub use openapi::ParseError as OpenAPIParseError;
-use rmcp::model::{ClientNotification, ClientRequest, ExtensionCapabilities, JsonRpcRequest};
+use rmcp::model::{
+	ClientNotification, ClientRequest, ExtensionCapabilities, JsonObject, JsonRpcRequest,
+};
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::common::http_header::HEADER_SESSION_ID;
 use thiserror::Error;
@@ -367,21 +369,12 @@ impl UpstreamGroup {
 		fresh: &HashMap<Strng, ExtensionCapabilities>,
 	) -> Option<ExtensionCapabilities> {
 		let store = self.extensions.read().expect("read lock");
-		let mut merged = ExtensionCapabilities::new();
-		// in config order, first target takes precedence if there is overlap
-		// TODO should we warn on divergence? or merge/intersect the capabilities?
-		for name in self.by_name.keys() {
-			if let Some(ext) = fresh.get(name).or_else(|| store.get(name)) {
-				for (k, v) in ext {
-					merged.entry(k.clone()).or_insert_with(|| v.clone());
-				}
-			}
-		}
-		if merged.is_empty() {
-			None
-		} else {
-			Some(merged)
-		}
+		merge_extension_capabilities(
+			self
+				.by_name
+				.keys()
+				.filter_map(|name| fresh.get(name).or_else(|| store.get(name))),
+		)
 	}
 
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {
@@ -489,9 +482,86 @@ impl UpstreamGroup {
 	}
 }
 
+/// Extension names are unioned across all targets, but we only keep settings when all targets agree
+/// on the same settings object. If any target has a different settings object for the same
+/// extension, we log a warning and advertise the extension with empty settings.
+fn merge_extension_capabilities<'a>(
+	per_target: impl Iterator<Item = &'a ExtensionCapabilities>,
+) -> Option<ExtensionCapabilities> {
+	let mut merged: BTreeMap<&'a str, Option<&'a JsonObject>> = BTreeMap::new();
+	for ext in per_target {
+		for (k, v) in ext {
+			match merged.entry(k.as_str()) {
+				btree_map::Entry::Vacant(e) => {
+					e.insert(Some(v));
+				},
+				btree_map::Entry::Occupied(mut e) => {
+					if e.get().is_some_and(|existing| existing != v) {
+						warn!(
+							extension = %k,
+							"targets advertise divergent extension settings, advertising support without settings"
+						);
+						e.insert(None);
+					}
+				},
+			}
+		}
+	}
+	if merged.is_empty() {
+		return None;
+	}
+	Some(
+		merged
+			.into_iter()
+			.map(|(k, v)| (k.to_string(), v.cloned().unwrap_or_default()))
+			.collect(),
+	)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn ext(id: &str, settings: serde_json::Value) -> ExtensionCapabilities {
+		let mut e = ExtensionCapabilities::new();
+		e.insert(id.to_string(), settings.as_object().cloned().unwrap());
+		e
+	}
+
+	#[test]
+	fn merge_extensions_agreeing_settings_pass_through() {
+		let a = ext("io.modelcontextprotocol/ui", serde_json::json!({"x": 1}));
+		let b = ext("io.modelcontextprotocol/ui", serde_json::json!({"x": 1}));
+		let merged = merge_extension_capabilities([&a, &b].into_iter()).unwrap();
+		assert_eq!(
+			merged.get("io.modelcontextprotocol/ui"),
+			serde_json::json!({"x": 1}).as_object()
+		);
+	}
+
+	#[test]
+	fn merge_extensions_divergent_settings_advertise_empty() {
+		let a = ext("io.modelcontextprotocol/ui", serde_json::json!({"x": 1}));
+		let b = ext("io.modelcontextprotocol/ui", serde_json::json!({"x": 2}));
+		let merged = merge_extension_capabilities([&a, &b].into_iter()).unwrap();
+		assert_eq!(
+			merged.get("io.modelcontextprotocol/ui"),
+			serde_json::json!({}).as_object()
+		);
+	}
+
+	#[test]
+	fn merge_extensions_unions_distinct_extensions() {
+		let a = ext("io.modelcontextprotocol/ui", serde_json::json!({}));
+		let b = ext("example/other", serde_json::json!({"y": true}));
+		let merged = merge_extension_capabilities([&a, &b].into_iter()).unwrap();
+		assert_eq!(merged.len(), 2);
+		assert_eq!(
+			merged.get("example/other"),
+			serde_json::json!({"y": true}).as_object()
+		);
+		assert!(merge_extension_capabilities(std::iter::empty()).is_none());
+	}
 
 	#[test]
 	fn incoming_request_context_applies_original_authority() {
