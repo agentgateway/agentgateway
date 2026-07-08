@@ -8,7 +8,6 @@ import {
   Pencil,
   Play,
   Plus,
-  Save,
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
@@ -28,6 +27,7 @@ import {
 } from "../config";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
 import {
   Drawer,
@@ -91,6 +91,7 @@ import type {
   LlmModel,
   LlmProvider,
   LlmVirtualModel,
+  GatewayConfig,
   ProviderName,
 } from "../types";
 import type {
@@ -434,6 +435,7 @@ export function ModelsPage() {
           key={activeEditing.previousName ?? "new"}
           previousName={activeEditing.previousName}
           initial={activeEditing.model}
+          config={config.data}
           providers={providers}
           help={help}
           saving={update.isPending}
@@ -451,6 +453,7 @@ export function ModelsPage() {
           key={activeVirtualEditing.previousName ?? "new"}
           previousName={activeVirtualEditing.previousName}
           initial={activeVirtualEditing.model}
+          config={config.data}
           baseModels={models}
           providers={providers}
           help={help}
@@ -473,6 +476,7 @@ export function ModelsPage() {
 
 function ModelEditor(props: {
   initial: LlmModel;
+  config?: GatewayConfig;
   providers: LlmProvider[];
   previousName?: string;
   help: SchemaHelp;
@@ -566,25 +570,34 @@ function ModelEditor(props: {
     props.onSave(preview ?? model, props.previousName);
   }
 
+  function validateBeforeDiff() {
+    setSaveAttempted(true);
+    if (!preview?.provider) return false;
+    if (invalidApiKey) return false;
+    if (policyPatch.error) {
+      setPolicyError(policyPatch.error);
+      return false;
+    }
+    setPolicyError(null);
+    return true;
+  }
+
   return (
     <Drawer
       title={props.previousName ? "Edit model" : "Add model"}
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving || !model.name.trim() || !preview?.provider}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save model
-          </button>
-        </div>
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Model config diff"
+          saveLabel="Save model"
+          saving={props.saving}
+          saveDisabled={!model.name.trim() || !preview?.provider}
+          onCancel={props.onCancel}
+          onSave={save}
+          beforeDiff={validateBeforeDiff}
+          applyDiff={(next) => upsertModel(next, preview ?? model, props.previousName)}
+        />
       }
     >
       <details className="schema-details model-help-details">
@@ -1113,6 +1126,7 @@ function modelPolicySummary(model: Partial<LlmModel>) {
 
 function VirtualModelEditor(props: {
   initial: LlmVirtualModel;
+  config?: GatewayConfig;
   previousName?: string;
   baseModels: LlmModel[];
   providers: LlmProvider[];
@@ -1152,6 +1166,12 @@ function VirtualModelEditor(props: {
     );
   const failoverGroups = failoverTargetGroups(failoverTargets);
   const defaultTarget = defaultVirtualTargetModel(props.baseModels);
+  const saveDisabled =
+    props.saving ||
+    !model.name.trim() ||
+    activeTargets.length === 0 ||
+    hasInvalidTarget ||
+    hasInvalidConditionalFallback;
 
   function setStrategy(next: VirtualRoutingStrategy) {
     if (next === "weighted") {
@@ -1249,26 +1269,18 @@ function VirtualModelEditor(props: {
       title={props.previousName ? "Edit virtual model" : "Add virtual model"}
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={
-              props.saving ||
-              !model.name.trim() ||
-              activeTargets.length === 0 ||
-              hasInvalidTarget ||
-              hasInvalidConditionalFallback
-            }
-            onClick={() => props.onSave(preview ?? model, props.previousName)}
-          >
-            <Save size={16} />
-            Save virtual model
-          </button>
-        </div>
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Virtual model config diff"
+          saveLabel="Save virtual model"
+          saving={props.saving}
+          saveDisabled={saveDisabled}
+          onCancel={props.onCancel}
+          onSave={() => props.onSave(preview ?? model, props.previousName)}
+          applyDiff={(next) =>
+            upsertVirtualModel(next, preview ?? model, props.previousName)
+          }
+        />
       }
     >
       <Field

@@ -465,7 +465,6 @@ export function configWarnings(config: GatewayConfig): string[] {
   const warnings: string[] = [];
   const models = config.llm?.models ?? [];
   const mcpTargets = config.mcp?.targets ?? [];
-  if (!config.llm) warnings.push("LLM config is not initialized.");
   const duplicateNames = models
     .map((model) => model.name)
     .filter((name, index, names) => names.indexOf(name) !== index);

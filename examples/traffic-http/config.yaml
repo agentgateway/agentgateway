@@ -4,7 +4,6 @@ binds:
   listeners:
   - protocol: HTTP
     routes:
-    # Test with: curl '127.0.0.1:3000/match?param=hello' -H "x-header: test-0"
     - name: match-example
       matches:
       - path:
@@ -17,49 +16,47 @@ binds:
         headers:
         - name: x-header
           value:
-            regex: "test-[0-9]"
+            regex: test-[0-9]
       backends:
       - host: 127.0.0.1:8080
     - name: policy-example
       policies:
-        # CORS headers to set
-        # See https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS#the_http_response_headers
         cors:
-          allowHeaders: ["header"]
-          allowOrigins: ["*"]
+          allowHeaders:
+          - header
+          allowOrigins:
+          - '*'
           allowCredentials: true
-          allowMethods: ["GET"]
-          exposeHeaders: ["header2"]
+          allowMethods:
+          - GET
+          exposeHeaders:
+          - header2
           maxAge: 100s
-        # Modify request headers
         requestHeaderModifier:
           add:
             x-req-added: value
           remove:
           - x-illegal-header
-        # Modify response headers
         responseHeaderModifier:
           set:
             x-req-added: value
-        # Rewrite url/hostname
         urlRewrite:
           path:
-            full: "/new-path"
+            full: /new-path
           authority:
-            full: "custom-host-header"
-        # Allow 10 RPS
+            full: custom-host-header
         localRateLimit:
         - maxTokens: 10
           tokensPerFill: 1
           fillInterval: 1s
-        # Mirror 50% of requests
         requestMirror:
           backend:
             host: 127.0.0.1:8081
-          percentage: .5
+          percentage: 0.5
         retry:
           attempts: 2
-          codes: [429]
+          codes:
+          - 429
         timeout:
           requestTimeout: 1s
       backends:
@@ -70,7 +67,7 @@ binds:
           pathPrefix: /direct
       policies:
         directResponse:
-          body: "hello!"
+          body: hello!
           status: 200
     - name: ip-rules
       matches:
@@ -82,5 +79,20 @@ binds:
           - |
             cidr("127.0.0.1/8").containsIP(source.address)
         directResponse:
-          body: "hello!"
+          body: hello!
           status: 200
+llm:
+  port: 4000
+  models:
+  - name: anthropic/*
+    provider: anthropic
+    transformation:
+      model: llmRequest.model.stripPrefix("anthropic/")
+  providers: []
+  virtualModels: []
+frontendPolicies:
+  http:
+    maxBufferSize: 33554432
+config:
+  modelCatalog:
+  - file: examples/traffic-http/base-costs.json

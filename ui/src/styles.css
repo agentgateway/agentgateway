@@ -5528,6 +5528,11 @@ details summary {
   min-height: 560px;
 }
 
+.config-diff-editor {
+  height: min(68vh, 720px);
+  min-height: 460px;
+}
+
 .schema-yaml-editor.policy-yaml-editor {
   height: min(42vh, 460px);
   min-height: 300px;

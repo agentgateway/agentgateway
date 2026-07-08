@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bot, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   invalidProviderApiKey,
@@ -9,6 +9,7 @@ import {
   removeLlmProvider,
   upsertLlmProvider,
 } from "../config";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import {
   Drawer,
   EmptyState,
@@ -24,7 +25,12 @@ import { ProviderIcon } from "../components/ProviderIcon";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import { cleanEmpty } from "../policies/policyUtils";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
-import type { LlmModel, LlmProvider, ProviderName } from "../types";
+import type {
+  GatewayConfig,
+  LlmModel,
+  LlmProvider,
+  ProviderName,
+} from "../types";
 import { ProviderConfigEditor } from "./models/ProviderConfigEditor";
 
 export function ProvidersPage() {
@@ -212,6 +218,7 @@ export function ProvidersPage() {
         <ProviderEditor
           key={activeEditing.previousName ?? "new"}
           initial={activeEditing.provider}
+          config={config.data}
           previousName={activeEditing.previousName}
           help={help}
           saving={update.isPending}
@@ -232,6 +239,7 @@ export function ProvidersPage() {
 
 function ProviderEditor(props: {
   initial: LlmProvider;
+  config?: GatewayConfig;
   previousName?: string;
   help: SchemaHelp;
   saving: boolean;
@@ -251,25 +259,31 @@ function ProviderEditor(props: {
     props.onSave(preview ?? provider, props.previousName);
   }
 
+  function validateBeforeDiff() {
+    setSaveAttempted(true);
+    if (!provider.name.trim()) return false;
+    if (invalidApiKey) return false;
+    return true;
+  }
+
   return (
     <Drawer
       title={props.previousName ? "Edit provider" : "Add provider"}
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving || !provider.name.trim()}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save provider
-          </button>
-        </div>
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Provider config diff"
+          saveLabel="Save provider"
+          saving={props.saving}
+          saveDisabled={!provider.name.trim()}
+          onCancel={props.onCancel}
+          onSave={save}
+          beforeDiff={validateBeforeDiff}
+          applyDiff={(next) =>
+            upsertLlmProvider(next, preview ?? provider, props.previousName)
+          }
+        />
       }
     >
       <div className="form-grid">

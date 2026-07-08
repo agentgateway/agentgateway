@@ -1,4 +1,4 @@
-import { Network, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { Network, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   Drawer,
@@ -10,10 +10,15 @@ import {
   Tooltip,
   YamlBlock,
 } from "../components/Primitives";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
-import type { TrafficGateway, TrafficGatewayListener } from "../types";
+import type {
+  GatewayConfig,
+  TrafficGateway,
+  TrafficGatewayListener,
+} from "../types";
 import type { LocalTLSServerConfig } from "../gateway-config";
 import { TrafficPolicySection } from "./traffic/TrafficPolicySection";
 
@@ -47,6 +52,8 @@ export function TrafficGatewaysPage() {
       })),
     [config.data],
   );
+  const hasLegacyBinds = Boolean(config.data?.binds?.length);
+  const showLegacyBindsWarning = hasLegacyBinds && gateways.length === 0;
   const activeGateway =
     drawer === "new"
       ? { name: "public", gateway: { port: 8080 } }
@@ -86,6 +93,16 @@ export function TrafficGatewaysPage() {
       ) : null}
       {update.isSuccess ? (
         <StatusBanner state="ok" title="Configuration saved" />
+      ) : null}
+      {showLegacyBindsWarning ? (
+        <StatusBanner
+          state="warn"
+          title="Detected legacy binds config"
+        >
+          This configuration uses legacy <code>binds</code> and has no{" "}
+          <code>gateways</code>. Consider moving listener ownership to{" "}
+          <code>gateways</code>.
+        </StatusBanner>
       ) : null}
 
       <Panel>
@@ -254,6 +271,7 @@ export function TrafficGatewaysPage() {
         <GatewayEditor
           key={`${activeGateway.previousName ?? "new"}:${drawer ?? ""}`}
           initial={activeGateway}
+          config={config.data}
           help={help}
           saving={update.isPending}
           onCancel={closeDrawer}
@@ -276,6 +294,7 @@ export function TrafficGatewaysPage() {
         <GatewayListenerEditor
           key={drawer ?? "listener-local"}
           editing={activeListener}
+          config={config.data}
           help={help}
           saving={update.isPending}
           onCancel={closeDrawer}
@@ -302,6 +321,7 @@ export function TrafficGatewaysPage() {
 
 function GatewayEditor(props: {
   initial: GatewayEditorState;
+  config?: GatewayConfig;
   help: SchemaHelp;
   saving: boolean;
   onCancel: () => void;
@@ -337,26 +357,31 @@ function GatewayEditor(props: {
       title={props.initial.previousName ? "Edit gateway" : "Add gateway"}
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving || !name.trim()}
-            onClick={() =>
-              props.onSave({
-                previousName: props.initial.previousName,
-                name: name.trim(),
-                gateway: preview,
-              })
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Gateway config diff"
+          saveLabel="Save gateway"
+          saving={props.saving}
+          saveDisabled={!name.trim()}
+          onCancel={props.onCancel}
+          onSave={() =>
+            props.onSave({
+              previousName: props.initial.previousName,
+              name: name.trim(),
+              gateway: preview,
+            })
+          }
+          applyDiff={(next) => {
+            next.gateways ??= {};
+            if (
+              props.initial.previousName &&
+              props.initial.previousName !== name.trim()
+            ) {
+              delete next.gateways[props.initial.previousName];
             }
-          >
-            <Save size={16} />
-            Save gateway
-          </button>
-        </div>
+            next.gateways[name.trim()] = cleanGateway(preview);
+          }}
+        />
       }
     >
       <div className="form-grid">
@@ -495,6 +520,7 @@ function GatewayTLSFields(props: {
 
 function GatewayListenerEditor(props: {
   editing: GatewayListenerEditorState;
+  config?: GatewayConfig;
   help: SchemaHelp;
   saving: boolean;
   onCancel: () => void;
@@ -526,26 +552,30 @@ function GatewayListenerEditor(props: {
       }
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={() =>
-              props.onSave(
-                props.editing.gatewayName,
-                preview,
-                props.editing.listenerIndex,
-              )
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Gateway listener config diff"
+          saveLabel="Save listener"
+          saving={props.saving}
+          onCancel={props.onCancel}
+          onSave={() =>
+            props.onSave(
+              props.editing.gatewayName,
+              preview,
+              props.editing.listenerIndex,
+            )
+          }
+          applyDiff={(next) => {
+            const gateway = next.gateways?.[props.editing.gatewayName];
+            if (!gateway) return;
+            gateway.listeners ??= [];
+            if (typeof props.editing.listenerIndex === "number") {
+              gateway.listeners[props.editing.listenerIndex] = preview;
+            } else {
+              gateway.listeners.push(preview);
             }
-          >
-            <Save size={16} />
-            Save listener
-          </button>
-        </div>
+          }}
+        />
       }
     >
       <div className="form-grid">
