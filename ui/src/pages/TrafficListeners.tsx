@@ -4,7 +4,6 @@ import {
   Pencil,
   Plus,
   Route as RouteIcon,
-  Save,
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -21,6 +20,7 @@ import {
   Tooltip,
   YamlBlock,
 } from "../components/Primitives";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
@@ -29,7 +29,7 @@ import {
   listenerDisplayName,
   trafficStats,
 } from "../traffic";
-import type { TrafficBind, TrafficListener } from "../types";
+import type { GatewayConfig, TrafficBind, TrafficListener } from "../types";
 import type { LocalTLSServerConfig } from "../gateway-config";
 import {
   ReadonlyModeBanner,
@@ -351,6 +351,7 @@ function TrafficListenersEditorPage() {
         <BindEditor
           key={`${trafficDrawer ?? "bind-local"}-${activeBindEditor.port}`}
           bind={activeBindEditor}
+          config={config.data}
           help={help}
           saving={update.isPending}
           onCancel={closeTrafficDrawer}
@@ -373,6 +374,7 @@ function TrafficListenersEditorPage() {
       {activeListenerEditor ? (
         <ListenerEditor
           binds={config.data?.binds ?? []}
+          config={config.data}
           key={trafficDrawer ?? "listener-local"}
           editing={activeListenerEditor}
           help={help}
@@ -398,6 +400,7 @@ function TrafficListenersEditorPage() {
 
 function BindEditor(props: {
   bind: TrafficBind;
+  config?: GatewayConfig;
   help: SchemaHelp;
   saving: boolean;
   onCancel: () => void;
@@ -424,20 +427,32 @@ function BindEditor(props: {
       title="Bind port"
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save bind
-          </button>
-        </div>
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Bind config diff"
+          saveLabel="Save bind"
+          saving={props.saving}
+          onCancel={props.onCancel}
+          onSave={save}
+          beforeDiff={() => {
+            const parsed = Number(port);
+            if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+              setError("Port must be between 1 and 65535.");
+              return false;
+            }
+            return true;
+          }}
+          applyDiff={(next) => {
+            if (!Array.isArray(next.binds)) next.binds = [];
+            const index = next.binds.findIndex(
+              (item) => item.port === props.bind.port,
+            );
+            const parsed = Number(port);
+            const bind = { ...preview, port: parsed };
+            if (index >= 0) next.binds[index] = bind;
+            else next.binds.push(bind);
+          }}
+        />
       }
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}
@@ -462,6 +477,7 @@ function BindEditor(props: {
 
 function ListenerEditor(props: {
   binds: TrafficBind[];
+  config?: GatewayConfig;
   editing: {
     bindIndex: number;
     listenerIndex?: number;
@@ -504,26 +520,30 @@ function ListenerEditor(props: {
       }
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={() =>
-              props.onSave(
-                Number(bindIndex),
-                cleanListener(preview),
-                props.editing.listenerIndex,
-              )
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Listener config diff"
+          saveLabel="Save listener"
+          saving={props.saving}
+          onCancel={props.onCancel}
+          onSave={() =>
+            props.onSave(
+              Number(bindIndex),
+              cleanListener(preview),
+              props.editing.listenerIndex,
+            )
+          }
+          applyDiff={(next) => {
+            const bind = next.binds?.[Number(bindIndex)];
+            if (!bind) return;
+            if (typeof props.editing.listenerIndex === "number") {
+              bind.listeners[props.editing.listenerIndex] =
+                cleanListener(preview);
+            } else {
+              bind.listeners.push(cleanListener(preview));
             }
-          >
-            <Save size={16} />
-            Save listener
-          </button>
-        </div>
+          }}
+        />
       }
     >
       <div className="form-grid">

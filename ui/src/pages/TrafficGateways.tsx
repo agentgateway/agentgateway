@@ -95,10 +95,7 @@ export function TrafficGatewaysPage() {
         <StatusBanner state="ok" title="Configuration saved" />
       ) : null}
       {showLegacyBindsWarning ? (
-        <StatusBanner
-          state="warn"
-          title="Detected legacy binds config"
-        >
+        <StatusBanner state="warn" title="Detected legacy binds config">
           This configuration uses legacy <code>binds</code> and has no{" "}
           <code>gateways</code>. Consider moving listener ownership to{" "}
           <code>gateways</code>.

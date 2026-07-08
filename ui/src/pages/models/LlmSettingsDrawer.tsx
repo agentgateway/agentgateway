@@ -1,5 +1,7 @@
-import { Save, Server } from "lucide-react";
+import { Server } from "lucide-react";
 import { useState } from "react";
+import { ensureLlm } from "../../config";
+import { ConfigDiffSaveActions } from "../../components/ConfigDiffDrawer";
 import {
   GatewayBindingEditor,
   type GatewayBindingValue,
@@ -27,6 +29,10 @@ export function LlmSettingsDrawer(props: {
     gateways: props.llm?.gateways ?? null,
     port: props.llm?.port ?? null,
   });
+  const patch: LlmSettingsPatch = {
+    gateways: binding.gateways ?? null,
+    port: binding.gateways ? null : (binding.port ?? null),
+  };
 
   return (
     <Drawer title="Settings" onClose={props.onClose}>
@@ -34,10 +40,7 @@ export function LlmSettingsDrawer(props: {
         className="policy-editor-stack"
         onSubmit={(event) => {
           event.preventDefault();
-          props.onSave({
-            gateways: binding.gateways ?? null,
-            port: binding.gateways ? null : (binding.port ?? null),
-          });
+          props.onSave(patch);
         }}
       >
         <PolicySection
@@ -61,10 +64,16 @@ export function LlmSettingsDrawer(props: {
             />
           </div>
         </PolicySection>
-        <button className="button" type="submit" disabled={props.saving}>
-          <Save size={16} />
-          Save settings
-        </button>
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="LLM settings config diff"
+          saveLabel="Save settings"
+          saving={props.saving}
+          onSave={() => props.onSave(patch)}
+          applyDiff={(next) => {
+            Object.assign(ensureLlm(next), patch);
+          }}
+        />
       </form>
       {props.saveError ? (
         <StatusBanner state="bad" title="Save failed">

@@ -1,11 +1,4 @@
-import {
-  Pencil,
-  Plus,
-  Save,
-  Server,
-  SlidersHorizontal,
-  Trash2,
-} from "lucide-react";
+import { Pencil, Plus, Server, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   ensureMcp,
@@ -18,6 +11,7 @@ import {
   GatewayBindingEditor,
   type GatewayBindingValue,
 } from "../components/GatewayBindingEditor";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
@@ -225,6 +219,7 @@ export function McpServersPage() {
         <McpServerEditor
           key={activeEditing.previousName ?? "new"}
           initial={activeEditing.target}
+          config={config.data}
           previousName={activeEditing.previousName}
           help={help}
           saving={update.isPending}
@@ -311,19 +306,20 @@ function McpSettings(props: {
   const [failureMode, setFailureMode] = useState<McpFailureMode>(
     props.mcp?.failureMode ?? "failClosed",
   );
+  const patch: McpSettingsPatch = {
+    gateways: binding.gateways ?? null,
+    port: binding.gateways ? null : (binding.port ?? null),
+    statefulMode,
+    prefixMode: prefixMode === "none" ? null : prefixMode,
+    failureMode,
+  };
 
   return (
     <form
       className="policy-editor-stack"
       onSubmit={(event) => {
         event.preventDefault();
-        props.onSave({
-          gateways: binding.gateways ?? null,
-          port: binding.gateways ? null : (binding.port ?? null),
-          statefulMode,
-          prefixMode: prefixMode === "none" ? null : prefixMode,
-          failureMode,
-        });
+        props.onSave(patch);
       }}
     >
       <PolicySection
@@ -447,16 +443,23 @@ function McpSettings(props: {
           </FieldGroup>
         </div>
       </PolicySection>
-      <button className="button" type="submit" disabled={props.saving}>
-        <Save size={16} />
-        Save settings
-      </button>
+      <ConfigDiffSaveActions
+        config={props.config}
+        diffTitle="MCP settings config diff"
+        saveLabel="Save settings"
+        saving={props.saving}
+        onSave={() => props.onSave(patch)}
+        applyDiff={(next) => {
+          Object.assign(ensureMcp(next), patch);
+        }}
+      />
     </form>
   );
 }
 
 function McpServerEditor(props: {
   initial: McpTarget;
+  config?: GatewayConfig | null;
   previousName?: string;
   help: SchemaHelp;
   saving: boolean;
@@ -478,46 +481,50 @@ function McpServerEditor(props: {
   const [clearEnv, setClearEnv] = useState(Boolean(stdio?.clear_env));
   const [error, setError] = useState<string | null>(null);
 
-  function save() {
+  function targetPreview() {
+    const base = {
+      ...props.initial,
+      name: name.trim(),
+      policies: props.initial.policies,
+    } as McpTarget;
+    delete (base as Record<string, unknown>).mcp;
+    delete (base as Record<string, unknown>).sse;
+    delete (base as Record<string, unknown>).stdio;
+    delete (base as Record<string, unknown>).openapi;
+    if (kind === "stdio") {
+      const env = envText.trim() ? parseEnvYaml(envText) : {};
+      return {
+        ...base,
+        stdio: {
+          cmd: cmd.trim(),
+          args: splitArgs(args),
+          env,
+          clear_env: clearEnv,
+        },
+      };
+    }
+    const target = {
+      host: url.trim() || null,
+    };
+    return kind === "sse" ? { ...base, sse: target } : { ...base, mcp: target };
+  }
+
+  function validTargetPreview() {
     try {
       setError(null);
-      const base = {
-        ...props.initial,
-        name: name.trim(),
-        policies: props.initial.policies,
-      } as McpTarget;
-      delete (base as Record<string, unknown>).mcp;
-      delete (base as Record<string, unknown>).sse;
-      delete (base as Record<string, unknown>).stdio;
-      delete (base as Record<string, unknown>).openapi;
-      if (kind === "stdio") {
-        const env = envText.trim() ? parseEnvYaml(envText) : {};
-        props.onSave(
-          {
-            ...base,
-            stdio: {
-              cmd: cmd.trim(),
-              args: splitArgs(args),
-              env,
-              clear_env: clearEnv,
-            },
-          },
-          props.previousName,
-        );
-        return;
-      }
-      const target = {
-        host: url.trim() || null,
-      };
-      props.onSave(
-        kind === "sse" ? { ...base, sse: target } : { ...base, mcp: target },
-        props.previousName,
-      );
+      return targetPreview();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Invalid server configuration",
       );
+      return null;
     }
+  }
+
+  function save() {
+    const target = validTargetPreview();
+    if (!target) return;
+    props.onSave(target, props.previousName);
   }
 
   return (
@@ -525,22 +532,20 @@ function McpServerEditor(props: {
       title={props.previousName ? "Edit MCP server" : "Add MCP server"}
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={
-              props.saving || !name.trim() || (kind === "stdio" && !cmd.trim())
-            }
-            onClick={save}
-          >
-            <Save size={16} />
-            Save server
-          </button>
-        </div>
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="MCP server config diff"
+          saveLabel="Save server"
+          saving={props.saving}
+          saveDisabled={!name.trim() || (kind === "stdio" && !cmd.trim())}
+          onCancel={props.onCancel}
+          onSave={save}
+          beforeDiff={() => Boolean(validTargetPreview())}
+          applyDiff={(next) => {
+            const target = targetPreview();
+            upsertMcpTarget(next, target, props.previousName);
+          }}
+        />
       }
     >
       <div className="form-grid">

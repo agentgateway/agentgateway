@@ -1,5 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Pencil, Plus, Route as RouteIcon, Save, Trash2 } from "lucide-react";
+import { Pencil, Plus, Route as RouteIcon, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   EnumSelector,
@@ -17,6 +17,7 @@ import {
   Tooltip,
   YamlBlock,
 } from "../components/Primitives";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import {
@@ -368,6 +369,7 @@ function TrafficRoutesEditorPage() {
 
       {editing ? (
         <RouteEditor
+          config={config.data}
           listeners={listeners}
           editing={editing}
           help={help}
@@ -545,6 +547,7 @@ function GatewayRoutesEditorPage() {
 
       {editing ? (
         <GatewayRouteEditor
+          config={config.data}
           gatewayOptions={gatewayOptions}
           editing={editing}
           help={help}
@@ -568,6 +571,7 @@ function GatewayRoutesEditorPage() {
 }
 
 function GatewayRouteEditor(props: {
+  config?: GatewayConfig;
   gatewayOptions: Array<{ value: string; label: string; description?: string }>;
   editing: {
     routeIndex?: number;
@@ -603,20 +607,29 @@ function GatewayRouteEditor(props: {
       }
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save route
-          </button>
-        </div>
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Route config diff"
+          saveLabel="Save route"
+          saving={props.saving}
+          onCancel={props.onCancel}
+          onSave={save}
+          beforeDiff={() => {
+            if (!gateway) {
+              setError("Select a gateway.");
+              return false;
+            }
+            return true;
+          }}
+          applyDiff={(next) => {
+            if (!Array.isArray(next.routes)) next.routes = [];
+            if (typeof props.editing.routeIndex === "number") {
+              next.routes[props.editing.routeIndex] = preview;
+            } else {
+              next.routes.push(preview);
+            }
+          }}
+        />
       }
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}
@@ -695,6 +708,7 @@ function GatewayRouteEditor(props: {
 }
 
 function RouteEditor(props: {
+  config?: GatewayConfig;
   listeners: Array<{
     bind: { port?: number | null };
     bindIndex: number;
@@ -759,20 +773,35 @@ function RouteEditor(props: {
       }
       onClose={props.onCancel}
       footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save route
-          </button>
-        </div>
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Route config diff"
+          saveLabel="Save route"
+          saving={props.saving}
+          onCancel={props.onCancel}
+          onSave={save}
+          beforeDiff={() => {
+            if (!selectedListener) {
+              setError("Select a listener.");
+              return false;
+            }
+            return true;
+          }}
+          applyDiff={(next) => {
+            const [bindIndex, listenerIndex] = listenerKey
+              .split(":")
+              .map(Number);
+            const listener =
+              next.binds?.[bindIndex]?.listeners?.[listenerIndex];
+            if (!listener) return;
+            const routes = routeArray(listener, effectiveKind);
+            if (typeof props.editing.routeIndex === "number") {
+              routes[props.editing.routeIndex] = preview as never;
+            } else {
+              routes.push(preview as never);
+            }
+          }}
+        />
       }
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}

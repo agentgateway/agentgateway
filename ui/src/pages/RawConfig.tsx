@@ -1,7 +1,8 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Clipboard, Download, Save, RotateCcw } from "lucide-react";
+import { Clipboard, Download, FileText, Save, RotateCcw } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { validateGatewayConfig } from "../configValidation";
+import { ConfigDiffDrawer } from "../components/ConfigDiffDrawer";
 import { PageHeader, Panel, StatusBanner } from "../components/Primitives";
 import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
 import { parseYamlText, toYamlText } from "../policies/policyUtils";
@@ -42,6 +43,7 @@ function RawConfigEditorPage() {
   const [text, setText] = useState(initialText);
   const [error, setError] = useState<string | null>(null);
   const [savedText, setSavedText] = useState<string | null>(null);
+  const [diffOpen, setDiffOpen] = useState(false);
   const previousInitialText = useRef(initialText);
   const dirty = text !== initialText;
   const showSaved = Boolean(
@@ -59,6 +61,7 @@ function RawConfigEditorPage() {
     setText(next);
     setError(null);
     setSavedText(null);
+    setDiffOpen(false);
     update.reset();
   }
 
@@ -115,6 +118,15 @@ function RawConfigEditorPage() {
               Reset
             </button>
             <button
+              className="button"
+              type="button"
+              disabled={!dirty || update.isPending}
+              onClick={() => setDiffOpen(true)}
+            >
+              <FileText size={16} />
+              View diff
+            </button>
+            <button
               className="button primary"
               type="button"
               disabled={!dirty || update.isPending}
@@ -157,6 +169,16 @@ function RawConfigEditorPage() {
           />
         </Suspense>
       </Panel>
+      {diffOpen ? (
+        <ConfigDiffDrawer
+          title="Raw configuration diff"
+          original={initialText}
+          modified={text}
+          saving={update.isPending}
+          onClose={() => setDiffOpen(false)}
+          onSave={() => void save()}
+        />
+      ) : null}
     </div>
   );
 }

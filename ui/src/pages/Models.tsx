@@ -596,7 +596,9 @@ function ModelEditor(props: {
           onCancel={props.onCancel}
           onSave={save}
           beforeDiff={validateBeforeDiff}
-          applyDiff={(next) => upsertModel(next, preview ?? model, props.previousName)}
+          applyDiff={(next) =>
+            upsertModel(next, preview ?? model, props.previousName)
+          }
         />
       }
     >
