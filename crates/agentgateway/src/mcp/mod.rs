@@ -7,6 +7,7 @@ mod router;
 mod session;
 mod sse;
 mod streamablehttp;
+mod subscriptions;
 mod upstream;
 
 use std::fmt::{Display, Write};
@@ -17,7 +18,15 @@ use std::time::Duration;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
-use rmcp::model::{ErrorCode, ErrorData, JsonRpcError, RequestId};
+use rmcp::model::{
+	CallToolRequestMethod, CancelTaskMethod, CompleteRequestMethod, ConstString,
+	DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
+	GetTaskPayloadMethod, InitializeResultMethod, JsonRpcError, ListPromptsRequestMethod,
+	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListTasksMethod,
+	ListToolsRequestMethod, PingRequestMethod, ProtocolVersion, ReadResourceRequestMethod, RequestId,
+	SetLevelRequestMethod, SubscribeRequestMethod, SubscriptionsListenRequestMethod,
+	UnsubscribeRequestMethod,
+};
 pub use router::App;
 use thiserror::Error;
 
@@ -40,6 +49,49 @@ pub enum FailureMode {
 }
 
 pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
+
+pub(crate) fn is_known_client_request_method(method: &str) -> bool {
+	matches!(
+		method,
+		DiscoverRequestMethod::VALUE
+			| PingRequestMethod::VALUE
+			| InitializeResultMethod::VALUE
+			| CompleteRequestMethod::VALUE
+			| SetLevelRequestMethod::VALUE
+			| GetPromptRequestMethod::VALUE
+			| ListPromptsRequestMethod::VALUE
+			| ListResourcesRequestMethod::VALUE
+			| ListResourceTemplatesRequestMethod::VALUE
+			| ReadResourceRequestMethod::VALUE
+			| SubscriptionsListenRequestMethod::VALUE
+			| SubscribeRequestMethod::VALUE
+			| UnsubscribeRequestMethod::VALUE
+			| CallToolRequestMethod::VALUE
+			| ListToolsRequestMethod::VALUE
+			| GetTaskMethod::VALUE
+			| ListTasksMethod::VALUE
+			| GetTaskPayloadMethod::VALUE
+			| CancelTaskMethod::VALUE
+	)
+}
+
+/// True for protocol versions in the modern (2026-07-28+) era, which negotiate via
+/// `server/discover` plus per-request `_meta` rather than a session-establishing `initialize`.
+pub(crate) fn is_modern_version(version: &ProtocolVersion) -> bool {
+	version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str()
+}
+
+/// Methods removed for the modern (2026-07-28+) protocol by SEP-2575/SEP-2567:
+/// modern clients use `server/discover` plus per-request `_meta` instead of a
+/// session-establishing `initialize`, and have no session to subscribe/set-level on.
+/// Keep consistent with [`is_known_client_request_method`].
+pub(crate) const REMOVED_METHODS_2026_07_28: &[&str] = &[
+	InitializeResultMethod::VALUE,
+	PingRequestMethod::VALUE,
+	SetLevelRequestMethod::VALUE,
+	SubscribeRequestMethod::VALUE,
+	UnsubscribeRequestMethod::VALUE,
+];
 
 #[cfg(test)]
 #[path = "mcp_tests.rs"]
@@ -73,20 +125,27 @@ pub enum Error {
 	InvalidProtocolVersion,
 	#[error("unsupported MCP protocol version: {1}")]
 	UnsupportedVersion(Option<RequestId>, String),
-	#[error("unsupported MCP protocol version for initialize: {1}")]
-	UnsupportedVersionForInitialize(Option<RequestId>, String),
 	#[error("MCP protocol version header/body mismatch")]
 	VersionMismatch(Option<RequestId>),
 	#[error("{1} header/body mismatch")]
 	HeaderBodyMismatch(Option<RequestId>, &'static str),
 	#[error("invalid MCP routing header: {1}")]
 	InvalidRoutingHeader(Option<RequestId>, &'static str),
+	#[error("method not found: {1}")]
+	MethodNotFound(Option<RequestId>, String),
+	#[error("invalid request parameters: {1}")]
+	InvalidParams(Option<RequestId>, String),
 	#[error("failed to start stdio server: {0}")]
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
 	UpstreamError(Box<SendDirectResponse>),
 	#[error("send error: {}", .1)]
 	SendError(Option<RequestId>, String),
+	/// Server-side availability/capability condition (no upstreams reachable, method unsupported by
+	/// the selected transport). Maps to a JSON-RPC internal error, not invalid-params: the client's
+	/// request was well-formed.
+	#[error("{1}")]
+	Unavailable(Option<RequestId>, String),
 	// Intentionally do NOT say its not authorized; we hide the existence of the tool
 	#[error("Unknown {1}: {2}")]
 	Authorization(RequestId, String, String),
@@ -117,6 +176,14 @@ impl Error {
 					data: None,
 				},
 			),
+			Error::Unavailable(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::INTERNAL_ERROR,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
 			Error::Authorization(id, _, _) => (
 				id.clone(),
 				ErrorData {
@@ -126,13 +193,18 @@ impl Error {
 				},
 			),
 			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
-			Error::UnsupportedVersion(Some(id), _)
-			| Error::UnsupportedVersionForInitialize(Some(id), _) => (
+			Error::UnsupportedVersion(Some(id), version) => (
 				id.clone(),
 				ErrorData {
 					code: ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,
 					message: self.to_string().into(),
-					data: None,
+					// This gate runs before backend selection, so it reports the gateway set.
+					// With single-server discover passthrough, SEP-2575's supported/discover
+					// correlation holds only when the upstream advertises a superset of this list.
+					data: Some(serde_json::json!({
+						"supported": ProtocolVersion::KNOWN_VERSIONS,
+						"requested": version,
+					})),
 				},
 			),
 			Error::VersionMismatch(Some(id)) => (
@@ -155,6 +227,22 @@ impl Error {
 				id.clone(),
 				ErrorData {
 					code: ErrorCode::HEADER_MISMATCH,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::MethodNotFound(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::METHOD_NOT_FOUND,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::InvalidParams(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::INVALID_PARAMS,
 					message: self.to_string().into(),
 					data: None,
 				},

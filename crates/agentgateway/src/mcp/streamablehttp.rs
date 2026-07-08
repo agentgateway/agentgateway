@@ -3,18 +3,21 @@ use std::sync::Arc;
 use ::http::{HeaderMap, StatusCode};
 use agent_core::prelude::AssertSize;
 use rmcp::model::{
-	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta, ProtocolVersion,
-	RequestId, ServerJsonRpcMessage,
+	ClientCapabilities, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString,
+	GetMeta, Implementation, META_KEY_CLIENT_CAPABILITIES, META_KEY_CLIENT_INFO,
+	META_KEY_PROTOCOL_VERSION, Meta, ProtocolVersion, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_MCP_METHOD, HEADER_MCP_NAME, HEADER_MCP_PARAM_PREFIX,
 	HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 use rmcp::transport::common::mcp_headers::{decode_header_value, encode_header_value};
+use serde::Deserialize;
 
 use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::RelayInputs;
 use crate::mcp::session::SessionManager;
+use crate::mcp::{REMOVED_METHODS_2026_07_28, is_modern_version};
 use crate::proxy::ProxyError;
 use crate::*;
 
@@ -46,10 +49,7 @@ pub(crate) struct RequestProtocol {
 
 impl RequestProtocol {
 	pub(crate) fn is_modern(&self) -> bool {
-		self
-			.version
-			.as_ref()
-			.is_some_and(|version| version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str())
+		self.version.as_ref().is_some_and(is_modern_version)
 	}
 
 	pub(crate) fn uses_sessions(&self) -> bool {
@@ -130,30 +130,29 @@ impl StreamableHttpService {
 
 		let limit = http::buffer_limit(&request);
 		let (mut part, body) = request.into_parts();
-		let message = match json::from_body_with_limit::<ClientJsonRpcMessage>(body, limit).await {
+		let bytes = match http::read_body_with_limit(body, limit).await {
 			Ok(b) => b,
 			Err(e) => return mcp::Error::Deserialize(e).into(),
 		};
+		let message = match serde_json::from_slice::<ClientJsonRpcMessage>(&bytes) {
+			Ok(m) => m,
+			Err(e) => {
+				return match unknown_method_error(&part.headers, &bytes) {
+					Some(err) => err.into(),
+					None => mcp::Error::Deserialize(http::Error::new(e)).into(),
+				};
+			},
+		};
+		// Raw body is only needed for the `unknown_method_error` recovery above; release it now
+		// so the buffer is not pinned across the upstream round-trip below.
+		drop(bytes);
 		let request_id = request_id(&message);
-		let protocol = request_protocol(&part.headers, &message, request_id.clone())?;
+		let protocol = validate_request_protocol(&part.headers, &message, request_id.clone())?;
 		validate_standard_headers(&part.headers, &message, &protocol)?;
 		part.extensions.insert(protocol.clone());
 
 		if !self.config.stateful_mode {
-			let relay = inputs.build_new_connections()?;
-			// Use stateless session - not registered in session manager
-			let mut session = self.session_manager.create_stateless_session(relay);
-			let response = Box::pin(session.stateless_send_and_initialize(part.clone(), message)).await;
-
-			let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-			// Clean up upstream resources (e.g., stdio processes)
-			tokio::task::spawn(async move {
-				// Wait until the response is actually completed.
-				let _ = rx.await;
-				trace!("cleaning up stateless session");
-				let _ = session.delete_session(part).await;
-			});
-			return response.map(|r| r.map(|b| DropBody::new(b, tx)));
+			return self.serve_stateless(inputs, part, message, protocol).await;
 		}
 
 		let session_id = part
@@ -176,9 +175,7 @@ impl StreamableHttpService {
 		}
 
 		if !protocol.uses_sessions() {
-			let relay = inputs.build_new_connections()?;
-			let mut session = self.session_manager.create_stateless_session(relay);
-			return Box::pin(session.send(part, message)).await;
+			return self.serve_stateless(inputs, part, message, protocol).await;
 		}
 
 		// No session header... we need to create one, if it is an initialize.
@@ -203,6 +200,40 @@ impl StreamableHttpService {
 		resp.headers_mut().insert(HEADER_SESSION_ID, sid);
 		self.session_manager.insert_session(session, idle_ttl);
 		Ok(resp)
+	}
+
+	async fn serve_stateless(
+		&self,
+		inputs: RelayInputs,
+		part: ::http::request::Parts,
+		message: ClientJsonRpcMessage,
+		protocol: RequestProtocol,
+	) -> Result<Response, ProxyError> {
+		let relay = inputs.build_new_connections()?;
+		// Use stateless session - not registered in session manager
+		let mut session = self.session_manager.create_stateless_session(relay);
+		let initialize_upstream = protocol.uses_sessions();
+		let needs_cleanup = initialize_upstream || session.has_connection_teardown();
+		// Teardown is needed when the synthetic upstream initialize may open upstream sessions,
+		// or when stdio/SSE targets hold per-connection state. Modern requests (no synthetic
+		// initialize) against plain streamable/OpenAPI targets have nothing to clean up.
+		if !needs_cleanup {
+			return Box::pin(session.stateless_send_and_initialize(part, message, initialize_upstream))
+				.await;
+		}
+		let cleanup_part = part.clone();
+		let response =
+			Box::pin(session.stateless_send_and_initialize(part, message, initialize_upstream)).await;
+
+		let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+		tokio::task::spawn(async move {
+			// Wait until the response is actually completed.
+			let _ = rx.await;
+			trace!("cleaning up stateless session");
+			// Clean up upstream resources (e.g., stdio processes)
+			let _ = session.delete_session(cleanup_part).await;
+		});
+		response.map(|r| r.map(|b| DropBody::new(b, tx)))
 	}
 
 	pub async fn handle_get(
@@ -399,6 +430,7 @@ pub(crate) fn protocol_version_header(
 	let value = value
 		.to_str()
 		.map_err(|_| ProxyError::MCP(mcp::Error::InvalidProtocolVersion))?;
+	// This is the gateway-owned version set used by the transport gate and version errors.
 	let version = ProtocolVersion::KNOWN_VERSIONS
 		.iter()
 		.find(|version| version.as_str() == value)
@@ -412,14 +444,53 @@ pub(crate) fn protocol_version_header(
 	Ok(Some(version))
 }
 
-fn request_protocol(
+/// Validates a POST request's protocol version and the per-request metadata required for
+/// modern (2026-07-28+) requests. The protocol header is parsed once here.
+///
+/// Keep the statement order. Removed-method rejection must run before `_meta` validation
+/// because methods removed from the modern protocol must return 404 even when their params
+/// do not validate. Both checks must run before header/body version reconciliation.
+fn validate_request_protocol(
 	headers: &::http::HeaderMap,
 	message: &ClientJsonRpcMessage,
 	request_id: Option<RequestId>,
 ) -> Result<RequestProtocol, ProxyError> {
 	let header_version = protocol_version_header(headers, request_id.clone())?;
 	let body_version = message_protocol_version(message);
-	let initialize = is_initialize_request(message);
+
+	// These checks use only the header version because modern clients must send it,
+	// and the body version is reconciled later.
+	if header_version.as_ref().is_some_and(is_modern_version)
+		&& let ClientJsonRpcMessage::Request(req) = message
+	{
+		let method = req.request.method();
+		if REMOVED_METHODS_2026_07_28.contains(&method) || !mcp::is_known_client_request_method(method)
+		{
+			return Err(mcp::Error::MethodNotFound(request_id, method.to_string()).into());
+		}
+		let meta = req.request.get_meta();
+		// Treat malformed values as missing, matching the rmcp accessors without cloning
+		// each `_meta` value into an owned serde_json::Value.
+		let missing = if body_version.is_none() {
+			Some("protocolVersion")
+		} else if decode_meta_value::<Implementation>(meta, META_KEY_CLIENT_INFO).is_none() {
+			Some("clientInfo")
+		} else if decode_meta_value::<ClientCapabilities>(meta, META_KEY_CLIENT_CAPABILITIES).is_none()
+		{
+			Some("clientCapabilities")
+		} else {
+			None
+		};
+		if let Some(key) = missing {
+			return Err(
+				mcp::Error::InvalidParams(
+					request_id,
+					format!("_meta.{key} is required for modern requests"),
+				)
+				.into(),
+			);
+		}
+	}
 
 	if let (Some(header), Some(body)) = (&header_version, &body_version)
 		&& header != body
@@ -427,45 +498,62 @@ fn request_protocol(
 		return Err(mcp::Error::VersionMismatch(request_id).into());
 	}
 
-	let declared_version = header_version.as_ref().or(body_version.as_ref());
-	let declares_modern_version = declared_version
-		.is_some_and(|version| version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str());
-	let missing_modern_version_source = header_version.is_none() || body_version.is_none();
-	if declares_modern_version && missing_modern_version_source {
+	// Completeness checks header or body. A body-only modern version is still a
+	// modern request, but it is missing the required protocol header.
+	let declares_modern_version = header_version
+		.as_ref()
+		.or(body_version.as_ref())
+		.is_some_and(is_modern_version);
+	if declares_modern_version && (header_version.is_none() || body_version.is_none()) {
 		return Err(mcp::Error::InvalidProtocolVersion.into());
 	}
 
-	let version = body_version.or(header_version);
-	if initialize
-		&& let Some(v) = version.as_ref()
-		&& v.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str()
-	{
-		// `initialize` selects legacy session semantics. Modern versions use
-		// `server/discover` plus per-request `_meta`, so accepting 2026+ here would
-		// create a session that claims a protocol era that no longer defines it.
-		return Err(mcp::Error::UnsupportedVersionForInitialize(request_id, v.to_string()).into());
-	}
-
-	Ok(RequestProtocol { version })
+	Ok(RequestProtocol {
+		version: body_version.or(header_version),
+	})
 }
 
-fn is_initialize_request(message: &ClientJsonRpcMessage) -> bool {
-	matches!(
-		message,
-		ClientJsonRpcMessage::Request(req)
-			if matches!(req.request, ClientRequest::InitializeRequest(_))
-	)
+/// Recovers a `MethodNotFound` for modern request bodies that fail the typed
+/// `ClientJsonRpcMessage` parse (e.g. non-object `params`) but name an unknown method.
+/// Parseable unknown methods get the same 404 from `validate_request_protocol`; this
+/// fallback only classifies bodies the typed parse cannot represent.
+/// Header-only modern detection: body `_meta` is unreadable once the typed parse has failed.
+fn unknown_method_error(headers: &::http::HeaderMap, bytes: &[u8]) -> Option<mcp::Error> {
+	if !protocol_version_header(headers, None)
+		.ok()?
+		.is_some_and(|v| is_modern_version(&v))
+	{
+		return None;
+	}
+	let value: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+	if value.get("jsonrpc")?.as_str()? != "2.0" {
+		return None;
+	}
+	let method = value.get("method")?.as_str()?.to_string();
+	if mcp::is_known_client_request_method(&method) {
+		return None;
+	}
+	let request_id: RequestId = serde_json::from_value(value.get("id")?.clone()).ok()?;
+	Some(mcp::Error::MethodNotFound(Some(request_id), method))
+}
+
+fn decode_meta_value<T>(meta: &Meta, key: &str) -> Option<T>
+where
+	T: for<'de> Deserialize<'de>,
+{
+	meta.get(key).and_then(|value| T::deserialize(value).ok())
 }
 
 fn message_protocol_version(message: &ClientJsonRpcMessage) -> Option<ProtocolVersion> {
 	match message {
 		ClientJsonRpcMessage::Request(req) => match &req.request {
 			ClientRequest::InitializeRequest(init) => Some(init.params.protocol_version.clone()),
-			_ => req.request.get_meta().protocol_version(),
+			_ => decode_meta_value(req.request.get_meta(), META_KEY_PROTOCOL_VERSION),
 		},
-		ClientJsonRpcMessage::Notification(notification) => {
-			notification.notification.get_meta().protocol_version()
-		},
+		ClientJsonRpcMessage::Notification(notification) => decode_meta_value(
+			notification.notification.get_meta(),
+			META_KEY_PROTOCOL_VERSION,
+		),
 		_ => None,
 	}
 }
@@ -479,7 +567,7 @@ fn accepted_response() -> Response {
 
 fn reject_modern_session_request(headers: &::http::HeaderMap) -> Result<(), ProxyError> {
 	if let Some(version) = protocol_version_header(headers, None)?
-		&& version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str()
+		&& is_modern_version(&version)
 	{
 		return Err(mcp::Error::UnsupportedVersion(None, version.to_string()).into());
 	}

@@ -41,6 +41,37 @@ impl Messages {
 				.boxed(),
 		)
 	}
+
+	/// One-pass filter+swallow+rewrite+tag where the mapping fn may drop a message (`None`)
+	/// or turn an `Ok` message into an `Err`. The listen path uses this to promote an
+	/// upstream JSON-RPC error frame into a real stream error.
+	pub fn filter_map_messages_result(
+		self,
+		mut f: impl FnMut(ServerJsonRpcMessage) -> Option<Result<ServerJsonRpcMessage, ClientError>>
+		+ Send
+		+ 'static,
+	) -> Self {
+		Messages(
+			self
+				.0
+				.filter_map(move |message| {
+					let mapped = match message {
+						Ok(message) => f(message),
+						Err(err) => Some(Err(err)),
+					};
+					async move { mapped }
+				})
+				.boxed(),
+		)
+	}
+}
+
+#[cfg(test)]
+impl Messages {
+	/// Build a `Messages` from a fixed list of results, for driving pipeline tests.
+	pub(crate) fn from_results(items: Vec<Result<ServerJsonRpcMessage, ClientError>>) -> Self {
+		Messages(futures::stream::iter(items).boxed())
+	}
 }
 
 impl Stream for Messages {

@@ -14,7 +14,7 @@ use headers::HeaderMapExt;
 use rmcp::model::{
 	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
 	Implementation, InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId,
-	ServerJsonRpcMessage,
+	ServerJsonRpcMessage, SubscriptionFilter,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -66,15 +66,16 @@ impl Session {
 	}
 
 	/// Send a downstream message to upstream server(s) in gateway stateless mode.
-	/// Legacy (pre-2026) non-initialize messages get a gateway-generated
-	/// InitializeRequest first, because legacy servers require initialize before
-	/// any other request. Modern (>= 2026-07-28) requests are stateless and are
-	/// forwarded as-is: a modern client only reaches a modern request after its
-	/// `server/discover` negotiated a modern server, so no handshake is needed.
+	/// When `initialize_upstream` is true, every non-initialize message gets a
+	/// gateway-generated InitializeRequest first because many legacy servers
+	/// require initialize before any other request. The caller sets it to false
+	/// for modern requests, which are forwarded as-is without a synthetic
+	/// handshake.
 	pub async fn stateless_send_and_initialize(
 		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
+		initialize_upstream: bool,
 	) -> Result<Response, ProxyError> {
 		let req_id = match &message {
 			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
@@ -82,11 +83,7 @@ impl Session {
 		};
 		let is_init = matches!(&message,
 			ClientJsonRpcMessage::Request(r) if matches!(r.request, ClientRequest::InitializeRequest(_)));
-		let is_modern = parts
-			.extensions
-			.get::<crate::mcp::streamablehttp::RequestProtocol>()
-			.is_some_and(|p| p.is_modern());
-		if !is_init && !is_modern {
+		if initialize_upstream && !is_init {
 			let mut client_info = get_client_info();
 			if let Some(protocol_version) =
 				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone())?
@@ -153,7 +150,21 @@ impl Session {
 			}
 		}
 		// Now we can send the message like normal (if it's tools/call, it'll go to the initialized target)
-		self.send(parts, message).await
+		if initialize_upstream {
+			return self.send(parts, message).await;
+		}
+		let res = self
+			.send_internal(parts, message)
+			.assert_size::<{ 6 * 1024 }>()
+			.await;
+		match res {
+			// Modern requests are never part of a legacy session, so method-not-found can use its
+			// 404 status; on the legacy `send` path a 404 would signal session termination.
+			Err(UpstreamError::InvalidMethod(method)) if req_id.is_some() => {
+				Err(mcp::Error::MethodNotFound(req_id, method).into())
+			},
+			other => Self::handle_error(req_id, other).await,
+		}
 	}
 
 	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
@@ -217,6 +228,50 @@ impl Session {
 		Ok(())
 	}
 
+	pub(super) fn authorized_list_changed_filters(
+		&self,
+		filter: &SubscriptionFilter,
+		cel: &rbac::CelExecWrapper,
+	) -> Result<Vec<(String, SubscriptionFilter)>, UpstreamError> {
+		let grant = |requested: Option<bool>, resource_type: rbac::ResourceType| {
+			(requested == Some(true) && self.relay.policies.validate(&resource_type, cel)).then_some(true)
+		};
+		let filters = self
+			.relay
+			.upstreams
+			.iter_named()
+			.filter_map(|(target, _)| {
+				let target = target.to_string();
+				// List-changed notifications expose target-level activity before item names are known.
+				let probe = || rbac::ResourceId::new(target.clone(), String::new());
+				let mut target_filter = SubscriptionFilter::new();
+				target_filter.tools_list_changed =
+					grant(filter.tools_list_changed, rbac::ResourceType::Tool(probe()));
+				target_filter.prompts_list_changed = grant(
+					filter.prompts_list_changed,
+					rbac::ResourceType::Prompt(probe()),
+				);
+				target_filter.resources_list_changed = grant(
+					filter.resources_list_changed,
+					rbac::ResourceType::Resource(probe()),
+				);
+				mcp::subscriptions::wants_list_changed(&target_filter).then_some((target, target_filter))
+			})
+			.collect::<Vec<_>>();
+		if filters.is_empty() {
+			// Zero initialized targets is an availability problem the fanout already reports;
+			// only an evaluated-and-denied result is an authorization error.
+			if self.relay.upstreams.iter_named().next().is_none() {
+				return Ok(filters);
+			}
+			return Err(UpstreamError::Authorization {
+				resource_type: "subscription".to_string(),
+				resource_name: "list_changed".to_string(),
+			});
+		}
+		Ok(filters)
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	async fn authorize_with_ctx<P>(
 		&self,
@@ -245,6 +300,12 @@ impl Session {
 				resource_name: resource_name.to_string(),
 			})
 		}
+	}
+
+	/// True when some upstream's `delete` does teardown work even without an upstream
+	/// session id (stdio processes, SSE streams).
+	pub fn has_connection_teardown(&self) -> bool {
+		self.relay.upstreams.has_connection_teardown()
 	}
 
 	/// delete any active sessions
@@ -337,6 +398,12 @@ impl Session {
 			},
 			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
 				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
+			},
+			Err(UpstreamError::InvalidRequest(message)) if req_id.is_some() => {
+				Err(mcp::Error::InvalidParams(req_id, message).into())
+			},
+			Err(UpstreamError::Unavailable(message)) if req_id.is_some() => {
+				Err(mcp::Error::Unavailable(req_id, message).into())
 			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
@@ -459,8 +526,12 @@ impl Session {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_empty())).await
 					},
 					ClientRequest::SubscriptionsListenRequest(slr) => {
-						let subscription_id = r.id.clone();
-						let target_names = if let Some(resource_subscriptions) =
+						mcp::subscriptions::validate_listen_filter(&mut slr.params.notifications)
+							.map_err(|message| UpstreamError::InvalidRequest(message.to_string()))?;
+						// Snapshot the client's filter (URIs still in service+ form) for the ack before the
+						// loop below rewrites them to upstream form for matching forwarded notifications.
+						let client_filter = slr.params.notifications.clone();
+						let target_name = if let Some(resource_subscriptions) =
 							&mut slr.params.notifications.resource_subscriptions
 						{
 							let mut target_name = None;
@@ -486,16 +557,28 @@ impl Session {
 								target_name = Some(service_name.to_string());
 								*uri = original_uri;
 							}
-							target_name.map(|target| vec![target])
+							target_name
 						} else {
 							None
 						};
-						Box::pin(self.relay.send_fanout_to(
-							r,
-							ctx,
-							self.relay.merge_subscriptions_listen(subscription_id),
-							target_names,
-						))
+						// URIs in this filter were rewritten to upstream form in the loop above; it matches
+						// forwarded ResourceUpdated frames before their URIs are rewritten back to service+ form.
+						let upstream_filter = slr.params.notifications.clone();
+						let (client_filter, target_filters) = if let Some(target) = target_name {
+							// Every URI was individually authorized above, so the ack echoes the filter as-is.
+							(client_filter, vec![(target, upstream_filter.clone())])
+						} else {
+							let target_filters = self.authorized_list_changed_filters(&upstream_filter, &cel)?;
+							// The ack must only claim categories some authorized target will deliver;
+							// RBAC may have stripped a requested category from every pipeline.
+							let granted = mcp::subscriptions::union_list_changed(&target_filters);
+							(granted, target_filters)
+						};
+						Box::pin(
+							self
+								.relay
+								.send_subscriptions_listen(r, ctx, client_filter, target_filters),
+						)
 						.await
 					},
 					ClientRequest::ListPromptsRequest(_) => {
@@ -621,10 +704,19 @@ impl Session {
 					ClientRequest::ListTasksRequest(_)
 					| ClientRequest::GetTaskRequest(_)
 					| ClientRequest::GetTaskPayloadRequest(_)
-					| ClientRequest::CancelTaskRequest(_)
-					| ClientRequest::CustomRequest(_) => {
+					| ClientRequest::CancelTaskRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
+					},
+					ClientRequest::CustomRequest(_) => {
+						let method = r.request.method();
+						if mcp::is_known_client_request_method(method) {
+							Err(UpstreamError::InvalidRequest(format!(
+								"invalid params for method: {method}"
+							)))
+						} else {
+							Err(UpstreamError::InvalidMethod(method.to_string()))
+						}
 					},
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {

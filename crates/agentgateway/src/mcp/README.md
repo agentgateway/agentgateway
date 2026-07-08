@@ -43,6 +43,9 @@ We want to create the intersection of supported versions from all servers.
 If a server returns an error, we also return that error: this tells the clients "we don't support `2026-07-28`" and they will retry
 with `initialize`; `initialize` will do similar negotiation.
 
+`subscriptions/listen` is only supported for upstream transports whose listen responses can carry notifications.
+Under the default `failClosed` failure mode, adding a stdio or SSE target to a multiplexed backend makes an unscoped listen fail for the whole backend; use `failOpen` when mixed backends should skip those targets.
+
 ---
 
 With this approach, we should fully support new clients. And, when the client _and_ server are new, we get the optimal
