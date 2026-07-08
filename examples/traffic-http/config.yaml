@@ -88,8 +88,25 @@ llm:
     provider: anthropic
     transformation:
       model: llmRequest.model.stripPrefix("anthropic/")
+  - name: ollama/*
+    provider: ollama
+    transformation:
+      temperature: 'null'
+      model: llmRequest.model.stripPrefix("ollama/")
+  - name: openai/*
+    provider: openai
+    transformation:
+      model: llmRequest.model.stripPrefix("openai/")
   providers: []
   virtualModels: []
+  policies:
+    guardrails:
+      request:
+      - regex:
+          action: reject
+          rules:
+          - builtin: email
+          - builtin: ssn
 frontendPolicies:
   http:
     maxBufferSize: 33554432
