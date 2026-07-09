@@ -525,6 +525,40 @@ async fn modern_stateful_streamable_http_does_not_use_sessions() {
 	assert_eq!(with_session.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
+// TODO this test doesn't regress without downgrade_to_legacy_handshake
+// as our current rmcp fork doesn't replicate the stricness that the python SDK has
+#[tokio::test]
+async fn stateless_vnext_tools_list_reaches_upstream() {
+	let mock = mock_streamable_http_server(false).await;
+	let (_bind, io) = setup_proxy(&mock, false, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/list",
+		"params": {
+			"_meta": {
+				"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+				"io.modelcontextprotocol/clientInfo": {"name": "probe-client", "version": "0"},
+				"io.modelcontextprotocol/clientCapabilities": {}
+			}
+		}
+	});
+	let resp = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/list")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	let text = resp.text().await.unwrap();
+	assert!(
+		text.contains("echo"),
+		"expected the upstream tools, got {text}"
+	);
+}
+
 #[tokio::test]
 async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize() {
 	let old = mock_streamable_http_server(false).await;
