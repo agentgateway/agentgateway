@@ -38,7 +38,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-  RUST_VERSION: "1.96.1"
+  RUST_VERSION: "1.97.0"
+  CARGO_BUILD_WARNINGS: deny
   GO_VERSION: "1.26.4"
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller

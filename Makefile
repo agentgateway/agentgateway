@@ -73,7 +73,7 @@ build-target: $(UI_PREREQ)
 .PHONY: lint
 lint:
 	cargo fmt --check -- --config imports_granularity=Module,group_imports=StdExternalCrate,normalize_comments=true
-	cargo clippy --all-targets -- -D warnings
+	cargo clippy --all-targets
 
 .PHONY: clippy
 fix-clippy:
