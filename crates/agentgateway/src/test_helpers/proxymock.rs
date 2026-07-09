@@ -46,6 +46,18 @@ use crate::types::local::LocalNamedAIProvider;
 use crate::types::{frontend, local};
 use crate::{ProxyInputs, client, mcp};
 
+// Copied from examples/mcp-tls/certs/ca-cert.pem.
+const MOCK_TLS_CA_CERT: &[u8] = b"-----BEGIN CERTIFICATE-----\n\
+MIIBezCCASCgAwIBAgIRAOnmoc9aVSZkyJ59U9r+6KAwCgYIKoZIzj0EAwIwGzEZ\n\
+MBcGA1UEAxMQYWdlbnRnYXRld2F5LmRldjAeFw0yNTEwMTUxOTQzMzZaFw0zNTEw\n\
+MTMxOTQzMzZaMBsxGTAXBgNVBAMTEGFnZW50Z2F0ZXdheS5kZXYwWTATBgcqhkjO\n\
+PQIBBggqhkjOPQMBBwNCAAScPuAg65+9D2YuOrFl4xAYOB6h2460QhZTIStE1PHP\n\
+MIOUJAAqBdAWAH5JG4UiVUH/tKYEd73CfaBsHSNrOJlLo0UwQzAOBgNVHQ8BAf8E\n\
+BAMCAQYwEgYDVR0TAQH/BAgwBgEB/wIBATAdBgNVHQ4EFgQUcwtMh/9FfJvcR9JU\n\
+bISOus7YDMowCgYIKoZIzj0EAwIDSQAwRgIhAL2agfEI9TBl060Y0aGQ7SX69aLC\n\
+7/ifjLmH38SGOWCJAiEA63NRyf5oz6rzvvIHpK8OM2hSHqWQFQnhBTCbyzNAe5U=\n\
+-----END CERTIFICATE-----\n";
+
 pub async fn send_request(
 	io: Client<MemoryConnector, Body>,
 	method: Method,
@@ -1030,7 +1042,7 @@ impl TestBind {
 		let tls: BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
 			cert: None,
 			key: None,
-			root: Some(include_bytes!("../../../../examples/mcp-tls/certs/ca-cert.pem").to_vec()),
+			root: Some(MOCK_TLS_CA_CERT.to_vec()),
 			hostname: sni.map(|s| s.to_string()),
 			insecure: false,
 			insecure_host: true,
