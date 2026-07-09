@@ -53,7 +53,7 @@ binds:
             identityProvider:
               # `https://` host = HTTPS with TLS auto-configured (no :443 + backendTLS needed).
               host: https://$OKTA_DOMAIN
-              tokenEndpointPath: /oauth2/v1/token
+              path: /oauth2/v1/token
               clientAuth:
                 clientId: $OKTA_CLIENT_ID
                 # Must match the app's token_endpoint_auth_method in Okta
@@ -65,7 +65,7 @@ binds:
             # Accepts the ID-JAG via the RFC 7523 jwt-bearer grant.
             resourceAuthorizationServer:
               host: https://$AUTH0_DOMAIN
-              tokenEndpointPath: /oauth/token
+              path: /oauth/token
               clientAuth:
                 clientId: $AUTH0_CLIENT_ID
                 method: clientSecretPost

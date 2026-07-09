@@ -3326,7 +3326,7 @@
             }
           ]
         },
-        "tokenEndpointPath": {
+        "path": {
           "description": "Token endpoint path on the backend; defaults to \"/\".",
           "type": "string"
         },
@@ -3759,7 +3759,7 @@
             }
           ]
         },
-        "tokenEndpointPath": {
+        "path": {
           "description": "Token endpoint path on the backend; defaults to \"/\".",
           "type": "string"
         },

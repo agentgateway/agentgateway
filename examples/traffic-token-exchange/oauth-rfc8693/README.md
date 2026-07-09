@@ -73,7 +73,7 @@ Config ([`config.yaml`](./config.yaml)):
 backendAuth:
   oauthTokenExchange:
     host: localhost:7080
-    tokenEndpointPath: /realms/backend-oauth/protocol/openid-connect/token
+    path: /realms/backend-oauth/protocol/openid-connect/token
     clientAuth:
       clientId: requester-client
       clientSecret: requester-secret

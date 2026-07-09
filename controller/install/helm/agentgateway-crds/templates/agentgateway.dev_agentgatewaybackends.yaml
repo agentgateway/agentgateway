@@ -1143,6 +1143,85 @@ spec:
                                                                   maxItems: 64
                                                                   minItems: 1
                                                                   type: array
+                                                                backendRef:
+                                                                  description: RFC
+                                                                    8693 token endpoint
+                                                                    backend.
+                                                                  properties:
+                                                                    group:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                                        When unspecified or empty string, core API group is inferred.
+                                                                      maxLength: 253
+                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                                      type: string
+                                                                    kind:
+                                                                      default: Service
+                                                                      description: |-
+                                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                                        "Service".
+
+                                                                        Defaults to "Service" when not specified.
+
+                                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                                        outside of the cluster and as such are difficult to reason about in
+                                                                        terms of conformance. They also may not be safe to forward to (see
+                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                                        support ExternalName Services.
+
+                                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                                      type: string
+                                                                    name:
+                                                                      description: Name
+                                                                        is the name
+                                                                        of the referent.
+                                                                      maxLength: 253
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    namespace:
+                                                                      description: |-
+                                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                                        namespace is inferred.
+
+                                                                        Note that when a namespace different than the local namespace is specified,
+                                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                                        documentation for details.
+
+                                                                        Support: Core
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                                      type: string
+                                                                    port:
+                                                                      description: |-
+                                                                        Port specifies the destination port number to use for this resource.
+                                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                                        case, the port number is the service port number, not the target port.
+                                                                        For other resources, destination port might be derived from the referent
+                                                                        resource or this field.
+                                                                      format: int32
+                                                                      maximum: 65535
+                                                                      minimum: 1
+                                                                      type: integer
+                                                                  required:
+                                                                  - name
+                                                                  type: object
+                                                                  x-kubernetes-validations:
+                                                                  - message: Must
+                                                                      have port for
+                                                                      Service reference
+                                                                    rule: '(size(self.group)
+                                                                      == 0 && self.kind
+                                                                      == ''Service'')
+                                                                      ? has(self.port)
+                                                                      : true'
                                                                 cache:
                                                                   description: Response
                                                                     cache configuration.
@@ -1430,6 +1509,14 @@ spec:
                                                                       be set
                                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                       == 1'
+                                                                path:
+                                                                  description: Token
+                                                                    endpoint path;
+                                                                    defaults to "/".
+                                                                    Must start with
+                                                                    "/".
+                                                                  pattern: ^/
+                                                                  type: string
                                                                 requestedTokenType:
                                                                   description: RFC
                                                                     8693 requested_token_type.
@@ -1551,96 +1638,8 @@ spec:
                                                                       - Jwt
                                                                       type: string
                                                                   type: object
-                                                                tokenEndpoint:
-                                                                  description: RFC
-                                                                    8693 token endpoint
-                                                                    backend and path.
-                                                                  properties:
-                                                                    group:
-                                                                      default: ""
-                                                                      description: |-
-                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                                        When unspecified or empty string, core API group is inferred.
-                                                                      maxLength: 253
-                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                                      type: string
-                                                                    kind:
-                                                                      default: Service
-                                                                      description: |-
-                                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                                        "Service".
-
-                                                                        Defaults to "Service" when not specified.
-
-                                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                                        outside of the cluster and as such are difficult to reason about in
-                                                                        terms of conformance. They also may not be safe to forward to (see
-                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                                        support ExternalName Services.
-
-                                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                                      type: string
-                                                                    name:
-                                                                      description: Name
-                                                                        is the name
-                                                                        of the referent.
-                                                                      maxLength: 253
-                                                                      minLength: 1
-                                                                      type: string
-                                                                    namespace:
-                                                                      description: |-
-                                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                                        namespace is inferred.
-
-                                                                        Note that when a namespace different than the local namespace is specified,
-                                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                                        documentation for details.
-
-                                                                        Support: Core
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                                      type: string
-                                                                    path:
-                                                                      description: Token
-                                                                        endpoint path;
-                                                                        defaults to
-                                                                        "/". Must
-                                                                        start with
-                                                                        "/".
-                                                                      pattern: ^/
-                                                                      type: string
-                                                                    port:
-                                                                      description: |-
-                                                                        Port specifies the destination port number to use for this resource.
-                                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                                        case, the port number is the service port number, not the target port.
-                                                                        For other resources, destination port might be derived from the referent
-                                                                        resource or this field.
-                                                                      format: int32
-                                                                      maximum: 65535
-                                                                      minimum: 1
-                                                                      type: integer
-                                                                  required:
-                                                                  - name
-                                                                  type: object
-                                                                  x-kubernetes-validations:
-                                                                  - message: Must
-                                                                      have port for
-                                                                      Service reference
-                                                                    rule: '(size(self.group)
-                                                                      == 0 && self.kind
-                                                                      == ''Service'')
-                                                                      ? has(self.port)
-                                                                      : true'
                                                               required:
-                                                              - tokenEndpoint
+                                                              - backendRef
                                                               type: object
                                                               x-kubernetes-validations:
                                                               - message: actorToken
@@ -2629,6 +2628,85 @@ spec:
                                                                   maxItems: 64
                                                                   minItems: 1
                                                                   type: array
+                                                                backendRef:
+                                                                  description: RFC
+                                                                    8693 token endpoint
+                                                                    backend.
+                                                                  properties:
+                                                                    group:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                                        When unspecified or empty string, core API group is inferred.
+                                                                      maxLength: 253
+                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                                      type: string
+                                                                    kind:
+                                                                      default: Service
+                                                                      description: |-
+                                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                                        "Service".
+
+                                                                        Defaults to "Service" when not specified.
+
+                                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                                        outside of the cluster and as such are difficult to reason about in
+                                                                        terms of conformance. They also may not be safe to forward to (see
+                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                                        support ExternalName Services.
+
+                                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                                      type: string
+                                                                    name:
+                                                                      description: Name
+                                                                        is the name
+                                                                        of the referent.
+                                                                      maxLength: 253
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    namespace:
+                                                                      description: |-
+                                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                                        namespace is inferred.
+
+                                                                        Note that when a namespace different than the local namespace is specified,
+                                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                                        documentation for details.
+
+                                                                        Support: Core
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                                      type: string
+                                                                    port:
+                                                                      description: |-
+                                                                        Port specifies the destination port number to use for this resource.
+                                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                                        case, the port number is the service port number, not the target port.
+                                                                        For other resources, destination port might be derived from the referent
+                                                                        resource or this field.
+                                                                      format: int32
+                                                                      maximum: 65535
+                                                                      minimum: 1
+                                                                      type: integer
+                                                                  required:
+                                                                  - name
+                                                                  type: object
+                                                                  x-kubernetes-validations:
+                                                                  - message: Must
+                                                                      have port for
+                                                                      Service reference
+                                                                    rule: '(size(self.group)
+                                                                      == 0 && self.kind
+                                                                      == ''Service'')
+                                                                      ? has(self.port)
+                                                                      : true'
                                                                 cache:
                                                                   description: Response
                                                                     cache configuration.
@@ -2916,6 +2994,14 @@ spec:
                                                                       be set
                                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                       == 1'
+                                                                path:
+                                                                  description: Token
+                                                                    endpoint path;
+                                                                    defaults to "/".
+                                                                    Must start with
+                                                                    "/".
+                                                                  pattern: ^/
+                                                                  type: string
                                                                 requestedTokenType:
                                                                   description: RFC
                                                                     8693 requested_token_type.
@@ -3037,96 +3123,8 @@ spec:
                                                                       - Jwt
                                                                       type: string
                                                                   type: object
-                                                                tokenEndpoint:
-                                                                  description: RFC
-                                                                    8693 token endpoint
-                                                                    backend and path.
-                                                                  properties:
-                                                                    group:
-                                                                      default: ""
-                                                                      description: |-
-                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                                        When unspecified or empty string, core API group is inferred.
-                                                                      maxLength: 253
-                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                                      type: string
-                                                                    kind:
-                                                                      default: Service
-                                                                      description: |-
-                                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                                        "Service".
-
-                                                                        Defaults to "Service" when not specified.
-
-                                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                                        outside of the cluster and as such are difficult to reason about in
-                                                                        terms of conformance. They also may not be safe to forward to (see
-                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                                        support ExternalName Services.
-
-                                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                                      type: string
-                                                                    name:
-                                                                      description: Name
-                                                                        is the name
-                                                                        of the referent.
-                                                                      maxLength: 253
-                                                                      minLength: 1
-                                                                      type: string
-                                                                    namespace:
-                                                                      description: |-
-                                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                                        namespace is inferred.
-
-                                                                        Note that when a namespace different than the local namespace is specified,
-                                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                                        documentation for details.
-
-                                                                        Support: Core
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                                      type: string
-                                                                    path:
-                                                                      description: Token
-                                                                        endpoint path;
-                                                                        defaults to
-                                                                        "/". Must
-                                                                        start with
-                                                                        "/".
-                                                                      pattern: ^/
-                                                                      type: string
-                                                                    port:
-                                                                      description: |-
-                                                                        Port specifies the destination port number to use for this resource.
-                                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                                        case, the port number is the service port number, not the target port.
-                                                                        For other resources, destination port might be derived from the referent
-                                                                        resource or this field.
-                                                                      format: int32
-                                                                      maximum: 65535
-                                                                      minimum: 1
-                                                                      type: integer
-                                                                  required:
-                                                                  - name
-                                                                  type: object
-                                                                  x-kubernetes-validations:
-                                                                  - message: Must
-                                                                      have port for
-                                                                      Service reference
-                                                                    rule: '(size(self.group)
-                                                                      == 0 && self.kind
-                                                                      == ''Service'')
-                                                                      ? has(self.port)
-                                                                      : true'
                                                               required:
-                                                              - tokenEndpoint
+                                                              - backendRef
                                                               type: object
                                                               x-kubernetes-validations:
                                                               - message: actorToken
@@ -4111,6 +4109,85 @@ spec:
                                                                   maxItems: 64
                                                                   minItems: 1
                                                                   type: array
+                                                                backendRef:
+                                                                  description: RFC
+                                                                    8693 token endpoint
+                                                                    backend.
+                                                                  properties:
+                                                                    group:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                                        When unspecified or empty string, core API group is inferred.
+                                                                      maxLength: 253
+                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                                      type: string
+                                                                    kind:
+                                                                      default: Service
+                                                                      description: |-
+                                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                                        "Service".
+
+                                                                        Defaults to "Service" when not specified.
+
+                                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                                        outside of the cluster and as such are difficult to reason about in
+                                                                        terms of conformance. They also may not be safe to forward to (see
+                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                                        support ExternalName Services.
+
+                                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                                      type: string
+                                                                    name:
+                                                                      description: Name
+                                                                        is the name
+                                                                        of the referent.
+                                                                      maxLength: 253
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    namespace:
+                                                                      description: |-
+                                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                                        namespace is inferred.
+
+                                                                        Note that when a namespace different than the local namespace is specified,
+                                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                                        documentation for details.
+
+                                                                        Support: Core
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                                      type: string
+                                                                    port:
+                                                                      description: |-
+                                                                        Port specifies the destination port number to use for this resource.
+                                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                                        case, the port number is the service port number, not the target port.
+                                                                        For other resources, destination port might be derived from the referent
+                                                                        resource or this field.
+                                                                      format: int32
+                                                                      maximum: 65535
+                                                                      minimum: 1
+                                                                      type: integer
+                                                                  required:
+                                                                  - name
+                                                                  type: object
+                                                                  x-kubernetes-validations:
+                                                                  - message: Must
+                                                                      have port for
+                                                                      Service reference
+                                                                    rule: '(size(self.group)
+                                                                      == 0 && self.kind
+                                                                      == ''Service'')
+                                                                      ? has(self.port)
+                                                                      : true'
                                                                 cache:
                                                                   description: Response
                                                                     cache configuration.
@@ -4398,6 +4475,14 @@ spec:
                                                                       be set
                                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                       == 1'
+                                                                path:
+                                                                  description: Token
+                                                                    endpoint path;
+                                                                    defaults to "/".
+                                                                    Must start with
+                                                                    "/".
+                                                                  pattern: ^/
+                                                                  type: string
                                                                 requestedTokenType:
                                                                   description: RFC
                                                                     8693 requested_token_type.
@@ -4519,96 +4604,8 @@ spec:
                                                                       - Jwt
                                                                       type: string
                                                                   type: object
-                                                                tokenEndpoint:
-                                                                  description: RFC
-                                                                    8693 token endpoint
-                                                                    backend and path.
-                                                                  properties:
-                                                                    group:
-                                                                      default: ""
-                                                                      description: |-
-                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                                        When unspecified or empty string, core API group is inferred.
-                                                                      maxLength: 253
-                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                                      type: string
-                                                                    kind:
-                                                                      default: Service
-                                                                      description: |-
-                                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                                        "Service".
-
-                                                                        Defaults to "Service" when not specified.
-
-                                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                                        outside of the cluster and as such are difficult to reason about in
-                                                                        terms of conformance. They also may not be safe to forward to (see
-                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                                        support ExternalName Services.
-
-                                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                                      type: string
-                                                                    name:
-                                                                      description: Name
-                                                                        is the name
-                                                                        of the referent.
-                                                                      maxLength: 253
-                                                                      minLength: 1
-                                                                      type: string
-                                                                    namespace:
-                                                                      description: |-
-                                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                                        namespace is inferred.
-
-                                                                        Note that when a namespace different than the local namespace is specified,
-                                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                                        documentation for details.
-
-                                                                        Support: Core
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                                      type: string
-                                                                    path:
-                                                                      description: Token
-                                                                        endpoint path;
-                                                                        defaults to
-                                                                        "/". Must
-                                                                        start with
-                                                                        "/".
-                                                                      pattern: ^/
-                                                                      type: string
-                                                                    port:
-                                                                      description: |-
-                                                                        Port specifies the destination port number to use for this resource.
-                                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                                        case, the port number is the service port number, not the target port.
-                                                                        For other resources, destination port might be derived from the referent
-                                                                        resource or this field.
-                                                                      format: int32
-                                                                      maximum: 65535
-                                                                      minimum: 1
-                                                                      type: integer
-                                                                  required:
-                                                                  - name
-                                                                  type: object
-                                                                  x-kubernetes-validations:
-                                                                  - message: Must
-                                                                      have port for
-                                                                      Service reference
-                                                                    rule: '(size(self.group)
-                                                                      == 0 && self.kind
-                                                                      == ''Service'')
-                                                                      ? has(self.port)
-                                                                      : true'
                                                               required:
-                                                              - tokenEndpoint
+                                                              - backendRef
                                                               type: object
                                                               x-kubernetes-validations:
                                                               - message: actorToken
@@ -5825,6 +5822,85 @@ spec:
                                                                   maxItems: 64
                                                                   minItems: 1
                                                                   type: array
+                                                                backendRef:
+                                                                  description: RFC
+                                                                    8693 token endpoint
+                                                                    backend.
+                                                                  properties:
+                                                                    group:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                                        When unspecified or empty string, core API group is inferred.
+                                                                      maxLength: 253
+                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                                      type: string
+                                                                    kind:
+                                                                      default: Service
+                                                                      description: |-
+                                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                                        "Service".
+
+                                                                        Defaults to "Service" when not specified.
+
+                                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                                        outside of the cluster and as such are difficult to reason about in
+                                                                        terms of conformance. They also may not be safe to forward to (see
+                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                                        support ExternalName Services.
+
+                                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                                      type: string
+                                                                    name:
+                                                                      description: Name
+                                                                        is the name
+                                                                        of the referent.
+                                                                      maxLength: 253
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    namespace:
+                                                                      description: |-
+                                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                                        namespace is inferred.
+
+                                                                        Note that when a namespace different than the local namespace is specified,
+                                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                                        documentation for details.
+
+                                                                        Support: Core
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                                      type: string
+                                                                    port:
+                                                                      description: |-
+                                                                        Port specifies the destination port number to use for this resource.
+                                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                                        case, the port number is the service port number, not the target port.
+                                                                        For other resources, destination port might be derived from the referent
+                                                                        resource or this field.
+                                                                      format: int32
+                                                                      maximum: 65535
+                                                                      minimum: 1
+                                                                      type: integer
+                                                                  required:
+                                                                  - name
+                                                                  type: object
+                                                                  x-kubernetes-validations:
+                                                                  - message: Must
+                                                                      have port for
+                                                                      Service reference
+                                                                    rule: '(size(self.group)
+                                                                      == 0 && self.kind
+                                                                      == ''Service'')
+                                                                      ? has(self.port)
+                                                                      : true'
                                                                 cache:
                                                                   description: Response
                                                                     cache configuration.
@@ -6112,6 +6188,14 @@ spec:
                                                                       be set
                                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                       == 1'
+                                                                path:
+                                                                  description: Token
+                                                                    endpoint path;
+                                                                    defaults to "/".
+                                                                    Must start with
+                                                                    "/".
+                                                                  pattern: ^/
+                                                                  type: string
                                                                 requestedTokenType:
                                                                   description: RFC
                                                                     8693 requested_token_type.
@@ -6233,96 +6317,8 @@ spec:
                                                                       - Jwt
                                                                       type: string
                                                                   type: object
-                                                                tokenEndpoint:
-                                                                  description: RFC
-                                                                    8693 token endpoint
-                                                                    backend and path.
-                                                                  properties:
-                                                                    group:
-                                                                      default: ""
-                                                                      description: |-
-                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                                        When unspecified or empty string, core API group is inferred.
-                                                                      maxLength: 253
-                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                                      type: string
-                                                                    kind:
-                                                                      default: Service
-                                                                      description: |-
-                                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                                        "Service".
-
-                                                                        Defaults to "Service" when not specified.
-
-                                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                                        outside of the cluster and as such are difficult to reason about in
-                                                                        terms of conformance. They also may not be safe to forward to (see
-                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                                        support ExternalName Services.
-
-                                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                                      type: string
-                                                                    name:
-                                                                      description: Name
-                                                                        is the name
-                                                                        of the referent.
-                                                                      maxLength: 253
-                                                                      minLength: 1
-                                                                      type: string
-                                                                    namespace:
-                                                                      description: |-
-                                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                                        namespace is inferred.
-
-                                                                        Note that when a namespace different than the local namespace is specified,
-                                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                                        documentation for details.
-
-                                                                        Support: Core
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                                      type: string
-                                                                    path:
-                                                                      description: Token
-                                                                        endpoint path;
-                                                                        defaults to
-                                                                        "/". Must
-                                                                        start with
-                                                                        "/".
-                                                                      pattern: ^/
-                                                                      type: string
-                                                                    port:
-                                                                      description: |-
-                                                                        Port specifies the destination port number to use for this resource.
-                                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                                        case, the port number is the service port number, not the target port.
-                                                                        For other resources, destination port might be derived from the referent
-                                                                        resource or this field.
-                                                                      format: int32
-                                                                      maximum: 65535
-                                                                      minimum: 1
-                                                                      type: integer
-                                                                  required:
-                                                                  - name
-                                                                  type: object
-                                                                  x-kubernetes-validations:
-                                                                  - message: Must
-                                                                      have port for
-                                                                      Service reference
-                                                                    rule: '(size(self.group)
-                                                                      == 0 && self.kind
-                                                                      == ''Service'')
-                                                                      ? has(self.port)
-                                                                      : true'
                                                               required:
-                                                              - tokenEndpoint
+                                                              - backendRef
                                                               type: object
                                                               x-kubernetes-validations:
                                                               - message: actorToken
@@ -7311,6 +7307,85 @@ spec:
                                                                   maxItems: 64
                                                                   minItems: 1
                                                                   type: array
+                                                                backendRef:
+                                                                  description: RFC
+                                                                    8693 token endpoint
+                                                                    backend.
+                                                                  properties:
+                                                                    group:
+                                                                      default: ""
+                                                                      description: |-
+                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                                        When unspecified or empty string, core API group is inferred.
+                                                                      maxLength: 253
+                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                                      type: string
+                                                                    kind:
+                                                                      default: Service
+                                                                      description: |-
+                                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                                        "Service".
+
+                                                                        Defaults to "Service" when not specified.
+
+                                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                                        outside of the cluster and as such are difficult to reason about in
+                                                                        terms of conformance. They also may not be safe to forward to (see
+                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                                        support ExternalName Services.
+
+                                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                                      type: string
+                                                                    name:
+                                                                      description: Name
+                                                                        is the name
+                                                                        of the referent.
+                                                                      maxLength: 253
+                                                                      minLength: 1
+                                                                      type: string
+                                                                    namespace:
+                                                                      description: |-
+                                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                                        namespace is inferred.
+
+                                                                        Note that when a namespace different than the local namespace is specified,
+                                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                                        documentation for details.
+
+                                                                        Support: Core
+                                                                      maxLength: 63
+                                                                      minLength: 1
+                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                                      type: string
+                                                                    port:
+                                                                      description: |-
+                                                                        Port specifies the destination port number to use for this resource.
+                                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                                        case, the port number is the service port number, not the target port.
+                                                                        For other resources, destination port might be derived from the referent
+                                                                        resource or this field.
+                                                                      format: int32
+                                                                      maximum: 65535
+                                                                      minimum: 1
+                                                                      type: integer
+                                                                  required:
+                                                                  - name
+                                                                  type: object
+                                                                  x-kubernetes-validations:
+                                                                  - message: Must
+                                                                      have port for
+                                                                      Service reference
+                                                                    rule: '(size(self.group)
+                                                                      == 0 && self.kind
+                                                                      == ''Service'')
+                                                                      ? has(self.port)
+                                                                      : true'
                                                                 cache:
                                                                   description: Response
                                                                     cache configuration.
@@ -7598,6 +7673,14 @@ spec:
                                                                       be set
                                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                                       == 1'
+                                                                path:
+                                                                  description: Token
+                                                                    endpoint path;
+                                                                    defaults to "/".
+                                                                    Must start with
+                                                                    "/".
+                                                                  pattern: ^/
+                                                                  type: string
                                                                 requestedTokenType:
                                                                   description: RFC
                                                                     8693 requested_token_type.
@@ -7719,96 +7802,8 @@ spec:
                                                                       - Jwt
                                                                       type: string
                                                                   type: object
-                                                                tokenEndpoint:
-                                                                  description: RFC
-                                                                    8693 token endpoint
-                                                                    backend and path.
-                                                                  properties:
-                                                                    group:
-                                                                      default: ""
-                                                                      description: |-
-                                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                                        When unspecified or empty string, core API group is inferred.
-                                                                      maxLength: 253
-                                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                                      type: string
-                                                                    kind:
-                                                                      default: Service
-                                                                      description: |-
-                                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                                        "Service".
-
-                                                                        Defaults to "Service" when not specified.
-
-                                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                                        outside of the cluster and as such are difficult to reason about in
-                                                                        terms of conformance. They also may not be safe to forward to (see
-                                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                                        support ExternalName Services.
-
-                                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                                      type: string
-                                                                    name:
-                                                                      description: Name
-                                                                        is the name
-                                                                        of the referent.
-                                                                      maxLength: 253
-                                                                      minLength: 1
-                                                                      type: string
-                                                                    namespace:
-                                                                      description: |-
-                                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                                        namespace is inferred.
-
-                                                                        Note that when a namespace different than the local namespace is specified,
-                                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                                        documentation for details.
-
-                                                                        Support: Core
-                                                                      maxLength: 63
-                                                                      minLength: 1
-                                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                                      type: string
-                                                                    path:
-                                                                      description: Token
-                                                                        endpoint path;
-                                                                        defaults to
-                                                                        "/". Must
-                                                                        start with
-                                                                        "/".
-                                                                      pattern: ^/
-                                                                      type: string
-                                                                    port:
-                                                                      description: |-
-                                                                        Port specifies the destination port number to use for this resource.
-                                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                                        case, the port number is the service port number, not the target port.
-                                                                        For other resources, destination port might be derived from the referent
-                                                                        resource or this field.
-                                                                      format: int32
-                                                                      maximum: 65535
-                                                                      minimum: 1
-                                                                      type: integer
-                                                                  required:
-                                                                  - name
-                                                                  type: object
-                                                                  x-kubernetes-validations:
-                                                                  - message: Must
-                                                                      have port for
-                                                                      Service reference
-                                                                    rule: '(size(self.group)
-                                                                      == 0 && self.kind
-                                                                      == ''Service'')
-                                                                      ? has(self.port)
-                                                                      : true'
                                                               required:
-                                                              - tokenEndpoint
+                                                              - backendRef
                                                               type: object
                                                               x-kubernetes-validations:
                                                               - message: actorToken
@@ -9015,6 +9010,79 @@ spec:
                                             maxItems: 64
                                             minItems: 1
                                             type: array
+                                          backendRef:
+                                            description: RFC 8693 token endpoint backend.
+                                            properties:
+                                              group:
+                                                default: ""
+                                                description: |-
+                                                  Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                  When unspecified or empty string, core API group is inferred.
+                                                maxLength: 253
+                                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                type: string
+                                              kind:
+                                                default: Service
+                                                description: |-
+                                                  Kind is the Kubernetes resource kind of the referent. For example
+                                                  "Service".
+
+                                                  Defaults to "Service" when not specified.
+
+                                                  ExternalName services can refer to CNAME DNS records that may live
+                                                  outside of the cluster and as such are difficult to reason about in
+                                                  terms of conformance. They also may not be safe to forward to (see
+                                                  CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                  support ExternalName Services.
+
+                                                  Support: Core (Services with a type other than ExternalName)
+
+                                                  Support: Implementation-specific (Services with type ExternalName)
+                                                maxLength: 63
+                                                minLength: 1
+                                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                type: string
+                                              name:
+                                                description: Name is the name of the
+                                                  referent.
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                              namespace:
+                                                description: |-
+                                                  Namespace is the namespace of the backend. When unspecified, the local
+                                                  namespace is inferred.
+
+                                                  Note that when a namespace different than the local namespace is specified,
+                                                  a ReferenceGrant object is required in the referent namespace to allow that
+                                                  namespace's owner to accept the reference. See the ReferenceGrant
+                                                  documentation for details.
+
+                                                  Support: Core
+                                                maxLength: 63
+                                                minLength: 1
+                                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                type: string
+                                              port:
+                                                description: |-
+                                                  Port specifies the destination port number to use for this resource.
+                                                  Port is required when the referent is a Kubernetes Service. In this
+                                                  case, the port number is the service port number, not the target port.
+                                                  For other resources, destination port might be derived from the referent
+                                                  resource or this field.
+                                                format: int32
+                                                maximum: 65535
+                                                minimum: 1
+                                                type: integer
+                                            required:
+                                            - name
+                                            type: object
+                                            x-kubernetes-validations:
+                                            - message: Must have port for Service
+                                                reference
+                                              rule: '(size(self.group) == 0 && self.kind
+                                                == ''Service'') ? has(self.port) :
+                                                true'
                                           cache:
                                             description: Response cache configuration.
                                             properties:
@@ -9228,6 +9296,11 @@ spec:
                                                 be set
                                               rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                 == 1'
+                                          path:
+                                            description: Token endpoint path; defaults
+                                              to "/". Must start with "/".
+                                            pattern: ^/
+                                            type: string
                                           requestedTokenType:
                                             description: RFC 8693 requested_token_type.
                                             enum:
@@ -9330,88 +9403,8 @@ spec:
                                                 - Jwt
                                                 type: string
                                             type: object
-                                          tokenEndpoint:
-                                            description: RFC 8693 token endpoint backend
-                                              and path.
-                                            properties:
-                                              group:
-                                                default: ""
-                                                description: |-
-                                                  Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                  When unspecified or empty string, core API group is inferred.
-                                                maxLength: 253
-                                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                type: string
-                                              kind:
-                                                default: Service
-                                                description: |-
-                                                  Kind is the Kubernetes resource kind of the referent. For example
-                                                  "Service".
-
-                                                  Defaults to "Service" when not specified.
-
-                                                  ExternalName services can refer to CNAME DNS records that may live
-                                                  outside of the cluster and as such are difficult to reason about in
-                                                  terms of conformance. They also may not be safe to forward to (see
-                                                  CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                  support ExternalName Services.
-
-                                                  Support: Core (Services with a type other than ExternalName)
-
-                                                  Support: Implementation-specific (Services with type ExternalName)
-                                                maxLength: 63
-                                                minLength: 1
-                                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                type: string
-                                              name:
-                                                description: Name is the name of the
-                                                  referent.
-                                                maxLength: 253
-                                                minLength: 1
-                                                type: string
-                                              namespace:
-                                                description: |-
-                                                  Namespace is the namespace of the backend. When unspecified, the local
-                                                  namespace is inferred.
-
-                                                  Note that when a namespace different than the local namespace is specified,
-                                                  a ReferenceGrant object is required in the referent namespace to allow that
-                                                  namespace's owner to accept the reference. See the ReferenceGrant
-                                                  documentation for details.
-
-                                                  Support: Core
-                                                maxLength: 63
-                                                minLength: 1
-                                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                type: string
-                                              path:
-                                                description: Token endpoint path;
-                                                  defaults to "/". Must start with
-                                                  "/".
-                                                pattern: ^/
-                                                type: string
-                                              port:
-                                                description: |-
-                                                  Port specifies the destination port number to use for this resource.
-                                                  Port is required when the referent is a Kubernetes Service. In this
-                                                  case, the port number is the service port number, not the target port.
-                                                  For other resources, destination port might be derived from the referent
-                                                  resource or this field.
-                                                format: int32
-                                                maximum: 65535
-                                                minimum: 1
-                                                type: integer
-                                            required:
-                                            - name
-                                            type: object
-                                            x-kubernetes-validations:
-                                            - message: Must have port for Service
-                                                reference
-                                              rule: '(size(self.group) == 0 && self.kind
-                                                == ''Service'') ? has(self.port) :
-                                                true'
                                         required:
-                                        - tokenEndpoint
+                                        - backendRef
                                         type: object
                                         x-kubernetes-validations:
                                         - message: actorToken is only valid with TokenExchange
@@ -11202,6 +11195,77 @@ spec:
                                           maxItems: 64
                                           minItems: 1
                                           type: array
+                                        backendRef:
+                                          description: RFC 8693 token endpoint backend.
+                                          properties:
+                                            group:
+                                              default: ""
+                                              description: |-
+                                                Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                When unspecified or empty string, core API group is inferred.
+                                              maxLength: 253
+                                              pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                              type: string
+                                            kind:
+                                              default: Service
+                                              description: |-
+                                                Kind is the Kubernetes resource kind of the referent. For example
+                                                "Service".
+
+                                                Defaults to "Service" when not specified.
+
+                                                ExternalName services can refer to CNAME DNS records that may live
+                                                outside of the cluster and as such are difficult to reason about in
+                                                terms of conformance. They also may not be safe to forward to (see
+                                                CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                support ExternalName Services.
+
+                                                Support: Core (Services with a type other than ExternalName)
+
+                                                Support: Implementation-specific (Services with type ExternalName)
+                                              maxLength: 63
+                                              minLength: 1
+                                              pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                              type: string
+                                            name:
+                                              description: Name is the name of the
+                                                referent.
+                                              maxLength: 253
+                                              minLength: 1
+                                              type: string
+                                            namespace:
+                                              description: |-
+                                                Namespace is the namespace of the backend. When unspecified, the local
+                                                namespace is inferred.
+
+                                                Note that when a namespace different than the local namespace is specified,
+                                                a ReferenceGrant object is required in the referent namespace to allow that
+                                                namespace's owner to accept the reference. See the ReferenceGrant
+                                                documentation for details.
+
+                                                Support: Core
+                                              maxLength: 63
+                                              minLength: 1
+                                              pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                              type: string
+                                            port:
+                                              description: |-
+                                                Port specifies the destination port number to use for this resource.
+                                                Port is required when the referent is a Kubernetes Service. In this
+                                                case, the port number is the service port number, not the target port.
+                                                For other resources, destination port might be derived from the referent
+                                                resource or this field.
+                                              format: int32
+                                              maximum: 65535
+                                              minimum: 1
+                                              type: integer
+                                          required:
+                                          - name
+                                          type: object
+                                          x-kubernetes-validations:
+                                          - message: Must have port for Service reference
+                                            rule: '(size(self.group) == 0 && self.kind
+                                              == ''Service'') ? has(self.port) : true'
                                         cache:
                                           description: Response cache configuration.
                                           properties:
@@ -11412,6 +11476,11 @@ spec:
                                               be set
                                             rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                               == 1'
+                                        path:
+                                          description: Token endpoint path; defaults
+                                            to "/". Must start with "/".
+                                          pattern: ^/
+                                          type: string
                                         requestedTokenType:
                                           description: RFC 8693 requested_token_type.
                                           enum:
@@ -11513,85 +11582,8 @@ spec:
                                               - Jwt
                                               type: string
                                           type: object
-                                        tokenEndpoint:
-                                          description: RFC 8693 token endpoint backend
-                                            and path.
-                                          properties:
-                                            group:
-                                              default: ""
-                                              description: |-
-                                                Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                When unspecified or empty string, core API group is inferred.
-                                              maxLength: 253
-                                              pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                              type: string
-                                            kind:
-                                              default: Service
-                                              description: |-
-                                                Kind is the Kubernetes resource kind of the referent. For example
-                                                "Service".
-
-                                                Defaults to "Service" when not specified.
-
-                                                ExternalName services can refer to CNAME DNS records that may live
-                                                outside of the cluster and as such are difficult to reason about in
-                                                terms of conformance. They also may not be safe to forward to (see
-                                                CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                support ExternalName Services.
-
-                                                Support: Core (Services with a type other than ExternalName)
-
-                                                Support: Implementation-specific (Services with type ExternalName)
-                                              maxLength: 63
-                                              minLength: 1
-                                              pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                              type: string
-                                            name:
-                                              description: Name is the name of the
-                                                referent.
-                                              maxLength: 253
-                                              minLength: 1
-                                              type: string
-                                            namespace:
-                                              description: |-
-                                                Namespace is the namespace of the backend. When unspecified, the local
-                                                namespace is inferred.
-
-                                                Note that when a namespace different than the local namespace is specified,
-                                                a ReferenceGrant object is required in the referent namespace to allow that
-                                                namespace's owner to accept the reference. See the ReferenceGrant
-                                                documentation for details.
-
-                                                Support: Core
-                                              maxLength: 63
-                                              minLength: 1
-                                              pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                              type: string
-                                            path:
-                                              description: Token endpoint path; defaults
-                                                to "/". Must start with "/".
-                                              pattern: ^/
-                                              type: string
-                                            port:
-                                              description: |-
-                                                Port specifies the destination port number to use for this resource.
-                                                Port is required when the referent is a Kubernetes Service. In this
-                                                case, the port number is the service port number, not the target port.
-                                                For other resources, destination port might be derived from the referent
-                                                resource or this field.
-                                              format: int32
-                                              maximum: 65535
-                                              minimum: 1
-                                              type: integer
-                                          required:
-                                          - name
-                                          type: object
-                                          x-kubernetes-validations:
-                                          - message: Must have port for Service reference
-                                            rule: '(size(self.group) == 0 && self.kind
-                                              == ''Service'') ? has(self.port) : true'
                                       required:
-                                      - tokenEndpoint
+                                      - backendRef
                                       type: object
                                       x-kubernetes-validations:
                                       - message: actorToken is only valid with TokenExchange
@@ -12669,6 +12661,80 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
+                                                backendRef:
+                                                  description: RFC 8693 token endpoint
+                                                    backend.
+                                                  properties:
+                                                    group:
+                                                      default: ""
+                                                      description: |-
+                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                        When unspecified or empty string, core API group is inferred.
+                                                      maxLength: 253
+                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                      type: string
+                                                    kind:
+                                                      default: Service
+                                                      description: |-
+                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                        "Service".
+
+                                                        Defaults to "Service" when not specified.
+
+                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                        outside of the cluster and as such are difficult to reason about in
+                                                        terms of conformance. They also may not be safe to forward to (see
+                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                        support ExternalName Services.
+
+                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                      type: string
+                                                    name:
+                                                      description: Name is the name
+                                                        of the referent.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    namespace:
+                                                      description: |-
+                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                        namespace is inferred.
+
+                                                        Note that when a namespace different than the local namespace is specified,
+                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                        documentation for details.
+
+                                                        Support: Core
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                      type: string
+                                                    port:
+                                                      description: |-
+                                                        Port specifies the destination port number to use for this resource.
+                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                        case, the port number is the service port number, not the target port.
+                                                        For other resources, destination port might be derived from the referent
+                                                        resource or this field.
+                                                      format: int32
+                                                      maximum: 65535
+                                                      minimum: 1
+                                                      type: integer
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: Must have port for Service
+                                                      reference
+                                                    rule: '(size(self.group) == 0
+                                                      && self.kind == ''Service'')
+                                                      ? has(self.port) : true'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -12892,6 +12958,12 @@ spec:
                                                       must be set
                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                       == 1'
+                                                path:
+                                                  description: Token endpoint path;
+                                                    defaults to "/". Must start with
+                                                    "/".
+                                                  pattern: ^/
+                                                  type: string
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
@@ -12996,88 +13068,8 @@ spec:
                                                       - Jwt
                                                       type: string
                                                   type: object
-                                                tokenEndpoint:
-                                                  description: RFC 8693 token endpoint
-                                                    backend and path.
-                                                  properties:
-                                                    group:
-                                                      default: ""
-                                                      description: |-
-                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                        When unspecified or empty string, core API group is inferred.
-                                                      maxLength: 253
-                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                      type: string
-                                                    kind:
-                                                      default: Service
-                                                      description: |-
-                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                        "Service".
-
-                                                        Defaults to "Service" when not specified.
-
-                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                        outside of the cluster and as such are difficult to reason about in
-                                                        terms of conformance. They also may not be safe to forward to (see
-                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                        support ExternalName Services.
-
-                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                      type: string
-                                                    name:
-                                                      description: Name is the name
-                                                        of the referent.
-                                                      maxLength: 253
-                                                      minLength: 1
-                                                      type: string
-                                                    namespace:
-                                                      description: |-
-                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                        namespace is inferred.
-
-                                                        Note that when a namespace different than the local namespace is specified,
-                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                        documentation for details.
-
-                                                        Support: Core
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                      type: string
-                                                    path:
-                                                      description: Token endpoint
-                                                        path; defaults to "/". Must
-                                                        start with "/".
-                                                      pattern: ^/
-                                                      type: string
-                                                    port:
-                                                      description: |-
-                                                        Port specifies the destination port number to use for this resource.
-                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                        case, the port number is the service port number, not the target port.
-                                                        For other resources, destination port might be derived from the referent
-                                                        resource or this field.
-                                                      format: int32
-                                                      maximum: 65535
-                                                      minimum: 1
-                                                      type: integer
-                                                  required:
-                                                  - name
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: Must have port for Service
-                                                      reference
-                                                    rule: '(size(self.group) == 0
-                                                      && self.kind == ''Service'')
-                                                      ? has(self.port) : true'
                                               required:
-                                              - tokenEndpoint
+                                              - backendRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: actorToken is only valid
@@ -13944,6 +13936,80 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
+                                                backendRef:
+                                                  description: RFC 8693 token endpoint
+                                                    backend.
+                                                  properties:
+                                                    group:
+                                                      default: ""
+                                                      description: |-
+                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                        When unspecified or empty string, core API group is inferred.
+                                                      maxLength: 253
+                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                      type: string
+                                                    kind:
+                                                      default: Service
+                                                      description: |-
+                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                        "Service".
+
+                                                        Defaults to "Service" when not specified.
+
+                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                        outside of the cluster and as such are difficult to reason about in
+                                                        terms of conformance. They also may not be safe to forward to (see
+                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                        support ExternalName Services.
+
+                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                      type: string
+                                                    name:
+                                                      description: Name is the name
+                                                        of the referent.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    namespace:
+                                                      description: |-
+                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                        namespace is inferred.
+
+                                                        Note that when a namespace different than the local namespace is specified,
+                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                        documentation for details.
+
+                                                        Support: Core
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                      type: string
+                                                    port:
+                                                      description: |-
+                                                        Port specifies the destination port number to use for this resource.
+                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                        case, the port number is the service port number, not the target port.
+                                                        For other resources, destination port might be derived from the referent
+                                                        resource or this field.
+                                                      format: int32
+                                                      maximum: 65535
+                                                      minimum: 1
+                                                      type: integer
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: Must have port for Service
+                                                      reference
+                                                    rule: '(size(self.group) == 0
+                                                      && self.kind == ''Service'')
+                                                      ? has(self.port) : true'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -14167,6 +14233,12 @@ spec:
                                                       must be set
                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                       == 1'
+                                                path:
+                                                  description: Token endpoint path;
+                                                    defaults to "/". Must start with
+                                                    "/".
+                                                  pattern: ^/
+                                                  type: string
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
@@ -14271,88 +14343,8 @@ spec:
                                                       - Jwt
                                                       type: string
                                                   type: object
-                                                tokenEndpoint:
-                                                  description: RFC 8693 token endpoint
-                                                    backend and path.
-                                                  properties:
-                                                    group:
-                                                      default: ""
-                                                      description: |-
-                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                        When unspecified or empty string, core API group is inferred.
-                                                      maxLength: 253
-                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                      type: string
-                                                    kind:
-                                                      default: Service
-                                                      description: |-
-                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                        "Service".
-
-                                                        Defaults to "Service" when not specified.
-
-                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                        outside of the cluster and as such are difficult to reason about in
-                                                        terms of conformance. They also may not be safe to forward to (see
-                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                        support ExternalName Services.
-
-                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                      type: string
-                                                    name:
-                                                      description: Name is the name
-                                                        of the referent.
-                                                      maxLength: 253
-                                                      minLength: 1
-                                                      type: string
-                                                    namespace:
-                                                      description: |-
-                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                        namespace is inferred.
-
-                                                        Note that when a namespace different than the local namespace is specified,
-                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                        documentation for details.
-
-                                                        Support: Core
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                      type: string
-                                                    path:
-                                                      description: Token endpoint
-                                                        path; defaults to "/". Must
-                                                        start with "/".
-                                                      pattern: ^/
-                                                      type: string
-                                                    port:
-                                                      description: |-
-                                                        Port specifies the destination port number to use for this resource.
-                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                        case, the port number is the service port number, not the target port.
-                                                        For other resources, destination port might be derived from the referent
-                                                        resource or this field.
-                                                      format: int32
-                                                      maximum: 65535
-                                                      minimum: 1
-                                                      type: integer
-                                                  required:
-                                                  - name
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: Must have port for Service
-                                                      reference
-                                                    rule: '(size(self.group) == 0
-                                                      && self.kind == ''Service'')
-                                                      ? has(self.port) : true'
                                               required:
-                                              - tokenEndpoint
+                                              - backendRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: actorToken is only valid
@@ -15214,6 +15206,80 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
+                                                backendRef:
+                                                  description: RFC 8693 token endpoint
+                                                    backend.
+                                                  properties:
+                                                    group:
+                                                      default: ""
+                                                      description: |-
+                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                        When unspecified or empty string, core API group is inferred.
+                                                      maxLength: 253
+                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                      type: string
+                                                    kind:
+                                                      default: Service
+                                                      description: |-
+                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                        "Service".
+
+                                                        Defaults to "Service" when not specified.
+
+                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                        outside of the cluster and as such are difficult to reason about in
+                                                        terms of conformance. They also may not be safe to forward to (see
+                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                        support ExternalName Services.
+
+                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                      type: string
+                                                    name:
+                                                      description: Name is the name
+                                                        of the referent.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    namespace:
+                                                      description: |-
+                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                        namespace is inferred.
+
+                                                        Note that when a namespace different than the local namespace is specified,
+                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                        documentation for details.
+
+                                                        Support: Core
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                      type: string
+                                                    port:
+                                                      description: |-
+                                                        Port specifies the destination port number to use for this resource.
+                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                        case, the port number is the service port number, not the target port.
+                                                        For other resources, destination port might be derived from the referent
+                                                        resource or this field.
+                                                      format: int32
+                                                      maximum: 65535
+                                                      minimum: 1
+                                                      type: integer
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: Must have port for Service
+                                                      reference
+                                                    rule: '(size(self.group) == 0
+                                                      && self.kind == ''Service'')
+                                                      ? has(self.port) : true'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -15437,6 +15503,12 @@ spec:
                                                       must be set
                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                       == 1'
+                                                path:
+                                                  description: Token endpoint path;
+                                                    defaults to "/". Must start with
+                                                    "/".
+                                                  pattern: ^/
+                                                  type: string
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
@@ -15541,88 +15613,8 @@ spec:
                                                       - Jwt
                                                       type: string
                                                   type: object
-                                                tokenEndpoint:
-                                                  description: RFC 8693 token endpoint
-                                                    backend and path.
-                                                  properties:
-                                                    group:
-                                                      default: ""
-                                                      description: |-
-                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                        When unspecified or empty string, core API group is inferred.
-                                                      maxLength: 253
-                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                      type: string
-                                                    kind:
-                                                      default: Service
-                                                      description: |-
-                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                        "Service".
-
-                                                        Defaults to "Service" when not specified.
-
-                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                        outside of the cluster and as such are difficult to reason about in
-                                                        terms of conformance. They also may not be safe to forward to (see
-                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                        support ExternalName Services.
-
-                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                      type: string
-                                                    name:
-                                                      description: Name is the name
-                                                        of the referent.
-                                                      maxLength: 253
-                                                      minLength: 1
-                                                      type: string
-                                                    namespace:
-                                                      description: |-
-                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                        namespace is inferred.
-
-                                                        Note that when a namespace different than the local namespace is specified,
-                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                        documentation for details.
-
-                                                        Support: Core
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                      type: string
-                                                    path:
-                                                      description: Token endpoint
-                                                        path; defaults to "/". Must
-                                                        start with "/".
-                                                      pattern: ^/
-                                                      type: string
-                                                    port:
-                                                      description: |-
-                                                        Port specifies the destination port number to use for this resource.
-                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                        case, the port number is the service port number, not the target port.
-                                                        For other resources, destination port might be derived from the referent
-                                                        resource or this field.
-                                                      format: int32
-                                                      maximum: 65535
-                                                      minimum: 1
-                                                      type: integer
-                                                  required:
-                                                  - name
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: Must have port for Service
-                                                      reference
-                                                    rule: '(size(self.group) == 0
-                                                      && self.kind == ''Service'')
-                                                      ? has(self.port) : true'
                                               required:
-                                              - tokenEndpoint
+                                              - backendRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: actorToken is only valid
@@ -16710,6 +16702,80 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
+                                                backendRef:
+                                                  description: RFC 8693 token endpoint
+                                                    backend.
+                                                  properties:
+                                                    group:
+                                                      default: ""
+                                                      description: |-
+                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                        When unspecified or empty string, core API group is inferred.
+                                                      maxLength: 253
+                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                      type: string
+                                                    kind:
+                                                      default: Service
+                                                      description: |-
+                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                        "Service".
+
+                                                        Defaults to "Service" when not specified.
+
+                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                        outside of the cluster and as such are difficult to reason about in
+                                                        terms of conformance. They also may not be safe to forward to (see
+                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                        support ExternalName Services.
+
+                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                      type: string
+                                                    name:
+                                                      description: Name is the name
+                                                        of the referent.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    namespace:
+                                                      description: |-
+                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                        namespace is inferred.
+
+                                                        Note that when a namespace different than the local namespace is specified,
+                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                        documentation for details.
+
+                                                        Support: Core
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                      type: string
+                                                    port:
+                                                      description: |-
+                                                        Port specifies the destination port number to use for this resource.
+                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                        case, the port number is the service port number, not the target port.
+                                                        For other resources, destination port might be derived from the referent
+                                                        resource or this field.
+                                                      format: int32
+                                                      maximum: 65535
+                                                      minimum: 1
+                                                      type: integer
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: Must have port for Service
+                                                      reference
+                                                    rule: '(size(self.group) == 0
+                                                      && self.kind == ''Service'')
+                                                      ? has(self.port) : true'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -16933,6 +16999,12 @@ spec:
                                                       must be set
                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                       == 1'
+                                                path:
+                                                  description: Token endpoint path;
+                                                    defaults to "/". Must start with
+                                                    "/".
+                                                  pattern: ^/
+                                                  type: string
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
@@ -17037,88 +17109,8 @@ spec:
                                                       - Jwt
                                                       type: string
                                                   type: object
-                                                tokenEndpoint:
-                                                  description: RFC 8693 token endpoint
-                                                    backend and path.
-                                                  properties:
-                                                    group:
-                                                      default: ""
-                                                      description: |-
-                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                        When unspecified or empty string, core API group is inferred.
-                                                      maxLength: 253
-                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                      type: string
-                                                    kind:
-                                                      default: Service
-                                                      description: |-
-                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                        "Service".
-
-                                                        Defaults to "Service" when not specified.
-
-                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                        outside of the cluster and as such are difficult to reason about in
-                                                        terms of conformance. They also may not be safe to forward to (see
-                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                        support ExternalName Services.
-
-                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                      type: string
-                                                    name:
-                                                      description: Name is the name
-                                                        of the referent.
-                                                      maxLength: 253
-                                                      minLength: 1
-                                                      type: string
-                                                    namespace:
-                                                      description: |-
-                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                        namespace is inferred.
-
-                                                        Note that when a namespace different than the local namespace is specified,
-                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                        documentation for details.
-
-                                                        Support: Core
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                      type: string
-                                                    path:
-                                                      description: Token endpoint
-                                                        path; defaults to "/". Must
-                                                        start with "/".
-                                                      pattern: ^/
-                                                      type: string
-                                                    port:
-                                                      description: |-
-                                                        Port specifies the destination port number to use for this resource.
-                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                        case, the port number is the service port number, not the target port.
-                                                        For other resources, destination port might be derived from the referent
-                                                        resource or this field.
-                                                      format: int32
-                                                      maximum: 65535
-                                                      minimum: 1
-                                                      type: integer
-                                                  required:
-                                                  - name
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: Must have port for Service
-                                                      reference
-                                                    rule: '(size(self.group) == 0
-                                                      && self.kind == ''Service'')
-                                                      ? has(self.port) : true'
                                               required:
-                                              - tokenEndpoint
+                                              - backendRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: actorToken is only valid
@@ -17985,6 +17977,80 @@ spec:
                                                   maxItems: 64
                                                   minItems: 1
                                                   type: array
+                                                backendRef:
+                                                  description: RFC 8693 token endpoint
+                                                    backend.
+                                                  properties:
+                                                    group:
+                                                      default: ""
+                                                      description: |-
+                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                        When unspecified or empty string, core API group is inferred.
+                                                      maxLength: 253
+                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                      type: string
+                                                    kind:
+                                                      default: Service
+                                                      description: |-
+                                                        Kind is the Kubernetes resource kind of the referent. For example
+                                                        "Service".
+
+                                                        Defaults to "Service" when not specified.
+
+                                                        ExternalName services can refer to CNAME DNS records that may live
+                                                        outside of the cluster and as such are difficult to reason about in
+                                                        terms of conformance. They also may not be safe to forward to (see
+                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                        support ExternalName Services.
+
+                                                        Support: Core (Services with a type other than ExternalName)
+
+                                                        Support: Implementation-specific (Services with type ExternalName)
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                      type: string
+                                                    name:
+                                                      description: Name is the name
+                                                        of the referent.
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    namespace:
+                                                      description: |-
+                                                        Namespace is the namespace of the backend. When unspecified, the local
+                                                        namespace is inferred.
+
+                                                        Note that when a namespace different than the local namespace is specified,
+                                                        a ReferenceGrant object is required in the referent namespace to allow that
+                                                        namespace's owner to accept the reference. See the ReferenceGrant
+                                                        documentation for details.
+
+                                                        Support: Core
+                                                      maxLength: 63
+                                                      minLength: 1
+                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                      type: string
+                                                    port:
+                                                      description: |-
+                                                        Port specifies the destination port number to use for this resource.
+                                                        Port is required when the referent is a Kubernetes Service. In this
+                                                        case, the port number is the service port number, not the target port.
+                                                        For other resources, destination port might be derived from the referent
+                                                        resource or this field.
+                                                      format: int32
+                                                      maximum: 65535
+                                                      minimum: 1
+                                                      type: integer
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-validations:
+                                                  - message: Must have port for Service
+                                                      reference
+                                                    rule: '(size(self.group) == 0
+                                                      && self.kind == ''Service'')
+                                                      ? has(self.port) : true'
                                                 cache:
                                                   description: Response cache configuration.
                                                   properties:
@@ -18208,6 +18274,12 @@ spec:
                                                       must be set
                                                     rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                       == 1'
+                                                path:
+                                                  description: Token endpoint path;
+                                                    defaults to "/". Must start with
+                                                    "/".
+                                                  pattern: ^/
+                                                  type: string
                                                 requestedTokenType:
                                                   description: RFC 8693 requested_token_type.
                                                   enum:
@@ -18312,88 +18384,8 @@ spec:
                                                       - Jwt
                                                       type: string
                                                   type: object
-                                                tokenEndpoint:
-                                                  description: RFC 8693 token endpoint
-                                                    backend and path.
-                                                  properties:
-                                                    group:
-                                                      default: ""
-                                                      description: |-
-                                                        Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                        When unspecified or empty string, core API group is inferred.
-                                                      maxLength: 253
-                                                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                      type: string
-                                                    kind:
-                                                      default: Service
-                                                      description: |-
-                                                        Kind is the Kubernetes resource kind of the referent. For example
-                                                        "Service".
-
-                                                        Defaults to "Service" when not specified.
-
-                                                        ExternalName services can refer to CNAME DNS records that may live
-                                                        outside of the cluster and as such are difficult to reason about in
-                                                        terms of conformance. They also may not be safe to forward to (see
-                                                        CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                        support ExternalName Services.
-
-                                                        Support: Core (Services with a type other than ExternalName)
-
-                                                        Support: Implementation-specific (Services with type ExternalName)
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                      type: string
-                                                    name:
-                                                      description: Name is the name
-                                                        of the referent.
-                                                      maxLength: 253
-                                                      minLength: 1
-                                                      type: string
-                                                    namespace:
-                                                      description: |-
-                                                        Namespace is the namespace of the backend. When unspecified, the local
-                                                        namespace is inferred.
-
-                                                        Note that when a namespace different than the local namespace is specified,
-                                                        a ReferenceGrant object is required in the referent namespace to allow that
-                                                        namespace's owner to accept the reference. See the ReferenceGrant
-                                                        documentation for details.
-
-                                                        Support: Core
-                                                      maxLength: 63
-                                                      minLength: 1
-                                                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                      type: string
-                                                    path:
-                                                      description: Token endpoint
-                                                        path; defaults to "/". Must
-                                                        start with "/".
-                                                      pattern: ^/
-                                                      type: string
-                                                    port:
-                                                      description: |-
-                                                        Port specifies the destination port number to use for this resource.
-                                                        Port is required when the referent is a Kubernetes Service. In this
-                                                        case, the port number is the service port number, not the target port.
-                                                        For other resources, destination port might be derived from the referent
-                                                        resource or this field.
-                                                      format: int32
-                                                      maximum: 65535
-                                                      minimum: 1
-                                                      type: integer
-                                                  required:
-                                                  - name
-                                                  type: object
-                                                  x-kubernetes-validations:
-                                                  - message: Must have port for Service
-                                                      reference
-                                                    rule: '(size(self.group) == 0
-                                                      && self.kind == ''Service'')
-                                                      ? has(self.port) : true'
                                               required:
-                                              - tokenEndpoint
+                                              - backendRef
                                               type: object
                                               x-kubernetes-validations:
                                               - message: actorToken is only valid
@@ -19513,6 +19505,76 @@ spec:
                             maxItems: 64
                             minItems: 1
                             type: array
+                          backendRef:
+                            description: RFC 8693 token endpoint backend.
+                            properties:
+                              group:
+                                default: ""
+                                description: |-
+                                  Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                  When unspecified or empty string, core API group is inferred.
+                                maxLength: 253
+                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                type: string
+                              kind:
+                                default: Service
+                                description: |-
+                                  Kind is the Kubernetes resource kind of the referent. For example
+                                  "Service".
+
+                                  Defaults to "Service" when not specified.
+
+                                  ExternalName services can refer to CNAME DNS records that may live
+                                  outside of the cluster and as such are difficult to reason about in
+                                  terms of conformance. They also may not be safe to forward to (see
+                                  CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                  support ExternalName Services.
+
+                                  Support: Core (Services with a type other than ExternalName)
+
+                                  Support: Implementation-specific (Services with type ExternalName)
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                type: string
+                              name:
+                                description: Name is the name of the referent.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace is the namespace of the backend. When unspecified, the local
+                                  namespace is inferred.
+
+                                  Note that when a namespace different than the local namespace is specified,
+                                  a ReferenceGrant object is required in the referent namespace to allow that
+                                  namespace's owner to accept the reference. See the ReferenceGrant
+                                  documentation for details.
+
+                                  Support: Core
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                type: string
+                              port:
+                                description: |-
+                                  Port specifies the destination port number to use for this resource.
+                                  Port is required when the referent is a Kubernetes Service. In this
+                                  case, the port number is the service port number, not the target port.
+                                  For other resources, destination port might be derived from the referent
+                                  resource or this field.
+                                format: int32
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                            required:
+                            - name
+                            type: object
+                            x-kubernetes-validations:
+                            - message: Must have port for Service reference
+                              rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                ? has(self.port) : true'
                           cache:
                             description: Response cache configuration.
                             properties:
@@ -19707,6 +19769,11 @@ spec:
                                 cookie] must be set
                               rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                 == 1'
+                          path:
+                            description: Token endpoint path; defaults to "/". Must
+                              start with "/".
+                            pattern: ^/
+                            type: string
                           requestedTokenType:
                             description: RFC 8693 requested_token_type.
                             enum:
@@ -19803,83 +19870,8 @@ spec:
                                 - Jwt
                                 type: string
                             type: object
-                          tokenEndpoint:
-                            description: RFC 8693 token endpoint backend and path.
-                            properties:
-                              group:
-                                default: ""
-                                description: |-
-                                  Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                  When unspecified or empty string, core API group is inferred.
-                                maxLength: 253
-                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                type: string
-                              kind:
-                                default: Service
-                                description: |-
-                                  Kind is the Kubernetes resource kind of the referent. For example
-                                  "Service".
-
-                                  Defaults to "Service" when not specified.
-
-                                  ExternalName services can refer to CNAME DNS records that may live
-                                  outside of the cluster and as such are difficult to reason about in
-                                  terms of conformance. They also may not be safe to forward to (see
-                                  CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                  support ExternalName Services.
-
-                                  Support: Core (Services with a type other than ExternalName)
-
-                                  Support: Implementation-specific (Services with type ExternalName)
-                                maxLength: 63
-                                minLength: 1
-                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                type: string
-                              name:
-                                description: Name is the name of the referent.
-                                maxLength: 253
-                                minLength: 1
-                                type: string
-                              namespace:
-                                description: |-
-                                  Namespace is the namespace of the backend. When unspecified, the local
-                                  namespace is inferred.
-
-                                  Note that when a namespace different than the local namespace is specified,
-                                  a ReferenceGrant object is required in the referent namespace to allow that
-                                  namespace's owner to accept the reference. See the ReferenceGrant
-                                  documentation for details.
-
-                                  Support: Core
-                                maxLength: 63
-                                minLength: 1
-                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                type: string
-                              path:
-                                description: Token endpoint path; defaults to "/".
-                                  Must start with "/".
-                                pattern: ^/
-                                type: string
-                              port:
-                                description: |-
-                                  Port specifies the destination port number to use for this resource.
-                                  Port is required when the referent is a Kubernetes Service. In this
-                                  case, the port number is the service port number, not the target port.
-                                  For other resources, destination port might be derived from the referent
-                                  resource or this field.
-                                format: int32
-                                maximum: 65535
-                                minimum: 1
-                                type: integer
-                            required:
-                            - name
-                            type: object
-                            x-kubernetes-validations:
-                            - message: Must have port for Service reference
-                              rule: '(size(self.group) == 0 && self.kind == ''Service'')
-                                ? has(self.port) : true'
                         required:
-                        - tokenEndpoint
+                        - backendRef
                         type: object
                         x-kubernetes-validations:
                         - message: actorToken is only valid with TokenExchange grantType

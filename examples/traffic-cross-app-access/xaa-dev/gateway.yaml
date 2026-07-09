@@ -39,7 +39,7 @@ binds:
             identityProvider:
               # `https://` host = HTTPS with TLS auto-configured (no :443 + backendTLS needed).
               host: https://idp.xaa.dev
-              tokenEndpointPath: /token
+              path: /token
               clientAuth:
                 clientId: $XAA_CLIENT_ID
                 method: clientSecretPost
@@ -47,7 +47,7 @@ binds:
             # Leg 2 — resource authorization server (resource-client credentials).
             resourceAuthorizationServer:
               host: https://auth.resource.xaa.dev
-              tokenEndpointPath: /token
+              path: /token
               clientAuth:
                 clientId: ${XAA_CLIENT_ID}-at-todo0
                 method: clientSecretPost

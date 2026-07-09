@@ -22,7 +22,7 @@ binds:
           backendAuth:
             oauthTokenExchange:
               host: localhost:7090           # stands in for login.microsoftonline.com:443
-              tokenEndpointPath: /token       # stands in for /<TENANT_ID>/oauth2/v2.0/token
+              path: /token       # stands in for /<TENANT_ID>/oauth2/v2.0/token
               grantType: jwtBearer
               clientAuth:
                 clientId: my-app-client-id
@@ -44,7 +44,7 @@ binds:
           backendAuth:
             oauthTokenExchange:
               host: localhost:7090
-              tokenEndpointPath: /token
+              path: /token
               grantType: jwtBearer
               audiences:
               - target-client
@@ -60,7 +60,7 @@ binds:
           backendAuth:
             oauthTokenExchange:
               host: localhost:7080
-              tokenEndpointPath: /realms/backend-oauth/protocol/openid-connect/token
+              path: /realms/backend-oauth/protocol/openid-connect/token
               grantType: jwtBearer
               clientAuth:
                 clientId: requester-client

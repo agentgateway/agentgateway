@@ -971,7 +971,7 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 
 	if tokenEndpoint == nil {
 		var err error
-		tokenEndpoint, err = BuildBackendRef(ctx, auth.TokenEndpoint.BackendObjectReference, namespace)
+		tokenEndpoint, err = BuildBackendRef(ctx, auth.BackendRef, namespace)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -1004,7 +1004,7 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 
 	oauth := &api.OAuthTokenExchange{
 		TokenEndpoint:         tokenEndpoint,
-		TokenEndpointPath:     auth.TokenEndpoint.Path,
+		TokenEndpointPath:     auth.Path,
 		GrantType:             translateOAuthGrantType(auth.GrantType),
 		SubjectToken:          translateOAuthTokenSpec(auth.SubjectToken),
 		ActorToken:            translateOAuthActorToken(auth.ActorToken),
@@ -1017,8 +1017,8 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
 		Cache:                 translateOAuthTokenCache(auth.Cache),
 	}
-	if auth.TokenEndpoint.Path != nil && !strings.HasPrefix(*auth.TokenEndpoint.Path, "/") {
-		errs = append(errs, fmt.Errorf("oauth tokenEndpoint.path %q must start with /", *auth.TokenEndpoint.Path))
+	if auth.Path != nil && !strings.HasPrefix(*auth.Path, "/") {
+		errs = append(errs, fmt.Errorf("oauthTokenExchange.path %q must start with /", *auth.Path))
 	}
 	if oauth.GrantType == api.OAuthTokenExchange_JWT_BEARER {
 		if oauth.ActorToken != nil {

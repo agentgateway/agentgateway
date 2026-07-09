@@ -44,13 +44,11 @@ func oauthTestPolicyCtxWithBackend(
 	}
 }
 
-func oauthTokenEndpointRef() agentgateway.OAuthTokenEndpoint {
-	return agentgateway.OAuthTokenEndpoint{
-		BackendObjectReference: gwv1.BackendObjectReference{
-			Group: ptr.Of(gwv1.Group("agentgateway.dev")),
-			Kind:  ptr.Of(gwv1.Kind("AgentgatewayBackend")),
-			Name:  "token-endpoint",
-		},
+func oauthTokenEndpointRef() gwv1.BackendObjectReference {
+	return gwv1.BackendObjectReference{
+		Group: ptr.Of(gwv1.Group("agentgateway.dev")),
+		Kind:  ptr.Of(gwv1.Kind("AgentgatewayBackend")),
+		Name:  "token-endpoint",
 	}
 }
 
@@ -61,7 +59,7 @@ func TestOAuthTokenExchangeTokenEndpointIsReferencedBackend(t *testing.T) {
 				BackendSimple: agentgateway.BackendSimple{
 					Auth: &agentgateway.BackendAuth{
 						OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
-							TokenEndpoint: oauthTokenEndpointRef(),
+							BackendRef: oauthTokenEndpointRef(),
 						},
 					},
 				},
@@ -85,7 +83,7 @@ func TestBuildOAuthTokenExchangeResolvesTokenEndpointWhenNil(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 
 	oauth, err := BuildOAuthTokenExchange(ctx, &agentgateway.OAuthTokenExchange{
-		TokenEndpoint: oauthTokenEndpointRef(),
+		BackendRef: oauthTokenEndpointRef(),
 	}, "default", nil)
 	if err != nil {
 		t.Fatalf("BuildOAuthTokenExchange() error = %v, want nil", err)
@@ -149,7 +147,7 @@ func TestOAuthTokenExchangeClientAuthPublicClientRequiresPost(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 
 	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
-		TokenEndpoint: oauthTokenEndpointRef(),
+		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "public-client",
 			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodClientSecretPost),
@@ -167,7 +165,7 @@ func TestOAuthTokenExchangeClientAuthPublicClientRequiresPost(t *testing.T) {
 	}
 
 	_, err = buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
-		TokenEndpoint: oauthTokenEndpointRef(),
+		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "public-client",
 		},
@@ -189,7 +187,7 @@ func TestOAuthTokenExchangeClientAuthMissingSecretKeyPreservesExplicitSecretInte
 	})
 
 	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
-		TokenEndpoint: oauthTokenEndpointRef(),
+		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "gateway",
 			SecretRef: &agentgateway.LocalSecretObjectRef{
@@ -222,7 +220,7 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	})
 
 	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
-		TokenEndpoint: oauthTokenEndpointRef(),
+		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "gateway",
 			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
@@ -275,7 +273,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "id-jag",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint:      oauthTokenEndpointRef(),
+				BackendRef:         oauthTokenEndpointRef(),
 				RequestedTokenType: ptr.Of(agentgateway.OAuthTokenTypeIDJAG),
 			},
 			want: "IdJag is only supported by crossAppAccess",
@@ -283,8 +281,8 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "jwt-bearer-actor-token",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint: oauthTokenEndpointRef(),
-				GrantType:     ptr.Of(agentgateway.OAuthGrantTypeJwtBearer),
+				BackendRef: oauthTokenEndpointRef(),
+				GrantType:  ptr.Of(agentgateway.OAuthGrantTypeJwtBearer),
 				ActorToken: &agentgateway.OAuthActorToken{
 					Source: agentgateway.AuthorizationExtractionLocation{
 						AuthorizationLocationFields: agentgateway.AuthorizationLocationFields{
@@ -298,7 +296,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "jwt-bearer-requested-token-type",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint:      oauthTokenEndpointRef(),
+				BackendRef:         oauthTokenEndpointRef(),
 				GrantType:          ptr.Of(agentgateway.OAuthGrantTypeJwtBearer),
 				RequestedTokenType: ptr.Of(agentgateway.OAuthTokenTypeAccessToken),
 			},
@@ -307,7 +305,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "may-act-without-jwt-actor",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint: oauthTokenEndpointRef(),
+				BackendRef: oauthTokenEndpointRef(),
 				ActorToken: &agentgateway.OAuthActorToken{
 					Source: agentgateway.AuthorizationExtractionLocation{
 						AuthorizationLocationFields: agentgateway.AuthorizationLocationFields{
@@ -323,7 +321,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "invalid-subject-source-cel",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint: oauthTokenEndpointRef(),
+				BackendRef: oauthTokenEndpointRef(),
 				SubjectToken: &agentgateway.OAuthTokenSpec{
 					Source: &agentgateway.AuthorizationExtractionLocation{
 						Expression: ptr.Of(agentgateway.CELExpression("((")),
@@ -335,7 +333,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "invalid-actor-source-cel",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint: oauthTokenEndpointRef(),
+				BackendRef: oauthTokenEndpointRef(),
 				ActorToken: &agentgateway.OAuthActorToken{
 					Source: agentgateway.AuthorizationExtractionLocation{
 						Expression: ptr.Of(agentgateway.CELExpression("((")),
@@ -347,7 +345,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "reserved-additional-param",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint: oauthTokenEndpointRef(),
+				BackendRef: oauthTokenEndpointRef(),
 				AdditionalParams: map[string]agentgateway.CELExpression{
 					"scope": "request.path",
 				},
@@ -357,7 +355,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "private-key-jwt-without-method",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint: oauthTokenEndpointRef(),
+				BackendRef: oauthTokenEndpointRef(),
 				ClientAuth: &agentgateway.OAuthClientAuth{
 					ClientID: "gateway",
 					PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
@@ -373,7 +371,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 		{
 			name: "private-key-jwt-method-without-settings",
 			auth: agentgateway.OAuthTokenExchange{
-				TokenEndpoint: oauthTokenEndpointRef(),
+				BackendRef: oauthTokenEndpointRef(),
 				ClientAuth: &agentgateway.OAuthClientAuth{
 					ClientID: "gateway",
 					Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
@@ -405,7 +403,7 @@ func TestTranslateBackendAuthPreservesInvalidOAuthPolicy(t *testing.T) {
 				BackendSimple: agentgateway.BackendSimple{
 					Auth: &agentgateway.BackendAuth{
 						OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
-							TokenEndpoint: oauthTokenEndpointRef(),
+							BackendRef: oauthTokenEndpointRef(),
 							SubjectToken: &agentgateway.OAuthTokenSpec{
 								Source: &agentgateway.AuthorizationExtractionLocation{
 									Expression: ptr.Of(agentgateway.CELExpression("((")),
@@ -439,7 +437,7 @@ func TestOAuthTokenExchangeEnumDefaulting(t *testing.T) {
 	})
 
 	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
-		TokenEndpoint: oauthTokenEndpointRef(),
+		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "gateway",
 			SecretRef: &agentgateway.LocalSecretObjectRef{
@@ -465,10 +463,8 @@ func TestOAuthTokenExchangeTokenTypeTranslation(t *testing.T) {
 
 	path := "/oauth/token"
 	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
-		TokenEndpoint: agentgateway.OAuthTokenEndpoint{
-			BackendObjectReference: oauthTokenEndpointRef().BackendObjectReference,
-			Path:                   &path,
-		},
+		BackendRef: oauthTokenEndpointRef(),
+		Path:       &path,
 		SubjectToken: &agentgateway.OAuthTokenSpec{
 			TokenType: ptr.Of(agentgateway.OAuthTokenTypeAccessToken),
 		},
