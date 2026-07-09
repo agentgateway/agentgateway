@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
+#[cfg(any(not(test), target_family = "unix"))]
+use std::sync::OnceLock;
 use std::time::Duration;
 #[cfg(not(test))]
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -2715,6 +2717,7 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 	Ok(())
 }
 
+#[cfg(any(not(test), target_family = "unix"))]
 static STARTUP_TIMESTAMP: OnceLock<u64> = OnceLock::new();
 
 fn llm_model_match_specificity(model_name: &str) -> usize {
