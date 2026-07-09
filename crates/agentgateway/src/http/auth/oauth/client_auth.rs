@@ -313,11 +313,11 @@ impl OAuthClientAuth {
 	}
 }
 
-impl TryFrom<proto::o_auth_token_exchange::ClientAuth> for OAuthClientAuth {
+impl TryFrom<proto::OAuthClientAuth> for OAuthClientAuth {
 	type Error = ProtoError;
 
-	fn try_from(c: proto::o_auth_token_exchange::ClientAuth) -> Result<Self, Self::Error> {
-		use proto::o_auth_token_exchange::client_auth::Method;
+	fn try_from(c: proto::OAuthClientAuth) -> Result<Self, Self::Error> {
+		use proto::o_auth_client_auth::Method;
 
 		let method = match Method::try_from(c.method) {
 			Ok(Method::Unspecified | Method::ClientSecretBasic) => {
@@ -372,11 +372,11 @@ impl TryFrom<proto::o_auth_token_exchange::ClientAuth> for OAuthClientAuth {
 	}
 }
 
-impl TryFrom<proto::o_auth_token_exchange::client_auth::PrivateKeyJwt> for PrivateKeyJwt {
+impl TryFrom<proto::o_auth_client_auth::PrivateKeyJwt> for PrivateKeyJwt {
 	type Error = ProtoError;
 
 	fn try_from(
-		private_key_jwt: proto::o_auth_token_exchange::client_auth::PrivateKeyJwt,
+		private_key_jwt: proto::o_auth_client_auth::PrivateKeyJwt,
 	) -> Result<Self, Self::Error> {
 		Self::try_from(RawPrivateKeyJwt {
 			signing_key: FileOrInline::Inline(private_key_jwt.signing_key),
@@ -428,7 +428,7 @@ impl SigningAlg {
 }
 
 fn signing_alg_from_proto(alg: i32) -> Result<SigningAlg, ProtoError> {
-	use proto::o_auth_token_exchange::client_auth::private_key_jwt::SigningAlg as ProtoSigningAlg;
+	use proto::o_auth_client_auth::private_key_jwt::SigningAlg as ProtoSigningAlg;
 
 	match ProtoSigningAlg::try_from(alg) {
 		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),

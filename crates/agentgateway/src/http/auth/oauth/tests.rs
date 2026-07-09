@@ -1125,12 +1125,12 @@ fn accepts_supported_requested_token_types_from_proto() {
 
 #[test]
 fn private_key_jwt_client_auth_from_proto() {
-	let auth = OAuthClientAuth::try_from(proto::o_auth_token_exchange::ClientAuth {
+	let auth = OAuthClientAuth::try_from(proto::OAuthClientAuth {
 		client_id: "gateway-client".to_string(),
-		method: proto::o_auth_token_exchange::client_auth::Method::PrivateKeyJwt as i32,
-		private_key_jwt: Some(proto::o_auth_token_exchange::client_auth::PrivateKeyJwt {
+		method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+		private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
 			signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
-			alg: proto::o_auth_token_exchange::client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+			alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
 			kid: Some("kid-1".to_string()),
 			assertion_audience: "https://issuer.example/token".to_string(),
 		}),
@@ -1187,10 +1187,10 @@ fn private_key_jwt_client_auth_from_proto() {
 )]
 #[case::empty_client_id(
 	proto::OAuthTokenExchange {
-		client_auth: Some(proto::o_auth_token_exchange::ClientAuth {
+		client_auth: Some(proto::OAuthClientAuth {
 			client_id: String::new(),
 			client_secret: Some("s".to_string()),
-			method: proto::o_auth_token_exchange::client_auth::Method::ClientSecretPost as i32,
+			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
 			..Default::default()
 		}),
 		..Default::default()
@@ -1199,10 +1199,10 @@ fn private_key_jwt_client_auth_from_proto() {
 )]
 #[case::empty_client_secret(
 	proto::OAuthTokenExchange {
-		client_auth: Some(proto::o_auth_token_exchange::ClientAuth {
+		client_auth: Some(proto::OAuthClientAuth {
 			client_id: "gateway-client".to_string(),
 			client_secret: Some(String::new()),
-			method: proto::o_auth_token_exchange::client_auth::Method::ClientSecretPost as i32,
+			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
 			..Default::default()
 		}),
 		..Default::default()
@@ -1211,9 +1211,9 @@ fn private_key_jwt_client_auth_from_proto() {
 )]
 #[case::private_key_jwt_missing_settings(
 	proto::OAuthTokenExchange {
-		client_auth: Some(proto::o_auth_token_exchange::ClientAuth {
+		client_auth: Some(proto::OAuthClientAuth {
 			client_id: "gateway-client".to_string(),
-			method: proto::o_auth_token_exchange::client_auth::Method::PrivateKeyJwt as i32,
+			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
 			..Default::default()
 		}),
 		..Default::default()
@@ -1222,13 +1222,13 @@ fn private_key_jwt_client_auth_from_proto() {
 )]
 #[case::private_key_jwt_with_client_secret(
 	proto::OAuthTokenExchange {
-		client_auth: Some(proto::o_auth_token_exchange::ClientAuth {
+		client_auth: Some(proto::OAuthClientAuth {
 			client_id: "gateway-client".to_string(),
 			client_secret: Some("secret".to_string()),
-			method: proto::o_auth_token_exchange::client_auth::Method::PrivateKeyJwt as i32,
-			private_key_jwt: Some(proto::o_auth_token_exchange::client_auth::PrivateKeyJwt {
+			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
 				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
-				alg: proto::o_auth_token_exchange::client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
 				assertion_audience: "https://issuer.example/token".to_string(),
 				..Default::default()
 			}),
@@ -1239,13 +1239,13 @@ fn private_key_jwt_client_auth_from_proto() {
 )]
 #[case::private_key_jwt_settings_with_secret_method(
 	proto::OAuthTokenExchange {
-		client_auth: Some(proto::o_auth_token_exchange::ClientAuth {
+		client_auth: Some(proto::OAuthClientAuth {
 			client_id: "gateway-client".to_string(),
 			client_secret: Some("secret".to_string()),
-			method: proto::o_auth_token_exchange::client_auth::Method::ClientSecretPost as i32,
-			private_key_jwt: Some(proto::o_auth_token_exchange::client_auth::PrivateKeyJwt {
+			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
 				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
-				alg: proto::o_auth_token_exchange::client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
 				assertion_audience: "https://issuer.example/token".to_string(),
 				..Default::default()
 			}),

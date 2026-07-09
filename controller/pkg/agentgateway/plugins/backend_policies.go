@@ -1066,13 +1066,13 @@ func translateOAuthActorToken(actor *agentgateway.OAuthActorToken) *api.OAuthTok
 	return res
 }
 
-func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, namespace string) (*api.OAuthTokenExchange_ClientAuth, error) {
+func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, namespace string) (*api.OAuthClientAuth, error) {
 	if auth == nil {
 		return nil, nil
 	}
 
 	var errs []error
-	res := &api.OAuthTokenExchange_ClientAuth{
+	res := &api.OAuthClientAuth{
 		ClientId: auth.ClientID,
 		Method:   translateOAuthClientAuthMethod(auth.Method),
 	}
@@ -1117,13 +1117,13 @@ func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, nam
 	return res, errors.Join(errs...)
 }
 
-func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJWT, namespace string) (*api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt, error) {
+func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJWT, namespace string) (*api.OAuthClientAuth_PrivateKeyJwt, error) {
 	if auth == nil {
 		return nil, nil
 	}
 
 	var errs []error
-	res := &api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt{
+	res := &api.OAuthClientAuth_PrivateKeyJwt{
 		Alg:               translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
 		Kid:               auth.KeyID,
 		AssertionAudience: auth.AssertionAudience,
@@ -1167,39 +1167,39 @@ func translateOAuthTokenType(tokenType agentgateway.OAuthTokenType) string {
 	}
 }
 
-func translateOAuthClientAuthMethod(method *agentgateway.OAuthClientAuthMethod) api.OAuthTokenExchange_ClientAuth_Method {
+func translateOAuthClientAuthMethod(method *agentgateway.OAuthClientAuthMethod) api.OAuthClientAuth_Method {
 	if method == nil {
-		return api.OAuthTokenExchange_ClientAuth_UNSPECIFIED
+		return api.OAuthClientAuth_UNSPECIFIED
 	}
 	switch *method {
 	case agentgateway.OAuthClientAuthMethodClientSecretPost:
-		return api.OAuthTokenExchange_ClientAuth_CLIENT_SECRET_POST
+		return api.OAuthClientAuth_CLIENT_SECRET_POST
 	case agentgateway.OAuthClientAuthMethodClientSecretBasic:
-		return api.OAuthTokenExchange_ClientAuth_CLIENT_SECRET_BASIC
+		return api.OAuthClientAuth_CLIENT_SECRET_BASIC
 	case agentgateway.OAuthClientAuthMethodPrivateKeyJWT:
-		return api.OAuthTokenExchange_ClientAuth_PRIVATE_KEY_JWT
+		return api.OAuthClientAuth_PRIVATE_KEY_JWT
 	default:
-		return api.OAuthTokenExchange_ClientAuth_UNSPECIFIED
+		return api.OAuthClientAuth_UNSPECIFIED
 	}
 }
 
-func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_SigningAlg {
+func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.OAuthClientAuth_PrivateKeyJwt_SigningAlg {
 	if alg == nil {
-		return api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
 	}
 	switch *alg {
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
-		return api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_RS256
+		return api.OAuthClientAuth_PrivateKeyJwt_RS256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
-		return api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_RS384
+		return api.OAuthClientAuth_PrivateKeyJwt_RS384
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
-		return api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_RS512
+		return api.OAuthClientAuth_PrivateKeyJwt_RS512
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
-		return api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_ES256
+		return api.OAuthClientAuth_PrivateKeyJwt_ES256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
-		return api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_ES384
+		return api.OAuthClientAuth_PrivateKeyJwt_ES384
 	default:
-		return api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
 	}
 }
 

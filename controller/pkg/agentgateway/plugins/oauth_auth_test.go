@@ -86,7 +86,7 @@ func TestOAuthTokenExchangeClientAuthPublicClientRequiresPost(t *testing.T) {
 		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want nil", err)
 	}
 	clientAuth := policy.GetOauthTokenExchange().GetClientAuth()
-	if clientAuth.GetMethod() != api.OAuthTokenExchange_ClientAuth_CLIENT_SECRET_POST {
+	if clientAuth.GetMethod() != api.OAuthClientAuth_CLIENT_SECRET_POST {
 		t.Fatalf("client auth method = %v, want CLIENT_SECRET_POST", clientAuth.GetMethod())
 	}
 	if clientAuth.ClientSecret != nil {
@@ -168,7 +168,7 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	}
 
 	clientAuth := policy.GetOauthTokenExchange().GetClientAuth()
-	if clientAuth.GetMethod() != api.OAuthTokenExchange_ClientAuth_PRIVATE_KEY_JWT {
+	if clientAuth.GetMethod() != api.OAuthClientAuth_PRIVATE_KEY_JWT {
 		t.Fatalf("client auth method = %v, want PRIVATE_KEY_JWT", clientAuth.GetMethod())
 	}
 	if clientAuth.ClientSecret != nil {
@@ -181,7 +181,7 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	if privateKeyJWT.GetSigningKey() == "" {
 		t.Fatal("signing key is empty, want secret value")
 	}
-	if privateKeyJWT.GetAlg() != api.OAuthTokenExchange_ClientAuth_PrivateKeyJwt_ES256 {
+	if privateKeyJWT.GetAlg() != api.OAuthClientAuth_PrivateKeyJwt_ES256 {
 		t.Fatalf("privateKeyJwt alg = %v, want ES256", privateKeyJWT.GetAlg())
 	}
 	if privateKeyJWT.GetKid() != "kid-1" {
@@ -382,7 +382,7 @@ func TestOAuthTokenExchangeEnumDefaulting(t *testing.T) {
 	if oauth.GetGrantType() != api.OAuthTokenExchange_UNSPECIFIED {
 		t.Fatalf("grant type = %v, want UNSPECIFIED", oauth.GetGrantType())
 	}
-	if oauth.GetClientAuth().GetMethod() != api.OAuthTokenExchange_ClientAuth_UNSPECIFIED {
+	if oauth.GetClientAuth().GetMethod() != api.OAuthClientAuth_UNSPECIFIED {
 		t.Fatalf("client auth method = %v, want UNSPECIFIED", oauth.GetClientAuth().GetMethod())
 	}
 }
