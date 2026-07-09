@@ -533,16 +533,22 @@ pub(super) fn entra_authorize(
 	auth: &McpAuthentication,
 ) -> Result<Response, ProxyError> {
 	let endpoints = entra_endpoints(&auth.issuer).map_err(ProxyError::ProcessingString)?;
-	let query = strip_resource_param(req.uri().query().unwrap_or("").as_bytes()).0;
-	let location = if query.is_empty() {
-		endpoints.authorization_endpoint
-	} else {
-		format!("{}?{}", endpoints.authorization_endpoint, query)
-	};
+	let mut location: Uri = match req.uri().query() {
+		Some(query) => format!("{}?{}", endpoints.authorization_endpoint, query),
+		None => endpoints.authorization_endpoint,
+	}
+	.parse()
+	.map_err(|e| ProxyError::ProcessingString(format!("invalid authorize URL: {e}")))?;
+	crate::http::modify_query_parameters(
+		&mut location,
+		std::iter::empty::<(&str, &str)>(),
+		["resource"],
+	)
+	.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
 	Ok(
 		Response::builder()
 			.status(StatusCode::FOUND)
-			.header(::http::header::LOCATION, location)
+			.header(::http::header::LOCATION, location.to_string())
 			.body(axum::body::Body::empty())?,
 	)
 }
@@ -556,16 +562,14 @@ pub(super) async fn entra_token(
 	auth: &McpAuthentication,
 	client: PolicyClient,
 ) -> Result<Response, ProxyError> {
-	if req.method() == Method::OPTIONS {
-		return entra_token_preflight();
-	}
+	// CORS (including preflight) is the responsibility of the route's cors policy.
 	if req.method() != Method::POST {
-		let mut resp = Response::builder()
-			.status(StatusCode::METHOD_NOT_ALLOWED)
-			.header(::http::header::ALLOW, "POST, OPTIONS")
-			.body(axum::body::Body::empty())?;
-		entra_token_cors_headers(resp.headers_mut());
-		return Ok(resp);
+		return Ok(
+			Response::builder()
+				.status(StatusCode::METHOD_NOT_ALLOWED)
+				.header(::http::header::ALLOW, "POST")
+				.body(axum::body::Body::empty())?,
+		);
 	}
 
 	let endpoints = entra_endpoints(&auth.issuer).map_err(ProxyError::ProcessingString)?;
@@ -599,39 +603,12 @@ pub(super) async fn entra_token(
 		builder = builder.header(::http::header::AUTHORIZATION, authorization);
 	}
 	let ureq = builder.body(Body::from(form))?;
-	let mut upstream = client
+	let upstream = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
 		.simple_call(ureq)
 		.await?;
 
-	// Add CORS headers for browser-based MCP clients (same as client_registration)
-	entra_token_cors_headers(upstream.headers_mut());
-
 	Ok(upstream)
-}
-
-/// CORS headers for the proxied Entra token endpoint. `authorization` is allowed so that
-/// browser-based clients authenticating with client_secret_basic pass preflight.
-fn entra_token_cors_headers(headers: &mut ::http::HeaderMap) {
-	headers.insert("access-control-allow-origin", "*".parse().unwrap());
-	headers.insert(
-		"access-control-allow-methods",
-		"POST, OPTIONS".parse().unwrap(),
-	);
-	headers.insert(
-		"access-control-allow-headers",
-		"content-type, authorization".parse().unwrap(),
-	);
-}
-
-/// Answer a CORS preflight for the proxied Entra token endpoint locally instead of
-/// forwarding it to Entra.
-fn entra_token_preflight() -> Result<Response, ProxyError> {
-	let mut resp = Response::builder()
-		.status(StatusCode::NO_CONTENT)
-		.body(axum::body::Body::empty())?;
-	entra_token_cors_headers(resp.headers_mut());
-	Ok(resp)
 }
 
 /// Re-encode a form/query string without any `resource` parameters, reporting whether a
@@ -1027,36 +1004,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn entra_token_answers_cors_preflight_locally() {
-		let client = crate::test_helpers::policy_client();
-		let mut req = ::http::Request::builder()
-			.method(Method::OPTIONS)
-			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")
-			.body(Body::empty())
-			.expect("request should build");
-
-		let resp = entra_token(&mut req, &entra_auth(), client)
-			.await
-			.expect("preflight should be answered");
-
-		assert_eq!(resp.status(), StatusCode::NO_CONTENT);
-		assert_eq!(
-			resp
-				.headers()
-				.get("access-control-allow-headers")
-				.expect("allow-headers"),
-			"content-type, authorization"
-		);
-		assert_eq!(
-			resp
-				.headers()
-				.get("access-control-allow-methods")
-				.expect("allow-methods"),
-			"POST, OPTIONS"
-		);
-	}
-
-	#[tokio::test]
 	async fn entra_token_rejects_non_post_methods() {
 		let client = crate::test_helpers::policy_client();
 		let mut req = ::http::Request::builder()
@@ -1072,7 +1019,7 @@ mod tests {
 		assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
 		assert_eq!(
 			resp.headers().get(::http::header::ALLOW).expect("allow"),
-			"POST, OPTIONS"
+			"POST"
 		);
 	}
 
