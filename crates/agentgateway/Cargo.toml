@@ -152,6 +152,7 @@ tracing.workspace = true
 typespec_client_core.workspace = true
 url.workspace = true
 uuid.workspace = true
+value-bag.workspace = true
 x509-parser.workspace = true
 reqwest.workspace = true
 websocket-sans-io.workspace = true

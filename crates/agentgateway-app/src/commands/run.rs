@@ -5,7 +5,7 @@ use agent_core::{strng, telemetry, version};
 use agentgateway::app::Bound;
 use agentgateway::types::agent::ListenerTarget;
 use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{RunArgs, read_config_contents};
 
@@ -46,8 +46,19 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				&config.logging.level,
 				config.logging.format == LoggingFormat::Json,
 			);
+			info!("version: {}", version::BuildInfo::new());
+			info!(
+				"running with config: {}",
+				serdes::yamlviajson::to_string(&config)?
+			);
 			let request_log_store = match config.database.as_ref() {
-				Some(cfg) => Some(agentgateway::telemetry::log_store::setup(cfg).await?),
+				Some(cfg) => match agentgateway::telemetry::log_store::setup(cfg).await {
+					Ok(store) => Some(store),
+					Err(err) => {
+						error!(?err, "failed to initialize request log database");
+						return Err(err);
+					},
+				},
 				None => None,
 			};
 			let result = proxy(Arc::new(config)).await;
@@ -139,11 +150,6 @@ fn spawn_readiness(bound: &Bound) {
 }
 
 async fn proxy(cfg: Arc<Config>) -> anyhow::Result<()> {
-	info!("version: {}", version::BuildInfo::new());
-	info!(
-		"running with config: {}",
-		serdes::yamlviajson::to_string(&cfg)?
-	);
 	let bound = agentgateway::app::run(cfg).await?;
 	spawn_readiness(&bound);
 	bound.wait_termination().await
