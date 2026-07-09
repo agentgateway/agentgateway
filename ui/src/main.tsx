@@ -1,5 +1,22 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  GuardedGuardrailsPage,
+  GuardedKeysPage,
+  GuardedLlmPoliciesPage,
+  GuardedMcpPoliciesPage,
+  GuardedMcpServersPage,
+  GuardedModelsPage,
+  GuardedProvidersPage,
+} from "./pages/xdsGuardedLlmMcpPages";
+import {
+  GuardedAnalyticsPage,
+  GuardedClientSetupPage,
+  GuardedCostsPage,
+  GuardedLogsPage,
+  GuardedMcpPlaygroundPage,
+  GuardedPlaygroundPage,
+} from "./pages/xdsGuardedPages";
+import {
   RouterProvider,
   createRootRoute,
   createRoute,
@@ -10,24 +27,13 @@ import { createRoot } from "react-dom/client";
 import { routerBasePath } from "./basePath";
 import { Shell } from "./components/Shell";
 import { CelPage } from "./pages/Cel";
-import { ClientSetupPage } from "./pages/ClientSetup";
-import { CostsPage } from "./pages/Costs";
 import { DumpPoliciesPage } from "./pages/DumpPolicies";
 import {
   LlmGetStartedPage,
   McpGetStartedPage,
   TrafficGetStartedPage,
 } from "./pages/GetStarted";
-import { GuardrailsPage } from "./pages/Guardrails";
 import { HomePage } from "./pages/Home";
-import { KeysPage } from "./pages/Keys";
-import { AnalyticsPage, LogsPage } from "./pages/Logs";
-import { McpPlaygroundPage } from "./pages/McpPlayground";
-import { McpServersPage } from "./pages/McpServers";
-import { ModelsPage } from "./pages/Models";
-import { McpPoliciesPage, PoliciesPage } from "./pages/Policies";
-import { PlaygroundPage } from "./pages/Playground";
-import { ProvidersPage } from "./pages/Providers";
 import { TrafficListenersPage } from "./pages/TrafficListeners";
 import { TrafficRoutesPage } from "./pages/TrafficRoutes";
 import "@fontsource/geist-sans/latin-400.css";
@@ -62,7 +68,7 @@ const dumpPoliciesRoute = createRoute({
 const modelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/models",
-  component: ModelsPage,
+  component: GuardedModelsPage,
 });
 
 const llmGetStartedRoute = createRoute({
@@ -74,67 +80,67 @@ const llmGetStartedRoute = createRoute({
 const providersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/providers",
-  component: ProvidersPage,
+  component: GuardedProvidersPage,
 });
 
 const logsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/logs",
-  component: LogsPage,
+  component: GuardedLogsPage,
 });
 
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/analytics",
-  component: AnalyticsPage,
+  component: GuardedAnalyticsPage,
 });
 
 const policiesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/policies",
-  component: PoliciesPage,
+  component: GuardedLlmPoliciesPage,
 });
 
 const guardrailsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/guardrails",
-  component: GuardrailsPage,
+  component: GuardedGuardrailsPage,
 });
 
 const costsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/costs",
-  component: CostsPage,
+  component: GuardedCostsPage,
 });
 
 const keysRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/keys",
-  component: KeysPage,
+  component: GuardedKeysPage,
 });
 
 const playgroundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/playground",
-  component: PlaygroundPage,
+  component: GuardedPlaygroundPage,
 });
 
 const clientSetupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/client-setup",
-  component: ClientSetupPage,
+  component: GuardedClientSetupPage,
 });
 
 const mcpServersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/mcp/servers",
-  component: McpServersPage,
+  component: GuardedMcpServersPage,
 });
 
 const mcpPoliciesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/mcp/policies",
-  component: McpPoliciesPage,
+  component: GuardedMcpPoliciesPage,
 });
 
 const mcpGetStartedRoute = createRoute({
@@ -146,7 +152,7 @@ const mcpGetStartedRoute = createRoute({
 const mcpPlaygroundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/mcp/playground",
-  component: McpPlaygroundPage,
+  component: GuardedMcpPlaygroundPage,
 });
 
 const trafficListenersRoute = createRoute({

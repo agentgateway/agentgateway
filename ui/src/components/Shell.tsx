@@ -76,13 +76,18 @@ export function Shell() {
     mobileNavOpen,
     () => setMobileNavOpen(false),
   );
+  // In dump mode (XDS-managed gateway) there is no writable local config to
+  // check for presence of an `llm`/`mcp` section — always show the nav items
+  // and let each read-only dump view report "nothing configured" itself,
+  // rather than falling back to the standalone-mode "get started" wizard
+  // (which requires config writes that don't work here).
   const hasLlm = dumpMode
-    ? false
+    ? true
     : config.data
       ? Boolean(config.data.llm)
       : true;
   const hasMcp = dumpMode
-    ? false
+    ? true
     : config.data
       ? Boolean(config.data.mcp)
       : true;
@@ -223,67 +228,65 @@ function navigationGroups(options: {
       items: [{ to: "/", label: "Home", icon: Home }],
     },
   ];
-  if (!options.dumpMode) {
-    groups.push({
-      title: "LLM",
-      items: options.hasLlm
-        ? [
-            { to: "/llm/models", label: "Models", icon: Bot },
-            { to: "/llm/providers", label: "Providers", icon: Boxes },
+  groups.push({
+    title: "LLM",
+    items: options.hasLlm
+      ? [
+          { to: "/llm/models", label: "Models", icon: Bot },
+          { to: "/llm/providers", label: "Providers", icon: Boxes },
 
-            {
-              to: "/llm/policies",
-              label: "Policies",
-              icon: Bolt,
-              groupStart: true,
-            },
-            { to: "/llm/guardrails", label: "Guardrails", icon: Shield },
-            { to: "/llm/keys", label: "Virtual API Keys", icon: KeyRound },
-            { to: "/llm/costs", label: "Costs", icon: Coins },
+          {
+            to: "/llm/policies",
+            label: "Policies",
+            icon: Bolt,
+            groupStart: true,
+          },
+          { to: "/llm/guardrails", label: "Guardrails", icon: Shield },
+          { to: "/llm/keys", label: "Virtual API Keys", icon: KeyRound },
+          { to: "/llm/costs", label: "Costs", icon: Coins },
 
-            {
-              to: "/llm/analytics",
-              label: "Analytics",
-              icon: BarChart3,
-              groupStart: true,
-            },
-            { to: "/llm/logs", label: "Logs", icon: ScrollText },
+          {
+            to: "/llm/analytics",
+            label: "Analytics",
+            icon: BarChart3,
+            groupStart: true,
+          },
+          { to: "/llm/logs", label: "Logs", icon: ScrollText },
 
-            {
-              to: "/llm/client-setup",
-              label: "Client Setup",
-              icon: Cable,
-              groupStart: true,
-            },
-            { to: "/llm/playground", label: "Chat Playground", icon: Play },
-          ]
-        : [
-            {
-              to: "/llm/get-started",
-              label: "Get started",
-              icon: Bot,
-              placeholder: true,
-            },
-          ],
-    });
-    groups.push({
-      title: "MCP",
-      items: options.hasMcp
-        ? [
-            { to: "/mcp/servers", label: "Servers", icon: Server },
-            { to: "/mcp/policies", label: "Policies", icon: ShieldCheck },
-            { to: "/mcp/playground", label: "Tool Playground", icon: Play },
-          ]
-        : [
-            {
-              to: "/mcp/get-started",
-              label: "Get started",
-              icon: Server,
-              placeholder: true,
-            },
-          ],
-    });
-  }
+          {
+            to: "/llm/client-setup",
+            label: "Client Setup",
+            icon: Cable,
+            groupStart: true,
+          },
+          { to: "/llm/playground", label: "Chat Playground", icon: Play },
+        ]
+      : [
+          {
+            to: "/llm/get-started",
+            label: "Get started",
+            icon: Bot,
+            placeholder: true,
+          },
+        ],
+  });
+  groups.push({
+    title: "MCP",
+    items: options.hasMcp
+      ? [
+          { to: "/mcp/servers", label: "Servers", icon: Server },
+          { to: "/mcp/policies", label: "Policies", icon: ShieldCheck },
+          { to: "/mcp/playground", label: "Tool Playground", icon: Play },
+        ]
+      : [
+          {
+            to: "/mcp/get-started",
+            label: "Get started",
+            icon: Server,
+            placeholder: true,
+          },
+        ],
+  });
   groups.push({
     title: "Traffic",
     items: options.dumpMode
