@@ -5,28 +5,28 @@ use std::sync::Arc;
 use agent_core::prelude::AssertSize;
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
-use http::StatusCode;
 use http::request::Parts;
+use http::StatusCode;
 use itertools::Itertools;
-use rmcp::ErrorData;
 use rmcp::model::{
 	CacheScope, ClientNotification, ClientRequest, DiscoverResult, Implementation,
 	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
 	ListResourcesResult, ListToolsResult, Meta, ProtocolVersion, RequestId, ResultType,
-	ServerCapabilities,
-	ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerResult, SubscriptionsListenResult,
+	ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerResult,
+	SubscriptionsListenResult,
 };
+use rmcp::ErrorData;
 use tracing::{debug, warn};
 
-use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
+use crate::http::Response;
 use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
+use crate::mcp::{mergestream, rbac, upstream, ClientError, FailureMode, MCPInfo};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 
@@ -1089,14 +1089,24 @@ fn normalize_outbound_for_protocol(
 			normalize_result_type(&mut r.result_type, downstream_modern);
 			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
-		ServerResult::InitializeResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::InitializeResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
 		ServerResult::CompleteResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::GetPromptResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::GetPromptResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
 		ServerResult::ElicitResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::CreateTaskResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::ListTasksResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::CreateTaskResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::ListTasksResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
 		ServerResult::GetTaskResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::CancelTaskResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::CancelTaskResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
 		ServerResult::SubscriptionsListenResult(r) => {
 			normalize_result_type(&mut r.result_type, downstream_modern)
 		},
