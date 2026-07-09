@@ -557,6 +557,11 @@ pub(super) fn entra_authorize(
 /// (see [`entra_authorize`]) and injecting the configured client secret when the client did
 /// not supply one. Entra app registrations under the Web platform are confidential clients
 /// and require the secret at the token endpoint, while public clients (PKCE-only) do not.
+///
+/// The secret is only attached to user-delegated grants (`authorization_code`,
+/// `refresh_token`). This endpoint is reachable pre-authentication, so injecting the secret
+/// into other grant types — notably `client_credentials` — would let any caller mint
+/// app-level tokens with the gateway's credential.
 pub(super) async fn entra_token(
 	req: &mut Request,
 	auth: &McpAuthentication,
@@ -582,9 +587,11 @@ pub(super) async fn entra_token(
 		.await
 		.map_err(ProxyError::Body)?;
 
-	let (mut form, has_client_secret) = strip_resource_param(&bytes);
+	let parsed = parse_entra_token_form(&bytes);
+	let mut form = parsed.form;
 	if authorization.is_none()
-		&& !has_client_secret
+		&& !parsed.has_client_secret
+		&& entra_grant_may_use_client_secret(parsed.grant_type.as_deref())
 		&& let Some(secret) = &auth.client_secret
 	{
 		form = url::form_urlencoded::Serializer::new(form)
@@ -611,20 +618,39 @@ pub(super) async fn entra_token(
 	Ok(upstream)
 }
 
-/// Re-encode a form/query string without any `resource` parameters, reporting whether a
-/// `client_secret` parameter was present.
-fn strip_resource_param(input: &[u8]) -> (String, bool) {
+/// An OAuth token request form re-encoded without any `resource` parameters, plus the fields
+/// needed to decide whether the configured client secret may be attached.
+struct EntraTokenForm {
+	form: String,
+	has_client_secret: bool,
+	grant_type: Option<String>,
+}
+
+/// Only user-delegated grants may have the gateway's client secret attached; see
+/// [`entra_token`].
+fn entra_grant_may_use_client_secret(grant_type: Option<&str>) -> bool {
+	matches!(grant_type, Some("authorization_code" | "refresh_token"))
+}
+
+fn parse_entra_token_form(input: &[u8]) -> EntraTokenForm {
 	let mut has_client_secret = false;
+	let mut grant_type = None;
 	let mut serializer = url::form_urlencoded::Serializer::new(String::new());
 	for (k, v) in url::form_urlencoded::parse(input) {
-		if k == "client_secret" {
-			has_client_secret = true;
+		match k.as_ref() {
+			"client_secret" => has_client_secret = true,
+			"grant_type" => grant_type = Some(v.to_string()),
+			_ => {},
 		}
 		if k != "resource" {
 			serializer.append_pair(&k, &v);
 		}
 	}
-	(serializer.finish(), has_client_secret)
+	EntraTokenForm {
+		form: serializer.finish(),
+		has_client_secret,
+		grant_type,
+	}
 }
 
 const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
@@ -1024,18 +1050,36 @@ mod tests {
 	}
 
 	#[test]
-	fn strip_resource_param_removes_resource_and_detects_client_secret() {
-		let (form, has_secret) = strip_resource_param(
+	fn parse_entra_token_form_removes_resource_and_detects_client_secret() {
+		let parsed = parse_entra_token_form(
 			b"grant_type=authorization_code&code=abc&resource=https%3A%2F%2Fgw%2Fmcp&code_verifier=v",
 		);
-		assert!(!has_secret);
-		assert!(!form.contains("resource"));
-		assert!(form.contains("grant_type=authorization_code"));
-		assert!(form.contains("code=abc"));
-		assert!(form.contains("code_verifier=v"));
+		assert!(!parsed.has_client_secret);
+		assert_eq!(parsed.grant_type.as_deref(), Some("authorization_code"));
+		assert!(!parsed.form.contains("resource"));
+		assert!(parsed.form.contains("grant_type=authorization_code"));
+		assert!(parsed.form.contains("code=abc"));
+		assert!(parsed.form.contains("code_verifier=v"));
 
-		let (form, has_secret) = strip_resource_param(b"grant_type=refresh_token&client_secret=s3cret");
-		assert!(has_secret);
-		assert!(form.contains("client_secret=s3cret"));
+		let parsed = parse_entra_token_form(b"grant_type=refresh_token&client_secret=s3cret");
+		assert!(parsed.has_client_secret);
+		assert_eq!(parsed.grant_type.as_deref(), Some("refresh_token"));
+		assert!(parsed.form.contains("client_secret=s3cret"));
+	}
+
+	#[test]
+	fn entra_client_secret_only_attaches_to_user_delegated_grants() {
+		assert!(entra_grant_may_use_client_secret(Some(
+			"authorization_code"
+		)));
+		assert!(entra_grant_may_use_client_secret(Some("refresh_token")));
+		// A hostile page could POST these pre-auth; the gateway must never attach its secret.
+		assert!(!entra_grant_may_use_client_secret(Some(
+			"client_credentials"
+		)));
+		assert!(!entra_grant_may_use_client_secret(Some(
+			"urn:ietf:params:oauth:grant-type:jwt-bearer"
+		)));
+		assert!(!entra_grant_may_use_client_secret(None));
 	}
 }
