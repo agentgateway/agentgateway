@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -13,6 +15,7 @@ import (
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
+	istiolog "istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/security"
 	"istio.io/istio/pkg/util/sets"
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -88,6 +90,8 @@ type setup struct {
 
 var _ Server = &setup{}
 
+const klogVerbosityEnv = "AGW_KLOG_VERBOSITY"
+
 // ensure global logger wiring happens once to avoid data races
 var setLoggerOnce sync.Once
 
@@ -115,10 +119,16 @@ func New(opts Options) (*setup, error) {
 		}
 	}
 
-	SetupLogging(s.GlobalSettings.LogLevel)
+	if err := SetupLogging(s.GlobalSettings.LogLevel); err != nil {
+		return nil, err
+	}
 
 	if s.RestConfig == nil {
-		s.RestConfig = ctrl.GetConfigOrDie()
+		var err error
+		s.RestConfig, err = ctrl.GetConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load Kubernetes config: %w", err)
+		}
 	}
 	if s.APIClient == nil {
 		apiClient, err := apiclient.New(s.RestConfig, s.GlobalSettings.IstioClusterId)
@@ -388,8 +398,9 @@ func (s *setup) buildSyncer(
 	return agwSyncer, nil
 }
 
-// SetupLogging configures the global slog logger
-func SetupLogging(levelStr string) {
+// SetupLogging configures the global slog logger and third-party loggers used
+// by the controller.
+func SetupLogging(levelStr string) error {
 	level, err := logging.ParseLevel(levelStr)
 	if err != nil {
 		slog.Error("failed to parse log level, defaulting to info", "error", err)
@@ -397,13 +408,32 @@ func SetupLogging(levelStr string) {
 	}
 	// set all loggers to the specified level
 	logging.Reset(level)
-	// set controller-runtime and klog loggers only once to avoid data races with concurrent readers
+	// set controller-runtime logger only once to avoid data races with concurrent readers
 	setLoggerOnce.Do(func() {
 		controllerLogger := logr.FromSlogHandler(logging.New("controller-runtime").Handler())
 		ctrl.SetLogger(controllerLogger)
-		klogLogger := logr.FromSlogHandler(logging.New("klog").Handler())
-		klog.SetLogger(klogLogger)
 	})
+	if verbosity := strings.TrimSpace(os.Getenv(klogVerbosityEnv)); verbosity != "" {
+		v, err := strconv.Atoi(verbosity)
+		if err != nil || v < 0 {
+			return fmt.Errorf("%s must be a non-negative integer", klogVerbosityEnv)
+		}
+		istiolog.EnableKlogWithVerbosity(v)
+	}
+
+	istioLevel := istiolog.InfoLevel
+	switch level {
+	case logging.LevelTrace, slog.LevelDebug:
+		istioLevel = istiolog.DebugLevel
+	case slog.LevelWarn:
+		istioLevel = istiolog.WarnLevel
+	case slog.LevelError:
+		istioLevel = istiolog.ErrorLevel
+	}
+	if err := configureIstioLogging(istioLevel); err != nil {
+		return fmt.Errorf("configure Istio logging: %w", err)
+	}
+	return nil
 }
 
 func initDiscoveryNSFilter(
