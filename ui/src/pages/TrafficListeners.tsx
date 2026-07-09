@@ -9,6 +9,7 @@ import {
 import { useMemo, useState } from "react";
 import { EnumSelector } from "../components/EnumSelector";
 import {
+  ConfirmDialog,
   Drawer,
   Dropdown,
   EmptyState,
@@ -84,6 +85,21 @@ function TrafficListenersEditorPage() {
     listenerIndex?: number;
     listener: TrafficListener;
   } | null>(null);
+  const [deleting, setDeleting] = useState<
+    | {
+        kind: "bind";
+        bindIndex: number;
+        label: string;
+        listenerCount: number;
+      }
+    | {
+        kind: "listener";
+        bindIndex: number;
+        listenerIndex: number;
+        label: string;
+      }
+    | null
+  >(null);
   const [trafficDrawer, setTrafficDrawer] = useStickyQueryParam("drawer");
   const linkedBind = linkedBindEditor(trafficDrawer, config.data?.binds ?? []);
   const linkedListener = linkedListenerEditor(
@@ -236,11 +252,13 @@ function TrafficListenersEditorPage() {
                           className="icon-button danger"
                           type="button"
                           aria-label="Delete bind"
+                          disabled={update.isPending}
                           onClick={() =>
-                            update.mutate((next) => {
-                              next.binds = (next.binds ?? []).filter(
-                                (_, index) => index !== bindIndex,
-                              );
+                            setDeleting({
+                              kind: "bind",
+                              bindIndex,
+                              label: `Port ${bind.port}`,
+                              listenerCount: bind.listeners.length,
                             })
                           }
                         >
@@ -313,15 +331,16 @@ function TrafficListenersEditorPage() {
                                     className="icon-button danger"
                                     type="button"
                                     aria-label="Delete listener"
+                                    disabled={update.isPending}
                                     onClick={() =>
-                                      update.mutate((next) => {
-                                        const target = next.binds?.[bindIndex];
-                                        if (target)
-                                          target.listeners =
-                                            target.listeners.filter(
-                                              (_, index) =>
-                                                index !== listenerIndex,
-                                            );
+                                      setDeleting({
+                                        kind: "listener",
+                                        bindIndex,
+                                        listenerIndex,
+                                        label: listenerDisplayName(
+                                          listener,
+                                          listenerIndex,
+                                        ),
                                       })
                                     }
                                   >
@@ -394,6 +413,40 @@ function TrafficListenersEditorPage() {
           }
         />
       ) : null}
+      {deleting ? (
+        <ConfirmDialog
+          title={`Delete ${deleting.kind}?`}
+          destructive
+          confirmLabel={`Delete ${deleting.kind}`}
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() =>
+            update.mutate(
+              (next) => {
+                if (deleting.kind === "bind") {
+                  next.binds = (next.binds ?? []).filter(
+                    (_, index) => index !== deleting.bindIndex,
+                  );
+                  return;
+                }
+                const bind = next.binds?.[deleting.bindIndex];
+                if (bind)
+                  bind.listeners = bind.listeners.filter(
+                    (_, index) => index !== deleting.listenerIndex,
+                  );
+              },
+              { onSuccess: () => setDeleting(null) },
+            )
+          }
+        >
+          <p>
+            Delete <strong>{deleting.label}</strong>?
+            {deleting.kind === "bind" && deleting.listenerCount
+              ? ` This also removes ${deleting.listenerCount} listener${deleting.listenerCount === 1 ? "" : "s"} and their routes.`
+              : " Traffic using it will no longer be served."}
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
@@ -426,13 +479,15 @@ function BindEditor(props: {
     <Drawer
       title="Bind port"
       onClose={props.onCancel}
-      footer={
+      dirty={port !== String(props.bind.port)}
+      saving={props.saving}
+      footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
           diffTitle="Bind config diff"
           saveLabel="Save bind"
           saving={props.saving}
-          onCancel={props.onCancel}
+          onCancel={requestClose}
           onSave={save}
           beforeDiff={() => {
             const parsed = Number(port);
@@ -453,7 +508,7 @@ function BindEditor(props: {
             else next.binds.push(bind);
           }}
         />
-      }
+      )}
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}
       <div className="form-grid">
@@ -498,6 +553,8 @@ function ListenerEditor(props: {
   );
   const [cert, setCert] = useState(listener.tls?.cert ?? "");
   const [key, setKey] = useState(listener.tls?.key ?? "");
+  const draft = JSON.stringify({ bindIndex, listener, cert, key });
+  const [initialDraft] = useState(() => draft);
   const protocol = listener.protocol ?? "HTTP";
   const supportsTcp = protocol === "TCP" || protocol === "TLS";
   const preview: TrafficListener = {
@@ -519,13 +576,15 @@ function ListenerEditor(props: {
           : "Add listener"
       }
       onClose={props.onCancel}
-      footer={
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
           diffTitle="Listener config diff"
           saveLabel="Save listener"
           saving={props.saving}
-          onCancel={props.onCancel}
+          onCancel={requestClose}
           onSave={() =>
             props.onSave(
               Number(bindIndex),
@@ -544,7 +603,7 @@ function ListenerEditor(props: {
             }
           }}
         />
-      }
+      )}
     >
       <div className="form-grid">
         {typeof props.editing.listenerIndex !== "number" ? (

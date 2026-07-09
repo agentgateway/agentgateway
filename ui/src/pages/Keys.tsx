@@ -547,6 +547,14 @@ function KeyEditor(props: {
   );
   const [submitted, setSubmitted] = useState(false);
   const generatedKey = useRef<string | null>(null);
+  const draft = JSON.stringify({
+    name,
+    keyMode,
+    key,
+    replaceKey,
+    metadataValues,
+  });
+  const [initialDraft] = useState(() => draft);
   const nameRequired = isNew && !name.trim();
   const duplicateName = isNew
     ? duplicateKeyName(name, props.existingKeys)
@@ -586,14 +594,16 @@ function KeyEditor(props: {
     <Drawer
       title={props.previousKey ? "Edit virtual key" : "Create virtual key"}
       onClose={props.onCancel}
-      footer={
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
           diffTitle="Virtual API key config diff"
           saveLabel="Save key"
           saving={props.saving}
           saveDisabled={keyMode === "custom" && !key.trim()}
-          onCancel={props.onCancel}
+          onCancel={requestClose}
           onSave={save}
           beforeDiff={() => Boolean(nextVirtualKey())}
           applyDiff={(next) => {
@@ -603,7 +613,7 @@ function KeyEditor(props: {
             }
           }}
         />
-      }
+      )}
     >
       <Field label="Name">
         <input

@@ -480,6 +480,10 @@ function LogsSettingsDrawer(props: {
   const [groupExpression, setGroupExpression] = useState(
     props.attributes.group,
   );
+  const dirty =
+    enabled !== props.enabled ||
+    userExpression !== props.attributes.user ||
+    groupExpression !== props.attributes.group;
   useEffect(() => setEnabled(props.enabled), [props.enabled]);
   useEffect(() => {
     setUserExpression(props.attributes.user);
@@ -493,20 +497,22 @@ function LogsSettingsDrawer(props: {
     <Drawer
       title="Log settings"
       onClose={props.onClose}
-      footer={
+      dirty={dirty}
+      saving={props.saving}
+      footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
           diffTitle="Log settings config diff"
           saveLabel="Save settings"
           saving={props.saving}
-          onCancel={props.onClose}
+          onCancel={requestClose}
           onSave={() => props.onSave(values)}
           applyDiff={(next) => {
             setPromptCompletionLogging(next, values.enabled);
             setUiLogAttributeExpressions(next, values.attributes);
           }}
         />
-      }
+      )}
     >
       <label className="config-option-row">
         <input

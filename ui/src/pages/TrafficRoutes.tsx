@@ -6,6 +6,7 @@ import {
   type EnumSelectorOption,
 } from "../components/EnumSelector";
 import {
+  ConfirmDialog,
   Drawer,
   Dropdown,
   EmptyState,
@@ -28,6 +29,7 @@ import {
   routeContexts,
   routeDisplayName,
   trafficStats,
+  type RouteContext,
   type RouteKind,
 } from "../traffic";
 import type {
@@ -115,6 +117,7 @@ function TrafficRoutesEditorPage() {
     routeIndex?: number;
     route: TrafficRoute | TrafficTcpRoute;
   } | null>(null);
+  const [deletingRoute, setDeletingRoute] = useState<RouteContext | null>(null);
   const [openedSearchListener, setOpenedSearchListener] = useState<
     string | null
   >(null);
@@ -345,17 +348,8 @@ function TrafficRoutesEditorPage() {
                           className="icon-button danger"
                           type="button"
                           aria-label="Delete route"
-                          onClick={() =>
-                            update.mutate((next) => {
-                              const listener =
-                                next.binds?.[context.bindIndex]?.listeners?.[
-                                  context.listenerIndex
-                                ];
-                              if (!listener) return;
-                              const routes = routeArray(listener, context.kind);
-                              routes.splice(context.routeIndex, 1);
-                            })
-                          }
+                          disabled={update.isPending}
+                          onClick={() => setDeletingRoute(context)}
                         >
                           <Trash2 size={16} />
                         </button>
@@ -394,6 +388,37 @@ function TrafficRoutesEditorPage() {
             )
           }
         />
+      ) : null}
+      {deletingRoute ? (
+        <ConfirmDialog
+          title="Delete route?"
+          destructive
+          confirmLabel="Delete route"
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeletingRoute(null)}
+          onConfirm={() =>
+            update.mutate(
+              (next) => {
+                const listener =
+                  next.binds?.[deletingRoute.bindIndex]?.listeners?.[
+                    deletingRoute.listenerIndex
+                  ];
+                if (!listener) return;
+                const routes = routeArray(listener, deletingRoute.kind);
+                routes.splice(deletingRoute.routeIndex, 1);
+              },
+              { onSuccess: () => setDeletingRoute(null) },
+            )
+          }
+        >
+          <p>
+            Delete{" "}
+            <strong>
+              {routeDisplayName(deletingRoute.route, deletingRoute.routeIndex)}
+            </strong>
+            ? Traffic matching this route will no longer reach its backends.
+          </p>
+        </ConfirmDialog>
       ) : null}
     </div>
   );
@@ -872,6 +897,8 @@ function RouteEditor(props: {
     props.editing.route,
   );
   const [error, setError] = useState<string | null>(null);
+  const draft = JSON.stringify({ listenerKey, kind, route });
+  const [initialDraft] = useState(() => draft);
   const selectedListener = props.listeners.find(
     (item) => `${item.bindIndex}:${item.listenerIndex}` === listenerKey,
   );
@@ -903,13 +930,15 @@ function RouteEditor(props: {
           : "Add route"
       }
       onClose={props.onCancel}
-      footer={
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
           diffTitle="Route config diff"
           saveLabel="Save route"
           saving={props.saving}
-          onCancel={props.onCancel}
+          onCancel={requestClose}
           onSave={save}
           beforeDiff={() => {
             if (!selectedListener) {
@@ -933,7 +962,7 @@ function RouteEditor(props: {
             }
           }}
         />
-      }
+      )}
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}
       <div className="route-editor-stack">

@@ -285,24 +285,15 @@ export function HomePage() {
             ),
           ]}
           actions={
-            <>
-              <button
-                className="button"
-                type="button"
-                disabled={update.isPending}
-                onClick={() => setLlmSettingsOpen(true)}
-              >
-                <Settings size={16} />
-                Settings
-              </button>
-              <Link
-                className="button primary"
-                to="/llm/models"
-                hash="add=model"
-              >
-                Setup models
-              </Link>
-            </>
+            <button
+              className="button"
+              type="button"
+              disabled={update.isPending}
+              onClick={() => setLlmSettingsOpen(true)}
+            >
+              <Settings size={16} />
+              Settings
+            </button>
           }
         />
         <SurfaceRow
@@ -323,20 +314,15 @@ export function HomePage() {
             ),
           ]}
           actions={
-            <>
-              <button
-                className="button"
-                type="button"
-                disabled={update.isPending}
-                onClick={() => setMcpSettingsOpen(true)}
-              >
-                <Settings size={16} />
-                Settings
-              </button>
-              <Link className="button primary" to="/mcp/servers">
-                Setup servers
-              </Link>
-            </>
+            <button
+              className="button"
+              type="button"
+              disabled={update.isPending}
+              onClick={() => setMcpSettingsOpen(true)}
+            >
+              <Settings size={16} />
+              Settings
+            </button>
           }
         />
         <SurfaceRow
@@ -367,7 +353,6 @@ export function HomePage() {
                   `${traffic.httpRoutes} ${traffic.httpRoutes === 1 ? "route" : "routes"}`,
                 ]
           }
-          links={[{ to: "/traffic/gateways", label: "Setup gateways" }]}
         />
       </section>
       {llmSettingsOpen ? (
@@ -530,23 +515,21 @@ function SurfaceRow(props: {
         )}
       </div>
       <div className="surface-row-actions">
-        {props.actions ? (
-          props.actions
-        ) : props.setupNeeded ? (
-          <Link
-            className="button primary"
-            to={props.setupTo}
-            hash={props.setupHash}
-          >
-            {props.setupLabel}
-          </Link>
-        ) : (
-          props.links?.map((link) => (
-            <Link key={link.to} className="button primary" to={link.to}>
-              {link.label}
-            </Link>
-          ))
-        )}
+        {!props.setupNeeded
+          ? (props.actions ??
+            props.links?.map((link) => (
+              <Link key={link.to} className="button" to={link.to}>
+                {link.label}
+              </Link>
+            )))
+          : null}
+        <Link
+          className="button primary"
+          to={props.setupTo}
+          hash={props.setupHash}
+        >
+          {props.setupLabel}
+        </Link>
       </div>
     </div>
   );

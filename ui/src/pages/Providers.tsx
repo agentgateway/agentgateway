@@ -11,6 +11,7 @@ import {
 } from "../config";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import {
+  ConfirmDialog,
   Drawer,
   EmptyState,
   Field,
@@ -46,6 +47,7 @@ export function ProvidersPage() {
     previousName?: string;
     provider: LlmProvider;
   } | null>(null);
+  const [deletingProvider, setDeletingProvider] = useState<string | null>(null);
   const [providerDrawer, setProviderDrawer] = useStickyQueryParam("provider");
   const linkedProvider =
     providerDrawer && providerDrawer !== "new"
@@ -193,13 +195,8 @@ export function ProvidersPage() {
                             className="icon-button danger"
                             aria-label="Delete provider"
                             type="button"
-                            disabled={usage.length > 0}
-                            onClick={() => {
-                              if (confirmDeleteProvider(provider.name))
-                                update.mutate((next) =>
-                                  removeLlmProvider(next, provider.name),
-                                );
-                            }}
+                            disabled={usage.length > 0 || update.isPending}
+                            onClick={() => setDeletingProvider(provider.name)}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -233,6 +230,24 @@ export function ProvidersPage() {
           }
         />
       ) : null}
+      {deletingProvider ? (
+        <ConfirmDialog
+          title="Delete provider?"
+          destructive
+          confirmLabel="Delete provider"
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeletingProvider(null)}
+          onConfirm={() =>
+            update.mutate((next) => removeLlmProvider(next, deletingProvider), {
+              onSuccess: () => setDeletingProvider(null),
+            })
+          }
+        >
+          <p>
+            Delete <strong>{deletingProvider}</strong>? This cannot be undone.
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
@@ -247,6 +262,7 @@ function ProviderEditor(props: {
   onSave: (provider: LlmProvider, previousName?: string) => void;
 }) {
   const [provider, setProvider] = useState<LlmProvider>(props.initial);
+  const [initialDraft] = useState(() => JSON.stringify(props.initial));
   const [saveAttempted, setSaveAttempted] = useState(false);
   const preview = cleanEmpty(provider) as LlmProvider | undefined;
   const invalidApiKey = invalidProviderApiKey(provider.params?.apiKey);
@@ -270,21 +286,23 @@ function ProviderEditor(props: {
     <Drawer
       title={props.previousName ? "Edit provider" : "Add provider"}
       onClose={props.onCancel}
-      footer={
+      dirty={JSON.stringify(provider) !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
           diffTitle="Provider config diff"
           saveLabel="Save provider"
           saving={props.saving}
           saveDisabled={!provider.name.trim()}
-          onCancel={props.onCancel}
+          onCancel={requestClose}
           onSave={save}
           beforeDiff={validateBeforeDiff}
           applyDiff={(next) =>
             upsertLlmProvider(next, preview ?? provider, props.previousName)
           }
         />
-      }
+      )}
     >
       <div className="form-grid">
         <Field
@@ -365,8 +383,4 @@ function providerUsage(providerName: string, models: LlmModel[]) {
       "reference" in model.provider &&
       model.provider.reference === providerName,
   );
-}
-
-function confirmDeleteProvider(name: string) {
-  return window.confirm(`Delete provider "${name}"? This cannot be undone.`);
 }

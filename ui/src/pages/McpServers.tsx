@@ -16,6 +16,7 @@ import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import {
+  ConfirmDialog,
   Drawer,
   EmptyState,
   Field,
@@ -56,6 +57,7 @@ export function McpServersPage() {
     previousName?: string;
     target: McpTarget;
   } | null>(null);
+  const [deletingServer, setDeletingServer] = useState<string | null>(null);
   const [serverDrawer, setServerDrawer] = useStickyQueryParam("server");
   const linkedTarget =
     serverDrawer && serverDrawer !== "new" && serverDrawer !== "settings"
@@ -196,11 +198,8 @@ export function McpServersPage() {
                             className="icon-button danger"
                             aria-label="Delete server"
                             type="button"
-                            onClick={() =>
-                              update.mutate((next) =>
-                                removeMcpTarget(next, target.name),
-                              )
-                            }
+                            disabled={update.isPending}
+                            onClick={() => setDeletingServer(target.name)}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -254,6 +253,25 @@ export function McpServersPage() {
             )
           }
         />
+      ) : null}
+      {deletingServer ? (
+        <ConfirmDialog
+          title="Delete MCP server?"
+          destructive
+          confirmLabel="Delete server"
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeletingServer(null)}
+          onConfirm={() =>
+            update.mutate((next) => removeMcpTarget(next, deletingServer), {
+              onSuccess: () => setDeletingServer(null),
+            })
+          }
+        >
+          <p>
+            Delete <strong>{deletingServer}</strong>? Traffic can no longer be
+            sent to this target.
+          </p>
+        </ConfirmDialog>
       ) : null}
     </div>
   );
@@ -480,6 +498,16 @@ function McpServerEditor(props: {
   const [envText, setEnvText] = useState(toYamlMappingText(stdio?.env));
   const [clearEnv, setClearEnv] = useState(Boolean(stdio?.clear_env));
   const [error, setError] = useState<string | null>(null);
+  const draft = JSON.stringify({
+    name,
+    kind,
+    url,
+    cmd,
+    args,
+    envText,
+    clearEnv,
+  });
+  const [initialDraft] = useState(() => draft);
 
   function targetPreview() {
     const base = {
@@ -531,14 +559,16 @@ function McpServerEditor(props: {
     <Drawer
       title={props.previousName ? "Edit MCP server" : "Add MCP server"}
       onClose={props.onCancel}
-      footer={
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
           diffTitle="MCP server config diff"
           saveLabel="Save server"
           saving={props.saving}
           saveDisabled={!name.trim() || (kind === "stdio" && !cmd.trim())}
-          onCancel={props.onCancel}
+          onCancel={requestClose}
           onSave={save}
           beforeDiff={() => Boolean(validTargetPreview())}
           applyDiff={(next) => {
@@ -546,7 +576,7 @@ function McpServerEditor(props: {
             upsertMcpTarget(next, target, props.previousName);
           }}
         />
-      }
+      )}
     >
       <div className="form-grid">
         <Field
