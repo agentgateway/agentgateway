@@ -17,8 +17,10 @@ use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{McpAuthentication, McpIDP};
 
 pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
-	path.starts_with("/.well-known/oauth-protected-resource")
-		|| path.starts_with("/.well-known/oauth-authorization-server")
+	path == "/.well-known/oauth-protected-resource"
+		|| path.starts_with("/.well-known/oauth-protected-resource/")
+		|| path == "/.well-known/oauth-authorization-server"
+		|| path.starts_with("/.well-known/oauth-authorization-server/")
 }
 
 pub(super) async fn apply_token_validation(
@@ -79,18 +81,28 @@ pub(crate) async fn handle_mcp_request(
 				})
 				.into_response(),
 		)),
-		path if path.starts_with("/.well-known/oauth-protected-resource") => Ok(Some(
-			protected_resource_metadata(req, auth).await.into_response(),
-		)),
-		path if path.starts_with("/.well-known/oauth-authorization-server") => Ok(Some(
-			authorization_server_metadata(req, auth, client.clone())
-				.await
-				.map_err(|e| {
-					warn!("authorization_server_metadata error: {}", e);
-					StatusCode::INTERNAL_SERVER_ERROR
-				})
-				.into_response(),
-		)),
+		path
+			if path == "/.well-known/oauth-protected-resource"
+				|| path.starts_with("/.well-known/oauth-protected-resource/") =>
+		{
+			Ok(Some(
+				protected_resource_metadata(req, auth).await.into_response(),
+			))
+		},
+		path
+			if path == "/.well-known/oauth-authorization-server"
+				|| path.starts_with("/.well-known/oauth-authorization-server/") =>
+		{
+			Ok(Some(
+				authorization_server_metadata(req, auth, client.clone())
+					.await
+					.map_err(|e| {
+						warn!("authorization_server_metadata error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response(),
+			))
+		},
 		_ => {
 			// Not handled
 			Ok(None)
@@ -457,6 +469,25 @@ mod tests {
 			request_uri_for_oauth_metadata(&req).to_string(),
 			"https://example.com/.well-known/oauth-protected-resource/mcp"
 		);
+	}
+
+	#[test]
+	fn well_known_endpoint_requires_root_and_slash_delimited_suffix() {
+		assert!(is_well_known_endpoint(
+			"/.well-known/oauth-protected-resource"
+		));
+		assert!(is_well_known_endpoint(
+			"/.well-known/oauth-protected-resource/mcp"
+		));
+		assert!(is_well_known_endpoint(
+			"/.well-known/oauth-authorization-server/tenant"
+		));
+		assert!(!is_well_known_endpoint(
+			"/mcp/.well-known/oauth-protected-resource"
+		));
+		assert!(!is_well_known_endpoint(
+			"/.well-known/oauth-protected-resource-evil"
+		));
 	}
 
 	#[test]

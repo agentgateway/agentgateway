@@ -46,7 +46,11 @@ impl App {
 		if backend_policies.mcp_authentication.is_some() {
 			return None;
 		}
-		if !req.uri().path().contains("/.well-known/") {
+		if !matches!(
+			req.method(),
+			&::http::Method::GET | &::http::Method::OPTIONS
+		) || !auth::is_well_known_endpoint(req.uri().path())
+		{
 			return None;
 		}
 		match backend.targets.first().map(|t| &t.spec) {
