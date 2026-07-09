@@ -1046,3 +1046,66 @@ fn test_backend_auth_serde_with_credentials_includes_field() {
 		"credentials should appear in serialized output: {yaml}"
 	);
 }
+
+#[tokio::test]
+async fn test_backend_auth_credential_authorization_marks_explicit() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let credentials = vec![credential("authorization", "jwt-token", Some("Bearer "))];
+
+	apply_backend_auth(&backend_info, None, &credentials, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let applied = req
+		.extensions()
+		.get::<AppliedBackendAuthLocation>()
+		.expect("Authorization credential must set the applied-location marker");
+	assert!(applied.explicit);
+}
+
+#[tokio::test]
+async fn test_backend_auth_credential_other_header_keeps_primary_marker() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let key_auth = BackendAuth::Key {
+		value: SecretString::new("primary".into()),
+		location: None,
+	};
+	let credentials = vec![credential("x-api-key", "v", None)];
+
+	apply_backend_auth(&backend_info, Some(&key_auth), &credentials, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let applied = req
+		.extensions()
+		.get::<AppliedBackendAuthLocation>()
+		.expect("primary auth must set the applied-location marker");
+	assert!(
+		!applied.explicit,
+		"non-Authorization credentials must not override the primary marker"
+	);
+}

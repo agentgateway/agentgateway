@@ -151,6 +151,15 @@ pub async fn apply_backend_auth(
 		credential
 			.location
 			.insert(req, credential.key.expose_secret())?;
+		// Credential locations are always explicitly configured. Mark Authorization writes
+		// so providers (e.g. Anthropic) do not rewrite or relocate the header. Other
+		// locations must not touch the marker set by the primary auth kind.
+		if matches!(&credential.location, AuthorizationLocation::Header { name, .. } if *name == http::header::AUTHORIZATION)
+		{
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit: true });
+		}
 	}
 	Ok(())
 }
