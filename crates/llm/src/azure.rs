@@ -45,53 +45,50 @@ impl Provider {
 	}
 
 	pub fn get_path_for_model(&self, route: RouteType, model: &str) -> Strng {
-		// Foundry exposes both OpenAI-compatible and Anthropic-native endpoints.
-		// Route to the Anthropic-native path only for Claude models; GPT and other
-		// models use the project-scoped OpenAI-compatible path.
-		if matches!(self.resource_type, AzureResourceType::Foundry) {
-			if self.is_anthropic_model(Some(model)) {
-				if route == RouteType::Messages {
-					return strng::literal!("/anthropic/v1/messages");
-				}
-				if route == RouteType::AnthropicTokenCount {
-					return strng::literal!("/anthropic/v1/messages/count_tokens");
-				}
-			}
-			let t = if route == RouteType::Embeddings {
-				strng::literal!("embeddings")
-			} else if route == RouteType::Responses {
-				strng::literal!("responses")
-			} else {
-				strng::literal!("chat/completions")
-			};
-			let project = self
-				.project_name
-				.as_deref()
-				.unwrap_or(self.resource_name.as_str());
-			return strng::format!("/api/projects/{project}/openai/v1/{t}");
+		match self.resource_type {
+			AzureResourceType::Foundry => self.foundry_path(route, model),
+			AzureResourceType::OpenAI => self.openai_path(route, model),
 		}
+	}
 
-		let t = if route == RouteType::Embeddings {
-			strng::literal!("embeddings")
-		} else if route == RouteType::Responses {
-			strng::literal!("responses")
-		} else {
-			strng::literal!("chat/completions")
-		};
+	fn foundry_path(&self, route: RouteType, model: &str) -> Strng {
+		if self.is_anthropic_model(Some(model)) {
+			match route {
+				RouteType::Messages => return strng::literal!("/anthropic/v1/messages"),
+				RouteType::AnthropicTokenCount => {
+					return strng::literal!("/anthropic/v1/messages/count_tokens");
+				},
+				_ => {},
+			}
+		}
+		let project = self
+			.project_name
+			.as_deref()
+			.unwrap_or(self.resource_name.as_str());
+		let suffix = Self::openai_suffix(route);
+		strng::format!("/api/projects/{project}/openai/v1/{suffix}")
+	}
 
-		let api_version = self.api_version();
-		if api_version == "v1" {
-			strng::format!("/openai/v1/{t}")
-		} else if api_version == "preview" {
-			// v1 preview API
-			strng::format!("/openai/v1/{t}?api-version=preview")
-		} else {
-			let model = self.model.as_deref().unwrap_or(model);
-			strng::format!(
-				"/openai/deployments/{}/{t}?api-version={}",
-				model,
-				api_version
-			)
+	fn openai_path(&self, route: RouteType, model: &str) -> Strng {
+		let suffix = Self::openai_suffix(route);
+		match self.api_version() {
+			"v1" => strng::format!("/openai/v1/{suffix}"),
+			"preview" => strng::format!("/openai/v1/{suffix}?api-version=preview"),
+			version if route == RouteType::Responses => {
+				strng::format!("/openai/responses?api-version={version}")
+			},
+			version => {
+				let model = self.model.as_deref().unwrap_or(model);
+				strng::format!("/openai/deployments/{model}/{suffix}?api-version={version}")
+			},
+		}
+	}
+
+	fn openai_suffix(route: RouteType) -> Strng {
+		match route {
+			RouteType::Embeddings => strng::literal!("embeddings"),
+			RouteType::Responses => strng::literal!("responses"),
+			_ => strng::literal!("chat/completions"),
 		}
 	}
 
@@ -219,6 +216,49 @@ mod tests {
 	) {
 		let mut p = make_provider("my-resource", resource_type);
 		p.project_name = project_name.map(strng::new);
+		assert_eq!(p.get_path_for_model(route, model).as_str(), expected);
+	}
+
+	#[rstest::rstest]
+	// Responses with a date-based api-version uses the non-deployment path; the model is
+	// supplied in the request body (issue #2482).
+	#[case::responses_date_version(
+		RouteType::Responses,
+		"2026-01-01-preview",
+		"gpt-5.1",
+		"/openai/responses?api-version=2026-01-01-preview"
+	)]
+	// Responses on the v1 surface.
+	#[case::responses_v1(RouteType::Responses, "v1", "gpt-5.1", "/openai/v1/responses")]
+	// Responses on the v1 preview surface.
+	#[case::responses_preview(
+		RouteType::Responses,
+		"preview",
+		"gpt-5.1",
+		"/openai/v1/responses?api-version=preview"
+	)]
+	// Completions with a date-based api-version keeps the deployment-scoped path.
+	#[case::completions_date_version(
+		RouteType::Completions,
+		"2024-02-15-preview",
+		"gpt-4o-mini",
+		"/openai/deployments/gpt-4o-mini/chat/completions?api-version=2024-02-15-preview"
+	)]
+	// Embeddings with a date-based api-version keeps the deployment-scoped path.
+	#[case::embeddings_date_version(
+		RouteType::Embeddings,
+		"2024-02-15-preview",
+		"text-embedding-3-small",
+		"/openai/deployments/text-embedding-3-small/embeddings?api-version=2024-02-15-preview"
+	)]
+	fn test_get_path_for_model_api_versions(
+		#[case] route: RouteType,
+		#[case] api_version: &str,
+		#[case] model: &str,
+		#[case] expected: &str,
+	) {
+		let mut p = make_provider("my-resource", AzureResourceType::OpenAI);
+		p.api_version = Some(strng::new(api_version));
 		assert_eq!(p.get_path_for_model(route, model).as_str(), expected);
 	}
 }
