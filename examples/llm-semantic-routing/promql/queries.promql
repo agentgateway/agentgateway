@@ -1,0 +1,91 @@
+# Replace RUN_ID and the [30m] range with the actual eval run id/window.
+# These queries assume the Gateway is agentgateway-system/agentgateway-proxy.
+
+# 1. Confirm the model catalog priced the selected models.
+sum by (status, gen_ai_system, gen_ai_request_model, gen_ai_response_model) (
+  increase(agentgateway_cost_catalog_lookups_total{
+    namespace="agentgateway-system",
+    gateway="agentgateway-proxy"
+  }[30m])
+)
+
+# 2. Realized cost by model from agentgateway's model catalog.
+sum by (gen_ai_request_model, gen_ai_response_model, gateway) (
+  increase(agentgateway_gen_ai_client_cost_usd_total{
+    namespace="agentgateway-system",
+    gateway="agentgateway-proxy"
+  }[30m])
+)
+
+# 3. Token usage by selected/requested model and token type.
+sum by (gen_ai_request_model, gen_ai_response_model, gen_ai_token_type) (
+  increase(agentgateway_gen_ai_client_token_usage_sum{
+    namespace="agentgateway-system",
+    gateway="agentgateway-proxy"
+  }[30m])
+)
+
+# 4. If user_id labels are enabled, split the three eval lanes.
+# The runner sends X-User-ID values like vsr-RUN_ID-routed,
+# vsr-RUN_ID-always_low_cost, and vsr-RUN_ID-always_expensive.
+sum by (user_id, gen_ai_request_model, gen_ai_response_model, gen_ai_token_type) (
+  increase(agentgateway_gen_ai_client_token_usage_sum{
+    namespace="agentgateway-system",
+    gateway="agentgateway-proxy",
+    user_id=~"vsr-RUN_ID-.*"
+  }[30m])
+)
+
+# 5. If user_id labels are enabled, realized cost by eval lane.
+sum by (user_id, gen_ai_request_model, gen_ai_response_model) (
+  increase(agentgateway_gen_ai_client_cost_usd_total{
+    namespace="agentgateway-system",
+    gateway="agentgateway-proxy",
+    user_id=~"vsr-RUN_ID-.*"
+  }[30m])
+)
+
+# 6. End-to-end request latency for the experimental route.
+histogram_quantile(
+  0.95,
+  sum by (le, route) (
+    rate(agentgateway_request_duration_seconds_bucket{
+      namespace="agentgateway-system",
+      gateway="agentgateway-proxy",
+      route=~".*openai-semantic-routing.*"
+    }[30m])
+  )
+)
+
+# 7. LLM request duration by model.
+histogram_quantile(
+  0.95,
+  sum by (le, gen_ai_request_model, gen_ai_response_model) (
+    rate(agentgateway_gen_ai_server_request_duration_bucket{
+      namespace="agentgateway-system",
+      gateway="agentgateway-proxy"
+    }[30m])
+  )
+)
+
+# 8. Time to first token by model, useful when you later test streaming.
+histogram_quantile(
+  0.95,
+  sum by (le, gen_ai_request_model, gen_ai_response_model) (
+    rate(agentgateway_gen_ai_server_time_to_first_token_bucket{
+      namespace="agentgateway-system",
+      gateway="agentgateway-proxy"
+    }[30m])
+  )
+)
+
+# 9. Output throughput by model. Higher is better.
+1 / histogram_quantile(
+  0.50,
+  sum by (le, gen_ai_request_model, gen_ai_response_model) (
+    rate(agentgateway_gen_ai_server_time_per_output_token_bucket{
+      namespace="agentgateway-system",
+      gateway="agentgateway-proxy"
+    }[30m])
+  )
+)
