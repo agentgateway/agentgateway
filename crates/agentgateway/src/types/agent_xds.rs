@@ -951,7 +951,7 @@ fn convert_backend_ai_policy(
 		context_compression: ai
 			.context_compression
 			.as_ref()
-			.and_then(convert_context_compression),
+			.and_then(|cc| convert_context_compression(cc, diagnostics)),
 		routes: ai
 			.routes
 			.iter()
@@ -3357,12 +3357,11 @@ fn convert_prompt_caching(
 
 fn convert_context_compression(
 	cc: &proto::agent::backend_policy_spec::ai::ContextCompression,
+	diagnostics: &mut Diagnostics,
 ) -> Option<llm::policy::compression::ContextCompression> {
-	use proto::agent::backend_policy_spec::ai::context_compression::{FailureMode, engine};
+	use proto::agent::backend_policy_spec::ai::context_compression::FailureMode;
 
-	// Only the external engine is defined today; without one, there's nothing to configure.
-	let engine::Kind::External(external) = cc.engine.as_ref()?.kind.as_ref()?;
-	let target = resolve_simple_reference(external.backend.as_ref());
+	let target = resolve_simple_reference(cc.backend.as_ref());
 	if matches!(target, SimpleBackendReference::Invalid) {
 		return None;
 	}
@@ -3373,16 +3372,20 @@ fn convert_context_compression(
 		_ => llm::policy::FailureMode::FailOpen,
 	};
 
+	let forward_header_matches = convert_header_match(
+		diagnostics,
+		"backend.ai.contextCompression.forwardHeaderMatches",
+		&cc.forward_header_matches,
+	)
+	.unwrap_or_default();
+
 	Some(llm::policy::compression::ContextCompression {
-		engine: llm::policy::compression::CompressionEngine::External(
-			llm::policy::compression::ExternalCompressionEngine {
-				target,
-				path: external
-					.path
-					.clone()
-					.unwrap_or_else(llm::policy::compression::default_compress_path),
-			},
-		),
+		target,
+		path: cc
+			.path
+			.clone()
+			.unwrap_or_else(llm::policy::compression::default_compress_path),
+		forward_header_matches,
 		failure_mode,
 		min_size_bytes: cc
 			.min_size_bytes
@@ -3395,6 +3398,8 @@ fn convert_webhook(
 	w: &proto::agent::backend_policy_spec::ai::Webhook,
 	diagnostics: &mut Diagnostics,
 ) -> Result<llm::policy::Webhook, ProtoError> {
+	use proto::agent::backend_policy_spec::ai::webhook::{FailureMode, MessageFormat};
+
 	let target = resolve_simple_reference(w.backend.as_ref());
 
 	let forward_header_matches = convert_header_match(
@@ -3403,19 +3408,23 @@ fn convert_webhook(
 		&w.forward_header_matches,
 	)?;
 
-	let failure_mode =
-		match proto::agent::backend_policy_spec::ai::webhook::FailureMode::try_from(w.failure_mode) {
-			Ok(proto::agent::backend_policy_spec::ai::webhook::FailureMode::FailOpen) => {
-				llm::policy::FailureMode::FailOpen
-			},
-			// Default to FailClosed (proto default is FAIL_CLOSED = 0)
-			_ => llm::policy::FailureMode::FailClosed,
-		};
+	let failure_mode = match FailureMode::try_from(w.failure_mode) {
+		Ok(FailureMode::FailOpen) => llm::policy::FailureMode::FailOpen,
+		// Default to FailClosed (proto default is FAIL_CLOSED = 0)
+		_ => llm::policy::FailureMode::FailClosed,
+	};
+
+	let message_format = match MessageFormat::try_from(w.message_format) {
+		Ok(MessageFormat::Raw) => llm::policy::MessageFormat::Raw,
+		// Default to Simplified (proto default is SIMPLIFIED = 0)
+		_ => llm::policy::MessageFormat::Simplified,
+	};
 
 	Ok(llm::policy::Webhook {
 		target,
 		forward_header_matches,
 		failure_mode,
+		message_format,
 	})
 }
 
@@ -4128,71 +4137,53 @@ mod tests {
 
 	#[test]
 	fn context_compression_from_proto_resolves_defaults() {
-		use proto::agent::backend_policy_spec::ai::context_compression::{Engine, External, engine};
 		use proto::agent::backend_reference;
 
 		let cc = proto::agent::backend_policy_spec::ai::ContextCompression {
-			engine: Some(Engine {
-				kind: Some(engine::Kind::External(External {
-					backend: Some(proto::agent::BackendReference {
-						port: 8787,
-						kind: Some(backend_reference::Kind::Service(
-							backend_reference::Service {
-								namespace: "default".to_string(),
-								hostname: "compressor.default.svc.cluster.local".to_string(),
-							},
-						)),
-					}),
-					// path unset -> policy default
-					path: None,
+			backend: Some(proto::agent::BackendReference {
+				port: 8787,
+				kind: Some(backend_reference::Kind::Service(backend_reference::Service {
+					namespace: "default".to_string(),
+					hostname: "compressor.default.svc.cluster.local".to_string(),
 				})),
 			}),
+			// path unset -> policy default
+			path: None,
 			// failure_mode unset (0) -> FAIL_OPEN, matching local-config default
 			failure_mode: 0,
 			// min_size_bytes unset -> policy default
 			min_size_bytes: None,
+			forward_header_matches: vec![],
 		};
 
 		let got = compression_of(&ai_with_context_compression(Some(cc)))
 			.expect("context compression should convert");
-		assert!(matches!(
-			got.failure_mode,
-			llm::policy::FailureMode::FailOpen
-		));
+		assert!(matches!(got.failure_mode, llm::policy::FailureMode::FailOpen));
 		assert_eq!(
 			got.min_size_bytes,
 			llm::policy::compression::default_min_size_bytes()
 		);
-		let llm::policy::compression::CompressionEngine::External(external) = got.engine;
-		assert_eq!(
-			external.path,
-			llm::policy::compression::default_compress_path()
-		);
+		assert_eq!(got.path, llm::policy::compression::default_compress_path());
 		assert!(matches!(
-			external.target,
+			got.target,
 			SimpleBackendReference::Service { port, .. } if port == 8787
 		));
 	}
 
 	#[test]
 	fn context_compression_from_proto_honors_explicit_fields() {
-		use proto::agent::backend_policy_spec::ai::context_compression::{
-			Engine, External, FailureMode, engine,
-		};
+		use proto::agent::backend_policy_spec::ai::context_compression::FailureMode;
 		use proto::agent::backend_reference;
 
 		let cc = proto::agent::backend_policy_spec::ai::ContextCompression {
-			engine: Some(Engine {
-				kind: Some(engine::Kind::External(External {
-					backend: Some(proto::agent::BackendReference {
-						port: 0,
-						kind: Some(backend_reference::Kind::Backend("my-backend".to_string())),
-					}),
-					path: Some("/compress".to_string()),
-				})),
+			backend: Some(proto::agent::BackendReference {
+				port: 0,
+				kind: Some(backend_reference::Kind::Backend("my-backend".to_string())),
 			}),
+			path: Some("/compress".to_string()),
 			failure_mode: FailureMode::FailClosed as i32,
 			min_size_bytes: Some(4096),
+			forward_header_matches: vec![],
 		};
 
 		let got = compression_of(&ai_with_context_compression(Some(cc)))
@@ -4202,38 +4193,21 @@ mod tests {
 			llm::policy::FailureMode::FailClosed
 		));
 		assert_eq!(got.min_size_bytes, 4096);
-		let llm::policy::compression::CompressionEngine::External(external) = got.engine;
-		assert_eq!(external.path, "/compress");
-		assert!(matches!(
-			external.target,
-			SimpleBackendReference::Backend(_)
-		));
+		assert_eq!(got.path, "/compress");
+		assert!(matches!(got.target, SimpleBackendReference::Backend(_)));
 	}
 
 	#[test]
-	fn context_compression_from_proto_drops_invalid_target_and_missing_engine() {
-		use proto::agent::backend_policy_spec::ai::context_compression::{Engine, External, engine};
-
-		// Engine present but backend reference missing -> Invalid target -> dropped.
+	fn context_compression_from_proto_drops_invalid_target() {
+		// Backend reference missing -> Invalid target -> dropped.
 		let no_backend = proto::agent::backend_policy_spec::ai::ContextCompression {
-			engine: Some(Engine {
-				kind: Some(engine::Kind::External(External {
-					backend: None,
-					path: None,
-				})),
-			}),
+			backend: None,
+			path: None,
 			failure_mode: 0,
 			min_size_bytes: None,
+			forward_header_matches: vec![],
 		};
 		assert!(compression_of(&ai_with_context_compression(Some(no_backend))).is_none());
-
-		// No engine at all -> dropped.
-		let no_engine = proto::agent::backend_policy_spec::ai::ContextCompression {
-			engine: None,
-			failure_mode: 0,
-			min_size_bytes: None,
-		};
-		assert!(compression_of(&ai_with_context_compression(Some(no_engine))).is_none());
 
 		// No context compression -> None.
 		assert!(compression_of(&ai_with_context_compression(None)).is_none());

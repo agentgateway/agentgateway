@@ -1209,6 +1209,15 @@ message BackendPolicySpec {
         FAIL_OPEN = 1;
       }
       FailureMode failure_mode = 4;
+
+      // Fidelity of messages exchanged with the webhook. Defaults to SIMPLIFIED
+      // (role + text content). RAW forwards provider-native message objects,
+      // preserving tool calls, cache markers, and multi-part content.
+      enum MessageFormat {
+        SIMPLIFIED = 0;
+        RAW = 1;
+      }
+      MessageFormat message_format = 5;
     }
 
     message Moderation {
@@ -1335,32 +1344,25 @@ message BackendPolicySpec {
     map<string, string> model_aliases = 5;
     PromptCaching prompt_caching = 6;
 
-    // Context compression shrinks request messages through a compression engine
-    // before they reach the LLM provider, to reduce token spend.
+    // Context compression shrinks request messages through an external compression service
+    // (a message-processor webhook) before they reach the LLM provider, to reduce token spend.
     message ContextCompression {
-      // External compression service implementing the gateway compression wire contract.
-      message External {
-        BackendReference backend = 1;
-        // Request path of the compression endpoint. Defaults to "/v1/compress".
-        optional string path = 2;
-      }
-      // Engine that performs the compression.
-      message Engine {
-        oneof kind {
-          External external = 1;
-        }
-      }
-      // Behavior when the engine is unreachable, errors, or returns unusable messages.
+      // Backend serving the compression endpoint.
+      BackendReference backend = 1;
+      // Request path of the compression endpoint. Defaults to "/v1/compress".
+      optional string path = 2;
+      // Behavior when the service is unreachable, errors, or returns unusable messages.
       // Defaults to FAIL_OPEN (forward the original request unchanged).
       enum FailureMode {
         FAIL_OPEN = 0;
         FAIL_CLOSED = 1;
       }
-      Engine engine = 1;
-      FailureMode failure_mode = 2;
+      FailureMode failure_mode = 3;
       // Minimum serialized size of the message array, in bytes, before compression is
       // attempted. Requests below the threshold are forwarded untouched. Defaults to 16384.
-      optional uint32 min_size_bytes = 3;
+      optional uint32 min_size_bytes = 4;
+      // Incoming request headers to forward to the compression service.
+      repeated HeaderMatch forward_header_matches = 5;
     }
     ContextCompression context_compression = 9;
 

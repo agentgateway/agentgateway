@@ -117,18 +117,23 @@ func writeJSON(w http.ResponseWriter, resp any) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// handleCompress implements the gateway context-compression wire contract: it accepts
-// {messages, model} and returns a compressed {messages} array. The mock "compresses" by
-// collapsing the conversation into a single marked user message, which both proves the
-// callout fired and lets the LLM handler recognize a compressed request.
+// handleCompress implements the shared message-processor wire contract used by context
+// compression: it accepts {body:{messages}} and returns a {action} envelope. The mock
+// "compresses" by returning a mask action that collapses the conversation into a single
+// marked user message, which both proves the callout fired and lets the LLM handler
+// recognize a compressed request.
 func handleCompress(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 	writeJSON(w, map[string]any{
-		"messages": []map[string]any{
-			{"role": "user", "content": compressionMarker + " summarize the reference material"},
+		"action": map[string]any{
+			"body": map[string]any{
+				"messages": []map[string]any{
+					{"role": "user", "content": compressionMarker + " summarize the reference material"},
+				},
+			},
 		},
 	})
 }

@@ -6,7 +6,6 @@ import type { SchemaHelp } from "../../schemaHelp";
 import type { LlmModel } from "../../types";
 import type {
   ContextCompression,
-  ExternalCompressionEngine,
   HeaderModifier,
   LocalEviction,
   LocalHealthPolicy,
@@ -291,14 +290,8 @@ export function PromptCachingEditor(props: {
   );
 }
 
-function externalEngine(
-  value: ContextCompression | null | undefined,
-): ExternalCompressionEngine | undefined {
-  return value?.engine?.external;
-}
-
-function engineHost(engine: ExternalCompressionEngine | undefined): string {
-  const target = engine?.target;
+function compressionHost(value: ContextCompression | null | undefined): string {
+  const target = value?.target;
   return target && "host" in target ? target.host : "";
 }
 
@@ -308,11 +301,10 @@ export function ContextCompressionEditor(props: {
   onChange: (value: LlmModel["contextCompression"] | null) => void;
 }) {
   const value = props.value ?? null;
-  const engine = externalEngine(value);
-  const host = engineHost(engine);
+  const host = compressionHost(value);
 
-  // The engine target is a union (service/host/backend); this editor manages the common
-  // `host` case. Editing host resets the target to a host reference.
+  // The target is a union (service/host/backend); this editor manages the common `host`
+  // case. Editing host resets the target to a host reference.
   function setHost(nextHost: string) {
     if (!nextHost) {
       props.onChange(null);
@@ -320,20 +312,7 @@ export function ContextCompressionEditor(props: {
     }
     props.onChange({
       ...(value ?? {}),
-      engine: {
-        external: {
-          ...(engine ?? {}),
-          target: { host: nextHost },
-        },
-      },
-    });
-  }
-
-  function patchEngine(next: Partial<ExternalCompressionEngine>) {
-    if (!engine) return;
-    props.onChange({
-      ...(value ?? {}),
-      engine: { external: { ...engine, ...next } },
+      target: { host: nextHost },
     });
   }
 
@@ -345,9 +324,9 @@ export function ContextCompressionEditor(props: {
   return (
     <div className="policy-editor-stack compact">
       <Field
-        label="Engine host"
-        tooltip={props.help.field<ExternalCompressionEngine>(
-          "ExternalCompressionEngine",
+        label="Compression host"
+        tooltip={props.help.field<ContextCompression>(
+          "ContextCompression",
           "target",
         )}
       >
@@ -359,17 +338,15 @@ export function ContextCompressionEditor(props: {
       </Field>
       <Field
         label="Compression path"
-        tooltip={props.help.field<ExternalCompressionEngine>(
-          "ExternalCompressionEngine",
+        tooltip={props.help.field<ContextCompression>(
+          "ContextCompression",
           "path",
         )}
       >
         <input
-          value={engine?.path ?? ""}
-          disabled={!engine}
-          onChange={(event) =>
-            patchEngine({ path: event.target.value || undefined })
-          }
+          value={value?.path ?? ""}
+          disabled={!value}
+          onChange={(event) => patch({ path: event.target.value || undefined })}
           placeholder="/v1/compress"
         />
       </Field>
@@ -422,7 +399,7 @@ export function ContextCompressionEditor(props: {
 export function contextCompressionSummary(
   value: LlmModel["contextCompression"] | null | undefined,
 ) {
-  const host = engineHost(externalEngine(value));
+  const host = compressionHost(value);
   if (!host) return "No context compression configured";
   const mode =
     value?.failureMode === "failClosed" ? "fail closed" : "fail open";

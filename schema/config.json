@@ -4448,6 +4448,10 @@
         "failureMode": {
           "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
           "$ref": "#/$defs/WebhookFailureMode"
+        },
+        "messageFormat": {
+          "description": "Fidelity of the messages sent to (and accepted back from) the webhook.\nDefaults to `simplified` (role + text content). `raw` forwards provider-native\nmessage objects, preserving tool calls, cache markers, and multi-part content.",
+          "$ref": "#/$defs/MessageFormat"
         }
       },
       "additionalProperties": false,
@@ -4467,6 +4471,21 @@
           "description": "Allow the request through when the webhook guardrail is unavailable.",
           "type": "string",
           "const": "failOpen"
+        }
+      ]
+    },
+    "MessageFormat": {
+      "description": "Fidelity of messages exchanged with a message-processor callout (webhook / compression).",
+      "oneOf": [
+        {
+          "description": "Normalized `{role, content}` messages. Provider-specific blocks (tool calls, cache\nmarkers, multi-part content) are dropped. This is the stable, widely-supported shape.",
+          "type": "string",
+          "const": "simplified"
+        },
+        {
+          "description": "Provider-native message objects, forwarded verbatim. Preserves everything the\nsimplified shape drops; the callout server must understand the provider wire format.",
+          "type": "string",
+          "const": "raw"
         }
       ]
     },
@@ -4818,15 +4837,27 @@
       "additionalProperties": false
     },
     "ContextCompression": {
-      "description": "Context compression shrinks request messages before they reach the LLM to reduce token\nspend. Compression is an optimization: by default failures are ignored and the original\nrequest is forwarded unchanged.",
+      "description": "Context compression shrinks request messages through an external compression service before\nthey reach the LLM, to reduce token spend. Compression is an optimization: by default a\nfailure is ignored and the original request is forwarded unchanged.",
       "type": "object",
       "properties": {
-        "engine": {
-          "description": "Engine that performs the compression.",
-          "$ref": "#/$defs/CompressionEngine"
+        "target": {
+          "description": "Backend serving the compression endpoint (a message-processor webhook).",
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "path": {
+          "description": "Request path of the compression endpoint. Defaults to `/v1/compress`.",
+          "type": "string",
+          "default": "/v1/compress"
+        },
+        "forwardHeaderMatches": {
+          "description": "Incoming request headers to forward to the compression service.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderMatch"
+          }
         },
         "failureMode": {
-          "description": "Behavior when the engine is unreachable, errors, or returns unusable messages.\nDefaults to `failOpen` (forward the original request unchanged).",
+          "description": "Behavior when the service is unreachable, errors, or returns unusable messages.\nDefaults to `failOpen` (forward the original request unchanged).",
           "$ref": "#/$defs/WebhookFailureMode",
           "default": "failOpen"
         },
@@ -4836,42 +4867,6 @@
           "format": "uint",
           "minimum": 0,
           "default": 16384
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "engine"
-      ]
-    },
-    "CompressionEngine": {
-      "oneOf": [
-        {
-          "description": "External compression service implementing the gateway's compression wire contract.",
-          "type": "object",
-          "properties": {
-            "external": {
-              "$ref": "#/$defs/ExternalCompressionEngine"
-            }
-          },
-          "required": [
-            "external"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "ExternalCompressionEngine": {
-      "description": "External service speaking the gateway compression API (see module docs).",
-      "type": "object",
-      "properties": {
-        "target": {
-          "description": "Backend serving the compression endpoint.",
-          "$ref": "#/$defs/SimpleLocalBackendSerde"
-        },
-        "path": {
-          "description": "Request path of the compression endpoint. Defaults to `/v1/compress`.",
-          "type": "string",
-          "default": "/v1/compress"
         }
       },
       "additionalProperties": false,

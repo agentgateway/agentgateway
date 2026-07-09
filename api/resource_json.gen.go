@@ -1425,28 +1425,6 @@ func (this *BackendPolicySpec_Ai_ContextCompression) UnmarshalJSON(b []byte) err
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
-// MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_ContextCompression_External
-func (this *BackendPolicySpec_Ai_ContextCompression_External) MarshalJSON() ([]byte, error) {
-	str, err := ResourceMarshaler.MarshalToString(this)
-	return []byte(str), err
-}
-
-// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_Ai_ContextCompression_External
-func (this *BackendPolicySpec_Ai_ContextCompression_External) UnmarshalJSON(b []byte) error {
-	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
-}
-
-// MarshalJSON is a custom marshaler for BackendPolicySpec_Ai_ContextCompression_Engine
-func (this *BackendPolicySpec_Ai_ContextCompression_Engine) MarshalJSON() ([]byte, error) {
-	str, err := ResourceMarshaler.MarshalToString(this)
-	return []byte(str), err
-}
-
-// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_Ai_ContextCompression_Engine
-func (this *BackendPolicySpec_Ai_ContextCompression_Engine) UnmarshalJSON(b []byte) error {
-	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
-}
-
 // MarshalJSON is a custom marshaler for BackendPolicySpec_A2A
 func (this *BackendPolicySpec_A2A) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

@@ -8,10 +8,9 @@
 #
 #   headroom proxy --port 8787 --mode cache
 #
-# The gateway POSTs each request's messages to the engine's /v1/compress endpoint and
-# forwards the compressed result upstream. Send `x-agw-compression-bypass: true` to skip
-# compression for a request. If the engine is unreachable, `failureMode: failOpen`
-# (the default) forwards the original request unchanged.
+# The gateway POSTs each request's messages to the engine's /v1/compress endpoint (a
+# message-processor webhook) and applies the messages it returns. If the engine is
+# unreachable, `failureMode: failOpen` (the default) forwards the original request unchanged.
 #
 # This uses the `llm` server form (default port 4000), which matches the Claude Code
 # integration guide: https://agentgateway.dev/docs/standalone/main/integrations/llm-clients/claude-code/
@@ -22,10 +21,8 @@ llm:
     params:
       apiKey: "$ANTHROPIC_API_KEY"
     contextCompression:
-      engine:
-        external:
-          target:
-            host: 127.0.0.1:8787
-          # path: /v1/compress    # default
-      # failureMode: failOpen     # failOpen (default) | failClosed
-      # minSizeBytes: 16384       # skip requests below this serialized size
+      target:
+        host: 127.0.0.1:8787
+      # path: /v1/compress      # default
+      # failureMode: failOpen   # failOpen (default) | failClosed
+      # minSizeBytes: 16384     # skip requests below this serialized size

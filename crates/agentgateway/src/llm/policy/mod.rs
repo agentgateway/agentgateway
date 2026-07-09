@@ -1017,6 +1017,9 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 	) -> anyhow::Result<GuardrailOutcome> {
+		if webhook.message_format == MessageFormat::Raw {
+			return Self::apply_webhook_raw(req, http_headers, client, webhook).await;
+		}
 		let messsages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 		let whr = match webhook::send_request(client, &webhook.target, &headers, messsages).await {
@@ -1066,6 +1069,54 @@ impl Policy {
 						.unwrap_or_else(|| "no reason specified".to_string())
 				);
 				Ok(GuardrailOutcome::None)
+			},
+		}
+	}
+
+	/// Raw-fidelity request webhook: forwards provider-native messages and applies the returned
+	/// action, preserving tool calls / cache markers that the simplified path drops. Shares the
+	/// callout and validation with context compression.
+	async fn apply_webhook_raw(
+		req: &mut dyn RequestType,
+		http_headers: &HeaderMap,
+		client: &PolicyClient,
+		webhook: &Webhook,
+	) -> anyhow::Result<GuardrailOutcome> {
+		let Some(original) = req.raw_messages() else {
+			// Formats without a raw message array can't use raw fidelity; nothing to guard.
+			return Ok(GuardrailOutcome::None);
+		};
+		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
+		let outcome = webhook::call_processor(
+			client,
+			&webhook.target,
+			webhook::REQUEST_PATH,
+			&headers,
+			crate::telemetry::metrics::OutboundCallSubtype::Guardrail,
+			&original,
+			None,
+		)
+		.await;
+		match outcome {
+			Err(e) => match webhook.failure_mode {
+				FailureMode::FailOpen => {
+					warn!("webhook guardrail unavailable, failing open: {}", e);
+					Ok(GuardrailOutcome::FailOpen)
+				},
+				FailureMode::FailClosed => Err(e),
+			},
+			Ok(webhook::ProcessorOutcome::Pass) => Ok(GuardrailOutcome::None),
+			Ok(webhook::ProcessorOutcome::Reject { body, status_code }) => Ok(GuardrailOutcome::Rejected(
+				::http::response::Builder::new()
+					.status(status_code)
+					.body(http::Body::from(body))?,
+			)),
+			Ok(webhook::ProcessorOutcome::Replace(messages)) => {
+				if let Err(reason) = webhook::validate_replacement(&original, &messages) {
+					anyhow::bail!("webhook returned unusable messages: {reason}");
+				}
+				req.set_raw_messages(messages)?;
+				Ok(GuardrailOutcome::Masked)
 			},
 		}
 	}
@@ -1129,7 +1180,7 @@ impl Policy {
 		}
 	}
 
-	fn get_webhook_forward_headers(
+	pub(crate) fn get_webhook_forward_headers(
 		http_headers: &HeaderMap,
 		header_matches: &[HeaderMatch],
 	) -> HeaderMap {
@@ -1485,6 +1536,26 @@ pub struct Webhook {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub failure_mode: FailureMode,
+	/// Fidelity of the messages sent to (and accepted back from) the webhook.
+	/// Defaults to `simplified` (role + text content). `raw` forwards provider-native
+	/// message objects, preserving tool calls, cache markers, and multi-part content.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub message_format: MessageFormat,
+}
+
+/// Fidelity of messages exchanged with a message-processor callout (webhook / compression).
+#[apply(schema!)]
+#[derive(Default, Copy, PartialEq, Eq)]
+pub enum MessageFormat {
+	/// Normalized `{role, content}` messages. Provider-specific blocks (tool calls, cache
+	/// markers, multi-part content) are dropped. This is the stable, widely-supported shape.
+	#[default]
+	#[serde(rename = "simplified")]
+	Simplified,
+	/// Provider-native message objects, forwarded verbatim. Preserves everything the
+	/// simplified shape drops; the callout server must understand the provider wire format.
+	#[serde(rename = "raw")]
+	Raw,
 }
 
 #[apply(schema!)]

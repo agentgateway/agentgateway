@@ -9,7 +9,7 @@ use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::SimpleBackendReference;
 use crate::*;
 
-const REQUEST_PATH: &str = "request";
+pub(crate) const REQUEST_PATH: &str = "request";
 const RESPONSE_PATH: &str = "response";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,4 +193,223 @@ pub async fn send_response(
 		.await?;
 	let parsed = json::from_response_body(res).await?;
 	Ok(parsed)
+}
+
+/// The action a message-processor callout asks the gateway to take. This is the shared,
+/// format-agnostic result of the `{action: ...}` envelope, used by both guardrail webhooks
+/// and context compression. Message payloads are raw JSON so full fidelity is preserved for
+/// callers that need it; simplified callers convert at the edge.
+pub enum ProcessorOutcome {
+	/// Leave the request unchanged.
+	Pass,
+	/// Replace the messages with these (raw provider-native objects).
+	Replace(Vec<serde_json::Value>),
+	/// Reject the request with this body and status.
+	Reject { body: String, status_code: u16 },
+}
+
+/// Call a message-processor endpoint with the request messages and parse the `{action}`
+/// envelope. `messages` are sent verbatim in the `body.messages` array, so callers control
+/// fidelity (simplified `{role, content}` objects or raw provider-native objects).
+pub async fn call_processor(
+	client: &PolicyClient,
+	target: &SimpleBackendReference,
+	path: &str,
+	http_headers: &HeaderMap,
+	subtype: OutboundCallSubtype,
+	messages: &[serde_json::Value],
+	buffer_limit: Option<crate::transport::BufferLimit>,
+) -> anyhow::Result<ProcessorOutcome> {
+	let body = serde_json::json!({ "body": { "messages": messages } });
+	// build_request prepends "/", so normalize whether callers pass "request" or "/v1/compress".
+	let path = path.trim_start_matches('/');
+	let mut req = with_default_timeout(build_request(&body, path, http_headers)?);
+	// Large contexts can exceed the default buffer limit; carry the frontend's limit over.
+	if let Some(lim) = buffer_limit {
+		req.extensions_mut().insert(lim);
+	}
+	let res = Box::pin(
+		client
+			.with_outbound(OutboundCallKind::Policy, subtype)
+			.call_reference(req, target),
+	)
+	.await?;
+
+	let status = res.status();
+	let lim = http::response_buffer_limit(&res);
+	let raw = http::read_body_with_limit(res.into_body(), lim).await?;
+	if status != ::http::StatusCode::OK {
+		anyhow::bail!("message processor returned status {status}");
+	}
+	let v: serde_json::Value = serde_json::from_slice(&raw)?;
+	Ok(parse_processor_action(&v))
+}
+
+/// Interpret the `{action: ...}` envelope. Mirrors the precedence of the untagged
+/// `RequestAction` enum: reject (string body + status_code) → mask (body.messages) → pass.
+fn parse_processor_action(v: &serde_json::Value) -> ProcessorOutcome {
+	let Some(action) = v.get("action") else {
+		return ProcessorOutcome::Pass;
+	};
+	if let Some(body) = action.get("body") {
+		if let Some(text) = body.as_str() {
+			let status_code = action
+				.get("status_code")
+				.and_then(serde_json::Value::as_u64)
+				.unwrap_or(u64::from(::http::StatusCode::FORBIDDEN.as_u16())) as u16;
+			return ProcessorOutcome::Reject {
+				body: text.to_string(),
+				status_code,
+			};
+		}
+		if let Some(messages) = body.get("messages").and_then(|m| m.as_array()) {
+			return ProcessorOutcome::Replace(messages.clone());
+		}
+	}
+	ProcessorOutcome::Pass
+}
+
+/// Sanity-check raw replacement messages from a processor before applying them. Rejects output
+/// that is empty (when the input wasn't), contains non-object messages, or breaks tool-call
+/// pairing that was intact in the original request. Shared by context compression and any
+/// raw-fidelity webhook that rewrites messages.
+pub(crate) fn validate_replacement(
+	original: &[serde_json::Value],
+	replacement: &[serde_json::Value],
+) -> Result<(), String> {
+	if replacement.is_empty() && !original.is_empty() {
+		return Err("processor returned an empty message array".to_string());
+	}
+	if replacement.iter().any(|m| !m.is_object()) {
+		return Err("processor returned non-object messages".to_string());
+	}
+	let broken: Vec<_> = pairing_violations(replacement)
+		.difference(&pairing_violations(original))
+		.cloned()
+		.collect();
+	if !broken.is_empty() {
+		return Err(format!(
+			"processor broke tool-call pairing for ids: {}",
+			broken.join(", ")
+		));
+	}
+	Ok(())
+}
+
+/// Tool-call ids that appear on only one side of the call/result relationship. Understands
+/// OpenAI completions (`tool_calls`/`tool_call_id`), Anthropic messages (`tool_use`/
+/// `tool_result` content blocks), and OpenAI responses (`function_call`/`function_call_output`
+/// items). A model rejects requests where a tool call has no result (or vice versa), so a
+/// processor that drops one half of a pair would turn a valid request into a provider error.
+fn pairing_violations(messages: &[serde_json::Value]) -> std::collections::BTreeSet<String> {
+	let mut calls = std::collections::BTreeSet::new();
+	let mut results = std::collections::BTreeSet::new();
+	let as_str = |v: &serde_json::Value, k: &str| {
+		v.get(k)
+			.and_then(|v| v.as_str())
+			.map(std::string::ToString::to_string)
+	};
+	for m in messages {
+		// OpenAI completions
+		if let Some(tool_calls) = m.get("tool_calls").and_then(|v| v.as_array()) {
+			calls.extend(tool_calls.iter().filter_map(|c| as_str(c, "id")));
+		}
+		if let Some(id) = as_str(m, "tool_call_id") {
+			results.insert(id);
+		}
+		// Anthropic messages content blocks
+		if let Some(parts) = m.get("content").and_then(|v| v.as_array()) {
+			for p in parts {
+				match p.get("type").and_then(|v| v.as_str()) {
+					Some("tool_use") => calls.extend(as_str(p, "id")),
+					Some("tool_result") => results.extend(as_str(p, "tool_use_id")),
+					_ => {},
+				}
+			}
+		}
+		// OpenAI responses items
+		match m.get("type").and_then(|v| v.as_str()) {
+			Some("function_call") => calls.extend(as_str(m, "call_id")),
+			Some("function_call_output") => results.extend(as_str(m, "call_id")),
+			_ => {},
+		}
+	}
+	calls.symmetric_difference(&results).cloned().collect()
+}
+
+#[cfg(test)]
+mod processor_tests {
+	use serde_json::json;
+
+	use super::*;
+
+	#[test]
+	fn validate_rejects_empty_output_for_nonempty_input() {
+		let original = vec![json!({"role": "user", "content": "hi"})];
+		assert!(validate_replacement(&original, &[]).is_err());
+		assert!(validate_replacement(&[], &[]).is_ok());
+	}
+
+	#[test]
+	fn validate_rejects_non_object_messages() {
+		let original = vec![json!({"role": "user", "content": "hi"})];
+		let replacement = vec![json!("not an object")];
+		assert!(validate_replacement(&original, &replacement).is_err());
+	}
+
+	#[test]
+	fn validate_rejects_broken_tool_pairing() {
+		let original = vec![
+			json!({"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "f", "input": {}}]}),
+			json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "ok"}]}),
+		];
+		let dropped = vec![original[0].clone()];
+		assert!(validate_replacement(&original, &dropped).is_err());
+		let rewritten = vec![
+			original[0].clone(),
+			json!({"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "[compressed]"}]}),
+		];
+		assert!(validate_replacement(&original, &rewritten).is_ok());
+	}
+
+	#[test]
+	fn validate_allows_preexisting_violations() {
+		let original = vec![json!({"role": "assistant", "tool_calls": [{"id": "t9"}]})];
+		let replacement = vec![json!({"role": "assistant", "tool_calls": [{"id": "t9"}]})];
+		assert!(validate_replacement(&original, &replacement).is_ok());
+	}
+
+	#[test]
+	fn pairing_covers_openai_completions_and_responses() {
+		let paired = vec![
+			json!({"role": "assistant", "tool_calls": [{"id": "a", "type": "function"}]}),
+			json!({"role": "tool", "tool_call_id": "a", "content": "ok"}),
+		];
+		assert!(pairing_violations(&paired).is_empty());
+		let paired = vec![
+			json!({"type": "function_call", "call_id": "b", "name": "f", "arguments": "{}"}),
+			json!({"type": "function_call_output", "call_id": "b", "output": "ok"}),
+		];
+		assert!(pairing_violations(&paired).is_empty());
+		let unpaired =
+			vec![json!({"type": "function_call", "call_id": "c", "name": "f", "arguments": "{}"})];
+		assert_eq!(pairing_violations(&unpaired).len(), 1);
+	}
+
+	#[test]
+	fn parse_action_replace_mask_body() {
+		let v = json!({"action": {"body": {"messages": [{"role": "user", "content": "x"}]}}});
+		assert!(matches!(parse_processor_action(&v), ProcessorOutcome::Replace(m) if m.len() == 1));
+	}
+
+	#[test]
+	fn parse_action_reject_and_pass() {
+		let reject = json!({"action": {"body": "no", "status_code": 403}});
+		assert!(matches!(
+			parse_processor_action(&reject),
+			ProcessorOutcome::Reject { status_code: 403, .. }
+		));
+		let pass = json!({"action": {"reason": "ok"}});
+		assert!(matches!(parse_processor_action(&pass), ProcessorOutcome::Pass));
+	}
 }

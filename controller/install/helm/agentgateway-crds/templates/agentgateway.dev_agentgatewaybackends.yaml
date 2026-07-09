@@ -415,114 +415,154 @@ spec:
                                           engine before they reach the LLM provider, to reduce token spend.
                                           Note: This field is only applicable when using the agentgateway data plane.
                                         properties:
-                                          engine:
-                                            description: Engine that performs the
-                                              compression.
+                                          backendRef:
+                                            description: |-
+                                              Compression server to reach.
+
+                                              Supported types: Service and Backend.
                                             properties:
-                                              external:
-                                                description: External compression
-                                                  service implementing the gateway
-                                                  compression wire contract.
-                                                properties:
-                                                  backendRef:
-                                                    description: |-
-                                                      Compression server to reach.
+                                              group:
+                                                default: ""
+                                                description: |-
+                                                  Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                                  When unspecified or empty string, core API group is inferred.
+                                                maxLength: 253
+                                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                type: string
+                                              kind:
+                                                default: Service
+                                                description: |-
+                                                  Kind is the Kubernetes resource kind of the referent. For example
+                                                  "Service".
 
-                                                      Supported types: Service and Backend.
-                                                    properties:
-                                                      group:
-                                                        default: ""
-                                                        description: |-
-                                                          Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                          When unspecified or empty string, core API group is inferred.
-                                                        maxLength: 253
-                                                        pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                                        type: string
-                                                      kind:
-                                                        default: Service
-                                                        description: |-
-                                                          Kind is the Kubernetes resource kind of the referent. For example
-                                                          "Service".
+                                                  Defaults to "Service" when not specified.
 
-                                                          Defaults to "Service" when not specified.
+                                                  ExternalName services can refer to CNAME DNS records that may live
+                                                  outside of the cluster and as such are difficult to reason about in
+                                                  terms of conformance. They also may not be safe to forward to (see
+                                                  CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                                  support ExternalName Services.
 
-                                                          ExternalName services can refer to CNAME DNS records that may live
-                                                          outside of the cluster and as such are difficult to reason about in
-                                                          terms of conformance. They also may not be safe to forward to (see
-                                                          CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                          support ExternalName Services.
+                                                  Support: Core (Services with a type other than ExternalName)
 
-                                                          Support: Core (Services with a type other than ExternalName)
+                                                  Support: Implementation-specific (Services with type ExternalName)
+                                                maxLength: 63
+                                                minLength: 1
+                                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                type: string
+                                              name:
+                                                description: Name is the name of the
+                                                  referent.
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                              namespace:
+                                                description: |-
+                                                  Namespace is the namespace of the backend. When unspecified, the local
+                                                  namespace is inferred.
 
-                                                          Support: Implementation-specific (Services with type ExternalName)
-                                                        maxLength: 63
-                                                        minLength: 1
-                                                        pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                                        type: string
-                                                      name:
-                                                        description: Name is the name
-                                                          of the referent.
-                                                        maxLength: 253
-                                                        minLength: 1
-                                                        type: string
-                                                      namespace:
-                                                        description: |-
-                                                          Namespace is the namespace of the backend. When unspecified, the local
-                                                          namespace is inferred.
+                                                  Note that when a namespace different than the local namespace is specified,
+                                                  a ReferenceGrant object is required in the referent namespace to allow that
+                                                  namespace's owner to accept the reference. See the ReferenceGrant
+                                                  documentation for details.
 
-                                                          Note that when a namespace different than the local namespace is specified,
-                                                          a ReferenceGrant object is required in the referent namespace to allow that
-                                                          namespace's owner to accept the reference. See the ReferenceGrant
-                                                          documentation for details.
-
-                                                          Support: Core
-                                                        maxLength: 63
-                                                        minLength: 1
-                                                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                                        type: string
-                                                      port:
-                                                        description: |-
-                                                          Port specifies the destination port number to use for this resource.
-                                                          Port is required when the referent is a Kubernetes Service. In this
-                                                          case, the port number is the service port number, not the target port.
-                                                          For other resources, destination port might be derived from the referent
-                                                          resource or this field.
-                                                        format: int32
-                                                        maximum: 65535
-                                                        minimum: 1
-                                                        type: integer
-                                                    required:
-                                                    - name
-                                                    type: object
-                                                    x-kubernetes-validations:
-                                                    - message: Must have port for
-                                                        Service reference
-                                                      rule: '(size(self.group) ==
-                                                        0 && self.kind == ''Service'')
-                                                        ? has(self.port) : true'
-                                                  path:
-                                                    description: Request path of the
-                                                      compression endpoint. Defaults
-                                                      to `/v1/compress`.
-                                                    type: string
-                                                required:
-                                                - backendRef
-                                                type: object
+                                                  Support: Core
+                                                maxLength: 63
+                                                minLength: 1
+                                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                type: string
+                                              port:
+                                                description: |-
+                                                  Port specifies the destination port number to use for this resource.
+                                                  Port is required when the referent is a Kubernetes Service. In this
+                                                  case, the port number is the service port number, not the target port.
+                                                  For other resources, destination port might be derived from the referent
+                                                  resource or this field.
+                                                format: int32
+                                                maximum: 65535
+                                                minimum: 1
+                                                type: integer
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-validations:
-                                            - message: exactly one of the fields in
-                                                [external] must be set
-                                              rule: '[has(self.external)].filter(x,x==true).size()
-                                                == 1'
+                                            - message: Must have port for Service
+                                                reference
+                                              rule: '(size(self.group) == 0 && self.kind
+                                                == ''Service'') ? has(self.port) :
+                                                true'
                                           failureMode:
                                             default: FailOpen
                                             description: |-
-                                              Behavior when the engine is unreachable, errors, or returns unusable messages.
+                                              Behavior when the service is unreachable, errors, or returns unusable messages.
                                               `FailOpen` (default) forwards the original request unchanged; `FailClosed` rejects it.
                                             enum:
                                             - FailClosed
                                             - FailOpen
                                             type: string
+                                          forwardHeaderMatches:
+                                            description: |-
+                                              Incoming request headers to forward to the compression service.
+                                              By default, no headers are forwarded.
+                                            items:
+                                              description: |-
+                                                HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request
+                                                headers.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name is the name of the HTTP Header to be matched. Name matching MUST be
+                                                    case-insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2).
+
+                                                    If multiple entries specify equivalent header names, only the first
+                                                    entry with an equivalent name MUST be considered for a match. Subsequent
+                                                    entries with an equivalent header name MUST be ignored. Due to the
+                                                    case-insensitivity of header names, "foo" and "Foo" are considered
+                                                    equivalent.
+
+                                                    When a header is repeated in an HTTP request, it is
+                                                    implementation-specific behavior as to how this is represented.
+                                                    Generally, proxies should follow the guidance from the RFC:
+                                                    https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.2 regarding
+                                                    processing a repeated header, with special handling for "Set-Cookie".
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                  type: string
+                                                type:
+                                                  default: Exact
+                                                  description: |-
+                                                    Type specifies how to match against the value of the header.
+
+                                                    Support: Core (Exact)
+
+                                                    Support: Implementation-specific (RegularExpression)
+
+                                                    Since RegularExpression HeaderMatchType has implementation-specific
+                                                    conformance, implementations can support POSIX, PCRE or any other dialects
+                                                    of regular expressions. Please read the implementation's documentation to
+                                                    determine the supported dialect.
+                                                  enum:
+                                                  - Exact
+                                                  - RegularExpression
+                                                  type: string
+                                                value:
+                                                  description: |-
+                                                    Value is the value of HTTP Header to be matched.
+                                                    <gateway:experimental:description>
+                                                    Must consist of printable US-ASCII characters, optionally separated
+                                                    by single tabs or spaces. See: https://tools.ietf.org/html/rfc7230#section-3.2
+                                                    </gateway:experimental:description>
+
+                                                    <gateway:experimental:validation:Pattern=`^[!-~]+([\t ]?[!-~]+)*$`>
+                                                  maxLength: 4096
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              - value
+                                              type: object
+                                            type: array
                                           minSizeBytes:
                                             default: 16384
                                             description: |-
@@ -530,8 +570,12 @@ spec:
                                               attempted. Requests below the threshold are forwarded untouched.
                                             minimum: 0
                                             type: integer
+                                          path:
+                                            description: Request path of the compression
+                                              endpoint. Defaults to `/v1/compress`.
+                                            type: string
                                         required:
-                                        - engine
+                                        - backendRef
                                         type: object
                                       defaults:
                                         description: Defaults to merge with user input
@@ -5405,6 +5449,17 @@ spec:
                                                         - value
                                                         type: object
                                                       type: array
+                                                    messageFormat:
+                                                      default: Simplified
+                                                      description: |-
+                                                        Fidelity of the messages sent to (and accepted back from) the webhook.
+                                                        `Simplified` (default) sends normalized role + text content. `Raw` forwards
+                                                        provider-native message objects, preserving tool calls, cache markers, and
+                                                        multi-part content; the webhook server must understand the provider wire format.
+                                                      enum:
+                                                      - Simplified
+                                                      - Raw
+                                                      type: string
                                                   required:
                                                   - backendRef
                                                   type: object
@@ -8620,6 +8675,17 @@ spec:
                                                         - value
                                                         type: object
                                                       type: array
+                                                    messageFormat:
+                                                      default: Simplified
+                                                      description: |-
+                                                        Fidelity of the messages sent to (and accepted back from) the webhook.
+                                                        `Simplified` (default) sends normalized role + text content. `Raw` forwards
+                                                        provider-native message objects, preserving tool calls, cache markers, and
+                                                        multi-part content; the webhook server must understand the provider wire format.
+                                                      enum:
+                                                      - Simplified
+                                                      - Raw
+                                                      type: string
                                                   required:
                                                   - backendRef
                                                   type: object
@@ -12157,108 +12223,151 @@ spec:
                           engine before they reach the LLM provider, to reduce token spend.
                           Note: This field is only applicable when using the agentgateway data plane.
                         properties:
-                          engine:
-                            description: Engine that performs the compression.
+                          backendRef:
+                            description: |-
+                              Compression server to reach.
+
+                              Supported types: Service and Backend.
                             properties:
-                              external:
-                                description: External compression service implementing
-                                  the gateway compression wire contract.
-                                properties:
-                                  backendRef:
-                                    description: |-
-                                      Compression server to reach.
+                              group:
+                                default: ""
+                                description: |-
+                                  Group is the group of the referent. For example, "gateway.networking.k8s.io".
+                                  When unspecified or empty string, core API group is inferred.
+                                maxLength: 253
+                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                type: string
+                              kind:
+                                default: Service
+                                description: |-
+                                  Kind is the Kubernetes resource kind of the referent. For example
+                                  "Service".
 
-                                      Supported types: Service and Backend.
-                                    properties:
-                                      group:
-                                        default: ""
-                                        description: |-
-                                          Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                          When unspecified or empty string, core API group is inferred.
-                                        maxLength: 253
-                                        pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                                        type: string
-                                      kind:
-                                        default: Service
-                                        description: |-
-                                          Kind is the Kubernetes resource kind of the referent. For example
-                                          "Service".
+                                  Defaults to "Service" when not specified.
 
-                                          Defaults to "Service" when not specified.
+                                  ExternalName services can refer to CNAME DNS records that may live
+                                  outside of the cluster and as such are difficult to reason about in
+                                  terms of conformance. They also may not be safe to forward to (see
+                                  CVE-2021-25740 for more information). Implementations SHOULD NOT
+                                  support ExternalName Services.
 
-                                          ExternalName services can refer to CNAME DNS records that may live
-                                          outside of the cluster and as such are difficult to reason about in
-                                          terms of conformance. They also may not be safe to forward to (see
-                                          CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                          support ExternalName Services.
+                                  Support: Core (Services with a type other than ExternalName)
 
-                                          Support: Core (Services with a type other than ExternalName)
+                                  Support: Implementation-specific (Services with type ExternalName)
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                type: string
+                              name:
+                                description: Name is the name of the referent.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace is the namespace of the backend. When unspecified, the local
+                                  namespace is inferred.
 
-                                          Support: Implementation-specific (Services with type ExternalName)
-                                        maxLength: 63
-                                        minLength: 1
-                                        pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                                        type: string
-                                      name:
-                                        description: Name is the name of the referent.
-                                        maxLength: 253
-                                        minLength: 1
-                                        type: string
-                                      namespace:
-                                        description: |-
-                                          Namespace is the namespace of the backend. When unspecified, the local
-                                          namespace is inferred.
+                                  Note that when a namespace different than the local namespace is specified,
+                                  a ReferenceGrant object is required in the referent namespace to allow that
+                                  namespace's owner to accept the reference. See the ReferenceGrant
+                                  documentation for details.
 
-                                          Note that when a namespace different than the local namespace is specified,
-                                          a ReferenceGrant object is required in the referent namespace to allow that
-                                          namespace's owner to accept the reference. See the ReferenceGrant
-                                          documentation for details.
-
-                                          Support: Core
-                                        maxLength: 63
-                                        minLength: 1
-                                        pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-                                        type: string
-                                      port:
-                                        description: |-
-                                          Port specifies the destination port number to use for this resource.
-                                          Port is required when the referent is a Kubernetes Service. In this
-                                          case, the port number is the service port number, not the target port.
-                                          For other resources, destination port might be derived from the referent
-                                          resource or this field.
-                                        format: int32
-                                        maximum: 65535
-                                        minimum: 1
-                                        type: integer
-                                    required:
-                                    - name
-                                    type: object
-                                    x-kubernetes-validations:
-                                    - message: Must have port for Service reference
-                                      rule: '(size(self.group) == 0 && self.kind ==
-                                        ''Service'') ? has(self.port) : true'
-                                  path:
-                                    description: Request path of the compression endpoint.
-                                      Defaults to `/v1/compress`.
-                                    type: string
-                                required:
-                                - backendRef
-                                type: object
+                                  Support: Core
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                type: string
+                              port:
+                                description: |-
+                                  Port specifies the destination port number to use for this resource.
+                                  Port is required when the referent is a Kubernetes Service. In this
+                                  case, the port number is the service port number, not the target port.
+                                  For other resources, destination port might be derived from the referent
+                                  resource or this field.
+                                format: int32
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                            required:
+                            - name
                             type: object
                             x-kubernetes-validations:
-                            - message: exactly one of the fields in [external] must
-                                be set
-                              rule: '[has(self.external)].filter(x,x==true).size()
-                                == 1'
+                            - message: Must have port for Service reference
+                              rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                ? has(self.port) : true'
                           failureMode:
                             default: FailOpen
                             description: |-
-                              Behavior when the engine is unreachable, errors, or returns unusable messages.
+                              Behavior when the service is unreachable, errors, or returns unusable messages.
                               `FailOpen` (default) forwards the original request unchanged; `FailClosed` rejects it.
                             enum:
                             - FailClosed
                             - FailOpen
                             type: string
+                          forwardHeaderMatches:
+                            description: |-
+                              Incoming request headers to forward to the compression service.
+                              By default, no headers are forwarded.
+                            items:
+                              description: |-
+                                HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request
+                                headers.
+                              properties:
+                                name:
+                                  description: |-
+                                    Name is the name of the HTTP Header to be matched. Name matching MUST be
+                                    case-insensitive. (See https://tools.ietf.org/html/rfc7230#section-3.2).
+
+                                    If multiple entries specify equivalent header names, only the first
+                                    entry with an equivalent name MUST be considered for a match. Subsequent
+                                    entries with an equivalent header name MUST be ignored. Due to the
+                                    case-insensitivity of header names, "foo" and "Foo" are considered
+                                    equivalent.
+
+                                    When a header is repeated in an HTTP request, it is
+                                    implementation-specific behavior as to how this is represented.
+                                    Generally, proxies should follow the guidance from the RFC:
+                                    https://www.rfc-editor.org/rfc/rfc7230.html#section-3.2.2 regarding
+                                    processing a repeated header, with special handling for "Set-Cookie".
+                                  maxLength: 256
+                                  minLength: 1
+                                  pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                  type: string
+                                type:
+                                  default: Exact
+                                  description: |-
+                                    Type specifies how to match against the value of the header.
+
+                                    Support: Core (Exact)
+
+                                    Support: Implementation-specific (RegularExpression)
+
+                                    Since RegularExpression HeaderMatchType has implementation-specific
+                                    conformance, implementations can support POSIX, PCRE or any other dialects
+                                    of regular expressions. Please read the implementation's documentation to
+                                    determine the supported dialect.
+                                  enum:
+                                  - Exact
+                                  - RegularExpression
+                                  type: string
+                                value:
+                                  description: |-
+                                    Value is the value of HTTP Header to be matched.
+                                    <gateway:experimental:description>
+                                    Must consist of printable US-ASCII characters, optionally separated
+                                    by single tabs or spaces. See: https://tools.ietf.org/html/rfc7230#section-3.2
+                                    </gateway:experimental:description>
+
+                                    <gateway:experimental:validation:Pattern=`^[!-~]+([\t ]?[!-~]+)*$`>
+                                  maxLength: 4096
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
+                              - value
+                              type: object
+                            type: array
                           minSizeBytes:
                             default: 16384
                             description: |-
@@ -12266,8 +12375,12 @@ spec:
                               attempted. Requests below the threshold are forwarded untouched.
                             minimum: 0
                             type: integer
+                          path:
+                            description: Request path of the compression endpoint.
+                              Defaults to `/v1/compress`.
+                            type: string
                         required:
-                        - engine
+                        - backendRef
                         type: object
                       defaults:
                         description: Defaults to merge with user input fields. If
@@ -16478,6 +16591,17 @@ spec:
                                         - value
                                         type: object
                                       type: array
+                                    messageFormat:
+                                      default: Simplified
+                                      description: |-
+                                        Fidelity of the messages sent to (and accepted back from) the webhook.
+                                        `Simplified` (default) sends normalized role + text content. `Raw` forwards
+                                        provider-native message objects, preserving tool calls, cache markers, and
+                                        multi-part content; the webhook server must understand the provider wire format.
+                                      enum:
+                                      - Simplified
+                                      - Raw
+                                      type: string
                                   required:
                                   - backendRef
                                   type: object
@@ -19262,6 +19386,17 @@ spec:
                                         - value
                                         type: object
                                       type: array
+                                    messageFormat:
+                                      default: Simplified
+                                      description: |-
+                                        Fidelity of the messages sent to (and accepted back from) the webhook.
+                                        `Simplified` (default) sends normalized role + text content. `Raw` forwards
+                                        provider-native message objects, preserving tool calls, cache markers, and
+                                        multi-part content; the webhook server must understand the provider wire format.
+                                      enum:
+                                      - Simplified
+                                      - Raw
+                                      type: string
                                   required:
                                   - backendRef
                                   type: object

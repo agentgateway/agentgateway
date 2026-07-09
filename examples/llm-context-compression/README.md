@@ -3,32 +3,33 @@
 This example shows how to shrink LLM request context through an external compression
 engine before it reaches the provider, reducing token spend on long-context requests.
 
-The gateway is engine-agnostic: it defines a small wire contract (below), and any
-service implementing it can be plugged in. [Headroom](https://github.com/headroomlabs-ai/headroom)
-is used as the reference engine here.
+Compression is one use of the gateway's **message-processor webhook** contract — the same
+callout the guardrail webhook uses. Any service implementing it can be plugged in.
+[Headroom](https://github.com/headroomlabs-ai/headroom) is used as the reference engine here.
 
-### Wire contract (version 1)
+### Wire contract
 
-For each compressible request, the gateway sends:
+For each compressible request, the gateway sends the request's raw provider-native messages:
 
 ```
 POST /v1/compress
 Content-Type: application/json
-x-agw-compression-version: 1
 
-{ "messages": [ ...provider-native message objects... ], "model": "claude-sonnet-4-5" }
+{ "body": { "messages": [ ...provider-native message objects... ] } }
 ```
 
-- `messages` is the request's native message array, forwarded verbatim — provider-specific
-  blocks (`cache_control`, images, tool calls) survive the round-trip. The system prompt is
-  *not* included: it is the stable prefix that prompt-cache reuse depends on.
-- `model` is a tokenizer/context-window hint, not a routing target.
+`messages` is the request's native message array, forwarded verbatim — provider-specific
+blocks (`cache_control`, images, tool calls) survive the round-trip. The system prompt is
+*not* included: it is the stable prefix that prompt-cache reuse depends on.
 
-The engine responds `200` with the compressed array:
+The engine responds `200` with an action envelope. To apply compressed messages, return a
+`mask` action carrying the replacement array:
 
 ```
-{ "messages": [ ...compressed message objects... ] }
+{ "action": { "body": { "messages": [ ...compressed message objects... ] } } }
 ```
+
+Return `{ "action": { "reason": "..." } }` (a pass action) to leave the request unchanged.
 
 Any non-200 status, malformed body, or output that breaks the request's tool-call pairing
 is treated as an engine failure and resolved per `failureMode` (default `failOpen`: the
@@ -72,9 +73,6 @@ curl http://localhost:4000/v1/messages \
     }]
   }')"
 ```
-
-Send `x-agw-compression-bypass: true` on any request to skip compression for that call.
-The gateway consumes this header; it is not forwarded to the provider.
 
 ### Prompt caching: compression can cost more than it saves
 

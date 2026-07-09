@@ -146,7 +146,27 @@ type Webhook struct {
 	// `FailClosed` (default) rejects the request.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// Fidelity of the messages sent to (and accepted back from) the webhook.
+	// `Simplified` (default) sends normalized role + text content. `Raw` forwards
+	// provider-native message objects, preserving tool calls, cache markers, and
+	// multi-part content; the webhook server must understand the provider wire format.
+	// +kubebuilder:default=Simplified
+	// +optional
+	MessageFormat MessageFormat `json:"messageFormat,omitempty"`
 }
+
+// MessageFormat controls the fidelity of messages exchanged with a message-processor
+// callout (webhook or compression).
+// +kubebuilder:validation:Enum=Simplified;Raw
+type MessageFormat string
+
+const (
+	// MessageFormatSimplified sends normalized {role, content} messages.
+	MessageFormatSimplified MessageFormat = "Simplified"
+	// MessageFormatRaw forwards provider-native message objects verbatim.
+	MessageFormatRaw MessageFormat = "Raw"
+)
 
 // Response to return to the client if request content
 // is matched against a regex pattern and the action is `REJECT`.
@@ -428,13 +448,24 @@ type PromptCachingConfig struct {
 }
 
 // ContextCompressionConfig configures compression of request messages through an external
-// compression engine before they reach the LLM provider.
+// compression service (a message-processor webhook) before they reach the LLM provider.
 type ContextCompressionConfig struct {
-	// Engine that performs the compression.
+	// Compression server to reach.
+	//
+	// Supported types: Service and Backend.
 	// +required
-	Engine ContextCompressionEngine `json:"engine"`
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
-	// Behavior when the engine is unreachable, errors, or returns unusable messages.
+	// Request path of the compression endpoint. Defaults to `/v1/compress`.
+	// +optional
+	Path string `json:"path,omitempty"`
+
+	// Incoming request headers to forward to the compression service.
+	// By default, no headers are forwarded.
+	// +optional
+	ForwardHeaderMatches []gwv1.HTTPHeaderMatch `json:"forwardHeaderMatches,omitempty"`
+
+	// Behavior when the service is unreachable, errors, or returns unusable messages.
 	// `FailOpen` (default) forwards the original request unchanged; `FailClosed` rejects it.
 	// +kubebuilder:default=FailOpen
 	// +optional
@@ -446,25 +477,4 @@ type ContextCompressionConfig struct {
 	// +kubebuilder:default=16384
 	// +optional
 	MinSizeBytes int `json:"minSizeBytes,omitempty"`
-}
-
-// ContextCompressionEngine selects the compression engine implementation.
-// +kubebuilder:validation:ExactlyOneOf=external
-type ContextCompressionEngine struct {
-	// External compression service implementing the gateway compression wire contract.
-	// +optional
-	External *ExternalCompressionEngine `json:"external,omitempty"`
-}
-
-// ExternalCompressionEngine is an external service speaking the gateway compression API.
-type ExternalCompressionEngine struct {
-	// Compression server to reach.
-	//
-	// Supported types: Service and Backend.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
-
-	// Request path of the compression endpoint. Defaults to `/v1/compress`.
-	// +optional
-	Path string `json:"path,omitempty"`
 }

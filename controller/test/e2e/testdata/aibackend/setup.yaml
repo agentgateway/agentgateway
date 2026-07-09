@@ -151,11 +151,9 @@ spec:
       contextCompression:
         # Force compression on small test requests.
         minSizeBytes: 0
-        engine:
-          external:
-            backendRef:
-              name: ai-testbox
-              port: 9234
+        backendRef:
+          name: ai-testbox
+          port: 9234
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
@@ -172,12 +170,10 @@ spec:
       contextCompression:
         minSizeBytes: 0
         failureMode: FailOpen
-        engine:
-          external:
-            # Nothing listens on this port; the engine call fails and compression fails open.
-            backendRef:
-              name: ai-testbox
-              port: 9999
+        # Nothing listens on this port; the compression call fails and compression fails open.
+        backendRef:
+          name: ai-testbox
+          port: 9999
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

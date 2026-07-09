@@ -1103,7 +1103,7 @@ function buildModelPolicyPatch(args: {
           promptCaching && Object.keys(promptCaching).length
             ? promptCaching
             : null,
-        contextCompression: contextCompression?.engine
+        contextCompression: contextCompression?.target
           ? contextCompression
           : null,
         authorization:

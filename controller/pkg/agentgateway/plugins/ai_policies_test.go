@@ -28,14 +28,24 @@ func TestContextCompressionFailureMode(t *testing.T) {
 	}
 }
 
-func TestProcessContextCompressionRequiresEngine(t *testing.T) {
-	// ExactlyOneOf normally guarantees an engine, but the translator must not panic or emit a
-	// half-built policy if the engine is somehow absent.
-	_, err := processContextCompression(PolicyCtx{}, "ns", &agentgateway.ContextCompressionConfig{
-		Engine: agentgateway.ContextCompressionEngine{},
-	})
-	if err == nil {
-		t.Fatal("expected error when no engine is configured")
+func TestWebhookMessageFormat(t *testing.T) {
+	cases := []struct {
+		name string
+		in   agentgateway.MessageFormat
+		want api.BackendPolicySpec_Ai_Webhook_MessageFormat
+	}{
+		// Empty (unset) must default to SIMPLIFIED so existing webhook servers see the same
+		// payload. SIMPLIFIED is proto 0, so an absent field also decodes to simplified.
+		{"empty defaults to simplified", "", api.BackendPolicySpec_Ai_Webhook_SIMPLIFIED},
+		{"explicit simplified", agentgateway.MessageFormatSimplified, api.BackendPolicySpec_Ai_Webhook_SIMPLIFIED},
+		{"explicit raw", agentgateway.MessageFormatRaw, api.BackendPolicySpec_Ai_Webhook_RAW},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := webhookMessageFormat(tc.in); got != tc.want {
+				t.Fatalf("webhookMessageFormat(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 

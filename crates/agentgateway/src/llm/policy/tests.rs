@@ -17,6 +17,7 @@ async fn webhook_fail_open_emits_single_metric() {
 				target: SimpleBackendReference::Invalid,
 				forward_header_matches: vec![],
 				failure_mode: FailureMode::FailOpen,
+				message_format: Default::default(),
 			}),
 		}],
 		response: vec![],
