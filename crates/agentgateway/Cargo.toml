@@ -226,6 +226,7 @@ borrow_interior_mutable_const = "allow"
 declare_interior_mutable_const = "allow"
 
 [lints.rust]
+linker_messages = "allow"
 # This rule makes code more confusing
 mismatched_lifetime_syntaxes = "allow"
 # ossl350 is set by the openssl-sys crate when OpenSSL >= 3.5.0 is detected.

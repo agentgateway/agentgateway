@@ -378,7 +378,7 @@ impl Config {
 			.proxy_metadata
 			.get("GATEWAY_NAME")
 			.unwrap_or(&empty_gw_name);
-		let role = format!("{ns}~{name}", ns = &self.pod_namespace, name = gw_name);
+		let role = format!("{ns}~{name}", ns = self.pod_namespace, name = gw_name);
 		let mut metadata = Self::build_struct([
 			(NAME, self.pod_name.as_str()),
 			(NAMESPACE, self.pod_namespace.as_str()),
