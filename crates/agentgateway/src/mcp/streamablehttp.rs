@@ -3,8 +3,7 @@ use std::sync::Arc;
 use ::http::{HeaderMap, StatusCode};
 use agent_core::prelude::AssertSize;
 use rmcp::model::{
-	ClientCapabilities, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString,
-	GetMeta, Implementation, META_KEY_CLIENT_CAPABILITIES, META_KEY_CLIENT_INFO,
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
 	META_KEY_PROTOCOL_VERSION, Meta, ProtocolVersion, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{
@@ -444,12 +443,11 @@ pub(crate) fn protocol_version_header(
 	Ok(Some(version))
 }
 
-/// Validates a POST request's protocol version and the per-request metadata required for
-/// modern (2026-07-28+) requests. The protocol header is parsed once here.
+/// Validates a POST request's protocol version and gateway-owned modern method routing.
+/// The protocol header is parsed once here.
 ///
-/// Keep the statement order. Removed-method rejection must run before `_meta` validation
-/// because methods removed from the modern protocol must return 404 even when their params
-/// do not validate. Both checks must run before header/body version reconciliation.
+/// Keep the statement order. Removed-method rejection must run before header/body version
+/// reconciliation because removed methods must return 404 even when their params do not parse.
 fn validate_request_protocol(
 	headers: &::http::HeaderMap,
 	message: &ClientJsonRpcMessage,
@@ -458,8 +456,8 @@ fn validate_request_protocol(
 	let header_version = protocol_version_header(headers, request_id.clone())?;
 	let body_version = message_protocol_version(message);
 
-	// These checks use only the header version because modern clients must send it,
-	// and the body version is reconciled later.
+	// This check uses only the header version because modern clients must send it and the
+	// body version is reconciled later.
 	if header_version.as_ref().is_some_and(is_modern_version)
 		&& let ClientJsonRpcMessage::Request(req) = message
 	{
@@ -468,24 +466,11 @@ fn validate_request_protocol(
 		{
 			return Err(mcp::Error::MethodNotFound(request_id, method.to_string()).into());
 		}
-		let meta = req.request.get_meta();
-		// Treat malformed values as missing, matching the rmcp accessors without cloning
-		// each `_meta` value into an owned serde_json::Value.
-		let missing = if body_version.is_none() {
-			Some("protocolVersion")
-		} else if decode_meta_value::<Implementation>(meta, META_KEY_CLIENT_INFO).is_none() {
-			Some("clientInfo")
-		} else if decode_meta_value::<ClientCapabilities>(meta, META_KEY_CLIENT_CAPABILITIES).is_none()
-		{
-			Some("clientCapabilities")
-		} else {
-			None
-		};
-		if let Some(key) = missing {
+		if body_version.is_none() {
 			return Err(
 				mcp::Error::InvalidParams(
 					request_id,
-					format!("_meta.{key} is required for modern requests"),
+					"_meta.protocolVersion is required for modern requests".to_string(),
 				)
 				.into(),
 			);

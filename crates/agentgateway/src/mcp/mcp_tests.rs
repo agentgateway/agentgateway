@@ -1071,7 +1071,7 @@ async fn modern_malformed_known_method_params_are_not_method_not_found() {
 }
 
 #[tokio::test]
-async fn modern_request_missing_meta_returns_invalid_params() {
+async fn modern_request_missing_gateway_protocol_version_returns_invalid_params() {
 	let mock = mock_modern_streamable_http_server().await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
 	let client = reqwest::Client::new();
@@ -1085,22 +1085,6 @@ async fn modern_request_missing_meta_returns_invalid_params() {
 				.as_object_mut()
 				.unwrap()
 				.remove("io.modelcontextprotocol/protocolVersion");
-			serde_json::json!({ "_meta": meta })
-		}),
-		("clientInfo missing", {
-			let mut meta = modern_meta();
-			meta
-				.as_object_mut()
-				.unwrap()
-				.remove("io.modelcontextprotocol/clientInfo");
-			serde_json::json!({ "_meta": meta })
-		}),
-		("clientCapabilities missing", {
-			let mut meta = modern_meta();
-			meta
-				.as_object_mut()
-				.unwrap()
-				.remove("io.modelcontextprotocol/clientCapabilities");
 			serde_json::json!({ "_meta": meta })
 		}),
 	];
@@ -1124,8 +1108,6 @@ async fn modern_request_missing_meta_returns_invalid_params() {
 			"case {label} should be rejected"
 		);
 		let json: serde_json::Value = response.json().await.unwrap();
-		// `_meta` validation must run before the completeness check, so the response keeps
-		// the request id and uses JSON-RPC -32602.
 		assert!(
 			is_json_subset(
 				&serde_json::json!({"jsonrpc": "2.0", "id": id, "error": {"code": -32602}}),
@@ -1133,6 +1115,61 @@ async fn modern_request_missing_meta_returns_invalid_params() {
 			),
 			"unexpected body for {label}: {json}"
 		);
+	}
+}
+
+#[tokio::test]
+async fn modern_request_forwards_non_routing_metadata() {
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	for (label, key, value) in [
+		(
+			"clientInfo missing",
+			"io.modelcontextprotocol/clientInfo",
+			None,
+		),
+		(
+			"clientInfo malformed",
+			"io.modelcontextprotocol/clientInfo",
+			Some(serde_json::json!(false)),
+		),
+		(
+			"clientCapabilities missing",
+			"io.modelcontextprotocol/clientCapabilities",
+			None,
+		),
+		(
+			"clientCapabilities malformed",
+			"io.modelcontextprotocol/clientCapabilities",
+			Some(serde_json::json!(false)),
+		),
+	] {
+		let mut meta = modern_meta();
+		let meta = meta.as_object_mut().unwrap();
+		match value {
+			Some(value) => {
+				meta.insert(key.to_string(), value);
+			},
+			None => {
+				meta.remove(key);
+			},
+		}
+		let body = serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "tools/list",
+			"params": { "_meta": meta }
+		});
+		let response = mcp_json_post(&client, &url, &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", "tools/list")
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::OK, "case {label}");
 	}
 }
 

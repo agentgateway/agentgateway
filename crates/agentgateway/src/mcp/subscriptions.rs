@@ -92,15 +92,8 @@ pub(super) fn filter_and_tag_listen_notification(
 	subscription_id: &RequestId,
 ) -> Option<Result<ServerJsonRpcMessage, ClientError>> {
 	let notification = match &message {
-		// A listen error means the upstream rejected the subscription. Keep it in the
-		// failure-mode path so the client does not get an ack over a silent stream.
-		ServerJsonRpcMessage::Error(e) => {
-			return Some(Err(ClientError::new(anyhow::anyhow!(
-				"upstream '{}' rejected subscriptions/listen: {}",
-				target,
-				e.error.message
-			))));
-		},
+		// Preserve upstream JSON-RPC errors so MergeStream can apply the configured failure mode.
+		ServerJsonRpcMessage::Error(_) => return Some(Ok(message)),
 		// The gateway emits the ack. Drop upstream ack responses and other non-notifications.
 		ServerJsonRpcMessage::Notification(n) => n,
 		_ => return None,
@@ -146,7 +139,6 @@ pub(super) fn synthesize_listen_ack(
 #[cfg(test)]
 mod tests {
 	use futures_util::StreamExt;
-	use rmcp::ErrorData;
 	use rmcp::model::{
 		ResourceUpdatedNotification, ResourceUpdatedNotificationParam, SubscriptionsListenResult,
 	};
@@ -161,8 +153,17 @@ mod tests {
 	}
 
 	/// An upstream JSON-RPC error frame as it arrives off the wire.
-	fn upstream_error(msg: &str) -> ServerJsonRpcMessage {
-		ServerJsonRpcMessage::error(ErrorData::internal_error(msg.to_string(), None), None)
+	fn upstream_error() -> ServerJsonRpcMessage {
+		serde_json::from_value(serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 7,
+			"error": {
+				"code": -32042,
+				"message": "subscription rejected",
+				"data": {"reason": "unavailable"}
+			}
+		}))
+		.unwrap()
 	}
 
 	fn tools_list_changed() -> ServerJsonRpcMessage {
@@ -387,7 +388,7 @@ mod tests {
 			tools_filter(),
 			vec![
 				Ok(tools_list_changed()),
-				Ok(upstream_error("boom")),
+				Ok(upstream_error()),
 				Ok(tools_list_changed()),
 			],
 			None,
@@ -402,12 +403,9 @@ mod tests {
 			"notifications/subscriptions/acknowledged"
 		);
 		assert_eq!(frames[1]["method"], "notifications/tools/list_changed");
-		assert!(
-			frames[2]["error"]["message"]
-				.as_str()
-				.unwrap()
-				.contains("upstream 'svc' rejected subscriptions/listen: boom")
-		);
+		assert_eq!(frames[2]["error"]["code"], -32042);
+		assert_eq!(frames[2]["error"]["message"], "subscription rejected");
+		assert_eq!(frames[2]["error"]["data"]["reason"], "unavailable");
 	}
 
 	#[tokio::test]
@@ -419,7 +417,7 @@ mod tests {
 			tools_filter(),
 			vec![
 				Ok(tools_list_changed()),
-				Ok(upstream_error("boom")),
+				Ok(upstream_error()),
 				Ok(tools_list_changed()),
 			],
 			None,
@@ -446,8 +444,8 @@ mod tests {
 		let id = RequestId::Number(4);
 		let ack = synthesize_listen_ack(id.clone(), tools_filter());
 		let sub_id = id.clone();
-		let rejecting = Messages::from_results(vec![Ok(upstream_error("boom"))])
-			.filter_map_messages_result(move |msg| {
+		let rejecting =
+			Messages::from_results(vec![Ok(upstream_error())]).filter_map_messages_result(move |msg| {
 				filter_and_tag_listen_notification(msg, None, "svc-a", &tools_filter(), &sub_id)
 			});
 		let merged = MergeStream::new_without_merge(
@@ -470,11 +468,6 @@ mod tests {
 			frames[0]["method"],
 			"notifications/subscriptions/acknowledged"
 		);
-		assert!(
-			frames[1]["error"]["message"]
-				.as_str()
-				.unwrap()
-				.contains("upstream 'svc-a' rejected subscriptions/listen: boom")
-		);
+		assert!(frames[1].get("error").is_some());
 	}
 }

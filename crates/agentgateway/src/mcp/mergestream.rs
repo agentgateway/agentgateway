@@ -42,9 +42,8 @@ impl Messages {
 		)
 	}
 
-	/// One-pass filter+swallow+rewrite+tag where the mapping fn may drop a message (`None`)
-	/// or turn an `Ok` message into an `Err`. The listen path uses this to promote an
-	/// upstream JSON-RPC error frame into a real stream error.
+	/// One-pass filter+rewrite+tag where the mapping fn may drop a message (`None`)
+	/// or turn an `Ok` message into an `Err`.
 	pub fn filter_map_messages_result(
 		self,
 		mut f: impl FnMut(ServerJsonRpcMessage) -> Option<Result<ServerJsonRpcMessage, ClientError>>
