@@ -15,13 +15,14 @@
       "default": null
     },
     "binds": {
-      "description": "binds defines the low-level API for configuring the proxy. Usage of `gateways` and `routes` is recommended.",
+      "description": "binds defines the low-level API for configuring the proxy.\nEach bind represents a single port the proxy listens on, as well as the full set of configuration\n(listeners, routes, backends) for that port.\nDeprecated; usage of `gateways` and `routes` is recommended instead.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/LocalBind"
       }
     },
     "frontendPolicies": {
+      "description": "frontendPolicies defines top level policies applying to all traffic.",
       "$ref": "#/$defs/LocalFrontendPolicies"
     },
     "policies": {
@@ -32,6 +33,7 @@
       }
     },
     "workloads": {
+      "description": "workloads defines the set of workloads that the proxy can serve. These are selected by `services`.\nThis is an advanced feature that is mostly for testing; usage of inline `backends` on routes and\npolicies is typically preferred.",
       "type": "array",
       "items": {
         "type": "object",
@@ -40,6 +42,7 @@
       "default": []
     },
     "services": {
+      "description": "services defines the set of services that the proxy can route to. These consist of `workloads`.\nThis is an advanced feature that is mostly for testing; usage of inline `backends` on routes and\npolicies is typically preferred.",
       "type": "array",
       "items": {
         "type": "object",
@@ -48,19 +51,21 @@
       "default": []
     },
     "backends": {
+      "description": "backends defines explicit backends that can be referenced by routes and policies.\nTypically, inline backends are used on the routes/policies, but this allows re-using the same backend\nacross different configurations.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/FullLocalBackend"
       }
     },
     "routeGroups": {
+      "description": "routeGroups provides a set of route groups used for route delegation. This is an advanced feature\nprimarily used for testing.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/LocalRouteGroup"
       }
     },
     "gateways": {
-      "description": "gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.",
+      "description": "gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.\nEach gateway defines a port that proxy will listen on, and optionally TLS settings for that port.",
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/LocalGateway"
@@ -81,6 +86,7 @@
       }
     },
     "llm": {
+      "description": "llm defines a set of LLM models to be exposed by the proxy. When configured, LLM models will be\nserved under the attached `gateways` using the standard serving paths (`/v1/models`, `/v1/chat/completions`, etc).",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalLLMConfig"
@@ -91,6 +97,7 @@
       ]
     },
     "mcp": {
+      "description": "mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be\nserved under the attached `gateways` at /mcp and /sse.\nAll MCP servers listed will be served as a single virtual MCP server.",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalSimpleMcpConfig"
@@ -101,6 +108,7 @@
       ]
     },
     "ui": {
+      "description": "ui defines settings for how the UI and UI backend is exposed. By default, the UI is exposed only\non the admin interface (typically localhost:15000). This setting allows attaching to `gateways`\nto serve externally, as well as attaching policies to UI traffic.\nIt is strongly recommended to utilize authentication (typically OIDC) when exposing the UI externally.",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalUIConfig"
@@ -9546,7 +9554,7 @@
           ]
         },
         "listeners": {
-          "description": "listeners defines multiple named listeners under this gateway. When set, listener fields cannot be set on the gateway itself.",
+          "description": "listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalGatewayListener"
@@ -9680,7 +9688,7 @@
       "type": "object",
       "properties": {
         "name": {
-          "description": "name identifies this listener for gateway references like gateway/listener.",
+          "description": "name identifies this listener for gateway references like `gateways: gateway-name/listener-name`.",
           "type": [
             "string",
             "null"
@@ -9688,7 +9696,7 @@
           "default": null
         },
         "hostname": {
-          "description": "Can be a wildcard.",
+          "description": "Hostname defines what hostnames are served under this listener. Can be a wildcard.\nThis allows serving multiple domains with different TLS configurations.\nIf unset, all domains will be served (implicit wildcard).",
           "type": [
             "string",
             "null"
@@ -9824,7 +9832,7 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways attaches this route to named gateways or gateway listeners.\nIf unset, the 'default' gateway will be used.",
+          "description": "gateways attaches this route to named gateways or gateway listeners.\nThis can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nIf unset, the 'default' gateway will be used.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
@@ -9904,7 +9912,7 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways attaches this route to named TCP/TLS gateways or gateway listeners.\nIf unset, the 'default' gateway will be used.",
+          "description": "gateways attaches this route to named TCP/TLS gateways or gateway listeners.\nThis can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nIf unset, the 'default' gateway will be used.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
@@ -9958,11 +9966,12 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways attaches the LLM API routes to named gateways. When omitted and a gateway named `default` exists,\nthe LLM API routes attach to it unless port or tls is set. When set, port and tls must be configured on the gateway.",
+          "description": "gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
         "port": {
+          "description": "port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.",
           "type": [
             "integer",
             "null"
@@ -9972,6 +9981,7 @@
           "maximum": 65535
         },
         "tls": {
+          "description": "tls defines the TLS settings to serve the LLM routes under when using `port`. Deprecated; use `gateways` instead.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTLSServerConfig"
@@ -10892,11 +10902,12 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways attaches the MCP routes to named gateways. When omitted and a gateway named `default` exists,\nthe MCP routes attach to it unless port is set. When set, port must be configured on the gateway.",
+          "description": "gateways attaches the MCP routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the MCP routes attach to it unless port is set.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },
         "port": {
+          "description": "port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.",
           "type": [
             "integer",
             "null"
@@ -10955,7 +10966,7 @@
       "type": "object",
       "properties": {
         "gateways": {
-          "description": "gateways exposes the UI and required UI API routes on named gateways. When omitted and a gateway named\n`default` exists, the UI routes attach to it.",
+          "description": "gateways attaches the UI and UI backend routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the UI routes attach to it.",
           "$ref": "#/$defs/LocalGatewayRefs",
           "default": []
         },

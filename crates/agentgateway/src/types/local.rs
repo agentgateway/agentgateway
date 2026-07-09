@@ -299,32 +299,48 @@ pub struct LocalConfig {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
 	config: Arc<Option<serde_json::Value>>,
-	/// binds defines the low-level API for configuring the proxy. Usage of `gateways` and `routes` is recommended.
+	/// binds defines the low-level API for configuring the proxy.
+	/// Each bind represents a single port the proxy listens on, as well as the full set of configuration
+	/// (listeners, routes, backends) for that port.
+	/// Deprecated; usage of `gateways` and `routes` is recommended instead.
 	#[serde(default)]
 	binds: Vec<LocalBind>,
+	/// frontendPolicies defines top level policies applying to all traffic.
 	#[serde(default)]
 	frontend_policies: LocalFrontendPolicies,
 	/// policies defines additional policies that can be attached to various other configurations.
 	/// This is an advanced feature; users should typically use the inline `policies` field under route/gateway.
 	#[serde(default)]
 	policies: Vec<LocalPolicy>,
+	/// workloads defines the set of workloads that the proxy can serve. These are selected by `services`.
+	/// This is an advanced feature that is mostly for testing; usage of inline `backends` on routes and
+	/// policies is typically preferred.
 	#[serde(default)]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "Vec<std::collections::HashMap<String, serde_json::Value>>")
 	)]
 	workloads: Vec<LocalWorkload>,
+	/// services defines the set of services that the proxy can route to. These consist of `workloads`.
+	/// This is an advanced feature that is mostly for testing; usage of inline `backends` on routes and
+	/// policies is typically preferred.
 	#[serde(default)]
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "Vec<std::collections::HashMap<String, serde_json::Value>>")
 	)]
 	services: Vec<Service>,
+	/// backends defines explicit backends that can be referenced by routes and policies.
+	/// Typically, inline backends are used on the routes/policies, but this allows re-using the same backend
+	/// across different configurations.
 	#[serde(default)]
 	backends: Vec<FullLocalBackend>,
+	/// routeGroups provides a set of route groups used for route delegation. This is an advanced feature
+	/// primarily used for testing.
 	#[serde(default, rename = "routeGroups")]
 	route_groups: Vec<LocalRouteGroup>,
 	/// gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.
+	/// Each gateway defines a port that proxy will listen on, and optionally TLS settings for that port.
 	#[serde(default)]
 	#[cfg_attr(
 		feature = "schema",
@@ -337,23 +353,34 @@ pub struct LocalConfig {
 	/// tcpRoutes defines TCP routes attached to one or more named TCP/TLS gateways.
 	#[serde(default)]
 	tcp_routes: Vec<LocalAttachedTCPRoute>,
+	/// llm defines a set of LLM models to be exposed by the proxy. When configured, LLM models will be
+	/// served under the attached `gateways` using the standard serving paths (`/v1/models`, `/v1/chat/completions`, etc).
 	#[serde(default)]
 	llm: Option<LocalLLMConfig>,
+	/// mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be
+	/// served under the attached `gateways` at /mcp and /sse.
+	/// All MCP servers listed will be served as a single virtual MCP server.
 	#[serde(default)]
 	mcp: Option<LocalSimpleMcpConfig>,
+	/// ui defines settings for how the UI and UI backend is exposed. By default, the UI is exposed only
+	/// on the admin interface (typically localhost:15000). This setting allows attaching to `gateways`
+	/// to serve externally, as well as attaching policies to UI traffic.
+	/// It is strongly recommended to utilize authentication (typically OIDC) when exposing the UI externally.
 	#[serde(default)]
 	ui: Option<LocalUIConfig>,
 }
 
 #[apply(schema_de!)]
 pub struct LocalLLMConfig {
-	/// gateways attaches the LLM API routes to named gateways. When omitted and a gateway named `default` exists,
-	/// the LLM API routes attach to it unless port or tls is set. When set, port and tls must be configured on the gateway.
+	/// gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.
+	/// When omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
+	/// port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
+	/// tls defines the TLS settings to serve the LLM routes under when using `port`. Deprecated; use `gateways` instead.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	tls: Option<LocalTLSServerConfig>,
 	/// providers defines reusable LLM provider defaults that models may reference.
@@ -487,11 +514,12 @@ pub struct LocalLLMConditionalTarget {
 
 #[apply(schema_de!)]
 pub struct LocalSimpleMcpConfig {
-	/// gateways attaches the MCP routes to named gateways. When omitted and a gateway named `default` exists,
-	/// the MCP routes attach to it unless port is set. When set, port must be configured on the gateway.
+	/// gateways attaches the MCP routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.
+	/// When omitted and a gateway named `default` exists, the MCP routes attach to it unless port is set.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
+	/// port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	port: Option<u16>,
 	#[serde(flatten)]
@@ -502,8 +530,8 @@ pub struct LocalSimpleMcpConfig {
 
 #[apply(schema_de!)]
 pub struct LocalUIConfig {
-	/// gateways exposes the UI and required UI API routes on named gateways. When omitted and a gateway named
-	/// `default` exists, the UI routes attach to it.
+	/// gateways attaches the UI and UI backend routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.
+	/// When omitted and a gateway named `default` exists, the UI routes attach to it.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
 	gateways: Vec<Strng>,
@@ -1098,7 +1126,7 @@ struct LocalGateway {
 	/// default to HTTP, or HTTPS when tls is set.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	protocol: Option<LocalGatewayProtocol>,
-	/// listeners defines multiple named listeners under this gateway. When set, listener fields cannot be set on the gateway itself.
+	/// listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	listeners: Vec<LocalGatewayListener>,
 
@@ -1114,6 +1142,7 @@ struct LocalGateway {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 struct LocalAttachedRoute {
 	/// gateways attaches this route to named gateways or gateway listeners.
+	/// This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.
 	/// If unset, the 'default' gateway will be used.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
@@ -1127,6 +1156,7 @@ struct LocalAttachedRoute {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 struct LocalAttachedTCPRoute {
 	/// gateways attaches this route to named TCP/TLS gateways or gateway listeners.
+	/// This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.
 	/// If unset, the 'default' gateway will be used.
 	#[serde(default, deserialize_with = "de_gateway_refs")]
 	#[cfg_attr(feature = "schema", schemars(with = "LocalGatewayRefs"))]
@@ -1137,10 +1167,12 @@ struct LocalAttachedTCPRoute {
 
 #[apply(schema_de!)]
 struct LocalGatewayListener {
-	/// name identifies this listener for gateway references like gateway/listener.
+	/// name identifies this listener for gateway references like `gateways: gateway-name/listener-name`.
 	#[serde(default)]
 	name: Option<Strng>,
-	/// Can be a wildcard.
+	/// Hostname defines what hostnames are served under this listener. Can be a wildcard.
+	/// This allows serving multiple domains with different TLS configurations.
+	/// If unset, all domains will be served (implicit wildcard).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	hostname: Option<Strng>,
 	/// protocol controls whether this listener accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, listeners
@@ -1157,6 +1189,7 @@ struct LocalGatewayListener {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "UPPERCASE", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[allow(clippy::upper_case_acronyms)]
 enum LocalGatewayProtocol {
 	HTTP,
 	HTTPS,
@@ -1950,7 +1983,7 @@ fn ui_matches(oidc_redirect_path: Option<Strng>) -> Vec<RouteMatch> {
 	if let Some(path) = oidc_redirect_path
 		&& !paths.iter().any(|existing| match existing {
 			PathMatch::Exact(existing) | PathMatch::PathPrefix(existing) => existing == &path,
-			PathMatch::Regex(_) | PathMatch::Invalid => false,
+			_ => unreachable!(),
 		}) {
 		paths.push(PathMatch::Exact(path));
 	}

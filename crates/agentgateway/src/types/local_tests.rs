@@ -1172,8 +1172,8 @@ async fn test_aws_config() {
 }
 
 #[tokio::test]
-async fn test_health_config() {
-	test_config_parsing("health").await;
+async fn test_gateway_config() {
+	test_config_parsing("gateway").await;
 }
 
 #[tokio::test]

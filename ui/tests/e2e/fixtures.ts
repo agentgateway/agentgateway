@@ -197,9 +197,9 @@ export function populatedConfig(): TestConfig {
 }
 
 export function sameOriginGatewayConfig(): TestConfig {
-	const config = populatedConfig();
-	config.gateways = {
-		public: {
+  const config = populatedConfig();
+  config.gateways = {
+    public: {
       port: 8080,
     },
   };
@@ -219,37 +219,37 @@ export function sameOriginGatewayConfig(): TestConfig {
   const mcpPolicies = mcp.policies as Record<string, unknown> | undefined;
   delete mcpPolicies?.cors;
 
-	return config;
+  return config;
 }
 
 export function implicitDefaultGatewayConfig(): TestConfig {
-	const config = populatedConfig();
-	config.gateways = {
-		default: {
-			port: 8080,
-		},
-	};
-	config.ui = {};
+  const config = populatedConfig();
+  config.gateways = {
+    default: {
+      port: 8080,
+    },
+  };
+  config.ui = {};
 
-	const llm = config.llm as Record<string, unknown>;
-	delete llm.gateways;
-	delete llm.port;
-	delete llm.tls;
-	const llmPolicies = llm.policies as Record<string, unknown> | undefined;
-	delete llmPolicies?.cors;
+  const llm = config.llm as Record<string, unknown>;
+  delete llm.gateways;
+  delete llm.port;
+  delete llm.tls;
+  const llmPolicies = llm.policies as Record<string, unknown> | undefined;
+  delete llmPolicies?.cors;
 
-	const mcp = config.mcp as Record<string, unknown>;
-	delete mcp.gateways;
-	delete mcp.port;
-	const mcpPolicies = mcp.policies as Record<string, unknown> | undefined;
-	delete mcpPolicies?.cors;
+  const mcp = config.mcp as Record<string, unknown>;
+  delete mcp.gateways;
+  delete mcp.port;
+  const mcpPolicies = mcp.policies as Record<string, unknown> | undefined;
+  delete mcpPolicies?.cors;
 
-	return config;
+  return config;
 }
 
 export async function mockGateway(
-	page: Page,
-	initialConfig: TestConfig = populatedConfig(),
+  page: Page,
+  initialConfig: TestConfig = populatedConfig(),
 ) {
   let config = structuredClone(initialConfig);
   const postedConfigs: TestConfig[] = [];
