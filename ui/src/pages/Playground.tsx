@@ -105,6 +105,7 @@ const storageKeys = {
   specificModel: "playgroundSpecificModel",
   apiKeyMode: "playgroundApiKeyMode",
   selectedKey: "playgroundSelectedKeyRef",
+  llmBaseUrlOverride: "playgroundLlmBaseUrlOverride",
 };
 
 const legacySecretStorageKeys = [
@@ -162,7 +163,12 @@ export function PlaygroundPage() {
     "",
   );
   const [model, setModel] = useState(() => queryModel() ?? storedModel);
-  const llmBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
+  const autoDerivedLlmBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
+  const [llmBaseUrlOverride, setLlmBaseUrlOverride] = useStoredStringState(
+    storageKeys.llmBaseUrlOverride,
+    "",
+  );
+  const llmBaseUrl = llmBaseUrlOverride.trim() || autoDerivedLlmBaseUrl;
   const [specificModel, setSpecificModel] = useStoredStringState(
     storageKeys.specificModel,
     "",
@@ -702,6 +708,24 @@ export function PlaygroundPage() {
                 </label>
               </div>
             ) : null}
+          </div>
+          <div className="playground-control-row">
+            <Field
+              label="LLM endpoint URL"
+              hint={`Auto-derived from config: ${autoDerivedLlmBaseUrl}. Leave blank to use the default; override only when the listener is exposed on a different host:port (e.g. behind a reverse proxy or a non-default docker-compose port mapping).`}
+            >
+              <input
+                type="text"
+                value={llmBaseUrlOverride}
+                placeholder={autoDerivedLlmBaseUrl}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                onChange={(event) => setLlmBaseUrlOverride(event.target.value)}
+                style={{ fontFamily: "monospace" }}
+              />
+            </Field>
           </div>
           <details
             className="system-prompt-details"
