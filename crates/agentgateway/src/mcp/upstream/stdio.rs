@@ -13,7 +13,7 @@ use rmcp::model::{
 use rmcp::transport::{TokioChildProcess, Transport};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
@@ -145,16 +145,21 @@ impl Process {
 								}
 							},
 							Some(JsonRpcMessage::Error(err)) => {
-								// An error reply terminates its request just like a response;
-								// only id-less errors belong on the event stream.
-								let sender = err
-									.id
-									.as_ref()
-									.and_then(|id| pending_requests_clone.lock().unwrap().remove(id));
-								if let Some(sender) = sender {
-									let _ = sender.send(ServerJsonRpcMessage::Error(err));
-								} else if let Some(sender) = event_stream_send.load().as_ref() {
-									let _ = sender.send(JsonRpcMessage::Error(err)).await;
+								// An error carrying a request id terminates that request, like a response.
+								// An id-less error can't be matched, so it belongs on the event stream.
+								match err.id.as_ref() {
+									Some(id) => {
+										if let Some(sender) = pending_requests_clone.lock().unwrap().remove(id) {
+											let _ = sender.send(ServerJsonRpcMessage::Error(err));
+										} else {
+											debug!("dropping stdio error for unknown request id {id:?}");
+										}
+									},
+									None => {
+										if let Some(sender) = event_stream_send.load().as_ref() {
+											let _ = sender.send(JsonRpcMessage::Error(err)).await;
+										}
+									},
 								}
 							},
 							Some(other) => {

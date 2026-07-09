@@ -526,7 +526,7 @@ async fn modern_stateful_streamable_http_does_not_use_sessions() {
 }
 
 // TODO this test doesn't regress without downgrade_to_legacy_handshake
-// as our current rmcp fork doesn't replicate the stricness that the python SDK has
+// as our current rmcp fork doesn't replicate the strictness that the python SDK has
 #[tokio::test]
 async fn stateless_vnext_tools_list_reaches_upstream() {
 	let mock = mock_streamable_http_server(false).await;

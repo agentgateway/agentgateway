@@ -66,14 +66,15 @@ impl Session {
 	}
 
 	/// Send a downstream message to upstream server(s) in gateway stateless mode.
-	/// Every non-initialize message gets a gateway-generated InitializeRequest
-	/// first, because many legacy servers require initialize before any other
-	/// request. Once downstream stateless transport is supported, remove this
-	/// wrapper and forward the message as-is.
+	/// Legacy (pre-2026) non-initialize messages get a gateway-generated
+	/// InitializeRequest first, because legacy servers require initialize before
+	/// any other request. Modern (>= 2026-07-28) requests are stateless and are
+	/// forwarded as-is: a modern client only reaches a modern request after its
+	/// `server/discover` negotiated a modern server, so no handshake is needed.
 	pub async fn stateless_send_and_initialize(
 		&mut self,
-		mut parts: Parts,
-		mut message: ClientJsonRpcMessage,
+		parts: Parts,
+		message: ClientJsonRpcMessage,
 	) -> Result<Response, ProxyError> {
 		let req_id = match &message {
 			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
@@ -81,9 +82,12 @@ impl Session {
 		};
 		let is_init = matches!(&message,
 			ClientJsonRpcMessage::Request(r) if matches!(r.request, ClientRequest::InitializeRequest(_)));
-		if !is_init {
-			let client_info = downgrade_to_legacy_handshake(&mut parts, &mut message, req_id.clone())?;
-			let init_request = rmcp::model::InitializeRequest::new(client_info);
+		let is_modern = parts
+			.extensions
+			.get::<crate::mcp::streamablehttp::RequestProtocol>()
+			.is_some_and(|p| p.is_modern());
+		if !is_init && !is_modern {
+			let init_request = rmcp::model::InitializeRequest::new(get_client_info());
 			let request_type = match &message {
 				ClientJsonRpcMessage::Request(r) => Some(&r.request),
 				_ => None,
@@ -955,50 +959,4 @@ fn get_client_info() -> ClientInfo {
 	client_info.client_info =
 		Implementation::new("agentgateway", BuildInfo::new().version.to_string());
 	client_info
-}
-
-/// Make a modern (>= 2026-07-28) request relayable behind the synthetic legacy
-/// `initialize` this stateless path prepends. A modern server refuses
-/// `initialize` from a client that presents as modern, so we present as legacy.
-///
-/// https://github.com/modelcontextprotocol/python-sdk/blob/9bdc03d54e59e28f08307c2dba0e429a64b171c9/src/mcp/server/runner.py#L669
-/// https://github.com/modelcontextprotocol/python-sdk/blob/9bdc03d54e59e28f08307c2dba0e429a64b171c9/src/mcp/shared/inbound.py#L442
-/// TODO: skip `initialize` entirely for modern->modern sessions.
-fn downgrade_to_legacy_handshake(
-	parts: &mut Parts,
-	message: &mut ClientJsonRpcMessage,
-	req_id: Option<RequestId>,
-) -> Result<ClientInfo, ProxyError> {
-	let mut client_info = get_client_info();
-
-	// clamp the version the handshake claims
-	if let Some(protocol_version) =
-		crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id)?
-	{
-		client_info.protocol_version =
-			if protocol_version.as_str() >= ProtocolVersion::STANDARD_HEADERS.as_str() {
-				ProtocolVersion::V_2025_11_25
-			} else {
-				protocol_version
-			};
-		if let Ok(v) = ::http::HeaderValue::from_str(client_info.protocol_version.as_str()) {
-			parts.headers.insert(
-				rmcp::transport::common::http_header::HEADER_MCP_PROTOCOL_VERSION,
-				v,
-			);
-		}
-	}
-
-	// strip the modern `_meta` envelope keys
-	let meta = match message {
-		ClientJsonRpcMessage::Request(r) => Some(r.request.get_meta_mut()),
-		ClientJsonRpcMessage::Notification(n) => Some(n.notification.get_meta_mut()),
-		_ => None,
-	};
-	if let Some(meta) = meta {
-		meta.0.remove(rmcp::model::META_KEY_PROTOCOL_VERSION);
-		meta.0.remove(rmcp::model::META_KEY_CLIENT_INFO);
-		meta.0.remove(rmcp::model::META_KEY_CLIENT_CAPABILITIES);
-	}
-	Ok(client_info)
 }
