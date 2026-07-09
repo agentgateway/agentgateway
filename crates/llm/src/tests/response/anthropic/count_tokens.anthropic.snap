@@ -1,0 +1,10 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/count_tokens.json
+info:
+  input_tokens: 42
+---
+{
+  "input_tokens": 42,
+  "token_count": 42
+}

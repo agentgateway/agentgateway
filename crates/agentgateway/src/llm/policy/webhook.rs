@@ -1,5 +1,6 @@
 use ::http::header::CONTENT_TYPE;
 use ::http::{HeaderMap, HeaderValue, header};
+pub use agent_llm::webhook::{Message, ResponseChoice};
 use serde::{Deserialize, Serialize};
 
 use crate::llm::policy::with_default_timeout;
@@ -47,21 +48,11 @@ pub struct GuardrailsResponseResponse {
 	pub action: ResponseAction,
 }
 
-// For convenience, re-use SimpleChatCompletionMessage
-pub type Message = crate::llm::SimpleChatCompletionMessage;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct PromptMessages {
 	/// List of prompt messages including role and content.
 	pub messages: Vec<Message>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ResponseChoice {
-	/// message contains the role and text content of the response from the LLM model.
-	pub message: Message,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

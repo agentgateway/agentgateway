@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# Exercises the backendAuth.oauth token-exchange policy
+# (as opposed to the extAuthz+CEL approach in ../extauthz).
+#
+# Uses docker-compose.yaml in this directory:
+#   - Keycloak realm "backend-oauth" on :7080
+#   - echo upstream on :18080
+config: {}
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    # RFC 8693 token exchange: inbound user bearer -> per-upstream token
+    - name: token-exchange
+      matches:
+      - path:
+          pathPrefix: /exchange
+      backends:
+      - host: localhost:18080
+        policies:
+          backendAuth:
+            oauth:
+              host: localhost:7080
+              tokenEndpointPath: /realms/backend-oauth/protocol/openid-connect/token
+              clientAuth:
+                clientId: requester-client
+                clientSecret: requester-secret
+                method: clientSecretBasic
+              audiences:
+              - target-client

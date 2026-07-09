@@ -9,6 +9,7 @@ pub mod metrics;
 pub mod prelude;
 pub mod readiness;
 pub mod responsechannel;
+pub mod serdes;
 pub mod signal;
 pub mod strng;
 pub mod telemetry;

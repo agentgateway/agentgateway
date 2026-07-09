@@ -325,6 +325,11 @@ impl BackendPolicies {
 		self.authorization.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
+		if let Some(crate::http::auth::BackendAuth::Aws(aws)) = self.backend_auth.as_ref() {
+			for expr in aws.cel_expressions() {
+				ctx.register_expression(expr);
+			}
+		}
 		if let Some(llm) = self.llm.as_ref() {
 			for expr in llm.expressions() {
 				ctx.register_expression(expr);

@@ -2476,7 +2476,7 @@ mod standalone_inference_routing {
 #[tokio::test]
 async fn custom_llm_provider_service_backend_runs_inference_routing() {
 	let backend = body_mock(include_bytes!(
-		"../llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let backend_addr = *backend.address();
@@ -2530,7 +2530,7 @@ async fn custom_llm_provider_service_backend_runs_inference_routing() {
 		io,
 		Method::POST,
 		"http://lo/v1/chat/completions",
-		include_bytes!("../llm/tests/requests/completions/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
 	)
 	.await;
 	assert_eq!(res.status(), 200);
@@ -2553,7 +2553,10 @@ async fn custom_llm_provider_service_backend_runs_inference_routing() {
 
 #[tokio::test]
 async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token_rate_limit() {
-	let backend = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let backend = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/anthropic/basic.json"
+	))
+	.await;
 	let backend_addr = *backend.address();
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
 	let request_path_seen = Arc::new(Mutex::new(None));
@@ -2641,7 +2644,7 @@ async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token
 		io,
 		Method::POST,
 		"http://lo/v1/chat/completions",
-		include_bytes!("../llm/tests/requests/completions/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
 	)
 	.await;
 	assert_eq!(res.status(), 200);

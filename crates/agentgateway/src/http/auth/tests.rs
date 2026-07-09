@@ -51,7 +51,7 @@ fn test_aws_auth_deserializes_assume_role_with_session_name_and_tags() {
 			);
 			// Tags are stored sorted by key, regardless of configured order.
 			assert_eq!(
-				ar.tags.as_ref(),
+				ar.tags.static_tags().as_ref(),
 				&[
 					("App".to_string(), "invoice-processor".to_string()),
 					("Team".to_string(), "acme-payments".to_string()),
@@ -60,6 +60,105 @@ fn test_aws_auth_deserializes_assume_role_with_session_name_and_tags() {
 		},
 		_ => panic!("expected implicit AWS auth with assume role"),
 	}
+}
+
+#[test]
+fn test_aws_auth_deserializes_dynamic_session_tags() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"tags": [
+				{"key": "Team", "value": "acme-payments"},
+				{"key": "App", "expression": "request.headers[\"x-app\"]"},
+				{"key": "User", "expression": "jwt.sub"}
+			]
+		}
+	}))
+	.expect("should deserialize mixed static and dynamic tags");
+	match implicit {
+		AwsAuth::Implicit {
+			assume_role: Some(ar),
+			..
+		} => {
+			assert!(ar.tags.has_dynamic());
+			assert_eq!(
+				ar.tags.static_tags().as_ref(),
+				&[("Team".to_string(), "acme-payments".to_string())]
+			);
+			let expressions: Vec<&str> = ar
+				.tags
+				.expressions()
+				.map(|e| e.original_expression.as_str())
+				.collect();
+			// Dynamic tags are sorted by key: App before User.
+			assert_eq!(expressions, vec![r#"request.headers["x-app"]"#, "jwt.sub"]);
+		},
+		_ => panic!("expected implicit AWS auth with assume role"),
+	}
+}
+
+#[test]
+fn test_aws_session_tags_round_trip_through_serialization() {
+	let source = serde_json::json!({
+		"roleArn": "arn:aws:iam::123456789012:role/my-role",
+		"tags": [
+			{"key": "Team", "value": "acme-payments"},
+			{"key": "App", "expression": "request.headers[\"x-app\"]"}
+		]
+	});
+	let ar: AwsAssumeRole = serde_json::from_value(source).expect("should deserialize");
+	let serialized = serde_json::to_value(&ar).expect("should serialize");
+	let round_tripped: AwsAssumeRole =
+		serde_json::from_value(serialized).expect("serialized form should deserialize");
+	assert_eq!(ar.tags, round_tripped.tags);
+}
+
+#[test]
+fn test_aws_session_tag_rejects_invalid_configs() {
+	for (name, tags) in [
+		(
+			"both value and expression",
+			serde_json::json!([{"key": "App", "value": "x", "expression": "jwt.sub"}]),
+		),
+		(
+			"neither value nor expression",
+			serde_json::json!([{"key": "App"}]),
+		),
+		(
+			"duplicate keys",
+			serde_json::json!([
+				{"key": "App", "value": "x"},
+				{"key": "App", "expression": "jwt.sub"}
+			]),
+		),
+		(
+			"invalid CEL expression",
+			serde_json::json!([{"key": "App", "expression": "this is not cel ("}]),
+		),
+		(
+			"static value with invalid characters",
+			serde_json::json!([{"key": "App", "value": "a,b"}]),
+		),
+		("empty key", serde_json::json!([{"key": "", "value": "x"}])),
+	] {
+		let result = serde_json::from_value::<AwsAssumeRole>(serde_json::json!({
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"tags": tags,
+		}));
+		assert!(result.is_err(), "{name} should be rejected");
+	}
+}
+
+#[test]
+fn test_aws_session_tags_rejects_more_than_sts_limit() {
+	let tags: Vec<serde_json::Value> = (0..51)
+		.map(|i| serde_json::json!({"key": format!("Key{i}"), "value": "x"}))
+		.collect();
+	let result = serde_json::from_value::<AwsAssumeRole>(serde_json::json!({
+		"roleArn": "arn:aws:iam::123456789012:role/my-role",
+		"tags": tags,
+	}));
+	assert!(result.is_err(), "more than 50 tags should be rejected");
 }
 
 #[test]

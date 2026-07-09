@@ -5039,13 +5039,18 @@ func (x *AwsAssumeRole) GetTags() []*AwsSessionTag {
 	return nil
 }
 
-// AWS STS session tag, a key/value pair passed to AssumeRole for cost attribution.
+// AWS STS session tag passed to AssumeRole for cost attribution.
+// Exactly one of value and expression may be set.
 type AwsSessionTag struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Tag key.
 	Key string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
-	// Tag value.
-	Value         string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// Static tag value.
+	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// CEL expression evaluated against each request to produce the tag value,
+	// for example `jwt.sub` or `request.headers["x-app"]`. If the expression does
+	// not produce a valid tag value at request time, the request is rejected.
+	Expression    string `protobuf:"bytes,3,opt,name=expression,proto3" json:"expression,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5090,6 +5095,13 @@ func (x *AwsSessionTag) GetKey() string {
 func (x *AwsSessionTag) GetValue() string {
 	if x != nil {
 		return x.Value
+	}
+	return ""
+}
+
+func (x *AwsSessionTag) GetExpression() string {
+	if x != nil {
+		return x.Expression
 	}
 	return ""
 }
@@ -15586,10 +15598,13 @@ const file_resource_proto_rawDesc = "" +
 	"\rAwsAssumeRole\x12\x19\n" +
 	"\brole_arn\x18\x01 \x01(\tR\aroleArn\x12!\n" +
 	"\fsession_name\x18\x02 \x01(\tR\vsessionName\x12<\n" +
-	"\x04tags\x18\x03 \x03(\v2(.agentgateway.dev.resource.AwsSessionTagR\x04tags\"7\n" +
+	"\x04tags\x18\x03 \x03(\v2(.agentgateway.dev.resource.AwsSessionTagR\x04tags\"W\n" +
 	"\rAwsSessionTag\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\"\xfc\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12\x1e\n" +
+	"\n" +
+	"expression\x18\x03 \x01(\tR\n" +
+	"expression\"\xfc\x02\n" +
 	"\x13AzureExplicitConfig\x12S\n" +
 	"\rclient_secret\x18\x01 \x01(\v2,.agentgateway.dev.resource.AzureClientSecretH\x00R\fclientSecret\x12{\n" +
 	"\x1bmanaged_identity_credential\x18\x02 \x01(\v29.agentgateway.dev.resource.AzureManagedIdentityCredentialH\x00R\x19managedIdentityCredential\x12~\n" +

@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+# jwtBearer (RFC 7523) grant demonstration.
+#
+# /jwt-bearer     -> mock token endpoint (:7090), shows the basic request shape
+# /obo            -> mock token endpoint (:7090), Microsoft Entra on-behalf-of request shape
+# /jwt-bearer-kc  -> real Keycloak, full exchange against the two-realm stack (docker-compose.yaml)
+config: {}
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    # --- Microsoft Entra on-behalf-of (OBO) shape, sent to the mock so we can read the form ---
+    - name: ms-obo
+      matches:
+      - path:
+          pathPrefix: /obo
+      backends:
+      - host: localhost:18080
+        policies:
+          backendAuth:
+            oauth:
+              host: localhost:7090           # stands in for login.microsoftonline.com:443
+              tokenEndpointPath: /token       # stands in for /<TENANT_ID>/oauth2/v2.0/token
+              grantType: jwtBearer
+              clientAuth:
+                clientId: my-app-client-id
+                clientSecret: my-app-client-secret
+                method: clientSecretPost       # puts client_id/client_secret in the BODY
+              scopes:
+              - https://graph.microsoft.com/.default
+              additionalParams:
+                requested_token_use: '"on_behalf_of"'   # CEL string literal
+
+    # --- RFC 7523 jwt-bearer against a mock token endpoint (green path) ---
+    - name: jwt-bearer-mock
+      matches:
+      - path:
+          pathPrefix: /jwt-bearer
+      backends:
+      - host: localhost:18080
+        policies:
+          backendAuth:
+            oauth:
+              host: localhost:7090
+              tokenEndpointPath: /token
+              grantType: jwtBearer
+              audiences:
+              - target-client
+
+    # --- RFC 7523 jwt-bearer against real Keycloak (two-realm stack) ---
+    - name: jwt-bearer-keycloak
+      matches:
+      - path:
+          pathPrefix: /jwt-bearer-kc
+      backends:
+      - host: localhost:18080
+        policies:
+          backendAuth:
+            oauth:
+              host: localhost:7080
+              tokenEndpointPath: /realms/backend-oauth/protocol/openid-connect/token
+              grantType: jwtBearer
+              clientAuth:
+                clientId: requester-client
+                clientSecret: requester-secret
+                method: clientSecretBasic
+              audiences:
+              - target-client

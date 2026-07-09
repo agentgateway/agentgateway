@@ -324,10 +324,10 @@ backends:
                     name: gpt-7-max
                     provider:
                       azure:
+                        apiVersion: v1
                         model: gpt-3.5-turbo
                         resourceName: my-azure-openai-endpoint
                         resourceType: openAI
-                        apiVersion: v1
                     hostOverride: ~
                     pathOverride: ~
                     pathPrefix: ~

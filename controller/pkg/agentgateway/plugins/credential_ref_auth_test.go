@@ -61,8 +61,8 @@ func TestAwsAuthPropagatesAssumeRoleSessionNameAndTags(t *testing.T) {
 			RoleArn:     "arn:aws:iam::111122223333:role/bedrock-team-acme-payments",
 			SessionName: new("acme-payments-invoice-processor"),
 			Tags: []agentgateway.AwsSessionTag{
-				{Key: "Team", Value: "acme-payments"},
-				{Key: "App", Value: "invoice-processor"},
+				{Key: "Team", Value: new("acme-payments")},
+				{Key: "App", Value: new("invoice-processor")},
 			},
 		},
 	}, "default")
@@ -79,6 +79,35 @@ func TestAwsAuthPropagatesAssumeRoleSessionNameAndTags(t *testing.T) {
 	assert.Equal(t, tags[0].GetValue(), "acme-payments")
 	assert.Equal(t, tags[1].GetKey(), "App")
 	assert.Equal(t, tags[1].GetValue(), "invoice-processor")
+}
+
+func TestAwsAuthPropagatesDynamicSessionTags(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthPropagatesDynamicSessionTags"))
+	ctx := simpleAuthPolicyCtx(
+		&AgwCollections{
+			Secrets: secrets,
+		}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	expression := agentgateway.CELExpression(`request.headers["x-app"]`)
+	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
+		AssumeRole: &agentgateway.AwsAssumeRole{
+			RoleArn: "arn:aws:iam::111122223333:role/bedrock-caller",
+			Tags: []agentgateway.AwsSessionTag{
+				{Key: "Team", Value: new("acme-payments")},
+				{Key: "App", Expression: &expression},
+			},
+		},
+	}, "default")
+	assert.NoError(t, err)
+
+	tags := policy.GetAws().GetAssumeRole().GetTags()
+	assert.Equal(t, len(tags), 2)
+	assert.Equal(t, tags[0].GetKey(), "Team")
+	assert.Equal(t, tags[0].GetValue(), "acme-payments")
+	assert.Equal(t, tags[0].GetExpression(), "")
+	assert.Equal(t, tags[1].GetKey(), "App")
+	assert.Equal(t, tags[1].GetValue(), "")
+	assert.Equal(t, tags[1].GetExpression(), `request.headers["x-app"]`)
 }
 
 func TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags(t *testing.T) {

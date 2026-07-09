@@ -999,17 +999,54 @@ fn backend_auth_from_proto(
 			} else {
 				Some(a.service_name.clone())
 			};
-			let assume_role = a.assume_role.map(|assume_role| auth::AwsAssumeRole {
-				role_arn: assume_role.role_arn,
-				session_name: if assume_role.session_name.is_empty() {
-					None
-				} else {
-					Some(assume_role.session_name)
-				},
-				tags: auth::aws::sorted_session_tags(
-					assume_role.tags.into_iter().map(|tag| (tag.key, tag.value)),
-				),
-			});
+			let assume_role = a
+				.assume_role
+				.map(|assume_role| -> Result<_, ProtoError> {
+					let tags = assume_role
+						.tags
+						.into_iter()
+						.map(|tag| -> Result<_, ProtoError> {
+							// A tag is dynamic iff expression is set; an unset proto value is
+							// indistinguishable from an empty one, and STS allows empty values.
+							if tag.expression.is_empty() {
+								return Ok(auth::aws::AwsSessionTag {
+									key: tag.key,
+									value: Some(tag.value),
+									expression: None,
+								});
+							}
+							if !tag.value.is_empty() {
+								return Err(ProtoError::Generic(format!(
+									"session tag {:?} sets both value and expression",
+									tag.key
+								)));
+							}
+							// Permissive: a bad expression fails requests that hit this tag
+							// (fail closed) instead of rejecting the whole policy update.
+							let expression = permissive_cel_expression_arc(
+								diagnostics,
+								format!("AWS session tag {:?}", tag.key),
+								tag.expression,
+							);
+							Ok(auth::aws::AwsSessionTag {
+								key: tag.key,
+								value: None,
+								expression: Some(expression),
+							})
+						})
+						.collect::<Result<Vec<_>, _>>()?;
+					Ok(auth::AwsAssumeRole {
+						role_arn: assume_role.role_arn,
+						session_name: if assume_role.session_name.is_empty() {
+							None
+						} else {
+							Some(assume_role.session_name)
+						},
+						tags: auth::aws::AwsSessionTags::try_new(tags)
+							.map_err(|e| ProtoError::Generic(e.to_string()))?,
+					})
+				})
+				.transpose()?;
 			let aws_auth = match a.kind {
 				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
 					if assume_role.is_some() {
@@ -1360,13 +1397,11 @@ pub(crate) fn backend_with_policies_from_proto(
 							})
 						},
 						Some(provider::Provider::Bedrock(bedrock)) => {
-							AIProvider::Bedrock(llm::bedrock::Provider {
+							AIProvider::bedrock(llm::bedrock::Provider {
 								model: bedrock.model.as_deref().map(strng::new),
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								source_credentials_cache: Default::default(),
-								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
@@ -1376,13 +1411,12 @@ pub(crate) fn backend_with_policies_from_proto(
 								},
 								_ => llm::azure::AzureResourceType::OpenAI,
 							};
-							AIProvider::Azure(llm::azure::Provider {
+							AIProvider::azure(llm::azure::Provider {
 								model: azure.model.as_deref().map(strng::new),
 								resource_name: strng::new(&azure.resource_name),
 								resource_type,
 								api_version: azure.api_version.as_deref().map(strng::new),
 								project_name: azure.project_name.as_deref().map(strng::new),
-								cached_cred: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azureopenai(_)) => {

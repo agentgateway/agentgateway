@@ -109,11 +109,9 @@ spec:
                             body, not fields in this CRD."
                           properties:
                             field:
-                              allOf:
-                              - minLength: 1
-                              - minLength: 1
                               description: Name of the field.
                               maxLength: 256
+                              minLength: 1
                               type: string
                             value:
                               description: Default value for the field. This can be
@@ -160,11 +158,9 @@ spec:
                             body, not fields in this CRD."
                           properties:
                             field:
-                              allOf:
-                              - minLength: 1
-                              - minLength: 1
                               description: Name of the field.
                               maxLength: 256
+                              minLength: 1
                               type: string
                             value:
                               description: Default value for the field. This can be
@@ -324,9 +320,18 @@ spec:
                                                         attribution. STS allows at most 50 session tags per role session.
                                                       items:
                                                         description: |-
-                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
-                                                          for cost attribution.
+                                                          AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
+                                                          attribution. Exactly one of value and expression must be set.
                                                         properties:
+                                                          expression:
+                                                            description: |-
+                                                              Expression is a CEL expression evaluated against each request to produce
+                                                              the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
+                                                              expression does not produce a valid tag value at request time, the request
+                                                              is rejected.
+                                                            maxLength: 16384
+                                                            minLength: 1
+                                                            type: string
                                                           key:
                                                             description: Key is the
                                                               tag key.
@@ -335,13 +340,18 @@ spec:
                                                             type: string
                                                           value:
                                                             description: Value is
-                                                              the tag value.
+                                                              a static tag value.
                                                             maxLength: 256
                                                             type: string
                                                         required:
                                                         - key
-                                                        - value
                                                         type: object
+                                                        x-kubernetes-validations:
+                                                        - message: exactly one of
+                                                            value or expression must
+                                                            be set
+                                                          rule: has(self.value) !=
+                                                            has(self.expression)
                                                       maxItems: 50
                                                       type: array
                                                       x-kubernetes-list-map-keys:
@@ -1041,9 +1051,18 @@ spec:
                                                         attribution. STS allows at most 50 session tags per role session.
                                                       items:
                                                         description: |-
-                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
-                                                          for cost attribution.
+                                                          AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
+                                                          attribution. Exactly one of value and expression must be set.
                                                         properties:
+                                                          expression:
+                                                            description: |-
+                                                              Expression is a CEL expression evaluated against each request to produce
+                                                              the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
+                                                              expression does not produce a valid tag value at request time, the request
+                                                              is rejected.
+                                                            maxLength: 16384
+                                                            minLength: 1
+                                                            type: string
                                                           key:
                                                             description: Key is the
                                                               tag key.
@@ -1052,13 +1071,18 @@ spec:
                                                             type: string
                                                           value:
                                                             description: Value is
-                                                              the tag value.
+                                                              a static tag value.
                                                             maxLength: 256
                                                             type: string
                                                         required:
                                                         - key
-                                                        - value
                                                         type: object
+                                                        x-kubernetes-validations:
+                                                        - message: exactly one of
+                                                            value or expression must
+                                                            be set
+                                                          rule: has(self.value) !=
+                                                            has(self.expression)
                                                       maxItems: 50
                                                       type: array
                                                       x-kubernetes-list-map-keys:
@@ -1753,9 +1777,18 @@ spec:
                                                         attribution. STS allows at most 50 session tags per role session.
                                                       items:
                                                         description: |-
-                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
-                                                          for cost attribution.
+                                                          AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
+                                                          attribution. Exactly one of value and expression must be set.
                                                         properties:
+                                                          expression:
+                                                            description: |-
+                                                              Expression is a CEL expression evaluated against each request to produce
+                                                              the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
+                                                              expression does not produce a valid tag value at request time, the request
+                                                              is rejected.
+                                                            maxLength: 16384
+                                                            minLength: 1
+                                                            type: string
                                                           key:
                                                             description: Key is the
                                                               tag key.
@@ -1764,13 +1797,18 @@ spec:
                                                             type: string
                                                           value:
                                                             description: Value is
-                                                              the tag value.
+                                                              a static tag value.
                                                             maxLength: 256
                                                             type: string
                                                         required:
                                                         - key
-                                                        - value
                                                         type: object
+                                                        x-kubernetes-validations:
+                                                        - message: exactly one of
+                                                            value or expression must
+                                                            be set
+                                                          rule: has(self.value) !=
+                                                            has(self.expression)
                                                       maxItems: 50
                                                       type: array
                                                       x-kubernetes-list-map-keys:
@@ -2691,9 +2729,18 @@ spec:
                                                         attribution. STS allows at most 50 session tags per role session.
                                                       items:
                                                         description: |-
-                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
-                                                          for cost attribution.
+                                                          AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
+                                                          attribution. Exactly one of value and expression must be set.
                                                         properties:
+                                                          expression:
+                                                            description: |-
+                                                              Expression is a CEL expression evaluated against each request to produce
+                                                              the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
+                                                              expression does not produce a valid tag value at request time, the request
+                                                              is rejected.
+                                                            maxLength: 16384
+                                                            minLength: 1
+                                                            type: string
                                                           key:
                                                             description: Key is the
                                                               tag key.
@@ -2702,13 +2749,18 @@ spec:
                                                             type: string
                                                           value:
                                                             description: Value is
-                                                              the tag value.
+                                                              a static tag value.
                                                             maxLength: 256
                                                             type: string
                                                         required:
                                                         - key
-                                                        - value
                                                         type: object
+                                                        x-kubernetes-validations:
+                                                        - message: exactly one of
+                                                            value or expression must
+                                                            be set
+                                                          rule: has(self.value) !=
+                                                            has(self.expression)
                                                       maxItems: 50
                                                       type: array
                                                       x-kubernetes-list-map-keys:
@@ -3408,9 +3460,18 @@ spec:
                                                         attribution. STS allows at most 50 session tags per role session.
                                                       items:
                                                         description: |-
-                                                          AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
-                                                          for cost attribution.
+                                                          AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
+                                                          attribution. Exactly one of value and expression must be set.
                                                         properties:
+                                                          expression:
+                                                            description: |-
+                                                              Expression is a CEL expression evaluated against each request to produce
+                                                              the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
+                                                              expression does not produce a valid tag value at request time, the request
+                                                              is rejected.
+                                                            maxLength: 16384
+                                                            minLength: 1
+                                                            type: string
                                                           key:
                                                             description: Key is the
                                                               tag key.
@@ -3419,13 +3480,18 @@ spec:
                                                             type: string
                                                           value:
                                                             description: Value is
-                                                              the tag value.
+                                                              a static tag value.
                                                             maxLength: 256
                                                             type: string
                                                         required:
                                                         - key
-                                                        - value
                                                         type: object
+                                                        x-kubernetes-validations:
+                                                        - message: exactly one of
+                                                            value or expression must
+                                                            be set
+                                                          rule: has(self.value) !=
+                                                            has(self.expression)
                                                       maxItems: 50
                                                       type: array
                                                       x-kubernetes-list-map-keys:
@@ -4359,11 +4425,9 @@ spec:
                               minLength: 1
                               type: string
                             field:
-                              allOf:
-                              - minLength: 1
-                              - minLength: 1
                               description: Name of the field to set.
                               maxLength: 256
+                              minLength: 1
                               type: string
                           required:
                           - expression
@@ -4410,22 +4474,34 @@ spec:
                                   attribution. STS allows at most 50 session tags per role session.
                                 items:
                                   description: |-
-                                    AwsSessionTag is an AWS STS session tag: a key/value pair passed to AssumeRole
-                                    for cost attribution.
+                                    AwsSessionTag is an AWS STS session tag passed to AssumeRole for cost
+                                    attribution. Exactly one of value and expression must be set.
                                   properties:
+                                    expression:
+                                      description: |-
+                                        Expression is a CEL expression evaluated against each request to produce
+                                        the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
+                                        expression does not produce a valid tag value at request time, the request
+                                        is rejected.
+                                      maxLength: 16384
+                                      minLength: 1
+                                      type: string
                                     key:
                                       description: Key is the tag key.
                                       maxLength: 128
                                       minLength: 1
                                       type: string
                                     value:
-                                      description: Value is the tag value.
+                                      description: Value is a static tag value.
                                       maxLength: 256
                                       type: string
                                   required:
                                   - key
-                                  - value
                                   type: object
+                                  x-kubernetes-validations:
+                                  - message: exactly one of value or expression must
+                                      be set
+                                    rule: has(self.value) != has(self.expression)
                                 maxItems: 50
                                 type: array
                                 x-kubernetes-list-map-keys:

@@ -10,7 +10,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use anyhow::anyhow;
 use hashbrown::Equivalent;
 use heck::ToSnakeCase;
-use macro_rules_attribute::apply;
 use once_cell::sync::Lazy;
 use openapiv3::OpenAPI;
 use prometheus_client::encoding::EncodeLabelValue;
@@ -39,7 +38,7 @@ use crate::transport::tls;
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::local::{InternalBackend, SimpleLocalBackend, TargetOrUri};
 use crate::types::{agent, backend, frontend};
-use crate::*;
+use crate::{apply, *};
 
 #[apply(schema_ser_schema!)]
 pub struct Bind {
@@ -268,7 +267,7 @@ impl ServerTLSConfig {
 	}
 
 	#[allow(clippy::too_many_arguments)]
-	pub(crate) fn dynamic_ca_with_profile(
+	pub fn dynamic_ca_with_profile(
 		ca_cert_pem: Vec<u8>,
 		ca_key_pem: Vec<u8>,
 		default_alpns: Vec<Vec<u8>>,
@@ -779,7 +778,6 @@ pub struct ListenerName {
 	pub listener_set: Option<ResourceName>,
 }
 
-#[cfg(any(test, feature = "internal_benches"))]
 impl Default for ListenerName {
 	fn default() -> Self {
 		Self {

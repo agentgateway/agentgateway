@@ -25,7 +25,7 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [traffic-http](traffic-http/README.md): use agentgateway as a standard HTTP proxy.
 * [traffic-a2a](traffic-a2a/README.md): proxy [A2A](https://a2aproject.github.io/A2A/) traffic.
 * [traffic-aws-agentcore](traffic-aws-agentcore/README.md): proxy AWS AgentCore traffic with JWT auth and user-id header forwarding.
-* [traffic-backend-oauth](traffic-backend-oauth/README.md): use `extAuthz` to acquire Keycloak tokens for upstream requests using token exchange or client credentials.
+* [traffic-token-exchange](traffic-token-exchange/README.md): exchange inbound user credentials for per-upstream tokens — via `extAuthz` + CEL, the `backendAuth.oauth` RFC 8693 token-exchange grant, or the RFC 7523 JWT bearer grant.
 * [traffic-cross-app-access](traffic-cross-app-access/README.md): use Cross App Access (OAuth Identity Assertion Authorization Grant / ID-JAG) to exchange an authenticated user's identity for a backend-scoped access token — with local Keycloak, xaa.dev, or Okta+Auth0 demos.
 * [traffic-oidc](traffic-oidc/README.md): use the built-in `oidc` browser auth flow with a local Keycloak issuer.
 * [traffic-oauth2-proxy](traffic-oauth2-proxy/README.md): integrate with an external `oauth2-proxy` deployment.

@@ -1,5 +1,6 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::future::Future;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime};
 
 use aws_config::sts::AssumeRoleProvider;
@@ -9,6 +10,8 @@ use aws_credential_types::provider::ProvideCredentials;
 use aws_sigv4::http_request::{SignableBody, sign};
 use aws_sigv4::sign::v4::SigningParams;
 use aws_types::region::Region;
+use quick_cache::sync::{Cache as BoundedCache, EntryAction, EntryResult};
+use regex::Regex;
 use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::{Mutex, OnceCell};
 
@@ -67,8 +70,54 @@ impl std::fmt::Debug for AwsCredentialsCache {
 	}
 }
 
-#[derive(Default, Clone)]
-pub struct AwsAssumeRoleCache(Arc<Mutex<HashMap<AssumeRoleCacheKey, Credentials>>>);
+const ASSUME_ROLE_CACHE_CAPACITY: usize = 8192;
+
+/// Bounded cache of assumed-role credentials, keyed by everything that changes the
+/// STS AssumeRole call. With dynamic session tags each distinct evaluated tag set is
+/// its own entry, so the cache must be bounded, and fetches are single-flight so N
+/// concurrent requests for the same key coalesce into one STS call.
+#[derive(Clone)]
+pub struct AwsAssumeRoleCache(Arc<BoundedCache<AssumeRoleCacheKey, Credentials>>);
+
+impl Default for AwsAssumeRoleCache {
+	fn default() -> Self {
+		Self(Arc::new(BoundedCache::new(ASSUME_ROLE_CACHE_CAPACITY)))
+	}
+}
+
+impl AwsAssumeRoleCache {
+	async fn get_or_fetch<F, Fut>(
+		&self,
+		key: AssumeRoleCacheKey,
+		fetch: F,
+	) -> anyhow::Result<Credentials>
+	where
+		F: FnOnce() -> Fut,
+		Fut: Future<Output = anyhow::Result<Credentials>>,
+	{
+		let guard = match self
+			.0
+			.entry_async(&key, |_key, creds| {
+				if credentials_valid(creds) {
+					EntryAction::Retain(creds.clone())
+				} else {
+					EntryAction::ReplaceWithGuard
+				}
+			})
+			.await
+		{
+			EntryResult::Retained(creds) => return Ok(creds),
+			EntryResult::Vacant(guard) | EntryResult::Replaced(guard, _) => guard,
+			EntryResult::Removed(_, _) | EntryResult::Timeout => unreachable!(),
+		};
+
+		let creds = fetch().await?;
+		if credentials_valid(&creds) {
+			let _ = guard.insert(creds.clone());
+		}
+		Ok(creds)
+	}
+}
 
 impl std::fmt::Debug for AwsAssumeRoleCache {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -88,57 +137,236 @@ pub struct AwsAssumeRole {
 	pub session_name: Option<String>,
 	/// Session tags passed to STS AssumeRole for cost attribution. Once activated as
 	/// cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under
-	/// `resourceTags/user:TagKey`.
-	// Stored pre-sorted as (key, value) pairs so building the assume-role cache key
-	// is a cheap Arc clone instead of a per-request copy and sort.
+	/// `resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL
+	/// expression evaluated against each request (`expression`).
 	#[serde(
 		default,
-		skip_serializing_if = "<[(String, String)]>::is_empty",
+		skip_serializing_if = "AwsSessionTags::is_empty",
 		deserialize_with = "de_session_tags",
 		serialize_with = "ser_session_tags"
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<AwsSessionTag>"))]
-	pub tags: Arc<[(String, String)]>,
+	pub tags: AwsSessionTags,
 }
 
-/// An AWS STS session tag: a key/value pair passed to AssumeRole for cost attribution.
-#[derive(PartialEq, Eq, Hash)]
+/// An AWS STS session tag passed to AssumeRole for cost attribution.
+/// Exactly one of `value` and `expression` must be set.
 #[apply(schema!)]
 pub struct AwsSessionTag {
 	/// Tag key.
 	pub key: String,
-	/// Tag value.
-	pub value: String,
+	/// Static tag value.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub value: Option<String>,
+	/// CEL expression evaluated against each request to produce the tag value, for
+	/// example `jwt.sub` or `request.headers["x-app"]`. If the expression does not
+	/// produce a valid tag value at request time, the request is rejected.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub expression: Option<Arc<cel::Expression>>,
 }
 
-/// Sorts session tags into their canonical stored form so equality (and thus the
-/// assume-role cache key) is independent of the order tags were configured in.
-pub fn sorted_session_tags<I: IntoIterator<Item = (String, String)>>(
-	tags: I,
-) -> Arc<[(String, String)]> {
-	let mut tags: Vec<(String, String)> = tags.into_iter().collect();
-	tags.sort();
-	tags.into()
+// STS session tag limits: https://docs.aws.amazon.com/STS/latest/APIReference/API_Tag.html
+const MAX_SESSION_TAGS: usize = 50;
+const MAX_SESSION_TAG_KEY_LEN: usize = 128;
+const MAX_SESSION_TAG_VALUE_LEN: usize = 256;
+
+/// The characters STS accepts in session tag keys and values.
+static SESSION_TAG_CHARSET: LazyLock<Regex> =
+	LazyLock::new(|| Regex::new(r"^[\p{L}\p{Z}\p{N}_.:/=+\-@]*$").expect("static regex compiles"));
+
+/// Session tags in their runtime form: static values pre-resolved, dynamic (CEL)
+/// values compiled and evaluated per request.
+#[derive(Debug, Clone, Default)]
+pub struct AwsSessionTags {
+	// Pre-sorted (key, value) pairs so a static-only tag set turns into a cache key
+	// with a cheap Arc clone instead of a per-request copy and sort.
+	static_tags: Arc<[(String, String)]>,
+	// (key, expression) pairs, sorted by key.
+	dynamic_tags: Arc<[(String, Arc<cel::Expression>)]>,
 }
 
-fn de_session_tags<'de, D>(deserializer: D) -> Result<Arc<[(String, String)]>, D::Error>
+impl AwsSessionTags {
+	/// Validates and splits configured tags into static and dynamic sets. All
+	/// STS-side constraints that can be checked without a request are checked here,
+	/// so config errors surface at load time rather than per request.
+	pub fn try_new(tags: Vec<AwsSessionTag>) -> anyhow::Result<Self> {
+		if tags.len() > MAX_SESSION_TAGS {
+			anyhow::bail!(
+				"at most {MAX_SESSION_TAGS} session tags are allowed, got {}",
+				tags.len()
+			);
+		}
+		let mut keys = HashSet::with_capacity(tags.len());
+		let mut static_tags = Vec::new();
+		let mut dynamic_tags = Vec::new();
+		for tag in tags {
+			validate_session_tag_key(&tag.key)?;
+			if !keys.insert(tag.key.clone()) {
+				anyhow::bail!("duplicate session tag key {:?}", tag.key);
+			}
+			match (tag.value, tag.expression) {
+				(Some(value), None) => {
+					validate_session_tag_value(&tag.key, &value)?;
+					static_tags.push((tag.key, value));
+				},
+				(None, Some(expression)) => dynamic_tags.push((tag.key, expression)),
+				_ => anyhow::bail!(
+					"session tag {:?} must set exactly one of 'value' or 'expression'",
+					tag.key
+				),
+			}
+		}
+		static_tags.sort();
+		dynamic_tags.sort_by(|(a, _), (b, _)| a.cmp(b));
+		Ok(Self {
+			static_tags: static_tags.into(),
+			dynamic_tags: dynamic_tags.into(),
+		})
+	}
+
+	/// Builds a static-only tag set from (key, value) pairs, sorted into the
+	/// canonical form so equality is independent of configuration order.
+	pub fn from_static<I: IntoIterator<Item = (String, String)>>(tags: I) -> Self {
+		let mut tags: Vec<(String, String)> = tags.into_iter().collect();
+		tags.sort();
+		Self {
+			static_tags: tags.into(),
+			dynamic_tags: Default::default(),
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.static_tags.is_empty() && self.dynamic_tags.is_empty()
+	}
+
+	pub fn has_dynamic(&self) -> bool {
+		!self.dynamic_tags.is_empty()
+	}
+
+	pub fn static_tags(&self) -> Arc<[(String, String)]> {
+		self.static_tags.clone()
+	}
+
+	pub fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.dynamic_tags.iter().map(|(_, e)| e.as_ref())
+	}
+
+	/// Evaluates dynamic tags against the request and merges them with the static
+	/// tags into the sorted form used for both the cache key and the STS call.
+	/// Fails closed: an expression that cannot produce a valid tag value is an error.
+	fn resolve(&self, req: &http::Request) -> anyhow::Result<Arc<[(String, String)]>> {
+		let exec = cel::Executor::new_request(req);
+		let mut resolved: Vec<(String, String)> =
+			Vec::with_capacity(self.static_tags.len() + self.dynamic_tags.len());
+		resolved.extend(self.static_tags.iter().cloned());
+		for (key, expr) in self.dynamic_tags.iter() {
+			let value = exec
+				.eval(expr)
+				.map_err(anyhow::Error::from)
+				.and_then(session_tag_value)
+				.and_then(|value| {
+					if value.is_empty() {
+						anyhow::bail!("expression produced an empty value");
+					}
+					validate_session_tag_value(key, &value)?;
+					Ok(value)
+				})
+				.map_err(|e| {
+					anyhow::anyhow!(
+						"session tag {:?} (expression {:?}): {e}",
+						key,
+						expr.original_expression
+					)
+				})?;
+			resolved.push((key.clone(), value));
+		}
+		resolved.sort();
+		Ok(resolved.into())
+	}
+}
+
+// Dynamic tags cannot derive equality; compare them by (key, source expression),
+// which is exactly what determines their behavior.
+impl PartialEq for AwsSessionTags {
+	fn eq(&self, other: &Self) -> bool {
+		self.static_tags == other.static_tags
+			&& self.dynamic_tags.len() == other.dynamic_tags.len()
+			&& self
+				.dynamic_tags
+				.iter()
+				.zip(other.dynamic_tags.iter())
+				.all(|((ak, ae), (bk, be))| ak == bk && ae.original_expression == be.original_expression)
+	}
+}
+
+impl Eq for AwsSessionTags {}
+
+impl std::hash::Hash for AwsSessionTags {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		self.static_tags.hash(state);
+		for (key, expr) in self.dynamic_tags.iter() {
+			key.hash(state);
+			expr.original_expression.hash(state);
+		}
+	}
+}
+
+fn validate_session_tag_key(key: &str) -> anyhow::Result<()> {
+	if key.is_empty() || key.chars().count() > MAX_SESSION_TAG_KEY_LEN {
+		anyhow::bail!("session tag key {key:?} must be 1-{MAX_SESSION_TAG_KEY_LEN} characters");
+	}
+	if !SESSION_TAG_CHARSET.is_match(key) {
+		anyhow::bail!("session tag key {key:?} contains characters STS does not accept");
+	}
+	Ok(())
+}
+
+fn validate_session_tag_value(key: &str, value: &str) -> anyhow::Result<()> {
+	if value.chars().count() > MAX_SESSION_TAG_VALUE_LEN {
+		anyhow::bail!("session tag {key:?} value exceeds {MAX_SESSION_TAG_VALUE_LEN} characters");
+	}
+	if !SESSION_TAG_CHARSET.is_match(value) {
+		anyhow::bail!("session tag {key:?} value contains characters STS does not accept");
+	}
+	Ok(())
+}
+
+/// Coerces a CEL evaluation result into a tag value. Strings, numbers, and
+/// booleans (common JWT claim types) stringify via [`cel::Value::as_string`];
+/// anything else (null, lists, maps) is an error so misattribution fails closed.
+fn session_tag_value(v: cel::Value) -> anyhow::Result<String> {
+	// Materialize Dynamic so nested lookups (e.g. JWT claims) are concrete values.
+	v.always_materialize_owned()
+		.as_string()
+		.map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+fn de_session_tags<'de, D>(deserializer: D) -> Result<AwsSessionTags, D::Error>
 where
 	D: serde::Deserializer<'de>,
 {
 	let tags = Vec::<AwsSessionTag>::deserialize(deserializer)?;
-	Ok(sorted_session_tags(
-		tags.into_iter().map(|t| (t.key, t.value)),
-	))
+	AwsSessionTags::try_new(tags).map_err(serde::de::Error::custom)
 }
 
-fn ser_session_tags<S>(tags: &Arc<[(String, String)]>, serializer: S) -> Result<S::Ok, S::Error>
+fn ser_session_tags<S>(tags: &AwsSessionTags, serializer: S) -> Result<S::Ok, S::Error>
 where
 	S: serde::Serializer,
 {
-	serializer.collect_seq(tags.iter().map(|(key, value)| AwsSessionTag {
+	let static_entries = tags.static_tags.iter().map(|(key, value)| AwsSessionTag {
 		key: key.clone(),
-		value: value.clone(),
-	}))
+		value: Some(value.clone()),
+		expression: None,
+	});
+	let dynamic_entries = tags
+		.dynamic_tags
+		.iter()
+		.map(|(key, expression)| AwsSessionTag {
+			key: key.clone(),
+			value: None,
+			expression: Some(expression.clone()),
+		});
+	serializer.collect_seq(static_entries.chain(dynamic_entries))
 }
 
 impl AwsAuth {
@@ -164,6 +392,15 @@ impl AwsAuth {
 				assume_role_cache, ..
 			} => Some(assume_role_cache),
 		}
+	}
+
+	/// CEL expressions this auth config evaluates per request (dynamic session
+	/// tags), for registration with the CEL context builder.
+	pub fn cel_expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self
+			.assume_role()
+			.into_iter()
+			.flat_map(|assume_role| assume_role.tags.expressions())
 	}
 
 	fn source_credentials_cache(&self) -> Option<&AwsCredentialsCache> {
@@ -193,6 +430,14 @@ pub(super) async fn sign_request(
 	req: &mut http::Request,
 	aws_auth: &AwsAuth,
 ) -> anyhow::Result<()> {
+	// Resolve any dynamic (CEL) session tags first, while the request is intact.
+	// The CEL context reads headers and extensions (JWT claims, etc.), which the
+	// proxy keeps on the request until after late backend auth. Fails closed: an
+	// expression that cannot produce a valid tag value rejects the request.
+	let resolved_tags = match aws_auth.assume_role() {
+		Some(assume_role) if assume_role.tags.has_dynamic() => Some(assume_role.tags.resolve(req)?),
+		_ => None,
+	};
 	let lim = crate::http::buffer_limit(req);
 	let orig_body = std::mem::take(req.body_mut());
 	// Get the region based on auth mode
@@ -214,7 +459,9 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
-	let creds = Box::pin(load_credentials(aws_auth, region)).await?.into();
+	let creds = Box::pin(load_credentials(aws_auth, region, resolved_tags))
+		.await?
+		.into();
 
 	let service = signing_service_name(req, aws_auth);
 	trace!("AWS signing with region: {}, service: {}", region, service);
@@ -274,9 +521,13 @@ async fn sdk_config<'a>() -> &'a SdkConfig {
 		.await
 }
 
-async fn load_credentials(aws_auth: &AwsAuth, signing_region: &str) -> anyhow::Result<Credentials> {
+async fn load_credentials(
+	aws_auth: &AwsAuth,
+	signing_region: &str,
+	resolved_tags: Option<Arc<[(String, String)]>>,
+) -> anyhow::Result<Credentials> {
 	if let (Some(assume_role), Some(cache)) = (aws_auth.assume_role(), aws_auth.assume_role_cache()) {
-		load_assumed_credentials(assume_role, cache, signing_region).await
+		load_assumed_credentials(assume_role, cache, signing_region, resolved_tags).await
 	} else {
 		load_source_credentials(aws_auth).await
 	}
@@ -339,8 +590,7 @@ struct AssumeRoleCacheKey {
 	role_arn: String,
 	resolved_sts_region: String,
 	session_name: Option<String>,
-	/// Pre-sorted (key, value) pairs (see [`sorted_session_tags`]) so the cache key
-	/// is stable regardless of tag order.
+	/// Sorted (key, value) pairs so the cache key is stable regardless of tag order.
 	tags: Arc<[(String, String)]>,
 }
 
@@ -350,45 +600,43 @@ async fn load_assumed_credentials(
 	assume_role: &AwsAssumeRole,
 	cache: &AwsAssumeRoleCache,
 	signing_region: &str,
+	resolved_tags: Option<Arc<[(String, String)]>>,
 ) -> anyhow::Result<Credentials> {
 	let sts_region = resolve_sts_region(assume_role, signing_region).await?;
+	// resolved_tags is Some iff dynamic tags are configured (see sign_request);
+	// static-only configs use the pre-sorted static set via a cheap Arc clone.
+	let tags = resolved_tags.unwrap_or_else(|| assume_role.tags.static_tags());
 	let key = AssumeRoleCacheKey {
 		role_arn: assume_role.role_arn.clone(),
 		resolved_sts_region: sts_region.clone(),
 		session_name: assume_role.session_name.clone(),
-		tags: assume_role.tags.clone(),
+		tags,
 	};
 
-	{
-		let mut cached = cache.0.lock().await;
-		cached.retain(|_, creds| credentials_valid(creds));
-		if let Some(creds) = cached.get(&key) {
-			return Ok(creds.clone());
-		}
-	}
+	cache
+		.get_or_fetch(key.clone(), || async move {
+			let config = Box::pin(sdk_config()).await;
+			let mut builder = AssumeRoleProvider::builder(&assume_role.role_arn)
+				.configure(config)
+				.region(Region::new(sts_region));
 
-	let config = Box::pin(sdk_config()).await;
-	let mut builder = AssumeRoleProvider::builder(&assume_role.role_arn)
-		.configure(config)
-		.region(Region::new(sts_region));
+			if let Some(session_name) = &assume_role.session_name {
+				builder = builder.session_name(session_name);
+			}
 
-	if let Some(session_name) = &assume_role.session_name {
-		builder = builder.session_name(session_name);
-	}
+			if !key.tags.is_empty() {
+				builder = builder.tags(key.tags.iter().cloned());
+			}
 
-	if !assume_role.tags.is_empty() {
-		builder = builder.tags(assume_role.tags.iter().cloned());
-	}
-
-	let source_credentials_provider = config.credentials_provider().ok_or(anyhow::anyhow!(
-		"No credentials provider found in AWS config"
-	))?;
-	let provider = builder
-		.build_from_provider(source_credentials_provider.clone())
-		.await;
-	let creds = provider.provide_credentials().await?;
-	cache.0.lock().await.insert(key, creds.clone());
-	Ok(creds)
+			let source_credentials_provider = config.credentials_provider().ok_or(anyhow::anyhow!(
+				"No credentials provider found in AWS config"
+			))?;
+			let provider = builder
+				.build_from_provider(source_credentials_provider.clone())
+				.await;
+			Ok(provider.provide_credentials().await?)
+		})
+		.await
 }
 
 async fn resolve_sts_region(
@@ -420,8 +668,8 @@ fn credentials_valid(creds: &Credentials) -> bool {
 mod cache_key_tests {
 	use super::*;
 
-	fn tags(pairs: &[(&str, &str)]) -> Arc<[(String, String)]> {
-		sorted_session_tags(pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())))
+	fn tags(pairs: &[(&str, &str)]) -> AwsSessionTags {
+		AwsSessionTags::from_static(pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())))
 	}
 
 	fn key_for(assume_role: &AwsAssumeRole, region: &str) -> AssumeRoleCacheKey {
@@ -429,7 +677,7 @@ mod cache_key_tests {
 			role_arn: assume_role.role_arn.clone(),
 			resolved_sts_region: region.to_string(),
 			session_name: assume_role.session_name.clone(),
-			tags: assume_role.tags.clone(),
+			tags: assume_role.tags.static_tags(),
 		}
 	}
 
@@ -462,6 +710,23 @@ mod cache_key_tests {
 	}
 
 	#[test]
+	fn dynamic_tags_resolving_to_static_values_produce_equal_keys() {
+		// A dynamic tag that evaluates to X keys the cache identically to a static
+		// tag configured as X: only resolved values matter, not how they were produced.
+		let static_key = AssumeRoleCacheKey {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			resolved_sts_region: "us-east-1".to_string(),
+			session_name: None,
+			tags: tags(&[("Team", "acme")]).static_tags(),
+		};
+		let resolved_key = AssumeRoleCacheKey {
+			tags: Arc::from([("Team".to_string(), "acme".to_string())]),
+			..static_key.clone()
+		};
+		assert_eq!(static_key, resolved_key);
+	}
+
+	#[test]
 	fn tag_order_does_not_affect_key() {
 		// Tags are canonicalized (sorted) at deserialization, so configs that only
 		// differ in tag order deserialize to equal values and thus equal cache keys.
@@ -483,5 +748,283 @@ mod cache_key_tests {
 		.expect("assume role should deserialize");
 		assert_eq!(a.tags, b.tags);
 		assert_eq!(key_for(&a, "us-east-1"), key_for(&b, "us-east-1"));
+	}
+}
+
+#[cfg(test)]
+mod resolve_tags_tests {
+	use secrecy::SecretString;
+
+	use super::*;
+	use crate::http::jwt::Claims;
+
+	fn tag(key: &str, value: Option<&str>, expression: Option<&str>) -> AwsSessionTag {
+		AwsSessionTag {
+			key: key.to_string(),
+			value: value.map(str::to_string),
+			expression: expression
+				.map(|e| Arc::new(cel::Expression::new_strict(e).expect("expression should compile"))),
+		}
+	}
+
+	fn request(headers: &[(&str, &str)], claims: Option<serde_json::Value>) -> http::Request {
+		let mut builder = ::http::Request::builder().uri("http://example.com/");
+		for (k, v) in headers {
+			builder = builder.header(*k, *v);
+		}
+		let mut req = builder.body(crate::http::Body::empty()).expect("request");
+		if let Some(serde_json::Value::Object(claims)) = claims {
+			req.extensions_mut().insert(Claims {
+				inner: claims,
+				jwt: SecretString::new("header.payload.signature".into()),
+			});
+		}
+		req
+	}
+
+	fn session_tags(tags: Vec<AwsSessionTag>) -> AwsSessionTags {
+		AwsSessionTags::try_new(tags).expect("tags should validate")
+	}
+
+	#[test]
+	fn resolves_header_and_jwt_tags_merged_with_static() {
+		let tags = session_tags(vec![
+			tag("Team", Some("acme"), None),
+			tag("App", None, Some(r#"request.headers["x-app"]"#)),
+			tag("User", None, Some("jwt.sub")),
+		]);
+		let req = request(
+			&[("x-app", "invoicer")],
+			Some(serde_json::json!({"sub": "user@example.com"})),
+		);
+		let resolved = tags.resolve(&req).expect("tags should resolve");
+		assert_eq!(
+			resolved.as_ref(),
+			&[
+				("App".to_string(), "invoicer".to_string()),
+				("Team".to_string(), "acme".to_string()),
+				("User".to_string(), "user@example.com".to_string()),
+			]
+		);
+	}
+
+	#[test]
+	fn stringifies_numeric_claims() {
+		let tags = session_tags(vec![tag("OrgId", None, Some("jwt.org_id"))]);
+		let req = request(&[], Some(serde_json::json!({"org_id": 42})));
+		let resolved = tags.resolve(&req).expect("tags should resolve");
+		assert_eq!(
+			resolved.as_ref(),
+			&[("OrgId".to_string(), "42".to_string())]
+		);
+	}
+
+	#[test]
+	fn missing_header_fails_closed() {
+		let tags = session_tags(vec![tag("App", None, Some(r#"request.headers["x-app"]"#))]);
+		let err = tags.resolve(&request(&[], None)).expect_err("should fail");
+		assert!(
+			err.to_string().contains("App"),
+			"error names the tag: {err}"
+		);
+	}
+
+	#[test]
+	fn empty_value_fails_closed() {
+		let tags = session_tags(vec![tag("App", None, Some(r#"request.headers["x-app"]"#))]);
+		let err = tags
+			.resolve(&request(&[("x-app", "")], None))
+			.expect_err("should fail");
+		assert!(err.to_string().contains("empty"), "got: {err}");
+	}
+
+	#[test]
+	fn invalid_charset_fails_closed() {
+		let tags = session_tags(vec![tag("App", None, Some(r#"request.headers["x-app"]"#))]);
+		let err = tags
+			.resolve(&request(&[("x-app", "a,b")], None))
+			.expect_err("should fail");
+		assert!(
+			err.to_string().contains("STS does not accept"),
+			"got: {err}"
+		);
+	}
+
+	#[test]
+	fn oversized_value_fails_closed() {
+		let tags = session_tags(vec![tag("App", None, Some(r#"request.headers["x-app"]"#))]);
+		let long = "a".repeat(MAX_SESSION_TAG_VALUE_LEN + 1);
+		let err = tags
+			.resolve(&request(&[("x-app", long.as_str())], None))
+			.expect_err("should fail");
+		assert!(err.to_string().contains("exceeds"), "got: {err}");
+	}
+
+	#[tokio::test]
+	async fn sign_request_fails_closed_when_dynamic_tag_cannot_resolve() {
+		let auth = AwsAuth::Implicit {
+			service_name: None,
+			assume_role: Some(AwsAssumeRole {
+				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+				session_name: None,
+				tags: session_tags(vec![tag("App", None, Some(r#"request.headers["x-app"]"#))]),
+			}),
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
+		};
+		// No x-app header: resolution fails before any credential loading or STS call.
+		let mut req = request(&[], None);
+		let err = sign_request(&mut req, &auth)
+			.await
+			.expect_err("must reject the request rather than sign it unattributed");
+		assert!(
+			err.to_string().contains("App"),
+			"error names the tag: {err}"
+		);
+	}
+
+	#[tokio::test]
+	async fn sign_request_fails_closed_when_expression_did_not_compile() {
+		// xds compiles expressions permissively: a bad expression becomes one that
+		// always fails at evaluation, so only requests hitting this tag fail.
+		let (expression, err) = cel::Expression::new_permissive("this is not cel (");
+		assert!(err.is_some(), "expression should fail to compile");
+		let auth = AwsAuth::Implicit {
+			service_name: None,
+			assume_role: Some(AwsAssumeRole {
+				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+				session_name: None,
+				tags: AwsSessionTags::try_new(vec![AwsSessionTag {
+					key: "App".to_string(),
+					value: None,
+					expression: Some(Arc::new(expression)),
+				}])
+				.expect("permissive expression should pass config validation"),
+			}),
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
+		};
+		let mut req = request(&[("x-app", "invoicer")], None);
+		let err = sign_request(&mut req, &auth)
+			.await
+			.expect_err("uncompilable expression must fail the request");
+		assert!(
+			err.to_string().contains("App"),
+			"error names the tag: {err}"
+		);
+	}
+}
+
+#[cfg(test)]
+mod assume_role_cache_tests {
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	use super::*;
+
+	fn creds(expires_in: Option<Duration>) -> Credentials {
+		Credentials::new(
+			"AKID",
+			"SECRET",
+			None,
+			expires_in.map(|ttl| SystemTime::now() + ttl),
+			"test",
+		)
+	}
+
+	fn key(role: &str, tags: &[(&str, &str)]) -> AssumeRoleCacheKey {
+		AssumeRoleCacheKey {
+			role_arn: format!("arn:aws:iam::123456789012:role/{role}"),
+			resolved_sts_region: "us-east-1".to_string(),
+			session_name: None,
+			tags: tags
+				.iter()
+				.map(|(k, v)| (k.to_string(), v.to_string()))
+				.collect(),
+		}
+	}
+
+	async fn fetch(
+		cache: &AwsAssumeRoleCache,
+		key: AssumeRoleCacheKey,
+		calls: &AtomicUsize,
+		expires_in: Option<Duration>,
+	) -> anyhow::Result<Credentials> {
+		cache
+			.get_or_fetch(key, || {
+				calls.fetch_add(1, Ordering::Relaxed);
+				std::future::ready(Ok(creds(expires_in)))
+			})
+			.await
+	}
+
+	#[tokio::test]
+	async fn same_key_fetches_once() {
+		let cache = AwsAssumeRoleCache::default();
+		let calls = AtomicUsize::new(0);
+		let k = key("backend", &[("User", "alice")]);
+		fetch(&cache, k.clone(), &calls, None).await.unwrap();
+		fetch(&cache, k, &calls, None).await.unwrap();
+		assert_eq!(calls.load(Ordering::Relaxed), 1);
+	}
+
+	#[tokio::test]
+	async fn distinct_tag_values_fetch_separately() {
+		let cache = AwsAssumeRoleCache::default();
+		let calls = AtomicUsize::new(0);
+		fetch(&cache, key("backend", &[("User", "alice")]), &calls, None)
+			.await
+			.unwrap();
+		fetch(&cache, key("backend", &[("User", "bob")]), &calls, None)
+			.await
+			.unwrap();
+		assert_eq!(calls.load(Ordering::Relaxed), 2);
+	}
+
+	#[tokio::test]
+	async fn concurrent_requests_for_same_key_are_single_flight() {
+		let cache = AwsAssumeRoleCache::default();
+		let calls = AtomicUsize::new(0);
+		let k = key("backend", &[("User", "alice")]);
+		let slow_fetch = || async {
+			let n = calls.fetch_add(1, Ordering::Relaxed);
+			tokio::time::sleep(Duration::from_millis(50)).await;
+			assert_eq!(n, 0, "only one concurrent fetch should run");
+			Ok(creds(None))
+		};
+		let (a, b) = tokio::join!(
+			cache.get_or_fetch(k.clone(), slow_fetch),
+			cache.get_or_fetch(k, slow_fetch),
+		);
+		a.unwrap();
+		b.unwrap();
+		assert_eq!(calls.load(Ordering::Relaxed), 1);
+	}
+
+	#[tokio::test]
+	async fn near_expiry_credentials_are_not_cached() {
+		let cache = AwsAssumeRoleCache::default();
+		let calls = AtomicUsize::new(0);
+		let k = key("backend", &[]);
+		// Within the refresh buffer: usable for this request, but not worth caching.
+		let ttl = Some(ASSUMED_CREDENTIAL_REFRESH_BUFFER / 2);
+		fetch(&cache, k.clone(), &calls, ttl).await.unwrap();
+		fetch(&cache, k, &calls, ttl).await.unwrap();
+		assert_eq!(calls.load(Ordering::Relaxed), 2);
+	}
+
+	#[tokio::test]
+	async fn fetch_errors_are_not_cached() {
+		let cache = AwsAssumeRoleCache::default();
+		let calls = AtomicUsize::new(0);
+		let k = key("backend", &[]);
+		let err = cache
+			.get_or_fetch(k.clone(), || {
+				calls.fetch_add(1, Ordering::Relaxed);
+				std::future::ready(Err(anyhow::anyhow!("sts unavailable")))
+			})
+			.await;
+		assert!(err.is_err());
+		fetch(&cache, k, &calls, None).await.unwrap();
+		assert_eq!(calls.load(Ordering::Relaxed), 2);
 	}
 }

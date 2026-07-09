@@ -3076,7 +3076,7 @@
           ]
         },
         "tags": {
-          "description": "Session tags passed to STS AssumeRole for cost attribution. Once activated as\ncost allocation tags, each tag surfaces in the AWS Cost & Usage Report under\n`resourceTags/user:TagKey`.",
+          "description": "Session tags passed to STS AssumeRole for cost attribution. Once activated as\ncost allocation tags, each tag surfaces in the AWS Cost & Usage Report under\n`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL\nexpression evaluated against each request (`expression`).",
           "type": "array",
           "items": {
             "$ref": "#/$defs/AwsSessionTag"
@@ -3089,7 +3089,7 @@
       ]
     },
     "AwsSessionTag": {
-      "description": "An AWS STS session tag: a key/value pair passed to AssumeRole for cost attribution.",
+      "description": "An AWS STS session tag passed to AssumeRole for cost attribution.\nExactly one of `value` and `expression` must be set.",
       "type": "object",
       "properties": {
         "key": {
@@ -3097,14 +3097,27 @@
           "type": "string"
         },
         "value": {
-          "description": "Tag value.",
-          "type": "string"
+          "description": "Static tag value.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against each request to produce the tag value, for\nexample `jwt.sub` or `request.headers[\"x-app\"]`. If the expression does not\nproduce a valid tag value at request time, the request is rejected.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
-        "key",
-        "value"
+        "key"
       ]
     },
     "AzureAuth": {
