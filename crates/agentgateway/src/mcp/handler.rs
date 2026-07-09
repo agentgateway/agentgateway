@@ -5,9 +5,10 @@ use std::sync::Arc;
 use agent_core::prelude::AssertSize;
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
-use http::request::Parts;
 use http::StatusCode;
+use http::request::Parts;
 use itertools::Itertools;
+use rmcp::ErrorData;
 use rmcp::model::{
 	CacheScope, ClientNotification, ClientRequest, DiscoverResult, Implementation,
 	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
@@ -15,18 +16,17 @@ use rmcp::model::{
 	ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerResult,
 	SubscriptionsListenResult,
 };
-use rmcp::ErrorData;
 use tracing::{debug, warn};
 
-use crate::http::sessionpersistence::MCPSession;
 use crate::http::Response;
+use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{mergestream, rbac, upstream, ClientError, FailureMode, MCPInfo};
+use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 
