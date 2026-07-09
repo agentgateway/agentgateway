@@ -3,23 +3,22 @@
 # Context-compression example.
 #
 # Run a compression engine alongside the gateway to shrink request messages before they
-# reach the LLM. Any service implementing the gateway compression API works; this example
+# reach the LLM. Any service implementing Headroom's /v1/compress API works; this example
 # uses Headroom (https://github.com/headroomlabs-ai/headroom):
 #
 #   headroom proxy --port 8787 --mode cache
 #
-# The gateway POSTs each request's messages to the engine's /v1/compress endpoint (a
-# message-processor webhook) and applies the messages it returns. If the engine is
-# unreachable, `failureMode: failOpen` (the default) forwards the original request unchanged.
+# The gateway POSTs each request's messages to the engine's /v1/compress endpoint and
+# applies the messages it returns. If the engine is unreachable, `failureMode: failOpen`
+# (the default) forwards the original request unchanged.
 #
-# This uses the `llm` server form (default port 4000), which matches the Claude Code
-# integration guide: https://agentgateway.dev/docs/standalone/main/integrations/llm-clients/claude-code/
+# This uses the `llm` server form (default port 4000).
 llm:
   models:
   - name: "*"
-    provider: anthropic
+    provider: openAI
     params:
-      apiKey: "$ANTHROPIC_API_KEY"
+      apiKey: "$OPENAI_API_KEY"
     contextCompression:
       target:
         host: 127.0.0.1:8787

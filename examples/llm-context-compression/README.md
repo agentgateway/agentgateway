@@ -15,7 +15,7 @@ For each compressible request, the gateway sends the request's raw provider-nati
 POST /v1/compress
 Content-Type: application/json
 
-{ "messages": [ ...provider-native message objects... ], "model": "claude-sonnet-4-5" }
+{ "messages": [ ...provider-native message objects... ], "model": "gpt-4o" }
 ```
 
 `messages` is the request's native message array, forwarded verbatim — provider-specific
@@ -54,35 +54,36 @@ Or, you can use docker compose `docker compose -f examples/llm-context-compressi
 Then run the gateway:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
 cargo run -- -f examples/llm-context-compression/config.yaml
 ```
 
 ### Sending a request
 
 Compression only helps when there is enough context to compress; requests below
-`minSizeBytes` (default 16KiB) skip the engine entirely. Embed a large context block:
+`minSizeBytes` (default 16KiB) skip the engine entirely. `gen-context.sh` emits a large
+synthetic reference document to stdout, so you can feed it straight into the request with
+process substitution — no file needed:
 
 ```bash
-curl http://localhost:4000/v1/messages \
-  -H "Content-Type: application/json" \
-  -H "anthropic-version: 2023-06-01" \
-  -d "$(jq -n --rawfile ctx some-large-file.txt '{
-    model: "claude-sonnet-4-5",
-    max_tokens: 200,
+jq -n --rawfile ctx <(examples/llm-context-compression/gen-context.sh) '{
+    model: "gpt-4o",
     messages: [{
       role: "user",
       content: ("Here is some reference material:\n\n" + $ctx + "\n\nWhat are the key takeaways?")
     }]
-  }')"
+  }' | curl http://localhost:4000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d "@-"
 ```
 
 ### Prompt caching: compression can cost more than it saves
 
-On providers with prompt caching (Anthropic), cache reads are ~10x cheaper than fresh
-input. A compressor whose output for a given message changes as the conversation grows
-(position-dependent compression) rewrites the cached prefix on every turn — busting the
-cache usually costs more than compression saves.
+On providers with prompt caching — OpenAI (automatic, prefix-based) and Anthropic (explicit
+`cache_control` markers) — cache reads are far cheaper than fresh input. A compressor whose
+output for a given message changes as the conversation grows (position-dependent compression)
+rewrites the cached prefix on every turn — busting the cache usually costs more than
+compression saves.
 
 Only run engines in a deterministic, prefix-stable mode against cached providers. For
 Headroom that is cache-stable configuration:

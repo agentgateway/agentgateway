@@ -2,10 +2,11 @@
 //!
 //! Compression is one use of the shared message-processor callout (see [`super::webhook`]).
 //! It sends the request's raw provider-native messages to an external service and applies the
-//! messages the service returns. The wire contract is the same `{body:{messages}}` request /
-//! `{action}` response envelope the guardrail webhook uses; compression simply runs at a
-//! different point in the pipeline (after prompt guards, before token counting), defaults to
-//! failing open, and skips small requests.
+//! messages the service returns. The on-the-wire shape is Headroom's flat `POST /v1/compress`
+//! contract (`{messages, model}` request, `{messages, ...telemetry}` response) —
+//! [`webhook::WireFormat::Compress`] — but it shares the guardrail webhook's transport and
+//! validation. Compression runs at a different point in the pipeline (after prompt guards,
+//! before token counting), defaults to failing open, and skips small requests.
 //!
 //! Compression always operates on raw messages — anything less would corrupt tool calls and
 //! cache markers — so it has no message-format knob.
@@ -49,8 +50,8 @@ pub struct ContextCompression {
 	/// Defaults to `failOpen` (forward the original request unchanged).
 	#[serde(default = "default_failure_mode")]
 	pub failure_mode: FailureMode,
-	/// Minimum serialized size of the message array, in bytes, before compression is attempted.
-	/// Requests below the threshold are forwarded untouched. Defaults to 16384.
+	/// Minimum request body size, in bytes, before compression is attempted. Requests below the
+	/// threshold are forwarded untouched. Defaults to 16384.
 	#[serde(default = "default_min_size_bytes")]
 	pub min_size_bytes: usize,
 }
@@ -74,20 +75,27 @@ impl ContextCompression {
 		req: &mut dyn RequestType,
 		parts: &mut ::http::request::Parts,
 	) -> CompressionOutcome {
+		// Gate on the decoded request body size (recorded at parse time) rather than
+		// re-serializing the parsed messages. This is the whole body, not just the message
+		// array, but it's only a "is there enough to bother compressing" heuristic. A missing
+		// value (0) skips, which is the safe default.
+		let size = parts
+			.extensions
+			.get::<crate::llm::RequestBodyBytes>()
+			.map_or(0, |b| b.0);
+		if size < self.min_size_bytes {
+			debug!(
+				"context compression: request below size threshold ({size} < {}); skipping",
+				self.min_size_bytes
+			);
+			return CompressionOutcome::Skipped;
+		}
+
 		// Formats without a message array (embeddings, rerank, detect, ...) are not compressible.
 		let Some(original) = req.raw_messages() else {
 			debug!("context compression: request format has no message array; skipping");
 			return CompressionOutcome::Skipped;
 		};
-
-		let size = serialized_size(&original);
-		if size < self.min_size_bytes {
-			debug!(
-				"context compression: messages below size threshold ({size} < {}); skipping",
-				self.min_size_bytes
-			);
-			return CompressionOutcome::Skipped;
-		}
 
 		let model = req.model();
 		let client = PolicyClient::new(backend_info.inputs.clone());
@@ -157,22 +165,4 @@ fn reject_response(body: &str, status_code: u16) -> Response {
 				.body(http::Body::from("context compression failed"))
 				.expect("static response should build")
 		})
-}
-
-/// Serialized byte size of the message array without allocating the serialized form.
-fn serialized_size(messages: &[serde_json::Value]) -> usize {
-	struct Counter(usize);
-	impl std::io::Write for Counter {
-		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-			self.0 += buf.len();
-			Ok(buf.len())
-		}
-		fn flush(&mut self) -> std::io::Result<()> {
-			Ok(())
-		}
-	}
-	let mut counter = Counter(0);
-	// Serialization of a Vec<Value> is infallible into an in-memory writer.
-	let _ = serde_json::to_writer(&mut counter, messages);
-	counter.0
 }

@@ -4862,7 +4862,7 @@
           "default": "failOpen"
         },
         "minSizeBytes": {
-          "description": "Minimum serialized size of the message array, in bytes, before compression is attempted.\nRequests below the threshold are forwarded untouched. Defaults to 16384.",
+          "description": "Minimum request body size, in bytes, before compression is attempted. Requests below the\nthreshold are forwarded untouched. Defaults to 16384.",
           "type": "integer",
           "format": "uint",
           "minimum": 0,

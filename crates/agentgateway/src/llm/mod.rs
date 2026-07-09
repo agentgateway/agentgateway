@@ -671,6 +671,11 @@ pub enum RequestResult {
 	Rejected(Response),
 }
 
+/// Byte length of the decoded (plaintext) request body, before deserialization. Stashed on the
+/// request extensions so size-based policy gates avoid re-serializing the parsed request.
+#[derive(Copy, Clone)]
+pub(crate) struct RequestBodyBytes(pub usize);
+
 enum PreparedRequest {
 	Ready {
 		llm_info: LLMRequest,
@@ -2319,6 +2324,9 @@ impl AIProvider {
 			parts.headers.remove(header::CONTENT_ENCODING);
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}
+		// Record the decoded body size so size-based policy gates (e.g. context compression)
+		// can use it without re-serializing the parsed request.
+		parts.extensions.insert(RequestBodyBytes(bytes.len()));
 
 		if self.override_model().is_none()
 			&& types::detect::extract_model_from_path(parts.uri.path()).is_none()
