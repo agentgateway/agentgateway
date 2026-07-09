@@ -89,6 +89,7 @@ impl ContextCompression {
 			return CompressionOutcome::Skipped;
 		}
 
+		let model = req.model();
 		let client = PolicyClient::new(backend_info.inputs.clone());
 		let headers = Policy::get_webhook_forward_headers(&parts.headers, &self.forward_header_matches);
 		let buffer_limit = parts
@@ -101,7 +102,9 @@ impl ContextCompression {
 			&self.path,
 			&headers,
 			OutboundCallSubtype::Compression,
+			webhook::WireFormat::Compress,
 			&original,
+			model.as_deref(),
 			buffer_limit,
 		)
 		.await;

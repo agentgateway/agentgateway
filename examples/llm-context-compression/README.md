@@ -3,9 +3,9 @@
 This example shows how to shrink LLM request context through an external compression
 engine before it reaches the provider, reducing token spend on long-context requests.
 
-Compression is one use of the gateway's **message-processor webhook** contract — the same
-callout the guardrail webhook uses. Any service implementing it can be plugged in.
-[Headroom](https://github.com/headroomlabs-ai/headroom) is used as the reference engine here.
+Compression calls an external service that speaks
+[Headroom's](https://github.com/headroomlabs-ai/headroom) `POST /v1/compress` API. Any
+service implementing that shape can be plugged in.
 
 ### Wire contract
 
@@ -15,28 +15,31 @@ For each compressible request, the gateway sends the request's raw provider-nati
 POST /v1/compress
 Content-Type: application/json
 
-{ "body": { "messages": [ ...provider-native message objects... ] } }
+{ "messages": [ ...provider-native message objects... ], "model": "claude-sonnet-4-5" }
 ```
 
 `messages` is the request's native message array, forwarded verbatim — provider-specific
 blocks (`cache_control`, images, tool calls) survive the round-trip. The system prompt is
-*not* included: it is the stable prefix that prompt-cache reuse depends on.
+*not* included: it is the stable prefix that prompt-cache reuse depends on. `model` is a
+tokenizer/context-window hint.
 
-The engine responds `200` with an action envelope. To apply compressed messages, return a
-`mask` action carrying the replacement array:
+The service responds `200` with the compressed array (plus optional telemetry, which the
+gateway ignores):
 
 ```
-{ "action": { "body": { "messages": [ ...compressed message objects... ] } } }
+{ "messages": [ ...compressed message objects... ], "tokens_saved": 11500 }
 ```
 
-Return `{ "action": { "reason": "..." } }` (a pass action) to leave the request unchanged.
-
-Any non-200 status, malformed body, or output that breaks the request's tool-call pairing
-is treated as an engine failure and resolved per `failureMode` (default `failOpen`: the
-original request is forwarded unchanged).
+Any non-200 status, a response without a `messages` array, or output that breaks the
+request's tool-call pairing is treated as a failure and resolved per `failureMode`
+(default `failOpen`: the original request is forwarded unchanged).
 
 The gateway compresses after prompt guards run (guards see the original content) and
 before token counting (rate limits and cost reflect what is actually sent).
+
+Under the hood this reuses the gateway's shared message-processor callout (the same
+transport and validation as the guardrail webhook); only the on-the-wire request/response
+shape differs, and that is fixed internally per policy type — there is nothing to configure.
 
 ### Running the example
 

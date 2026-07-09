@@ -195,10 +195,8 @@ pub async fn send_response(
 	Ok(parsed)
 }
 
-/// The action a message-processor callout asks the gateway to take. This is the shared,
-/// format-agnostic result of the `{action: ...}` envelope, used by both guardrail webhooks
-/// and context compression. Message payloads are raw JSON so full fidelity is preserved for
-/// callers that need it; simplified callers convert at the edge.
+/// The action a message-processor callout asks the gateway to take. Shared result type across
+/// wire formats; a given wire may only produce a subset (the compress wire only ever replaces).
 pub enum ProcessorOutcome {
 	/// Leave the request unchanged.
 	Pass,
@@ -208,19 +206,44 @@ pub enum ProcessorOutcome {
 	Reject { body: String, status_code: u16 },
 }
 
-/// Call a message-processor endpoint with the request messages and parse the `{action}`
-/// envelope. `messages` are sent verbatim in the `body.messages` array, so callers control
-/// fidelity (simplified `{role, content}` objects or raw provider-native objects).
+/// On-the-wire request/response shape of a message-processor callout. Internal — chosen by the
+/// call site (guardrail vs compression), never user-configured, because it's fixed by the kind
+/// of server being called.
+#[derive(Clone, Copy)]
+pub enum WireFormat {
+	/// Guardrail webhook: `{body:{messages}}` request, `{action:{...}}` response
+	/// (pass / mask / reject).
+	Guardrail,
+	/// Flat compress transform, matching Headroom's `POST /v1/compress`: `{messages, model}`
+	/// request, `{messages, ...telemetry}` response. A pure transform — always replaces.
+	Compress,
+}
+
+/// Call a message-processor endpoint and parse the response into a [`ProcessorOutcome`]. The
+/// transport (backend resolution, buffering, status handling) is shared; `wire` selects the
+/// request body and response parser. `messages` are sent verbatim, so callers control fidelity.
+#[allow(clippy::too_many_arguments)]
 pub async fn call_processor(
 	client: &PolicyClient,
 	target: &SimpleBackendReference,
 	path: &str,
 	http_headers: &HeaderMap,
 	subtype: OutboundCallSubtype,
+	wire: WireFormat,
 	messages: &[serde_json::Value],
+	model: Option<&str>,
 	buffer_limit: Option<crate::transport::BufferLimit>,
 ) -> anyhow::Result<ProcessorOutcome> {
-	let body = serde_json::json!({ "body": { "messages": messages } });
+	let body = match wire {
+		WireFormat::Guardrail => serde_json::json!({ "body": { "messages": messages } }),
+		WireFormat::Compress => {
+			let mut body = serde_json::json!({ "messages": messages });
+			if let Some(model) = model {
+				body["model"] = serde_json::Value::String(model.to_string());
+			}
+			body
+		},
+	};
 	// build_request prepends "/", so normalize whether callers pass "request" or "/v1/compress".
 	let path = path.trim_start_matches('/');
 	let mut req = with_default_timeout(build_request(&body, path, http_headers)?);
@@ -242,7 +265,20 @@ pub async fn call_processor(
 		anyhow::bail!("message processor returned status {status}");
 	}
 	let v: serde_json::Value = serde_json::from_slice(&raw)?;
-	Ok(parse_processor_action(&v))
+	match wire {
+		WireFormat::Guardrail => Ok(parse_processor_action(&v)),
+		WireFormat::Compress => parse_compress_response(&v),
+	}
+}
+
+/// Parse a flat compress response (`{messages, ...telemetry}`). Headroom always returns the
+/// (possibly rewritten) message array, so this is always a `Replace`.
+fn parse_compress_response(v: &serde_json::Value) -> anyhow::Result<ProcessorOutcome> {
+	let messages = v
+		.get("messages")
+		.and_then(|m| m.as_array())
+		.ok_or_else(|| anyhow::anyhow!("compress response missing `messages` array"))?;
+	Ok(ProcessorOutcome::Replace(messages.clone()))
 }
 
 /// Interpret the `{action: ...}` envelope. Mirrors the precedence of the untagged
@@ -411,5 +447,14 @@ mod processor_tests {
 		));
 		let pass = json!({"action": {"reason": "ok"}});
 		assert!(matches!(parse_processor_action(&pass), ProcessorOutcome::Pass));
+	}
+
+	#[test]
+	fn parse_compress_flat_messages() {
+		// Headroom returns messages + telemetry at the top level; always a Replace.
+		let v = json!({"messages": [{"role": "user", "content": "x"}], "tokens_saved": 42});
+		assert!(matches!(parse_compress_response(&v), Ok(ProcessorOutcome::Replace(m)) if m.len() == 1));
+		// Missing messages array is an error (failure handled by the caller).
+		assert!(parse_compress_response(&json!({"tokens_saved": 0})).is_err());
 	}
 }

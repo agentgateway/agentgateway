@@ -1755,10 +1755,10 @@ mod context_compression {
 	use crate::test_helpers::proxymock::{body_mock, setup_proxy_test};
 	use crate::types::agent::{BackendTarget, SimpleBackendReference};
 
-	// A compression service is a message-processor webhook: it returns the shared `{action}`
-	// envelope. A `mask` action carries the replacement (raw) messages.
-	fn mask_action(messages: serde_json::Value) -> Vec<u8> {
-		serde_json::to_vec(&json!({ "action": { "body": { "messages": messages } } })).unwrap()
+	// A compression service uses the flat Headroom `/v1/compress` wire: it returns the
+	// (rewritten) message array at the top level.
+	fn compress_response(messages: serde_json::Value) -> Vec<u8> {
+		serde_json::to_vec(&json!({ "messages": messages, "tokens_saved": 100 })).unwrap()
 	}
 
 	fn policy(target: Target, failure_mode: FailureMode, min_size_bytes: usize) -> Policy {
@@ -1818,8 +1818,9 @@ mod context_compression {
 	}
 
 	#[tokio::test]
-	async fn replaces_messages_with_mask_action() {
-		let mock = body_mock(&mask_action(json!([{"role": "user", "content": "compressed"}]))).await;
+	async fn replaces_messages_with_compress_response() {
+		let mock =
+			body_mock(&compress_response(json!([{"role": "user", "content": "compressed"}]))).await;
 		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
 
 		let result = process(&policy, messages_request(simple_body()), false)
@@ -1832,8 +1833,9 @@ mod context_compression {
 	}
 
 	#[tokio::test]
-	async fn pass_action_leaves_request_unchanged() {
-		let mock = body_mock(br#"{"action":{"reason":"nothing to compress"}}"#).await;
+	async fn response_without_messages_fails_open() {
+		// A compress response must carry a `messages` array; anything else is an engine error.
+		let mock = body_mock(br#"{"tokens_saved": 0}"#).await;
 		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
 
 		let result = process(&policy, messages_request(simple_body()), false)
@@ -1845,7 +1847,7 @@ mod context_compression {
 
 	#[tokio::test]
 	async fn below_size_threshold_skips() {
-		let mock = body_mock(&mask_action(json!([{"role": "user", "content": "compressed"}]))).await;
+		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "compressed"}]))).await;
 		let policy = policy(
 			Target::Address(*mock.address()),
 			FailureMode::FailOpen,
@@ -1892,7 +1894,7 @@ mod context_compression {
 
 	#[tokio::test]
 	async fn malformed_engine_output_fails_open() {
-		let mock = body_mock(&mask_action(json!(["not an object"]))).await;
+		let mock = body_mock(&compress_response(json!(["not an object"]))).await;
 		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
 		let result = process(&policy, messages_request(simple_body()), false)
 			.await
@@ -1904,7 +1906,7 @@ mod context_compression {
 	#[tokio::test]
 	async fn broken_tool_pairing_fails_open() {
 		// engine drops the tool_result half of an intact pair
-		let mock = body_mock(&mask_action(json!([
+		let mock = body_mock(&compress_response(json!([
 			{"role": "assistant", "content": [{"type": "tool_use", "id": "t1", "name": "f", "input": {}}]}
 		])))
 		.await;
@@ -1928,7 +1930,7 @@ mod context_compression {
 	// Rate limiting and cost accounting must reflect what is actually sent upstream.
 	#[tokio::test]
 	async fn token_counts_reflect_compressed_messages() {
-		let mock = body_mock(&mask_action(json!([{"role": "user", "content": "tiny"}]))).await;
+		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "tiny"}]))).await;
 		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
 
 		let big = "long message content ".repeat(200);
