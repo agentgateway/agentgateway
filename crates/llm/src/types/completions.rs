@@ -249,7 +249,9 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 		.map(|choice| {
 			let mut content = Vec::new();
 
-			if let Some(text) = &choice.message.content && !text.is_empty() {
+			if let Some(text) = &choice.message.content
+				&& !text.is_empty()
+			{
 				content.push(OutputMessagePart::Text { text: text.clone() });
 			}
 

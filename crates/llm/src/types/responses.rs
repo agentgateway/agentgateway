@@ -386,7 +386,9 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 		match item {
 			OutputItem::Message(msg) => {
 				for c in &msg.content {
-					if let Content::OutputText(t) = c && !t.text.is_empty() {
+					if let Content::OutputText(t) = c
+						&& !t.text.is_empty()
+					{
 						content.push(OutputMessagePart::Text {
 							text: t.text.clone(),
 						});
