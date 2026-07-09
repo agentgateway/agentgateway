@@ -261,7 +261,7 @@ pub(crate) struct UpstreamGroup {
 	client: PolicyClient,
 	by_name: IndexMap<Strng, Arc<upstream::Upstream>>,
 
-	// per-target set of capabilities; we record the capabilites from a legacy
+	// per-target set of capabilities; we record the capabilities from a legacy
 	// target's initialize response so a modern client can see them in discover.
 	extensions: RwLock<HashMap<Strng, ExtensionCapabilities>>,
 

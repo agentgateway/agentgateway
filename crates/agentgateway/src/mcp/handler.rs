@@ -62,8 +62,7 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 	}
 }
 
-// TODO should we also rewrite the URL in resources/read response `.contents[].uri`?
-fn rewrite_resource_update_message(
+fn rewrite_resource_messages(
 	default_target_name: Option<&String>,
 	target: &str,
 	mut message: ServerJsonRpcMessage,
@@ -77,6 +76,19 @@ fn rewrite_resource_update_message(
 			target,
 			resource_updated.params.uri.as_str(),
 		);
+	}
+	if let ServerJsonRpcMessage::Response(resp) = &mut message
+		&& let ServerResult::ReadResourceResult(read) = &mut resp.result
+	{
+		for content in &mut read.contents {
+			match content {
+				rmcp::model::ResourceContents::TextResourceContents { uri, .. }
+				| rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => {
+					*uri = resource_uri(default_target_name, target, uri);
+				},
+				_ => {},
+			}
+		}
 	}
 	message
 }
@@ -153,7 +165,7 @@ impl Relay {
 		let default_target_name = self.upstreams.default_target_name.clone();
 		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
-			let message = rewrite_resource_update_message(default_target_name.as_ref(), &target, message);
+			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
 
 			let mut resource_allowed = |uri: &str| {
 				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against

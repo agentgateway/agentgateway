@@ -96,7 +96,7 @@ pub(crate) fn rewrite_tool_list_ui_meta(
 				target,
 				&mut *resource_allowed,
 			) {
-				warn!(%target, tool = %t.name, "stripping denied ui/resourceUri");
+				debug!(%target, tool = %t.name, "stripping denied ui/resourceUri");
 				m.0.remove(UI_FLAT_RESOURCE_URI_KEY);
 			}
 			if m.0.is_empty() {

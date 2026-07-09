@@ -298,10 +298,15 @@ async fn apps_ui_meta_and_resources_multiplexed() {
 		))
 		.await
 		.unwrap();
-	let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read.contents[0] else {
+	let rmcp::model::ResourceContents::TextResourceContents { text, uri, .. } = &read.contents[0]
+	else {
 		panic!("expected text contents, got {:?}", read.contents);
 	};
 	assert_eq!(text, appsmockserver::DASHBOARD_HTML);
+	assert_eq!(
+		uri, "ui://a+apps-mock/dashboard.html",
+		"returned contents uri must stay in the rewritten namespace"
+	);
 
 	// Hostile client URIs are rejected
 	for bad in [
