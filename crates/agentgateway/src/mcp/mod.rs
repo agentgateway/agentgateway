@@ -139,7 +139,7 @@ pub enum Error {
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
 	UpstreamError(Box<SendDirectResponse>),
-	#[error("send error: {}", .1)]
+	#[error("failed to send message: {1}")]
 	SendError(Option<RequestId>, String),
 	/// Server-side availability/capability condition (no upstreams reachable, method unsupported by
 	/// the selected transport). Maps to a JSON-RPC internal error, not invalid-params: the client's
@@ -168,30 +168,6 @@ pub enum Error {
 impl Error {
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
 		let (id, error) = match self {
-			Error::SendError(Some(id), _) => (
-				id.clone(),
-				ErrorData {
-					code: ErrorCode::INTERNAL_ERROR,
-					message: format!("failed to send message: {self}").into(),
-					data: None,
-				},
-			),
-			Error::Unavailable(Some(id), _) => (
-				id.clone(),
-				ErrorData {
-					code: ErrorCode::INTERNAL_ERROR,
-					message: self.to_string().into(),
-					data: None,
-				},
-			),
-			Error::Authorization(id, _, _) => (
-				id.clone(),
-				ErrorData {
-					code: ErrorCode::INVALID_PARAMS,
-					message: self.to_string().into(),
-					data: None,
-				},
-			),
 			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
 			Error::UnsupportedVersion(Some(id), version) => (
 				id.clone(),
@@ -207,47 +183,28 @@ impl Error {
 					})),
 				},
 			),
-			Error::VersionMismatch(Some(id)) => (
-				id.clone(),
-				ErrorData {
-					code: ErrorCode::HEADER_MISMATCH,
-					message: self.to_string().into(),
-					data: None,
-				},
-			),
-			Error::HeaderBodyMismatch(Some(id), _) => (
-				id.clone(),
-				ErrorData {
-					code: ErrorCode::HEADER_MISMATCH,
-					message: self.to_string().into(),
-					data: None,
-				},
-			),
-			Error::InvalidRoutingHeader(Some(id), _) => (
-				id.clone(),
-				ErrorData {
-					code: ErrorCode::HEADER_MISMATCH,
-					message: self.to_string().into(),
-					data: None,
-				},
-			),
-			Error::MethodNotFound(Some(id), _) => (
-				id.clone(),
-				ErrorData {
-					code: ErrorCode::METHOD_NOT_FOUND,
-					message: self.to_string().into(),
-					data: None,
-				},
-			),
-			Error::InvalidParams(Some(id), _) => (
-				id.clone(),
-				ErrorData {
-					code: ErrorCode::INVALID_PARAMS,
-					message: self.to_string().into(),
-					data: None,
-				},
-			),
-			_ => return None,
+			_ => {
+				let (id, code) = match self {
+					Error::SendError(Some(id), _) | Error::Unavailable(Some(id), _) => {
+						(id.clone(), ErrorCode::INTERNAL_ERROR)
+					},
+					Error::Authorization(id, _, _) => (id.clone(), ErrorCode::INVALID_PARAMS),
+					Error::VersionMismatch(Some(id))
+					| Error::HeaderBodyMismatch(Some(id), _)
+					| Error::InvalidRoutingHeader(Some(id), _) => (id.clone(), ErrorCode::HEADER_MISMATCH),
+					Error::MethodNotFound(Some(id), _) => (id.clone(), ErrorCode::METHOD_NOT_FOUND),
+					Error::InvalidParams(Some(id), _) => (id.clone(), ErrorCode::INVALID_PARAMS),
+					_ => return None,
+				};
+				(
+					id,
+					ErrorData {
+						code,
+						message: self.to_string().into(),
+						data: None,
+					},
+				)
+			},
 		};
 
 		serde_json::to_string(&JsonRpcError {

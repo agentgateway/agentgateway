@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use agent_core::strng;
+use futures_util::StreamExt;
 use itertools::Itertools;
 use openapiv3::OpenAPI;
 use rmcp::RoleClient;
@@ -810,6 +811,26 @@ async fn read_response_message(response: reqwest::Response) -> serde_json::Value
 		.filter_map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).ok())
 		.next_back()
 		.unwrap_or_else(|| panic!("SSE stream had no parseable data event: {text}"))
+}
+
+async fn read_first_sse_message(response: reqwest::Response) -> serde_json::Value {
+	let mut stream = response.bytes_stream();
+	let mut text = String::new();
+	loop {
+		let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
+			.await
+			.expect("timed out waiting for SSE data")
+			.expect("SSE stream ended before first data frame")
+			.expect("failed to read SSE chunk");
+		text.push_str(std::str::from_utf8(&chunk).expect("SSE chunk must be UTF-8"));
+		if let Some(frame) = text
+			.lines()
+			.filter_map(|line| line.strip_prefix("data:"))
+			.find_map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).ok())
+		{
+			return frame;
+		}
+	}
 }
 
 // Standard modern `_meta` block (SEP-2575): every modern request must carry these three
@@ -1643,6 +1664,90 @@ async fn authorization_deny_specific_tool_filters_only_that_tool() {
 		"Expected at least 5 tools after denying 1, got {}: {:?}",
 		tool_names.len(),
 		tool_names
+	);
+}
+
+#[tokio::test]
+async fn list_changed_listen_does_not_authorize_empty_tool_name() {
+	let mock = mock_streamable_http_server(true).await;
+
+	let allow_echo_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "echo""#).unwrap(),
+		)],
+		vec![],
+		vec![],
+	)));
+
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(allow_echo_policy)],
+	)
+	.await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let init = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test client",
+				"version": "0.0.1"
+			}
+		}
+	});
+	let init = mcp_json_post(&client, &url, &init)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init
+		.headers()
+		.get("mcp-session-id")
+		.expect("initialize response should include a session id")
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	let listen = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "subscriptions/listen",
+		"params": {
+			"notifications": {
+				"toolsListChanged": true
+			}
+		}
+	});
+	let response = mcp_json_post(&client, &url, &listen)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	assert!(
+		response
+			.headers()
+			.get(reqwest::header::CONTENT_TYPE)
+			.and_then(|value| value.to_str().ok())
+			.is_some_and(|value| value.starts_with("text/event-stream"))
+	);
+
+	let first_frame = read_first_sse_message(response).await;
+	assert_eq!(
+		first_frame["method"],
+		"notifications/subscriptions/acknowledged"
+	);
+	assert_eq!(
+		first_frame["params"]["notifications"]["toolsListChanged"],
+		true
 	);
 }
 
@@ -3217,150 +3322,6 @@ fn empty_mcp_policies() -> crate::mcp::McpAuthorizationSet {
 
 fn empty_cel() -> crate::mcp::rbac::CelExecWrapper {
 	crate::mcp::rbac::CelExecWrapper::new(::http::Request::new(()))
-}
-
-#[test]
-fn list_changed_subscriptions_skip_unauthorized_targets() {
-	let deny_target_b =
-		crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(vec![
-			RuleSet::new(PolicySet::new(
-				vec![],
-				vec![Arc::new(
-					cel::Expression::new_strict(r#"mcp.tool.target == "b""#).unwrap(),
-				)],
-				vec![],
-			)),
-		]));
-	let relay = Relay::new(
-		McpBackendGroup {
-			targets: vec![
-				fake_streamable_target("a", SocketAddr::from(([127, 0, 0, 1], 31041))),
-				fake_streamable_target("b", SocketAddr::from(([127, 0, 0, 1], 31042))),
-			],
-			..Default::default()
-		},
-		deny_target_b,
-		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
-	)
-	.unwrap();
-	let session_manager =
-		super::session::SessionManager::new(http::sessionpersistence::Encoder::base64());
-	let session = session_manager.create_stateless_session(relay);
-	let filter = rmcp::model::SubscriptionFilter::new().with_tools_list_changed(true);
-
-	let filters = session
-		.authorized_list_changed_filters(&filter, &empty_cel())
-		.unwrap();
-	assert_eq!(filters.len(), 1);
-	assert_eq!(filters[0].0, "a");
-	assert_eq!(filters[0].1.tools_list_changed, Some(true));
-}
-
-#[test]
-fn list_changed_subscriptions_drop_unauthorized_categories_per_target() {
-	let deny_prompts =
-		crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(vec![
-			RuleSet::new(PolicySet::new(
-				vec![],
-				vec![Arc::new(
-					cel::Expression::new_strict(r#"mcp.prompt.target == "a""#).unwrap(),
-				)],
-				vec![],
-			)),
-		]));
-	let relay = Relay::new(
-		McpBackendGroup {
-			targets: vec![fake_streamable_target(
-				"a",
-				SocketAddr::from(([127, 0, 0, 1], 31043)),
-			)],
-			..Default::default()
-		},
-		deny_prompts,
-		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
-	)
-	.unwrap();
-	let session_manager =
-		super::session::SessionManager::new(http::sessionpersistence::Encoder::base64());
-	let session = session_manager.create_stateless_session(relay);
-	let filter = rmcp::model::SubscriptionFilter::new()
-		.with_tools_list_changed(true)
-		.with_prompts_list_changed(true);
-
-	let filters = session
-		.authorized_list_changed_filters(&filter, &empty_cel())
-		.unwrap();
-	assert_eq!(filters.len(), 1);
-	assert_eq!(filters[0].0, "a");
-	assert_eq!(filters[0].1.tools_list_changed, Some(true));
-	assert_eq!(filters[0].1.prompts_list_changed, None);
-	// The ack echoes this union, so it must not claim the stripped category.
-	let granted = super::subscriptions::union_list_changed(&filters);
-	assert_eq!(granted.tools_list_changed, Some(true));
-	assert_eq!(granted.prompts_list_changed, None);
-}
-
-#[test]
-fn list_changed_subscriptions_all_denied_returns_authorization() {
-	let deny_tools =
-		crate::mcp::McpAuthorizationSet::new(crate::http::authorization::RuleSets::from(vec![
-			RuleSet::new(PolicySet::new(
-				vec![],
-				vec![Arc::new(
-					cel::Expression::new_strict(r#"mcp.tool.target == "a""#).unwrap(),
-				)],
-				vec![],
-			)),
-		]));
-	let relay = Relay::new(
-		McpBackendGroup {
-			targets: vec![fake_streamable_target(
-				"a",
-				SocketAddr::from(([127, 0, 0, 1], 31044)),
-			)],
-			..Default::default()
-		},
-		deny_tools,
-		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
-	)
-	.unwrap();
-	let session_manager =
-		super::session::SessionManager::new(http::sessionpersistence::Encoder::base64());
-	let session = session_manager.create_stateless_session(relay);
-	let filter = rmcp::model::SubscriptionFilter::new().with_tools_list_changed(true);
-
-	assert!(matches!(
-		session.authorized_list_changed_filters(&filter, &empty_cel()),
-		Err(crate::mcp::upstream::UpstreamError::Authorization {
-			resource_type,
-			resource_name,
-		}) if resource_type == "subscription" && resource_name == "list_changed"
-	));
-}
-
-#[test]
-fn list_changed_subscriptions_zero_targets_is_not_an_authorization_denial() {
-	// A zero-target failOpen backend has nothing to evaluate; the empty result must flow to
-	// the fanout's availability error, not masquerade as an RBAC denial.
-	let relay = Relay::new(
-		McpBackendGroup {
-			targets: vec![],
-			failure_mode: FailureMode::FailOpen,
-			..Default::default()
-		},
-		empty_mcp_policies(),
-		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
-	)
-	.unwrap();
-	let session_manager =
-		super::session::SessionManager::new(http::sessionpersistence::Encoder::base64());
-	let session = session_manager.create_stateless_session(relay);
-	let filter = rmcp::model::SubscriptionFilter::new().with_tools_list_changed(true);
-
-	let filters = session
-		.authorized_list_changed_filters(&filter, &empty_cel())
-		.unwrap();
-	assert!(filters.is_empty());
 }
 
 fn persisted_session(

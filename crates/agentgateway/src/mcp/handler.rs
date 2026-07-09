@@ -668,22 +668,14 @@ impl Relay {
 		r: JsonRpcRequest<ClientRequest>,
 		mut ctx: IncomingRequestContext,
 		client_filter: SubscriptionFilter,
-		target_filters: Vec<(String, SubscriptionFilter)>,
+		upstream_filter: SubscriptionFilter,
+		targets: Option<Vec<String>>,
 	) -> Result<Response, UpstreamError> {
 		use super::subscriptions::{
 			assemble_listen_stream, filter_and_tag_listen_notification, synthesize_listen_ack,
 		};
 		let id = r.id.clone();
-		let target_names = target_filters
-			.iter()
-			.map(|(target, _)| target.clone())
-			.collect::<Vec<_>>();
-		let mut target_filters = target_filters
-			.into_iter()
-			.collect::<HashMap<String, SubscriptionFilter>>();
-		let (streams, service_names) = self
-			.fanout_open_streams(&r, &mut ctx, Some(target_names))
-			.await?;
+		let (streams, service_names) = self.fanout_open_streams(&r, &mut ctx, targets).await?;
 
 		// Frame 0 is the gateway ack; upstream pipelines only forward matching notifications.
 		let ack = synthesize_listen_ack(id.clone(), client_filter);
@@ -691,11 +683,7 @@ impl Relay {
 			.into_iter()
 			.map(|(name, s)| {
 				let target = name.to_string();
-				let filter = target_filters.remove(&target).unwrap_or_else(|| {
-					// Fanout targets come from the filter keys; an empty filter matches nothing.
-					warn!("listen target '{target}' missing from authorized filters, failing closed");
-					SubscriptionFilter::new()
-				});
+				let filter = upstream_filter.clone();
 				let sub_id = id.clone();
 				let default_target_name = self.upstreams.default_target_name.clone();
 				s.filter_map_messages_result(move |msg| {

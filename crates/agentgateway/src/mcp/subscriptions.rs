@@ -18,8 +18,7 @@ use crate::mcp::{ClientError, FailureMode};
 /// Their serializer emits `{"method": ...}` only and drops extension `_meta`.
 /// `CustomNotification` serializes extension `Meta` into `params._meta`, which is what
 /// `ServerTagsSubscriptionId` checks for on every frame.
-/// Parameterized notifications like `ResourceUpdated` round-trip `_meta` through extensions, so
-/// they are tagged in place.
+/// `ResourceUpdated` round-trips `_meta` through extensions, so it is tagged in place.
 ///
 /// TODO(rmcp fork): `NotificationNoParam::{serialize,deserialize}` (serde_impl.rs) drop
 /// `params._meta`. The fork should emit `params: {"_meta": ...}` when extensions carry
@@ -29,38 +28,62 @@ use crate::mcp::{ClientError, FailureMode};
 fn tag_listen_notification(
 	message: ServerJsonRpcMessage,
 	subscription_id: &RequestId,
-) -> ServerJsonRpcMessage {
+) -> Option<ServerJsonRpcMessage> {
 	use rmcp::model::{
 		ConstString, PromptListChangedNotificationMethod, ResourceListChangedNotificationMethod,
 		ToolListChangedNotificationMethod,
 	};
 	let ServerJsonRpcMessage::Notification(mut jn) = message else {
-		return message;
+		return Some(message);
 	};
-	let custom_method = match &jn.notification {
-		ServerNotification::ToolListChangedNotification(_) => {
-			Some(ToolListChangedNotificationMethod::VALUE)
+	let replacement = match &mut jn.notification {
+		ServerNotification::ResourceUpdatedNotification(_)
+		| ServerNotification::CustomNotification(_) => {
+			jn.notification
+				.get_meta_mut()
+				.set_subscription_id(subscription_id.clone());
+			None
 		},
-		ServerNotification::PromptListChangedNotification(_) => {
-			Some(PromptListChangedNotificationMethod::VALUE)
+		ServerNotification::ToolListChangedNotification(_) => Some(custom_tagged_notification(
+			ToolListChangedNotificationMethod::VALUE,
+			None,
+			subscription_id,
+		)),
+		ServerNotification::PromptListChangedNotification(_) => Some(custom_tagged_notification(
+			PromptListChangedNotificationMethod::VALUE,
+			None,
+			subscription_id,
+		)),
+		ServerNotification::ResourceListChangedNotification(_) => Some(custom_tagged_notification(
+			ResourceListChangedNotificationMethod::VALUE,
+			None,
+			subscription_id,
+		)),
+		_ => {
+			debug_assert!(
+				false,
+				"subscriptions/listen forwarded an unhandled notification type"
+			);
+			warn!("dropping unhandled subscriptions/listen notification");
+			return None;
 		},
-		ServerNotification::ResourceListChangedNotification(_) => {
-			Some(ResourceListChangedNotificationMethod::VALUE)
-		},
-		_ => None,
 	};
-	if let Some(method) = custom_method {
-		let mut custom = CustomNotification::new(method, None);
-		custom
-			.get_meta_mut()
-			.set_subscription_id(subscription_id.clone());
-		jn.notification = ServerNotification::CustomNotification(custom);
-	} else {
-		jn.notification
-			.get_meta_mut()
-			.set_subscription_id(subscription_id.clone());
+	if let Some(notification) = replacement {
+		jn.notification = notification;
 	}
-	ServerJsonRpcMessage::Notification(jn)
+	Some(ServerJsonRpcMessage::Notification(jn))
+}
+
+fn custom_tagged_notification(
+	method: impl Into<String>,
+	params: Option<serde_json::Value>,
+	subscription_id: &RequestId,
+) -> ServerNotification {
+	let mut custom = CustomNotification::new(method, params);
+	custom
+		.get_meta_mut()
+		.set_subscription_id(subscription_id.clone());
+	ServerNotification::CustomNotification(custom)
 }
 
 /// Filters one upstream listen stream and tags the notifications forwarded to the client.
@@ -105,50 +128,7 @@ pub(super) fn filter_and_tag_listen_notification(
 		return None;
 	}
 	let message = rewrite_resource_update_message(default_target_name, target, message);
-	Some(Ok(tag_listen_notification(message, subscription_id)))
-}
-
-pub(super) fn validate_listen_filter(filter: &mut SubscriptionFilter) -> Result<(), &'static str> {
-	if filter
-		.resource_subscriptions
-		.as_ref()
-		.is_some_and(Vec::is_empty)
-	{
-		filter.resource_subscriptions = None;
-	}
-	// Normalized above: Some(resource_subscriptions) is non-empty.
-	let has_uris = filter.resource_subscriptions.is_some();
-	if !wants_list_changed(filter) && !has_uris {
-		return Err("subscriptions/listen requires at least one notification filter");
-	}
-	// resourceSubscriptions targets a single upstream, but list-changed flags are gateway-wide.
-	// Serving both in one listen would either scope the whole fanout to that one upstream
-	// (dropping the others' list-changed) or leak the target's URIs to every upstream.
-	if has_uris && wants_list_changed(filter) {
-		return Err(
-			"subscriptions/listen cannot combine resourceSubscriptions with list-changed flags; open a separate listen stream for each",
-		);
-	}
-	Ok(())
-}
-
-pub(super) fn wants_list_changed(filter: &SubscriptionFilter) -> bool {
-	filter.tools_list_changed == Some(true)
-		|| filter.prompts_list_changed == Some(true)
-		|| filter.resources_list_changed == Some(true)
-}
-
-/// Union of the granted categories across per-target filters. The ack must not claim a
-/// category RBAC stripped from every pipeline, or the client waits on notifications
-/// that can never arrive.
-pub(super) fn union_list_changed(filters: &[(String, SubscriptionFilter)]) -> SubscriptionFilter {
-	let mut union = SubscriptionFilter::new();
-	for (_, f) in filters {
-		union.tools_list_changed = union.tools_list_changed.or(f.tools_list_changed);
-		union.prompts_list_changed = union.prompts_list_changed.or(f.prompts_list_changed);
-		union.resources_list_changed = union.resources_list_changed.or(f.resources_list_changed);
-	}
-	union
+	tag_listen_notification(message, subscription_id).map(Ok)
 }
 
 /// Assembles the listen body with the gateway ack first, then the merged upstream pipelines.

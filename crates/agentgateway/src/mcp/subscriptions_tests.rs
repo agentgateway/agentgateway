@@ -72,32 +72,6 @@ fn tools_filter() -> SubscriptionFilter {
 	SubscriptionFilter::new().with_tools_list_changed(true)
 }
 
-#[test]
-fn validate_listen_filter_normalizes_and_rejects_invalid_shapes() {
-	let mut filter = SubscriptionFilter::new()
-		.with_resource_subscriptions(vec![])
-		.with_tools_list_changed(true);
-
-	validate_listen_filter(&mut filter).unwrap();
-	assert_eq!(filter.resource_subscriptions, None);
-	assert_eq!(filter.tools_list_changed, Some(true));
-
-	let mut filter = SubscriptionFilter::new().with_resource_subscriptions(vec![]);
-	assert_eq!(
-		validate_listen_filter(&mut filter).unwrap_err(),
-		"subscriptions/listen requires at least one notification filter"
-	);
-	assert_eq!(filter.resource_subscriptions, None);
-
-	let mut filter = SubscriptionFilter::new()
-		.with_resource_subscriptions(vec!["file:///x".to_string()])
-		.with_tools_list_changed(true);
-	assert_eq!(
-		validate_listen_filter(&mut filter).unwrap_err(),
-		"subscriptions/listen cannot combine resourceSubscriptions with list-changed flags; open a separate listen stream for each"
-	);
-}
-
 #[tokio::test]
 async fn listen_emits_ack_first_then_filtered_notification() {
 	let frames = run_listen(
@@ -346,23 +320,5 @@ async fn listen_fail_closed_first_error_ends_the_merged_stream() {
 			.as_str()
 			.unwrap()
 			.contains("upstream 'svc-a' rejected subscriptions/listen: boom")
-	);
-}
-
-#[test]
-fn union_list_changed_ors_categories_across_targets() {
-	// The listen ack echoes this union: a category granted on any one target must survive.
-	let union = union_list_changed(&[
-		("a".to_string(), tools_filter()),
-		(
-			"b".to_string(),
-			SubscriptionFilter::new().with_prompts_list_changed(true),
-		),
-	]);
-	assert_eq!(
-		union,
-		SubscriptionFilter::new()
-			.with_tools_list_changed(true)
-			.with_prompts_list_changed(true)
 	);
 }
