@@ -657,8 +657,8 @@ impl Relay {
 		Ok((streams, service_names))
 	}
 
-	/// Handles `subscriptions/listen` without `MergeStream`, whose terminal response
-	/// semantics do not fit a long-lived listen stream.
+	/// Handles `subscriptions/listen` with the shared stream fan-in. Upstream responses are
+	/// filtered out before `MergeStream`, so only notifications and stream errors are merged.
 	///
 	/// `client_filter` echoes the client's request verbatim (URIs still in `service+` form) into
 	/// the ack; `upstream_filter` has URIs rewritten to upstream form and is matched against
@@ -671,9 +671,9 @@ impl Relay {
 		upstream_filter: SubscriptionFilter,
 		targets: Option<Vec<String>>,
 	) -> Result<Response, UpstreamError> {
-		use super::subscriptions::{
-			assemble_listen_stream, filter_and_tag_listen_notification, synthesize_listen_ack,
-		};
+		use futures_util::StreamExt;
+
+		use super::subscriptions::{filter_and_tag_listen_notification, synthesize_listen_ack};
 		let id = r.id.clone();
 		let (streams, service_names) = self.fanout_open_streams(&r, &mut ctx, targets).await?;
 
@@ -686,19 +686,24 @@ impl Relay {
 				let filter = upstream_filter.clone();
 				let sub_id = id.clone();
 				let default_target_name = self.upstreams.default_target_name.clone();
-				s.filter_map_messages_result(move |msg| {
-					filter_and_tag_listen_notification(
-						msg,
-						default_target_name.as_ref(),
-						&target,
-						&filter,
-						&sub_id,
-					)
-				})
+				(
+					name,
+					s.filter_map_messages_result(move |msg| {
+						filter_and_tag_listen_notification(
+							msg,
+							default_target_name.as_ref(),
+							&target,
+							&filter,
+							&sub_id,
+						)
+					}),
+				)
 			})
 			.collect::<Vec<_>>();
 
-		let body = assemble_listen_stream(ack, pipelines, self.upstreams.failure_mode);
+		let merged =
+			mergestream::MergeStream::new_without_merge(pipelines, self.upstreams.failure_mode);
+		let body = futures::stream::once(async move { Ok(ack) }).chain(merged);
 
 		respond_with_guardrails(
 			id,

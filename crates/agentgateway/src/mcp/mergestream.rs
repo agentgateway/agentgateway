@@ -261,7 +261,7 @@ impl Stream for MergeStream {
 					}
 				},
 				Poll::Ready(None) => {
-					// Stream ended without terminal message (shouldn't happen in this design)
+					// Long-lived streams can end without a terminal response.
 					if self.failure_mode == FailureMode::FailOpen {
 						warn!("upstream stream ended unexpectedly, skipping (failure_mode=FailOpen)");
 						drop = true;

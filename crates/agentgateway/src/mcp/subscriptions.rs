@@ -1,6 +1,4 @@
-//! `subscriptions/listen` notification filtering and stream assembly.
-
-use futures_core::Stream;
+//! `subscriptions/listen` notification filtering.
 use rmcp::model::{
 	CustomNotification, GetMeta, Meta, RequestId, ServerJsonRpcMessage, ServerNotification,
 	SubscriptionFilter, SubscriptionsAcknowledgedNotification,
@@ -8,9 +6,8 @@ use rmcp::model::{
 };
 use tracing::warn;
 
+use crate::mcp::ClientError;
 use crate::mcp::handler::rewrite_resource_update_message;
-use crate::mcp::mergestream::Messages;
-use crate::mcp::{ClientError, FailureMode};
 
 /// Stamps the subscription id on every forwarded listen notification.
 ///
@@ -131,66 +128,6 @@ pub(super) fn filter_and_tag_listen_notification(
 	tag_listen_notification(message, subscription_id).map(Ok)
 }
 
-/// Assembles the listen body with the gateway ack first, then the merged upstream pipelines.
-pub(super) fn assemble_listen_stream(
-	ack: ServerJsonRpcMessage,
-	pipelines: Vec<Messages>,
-	failure_mode: FailureMode,
-) -> futures::stream::BoxStream<'static, Result<ServerJsonRpcMessage, ClientError>> {
-	use futures_util::StreamExt;
-	match failure_mode {
-		FailureMode::FailOpen => futures::stream::once(async move { Ok(ack) })
-			.chain(futures::stream::select_all(pipelines))
-			.filter_map(|item| async move {
-				match item {
-					Ok(m) => Some(Ok(m)),
-					Err(e) => {
-						warn!(
-							"upstream listen stream error, dropping (failure_mode=FailOpen): {}",
-							e
-						);
-						None
-					},
-				}
-			})
-			.boxed(),
-		FailureMode::FailClosed => {
-			// A clean EOF on a long-lived subscription means that upstream stopped sending
-			// notifications. FailClosed turns that into one terminal error frame.
-			let pipelines = pipelines
-				.into_iter()
-				.map(|p| {
-					p.chain(futures::stream::once(async {
-						Err::<ServerJsonRpcMessage, ClientError>(ClientError::new(anyhow::anyhow!(
-							"upstream listen stream ended"
-						)))
-					}))
-					.boxed()
-				})
-				.collect::<Vec<_>>();
-			let body = futures::stream::once(async move { Ok(ack) })
-				.chain(futures::stream::select_all(pipelines))
-				.boxed();
-			stop_after_error(body).boxed()
-		},
-	}
-}
-
-/// Ends a listen stream after its first error frame under FailClosed.
-fn stop_after_error<S>(stream: S) -> impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>>
-where
-	S: Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
-{
-	use futures_util::StreamExt;
-	stream.scan(false, |errored, item| {
-		if *errored {
-			return futures::future::ready(None);
-		}
-		*errored = item.is_err();
-		futures::future::ready(Some(item))
-	})
-}
-
 /// Frame 0 of a listen response: the gateway-synthesized ack. `notifications` echoes the client
 /// filter in service+ URI form; `_meta` carries the downstream listen request id.
 pub(super) fn synthesize_listen_ack(
@@ -207,5 +144,337 @@ pub(super) fn synthesize_listen_ack(
 }
 
 #[cfg(test)]
-#[path = "subscriptions_tests.rs"]
-mod subscriptions_tests;
+mod tests {
+	use futures_util::StreamExt;
+	use rmcp::ErrorData;
+	use rmcp::model::{
+		ResourceUpdatedNotification, ResourceUpdatedNotificationParam, SubscriptionsListenResult,
+	};
+
+	use super::*;
+	use crate::mcp::FailureMode;
+	use crate::mcp::handler::messages_to_response;
+	use crate::mcp::mergestream::{MergeStream, Messages};
+
+	fn list_changed(notification: ServerNotification) -> ServerJsonRpcMessage {
+		ServerJsonRpcMessage::notification(notification)
+	}
+
+	/// An upstream JSON-RPC error frame as it arrives off the wire.
+	fn upstream_error(msg: &str) -> ServerJsonRpcMessage {
+		ServerJsonRpcMessage::error(ErrorData::internal_error(msg.to_string(), None), None)
+	}
+
+	fn tools_list_changed() -> ServerJsonRpcMessage {
+		list_changed(ServerNotification::ToolListChangedNotification(
+			Default::default(),
+		))
+	}
+
+	fn resource_updated(uri: &str) -> ServerJsonRpcMessage {
+		list_changed(ServerNotification::ResourceUpdatedNotification(
+			ResourceUpdatedNotification::new(ResourceUpdatedNotificationParam::new(uri)),
+		))
+	}
+
+	/// Drives one upstream through the real listen pipeline and extracts the wire JSON frames.
+	async fn run_listen(
+		id: RequestId,
+		client_filter: SubscriptionFilter,
+		upstream_filter: SubscriptionFilter,
+		upstream_msgs: Vec<Result<ServerJsonRpcMessage, ClientError>>,
+		default_target_name: Option<String>,
+		target: &str,
+		failure_mode: FailureMode,
+	) -> Vec<serde_json::Value> {
+		let ack = synthesize_listen_ack(id.clone(), client_filter);
+		let target_name = agent_core::strng::new(target);
+		let target = target.to_string();
+		let sub_id = id.clone();
+		let pipeline = Messages::from_results(upstream_msgs).filter_map_messages_result(move |msg| {
+			filter_and_tag_listen_notification(
+				msg,
+				default_target_name.as_ref(),
+				&target,
+				&upstream_filter,
+				&sub_id,
+			)
+		});
+		let merged = MergeStream::new_without_merge(vec![(target_name, pipeline)], failure_mode);
+		let body = futures::stream::once(async move { Ok(ack) }).chain(merged);
+		read_listen_frames(id, body).await
+	}
+
+	/// Serializes the listen body to its SSE wire form and parses the JSON data frames back out.
+	async fn read_listen_frames(
+		id: RequestId,
+		body: impl futures_core::Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+	) -> Vec<serde_json::Value> {
+		let response = messages_to_response(id, body, None, true).unwrap();
+		let bytes = crate::http::read_resp_body(response).await.unwrap();
+		let text = std::str::from_utf8(&bytes).unwrap();
+		text
+			.lines()
+			.filter_map(|line| line.strip_prefix("data:"))
+			.map(|rest| serde_json::from_str(rest.strip_prefix(' ').unwrap_or(rest)).unwrap())
+			.collect()
+	}
+
+	fn tools_filter() -> SubscriptionFilter {
+		SubscriptionFilter::new().with_tools_list_changed(true)
+	}
+
+	#[tokio::test]
+	async fn listen_emits_ack_first_then_filtered_notification() {
+		let frames = run_listen(
+			RequestId::Number(7),
+			tools_filter(),
+			tools_filter(),
+			vec![Ok(tools_list_changed()), Ok(resource_updated("file:///x"))],
+			None,
+			"svc",
+			FailureMode::FailClosed,
+		)
+		.await;
+
+		// Frame 0 is the synthesized ack carrying the subscription id; the tools notification follows.
+		// resource_updated is dropped (no resourceSubscriptions in the filter). Under FailClosed the
+		// finite upstream stream ending is anomalous for a long-lived subscription, so the pipeline is
+		// torn down with a terminal error frame (frame 2).
+		assert_eq!(frames.len(), 3);
+		assert_eq!(
+			frames[0]["method"], "notifications/subscriptions/acknowledged",
+			"frame 0 must be the ack notification"
+		);
+		assert_eq!(
+			frames[0]["params"]["_meta"]["io.modelcontextprotocol/subscriptionId"],
+			7
+		);
+		assert_eq!(
+			frames[0]["params"]["notifications"]["toolsListChanged"], true,
+			"the ack must echo the granted filter"
+		);
+		assert_eq!(frames[1]["method"], "notifications/tools/list_changed");
+		assert!(
+			frames[2]["error"]["message"]
+				.as_str()
+				.unwrap()
+				.contains("ended"),
+			"a premature EOF under FailClosed must send a terminal error"
+		);
+	}
+
+	#[tokio::test]
+	async fn listen_tags_list_changed_frame_on_the_wire() {
+		// The tag must survive serialization. NotificationNoParam drops _meta, so the pipeline rebuilds
+		// list-changed as CustomNotification. Asserting on the serialized frame is the only way to
+		// catch a regression here.
+		let frames = run_listen(
+			RequestId::String("sub-1".into()),
+			tools_filter(),
+			tools_filter(),
+			vec![Ok(tools_list_changed())],
+			None,
+			"svc",
+			FailureMode::FailOpen,
+		)
+		.await;
+
+		assert_eq!(frames.len(), 2);
+		let tools = &frames[1];
+		assert_eq!(tools["method"], "notifications/tools/list_changed");
+		assert_eq!(
+			tools["params"]["_meta"]["io.modelcontextprotocol/subscriptionId"], "sub-1",
+			"list-changed frame must carry the subscription id in params._meta"
+		);
+	}
+
+	#[tokio::test]
+	async fn listen_filter_is_strict_opt_in() {
+		// prompts filter + a tools notification => nothing forwarded; output is the ack only.
+		let frames = run_listen(
+			RequestId::Number(1),
+			SubscriptionFilter::new().with_prompts_list_changed(true),
+			SubscriptionFilter::new().with_prompts_list_changed(true),
+			vec![Ok(tools_list_changed())],
+			None,
+			"svc",
+			FailureMode::FailOpen,
+		)
+		.await;
+		assert_eq!(frames.len(), 1);
+		assert_eq!(
+			frames[0]["method"],
+			"notifications/subscriptions/acknowledged"
+		);
+	}
+
+	#[tokio::test]
+	async fn listen_swallows_upstream_ack_and_response() {
+		// Upstream sends its own ack + a SubscriptionsListenResult Response. Exactly one ack (ours)
+		// reaches the client, and no method-less Response frame leaks.
+		let upstream_ack = synthesize_listen_ack(RequestId::Number(99), tools_filter());
+		let upstream_response = ServerJsonRpcMessage::response(
+			SubscriptionsListenResult::new(RequestId::Number(99)).into(),
+			RequestId::Number(99),
+		);
+		let frames = run_listen(
+			RequestId::Number(1),
+			tools_filter(),
+			tools_filter(),
+			vec![
+				Ok(upstream_ack),
+				Ok(upstream_response),
+				Ok(tools_list_changed()),
+			],
+			None,
+			"svc",
+			FailureMode::FailOpen,
+		)
+		.await;
+		let acks = frames
+			.iter()
+			.filter(|f| f["method"] == "notifications/subscriptions/acknowledged")
+			.count();
+		assert_eq!(acks, 1, "only the gateway's ack should reach the client");
+		assert!(
+			frames.iter().all(|f| f["method"].is_string()),
+			"no method-less Response frame should leak"
+		);
+		assert_eq!(
+			frames[0]["params"]["_meta"]["io.modelcontextprotocol/subscriptionId"],
+			1
+		);
+	}
+
+	#[tokio::test]
+	async fn listen_multiplex_uri_filter_and_rewrite() {
+		// resource_subscriptions holds upstream-form URIs; a matching ResourceUpdated is forwarded,
+		// rewritten to service+ form, and tagged. A non-matching URI is dropped.
+		let filter = SubscriptionFilter::new()
+			.with_resource_subscriptions(vec!["http://example.com/a".to_string()]);
+		let frames = run_listen(
+			RequestId::Number(5),
+			filter.clone(),
+			filter,
+			vec![
+				Ok(resource_updated("http://example.com/a")),
+				Ok(resource_updated("http://example.com/b")),
+			],
+			None,
+			"svc",
+			FailureMode::FailOpen,
+		)
+		.await;
+		assert_eq!(frames.len(), 2, "ack + the one matching resource update");
+		assert_eq!(frames[1]["method"], "notifications/resources/updated");
+		assert_eq!(
+			frames[1]["params"]["uri"], "svc+http://example.com/a",
+			"forwarded URI must be rewritten to service+ multiplex form"
+		);
+		assert_eq!(
+			frames[1]["params"]["_meta"]["io.modelcontextprotocol/subscriptionId"],
+			5
+		);
+	}
+
+	#[tokio::test]
+	async fn listen_fail_closed_surfaces_error_then_ends() {
+		// An upstream JSON-RPC error frame must reach the client. Under FailClosed it ends the stream.
+		let frames = run_listen(
+			RequestId::Number(3),
+			tools_filter(),
+			tools_filter(),
+			vec![
+				Ok(tools_list_changed()),
+				Ok(upstream_error("boom")),
+				Ok(tools_list_changed()),
+			],
+			None,
+			"svc",
+			FailureMode::FailClosed,
+		)
+		.await;
+		// ack, one tools frame, then the error frame. The trailing frame is gone.
+		assert_eq!(frames.len(), 3);
+		assert_eq!(
+			frames[0]["method"],
+			"notifications/subscriptions/acknowledged"
+		);
+		assert_eq!(frames[1]["method"], "notifications/tools/list_changed");
+		assert!(
+			frames[2]["error"]["message"]
+				.as_str()
+				.unwrap()
+				.contains("upstream 'svc' rejected subscriptions/listen: boom")
+		);
+	}
+
+	#[tokio::test]
+	async fn listen_fail_open_drops_error_and_retires_upstream() {
+		// The same upstream error frame is dropped under FailOpen; the upstream is retired.
+		let frames = run_listen(
+			RequestId::Number(3),
+			tools_filter(),
+			tools_filter(),
+			vec![
+				Ok(tools_list_changed()),
+				Ok(upstream_error("boom")),
+				Ok(tools_list_changed()),
+			],
+			None,
+			"svc",
+			FailureMode::FailOpen,
+		)
+		.await;
+		// ack + first tools frame; the error is dropped and the trailing frame is gone.
+		assert_eq!(frames.len(), 2);
+		assert!(frames.iter().all(|f| f.get("error").is_none()));
+		assert_eq!(
+			frames
+				.iter()
+				.filter(|f| f["method"] == "notifications/tools/list_changed")
+				.count(),
+			1
+		);
+	}
+
+	#[tokio::test]
+	async fn listen_fail_closed_first_error_ends_the_merged_stream() {
+		// One rejecting pipeline must terminate the whole merged body even while another
+		// pipeline is still live; without the cross-pipeline stop this read would hang.
+		let id = RequestId::Number(4);
+		let ack = synthesize_listen_ack(id.clone(), tools_filter());
+		let sub_id = id.clone();
+		let rejecting = Messages::from_results(vec![Ok(upstream_error("boom"))])
+			.filter_map_messages_result(move |msg| {
+				filter_and_tag_listen_notification(msg, None, "svc-a", &tools_filter(), &sub_id)
+			});
+		let merged = MergeStream::new_without_merge(
+			vec![
+				("svc-a".into(), rejecting),
+				("svc-b".into(), Messages::pending()),
+			],
+			FailureMode::FailClosed,
+		);
+		let body = futures::stream::once(async move { Ok(ack) }).chain(merged);
+		let frames = tokio::time::timeout(
+			std::time::Duration::from_secs(5),
+			read_listen_frames(id, body),
+		)
+		.await
+		.expect("the first error must end the stream despite the live pipeline");
+
+		assert_eq!(frames.len(), 2);
+		assert_eq!(
+			frames[0]["method"],
+			"notifications/subscriptions/acknowledged"
+		);
+		assert!(
+			frames[1]["error"]["message"]
+				.as_str()
+				.unwrap()
+				.contains("upstream 'svc-a' rejected subscriptions/listen: boom")
+		);
+	}
+}
