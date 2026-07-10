@@ -5,13 +5,10 @@ to route OpenAI-compatible chat traffic to a lower-cost or higher-capability
 model. vSR classifies the request, selects a model, and agentgateway forwards
 the request to OpenAI.
 
-The included policy sends routine implementation work to `gpt-5.4-nano` and
-escalates advanced distributed-systems design, formal verification, difficult
-debugging, and research synthesis to `gpt-5.5`.
-
-This is the reusable integration configuration. For the three-lane benchmark,
-catalog-backed cost report, observability checks, corpora, and result chart, use
-the [cost-based semantic-routing demo](https://github.com/danehans/agentgateway-demos/tree/main/cost-based-semantic-routing).
+The included policy is tuned for coding prompts: routine implementation,
+refactoring, unit tests, documentation, and simple debugging go to
+`gpt-5.4-nano`. It escalates advanced distributed-systems design, formal
+verification, difficult debugging, and research synthesis to `gpt-5.5`.
 
 ## Before You Begin
 
@@ -38,10 +35,13 @@ to the route you retain.
 Install vSR:
 
 ```bash
+export VSR_VERSION=0.3.0
+
 helm upgrade -i semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.3.0 \
+  --version "${VSR_VERSION}" \
   --namespace agentgateway-system \
-  -f examples/llm-semantic-routing/k8s/semantic-router-values.yaml
+  -f examples/llm-semantic-routing/k8s/semantic-router-values.yaml \
+  --set-string "image.tag=v${VSR_VERSION}"
 
 kubectl wait --for=condition=Available deployment/semantic-router \
   -n agentgateway-system \
@@ -60,8 +60,9 @@ kubectl describe httproute openai-semantic-routing -n agentgateway-system
 kubectl describe agentgatewaypolicy semantic-router-extproc -n agentgateway-system
 ```
 
-The values pin the vSR chart and `extproc` image to v0.3.0. Update both pins
-together when validating a newer vSR release.
+`VSR_VERSION` keeps the Helm chart and `extproc` image on the same vSR release.
+Set it once when validating a newer release; the command maps `0.3.0` to chart
+version `0.3.0` and image tag `v0.3.0`.
 
 ## Verify Streamed ExtProc
 
@@ -108,8 +109,8 @@ curl "$INGRESS_GW_ADDRESS/v1/chat/completions" \
 ```
 
 Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
-observability source of record. Run the demo to compare the routed policy with
-forced lower-cost and always-expensive baselines.
+observability source of record. Use isolated evaluation traffic with forced
+lower-cost and always-expensive baselines before adopting the policy broadly.
 
 ## Cleanup
 
