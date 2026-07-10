@@ -20,11 +20,12 @@ use tokio::process::Command;
 
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
+use crate::mcp::routing::NameRouting;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{FailureMode, mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{McpPrefixMode, McpTargetSpec};
+use crate::types::agent::McpTargetSpec;
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -270,33 +271,6 @@ pub(crate) struct UpstreamGroup {
 	pub failure_mode: FailureMode,
 }
 
-/// How downstream-visible tool/prompt names map to upstream targets.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NameRouting {
-	/// Single target: names pass through untouched and everything routes to it.
-	Single(String),
-	/// Names are exposed as `{target}_{name}`; the prefix is parsed off to route.
-	Prefix,
-	/// Names pass through untouched; calls are routed by looking up which
-	/// target serves the name. Requires names to be unique across targets.
-	Resolve,
-}
-
-impl NameRouting {
-	/// Whether resource URIs carry the target name (`{target}+{scheme}://...`).
-	/// Unlike names, URIs stay encoded in Resolve mode: clients only ever see
-	/// URIs we produced, so the encoding is transparent to them, and it is how
-	/// we route resource reads and Apps ui:// resources back to their target.
-	pub fn encodes_uris(&self) -> bool {
-		!matches!(self, NameRouting::Single(_))
-	}
-
-	/// Whether tool/prompt names get the `{target}_` prefix.
-	pub fn prefixes_names(&self) -> bool {
-		matches!(self, NameRouting::Prefix)
-	}
-}
-
 impl UpstreamGroup {
 	pub fn size(&self) -> usize {
 		self.by_name.len()
@@ -304,16 +278,7 @@ impl UpstreamGroup {
 
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
 		let is_multiplexing = backend.targets.len() != 1;
-		let name_routing = if is_multiplexing {
-			match backend.prefix_mode {
-				McpPrefixMode::Never => NameRouting::Resolve,
-				_ => NameRouting::Prefix,
-			}
-		} else if backend.prefix_mode == McpPrefixMode::Always {
-			NameRouting::Prefix
-		} else {
-			NameRouting::Single(backend.targets[0].name.to_string())
-		};
+		let name_routing = NameRouting::new(backend.prefix_mode, &backend.targets);
 		let mut s = Self {
 			failure_mode: backend.failure_mode,
 			backend,

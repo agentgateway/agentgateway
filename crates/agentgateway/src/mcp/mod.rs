@@ -6,6 +6,7 @@ mod mergestream;
 mod rbac;
 mod resolve;
 mod router;
+mod routing;
 mod session;
 mod sse;
 mod streamablehttp;
