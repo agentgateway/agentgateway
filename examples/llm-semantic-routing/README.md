@@ -48,7 +48,7 @@ Install or update Semantic Router:
 
 ```bash
 helm upgrade -i semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version v0.0.0-latest \
+  --version 0.3.0 \
   --namespace agentgateway-system \
   -f examples/llm-semantic-routing/k8s/semantic-router-values.yaml
 
@@ -56,6 +56,9 @@ kubectl wait --for=condition=Available deployment/semantic-router \
   -n agentgateway-system \
   --timeout=600s
 ```
+
+The chart and the `extproc` image are pinned to the vSR v0.3.0 release. Update
+both pins together when validating a newer release.
 
 Attach the experiment route and ExtProc policy:
 

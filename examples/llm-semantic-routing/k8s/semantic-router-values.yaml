@@ -2,6 +2,9 @@ router:
   skipProcessing:
     enabled: true
 
+image:
+  tag: v0.3.0
+
 persistence:
   enabled: true
   storageClassName: standard
