@@ -62,7 +62,7 @@ impl Session {
 			.send_internal(parts, message)
 			.assert_size::<{ 6 * 1024 }>()
 			.await;
-		Self::handle_error(req_id, res).await
+		Self::handle_error(req_id, res, false).await
 	}
 
 	/// Send a downstream message to upstream server(s) in gateway stateless mode.
@@ -107,7 +107,7 @@ impl Session {
 					};
 					let (service_name, _) = match self.relay.parse_resource_name(&name) {
 						Ok(target) => target,
-						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
+						Err(err) => return Self::handle_error(req_id.clone(), Err(err), false).await,
 					};
 					let res = self
 						.send_init_single(parts.clone(), init_request, service_name)
@@ -120,13 +120,14 @@ impl Session {
 							self.id = id.into();
 						}
 					}
-					Self::handle_error(Some(RequestId::Number(0)), res).await?;
+					Self::handle_error(Some(RequestId::Number(0)), res, false).await?;
 					// Now send the initialized notification
 					let _ = Self::handle_error(
 						None,
 						self
 							.send_initialized_notification_single(parts.clone(), service_name)
 							.await,
+						false,
 					)
 					.await?;
 				},
@@ -163,7 +164,7 @@ impl Session {
 			Err(UpstreamError::InvalidMethod(method)) if req_id.is_some() => {
 				Err(mcp::Error::MethodNotFound(req_id, method).into())
 			},
-			other => Self::handle_error(req_id, other).await,
+			other => Self::handle_error(req_id, other, true).await,
 		}
 	}
 
@@ -273,7 +274,7 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await).await
+		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await, false).await
 	}
 
 	/// forward_legacy_sse takes an upstream Response and forwards all messages to the SSE data stream.
@@ -330,12 +331,13 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_get(ctx).await).await
+		Self::handle_error(None, self.relay.send_fanout_get(ctx).await, false).await
 	}
 
 	async fn handle_error(
 		req_id: Option<RequestId>,
 		d: Result<Response, UpstreamError>,
+		downstream_modern: bool,
 	) -> Result<Response, ProxyError> {
 		match d {
 			Ok(r) => Ok(r),
@@ -355,10 +357,10 @@ impl Session {
 			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
 				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
 			},
-			Err(UpstreamError::InvalidRequest(message)) if req_id.is_some() => {
+			Err(UpstreamError::InvalidRequest(message)) if req_id.is_some() && downstream_modern => {
 				Err(mcp::Error::InvalidParams(req_id, message).into())
 			},
-			Err(UpstreamError::Unavailable(message)) if req_id.is_some() => {
+			Err(UpstreamError::Unavailable(message)) if req_id.is_some() && downstream_modern => {
 				Err(mcp::Error::Unavailable(req_id, message).into())
 			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though

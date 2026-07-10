@@ -668,6 +668,73 @@ async fn old_client_multiplex_mixed_servers_uses_legacy_session_flow() {
 }
 
 #[tokio::test]
+async fn legacy_multiplex_invalid_target_keeps_internal_error() {
+	let first = mock_streamable_http_server(true).await;
+	let second = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("first", first.addr, false), ("second", second.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	});
+	let initialize = mcp_json_post(&client, &url, &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(initialize.status(), reqwest::StatusCode::OK);
+	let session_id = initialize
+		.headers()
+		.get("mcp-session-id")
+		.expect("legacy initialize should create a session")
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	let call = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/call",
+		"params": {"name": "nosuchsvc+echo", "arguments": {}}
+	});
+	let response = mcp_json_post(&client, &url, &call)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		response.status(),
+		reqwest::StatusCode::INTERNAL_SERVER_ERROR
+	);
+	let json: serde_json::Value = response.json().await.unwrap();
+	assert!(
+		is_json_subset(
+			&serde_json::json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32603}}),
+			&json
+		),
+		"unexpected body: {json}"
+	);
+}
+
+#[tokio::test]
 async fn streamable_http_validates_protocol_version_header() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
