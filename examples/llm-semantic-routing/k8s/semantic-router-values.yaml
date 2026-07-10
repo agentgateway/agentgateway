@@ -4,6 +4,16 @@ router:
 
 image:
   tag: v0.3.0
+  pullPolicy: IfNotPresent
+
+args:
+- --secure=false
+
+env: []
+extraEnv: []
+envFromSecrets: []
+extraVolumes: []
+extraVolumeMounts: []
 
 persistence:
   enabled: true
@@ -21,18 +31,12 @@ resources:
 config:
   version: v0.3
   listeners: []
-  default_reasoning_effort:
-  reasoning_families: {}
-  prompt_guard:
-    enabled: false
-  semantic_cache:
-    enabled: false
-  tools:
-    enabled: false
 
   providers:
     defaults:
       default_model: gpt-5.4-nano
+      default_reasoning_effort: null
+      reasoning_families: null
     models:
     - name: gpt-5.4-nano
       provider_model_id: gpt-5.4-nano
@@ -83,6 +87,9 @@ config:
       tags: [premium, expensive, deep-reasoning]
 
     signals:
+      domains: []
+      jailbreak: []
+      pii: []
       keywords:
       - name: immediate_response_probe
         operator: OR
@@ -300,7 +307,12 @@ config:
   global:
     router:
       config_source: file
-      auto_model_names: [auto, vllm-sr/auto, MoM]
+      auto_model_name: auto
+      clear_route_cache: false
+      model_selection:
+        enabled: false
+        ml: null
+      strategy: priority
       streamed_body:
         enabled: true
         max_bytes: 10485760
@@ -308,15 +320,25 @@ config:
       skip_processing:
         enabled: true
     services:
+      api: null
+      authz: null
       observability:
         metrics:
           enabled: true
+        tracing:
+          enabled: false
+      ratelimit: null
+      response_api:
+        enabled: false
       router_replay:
         enabled: false
     stores:
+      memory: null
       semantic_cache:
         enabled: false
         backend_type: memory
+      vector_store:
+        enabled: false
     integrations:
       tools:
         enabled: false
