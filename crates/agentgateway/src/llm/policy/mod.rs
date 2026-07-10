@@ -1108,11 +1108,13 @@ impl Policy {
 				FailureMode::FailClosed => Err(e),
 			},
 			Ok(webhook::ProcessorOutcome::Pass) => Ok(GuardrailOutcome::None),
-			Ok(webhook::ProcessorOutcome::Reject { body, status_code }) => Ok(GuardrailOutcome::Rejected(
-				::http::response::Builder::new()
-					.status(status_code)
-					.body(http::Body::from(body))?,
-			)),
+			Ok(webhook::ProcessorOutcome::Reject { body, status_code }) => {
+				Ok(GuardrailOutcome::Rejected(
+					::http::response::Builder::new()
+						.status(status_code)
+						.body(http::Body::from(body))?,
+				))
+			},
 			Ok(webhook::ProcessorOutcome::Replace(messages)) => {
 				if let Err(reason) = webhook::validate_replacement(&original, &messages) {
 					anyhow::bail!("webhook returned unusable messages: {reason}");

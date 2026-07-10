@@ -4142,10 +4142,12 @@ mod tests {
 		let cc = proto::agent::backend_policy_spec::ai::ContextCompression {
 			backend: Some(proto::agent::BackendReference {
 				port: 8787,
-				kind: Some(backend_reference::Kind::Service(backend_reference::Service {
-					namespace: "default".to_string(),
-					hostname: "compressor.default.svc.cluster.local".to_string(),
-				})),
+				kind: Some(backend_reference::Kind::Service(
+					backend_reference::Service {
+						namespace: "default".to_string(),
+						hostname: "compressor.default.svc.cluster.local".to_string(),
+					},
+				)),
 			}),
 			// path unset -> policy default
 			path: None,
@@ -4158,7 +4160,10 @@ mod tests {
 
 		let got = compression_of(&ai_with_context_compression(Some(cc)))
 			.expect("context compression should convert");
-		assert!(matches!(got.failure_mode, llm::policy::FailureMode::FailOpen));
+		assert!(matches!(
+			got.failure_mode,
+			llm::policy::FailureMode::FailOpen
+		));
 		assert_eq!(
 			got.min_size_bytes,
 			llm::policy::compression::default_min_size_bytes()

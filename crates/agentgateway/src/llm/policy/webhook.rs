@@ -449,17 +449,25 @@ mod processor_tests {
 		let reject = json!({"action": {"body": "no", "status_code": 403}});
 		assert!(matches!(
 			parse_processor_action(&reject),
-			ProcessorOutcome::Reject { status_code: 403, .. }
+			ProcessorOutcome::Reject {
+				status_code: 403,
+				..
+			}
 		));
 		let pass = json!({"action": {"reason": "ok"}});
-		assert!(matches!(parse_processor_action(&pass), ProcessorOutcome::Pass));
+		assert!(matches!(
+			parse_processor_action(&pass),
+			ProcessorOutcome::Pass
+		));
 	}
 
 	#[test]
 	fn parse_compress_flat_messages() {
 		// Headroom returns messages + telemetry at the top level; always a Replace.
 		let v = json!({"messages": [{"role": "user", "content": "x"}], "tokens_saved": 42});
-		assert!(matches!(parse_compress_response(&v), Ok(ProcessorOutcome::Replace(m)) if m.len() == 1));
+		assert!(
+			matches!(parse_compress_response(&v), Ok(ProcessorOutcome::Replace(m)) if m.len() == 1)
+		);
 		// Missing messages array is an error (failure handled by the caller).
 		assert!(parse_compress_response(&json!({"tokens_saved": 0})).is_err());
 	}

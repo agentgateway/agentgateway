@@ -78,7 +78,11 @@ impl ContextCompression {
 		// Gate on the decoded request body size (recorded at parse time) rather than
 		// re-serializing the parsed messages. This is the whole body, not just the message
 		// array, but it's only a "is there enough to bother compressing" heuristic.
-		let Some(size) = parts.extensions.get::<crate::llm::RequestBodyBytes>().map(|b| b.0) else {
+		let Some(size) = parts
+			.extensions
+			.get::<crate::llm::RequestBodyBytes>()
+			.map(|b| b.0)
+		else {
 			// The body size is recorded during body parsing; its absence means we're on a path
 			// that never buffered the body. Skip rather than guess — the safe default.
 			debug!("context compression: request body size unrecorded; skipping");

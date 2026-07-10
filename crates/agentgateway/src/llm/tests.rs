@@ -1749,9 +1749,8 @@ mod raw_message_round_trip {
 mod context_compression {
 	use super::*;
 	use crate::http::auth::BackendInfo;
-	use crate::llm::policy::Policy;
 	use crate::llm::policy::compression::ContextCompression;
-	use crate::llm::policy::FailureMode;
+	use crate::llm::policy::{FailureMode, Policy};
 	use crate::test_helpers::proxymock::{body_mock, setup_proxy_test};
 	use crate::types::agent::{BackendTarget, SimpleBackendReference};
 
@@ -1798,7 +1797,11 @@ mod context_compression {
 		})
 	}
 
-	async fn process(policy: &Policy, req: Request, tokenize: bool) -> Result<RequestResult, AIError> {
+	async fn process(
+		policy: &Policy,
+		req: Request,
+		tokenize: bool,
+	) -> Result<RequestResult, AIError> {
 		AIProvider::Anthropic(anthropic::Provider { model: None })
 			.process_messages_request(&backend_info(), Some(policy), req, tokenize, &mut None)
 			.await
@@ -1819,8 +1822,10 @@ mod context_compression {
 
 	#[tokio::test]
 	async fn replaces_messages_with_compress_response() {
-		let mock =
-			body_mock(&compress_response(json!([{"role": "user", "content": "compressed"}]))).await;
+		let mock = body_mock(&compress_response(
+			json!([{"role": "user", "content": "compressed"}]),
+		))
+		.await;
 		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
 
 		let result = process(&policy, messages_request(simple_body()), false)
@@ -1847,7 +1852,10 @@ mod context_compression {
 
 	#[tokio::test]
 	async fn below_size_threshold_skips() {
-		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "compressed"}]))).await;
+		let mock = body_mock(&compress_response(
+			json!([{"role": "user", "content": "compressed"}]),
+		))
+		.await;
 		let policy = policy(
 			Target::Address(*mock.address()),
 			FailureMode::FailOpen,
@@ -1930,7 +1938,10 @@ mod context_compression {
 	// Rate limiting and cost accounting must reflect what is actually sent upstream.
 	#[tokio::test]
 	async fn token_counts_reflect_compressed_messages() {
-		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "tiny"}]))).await;
+		let mock = body_mock(&compress_response(
+			json!([{"role": "user", "content": "tiny"}]),
+		))
+		.await;
 		let policy = policy(Target::Address(*mock.address()), FailureMode::FailOpen, 0);
 
 		let big = "long message content ".repeat(200);
@@ -1939,7 +1950,9 @@ mod context_compression {
 			"max_tokens": 16,
 			"messages": [{"role": "user", "content": big}]
 		});
-		let result = process(&policy, messages_request(body), true).await.unwrap();
+		let result = process(&policy, messages_request(body), true)
+			.await
+			.unwrap();
 		let (body, llm_request) = forwarded_body(result).await;
 		assert_eq!(body["messages"][0]["content"], json!("tiny"));
 		let expected = num_tokens_from_messages(
