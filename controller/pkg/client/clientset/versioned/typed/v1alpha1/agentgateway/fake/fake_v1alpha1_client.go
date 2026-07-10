@@ -16,6 +16,10 @@ func (c *FakeAgentgatewayAgentgateway) AgentgatewayBackends(namespace string) ag
 	return newFakeAgentgatewayBackends(c, namespace)
 }
 
+func (c *FakeAgentgatewayAgentgateway) AgentgatewayModels(namespace string) agentgateway.AgentgatewayModelInterface {
+	return newFakeAgentgatewayModels(c, namespace)
+}
+
 func (c *FakeAgentgatewayAgentgateway) AgentgatewayParameters(namespace string) agentgateway.AgentgatewayParametersInterface {
 	return newFakeAgentgatewayParameters(c, namespace)
 }
