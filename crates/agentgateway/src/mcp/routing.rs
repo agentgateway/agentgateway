@@ -1,7 +1,6 @@
 //! How downstream-visible tool/prompt names and resource URIs map to upstream
-//! targets. `NameRouting` owns every synchronous decision the mode implies —
-//! outbound encoding, inbound decoding, and the uniqueness contract — so the
-//! rest of the proxy only asks questions instead of matching on the mode.
+//! targets. `NameRouting` owns every synchronous decision the mode implies:
+//! outbound encoding, inbound decoding, and the uniqueness contract.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -50,9 +49,7 @@ impl NameRouting {
 		}
 	}
 
-	/// Whether inbound names carry no routing information, so the owning
-	/// target must be resolved against upstream listings — which is also why
-	/// this mode requires names to be unique across targets.
+	/// Whether the owning target must be resolved against upstream listings.
 	pub fn needs_resolution(&self) -> bool {
 		matches!(self, NameRouting::Resolve)
 	}
@@ -141,10 +138,8 @@ impl NameRouting {
 		Ok((service, original_uri.to_string()))
 	}
 
-	/// Names served by more than one target. Only relevant when resolution is
-	/// in play, where unprefixed names must be unique to be routable; empty
-	/// for the other modes. Duplicates are dropped from merged listings rather
-	/// than silently picking one owner.
+	/// Names served by more than one target, which are unroutable in Resolve
+	/// mode and dropped from merged listings; empty for the other modes.
 	pub fn duplicate_names<'a>(
 		&self,
 		kind: &str,
@@ -162,7 +157,7 @@ impl NameRouting {
 			.filter(|(_, targets)| targets.len() > 1)
 			.map(|(name, targets)| {
 				warn!(
-					"{kind} '{name}' is served by multiple targets ({}); dropping it from the list because names must be unique across targets when prefixMode is 'never'",
+					"dropping {kind} '{name}': served by multiple targets ({})",
 					targets.iter().join(", "),
 				);
 				name.to_string()

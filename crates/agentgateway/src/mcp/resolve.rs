@@ -1,10 +1,6 @@
-//! Routing of unprefixed names to targets (`prefixMode: never`).
-//!
-//! With multiplexing, tool/prompt names normally carry a `{target}_` prefix
-//! that tells us where to route a call. In `Never` prefix mode the names are
-//! exposed untouched, so we instead discover the owning target by listing
-//! every target's names at call time. This is deliberately unoptimized; a
-//! process-level cache can sit in front of it later.
+//! Routing of unprefixed names to targets (`prefixMode: never`): the owning
+//! target is discovered by listing every target's names at call time.
+//! Deliberately unoptimized; a process-level cache can sit in front later.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -115,7 +111,7 @@ impl Relay {
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						warn!(
-							"upstream '{}' failed while resolving {} '{}', skipping: {}",
+							"upstream '{}' failed while resolving {} '{}', skipping (failure_mode=FailOpen): {}",
 							target,
 							kind.as_str(),
 							name,

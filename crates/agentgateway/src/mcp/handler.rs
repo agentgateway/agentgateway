@@ -149,8 +149,6 @@ impl Relay {
 		})
 	}
 
-	/// Whether name-to-target routing requires resolution against upstream
-	/// listings (`prefixMode: never` with multiple targets).
 	pub fn needs_resolution(&self) -> bool {
 		self.upstreams.name_routing.needs_resolution()
 	}
@@ -359,10 +357,8 @@ impl Relay {
 					(server_name, tools)
 				})
 				.collect_vec();
-			// In Resolve mode names are exposed unprefixed, so a name served by
-			// multiple targets cannot be routed; drop every copy rather than
-			// silently picking one. Duplicates are computed pre-authorization to
-			// stay consistent with call-time resolution, which is caller-independent.
+			// Duplicates are computed pre-authorization to match caller-independent
+			// call-time resolution.
 			let duplicates = routing.duplicate_names(
 				"tool",
 				per_target

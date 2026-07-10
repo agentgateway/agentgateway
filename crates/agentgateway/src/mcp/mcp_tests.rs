@@ -489,8 +489,7 @@ async fn multiplex_never_prefix_routes_unprefixed_names() {
 		"{names:?}"
 	);
 
-	// ...but ui:// resource URIs stay in the mux namespace: hosts read them
-	// from metadata we produced, unlike tool names, which apps hardcode.
+	// ...but ui:// URIs stay target-encoded even in never mode.
 	let show = tools
 		.tools
 		.iter()
@@ -568,8 +567,7 @@ async fn multiplex_never_prefix_collisions_are_dropped_and_unroutable() {
 	let io = t.serve_real_listener(strng::new("bind")).await;
 	let client = mcp_streamable_client_with_ui(io).await;
 
-	// Names served by multiple targets cannot be routed unprefixed, so every
-	// copy is dropped from the merged list rather than silently picking one.
+	// Colliding names are dropped from the merged list.
 	let tools = client.list_tools(None).await.unwrap();
 	let names = tools.tools.iter().map(|t| t.name.to_string()).collect_vec();
 	assert!(!names.contains(&"echo".to_string()), "{names:?}");
