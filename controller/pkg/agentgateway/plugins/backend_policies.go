@@ -1397,31 +1397,22 @@ func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.Backend
 		if c.SecretKey != nil {
 			secretKey = *c.SecretKey
 		}
+		var value string
 		data, err := ctx.ResolveCredentialRef(c.SecretRef, namespace)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
-			continue
-		}
-		val, ok := data[secretKey]
-		if !ok {
+		} else if val, ok := data[secretKey]; !ok {
 			errs = append(errs, fmt.Errorf("backendAuth credential %q: secret %s/%s missing key %q",
 				locName, namespace, c.SecretRef.Name, secretKey))
-			continue
-		}
-		loc := translateAuthorizationLocation(&c.Location)
-		if loc == nil {
-			errs = append(errs, fmt.Errorf("backendAuth credential %q: invalid location", locName))
-			continue
+		} else {
+			value = string(val)
 		}
 		translated = append(translated, &api.BackendAuthCredential{
-			Location: loc,
-			Value:    string(val),
+			Location: translateAuthorizationLocation(&c.Location),
+			Value:    value,
 		})
 	}
-	if len(errs) > 0 {
-		return nil, errs
-	}
-	return translated, nil
+	return translated, errs
 }
 
 // credentialLocationName returns the name field of whichever location variant is set.
