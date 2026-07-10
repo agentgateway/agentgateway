@@ -87,7 +87,13 @@ impl Session {
 			.get::<crate::mcp::streamablehttp::RequestProtocol>()
 			.is_some_and(|p| p.is_modern());
 		if !is_init && !is_modern {
-			let init_request = rmcp::model::InitializeRequest::new(get_client_info());
+			let mut client_info = get_client_info();
+			if let Some(protocol_version) =
+				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone())?
+			{
+				client_info.protocol_version = protocol_version;
+			}
+			let init_request = rmcp::model::InitializeRequest::new(client_info);
 			let request_type = match &message {
 				ClientJsonRpcMessage::Request(r) => Some(&r.request),
 				_ => None,
