@@ -1511,7 +1511,7 @@ type BackendAuthCredential struct {
 	SecretRef LocalSecretObjectRef `json:"secretRef"`
 
 	// SecretKey is the key in the referenced Secret whose value is used.
-	// Defaults to the location's name (for example the header name).
+	// Defaults to `Authorization`, matching the key convention used by `secretRef`.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=253
 	// +optional

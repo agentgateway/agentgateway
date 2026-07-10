@@ -1393,7 +1393,7 @@ func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.Backend
 	translated := make([]*api.BackendAuthCredential, 0, len(creds))
 	for _, c := range creds {
 		locName := credentialLocationName(c.Location)
-		secretKey := locName
+		secretKey := wellknown.Authorization
 		if c.SecretKey != nil {
 			secretKey = *c.SecretKey
 		}

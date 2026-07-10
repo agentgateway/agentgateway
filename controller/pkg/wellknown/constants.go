@@ -18,6 +18,7 @@ const (
 	SigningKey = "signingKey"
 	// GCPCredentialsJSON is the key name for GCP ADC-compatible credential JSON.
 	GCPCredentialsJSON = "credentials.json"
-	// Authorization is the key name in secret data for a bearer credential.
+	// Authorization is the key name in secret data for the Authorization value,
+	// used as the default secret key across backendAuth mechanisms.
 	Authorization = "Authorization"
 )
