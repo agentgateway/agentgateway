@@ -53,7 +53,7 @@ Name|Version|License
 [sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.6.0|Apache License 2.0
 [sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v1.5.0|Apache License 2.0
 [gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260610234253-d7447d7420de|Apache License 2.0
-[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.6.1-0.20260702135020-8e96714756a4|Apache License 2.0
+[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.6.1-0.20260710021432-dae9ac3ab4df|Apache License 2.0
 [sigs.k8s.io/yaml](https://sigs.k8s.io/yaml)|v1.6.0|MIT License
 [cmd/goimports](https://golang.org/x/tools/cmd/goimports)|latest|MIT License
 [gogo/protobuf](https://github.com/gogo/protobuf)|latest|MIT License

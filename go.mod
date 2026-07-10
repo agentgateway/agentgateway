@@ -60,7 +60,7 @@ require (
 	sigs.k8s.io/gateway-api v1.6.0
 	sigs.k8s.io/gateway-api-inference-extension v1.5.0
 	sigs.k8s.io/gateway-api-inference-extension/conformance v1.5.0
-	sigs.k8s.io/gateway-api/conformance v1.6.1-0.20260702135020-8e96714756a4
+	sigs.k8s.io/gateway-api/conformance v1.6.1-0.20260710021432-dae9ac3ab4df
 	sigs.k8s.io/yaml v1.6.0
 )
 
