@@ -14184,8 +14184,8 @@ type BackendPolicySpec_Ai_ContextCompression struct {
 	// Request path of the compression endpoint. Defaults to "/v1/compress".
 	Path        *string                                             `protobuf:"bytes,2,opt,name=path,proto3,oneof" json:"path,omitempty"`
 	FailureMode BackendPolicySpec_Ai_ContextCompression_FailureMode `protobuf:"varint,3,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_Ai_ContextCompression_FailureMode" json:"failure_mode,omitempty"`
-	// Minimum serialized size of the message array, in bytes, before compression is
-	// attempted. Requests below the threshold are forwarded untouched. Defaults to 16384.
+	// Minimum request body size, in bytes, before compression is attempted. Requests
+	// below the threshold are forwarded untouched. Defaults to 16384.
 	MinSizeBytes *uint32 `protobuf:"varint,4,opt,name=min_size_bytes,json=minSizeBytes,proto3,oneof" json:"min_size_bytes,omitempty"`
 	// Incoming request headers to forward to the compression service.
 	ForwardHeaderMatches []*HeaderMatch `protobuf:"bytes,5,rep,name=forward_header_matches,json=forwardHeaderMatches,proto3" json:"forward_header_matches,omitempty"`

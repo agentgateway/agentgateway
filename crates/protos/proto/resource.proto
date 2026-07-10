@@ -1358,8 +1358,8 @@ message BackendPolicySpec {
         FAIL_CLOSED = 1;
       }
       FailureMode failure_mode = 3;
-      // Minimum serialized size of the message array, in bytes, before compression is
-      // attempted. Requests below the threshold are forwarded untouched. Defaults to 16384.
+      // Minimum request body size, in bytes, before compression is attempted. Requests
+      // below the threshold are forwarded untouched. Defaults to 16384.
       optional uint32 min_size_bytes = 4;
       // Incoming request headers to forward to the compression service.
       repeated HeaderMatch forward_header_matches = 5;

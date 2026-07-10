@@ -471,8 +471,8 @@ type ContextCompressionConfig struct {
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
 
-	// Minimum serialized size of the message array, in bytes, before compression is
-	// attempted. Requests below the threshold are forwarded untouched.
+	// Minimum request body size, in bytes, before compression is attempted. Requests
+	// below the threshold are forwarded untouched.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=16384
 	// +optional

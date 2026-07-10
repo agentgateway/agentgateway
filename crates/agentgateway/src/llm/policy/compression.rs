@@ -77,12 +77,13 @@ impl ContextCompression {
 	) -> CompressionOutcome {
 		// Gate on the decoded request body size (recorded at parse time) rather than
 		// re-serializing the parsed messages. This is the whole body, not just the message
-		// array, but it's only a "is there enough to bother compressing" heuristic. A missing
-		// value (0) skips, which is the safe default.
-		let size = parts
-			.extensions
-			.get::<crate::llm::RequestBodyBytes>()
-			.map_or(0, |b| b.0);
+		// array, but it's only a "is there enough to bother compressing" heuristic.
+		let Some(size) = parts.extensions.get::<crate::llm::RequestBodyBytes>().map(|b| b.0) else {
+			// The body size is recorded during body parsing; its absence means we're on a path
+			// that never buffered the body. Skip rather than guess — the safe default.
+			debug!("context compression: request body size unrecorded; skipping");
+			return CompressionOutcome::Skipped;
+		};
 		if size < self.min_size_bytes {
 			debug!(
 				"context compression: request below size threshold ({size} < {}); skipping",
@@ -146,9 +147,11 @@ impl ContextCompression {
 			},
 			FailureMode::FailClosed => {
 				warn!("context compression: {reason}; failing closed");
+				// The compression engine is an upstream dependency; its failure is a bad gateway,
+				// not an internal error in agentgateway itself.
 				CompressionOutcome::Rejected(Box::new(reject_response(
 					"context compression failed",
-					::http::StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+					::http::StatusCode::BAD_GATEWAY.as_u16(),
 				)))
 			},
 		}

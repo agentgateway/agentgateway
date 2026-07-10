@@ -278,6 +278,12 @@ fn parse_compress_response(v: &serde_json::Value) -> anyhow::Result<ProcessorOut
 		.get("messages")
 		.and_then(|m| m.as_array())
 		.ok_or_else(|| anyhow::anyhow!("compress response missing `messages` array"))?;
+	// Surface the engine's self-reported savings rather than discarding it. This is an estimate
+	// from the compressor; the authoritative token counts are recomputed from the returned
+	// messages downstream.
+	if let Some(saved) = v.get("tokens_saved").and_then(serde_json::Value::as_i64) {
+		debug!("context compression: engine reported tokens_saved={saved}");
+	}
 	Ok(ProcessorOutcome::Replace(messages.clone()))
 }
 

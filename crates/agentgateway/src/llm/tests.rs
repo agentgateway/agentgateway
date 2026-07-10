@@ -1889,7 +1889,7 @@ mod context_compression {
 		else {
 			panic!("expected rejection");
 		};
-		assert_eq!(resp.status(), ::http::StatusCode::INTERNAL_SERVER_ERROR);
+		assert_eq!(resp.status(), ::http::StatusCode::BAD_GATEWAY);
 	}
 
 	#[tokio::test]
