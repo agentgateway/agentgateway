@@ -163,6 +163,7 @@ pub(super) async fn prepare_listen_streams(
 	let mut pending = FuturesUnordered::new();
 	for (index, (target, mut stream, sent_filter)) in streams.into_iter().enumerate() {
 		pending.push(async move {
+			let failure_target = target.clone();
 			let first = stream.next().await;
 			let prepared = match first {
 				Some(Ok(ServerJsonRpcMessage::Notification(notification))) => {
@@ -190,17 +191,20 @@ pub(super) async fn prepare_listen_streams(
 					anyhow::anyhow!("upstream {target} ended before acknowledging listen"),
 				))),
 			};
-			(index, prepared)
+			(index, failure_target, prepared)
 		});
 	}
 
 	let mut prepared = Vec::new();
 	let mut failures = Vec::new();
-	while let Some((index, result)) = pending.next().await {
+	while let Some((index, target, result)) = pending.next().await {
 		match result {
 			Ok(stream) => prepared.push(stream),
 			Err(error) if failure_mode == FailureMode::FailClosed => return Err(error),
-			Err(error) => failures.push((index, error)),
+			Err(error) => {
+				warn!(target = %target, ?error, "upstream failed during listen setup, skipping");
+				failures.push((index, error));
+			},
 		}
 	}
 	if prepared.is_empty() {
