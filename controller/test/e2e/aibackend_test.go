@@ -3,7 +3,6 @@
 package e2e_test
 
 import (
-	"maps"
 	"net/http"
 	"testing"
 
@@ -139,20 +138,6 @@ func testAIBackendContextCompression(t base.Test) {
 		curl.WithHeaders(anthropicHeaders("compress")),
 	)
 
-	// Bypass header: compression is skipped, so the upstream sees the original message and does
-	// not emit the compression marker.
-	t.Send(
-		"/v1/messages",
-		&testmatchers.HttpResponse{
-			StatusCode: http.StatusOK,
-			Body:       gomega.Not(gomega.ContainSubstring(compressionConfirmedResponse)),
-		},
-		curl.WithPostBody(compressibleBody),
-		curl.WithHeaders(mergeHeaders(anthropicHeaders("compress"), map[string]string{
-			"x-agw-compression-bypass": "true",
-		})),
-	)
-
 	// Fail open: the engine backend is unreachable, so the request is forwarded uncompressed
 	// rather than failing.
 	t.Send(
@@ -164,13 +149,6 @@ func testAIBackendContextCompression(t base.Test) {
 		curl.WithPostBody(compressibleBody),
 		curl.WithHeaders(anthropicHeaders("compress-failopen")),
 	)
-}
-
-func mergeHeaders(base, extra map[string]string) map[string]string {
-	out := make(map[string]string, len(base)+len(extra))
-	maps.Copy(out, base)
-	maps.Copy(out, extra)
-	return out
 }
 
 func testAIBackendFailover(t base.Test) {

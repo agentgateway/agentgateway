@@ -150,7 +150,7 @@ spec:
     ai:
       contextCompression:
         # Force compression on small test requests.
-        minSizeBytes: 0
+        minSizeBytes: 1
         backendRef:
           name: ai-testbox
           port: 9234
@@ -168,7 +168,7 @@ spec:
   backend:
     ai:
       contextCompression:
-        minSizeBytes: 0
+        minSizeBytes: 1
         failureMode: FailOpen
         # Nothing listens on this port; the compression call fails and compression fails open.
         backendRef:

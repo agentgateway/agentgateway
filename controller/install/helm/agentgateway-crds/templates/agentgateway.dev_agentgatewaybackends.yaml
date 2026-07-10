@@ -567,7 +567,7 @@ spec:
                                             description: |-
                                               Minimum request body size, in bytes, before compression is attempted. Requests
                                               below the threshold are forwarded untouched.
-                                            minimum: 0
+                                            minimum: 1
                                             type: integer
                                           path:
                                             description: Request path of the compression
@@ -12370,7 +12370,7 @@ spec:
                             description: |-
                               Minimum request body size, in bytes, before compression is attempted. Requests
                               below the threshold are forwarded untouched.
-                            minimum: 0
+                            minimum: 1
                             type: integer
                           path:
                             description: Request path of the compression endpoint.

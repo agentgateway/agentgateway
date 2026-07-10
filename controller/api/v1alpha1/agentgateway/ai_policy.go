@@ -473,7 +473,7 @@ type ContextCompressionConfig struct {
 
 	// Minimum request body size, in bytes, before compression is attempted. Requests
 	// below the threshold are forwarded untouched.
-	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:default=16384
 	// +optional
 	MinSizeBytes int `json:"minSizeBytes,omitempty"`
