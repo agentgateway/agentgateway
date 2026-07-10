@@ -858,9 +858,9 @@ pub mod from_messages {
 			})
 			.collect_vec();
 
-		// "Function tools with reasoning_effort are not supported for gpt-5.4
-		let reasoning_effort = if !tools.is_empty() && model.starts_with("gpt-5.4") {
-			None
+		// Function tools with reasoning_effort are not supported for GPT models.
+		let reasoning_effort = if !tools.is_empty() && model.starts_with("gpt-") {
+			Some(completions::ReasoningEffort::None)
 		} else {
 			reasoning_effort
 		};
