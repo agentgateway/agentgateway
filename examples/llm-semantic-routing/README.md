@@ -2,13 +2,15 @@
 
 This example configures agentgateway and [vLLM Semantic Router (vSR)](https://vllm-semantic-router.com/)
 to route OpenAI-compatible chat traffic to a lower-cost or higher-capability
-model. vSR classifies the request, selects a model, and agentgateway forwards
-the request to OpenAI.
+model. vLLM Semantic Router classifies the request, selects a model, and
+agentgateway forwards the request to OpenAI.
 
 The included policy is tuned for coding prompts: routine implementation,
 refactoring, unit tests, documentation, and simple debugging go to
 `gpt-5.4-nano`. It escalates advanced distributed-systems design, formal
 verification, difficult debugging, and research synthesis to `gpt-5.5`.
+Customize the signals, candidates, weights, and thresholds for your traffic by
+following the [vLLM Semantic Router configuration guide](https://vllm-semantic-router.com/docs/installation/configuration/).
 
 ## Before You Begin
 
@@ -26,13 +28,10 @@ The `AgentgatewayBackend` in `k8s/agentgateway-routing.yaml` expects an
 
 ## Configure Routing
 
-Do not apply this route beside an existing `HTTPRoute` with the same Gateway and
-`/v1/chat/completions` prefix. Gateway API resolves otherwise identical matches
-by route precedence, so an older route can bypass the ExtProc policy. Replace
-that route with this example, or adapt its backend and attach the ExtProc policy
-to the route you retain.
+Replace any existing `HTTPRoute` attached to this Gateway that matches
+`/v1/chat/completions` before applying this example.
 
-Install vSR:
+Install vLLM Semantic Router:
 
 ```bash
 export VSR_VERSION=0.3.0
@@ -60,9 +59,8 @@ kubectl describe httproute openai-semantic-routing -n agentgateway-system
 kubectl describe agentgatewaypolicy semantic-router-extproc -n agentgateway-system
 ```
 
-`VSR_VERSION` keeps the Helm chart and `extproc` image on the same vSR release.
-Set it once when validating a newer release; the command maps `0.3.0` to chart
-version `0.3.0` and image tag `v0.3.0`.
+`VSR_VERSION` sets both the chart version and the matching `v<version>`
+`extproc` image tag.
 
 ## Verify Streamed ExtProc
 

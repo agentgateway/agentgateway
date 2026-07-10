@@ -1,19 +1,10 @@
+# Helm deployment settings for the local classification and embedding models.
 router:
   skipProcessing:
     enabled: true
 
-image:
-  tag: v0.3.0
-  pullPolicy: IfNotPresent
-
 args:
 - --secure=false
-
-env: []
-extraEnv: []
-envFromSecrets: []
-extraVolumes: []
-extraVolumeMounts: []
 
 persistence:
   enabled: true
@@ -30,13 +21,11 @@ resources:
 
 config:
   version: v0.3
-  listeners: []
 
+  # Models selected by the coding policy below.
   providers:
     defaults:
       default_model: gpt-5.4-nano
-      default_reasoning_effort: null
-      reasoning_families: null
     models:
     - name: gpt-5.4-nano
       provider_model_id: gpt-5.4-nano
@@ -70,6 +59,7 @@ config:
         weight: 100
 
   routing:
+    # Model metadata and signals tuned for coding prompts.
     modelCards:
     - name: gpt-5.4-nano
       context_window_size: 1000000
@@ -87,9 +77,6 @@ config:
       tags: [premium, expensive, deep-reasoning]
 
     signals:
-      domains: []
-      jailbreak: []
-      pii: []
       keywords:
       - name: immediate_response_probe
         operator: OR
@@ -281,6 +268,7 @@ config:
         - name: expensive_lane
           gte: 0.35
 
+    # The immediate probe verifies ExtProc; the remaining decisions route traffic.
     decisions:
     - name: immediate_response_probe
       description: Deterministic immediate response used only to verify streamed ExtProc short-circuit behavior.
@@ -317,14 +305,11 @@ config:
       - model: gpt-5.4-nano
         use_reasoning: false
 
+  # Only non-default runtime settings required by this example.
   global:
     router:
       config_source: file
       auto_model_name: auto
-      clear_route_cache: false
-      model_selection:
-        enabled: false
-        ml: null
       strategy: priority
       streamed_body:
         enabled: true
@@ -333,28 +318,10 @@ config:
       skip_processing:
         enabled: true
     services:
-      api: null
-      authz: null
       observability:
         metrics:
           enabled: true
-        tracing:
-          enabled: false
-      ratelimit: null
-      response_api:
-        enabled: false
-      router_replay:
-        enabled: false
-    stores:
-      memory: null
-      semantic_cache:
-        enabled: false
-        backend_type: memory
-      vector_store:
-        enabled: false
-    integrations:
-      tools:
-        enabled: false
+    # Embedding and complexity settings used by the semantic coding signals.
     model_catalog:
       embeddings:
         semantic:
