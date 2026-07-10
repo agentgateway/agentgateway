@@ -72,7 +72,7 @@ backends:
                 path: /mcp
               name: remote
           stateful: true
-          alwaysUsePrefix: false
+          prefixMode: conditional
           failureMode: failClosed
           sessionIdleTtl: 30m0s
 route_groups: []

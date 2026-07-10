@@ -27,13 +27,13 @@ use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
 	BackendWithPolicies, Bind, BindMode, BindProtocol, FrontendPolicy, HeaderMatch,
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
-	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpTarget, McpTargetName,
-	McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType, ResourceName,
-	Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch, RouteName,
-	ServerTLSConfig, SimpleBackend, SimpleBackendReference, SimpleBackendReferenceWithPolicies,
-	SimpleBackendWithPolicies, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, Target, TargetedPolicy, TracingConfig, TrafficPolicy, TunnelProtocol,
-	TypedResourceName, validate_mcp_target_name,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode, McpTarget,
+	McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType,
+	ResourceName, Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch,
+	RouteName, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
+	SimpleBackendReferenceWithPolicies, SimpleBackendWithPolicies, SseTargetSpec,
+	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target, TargetedPolicy,
+	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName, validate_mcp_target_name,
 };
 use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
@@ -1693,10 +1693,7 @@ impl LocalBackend {
 				let m = McpBackend {
 					targets,
 					stateful,
-					always_use_prefix: tgt.prefix_mode.as_ref().is_some_and(|pm| match pm {
-						McpPrefixMode::Always => true,
-						McpPrefixMode::Conditional => false,
-					}),
+					prefix_mode: tgt.prefix_mode.unwrap_or_default(),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
 				};
@@ -1749,14 +1746,6 @@ pub enum McpStatefulMode {
 	Stateless,
 	#[default]
 	Stateful,
-}
-
-#[apply(schema_de!)]
-#[derive(Default)]
-pub enum McpPrefixMode {
-	Always,
-	#[default]
-	Conditional,
 }
 
 #[apply(schema_de!)]

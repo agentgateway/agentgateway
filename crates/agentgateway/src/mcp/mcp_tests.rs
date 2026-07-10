@@ -452,6 +452,179 @@ async fn apps_rbac_denied_ui_resource_strips_tool_meta() {
 	);
 }
 
+fn never_prefix_proxy(servers: Vec<(&str, SocketAddr, bool)>, stateful: bool) -> TestBind {
+	setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_prefix_mode(
+			"mcp",
+			servers,
+			stateful,
+			vec![],
+			crate::types::agent::McpPrefixMode::Never,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")))
+}
+
+#[tokio::test]
+async fn multiplex_never_prefix_routes_unprefixed_names() {
+	let apps = mock_apps_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(
+		vec![("a", apps.addr, false), ("b", other.addr, false)],
+		true,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client_with_ui(io).await;
+
+	// Names are exposed unprefixed...
+	let tools = client.list_tools(None).await.unwrap();
+	let names = tools.tools.iter().map(|t| t.name.to_string()).collect_vec();
+	assert!(names.contains(&"show_dashboard".to_string()), "{names:?}");
+	assert!(names.contains(&"echo".to_string()), "{names:?}");
+	assert!(
+		!names
+			.iter()
+			.any(|n| n.starts_with("a_") || n.starts_with("b_")),
+		"{names:?}"
+	);
+
+	// ...but ui:// resource URIs stay in the mux namespace: hosts read them
+	// from metadata we produced, unlike tool names, which apps hardcode.
+	let show = tools
+		.tools
+		.iter()
+		.find(|t| t.name == "show_dashboard")
+		.unwrap();
+	assert_eq!(
+		show
+			.meta
+			.as_ref()
+			.and_then(|m| m.0.get("ui"))
+			.and_then(|ui| ui.get("resourceUri"))
+			.and_then(|v| v.as_str()),
+		Some("ui://a+apps-mock/dashboard.html")
+	);
+
+	// Unprefixed calls route to the one target serving the name.
+	let ctr = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("show_dashboard"))
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, "dashboard data");
+	let ctr = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"{"hi":"world"}"#);
+
+	// Prompts resolve the same way.
+	let prompt = client
+		.get_prompt(
+			rmcp::model::GetPromptRequestParams::new("example_prompt").with_arguments(
+				serde_json::json!({"message": "hello"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+	assert!(!prompt.messages.is_empty());
+
+	// The rewritten app resource resolves through the mux.
+	let read = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(
+			"ui://a+apps-mock/dashboard.html",
+		))
+		.await
+		.unwrap();
+	let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read.contents[0] else {
+		panic!("expected text contents, got {:?}", read.contents);
+	};
+	assert_eq!(text, appsmockserver::DASHBOARD_HTML);
+}
+
+#[tokio::test]
+async fn multiplex_never_prefix_collisions_are_dropped_and_unroutable() {
+	let apps = mock_apps_streamable_http_server().await;
+	let mock_b = mock_streamable_http_server(true).await;
+	let mock_c = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(
+		vec![
+			("a", apps.addr, false),
+			("b", mock_b.addr, false),
+			("c", mock_c.addr, false),
+		],
+		true,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client_with_ui(io).await;
+
+	// Names served by multiple targets cannot be routed unprefixed, so every
+	// copy is dropped from the merged list rather than silently picking one.
+	let tools = client.list_tools(None).await.unwrap();
+	let names = tools.tools.iter().map(|t| t.name.to_string()).collect_vec();
+	assert!(!names.contains(&"echo".to_string()), "{names:?}");
+	assert!(names.contains(&"show_dashboard".to_string()), "{names:?}");
+
+	// Calling a colliding name fails rather than guessing a target.
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap_err();
+	assert!(
+		format!("{err}").contains("multiple targets"),
+		"unexpected error: {err}"
+	);
+
+	// Unique names keep working alongside collisions.
+	let ctr = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("show_dashboard"))
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, "dashboard data");
+}
+
+#[tokio::test]
+async fn stateless_multiplex_never_prefix_tool_call_resolves_target() {
+	let apps = mock_apps_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(
+		vec![("a", apps.addr, false), ("b", other.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	let ctr = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"{"hi":"world"}"#);
+}
+
 fn sse_first_data_message(body: &str) -> serde_json::Value {
 	let data = body
 		.lines()
@@ -3052,7 +3225,6 @@ async fn test_setup_partial_success_fail_open() {
 				},
 				backend_policies: Default::default(),
 				backend: None,
-				always_use_prefix: false,
 			}),
 			Arc::new(McpTarget {
 				name: "ok".into(),
@@ -3064,7 +3236,6 @@ async fn test_setup_partial_success_fail_open() {
 				},
 				backend_policies: Default::default(),
 				backend: None,
-				always_use_prefix: false,
 			}),
 		],
 		stateful: false,
@@ -3090,7 +3261,6 @@ async fn test_all_targets_fail_open_still_errors() {
 				},
 				backend_policies: Default::default(),
 				backend: None,
-				always_use_prefix: false,
 			}),
 			Arc::new(McpTarget {
 				name: "bad-2".into(),
@@ -3102,7 +3272,6 @@ async fn test_all_targets_fail_open_still_errors() {
 				},
 				backend_policies: Default::default(),
 				backend: None,
-				always_use_prefix: false,
 			}),
 		],
 		stateful: false,
@@ -3128,7 +3297,6 @@ fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
 			crate::types::agent::Target::Address(addr),
 		)),
-		always_use_prefix: false,
 	})
 }
 
@@ -3146,7 +3314,6 @@ fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
 			crate::types::agent::Target::Address(addr),
 		)),
-		always_use_prefix: false,
 	})
 }
 
@@ -3174,7 +3341,6 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
 			crate::types::agent::Target::Address(addr),
 		)),
-		always_use_prefix: false,
 	})
 }
 
@@ -3189,7 +3355,6 @@ fn fake_stdio_target(name: &str) -> Arc<McpTarget> {
 		},
 		backend_policies: Default::default(),
 		backend: None,
-		always_use_prefix: false,
 	})
 }
 
@@ -3342,7 +3507,7 @@ async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 			],
 			stateful: true,
 			failure_mode: FailureMode::FailOpen,
-			session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),

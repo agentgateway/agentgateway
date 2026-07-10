@@ -24,7 +24,7 @@ use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{FailureMode, mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::McpTargetSpec;
+use crate::types::agent::{McpPrefixMode, McpTargetSpec};
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -265,11 +265,36 @@ pub(crate) struct UpstreamGroup {
 	// target's initialize response so a modern client can see them in discover.
 	extensions: RwLock<HashMap<Strng, ExtensionCapabilities>>,
 
-	// If we have 1 target only, we don't prefix everything with 'target_'.
-	// Else this is empty
-	pub default_target_name: Option<String>,
+	pub name_routing: NameRouting,
 	pub is_multiplexing: bool,
 	pub failure_mode: FailureMode,
+}
+
+/// How downstream-visible tool/prompt names map to upstream targets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NameRouting {
+	/// Single target: names pass through untouched and everything routes to it.
+	Single(String),
+	/// Names are exposed as `{target}_{name}`; the prefix is parsed off to route.
+	Prefix,
+	/// Names pass through untouched; calls are routed by looking up which
+	/// target serves the name. Requires names to be unique across targets.
+	Resolve,
+}
+
+impl NameRouting {
+	/// Whether resource URIs carry the target name (`{target}+{scheme}://...`).
+	/// Unlike names, URIs stay encoded in Resolve mode: clients only ever see
+	/// URIs we produced, so the encoding is transparent to them, and it is how
+	/// we route resource reads and Apps ui:// resources back to their target.
+	pub fn encodes_uris(&self) -> bool {
+		!matches!(self, NameRouting::Single(_))
+	}
+
+	/// Whether tool/prompt names get the `{target}_` prefix.
+	pub fn prefixes_names(&self) -> bool {
+		matches!(self, NameRouting::Prefix)
+	}
 }
 
 impl UpstreamGroup {
@@ -278,14 +303,16 @@ impl UpstreamGroup {
 	}
 
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
-		let mut is_multiplexing = false;
-		let default_target_name = if backend.targets.len() != 1 {
-			is_multiplexing = true;
-			None
-		} else if backend.targets[0].always_use_prefix {
-			None
+		let is_multiplexing = backend.targets.len() != 1;
+		let name_routing = if is_multiplexing {
+			match backend.prefix_mode {
+				McpPrefixMode::Never => NameRouting::Resolve,
+				_ => NameRouting::Prefix,
+			}
+		} else if backend.prefix_mode == McpPrefixMode::Always {
+			NameRouting::Prefix
 		} else {
-			Some(backend.targets[0].name.to_string())
+			NameRouting::Single(backend.targets[0].name.to_string())
 		};
 		let mut s = Self {
 			failure_mode: backend.failure_mode,
@@ -293,7 +320,7 @@ impl UpstreamGroup {
 			client,
 			by_name: IndexMap::new(),
 			extensions: RwLock::new(HashMap::new()),
-			default_target_name,
+			name_routing,
 			is_multiplexing,
 		};
 		s.setup_connections()?;

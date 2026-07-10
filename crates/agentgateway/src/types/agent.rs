@@ -1650,11 +1650,25 @@ pub struct BackendInfo {
 	pub backend_name: Strng,
 }
 
+/// Controls how upstream tool/prompt names are exposed to clients.
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum McpPrefixMode {
+	/// Prefix names with the target name only when there are multiple targets.
+	#[default]
+	Conditional,
+	/// Always prefix names, even with a single target.
+	Always,
+	/// Never prefix names; with multiple targets, calls are routed by looking
+	/// up which target serves the name. Requires names to be unique across targets.
+	Never,
+}
+
 #[apply(schema_ser_schema!)]
 pub struct McpBackend {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
-	pub always_use_prefix: bool,
+	pub prefix_mode: McpPrefixMode,
 	/// Behavior when one or more MCP targets fail to initialize or fail during fanout.
 	/// Defaults to `failClosed`.
 	pub failure_mode: FailureMode,

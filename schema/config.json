@@ -7337,10 +7337,23 @@
       ]
     },
     "McpPrefixMode": {
-      "type": "string",
-      "enum": [
-        "always",
-        "conditional"
+      "description": "Controls how upstream tool/prompt names are exposed to clients.",
+      "oneOf": [
+        {
+          "description": "Prefix names with the target name only when there are multiple targets.",
+          "type": "string",
+          "const": "conditional"
+        },
+        {
+          "description": "Always prefix names, even with a single target.",
+          "type": "string",
+          "const": "always"
+        },
+        {
+          "description": "Never prefix names; with multiple targets, calls are routed by looking\nup which target serves the name. Requires names to be unique across targets.",
+          "type": "string",
+          "const": "never"
+        }
       ]
     },
     "McpBackendFailureMode": {

@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use agent_core::prelude::{AssertSize, Strng};
@@ -25,23 +25,50 @@ use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
-use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
+use crate::mcp::upstream::{IncomingRequestContext, NameRouting, UpstreamError};
+use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, resolve, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 
 const DELIMITER: &str = "_";
 
-fn resource_name(default_target_name: Option<&String>, target: &str, name: &str) -> String {
-	if default_target_name.is_none() {
+fn resource_name(routing: &NameRouting, target: &str, name: &str) -> String {
+	if routing.prefixes_names() {
 		format!("{target}{DELIMITER}{name}")
 	} else {
 		name.to_string()
 	}
 }
 
-fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
-	if default_target_name.is_none() {
+/// Names served by more than one target. Only relevant in Resolve mode, where
+/// unprefixed names must be unique to be routable; empty for other modes.
+fn duplicate_names<'a>(
+	routing: &NameRouting,
+	kind: &str,
+	names: impl Iterator<Item = (&'a Strng, &'a str)>,
+) -> HashSet<String> {
+	if *routing != NameRouting::Resolve {
+		return HashSet::new();
+	}
+	let mut owners: HashMap<&str, Vec<&Strng>> = HashMap::new();
+	for (target, name) in names {
+		owners.entry(name).or_default().push(target);
+	}
+	owners
+		.into_iter()
+		.filter(|(_, targets)| targets.len() > 1)
+		.map(|(name, targets)| {
+			warn!(
+				"{kind} '{name}' is served by multiple targets ({}); dropping it from the list because names must be unique across targets when prefixMode is 'never'",
+				targets.iter().join(", "),
+			);
+			name.to_string()
+		})
+		.collect()
+}
+
+fn resource_uri(routing: &NameRouting, target: &str, uri: &str) -> String {
+	if routing.encodes_uris() {
 		// Apps UI resources must keep their ui:// scheme so hosts still
 		// recognize them; the target is carried in the authority instead.
 		if let Some(rewritten) = apps::encode_ui_uri(target, uri) {
@@ -62,7 +89,7 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 }
 
 fn rewrite_resource_messages(
-	default_target_name: Option<&String>,
+	routing: &NameRouting,
 	target: &str,
 	mut message: ServerJsonRpcMessage,
 ) -> ServerJsonRpcMessage {
@@ -70,11 +97,8 @@ fn rewrite_resource_messages(
 		&& let ServerNotification::ResourceUpdatedNotification(resource_updated) =
 			&mut notification.notification
 	{
-		resource_updated.params.uri = resource_uri(
-			default_target_name,
-			target,
-			resource_updated.params.uri.as_str(),
-		);
+		resource_updated.params.uri =
+			resource_uri(routing, target, resource_updated.params.uri.as_str());
 	}
 	if let ServerJsonRpcMessage::Response(resp) = &mut message
 		&& let ServerResult::ReadResourceResult(read) = &mut resp.result
@@ -83,7 +107,7 @@ fn rewrite_resource_messages(
 			match content {
 				rmcp::model::ResourceContents::TextResourceContents { uri, .. }
 				| rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => {
-					*uri = resource_uri(default_target_name, target, uri);
+					*uri = resource_uri(routing, target, uri);
 				},
 				_ => {},
 			}
@@ -161,10 +185,10 @@ impl Relay {
 		cel: CelExecWrapper,
 	) -> Messages {
 		let target = target.to_string();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let routing = self.upstreams.name_routing.clone();
 		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
-			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
+			let message = rewrite_resource_messages(&routing, &target, message);
 
 			let mut resource_allowed = |uri: &str| {
 				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against
@@ -175,7 +199,7 @@ impl Relay {
 				)
 			};
 			apps::rewrite_tool_list_ui_meta(
-				default_target_name.is_none(),
+				routing.encodes_uris(),
 				&target,
 				&mut resource_allowed,
 				message,
@@ -183,18 +207,45 @@ impl Relay {
 		})
 	}
 
+	/// Whether name-to-target routing requires resolution against upstream
+	/// listings (`prefixMode: never` with multiple targets).
+	pub fn needs_resolution(&self) -> bool {
+		self.upstreams.name_routing == NameRouting::Resolve
+	}
+
+	/// Statically map a name to its target. Only valid when names carry the
+	/// routing information themselves; `Resolve` mode needs `resolve_resource_name`.
 	pub fn parse_resource_name<'a, 'b: 'a>(
 		&'a self,
 		res: &'b str,
 	) -> Result<(&'a str, &'b str), UpstreamError> {
-		if let Some(default) = self.upstreams.default_target_name.as_ref() {
-			Ok((default.as_str(), res))
-		} else {
-			res
+		match &self.upstreams.name_routing {
+			NameRouting::Single(default) => Ok((default.as_str(), res)),
+			NameRouting::Prefix => res
 				.split_once(DELIMITER)
 				.ok_or(UpstreamError::InvalidRequest(
 					"invalid resource name".to_string(),
-				))
+				)),
+			NameRouting::Resolve => Err(UpstreamError::InvalidRequest(
+				"internal error: unprefixed name requires resolution".to_string(),
+			)),
+		}
+	}
+
+	/// Map a name to its target, resolving against upstream listings when the
+	/// name itself carries no routing information (`prefixMode: never`).
+	pub async fn resolve_resource_name<'a, 'b: 'a>(
+		&'a self,
+		kind: resolve::ResolveKind,
+		res: &'b str,
+		ctx: &IncomingRequestContext,
+	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
+		if self.needs_resolution() {
+			let target = self.resolve_unprefixed(kind, res, ctx).await?;
+			Ok((Cow::Owned(target.to_string()), res))
+		} else {
+			let (target, name) = self.parse_resource_name(res)?;
+			Ok((Cow::Borrowed(target), name))
 		}
 	}
 
@@ -202,7 +253,7 @@ impl Relay {
 	/// multiplexed URI of the form `service+scheme://rest` (or `ui://service+rest`
 	/// for Apps UI resources).
 	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
-		if let Some(default) = self.upstreams.default_target_name.as_ref() {
+		if let NameRouting::Single(default) = &self.upstreams.name_routing {
 			Ok((default.as_str(), uri.to_string()))
 		} else if apps::is_ui_uri(uri) {
 			let (service_name, original_uri) = apps::decode_ui_uri(uri)
@@ -384,17 +435,35 @@ impl Relay {
 
 	pub fn merge_tools(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let routing = self.upstreams.name_routing.clone();
 		Box::new(move |streams, cel| {
-			let tools = streams
+			let per_target = streams
 				.into_iter()
-				.flat_map(|(server_name, s)| {
+				.map(|(server_name, s)| {
 					let tools = match s {
 						ServerResult::ListToolsResult(ltr) => ltr.tools,
 						_ => vec![],
 					};
+					(server_name, tools)
+				})
+				.collect_vec();
+			// In Resolve mode names are exposed unprefixed, so a name served by
+			// multiple targets cannot be routed; drop every copy rather than
+			// silently picking one. Duplicates are computed pre-authorization to
+			// stay consistent with call-time resolution, which is caller-independent.
+			let duplicates = duplicate_names(
+				&routing,
+				"tool",
+				per_target
+					.iter()
+					.flat_map(|(target, tools)| tools.iter().map(move |t| (target, t.name.as_ref()))),
+			);
+			let tools = per_target
+				.into_iter()
+				.flat_map(|(server_name, tools)| {
 					tools
 						.into_iter()
+						.filter(|t| !duplicates.contains(t.name.as_ref()))
 						// Apply authorization policies, filtering tools that are not allowed.
 						.filter(|t| {
 							policies.validate(
@@ -407,11 +476,7 @@ impl Relay {
 						})
 						// Rename to handle multiplexing
 						.map(|mut t| {
-							t.name = Cow::Owned(resource_name(
-								default_target_name.as_ref(),
-								server_name.as_str(),
-								&t.name,
-							));
+							t.name = Cow::Owned(resource_name(&routing, server_name.as_str(), &t.name));
 							t
 						})
 						.collect_vec()
@@ -546,17 +611,31 @@ impl Relay {
 
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let routing = self.upstreams.name_routing.clone();
 		Box::new(move |streams, cel| {
-			let prompts = streams
+			let per_target = streams
 				.into_iter()
-				.flat_map(|(server_name, s)| {
+				.map(|(server_name, s)| {
 					let prompts = match s {
 						ServerResult::ListPromptsResult(lpr) => lpr.prompts,
 						_ => vec![],
 					};
+					(server_name, prompts)
+				})
+				.collect_vec();
+			let duplicates = duplicate_names(
+				&routing,
+				"prompt",
+				per_target
+					.iter()
+					.flat_map(|(target, prompts)| prompts.iter().map(move |p| (target, p.name.as_str()))),
+			);
+			let prompts = per_target
+				.into_iter()
+				.flat_map(|(server_name, prompts)| {
 					prompts
 						.into_iter()
+						.filter(|p| !duplicates.contains(&p.name))
 						.filter(|p| {
 							policies.validate(
 								&rbac::ResourceType::Prompt(rbac::ResourceId::new(
@@ -567,7 +646,7 @@ impl Relay {
 							)
 						})
 						.map(|mut p| {
-							p.name = resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name);
+							p.name = resource_name(&routing, server_name.as_str(), &p.name);
 							p
 						})
 						.collect_vec()
@@ -586,7 +665,7 @@ impl Relay {
 	}
 	pub fn merge_resources(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let routing = self.upstreams.name_routing.clone();
 		Box::new(move |streams, cel| {
 			let resources = streams
 				.into_iter()
@@ -608,7 +687,7 @@ impl Relay {
 						})
 						// Prefix URI with service name when multiplexing to avoid conflicts
 						.map(|mut r| {
-							r.uri = resource_uri(default_target_name.as_ref(), server_name.as_str(), &r.uri);
+							r.uri = resource_uri(&routing, server_name.as_str(), &r.uri);
 							r
 						})
 						.collect_vec()
@@ -627,7 +706,7 @@ impl Relay {
 	}
 	pub fn merge_resource_templates(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let routing = self.upstreams.name_routing.clone();
 		Box::new(move |streams, cel| {
 			let resource_templates = streams
 				.into_iter()
@@ -649,11 +728,7 @@ impl Relay {
 						})
 						// Prefix uri_template with service name when multiplexing
 						.map(|mut rt| {
-							rt.uri_template = resource_uri(
-								default_target_name.as_ref(),
-								server_name.as_str(),
-								&rt.uri_template,
-							);
+							rt.uri_template = resource_uri(&routing, server_name.as_str(), &rt.uri_template);
 							rt
 						})
 						.collect_vec()
