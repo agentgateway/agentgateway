@@ -48,6 +48,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
 		&AgentgatewayBackend{},
 		&AgentgatewayBackendList{},
+		&AgentgatewayModel{},
+		&AgentgatewayModelList{},
 		&AgentgatewayParameters{},
 		&AgentgatewayParametersList{},
 		&AgentgatewayPolicy{},

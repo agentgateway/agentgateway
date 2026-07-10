@@ -12,9 +12,11 @@ import (
 
 var (
 	AgentgatewayBackendGVK    = buildAgwGvk("AgentgatewayBackend")
+	AgentgatewayModelGVK      = buildAgwGvk("AgentgatewayModel")
 	AgentgatewayParametersGVK = buildAgwGvk("AgentgatewayParameters")
 	AgentgatewayPolicyGVK     = buildAgwGvk("AgentgatewayPolicy")
 	AgentgatewayBackendGVR    = AgentgatewayBackendGVK.GroupVersion().WithResource("agentgatewaybackends")
+	AgentgatewayModelGVR      = AgentgatewayModelGVK.GroupVersion().WithResource("agentgatewaymodels")
 	AgentgatewayParametersGVR = AgentgatewayParametersGVK.GroupVersion().WithResource("agentgatewayparameters")
 	AgentgatewayPolicyGVR     = AgentgatewayPolicyGVK.GroupVersion().WithResource("agentgatewaypolicies")
 )
@@ -52,6 +54,8 @@ func GVKToGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) 
 		return AgentgatewayPolicyGVR, nil
 	case AgentgatewayBackendGVK:
 		return AgentgatewayBackendGVR, nil
+	case AgentgatewayModelGVK:
+		return AgentgatewayModelGVR, nil
 	default:
 		return schema.GroupVersionResource{}, fmt.Errorf("unknown GVK: %v", gvk)
 	}

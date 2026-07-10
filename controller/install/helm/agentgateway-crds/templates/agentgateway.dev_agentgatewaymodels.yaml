@@ -1,0 +1,1072 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  labels:
+    app: agentgateway
+    app.kubernetes.io/name: agentgateway
+  name: agentgatewaymodels.agentgateway.dev
+spec:
+  group: agentgateway.dev
+  names:
+    categories:
+    - agentgateway
+    kind: AgentgatewayModel
+    listKind: AgentgatewayModelList
+    plural: agentgatewaymodels
+    shortNames:
+    - agmodel
+    singular: agentgatewaymodel
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Model name matched from client requests
+      jsonPath: .spec.modelMatch
+      name: Model Match
+      type: string
+    - description: The age of the model.
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: Desired model configuration.
+            properties:
+              modelMatch:
+                description: |-
+                  Model name or wildcard expression matched against client requests.
+                  When omitted, the model matches metadata.name exactly.
+                maxLength: 1024
+                minLength: 1
+                type: string
+              parentRefs:
+                description: Gateways and listeners to which this model attaches.
+                items:
+                  description: |-
+                    ParentReference identifies an API object (usually a Gateway) that can be considered
+                    a parent of this resource (usually a route). There are two kinds of parent resources
+                    with "Core" support:
+
+                    * Gateway (Gateway conformance profile)
+                    * Service (Mesh conformance profile, ClusterIP Services only)
+
+                    This API may be extended in the future to support additional kinds of parent
+                    resources.
+
+                    The API object must be valid in the cluster; the Group and Kind must
+                    be registered in the cluster for this reference to be valid.
+                  properties:
+                    group:
+                      default: gateway.networking.k8s.io
+                      description: |-
+                        Group is the group of the referent.
+                        When unspecified, "gateway.networking.k8s.io" is inferred.
+                        To set the core API group (such as for a "Service" kind referent),
+                        Group must be explicitly set to "" (empty string).
+
+                        Support: Core
+                      maxLength: 253
+                      pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                      type: string
+                    kind:
+                      default: Gateway
+                      description: |-
+                        Kind is kind of the referent.
+
+                        There are two kinds of parent resources with "Core" support:
+
+                        * Gateway (Gateway conformance profile)
+                        * Service (Mesh conformance profile, ClusterIP Services only)
+
+                        Support for other resources is Implementation-Specific.
+                      maxLength: 63
+                      minLength: 1
+                      pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                      type: string
+                    name:
+                      description: |-
+                        Name is the name of the referent.
+
+                        Support: Core
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace is the namespace of the referent. When unspecified, this refers
+                        to the local namespace of the Route.
+
+                        Note that there are specific rules for ParentRefs which cross namespace
+                        boundaries. Cross-namespace references are only valid if they are explicitly
+                        allowed by something in the namespace they are referring to. For example:
+                        Gateway has the AllowedRoutes field, and ReferenceGrant provides a
+                        generic way to enable any other kind of cross-namespace reference.
+
+                        <gateway:experimental:description>
+                        ParentRefs from a Route to a Service in the same namespace are "producer"
+                        routes, which apply default routing rules to inbound connections from
+                        any namespace to the Service.
+
+                        ParentRefs from a Route to a Service in a different namespace are
+                        "consumer" routes, and these routing rules are only applied to outbound
+                        connections originating from the same namespace as the Route, for which
+                        the intended destination of the connections are a Service targeted as a
+                        ParentRef of the Route.
+                        </gateway:experimental:description>
+
+                        Support: Core
+                      maxLength: 63
+                      minLength: 1
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    port:
+                      description: |-
+                        Port is the network port this Route targets. It can be interpreted
+                        differently based on the type of parent resource.
+
+                        When the parent resource is a Gateway, this targets all listeners
+                        listening on the specified port that also support this kind of Route(and
+                        select this Route). It's not recommended to set `Port` unless the
+                        networking behaviors specified in a Route must apply to a specific port
+                        as opposed to a listener(s) whose port(s) may be changed. When both Port
+                        and SectionName are specified, the name and port of the selected listener
+                        must match both specified values.
+
+                        <gateway:experimental:description>
+                        When the parent resource is a Service, this targets a specific port in the
+                        Service spec. When both Port (experimental) and SectionName are specified,
+                        the name and port of the selected port must match both specified values.
+                        </gateway:experimental:description>
+
+                        Implementations MAY choose to support other parent resources.
+                        Implementations supporting other types of parent resources MUST clearly
+                        document how/if Port is interpreted.
+
+                        For the purpose of status, an attachment is considered successful as
+                        long as the parent resource accepts it partially. For example, Gateway
+                        listeners can restrict which Routes can attach to them by Route kind,
+                        namespace, or hostname. If 1 of 2 Gateway listeners accept attachment
+                        from the referencing Route, the Route MUST be considered successfully
+                        attached. If no Gateway listeners accept attachment from this Route,
+                        the Route MUST be considered detached from the Gateway.
+
+                        Support: Extended
+                      format: int32
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
+                    sectionName:
+                      description: |-
+                        SectionName is the name of a section within the target resource. In the
+                        following resources, SectionName is interpreted as the following:
+
+                        * Gateway: Listener name. When both Port (experimental) and SectionName
+                        are specified, the name and port of the selected listener must match
+                        both specified values.
+                        * Service: Port name. When both Port (experimental) and SectionName
+                        are specified, the name and port of the selected listener must match
+                        both specified values.
+
+                        Implementations MAY choose to support attaching Routes to other resources.
+                        If that is the case, they MUST clearly document how SectionName is
+                        interpreted.
+
+                        When unspecified (empty string), this will reference the entire resource.
+                        For the purpose of status, an attachment is considered successful if at
+                        least one section in the parent resource accepts it. For example, Gateway
+                        listeners can restrict which Routes can attach to them by Route kind,
+                        namespace, or hostname. If 1 of 2 Gateway listeners accept attachment from
+                        the referencing Route, the Route MUST be considered successfully
+                        attached. If no Gateway listeners accept attachment from this Route, the
+                        Route MUST be considered detached from the Gateway.
+
+                        Support: Core
+                      maxLength: 253
+                      minLength: 1
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                      type: string
+                  required:
+                  - name
+                  type: object
+                maxItems: 16
+                minItems: 1
+                type: array
+              provider:
+                description: Provider serving this concrete model.
+                properties:
+                  anthropic:
+                    description: Anthropic provider settings.
+                    properties:
+                      model:
+                        description: |-
+                          Model name override, such as `gpt-4o-mini`.
+                          If unset, the model name is taken from the request.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    type: object
+                  azure:
+                    description: |-
+                      Azure provider with resource-based configuration.
+                      Supports both Azure OpenAI and Azure AI Foundry resource types.
+                    properties:
+                      apiVersion:
+                        description: |-
+                          The version of the Azure OpenAI API to use.
+                          If unset, defaults to `v1`.
+                        maxLength: 64
+                        minLength: 1
+                        type: string
+                      model:
+                        description: |-
+                          Model name override, such as `gpt-4o-mini`.
+                          If unset, the model name is taken from the request.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      projectName:
+                        description: |-
+                          The Foundry project name, required when `resourceType` is `Foundry`.
+                          Used to construct paths: /api/projects/{projectName}/openai/v1/...
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      resourceName:
+                        description: |-
+                          The Azure resource name used to construct the endpoint host.
+                          For OpenAI: {resourceName}.openai.azure.com
+                          For Foundry: {resourceName}.services.ai.azure.com
+                          Note: when the Azure portal "Foundry legacy" template was used, the
+                          generated resource name may end in "-resource" (e.g. "myproject-resource");
+                          that suffix is part of the resource name as the user configured it, not
+                          part of the hostname suffix agentgateway should append.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      resourceType:
+                        description: The type of Azure endpoint. Determines the host
+                          suffix.
+                        enum:
+                        - Foundry
+                        - OpenAI
+                        type: string
+                    required:
+                    - resourceName
+                    - resourceType
+                    type: object
+                    x-kubernetes-validations:
+                    - message: projectName is required when resourceType is Foundry
+                      rule: self.resourceType != 'Foundry' || has(self.projectName)
+                  azureopenai:
+                    description: Azure OpenAI provider settings.
+                    properties:
+                      apiVersion:
+                        description: |-
+                          The version of the Azure OpenAI API to use.
+                          For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference).
+                          If unset, defaults to `v1`.
+                        maxLength: 64
+                        minLength: 1
+                        type: string
+                      deploymentName:
+                        description: |-
+                          The name of the Azure OpenAI model deployment to use.
+                          For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
+                          This is required if `apiVersion` is not `v1`. For `v1`, the model can be
+                          set in the request.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      endpoint:
+                        description: |-
+                          The endpoint for the Azure OpenAI API to use, such as `my-endpoint.openai.azure.com`.
+                          If the scheme is included, it is stripped.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    required:
+                    - endpoint
+                    type: object
+                    x-kubernetes-validations:
+                    - message: deploymentName is required for this apiVersion
+                      rule: '!has(self.apiVersion) || self.apiVersion == ''v1'' ?
+                        true : has(self.deploymentName)'
+                  bedrock:
+                    description: Bedrock provider settings.
+                    properties:
+                      guardrail:
+                        description: |-
+                          Guardrail policy to use for the backend. See
+                          <https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html>.
+                          If not specified, the AWS Guardrail policy will not be used.
+                        properties:
+                          identifier:
+                            description: Identifier of the Guardrail policy to use
+                              for the backend.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
+                          version:
+                            description: Version of the Guardrail policy to use for
+                              the backend.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
+                        required:
+                        - identifier
+                        - version
+                        type: object
+                      model:
+                        description: |-
+                          Model name override, such as `gpt-4o-mini`.
+                          If unset, the model name is taken from the request.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      region:
+                        default: us-east-1
+                        description: |-
+                          AWS region to use for the backend.
+                          Defaults to `us-east-1` if not specified.
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-z0-9-]+$
+                        type: string
+                    type: object
+                  custom:
+                    description: |-
+                      Custom provider configures a non-managed or self-hosted LLM provider.
+                      Use this when the provider target and API formats should be declared
+                      explicitly instead of inferred from a managed provider such as OpenAI or
+                      Anthropic.
+                    properties:
+                      backendRef:
+                        description: |-
+                          Kubernetes backend that serves this provider.
+                          `backendRef` may target only a namespace-local Service or InferencePool.
+                          If unset, host and port must be set on the parent provider.
+                        properties:
+                          group:
+                            default: ""
+                            description: |-
+                              API group of the referenced resource. For example, `gateway.networking.k8s.io`.
+                              When unspecified or empty string, core API group is inferred.
+                            maxLength: 253
+                            pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                            type: string
+                          kind:
+                            default: Service
+                            description: |-
+                              Kind of the referenced resource. For example, `Service`.
+                              Defaults to "Service" when not specified.
+                            maxLength: 63
+                            minLength: 1
+                            pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                            type: string
+                          name:
+                            description: Name of the referenced resource.
+                            maxLength: 253
+                            minLength: 1
+                            type: string
+                          port:
+                            description: |-
+                              Destination port number to use for this resource.
+                              Required when the referenced resource is a Kubernetes Service.
+                            format: int32
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                        required:
+                        - name
+                        type: object
+                        x-kubernetes-validations:
+                        - message: Must have port for Service reference
+                          rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                            ? has(self.port) : true'
+                      formats:
+                        description: Provider-native API formats this provider supports.
+                        items:
+                          description: Provider-native LLM API format settings.
+                          properties:
+                            path:
+                              description: |-
+                                Default upstream path override for this format.
+                                If unset, agentgateway uses the default path for the format.
+                              maxLength: 1024
+                              minLength: 1
+                              type: string
+                            type:
+                              description: Provider-native API format.
+                              enum:
+                              - AnthropicTokenCount
+                              - Completions
+                              - Embeddings
+                              - Messages
+                              - Realtime
+                              - Rerank
+                              - Responses
+                              type: string
+                          required:
+                          - type
+                          type: object
+                          x-kubernetes-validations:
+                          - message: path must start with /
+                            rule: '!has(self.path) || self.path.startsWith(''/'')'
+                        maxItems: 6
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - type
+                        x-kubernetes-list-type: map
+                      model:
+                        description: |-
+                          Model name override, such as `gpt-oss`.
+                          If unset, the model name is taken from the request.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    required:
+                    - formats
+                    type: object
+                    x-kubernetes-validations:
+                    - message: custom provider backendRef may target only Service
+                        or InferencePool
+                      rule: '!has(self.backendRef) || (((!has(self.backendRef.group)
+                        || self.backendRef.group == "") && (!has(self.backendRef.kind)
+                        || self.backendRef.kind == ''Service'')) || (has(self.backendRef.group)
+                        && self.backendRef.group == ''inference.networking.k8s.io''
+                        && has(self.backendRef.kind) && self.backendRef.kind == ''InferencePool''))'
+                  gemini:
+                    description: Gemini provider settings.
+                    properties:
+                      model:
+                        description: |-
+                          Model name override, such as `gemini-2.5-pro`.
+                          If unset, the model name is taken from the request.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    type: object
+                  host:
+                    description: |-
+                      Hostname to send requests to.
+                      For custom providers without backendRef, host and port specify the target.
+                      For managed providers, host and port override the provider default.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  openai:
+                    description: OpenAI provider settings.
+                    properties:
+                      model:
+                        description: |-
+                          Model name override, such as `gpt-4o-mini`.
+                          If unset, the model name is taken from the request.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    type: object
+                  path:
+                    description: |-
+                      URL path to use for LLM provider API requests.
+                      This is useful when you need to route requests to a different API endpoint while maintaining
+                      compatibility with the original provider's API structure.
+                      If not specified, the default path for the provider is used.
+                    maxLength: 1024
+                    minLength: 1
+                    type: string
+                  pathPrefix:
+                    description: |-
+                      Overrides the default base path prefix, such as `/v1`, for upstream requests.
+                      Path translation for cross-format requests still applies using this prefix.
+                      Only supported for OpenAI and Anthropic providers.
+                    maxLength: 1024
+                    minLength: 1
+                    type: string
+                  port:
+                    description: Port to send requests to.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                  vertexai:
+                    description: Vertex AI provider settings.
+                    properties:
+                      model:
+                        description: |-
+                          Model name override, such as `gpt-4o-mini`.
+                          If unset, the model name is taken from the request.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      projectId:
+                        description: The ID of the Google Cloud Project that you use
+                          for the Vertex AI.
+                        maxLength: 64
+                        minLength: 1
+                        type: string
+                      region:
+                        default: global
+                        description: |-
+                          The location of the Google Cloud Project that you use for the Vertex AI.
+                          Special values: `global` uses the global endpoint, while `us` and `eu` use restricted
+                          multi-region endpoints. Other values are treated as regional locations.
+                          Defaults to `global` if not specified.
+                        maxLength: 64
+                        minLength: 1
+                        type: string
+                    required:
+                    - projectId
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: both host and port must be set together
+                  rule: 'has(self.host) || has(self.port) ? has(self.host) && has(self.port)
+                    : true'
+                - message: custom providers must specify exactly one of backendRef
+                    or host and port
+                  rule: 'has(self.custom) ? has(self.custom.backendRef) != has(self.host)
+                    : true'
+                - message: path and pathPrefix are mutually exclusive
+                  rule: '!(has(self.path) && has(self.pathPrefix))'
+                - message: path, pathPrefix, and custom format paths are mutually
+                    exclusive
+                  rule: '!(has(self.custom) && self.custom.formats.exists(f, has(f.path))
+                    && (has(self.path) || has(self.pathPrefix)))'
+                - message: pathPrefix requires host to be set
+                  rule: 'has(self.pathPrefix) ? has(self.host) : true'
+                - message: exactly one of the fields in [openai azureopenai azure
+                    anthropic gemini vertexai bedrock custom] must be set
+                  rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock),has(self.custom)].filter(x,x==true).size()
+                    == 1'
+              providerModel:
+                description: |-
+                  Fixed model name sent to the provider. When omitted, the model selected by
+                  modelMatch is sent to the provider.
+                maxLength: 256
+                minLength: 1
+                type: string
+              transformations:
+                description: |-
+                  CEL transformations applied to fields in the provider request body.
+                  Transformations take precedence over providerModel for the same field.
+                items:
+                  description: |-
+                    Maps a request JSON field to a CEL expression.
+                    The expression is evaluated against the current request body and its result
+                    is assigned to the configured field.
+                  properties:
+                    expression:
+                      description: CEL expression used to compute the field value.
+                      maxLength: 16384
+                      minLength: 1
+                      type: string
+                    field:
+                      description: Name of the field to set.
+                      maxLength: 256
+                      minLength: 1
+                      type: string
+                  required:
+                  - expression
+                  - field
+                  type: object
+                maxItems: 64
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - field
+                x-kubernetes-list-type: map
+              virtualModel:
+                description: Request-time routing among concrete AgentgatewayModel
+                  resources.
+                properties:
+                  conditional:
+                    description: Ordered condition-based model selection.
+                    properties:
+                      targets:
+                        description: |-
+                          Concrete model targets evaluated in order. The first matching condition is
+                          selected. One final target may omit when to act as the fallback.
+                        items:
+                          properties:
+                            model:
+                              description: |-
+                                Concrete model name selected through the referenced model. This is needed
+                                when modelRef points to a wildcard modelMatch. When omitted, the referenced
+                                model's effective modelMatch is used.
+                              maxLength: 1024
+                              minLength: 1
+                              type: string
+                            modelRef:
+                              description: Same-namespace AgentgatewayModel resource
+                                selected by this target.
+                              properties:
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            when:
+                              description: |-
+                                CEL expression that must evaluate to true for this target to be selected.
+                                Omit only on the final fallback target.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                          required:
+                          - modelRef
+                          type: object
+                        maxItems: 64
+                        minItems: 1
+                        type: array
+                        x-kubernetes-validations:
+                        - message: conditional targets without when must be last
+                          rule: self.filter(e, !has(e.when)).size() <= 1 && (!self.exists(e,
+                            !has(e.when)) || !has(self[size(self) - 1].when))
+                    required:
+                    - targets
+                    type: object
+                  failover:
+                    description: Priority-based model selection with failover between
+                      priority groups.
+                    properties:
+                      targets:
+                        description: Concrete model targets grouped by priority. Lower
+                          values are preferred.
+                        items:
+                          properties:
+                            model:
+                              description: |-
+                                Concrete model name selected through the referenced model. This is needed
+                                when modelRef points to a wildcard modelMatch. When omitted, the referenced
+                                model's effective modelMatch is used.
+                              maxLength: 1024
+                              minLength: 1
+                              type: string
+                            modelRef:
+                              description: Same-namespace AgentgatewayModel resource
+                                selected by this target.
+                              properties:
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            priority:
+                              description: Priority of this target. Lower values are
+                                preferred.
+                              format: int32
+                              maximum: 1000000
+                              minimum: 0
+                              type: integer
+                          required:
+                          - modelRef
+                          - priority
+                          type: object
+                        maxItems: 64
+                        minItems: 1
+                        type: array
+                    required:
+                    - targets
+                    type: object
+                  weighted:
+                    description: Weight-based model selection.
+                    properties:
+                      targets:
+                        description: Concrete model targets and their relative weights.
+                        items:
+                          properties:
+                            model:
+                              description: |-
+                                Concrete model name selected through the referenced model. This is needed
+                                when modelRef points to a wildcard modelMatch. When omitted, the referenced
+                                model's effective modelMatch is used.
+                              maxLength: 1024
+                              minLength: 1
+                              type: string
+                            modelRef:
+                              description: Same-namespace AgentgatewayModel resource
+                                selected by this target.
+                              properties:
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            weight:
+                              default: 1
+                              description: Relative traffic weight. Defaults to 1.
+                              format: int32
+                              maximum: 1000000
+                              minimum: 1
+                              type: integer
+                          required:
+                          - modelRef
+                          type: object
+                        maxItems: 64
+                        minItems: 1
+                        type: array
+                    required:
+                    - targets
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: exactly one of the fields in [weighted failover conditional]
+                    must be set
+                  rule: '[has(self.weighted),has(self.failover),has(self.conditional)].filter(x,x==true).size()
+                    == 1'
+              visibility:
+                default: Public
+                description: |-
+                  Controls whether clients can request this model directly. Internal models
+                  can only be selected by virtual models. Defaults to Public.
+                enum:
+                - Internal
+                - Public
+                type: string
+            required:
+            - parentRefs
+            type: object
+            x-kubernetes-validations:
+            - message: providerModel requires provider
+              rule: has(self.provider) || !has(self.providerModel)
+            - message: transformations require provider
+              rule: has(self.provider) || !has(self.transformations)
+            - message: exactly one of the fields in [provider virtualModel] must be
+                set
+              rule: '[has(self.provider),has(self.virtualModel)].filter(x,x==true).size()
+                == 1'
+          status:
+            description: Current model attachment status.
+            properties:
+              parents:
+                description: Status for each Gateway parent to which this model is
+                  attached.
+                items:
+                  description: |-
+                    RouteParentStatus describes the status of a route with respect to an
+                    associated Parent.
+                  properties:
+                    conditions:
+                      description: |-
+                        Conditions describes the status of the route with respect to the Gateway.
+                        Note that the route's availability is also subject to the Gateway's own
+                        status conditions and listener status.
+
+                        If the Route's ParentRef specifies an existing Gateway that supports
+                        Routes of this kind AND that Gateway's controller has sufficient access,
+                        then that Gateway's controller MUST set the "Accepted" condition on the
+                        Route, to indicate whether the route has been accepted or rejected by the
+                        Gateway, and why.
+
+                        A Route MUST be considered "Accepted" if at least one of the Route's
+                        rules is implemented by the Gateway.
+
+                        There are a number of cases where the "Accepted" condition may not be set
+                        due to lack of controller visibility, that includes when:
+
+                        * The Route refers to a nonexistent parent.
+                        * The Route is of a type that the controller does not support.
+                        * The Route is in a namespace to which the controller does not have access.
+
+                        <gateway:util:excludeFromCRD>
+
+                        Notes for implementors:
+
+                        Conditions are a listType `map`, which means that they function like a
+                        map with a key of the `type` field _in the k8s apiserver_.
+
+                        This means that implementations must obey some rules when updating this
+                        section.
+
+                        * Implementations MUST perform a read-modify-write cycle on this field
+                          before modifying it. That is, when modifying this field, implementations
+                          must be confident they have fetched the most recent version of this field,
+                          and ensure that changes they make are on that recent version.
+                        * Implementations MUST NOT remove or reorder Conditions that they are not
+                          directly responsible for. For example, if an implementation sees a Condition
+                          with type `special.io/SomeField`, it MUST NOT remove, change or update that
+                          Condition.
+                        * Implementations MUST always _merge_ changes into Conditions of the same Type,
+                          rather than creating more than one Condition of the same Type.
+                        * Implementations MUST always update the `observedGeneration` field of the
+                          Condition to the `metadata.generation` of the Gateway at the time of update creation.
+                        * If the `observedGeneration` of a Condition is _greater than_ the value the
+                          implementation knows about, then it MUST NOT perform the update on that Condition,
+                          but must wait for a future reconciliation and status update. (The assumption is that
+                          the implementation's copy of the object is stale and an update will be re-triggered
+                          if relevant.)
+
+                        </gateway:util:excludeFromCRD>
+                      items:
+                        description: Condition contains details for one aspect of
+                          the current state of this API Resource.
+                        properties:
+                          lastTransitionTime:
+                            description: |-
+                              lastTransitionTime is the last time the condition transitioned from one status to another.
+                              This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                            format: date-time
+                            type: string
+                          message:
+                            description: |-
+                              message is a human readable message indicating details about the transition.
+                              This may be an empty string.
+                            maxLength: 32768
+                            type: string
+                          observedGeneration:
+                            description: |-
+                              observedGeneration represents the .metadata.generation that the condition was set based upon.
+                              For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                              with respect to the current state of the instance.
+                            format: int64
+                            minimum: 0
+                            type: integer
+                          reason:
+                            description: |-
+                              reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                              Producers of specific condition types may define expected values and meanings for this field,
+                              and whether the values are considered a guaranteed API.
+                              The value should be a CamelCase string.
+                              This field may not be empty.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                            type: string
+                          status:
+                            description: status of the condition, one of True, False,
+                              Unknown.
+                            enum:
+                            - "True"
+                            - "False"
+                            - Unknown
+                            type: string
+                          type:
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                            maxLength: 316
+                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                            type: string
+                        required:
+                        - lastTransitionTime
+                        - message
+                        - reason
+                        - status
+                        - type
+                        type: object
+                      maxItems: 8
+                      minItems: 1
+                      type: array
+                      x-kubernetes-list-map-keys:
+                      - type
+                      x-kubernetes-list-type: map
+                    controllerName:
+                      description: |-
+                        ControllerName is a domain/path string that indicates the name of the
+                        controller that wrote this status. This corresponds with the
+                        controllerName field on GatewayClass.
+
+                        Example: "example.net/gateway-controller".
+
+                        The format of this field is DOMAIN "/" PATH, where DOMAIN and PATH are
+                        valid Kubernetes names
+                        (https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names).
+
+                        Controllers MUST populate this field when writing status. Controllers should ensure that
+                        entries to status populated with their ControllerName are cleaned up when they are no
+                        longer necessary.
+                      maxLength: 253
+                      minLength: 1
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*\/[A-Za-z0-9\/\-._~%!$&'()*+,;=:]+$
+                      type: string
+                    parentRef:
+                      description: |-
+                        ParentRef corresponds with a ParentRef in the spec that this
+                        RouteParentStatus struct describes the status of.
+                      properties:
+                        group:
+                          default: gateway.networking.k8s.io
+                          description: |-
+                            Group is the group of the referent.
+                            When unspecified, "gateway.networking.k8s.io" is inferred.
+                            To set the core API group (such as for a "Service" kind referent),
+                            Group must be explicitly set to "" (empty string).
+
+                            Support: Core
+                          maxLength: 253
+                          pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                          type: string
+                        kind:
+                          default: Gateway
+                          description: |-
+                            Kind is kind of the referent.
+
+                            There are two kinds of parent resources with "Core" support:
+
+                            * Gateway (Gateway conformance profile)
+                            * Service (Mesh conformance profile, ClusterIP Services only)
+
+                            Support for other resources is Implementation-Specific.
+                          maxLength: 63
+                          minLength: 1
+                          pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                          type: string
+                        name:
+                          description: |-
+                            Name is the name of the referent.
+
+                            Support: Core
+                          maxLength: 253
+                          minLength: 1
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace is the namespace of the referent. When unspecified, this refers
+                            to the local namespace of the Route.
+
+                            Note that there are specific rules for ParentRefs which cross namespace
+                            boundaries. Cross-namespace references are only valid if they are explicitly
+                            allowed by something in the namespace they are referring to. For example:
+                            Gateway has the AllowedRoutes field, and ReferenceGrant provides a
+                            generic way to enable any other kind of cross-namespace reference.
+
+                            <gateway:experimental:description>
+                            ParentRefs from a Route to a Service in the same namespace are "producer"
+                            routes, which apply default routing rules to inbound connections from
+                            any namespace to the Service.
+
+                            ParentRefs from a Route to a Service in a different namespace are
+                            "consumer" routes, and these routing rules are only applied to outbound
+                            connections originating from the same namespace as the Route, for which
+                            the intended destination of the connections are a Service targeted as a
+                            ParentRef of the Route.
+                            </gateway:experimental:description>
+
+                            Support: Core
+                          maxLength: 63
+                          minLength: 1
+                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                          type: string
+                        port:
+                          description: |-
+                            Port is the network port this Route targets. It can be interpreted
+                            differently based on the type of parent resource.
+
+                            When the parent resource is a Gateway, this targets all listeners
+                            listening on the specified port that also support this kind of Route(and
+                            select this Route). It's not recommended to set `Port` unless the
+                            networking behaviors specified in a Route must apply to a specific port
+                            as opposed to a listener(s) whose port(s) may be changed. When both Port
+                            and SectionName are specified, the name and port of the selected listener
+                            must match both specified values.
+
+                            <gateway:experimental:description>
+                            When the parent resource is a Service, this targets a specific port in the
+                            Service spec. When both Port (experimental) and SectionName are specified,
+                            the name and port of the selected port must match both specified values.
+                            </gateway:experimental:description>
+
+                            Implementations MAY choose to support other parent resources.
+                            Implementations supporting other types of parent resources MUST clearly
+                            document how/if Port is interpreted.
+
+                            For the purpose of status, an attachment is considered successful as
+                            long as the parent resource accepts it partially. For example, Gateway
+                            listeners can restrict which Routes can attach to them by Route kind,
+                            namespace, or hostname. If 1 of 2 Gateway listeners accept attachment
+                            from the referencing Route, the Route MUST be considered successfully
+                            attached. If no Gateway listeners accept attachment from this Route,
+                            the Route MUST be considered detached from the Gateway.
+
+                            Support: Extended
+                          format: int32
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        sectionName:
+                          description: |-
+                            SectionName is the name of a section within the target resource. In the
+                            following resources, SectionName is interpreted as the following:
+
+                            * Gateway: Listener name. When both Port (experimental) and SectionName
+                            are specified, the name and port of the selected listener must match
+                            both specified values.
+                            * Service: Port name. When both Port (experimental) and SectionName
+                            are specified, the name and port of the selected listener must match
+                            both specified values.
+
+                            Implementations MAY choose to support attaching Routes to other resources.
+                            If that is the case, they MUST clearly document how SectionName is
+                            interpreted.
+
+                            When unspecified (empty string), this will reference the entire resource.
+                            For the purpose of status, an attachment is considered successful if at
+                            least one section in the parent resource accepts it. For example, Gateway
+                            listeners can restrict which Routes can attach to them by Route kind,
+                            namespace, or hostname. If 1 of 2 Gateway listeners accept attachment from
+                            the referencing Route, the Route MUST be considered successfully
+                            attached. If no Gateway listeners accept attachment from this Route, the
+                            Route MUST be considered detached from the Gateway.
+
+                            Support: Core
+                          maxLength: 253
+                          minLength: 1
+                          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                          type: string
+                      required:
+                      - name
+                      type: object
+                  required:
+                  - conditions
+                  - controllerName
+                  - parentRef
+                  type: object
+                maxItems: 16
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
