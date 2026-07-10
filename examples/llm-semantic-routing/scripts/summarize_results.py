@@ -3,6 +3,7 @@ import argparse
 import csv
 import json
 import math
+import os
 from collections import defaultdict
 
 
@@ -72,13 +73,12 @@ def fmt_money(value):
     return f"${value:.6f}"
 
 
-def summarize(rows, ratings):
+def build_summary(rows, ratings):
     by_lane = defaultdict(list)
     for row in rows:
         by_lane[row["lane"]].append(row)
 
-    print("Lane summary")
-    print("lane,requests,ok,input_tokens,output_tokens,cost_estimate,p50_ms,p95_ms")
+    lanes = {}
     for lane in sorted(by_lane):
         lane_rows = by_lane[lane]
         ok_rows = [r for r in lane_rows if r.get("ok")]
@@ -86,51 +86,67 @@ def summarize(rows, ratings):
         output_tokens = sum((r.get("usage") or {}).get("output_tokens", 0) or 0 for r in ok_rows)
         costs = [r.get("cost_estimate_usd") for r in ok_rows if r.get("cost_estimate_usd") is not None]
         latencies = [r.get("latency_ms") for r in ok_rows]
-        print(
-            f"{lane},{len(lane_rows)},{len(ok_rows)},{input_tokens},{output_tokens},"
-            f"{fmt_money(sum(costs))},{percentile(latencies, 0.50):.1f},{percentile(latencies, 0.95):.1f}"
-        )
+        lanes[lane] = {
+            "requests": len(lane_rows),
+            "ok": len(ok_rows),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_estimate_usd": sum(costs),
+            "latency_ms": {
+                "p50": percentile(latencies, 0.50),
+                "p95": percentile(latencies, 0.95),
+            },
+        }
 
+    routing = None
     routed = [r for r in by_lane.get("routed", []) if r.get("ok")]
     if routed:
         correct = [r for r in routed if r.get("routing_correct") is True]
-        print()
-        print(f"Routing accuracy: {len(correct)}/{len(routed)} = {len(correct) / len(routed):.1%}")
         confusion = defaultdict(int)
         for row in routed:
             expected = canonical_model(row.get("expected_model"))
             selected = canonical_model(row.get("selected_model"))
             confusion[(expected, selected)] += 1
-        print("expected_model,selected_model,count")
-        for (expected, selected), count in sorted(confusion.items()):
-            print(f"{expected},{selected},{count}")
+        routing = {
+            "correct": len(correct),
+            "total": len(routed),
+            "accuracy": len(correct) / len(routed),
+            "confusion_matrix": [
+                {
+                    "expected_model": expected,
+                    "selected_model": selected,
+                    "count": count,
+                }
+                for (expected, selected), count in sorted(confusion.items())
+            ],
+        }
 
+    counterfactual_savings = None
+    if routed:
         routed_cost = sum(r.get("cost_estimate_usd") or 0 for r in routed)
         routed_tokens_as_expensive = sum(cost_as_model("gpt-5.5", r.get("usage") or {}) for r in routed)
         if routed_tokens_as_expensive:
-            savings = 1 - (routed_cost / routed_tokens_as_expensive)
-            print()
-            print(
-                "Counterfactual savings on routed token counts: "
-                f"{fmt_money(routed_tokens_as_expensive)} always_expensive vs "
-                f"{fmt_money(routed_cost)} routed = {savings:.1%}"
-            )
+            counterfactual_savings = {
+                "always_expensive_cost_usd": routed_tokens_as_expensive,
+                "routed_cost_usd": routed_cost,
+                "savings_fraction": 1 - (routed_cost / routed_tokens_as_expensive),
+            }
 
+    actual_savings = None
     if by_lane.get("routed") and by_lane.get("always_expensive"):
         routed_cost = sum(r.get("cost_estimate_usd") or 0 for r in by_lane["routed"] if r.get("ok"))
         expensive_cost = sum(
             r.get("cost_estimate_usd") or 0 for r in by_lane["always_expensive"] if r.get("ok")
         )
         if expensive_cost:
-            print(
-                "Actual lane savings: "
-                f"{fmt_money(expensive_cost)} always_expensive vs "
-                f"{fmt_money(routed_cost)} routed = {1 - routed_cost / expensive_cost:.1%}"
-            )
+            actual_savings = {
+                "always_expensive_cost_usd": expensive_cost,
+                "routed_cost_usd": routed_cost,
+                "savings_fraction": 1 - routed_cost / expensive_cost,
+            }
 
+    satisfaction = None
     if ratings:
-        print()
-        print("Satisfaction")
         by_rating_lane = defaultdict(list)
         right_model = []
         for row in rows:
@@ -141,18 +157,119 @@ def summarize(rows, ratings):
                 by_rating_lane[row["lane"]].append(float(rating["satisfaction"]))
             if row["lane"] == "routed" and rating.get("right_model"):
                 right_model.append(rating["right_model"].strip().lower() in ("1", "true", "yes", "y"))
-        for lane, values in sorted(by_rating_lane.items()):
-            print(f"{lane}: avg={sum(values) / len(values):.2f} n={len(values)}")
+        satisfaction = {
+            "lanes": {
+                lane: {"average": sum(values) / len(values), "count": len(values)}
+                for lane, values in sorted(by_rating_lane.items())
+            },
+            "human_right_model": None,
+        }
         if right_model:
-            print(f"human right-model rate: {sum(right_model)}/{len(right_model)} = {sum(right_model) / len(right_model):.1%}")
+            satisfaction["human_right_model"] = {
+                "correct": sum(right_model),
+                "total": len(right_model),
+                "rate": sum(right_model) / len(right_model),
+            }
+
+    return {
+        "lanes": lanes,
+        "routing": routing,
+        "savings": {
+            "counterfactual_on_routed_tokens": counterfactual_savings,
+            "actual_lanes": actual_savings,
+        },
+        "satisfaction": satisfaction,
+    }
+
+
+def render_summary(summary):
+    lines = [
+        "Lane summary",
+        "lane,requests,ok,input_tokens,output_tokens,cost_estimate,p50_ms,p95_ms",
+    ]
+    for lane, values in summary["lanes"].items():
+        lines.append(
+            f"{lane},{values['requests']},{values['ok']},{values['input_tokens']},"
+            f"{values['output_tokens']},{fmt_money(values['cost_estimate_usd'])},"
+            f"{values['latency_ms']['p50']:.1f},{values['latency_ms']['p95']:.1f}"
+        )
+
+    routing = summary["routing"]
+    if routing:
+        lines.extend([
+            "",
+            f"Routing accuracy: {routing['correct']}/{routing['total']} = {routing['accuracy']:.1%}",
+            "expected_model,selected_model,count",
+        ])
+        for item in routing["confusion_matrix"]:
+            lines.append(
+                f"{item['expected_model']},{item['selected_model']},{item['count']}"
+            )
+
+    counterfactual = summary["savings"]["counterfactual_on_routed_tokens"]
+    if counterfactual:
+        lines.extend([
+            "",
+            "Counterfactual savings on routed token counts: "
+            f"{fmt_money(counterfactual['always_expensive_cost_usd'])} always_expensive vs "
+            f"{fmt_money(counterfactual['routed_cost_usd'])} routed = "
+            f"{counterfactual['savings_fraction']:.1%}",
+        ])
+
+    actual = summary["savings"]["actual_lanes"]
+    if actual:
+        lines.append(
+            "Actual lane savings: "
+            f"{fmt_money(actual['always_expensive_cost_usd'])} always_expensive vs "
+            f"{fmt_money(actual['routed_cost_usd'])} routed = "
+            f"{actual['savings_fraction']:.1%}"
+        )
+
+    satisfaction = summary["satisfaction"]
+    if satisfaction:
+        lines.extend(["", "Satisfaction"])
+        for lane, values in satisfaction["lanes"].items():
+            lines.append(f"{lane}: avg={values['average']:.2f} n={values['count']}")
+        right_model = satisfaction["human_right_model"]
+        if right_model:
+            lines.append(
+                f"human right-model rate: {right_model['correct']}/{right_model['total']} = "
+                f"{right_model['rate']:.1%}"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def write_text(path, text):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as stream:
+        stream.write(text)
+
+
+def write_json(path, summary):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as stream:
+        json.dump(summary, stream, indent=2, sort_keys=True)
+        stream.write("\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Summarize Semantic Router eval JSONL results.")
     parser.add_argument("results")
-    parser.add_argument("--ratings", default="", help="Optional CSV with id,lane,satisfaction,right_model columns.")
+    parser.add_argument(
+        "--ratings",
+        default="",
+        help="Optional CSV with id,lane,satisfaction,right_model columns.",
+    )
+    parser.add_argument("--json-output", default="", help="Write the summary as JSON.")
+    parser.add_argument("--text-output", default="", help="Write the rendered summary as text.")
     args = parser.parse_args()
-    summarize(load_results(args.results), load_ratings(args.ratings))
+    summary = build_summary(load_results(args.results), load_ratings(args.ratings))
+    text = render_summary(summary)
+    if args.json_output:
+        write_json(args.json_output, summary)
+    if args.text_output:
+        write_text(args.text_output, text)
+    print(text, end="")
 
 
 if __name__ == "__main__":

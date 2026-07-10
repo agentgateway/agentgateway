@@ -115,8 +115,14 @@ Then summarize the JSONL result file:
 
 ```bash
 python3 examples/llm-semantic-routing/scripts/summarize_results.py \
-  examples/llm-semantic-routing/results/<RUN_ID>.jsonl
+  examples/llm-semantic-routing/results/<RUN_ID>.jsonl \
+  --json-output examples/llm-semantic-routing/results/<RUN_ID>-summary.json \
+  --text-output examples/llm-semantic-routing/results/<RUN_ID>-summary.txt
 ```
+
+The summary is still printed to the terminal. The optional output flags retain
+the same analysis as structured JSON and readable text for later comparison or
+publication.
 
 Verify streamed ExtProc and immediate responses without calling OpenAI:
 
