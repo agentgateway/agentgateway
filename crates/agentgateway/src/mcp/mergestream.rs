@@ -23,6 +23,10 @@ impl Messages {
 		Messages(futures::stream::empty().boxed())
 	}
 
+	pub fn then_pending(self) -> Self {
+		Messages(self.0.chain(futures::stream::pending()).boxed())
+	}
+
 	pub fn from_result<T: Into<ServerResult>>(id: RequestId, result: T) -> Self {
 		Self::from(ServerJsonRpcMessage::response(result.into(), id))
 	}

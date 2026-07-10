@@ -704,7 +704,16 @@ impl Handler {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
 			ClientRequest::PingRequest(_) => Messages::from_result(id, ServerResult::empty(())),
-			ClientRequest::SubscriptionsListenRequest(_) => Messages::pending(),
+			ClientRequest::SubscriptionsListenRequest(_) => {
+				Messages::from(ServerJsonRpcMessage::notification(
+					ServerNotification::SubscriptionsAcknowledgedNotification(
+						SubscriptionsAcknowledgedNotification::new(
+							SubscriptionsAcknowledgedNotificationParams::new(SubscriptionFilter::new()),
+						),
+					),
+				))
+				.then_pending()
+			},
 			ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)

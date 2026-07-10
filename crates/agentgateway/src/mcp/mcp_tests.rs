@@ -1695,17 +1695,18 @@ async fn resource_scoped_listen_preserves_global_filters_for_other_backends() {
 
 	let owner = wiremock::MockServer::start().await;
 	let other = wiremock::MockServer::start().await;
-	let rejected_listen = ResponseTemplate::new(200).set_body_json(serde_json::json!({
-		"jsonrpc": "2.0",
-		"id": 2,
-		"error": {"code": -32601, "message": "subscriptions/listen"}
-	}));
 	Mock::given(wiremock::matchers::method("POST"))
-		.respond_with(rejected_listen.clone())
+		.respond_with(ResponseTemplate::new(200).set_body_raw(
+			"data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/subscriptions/acknowledged\",\"params\":{\"notifications\":{\"resourceSubscriptions\":[\"https://example.com/a\"],\"toolsListChanged\":true}}}\n\n",
+			"text/event-stream",
+		))
 		.mount(&owner)
 		.await;
 	Mock::given(wiremock::matchers::method("POST"))
-		.respond_with(rejected_listen)
+		.respond_with(ResponseTemplate::new(200).set_body_raw(
+			"data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/subscriptions/acknowledged\",\"params\":{\"notifications\":{\"toolsListChanged\":true}}}\n\n",
+			"text/event-stream",
+		))
 		.mount(&other)
 		.await;
 
@@ -1743,6 +1744,26 @@ async fn resource_scoped_listen_preserves_global_filters_for_other_backends() {
 		.await
 		.unwrap();
 	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let frames = response
+		.text()
+		.await
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data:"))
+		.map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).unwrap())
+		.collect::<Vec<_>>();
+	assert_eq!(
+		frames[0]["method"],
+		"notifications/subscriptions/acknowledged"
+	);
+	assert_eq!(
+		frames[0]["params"]["notifications"],
+		serde_json::json!({
+			"resourceSubscriptions": ["owner+https://example.com/a"],
+			"toolsListChanged": true
+		})
+	);
+	assert!(frames[1].get("error").is_some());
 
 	let owner_requests = owner.received_requests().await.unwrap();
 	let owner_listen = owner_requests

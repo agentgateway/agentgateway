@@ -46,6 +46,11 @@ with `initialize`; `initialize` will do similar negotiation.
 `subscriptions/listen` requires Streamable HTTP upstreams. Stdio and SSE use legacy protocol
 negotiation, so modern clients fall back before a listen request is forwarded.
 
+For multiplexed `subscriptions/listen`, Agentgateway waits for selected upstream ACKs before
+emitting one downstream ACK. The ACK includes only accepted filters; resource URIs keep the
+client's `service+` form. Later notifications are limited to the filters accepted by their source
+upstream.
+
 ---
 
 With this approach, we should fully support new clients. And, when the client _and_ server are new, we get the optimal

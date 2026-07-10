@@ -1,4 +1,7 @@
 //! `subscriptions/listen` notification filtering.
+use agent_core::strng::Strng;
+use futures_util::StreamExt;
+use futures_util::stream::FuturesUnordered;
 use rmcp::model::{
 	CustomNotification, GetMeta, Meta, RequestId, ServerJsonRpcMessage, ServerNotification,
 	SubscriptionFilter, SubscriptionsAcknowledgedNotification,
@@ -6,8 +9,9 @@ use rmcp::model::{
 };
 use tracing::warn;
 
-use crate::mcp::ClientError;
 use crate::mcp::handler::rewrite_resource_update_message;
+use crate::mcp::mergestream::Messages;
+use crate::mcp::{ClientError, FailureMode};
 
 /// Stamps the subscription id on every forwarded listen notification.
 ///
@@ -121,8 +125,196 @@ pub(super) fn filter_and_tag_listen_notification(
 	tag_listen_notification(message, subscription_id).map(Ok)
 }
 
-/// Frame 0 of a listen response: the gateway-synthesized ack. `notifications` echoes the client
-/// filter in service+ URI form; `_meta` carries the downstream listen request id.
+pub(super) struct PreparedListenStream {
+	pub target: Strng,
+	pub stream: Messages,
+	pub accepted_filter: SubscriptionFilter,
+}
+
+#[derive(Debug)]
+pub(super) enum ListenSetupFailure {
+	Upstream(Box<ServerJsonRpcMessage>),
+	Client(ClientError),
+}
+
+impl ListenSetupFailure {
+	pub fn into_downstream_message(
+		self,
+		request_id: RequestId,
+	) -> Result<ServerJsonRpcMessage, ClientError> {
+		match self {
+			Self::Upstream(message) => {
+				let ServerJsonRpcMessage::Error(mut error) = *message else {
+					unreachable!("only JSON-RPC error frames are retained")
+				};
+				error.id = Some(request_id);
+				Ok(ServerJsonRpcMessage::Error(error))
+			},
+			Self::Client(error) => Err(error),
+		}
+	}
+}
+
+/// Wait for every selected upstream to acknowledge its listen request and retain its stream.
+pub(super) async fn prepare_listen_streams(
+	streams: Vec<(Strng, Messages, SubscriptionFilter)>,
+	failure_mode: FailureMode,
+) -> Result<(Vec<PreparedListenStream>, SubscriptionFilter), ListenSetupFailure> {
+	let mut pending = FuturesUnordered::new();
+	for (index, (target, mut stream, sent_filter)) in streams.into_iter().enumerate() {
+		pending.push(async move {
+			let first = stream.next().await;
+			let prepared = match first {
+				Some(Ok(ServerJsonRpcMessage::Notification(notification))) => {
+					match notification.notification {
+						ServerNotification::SubscriptionsAcknowledgedNotification(ack) => {
+							Ok(PreparedListenStream {
+								target,
+								stream,
+								accepted_filter: intersect_filters(&sent_filter, &ack.params.notifications),
+							})
+						},
+						_ => Err(ListenSetupFailure::Client(ClientError::new(
+							anyhow::anyhow!("upstream {target} sent a non-ack first listen frame"),
+						))),
+					}
+				},
+				Some(Ok(ServerJsonRpcMessage::Error(error))) => Err(ListenSetupFailure::Upstream(
+					Box::new(ServerJsonRpcMessage::Error(error)),
+				)),
+				Some(Ok(_)) => Err(ListenSetupFailure::Client(ClientError::new(
+					anyhow::anyhow!("upstream {target} sent a non-ack first listen frame"),
+				))),
+				Some(Err(error)) => Err(ListenSetupFailure::Client(error)),
+				None => Err(ListenSetupFailure::Client(ClientError::new(
+					anyhow::anyhow!("upstream {target} ended before acknowledging listen"),
+				))),
+			};
+			(index, prepared)
+		});
+	}
+
+	let mut prepared = Vec::new();
+	let mut failures = Vec::new();
+	while let Some((index, result)) = pending.next().await {
+		match result {
+			Ok(stream) => prepared.push(stream),
+			Err(error) if failure_mode == FailureMode::FailClosed => return Err(error),
+			Err(error) => failures.push((index, error)),
+		}
+	}
+	if prepared.is_empty() {
+		failures.sort_by_key(|(index, _)| *index);
+		return Err(
+			failures
+				.into_iter()
+				.next()
+				.expect("at least one selected upstream must complete")
+				.1,
+		);
+	}
+	let accepted = prepared
+		.iter()
+		.fold(SubscriptionFilter::new(), |mut union, stream| {
+			union_filters(&mut union, &stream.accepted_filter);
+			union
+		});
+	Ok((prepared, accepted))
+}
+
+pub(super) fn client_filter_from_accepted(
+	client_filter: &SubscriptionFilter,
+	upstream_filter: &SubscriptionFilter,
+	accepted_filter: &SubscriptionFilter,
+) -> SubscriptionFilter {
+	let mut filter = SubscriptionFilter::new();
+	filter.tools_list_changed = (client_filter.tools_list_changed == Some(true)
+		&& accepted_filter.tools_list_changed == Some(true))
+	.then_some(true);
+	filter.prompts_list_changed = (client_filter.prompts_list_changed == Some(true)
+		&& accepted_filter.prompts_list_changed == Some(true))
+	.then_some(true);
+	filter.resources_list_changed = (client_filter.resources_list_changed == Some(true)
+		&& accepted_filter.resources_list_changed == Some(true))
+	.then_some(true);
+	let accepted_uris = accepted_filter
+		.resource_subscriptions
+		.as_deref()
+		.unwrap_or_default();
+	let uris = client_filter
+		.resource_subscriptions
+		.as_deref()
+		.unwrap_or_default()
+		.iter()
+		.zip(
+			upstream_filter
+				.resource_subscriptions
+				.as_deref()
+				.unwrap_or_default(),
+		)
+		.filter_map(|(client, upstream)| accepted_uris.contains(upstream).then_some(client.clone()))
+		.fold(Vec::new(), |mut uris, uri| {
+			if !uris.contains(&uri) {
+				uris.push(uri);
+			}
+			uris
+		});
+	filter.resource_subscriptions = (!uris.is_empty()).then_some(uris);
+	filter
+}
+
+fn intersect_filters(
+	sent: &SubscriptionFilter,
+	acknowledged: &SubscriptionFilter,
+) -> SubscriptionFilter {
+	let mut filter = SubscriptionFilter::new();
+	filter.tools_list_changed = (sent.tools_list_changed == Some(true)
+		&& acknowledged.tools_list_changed == Some(true))
+	.then_some(true);
+	filter.prompts_list_changed = (sent.prompts_list_changed == Some(true)
+		&& acknowledged.prompts_list_changed == Some(true))
+	.then_some(true);
+	filter.resources_list_changed = (sent.resources_list_changed == Some(true)
+		&& acknowledged.resources_list_changed == Some(true))
+	.then_some(true);
+	let acknowledged_uris = acknowledged
+		.resource_subscriptions
+		.as_deref()
+		.unwrap_or_default();
+	let uris = sent
+		.resource_subscriptions
+		.as_deref()
+		.unwrap_or_default()
+		.iter()
+		.filter(|uri| acknowledged_uris.contains(uri))
+		.cloned()
+		.collect::<Vec<_>>();
+	filter.resource_subscriptions = (!uris.is_empty()).then_some(uris);
+	filter
+}
+
+fn union_filters(union: &mut SubscriptionFilter, filter: &SubscriptionFilter) {
+	union.tools_list_changed = (union.tools_list_changed == Some(true)
+		|| filter.tools_list_changed == Some(true))
+	.then_some(true);
+	union.prompts_list_changed = (union.prompts_list_changed == Some(true)
+		|| filter.prompts_list_changed == Some(true))
+	.then_some(true);
+	union.resources_list_changed = (union.resources_list_changed == Some(true)
+		|| filter.resources_list_changed == Some(true))
+	.then_some(true);
+	let resources = union.resource_subscriptions.get_or_insert_default();
+	for uri in filter.resource_subscriptions.as_deref().unwrap_or_default() {
+		if !resources.contains(uri) {
+			resources.push(uri.clone());
+		}
+	}
+	if resources.is_empty() {
+		union.resource_subscriptions = None;
+	}
+}
+
+/// Frame 0 of a listen response: the gateway-synthesized ACK for filters accepted upstream.
 pub(super) fn synthesize_listen_ack(
 	id: RequestId,
 	client_filter: SubscriptionFilter,
@@ -172,6 +364,12 @@ mod tests {
 		))
 	}
 
+	fn prompts_list_changed() -> ServerJsonRpcMessage {
+		list_changed(ServerNotification::PromptListChangedNotification(
+			Default::default(),
+		))
+	}
+
 	fn resource_updated(uri: &str) -> ServerJsonRpcMessage {
 		list_changed(ServerNotification::ResourceUpdatedNotification(
 			ResourceUpdatedNotification::new(ResourceUpdatedNotificationParam::new(uri)),
@@ -181,23 +379,46 @@ mod tests {
 	/// Drives one upstream through the real listen pipeline and extracts the wire JSON frames.
 	async fn run_listen(
 		id: RequestId,
-		client_filter: SubscriptionFilter,
-		upstream_filter: SubscriptionFilter,
-		upstream_msgs: Vec<Result<ServerJsonRpcMessage, ClientError>>,
+		filters: (SubscriptionFilter, SubscriptionFilter, SubscriptionFilter),
+		remaining_msgs: Vec<Result<ServerJsonRpcMessage, ClientError>>,
 		default_target_name: Option<String>,
 		target: &str,
 		failure_mode: FailureMode,
 	) -> Vec<serde_json::Value> {
-		let ack = synthesize_listen_ack(id.clone(), client_filter);
+		let (client_filter, upstream_filter, upstream_ack_filter) = filters;
 		let target_name = agent_core::strng::new(target);
+		let mut upstream_msgs = vec![Ok(synthesize_listen_ack(
+			RequestId::Number(99),
+			upstream_ack_filter,
+		))];
+		upstream_msgs.extend(remaining_msgs);
+		let (prepared, accepted_filter) = prepare_listen_streams(
+			vec![(
+				target_name,
+				Messages::from_results(upstream_msgs),
+				upstream_filter.clone(),
+			)],
+			failure_mode,
+		)
+		.await
+		.unwrap();
+		let ack = synthesize_listen_ack(
+			id.clone(),
+			client_filter_from_accepted(&client_filter, &upstream_filter, &accepted_filter),
+		);
+		let PreparedListenStream {
+			target: target_name,
+			stream,
+			accepted_filter,
+		} = prepared.into_iter().next().unwrap();
 		let target = target.to_string();
 		let sub_id = id.clone();
-		let pipeline = Messages::from_results(upstream_msgs).filter_map_messages_result(move |msg| {
+		let pipeline = stream.filter_map_messages_result(move |msg| {
 			filter_and_tag_listen_notification(
 				msg,
 				default_target_name.as_ref(),
 				&target,
-				&upstream_filter,
+				&accepted_filter,
 				&sub_id,
 			)
 		});
@@ -225,12 +446,136 @@ mod tests {
 		SubscriptionFilter::new().with_tools_list_changed(true)
 	}
 
+	fn listen_ack(filter: SubscriptionFilter) -> ServerJsonRpcMessage {
+		synthesize_listen_ack(RequestId::Number(99), filter)
+	}
+
+	#[tokio::test]
+	async fn prepare_listen_streams_unions_accepted_filters() {
+		let requested = SubscriptionFilter::new()
+			.with_tools_list_changed(true)
+			.with_prompts_list_changed(true);
+		let (prepared, accepted) = prepare_listen_streams(
+			vec![
+				(
+					"tools".into(),
+					Messages::from_results(vec![
+						Ok(listen_ack(tools_filter())),
+						Ok(tools_list_changed()),
+					]),
+					requested.clone(),
+				),
+				(
+					"prompts".into(),
+					Messages::from_results(vec![
+						Ok(listen_ack(
+							SubscriptionFilter::new().with_prompts_list_changed(true),
+						)),
+						Ok(prompts_list_changed()),
+					]),
+					requested.clone(),
+				),
+			],
+			FailureMode::FailClosed,
+		)
+		.await
+		.unwrap();
+
+		assert_eq!(
+			accepted,
+			SubscriptionFilter::new()
+				.with_tools_list_changed(true)
+				.with_prompts_list_changed(true)
+		);
+		assert_eq!(prepared.len(), 2);
+		assert_eq!(
+			prepared
+				.iter()
+				.find(|stream| stream.target == "tools")
+				.unwrap()
+				.accepted_filter,
+			tools_filter()
+		);
+		assert_eq!(
+			prepared
+				.iter()
+				.find(|stream| stream.target == "prompts")
+				.unwrap()
+				.accepted_filter,
+			SubscriptionFilter::new().with_prompts_list_changed(true)
+		);
+	}
+
+	#[test]
+	fn client_filter_from_accepted_restores_resource_uri_order() {
+		let client = SubscriptionFilter::new().with_resource_subscriptions(vec![
+			"svc+https://example.com/a".to_string(),
+			"svc+https://example.com/b".to_string(),
+			"svc+https://example.com/a".to_string(),
+		]);
+		let upstream = SubscriptionFilter::new().with_resource_subscriptions(vec![
+			"https://example.com/a".to_string(),
+			"https://example.com/b".to_string(),
+			"https://example.com/a".to_string(),
+		]);
+		let accepted = SubscriptionFilter::new()
+			.with_resource_subscriptions(vec!["https://example.com/a".to_string()]);
+		assert_eq!(
+			client_filter_from_accepted(&client, &upstream, &accepted),
+			SubscriptionFilter::new()
+				.with_resource_subscriptions(vec!["svc+https://example.com/a".to_string()])
+		);
+	}
+
+	#[tokio::test]
+	async fn prepare_listen_streams_fail_closed_rejects_before_peer_ack() {
+		let result = tokio::time::timeout(
+			std::time::Duration::from_secs(1),
+			prepare_listen_streams(
+				vec![
+					(
+						"rejecting".into(),
+						Messages::from_results(vec![Ok(upstream_error())]),
+						tools_filter(),
+					),
+					("pending".into(), Messages::pending(), tools_filter()),
+				],
+				FailureMode::FailClosed,
+			),
+		)
+		.await
+		.expect("first structured rejection must not wait for another upstream");
+		assert!(matches!(result, Err(ListenSetupFailure::Upstream(_))));
+	}
+
+	#[tokio::test]
+	async fn prepare_listen_streams_fail_open_keeps_surviving_ack() {
+		let (prepared, accepted) = prepare_listen_streams(
+			vec![
+				(
+					"rejecting".into(),
+					Messages::from_results(vec![Ok(upstream_error())]),
+					tools_filter(),
+				),
+				(
+					"accepted".into(),
+					Messages::from_results(vec![Ok(listen_ack(tools_filter()))]),
+					tools_filter(),
+				),
+			],
+			FailureMode::FailOpen,
+		)
+		.await
+		.unwrap();
+		assert_eq!(prepared.len(), 1);
+		assert_eq!(accepted, tools_filter());
+	}
+
 	#[tokio::test]
 	async fn listen_emits_ack_first_then_filtered_notification() {
 		let frames = run_listen(
 			RequestId::Number(7),
-			tools_filter(),
-			tools_filter(),
+			(tools_filter(), tools_filter(), tools_filter()),
 			vec![Ok(tools_list_changed()), Ok(resource_updated("file:///x"))],
 			None,
 			"svc",
@@ -272,8 +617,7 @@ mod tests {
 		// catch a regression here.
 		let frames = run_listen(
 			RequestId::String("sub-1".into()),
-			tools_filter(),
-			tools_filter(),
+			(tools_filter(), tools_filter(), tools_filter()),
 			vec![Ok(tools_list_changed())],
 			None,
 			"svc",
@@ -295,8 +639,11 @@ mod tests {
 		// prompts filter + a tools notification => nothing forwarded; output is the ack only.
 		let frames = run_listen(
 			RequestId::Number(1),
-			SubscriptionFilter::new().with_prompts_list_changed(true),
-			SubscriptionFilter::new().with_prompts_list_changed(true),
+			(
+				SubscriptionFilter::new().with_prompts_list_changed(true),
+				SubscriptionFilter::new().with_prompts_list_changed(true),
+				SubscriptionFilter::new().with_prompts_list_changed(true),
+			),
 			vec![Ok(tools_list_changed())],
 			None,
 			"svc",
@@ -312,22 +659,23 @@ mod tests {
 
 	#[tokio::test]
 	async fn listen_swallows_upstream_ack_and_response() {
-		// Upstream sends its own ack + a SubscriptionsListenResult Response. Exactly one ack (ours)
-		// reaches the client, and no method-less Response frame leaks.
-		let upstream_ack = synthesize_listen_ack(RequestId::Number(99), tools_filter());
+		let requested_filter = SubscriptionFilter::new()
+			.with_tools_list_changed(true)
+			.with_prompts_list_changed(true);
+		// The upstream narrows the requested filter. The downstream ACK and notification pipeline
+		// must use the accepted subset, not the original request.
 		let upstream_response = ServerJsonRpcMessage::response(
 			SubscriptionsListenResult::new(RequestId::Number(99)).into(),
 			RequestId::Number(99),
 		);
 		let frames = run_listen(
 			RequestId::Number(1),
-			tools_filter(),
-			tools_filter(),
-			vec![
-				Ok(upstream_ack),
-				Ok(upstream_response),
-				Ok(tools_list_changed()),
-			],
+			(
+				requested_filter.clone(),
+				requested_filter.clone(),
+				tools_filter(),
+			),
+			vec![Ok(upstream_response), Ok(prompts_list_changed())],
 			None,
 			"svc",
 			FailureMode::FailOpen,
@@ -346,6 +694,15 @@ mod tests {
 			frames[0]["params"]["_meta"]["io.modelcontextprotocol/subscriptionId"],
 			1
 		);
+		assert_eq!(
+			frames[0]["params"]["notifications"],
+			serde_json::json!({"toolsListChanged": true})
+		);
+		assert_eq!(
+			frames.len(),
+			1,
+			"unacknowledged notifications must be dropped"
+		);
 	}
 
 	#[tokio::test]
@@ -356,8 +713,7 @@ mod tests {
 			.with_resource_subscriptions(vec!["http://example.com/a".to_string()]);
 		let frames = run_listen(
 			RequestId::Number(5),
-			filter.clone(),
-			filter,
+			(filter.clone(), filter.clone(), filter),
 			vec![
 				Ok(resource_updated("http://example.com/a")),
 				Ok(resource_updated("http://example.com/b")),
@@ -384,8 +740,7 @@ mod tests {
 		// An upstream JSON-RPC error frame must reach the client. Under FailClosed it ends the stream.
 		let frames = run_listen(
 			RequestId::Number(3),
-			tools_filter(),
-			tools_filter(),
+			(tools_filter(), tools_filter(), tools_filter()),
 			vec![
 				Ok(tools_list_changed()),
 				Ok(upstream_error()),
@@ -413,8 +768,7 @@ mod tests {
 		// The same upstream error frame is dropped under FailOpen; the upstream is retired.
 		let frames = run_listen(
 			RequestId::Number(3),
-			tools_filter(),
-			tools_filter(),
+			(tools_filter(), tools_filter(), tools_filter()),
 			vec![
 				Ok(tools_list_changed()),
 				Ok(upstream_error()),

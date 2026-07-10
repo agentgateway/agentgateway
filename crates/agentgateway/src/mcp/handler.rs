@@ -658,12 +658,10 @@ impl Relay {
 		Ok((streams, service_names))
 	}
 
-	/// Handles `subscriptions/listen` with the shared stream fan-in. Upstream responses are
-	/// filtered out before `MergeStream`, so only notifications and stream errors are merged.
+	/// Handles `subscriptions/listen` with an ACK derived from every selected upstream.
 	///
-	/// `client_filter` echoes the client's request verbatim (URIs still in `service+` form) into
-	/// the ack; `upstream_filter` has URIs rewritten to upstream form and is matched against
-	/// forwarded `ResourceUpdated` frames before the rewrite step re-adds the prefix.
+	/// `client_filter` keeps service+ URIs for the downstream ACK. `upstream_filter` has rewritten
+	/// upstream URIs for request routing and matching `ResourceUpdated` notifications.
 	pub async fn send_subscriptions_listen(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
@@ -674,7 +672,10 @@ impl Relay {
 	) -> Result<Response, UpstreamError> {
 		use futures_util::StreamExt;
 
-		use super::subscriptions::{filter_and_tag_listen_notification, synthesize_listen_ack};
+		use super::subscriptions::{
+			client_filter_from_accepted, filter_and_tag_listen_notification, prepare_listen_streams,
+			synthesize_listen_ack,
+		};
 		let id = r.id.clone();
 		let has_global_filter = upstream_filter.tools_list_changed == Some(true)
 			|| upstream_filter.prompts_list_changed == Some(true)
@@ -686,35 +687,52 @@ impl Relay {
 		let (streams, service_names) = self
 			.fanout_open_streams(&r, &mut ctx, targets, |target, r| {
 				let mut r = r.clone();
-				if resource_target
-					.as_deref()
-					.is_some_and(|resource_target| resource_target != target)
-					&& let ClientRequest::SubscriptionsListenRequest(slr) = &mut r.request
-				{
-					slr.params.notifications.resource_subscriptions = None;
+				if let ClientRequest::SubscriptionsListenRequest(slr) = &mut r.request {
+					slr.params.notifications =
+						listen_filter_for_target(&upstream_filter, resource_target.as_deref(), target);
 				}
 				r
 			})
 			.await?;
 
-		// Frame 0 is the gateway ack; upstream pipelines only forward matching notifications.
-		let ack = synthesize_listen_ack(id.clone(), client_filter);
-		let pipelines = streams
+		let prepared_inputs = streams
 			.into_iter()
-			.map(|(name, s)| {
+			.map(|(name, stream)| {
+				let filter =
+					listen_filter_for_target(&upstream_filter, resource_target.as_deref(), name.as_str());
+				(name, stream, filter)
+			})
+			.collect();
+		let (prepared, accepted_filter) =
+			match prepare_listen_streams(prepared_inputs, self.upstreams.failure_mode).await {
+				Ok(prepared) => prepared,
+				Err(error) => {
+					let error_id = id.clone();
+					return respond_with_guardrails(
+						id,
+						futures::stream::once(async move { error.into_downstream_message(error_id) }),
+						service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
+						None,
+						&ctx,
+					);
+				},
+			};
+
+		let ack_filter =
+			client_filter_from_accepted(&client_filter, &upstream_filter, &accepted_filter);
+		let ack = synthesize_listen_ack(id.clone(), ack_filter);
+		let pipelines = prepared
+			.into_iter()
+			.map(|prepared| {
+				let name = prepared.target;
+				let stream = prepared.stream;
+				let filter = prepared.accepted_filter;
 				let target = name.to_string();
-				let mut filter = upstream_filter.clone();
-				if resource_target
-					.as_deref()
-					.is_some_and(|resource_target| resource_target != target)
-				{
-					filter.resource_subscriptions = None;
-				}
 				let sub_id = id.clone();
 				let default_target_name = self.upstreams.default_target_name.clone();
 				(
 					name,
-					s.filter_map_messages_result(move |msg| {
+					stream.filter_map_messages_result(move |msg| {
 						filter_and_tag_listen_notification(
 							msg,
 							default_target_name.as_ref(),
@@ -1077,6 +1095,18 @@ fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
 		.extensions()
 		.get::<RequestProtocol>()
 		.is_some_and(RequestProtocol::is_modern)
+}
+
+fn listen_filter_for_target(
+	upstream_filter: &SubscriptionFilter,
+	resource_target: Option<&str>,
+	target: &str,
+) -> SubscriptionFilter {
+	let mut filter = upstream_filter.clone();
+	if resource_target.is_some_and(|resource_target| resource_target != target) {
+		filter.resource_subscriptions = None;
+	}
+	filter
 }
 
 fn wrap_with_guardrails(
