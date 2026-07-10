@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use agent_core::strng;
-use futures_util::StreamExt;
 use itertools::Itertools;
 use openapiv3::OpenAPI;
 use rmcp::RoleClient;
@@ -694,6 +693,12 @@ async fn streamable_http_validates_protocol_version_header() {
 		.await
 		.unwrap();
 	assert_eq!(unsupported.status(), reqwest::StatusCode::BAD_REQUEST);
+	let unsupported_body = unsupported.json::<serde_json::Value>().await.unwrap();
+	assert_eq!(unsupported_body["id"], 1);
+	assert!(
+		unsupported_body["error"].get("data").is_none(),
+		"legacy initialize errors must not include modern version-negotiation data"
+	);
 
 	let mismatch = mcp_json_post(&client, &url, &init_body)
 		.header("mcp-protocol-version", "2025-11-25")
@@ -811,26 +816,6 @@ async fn read_response_message(response: reqwest::Response) -> serde_json::Value
 		.filter_map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).ok())
 		.next_back()
 		.unwrap_or_else(|| panic!("SSE stream had no parseable data event: {text}"))
-}
-
-async fn read_first_sse_message(response: reqwest::Response) -> serde_json::Value {
-	let mut stream = response.bytes_stream();
-	let mut text = String::new();
-	loop {
-		let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), stream.next())
-			.await
-			.expect("timed out waiting for SSE data")
-			.expect("SSE stream ended before first data frame")
-			.expect("failed to read SSE chunk");
-		text.push_str(std::str::from_utf8(&chunk).expect("SSE chunk must be UTF-8"));
-		if let Some(frame) = text
-			.lines()
-			.filter_map(|line| line.strip_prefix("data:"))
-			.find_map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).ok())
-		{
-			return frame;
-		}
-	}
 }
 
 // Standard modern `_meta` block (SEP-2575): every modern request must carry these three
@@ -1705,86 +1690,83 @@ async fn authorization_deny_specific_tool_filters_only_that_tool() {
 }
 
 #[tokio::test]
-async fn list_changed_listen_does_not_authorize_empty_tool_name() {
-	let mock = mock_streamable_http_server(true).await;
+async fn resource_scoped_listen_preserves_global_filters_for_other_backends() {
+	use wiremock::{Mock, ResponseTemplate};
 
-	let allow_echo_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
-		vec![Arc::new(
-			cel::Expression::new_strict(r#"mcp.tool.name == "echo""#).unwrap(),
-		)],
-		vec![],
-		vec![],
-	)));
+	let owner = wiremock::MockServer::start().await;
+	let other = wiremock::MockServer::start().await;
+	let rejected_listen = ResponseTemplate::new(200).set_body_json(serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"error": {"code": -32601, "message": "subscriptions/listen"}
+	}));
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(rejected_listen.clone())
+		.mount(&owner)
+		.await;
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(rejected_listen)
+		.mount(&other)
+		.await;
 
-	let (_bind, io) = setup_proxy_policies(
-		&mock,
-		true,
-		false,
-		vec![BackendTrafficPolicy::McpAuthorization(allow_echo_policy)],
-	)
-	.await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![
+				("owner", *owner.address(), false),
+				("other", *other.address(), false),
+			],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(BIND_KEY).await;
 	let client = reqwest::Client::new();
 	let url = format!("http://{io}/mcp");
-	let init = serde_json::json!({
-		"jsonrpc": "2.0",
-		"id": 1,
-		"method": "initialize",
-		"params": {
-			"protocolVersion": "2025-06-18",
-			"capabilities": {},
-			"clientInfo": {
-				"name": "test client",
-				"version": "0.0.1"
-			}
-		}
-	});
-	let init = mcp_json_post(&client, &url, &init)
-		.header("mcp-protocol-version", "2025-06-18")
-		.send()
-		.await
-		.unwrap();
-	assert_eq!(init.status(), reqwest::StatusCode::OK);
-	let session_id = init
-		.headers()
-		.get("mcp-session-id")
-		.expect("initialize response should include a session id")
-		.to_str()
-		.unwrap()
-		.to_string();
-
 	let listen = serde_json::json!({
 		"jsonrpc": "2.0",
 		"id": 2,
 		"method": "subscriptions/listen",
 		"params": {
+			"_meta": modern_meta(),
 			"notifications": {
+				"resourceSubscriptions": ["owner+https://example.com/a"],
 				"toolsListChanged": true
 			}
 		}
 	});
 	let response = mcp_json_post(&client, &url, &listen)
-		.header("mcp-session-id", session_id)
-		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "subscriptions/listen")
 		.send()
 		.await
 		.unwrap();
 	assert_eq!(response.status(), reqwest::StatusCode::OK);
-	assert!(
-		response
-			.headers()
-			.get(reqwest::header::CONTENT_TYPE)
-			.and_then(|value| value.to_str().ok())
-			.is_some_and(|value| value.starts_with("text/event-stream"))
+
+	let owner_requests = owner.received_requests().await.unwrap();
+	let owner_listen = owner_requests
+		.iter()
+		.map(|request| serde_json::from_slice::<serde_json::Value>(&request.body).unwrap())
+		.find(|request| request["method"] == "subscriptions/listen")
+		.expect("resource owner should receive the listen request");
+	assert_eq!(
+		owner_listen["params"]["notifications"],
+		serde_json::json!({
+			"resourceSubscriptions": ["https://example.com/a"],
+			"toolsListChanged": true
+		})
 	);
 
-	let first_frame = read_first_sse_message(response).await;
+	let other_requests = other.received_requests().await.unwrap();
+	let other_listen = other_requests
+		.iter()
+		.map(|request| serde_json::from_slice::<serde_json::Value>(&request.body).unwrap())
+		.find(|request| request["method"] == "subscriptions/listen")
+		.expect("global filters should fan out to non-resource backends");
 	assert_eq!(
-		first_frame["method"],
-		"notifications/subscriptions/acknowledged"
-	);
-	assert_eq!(
-		first_frame["params"]["notifications"]["toolsListChanged"],
-		true
+		other_listen["params"]["notifications"],
+		serde_json::json!({"toolsListChanged": true})
 	);
 }
 

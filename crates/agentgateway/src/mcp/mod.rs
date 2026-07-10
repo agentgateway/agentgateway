@@ -50,6 +50,9 @@ pub enum FailureMode {
 
 pub(crate) const DEFAULT_SESSION_IDLE_TTL: Duration = Duration::from_mins(30);
 
+/// Method names of rmcp's typed `ClientRequest` variants. Keep this list in sync with rmcp rev
+/// bumps; only `CustomRequest` and failed typed parses consult it, so drift cannot 404 typed
+/// requests.
 pub(crate) fn is_known_client_request_method(method: &str) -> bool {
 	matches!(
 		method,
@@ -123,8 +126,12 @@ pub enum Error {
 	InvalidSessionIdHeader,
 	#[error("invalid MCP protocol version header")]
 	InvalidProtocolVersion,
-	#[error("unsupported MCP protocol version: {1}")]
-	UnsupportedVersion(Option<RequestId>, String),
+	#[error("unsupported MCP protocol version: {version}")]
+	UnsupportedVersion {
+		request_id: Option<RequestId>,
+		version: String,
+		include_supported_versions: bool,
+	},
 	#[error("MCP protocol version header/body mismatch")]
 	VersionMismatch(Option<RequestId>),
 	#[error("{1} header/body mismatch")]
@@ -169,7 +176,11 @@ impl Error {
 	pub fn jsonrpc_error_body(&self) -> Option<String> {
 		let (id, error) = match self {
 			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
-			Error::UnsupportedVersion(Some(id), version) => (
+			Error::UnsupportedVersion {
+				request_id: Some(id),
+				version,
+				include_supported_versions,
+			} => (
 				id.clone(),
 				ErrorData {
 					code: ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,
@@ -177,10 +188,12 @@ impl Error {
 					// This gate runs before backend selection, so it reports the gateway set.
 					// With single-server discover passthrough, SEP-2575's supported/discover
 					// correlation holds only when the upstream advertises a superset of this list.
-					data: Some(serde_json::json!({
-						"supported": ProtocolVersion::KNOWN_VERSIONS,
-						"requested": version,
-					})),
+					data: include_supported_versions.then(|| {
+						serde_json::json!({
+							"supported": ProtocolVersion::KNOWN_VERSIONS,
+							"requested": version,
+						})
+					}),
 				},
 			),
 			_ => {

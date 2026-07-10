@@ -576,6 +576,7 @@ impl Relay {
 		r: &JsonRpcRequest<ClientRequest>,
 		ctx: &mut IncomingRequestContext,
 		target_names: Option<Vec<String>>,
+		request_for_target: impl Fn(&str, &JsonRpcRequest<ClientRequest>) -> JsonRpcRequest<ClientRequest>,
 	) -> Result<(Vec<(Strng, Messages)>, Option<Vec<String>>), UpstreamError> {
 		let selected_upstreams = self
 			.upstreams
@@ -624,7 +625,7 @@ impl Relay {
 		let futs: Vec<_> = selected_upstreams
 			.into_iter()
 			.map(|(name, con)| {
-				let r = r.clone();
+				let r = request_for_target(name.as_str(), r);
 				let ctx = &*ctx;
 				async move { (name, con.generic_stream(r, ctx).await) }
 			})
@@ -669,13 +670,32 @@ impl Relay {
 		mut ctx: IncomingRequestContext,
 		client_filter: SubscriptionFilter,
 		upstream_filter: SubscriptionFilter,
-		targets: Option<Vec<String>>,
+		resource_target: Option<String>,
 	) -> Result<Response, UpstreamError> {
 		use futures_util::StreamExt;
 
 		use super::subscriptions::{filter_and_tag_listen_notification, synthesize_listen_ack};
 		let id = r.id.clone();
-		let (streams, service_names) = self.fanout_open_streams(&r, &mut ctx, targets).await?;
+		let has_global_filter = upstream_filter.tools_list_changed == Some(true)
+			|| upstream_filter.prompts_list_changed == Some(true)
+			|| upstream_filter.resources_list_changed == Some(true);
+		let targets = resource_target
+			.as_ref()
+			.filter(|_| !has_global_filter)
+			.map(|target| vec![target.clone()]);
+		let (streams, service_names) = self
+			.fanout_open_streams(&r, &mut ctx, targets, |target, r| {
+				let mut r = r.clone();
+				if resource_target
+					.as_deref()
+					.is_some_and(|resource_target| resource_target != target)
+					&& let ClientRequest::SubscriptionsListenRequest(slr) = &mut r.request
+				{
+					slr.params.notifications.resource_subscriptions = None;
+				}
+				r
+			})
+			.await?;
 
 		// Frame 0 is the gateway ack; upstream pipelines only forward matching notifications.
 		let ack = synthesize_listen_ack(id.clone(), client_filter);
@@ -683,7 +703,13 @@ impl Relay {
 			.into_iter()
 			.map(|(name, s)| {
 				let target = name.to_string();
-				let filter = upstream_filter.clone();
+				let mut filter = upstream_filter.clone();
+				if resource_target
+					.as_deref()
+					.is_some_and(|resource_target| resource_target != target)
+				{
+					filter.resource_subscriptions = None;
+				}
 				let sub_id = id.clone();
 				let default_target_name = self.upstreams.default_target_name.clone();
 				(
@@ -853,7 +879,9 @@ impl Relay {
 		target_names: Option<Vec<String>>,
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
-		let (streams, service_names) = self.fanout_open_streams(&r, &mut ctx, target_names).await?;
+		let (streams, service_names) = self
+			.fanout_open_streams(&r, &mut ctx, target_names, |_, r| r.clone())
+			.await?;
 
 		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		let streams = streams
@@ -1341,8 +1369,8 @@ mod tests {
 		assert!(legacy["result"].get("ttlMs").is_none());
 		assert!(legacy["result"].get("cacheScope").is_none());
 
-		// with_gateway_cache_policy stamps the hints backends no longer set: an unstamped result
-		// becomes stale/private for modern clients and loses the fields for legacy ones.
+		// Gateway cache hints make unstamped results stale and private for modern clients.
+		// Legacy normalization omits those fields.
 		let stamped = with_gateway_cache_policy(ServerJsonRpcMessage::response(
 			ServerResult::ListResourcesResult(ListResourcesResult::default()),
 			RequestId::Number(2),

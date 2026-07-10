@@ -3,15 +3,14 @@ use std::sync::Arc;
 use ::http::{HeaderMap, StatusCode};
 use agent_core::prelude::AssertSize;
 use rmcp::model::{
-	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
-	META_KEY_PROTOCOL_VERSION, Meta, ProtocolVersion, RequestId, ServerJsonRpcMessage,
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta, ProtocolVersion,
+	RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{
 	EVENT_STREAM_MIME_TYPE, HEADER_MCP_METHOD, HEADER_MCP_NAME, HEADER_MCP_PARAM_PREFIX,
 	HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 use rmcp::transport::common::mcp_headers::{decode_header_value, encode_header_value};
-use serde::Deserialize;
 
 use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::RelayInputs;
@@ -422,6 +421,7 @@ fn message_name(message: &ClientJsonRpcMessage) -> Option<&str> {
 pub(crate) fn protocol_version_header(
 	headers: &::http::HeaderMap,
 	request_id: Option<RequestId>,
+	include_supported_versions: bool,
 ) -> Result<Option<ProtocolVersion>, ProxyError> {
 	let Some(value) = headers.get(HEADER_MCP_PROTOCOL_VERSION) else {
 		return Ok(None);
@@ -435,10 +435,11 @@ pub(crate) fn protocol_version_header(
 		.find(|version| version.as_str() == value)
 		.cloned()
 		.ok_or_else(|| {
-			ProxyError::MCP(mcp::Error::UnsupportedVersion(
+			ProxyError::MCP(mcp::Error::UnsupportedVersion {
 				request_id,
-				value.to_string(),
-			))
+				version: value.to_string(),
+				include_supported_versions,
+			})
 		})?;
 	Ok(Some(version))
 }
@@ -453,7 +454,12 @@ fn validate_request_protocol(
 	message: &ClientJsonRpcMessage,
 	request_id: Option<RequestId>,
 ) -> Result<RequestProtocol, ProxyError> {
-	let header_version = protocol_version_header(headers, request_id.clone())?;
+	let is_initialize = matches!(
+		message,
+		ClientJsonRpcMessage::Request(request)
+			if matches!(request.request, ClientRequest::InitializeRequest(_))
+	);
+	let header_version = protocol_version_header(headers, request_id.clone(), !is_initialize)?;
 	let body_version = message_protocol_version(message);
 
 	// This check uses only the header version because modern clients must send it and the
@@ -462,7 +468,12 @@ fn validate_request_protocol(
 		&& let ClientJsonRpcMessage::Request(req) = message
 	{
 		let method = req.request.method();
-		if REMOVED_METHODS_2026_07_28.contains(&method) || !mcp::is_known_client_request_method(method)
+		// rmcp's untagged parse puts unknown methods and known methods with invalid params in
+		// `CustomRequest`. Typed variants are known by construction, so this check reserves 404 for
+		// unknown methods and lets dispatch return -32602 for invalid params.
+		if REMOVED_METHODS_2026_07_28.contains(&method)
+			|| (matches!(req.request, ClientRequest::CustomRequest(_))
+				&& !mcp::is_known_client_request_method(method))
 		{
 			return Err(mcp::Error::MethodNotFound(request_id, method.to_string()).into());
 		}
@@ -504,7 +515,7 @@ fn validate_request_protocol(
 /// fallback only classifies bodies the typed parse cannot represent.
 /// Header-only modern detection: body `_meta` is unreadable once the typed parse has failed.
 fn unknown_method_error(headers: &::http::HeaderMap, bytes: &[u8]) -> Option<mcp::Error> {
-	if !protocol_version_header(headers, None)
+	if !protocol_version_header(headers, None, true)
 		.ok()?
 		.is_some_and(|v| is_modern_version(&v))
 	{
@@ -522,23 +533,15 @@ fn unknown_method_error(headers: &::http::HeaderMap, bytes: &[u8]) -> Option<mcp
 	Some(mcp::Error::MethodNotFound(Some(request_id), method))
 }
 
-fn decode_meta_value<T>(meta: &Meta, key: &str) -> Option<T>
-where
-	T: for<'de> Deserialize<'de>,
-{
-	meta.get(key).and_then(|value| T::deserialize(value).ok())
-}
-
 fn message_protocol_version(message: &ClientJsonRpcMessage) -> Option<ProtocolVersion> {
 	match message {
 		ClientJsonRpcMessage::Request(req) => match &req.request {
 			ClientRequest::InitializeRequest(init) => Some(init.params.protocol_version.clone()),
-			_ => decode_meta_value(req.request.get_meta(), META_KEY_PROTOCOL_VERSION),
+			_ => req.request.get_meta().protocol_version(),
 		},
-		ClientJsonRpcMessage::Notification(notification) => decode_meta_value(
-			notification.notification.get_meta(),
-			META_KEY_PROTOCOL_VERSION,
-		),
+		ClientJsonRpcMessage::Notification(notification) => {
+			notification.notification.get_meta().protocol_version()
+		},
 		_ => None,
 	}
 }
@@ -551,10 +554,17 @@ fn accepted_response() -> Response {
 }
 
 fn reject_modern_session_request(headers: &::http::HeaderMap) -> Result<(), ProxyError> {
-	if let Some(version) = protocol_version_header(headers, None)?
+	if let Some(version) = protocol_version_header(headers, None, true)?
 		&& is_modern_version(&version)
 	{
-		return Err(mcp::Error::UnsupportedVersion(None, version.to_string()).into());
+		return Err(
+			mcp::Error::UnsupportedVersion {
+				request_id: None,
+				version: version.to_string(),
+				include_supported_versions: true,
+			}
+			.into(),
+		);
 	}
 	Ok(())
 }

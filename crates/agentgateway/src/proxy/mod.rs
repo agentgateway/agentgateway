@@ -306,7 +306,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::InvalidSessionIdQuery) => StatusCode::UNPROCESSABLE_ENTITY,
 			ProxyError::MCP(mcp::Error::InvalidSessionIdHeader) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::InvalidProtocolVersion) => StatusCode::BAD_REQUEST,
-			ProxyError::MCP(mcp::Error::UnsupportedVersion(..)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::UnsupportedVersion { .. }) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::VersionMismatch(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::HeaderBodyMismatch(_, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::InvalidRoutingHeader(_, _)) => StatusCode::BAD_REQUEST,

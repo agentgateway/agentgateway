@@ -86,7 +86,7 @@ impl Session {
 		if initialize_upstream && !is_init {
 			let mut client_info = get_client_info();
 			if let Some(protocol_version) =
-				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone())?
+				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone(), true)?
 			{
 				client_info.protocol_version = protocol_version;
 			}
@@ -518,13 +518,12 @@ impl Session {
 						// URIs in this filter were rewritten to upstream form in the loop above; it matches
 						// forwarded ResourceUpdated frames before their URIs are rewritten back to service+ form.
 						let upstream_filter = slr.params.notifications.clone();
-						let targets = target_name.map(|target| vec![target]);
 						Box::pin(self.relay.send_subscriptions_listen(
 							r,
 							ctx,
 							client_filter,
 							upstream_filter,
-							targets,
+							target_name,
 						))
 						.await
 					},
