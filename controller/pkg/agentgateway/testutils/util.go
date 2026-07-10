@@ -247,6 +247,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		ListenerSets:         krttest.GetMockCollection[*gwv1.ListenerSet](mock),
 		InferencePools:       krttest.GetMockCollection[*inf.InferencePool](mock),
 		Backends:             krttest.GetMockCollection[*agwv1alpha1.AgentgatewayBackend](mock),
+		Models:               krttest.GetMockCollection[*agwv1alpha1.AgentgatewayModel](mock),
 		AgentgatewayPolicies: krttest.GetMockCollection[*agwv1alpha1.AgentgatewayPolicy](mock),
 		ControllerName:       wellknown.DefaultAgwControllerName,
 		SystemNamespace:      "agentgateway-system",
