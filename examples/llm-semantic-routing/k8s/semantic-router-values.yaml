@@ -117,6 +117,9 @@ config:
         - Lean
         - invariant
         - proof
+        - prove
+        - convergence
+        - monotonicity
         - temporal logic
         - advanced debugging
         - root cause
@@ -125,7 +128,11 @@ config:
         - race condition
         - memory ordering
         - research synthesis
+        - synthesize
         - literature review
+        - operational transform
+        - conflict resolution
+        - compare tradeoffs
         case_sensitive: false
         bm25_threshold: 0.1
       - name: routine_coding_markers
@@ -163,6 +170,8 @@ config:
         - Find the root cause of a subtle concurrency bug from incomplete logs.
         - Write or review a formal specification with safety and liveness invariants.
         - Synthesize research papers into an implementation strategy.
+        - Design conflict resolution for replicated state and justify convergence, monotonic growth, and deletion semantics.
+        - Compare competing collaboration or consistency approaches and recommend one based on their tradeoffs.
         - Debug a rare production incident involving timing, retries, and consistency.
 
       context:
@@ -194,6 +203,10 @@ config:
             - guarantee
             - invariant
             - prove
+            - convergence
+            - monotonicity
+            - synthesize
+            - recommend
             - tradeoff
             - compare
             - failure mode

@@ -23,7 +23,10 @@ routing decisions with agentgateway observability data.
 - `k8s/agentgateway-experiment.yaml`: OpenAI backends for routed and forced
   baseline lanes, header-specific baseline `HTTPRoute`s, and an ExtProc policy
   attached only to the routed lane.
-- `data/eval-corpus.jsonl`: labeled prompts for calibration and smoke testing.
+- `data/tuning-corpus.jsonl`: targeted positive and negative controls for
+  iterating on routing signals.
+- `data/eval-corpus.jsonl`: labeled regression prompts for smoke testing and
+  measuring routing behavior after tuning.
 - `scripts/run_eval.py`: runs `routed`, `always_low_cost`, and
   `always_expensive` lanes through the same gateway.
 - `scripts/summarize_results.py`: summarizes local cost estimates, latency, and
@@ -187,8 +190,23 @@ Latency:
 
 ## Tuning
 
-Start by tuning `advanced_need_band.outputs[].name: expensive_lane` in
-`k8s/semantic-router-values.yaml`.
+Run the tuning corpus through only the routed lane while iterating on signals:
+
+```bash
+python3 examples/llm-semantic-routing/scripts/run_eval.py \
+  --dataset examples/llm-semantic-routing/data/tuning-corpus.jsonl \
+  --lanes routed \
+  --delay-sec 1
+```
+
+The tuning corpus deliberately pairs advanced formal-methods and research
+paraphrases with low-cost negative controls that mention merge functions,
+eventual consistency, CRDTs, and recommendations. Keep all controls passing
+before rerunning `data/eval-corpus.jsonl` as a regression suite. Use a separate,
+unseen corpus before publishing a general routing-accuracy claim.
+
+Start threshold tuning at `advanced_need_band.outputs[].name: expensive_lane`
+in `k8s/semantic-router-values.yaml`.
 
 - Lower `gte: 0.35` if hard prompts are under-escalated.
 - Raise it if routine prompts are over-escalated.
