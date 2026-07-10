@@ -138,6 +138,18 @@ func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
 			toRouteKind(wellknown.HTTPRouteGVK),
 			toRouteKind(wellknown.GRPCRouteGVK),
 		}
+		// AgentgatewayModel is opt-in. Listing it in allowedRoutes enables the
+		// listener's built-in LLM routes; it is not enabled by the default route
+		// kinds.
+		if l.AllowedRoutes != nil {
+			modelKind := toRouteKind(wellknown.AgentgatewayModelGVK)
+			for _, kind := range l.AllowedRoutes.Kinds {
+				if routeGroupKindEqual(modelKind, kind) {
+					supported = append(supported, modelKind)
+					break
+				}
+			}
+		}
 	case gwv1.TCPProtocolType:
 		supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TCPRouteGVK)}
 	case gwv1.TLSProtocolType:
