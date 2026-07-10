@@ -100,8 +100,9 @@ this policy in a production route.
 Routine coding prompts should use the lower-cost model:
 
 ```bash
-curl "$INGRESS_GW_ADDRESS/v1/chat/completions" \
+curl -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
   -H "Content-Type: application/json" \
+  -H "X-VSR-Debug: true" \
   -d '{
     "model": "auto",
     "messages": [
@@ -114,8 +115,9 @@ curl "$INGRESS_GW_ADDRESS/v1/chat/completions" \
 Advanced distributed-systems prompts should use the higher-capability model:
 
 ```bash
-curl "$INGRESS_GW_ADDRESS/v1/chat/completions" \
+curl -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
   -H "Content-Type: application/json" \
+  -H "X-VSR-Debug: true" \
   -d '{
     "model": "auto",
     "messages": [
@@ -125,46 +127,14 @@ curl "$INGRESS_GW_ADDRESS/v1/chat/completions" \
   }'
 ```
 
+The response headers should include `x-vsr-selected-model: gpt-5.4-nano` for
+the routine request and `x-vsr-selected-model: gpt-5.5` for the advanced
+request. The debug header is for verification only and should not be required
+by application traffic.
+
 Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
 observability source of record. Use isolated evaluation traffic with forced
 lower-cost and always-expensive baselines before adopting the policy broadly.
-
-## Verify Routing
-
-Set `X-VSR-Debug: true` to receive the selected-model header, then inspect one
-routine and one advanced request:
-
-```bash
-curl -sS -D /tmp/vsr-routine.headers -o /dev/null \
-  "$INGRESS_GW_ADDRESS/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -H "X-VSR-Debug: true" \
-  -d '{
-    "model": "auto",
-    "messages": [
-      {"role": "user", "content": "Implement a small Go helper and one table-driven test."}
-    ],
-    "max_tokens": 16
-  }'
-
-curl -sS -D /tmp/vsr-advanced.headers -o /dev/null \
-  "$INGRESS_GW_ADDRESS/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -H "X-VSR-Debug: true" \
-  -d '{
-    "model": "auto",
-    "messages": [
-      {"role": "user", "content": "Design a distributed rate limiter that remains correct during Redis failover and regional network partitions. Compare token bucket, sliding window, local fallback, and global reconciliation."}
-    ],
-    "max_tokens": 16
-  }'
-
-grep -i '^x-vsr-selected-model:' /tmp/vsr-routine.headers /tmp/vsr-advanced.headers
-```
-
-The routine request should select `gpt-5.4-nano`; the advanced request should
-select `gpt-5.5`. The debug header is for verification only and should not be
-required by application traffic.
 
 ## Cleanup
 
