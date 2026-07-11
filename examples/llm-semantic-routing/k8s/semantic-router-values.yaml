@@ -3,6 +3,10 @@ router:
   skipProcessing:
     enabled: true
 
+# The model runtime is configured below. Do not inherit the chart's qwen3
+# embedding override, which conflicts with the configured mmbert model.
+env: []
+
 args:
 - --secure=false
 
