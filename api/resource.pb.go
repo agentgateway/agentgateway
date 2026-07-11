@@ -5044,9 +5044,15 @@ type AwsAssumeRole struct {
 	// Session tags passed to STS AssumeRole. Once activated as cost allocation
 	// tags, they surface as columns in the AWS Cost & Usage Report for per-tenant
 	// cost attribution.
-	Tags          []*AwsSessionTag `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Tags []*AwsSessionTag `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`
+	// CEL expression evaluated against each request to produce the session name
+	// (RoleSessionName), for example `jwt.sub` or `request.headers["x-team"]`. If
+	// the expression does not produce a valid session name at request time, the
+	// request is rejected. At most one of session_name and session_name_expression
+	// may be set.
+	SessionNameExpression string `protobuf:"bytes,4,opt,name=session_name_expression,json=sessionNameExpression,proto3" json:"session_name_expression,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *AwsAssumeRole) Reset() {
@@ -5098,6 +5104,13 @@ func (x *AwsAssumeRole) GetTags() []*AwsSessionTag {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *AwsAssumeRole) GetSessionNameExpression() string {
+	if x != nil {
+		return x.SessionNameExpression
+	}
+	return ""
 }
 
 // AWS STS session tag passed to AssumeRole for cost attribution.
@@ -15740,11 +15753,12 @@ const file_resource_proto_rawDesc = "" +
 	"\x06region\x18\x03 \x01(\tR\x06region\x12(\n" +
 	"\rsession_token\x18\x04 \x01(\tH\x00R\fsessionToken\x88\x01\x01B\x10\n" +
 	"\x0e_session_token\"\r\n" +
-	"\vAwsImplicit\"\x8b\x01\n" +
+	"\vAwsImplicit\"\xc3\x01\n" +
 	"\rAwsAssumeRole\x12\x19\n" +
 	"\brole_arn\x18\x01 \x01(\tR\aroleArn\x12!\n" +
 	"\fsession_name\x18\x02 \x01(\tR\vsessionName\x12<\n" +
-	"\x04tags\x18\x03 \x03(\v2(.agentgateway.dev.resource.AwsSessionTagR\x04tags\"W\n" +
+	"\x04tags\x18\x03 \x03(\v2(.agentgateway.dev.resource.AwsSessionTagR\x04tags\x126\n" +
+	"\x17session_name_expression\x18\x04 \x01(\tR\x15sessionNameExpression\"W\n" +
 	"\rAwsSessionTag\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x1e\n" +

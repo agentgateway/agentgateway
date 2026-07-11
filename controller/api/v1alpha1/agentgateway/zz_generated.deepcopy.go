@@ -924,6 +924,11 @@ func (in *AwsAssumeRole) DeepCopyInto(out *AwsAssumeRole) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.SessionNameExpression != nil {
+		in, out := &in.SessionNameExpression, &out.SessionNameExpression
+		*out = new(CELExpression)
+		**out = **in
+	}
 	if in.Tags != nil {
 		in, out := &in.Tags, &out.Tags
 		*out = make([]AwsSessionTag, len(*in))
