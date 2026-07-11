@@ -3109,10 +3109,14 @@
           "type": "string"
         },
         "sessionName": {
-          "description": "Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report\nattribution. Max 64 chars, matching `[\\w+=,.@-]`. If unset, the AWS SDK\ngenerates a random session name.",
-          "type": [
-            "string",
-            "null"
+          "description": "Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report\nattribution. Either a static string or `{expression: ...}` with a CEL\nexpression evaluated against each request. Max 64 chars, matching\n`[\\w+=,.@-]`. If unset, the AWS SDK generates a random session name.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AwsSessionName"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "tags": {
@@ -3126,6 +3130,28 @@
       "additionalProperties": false,
       "required": [
         "roleArn"
+      ]
+    },
+    "AwsSessionName": {
+      "description": "Session name (RoleSessionName) in configuration form: a static string, or a\nCEL expression evaluated against each request. Untagged, so a plain string\nkeeps its existing meaning.",
+      "anyOf": [
+        {
+          "description": "Static session name.",
+          "type": "string"
+        },
+        {
+          "description": "CEL expression evaluated against each request to produce the session\nname, for example `jwt.sub` or `request.headers[\"x-team\"]`. If the\nexpression does not produce a valid session name at request time, the\nrequest is rejected.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/Expression"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "expression"
+          ]
+        }
       ]
     },
     "AwsSessionTag": {

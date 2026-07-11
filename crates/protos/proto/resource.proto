@@ -447,6 +447,12 @@ message AwsAssumeRole {
   // tags, they surface as columns in the AWS Cost & Usage Report for per-tenant
   // cost attribution.
   repeated AwsSessionTag tags = 3;
+  // CEL expression evaluated against each request to produce the session name
+  // (RoleSessionName), for example `jwt.sub` or `request.headers["x-team"]`. If
+  // the expression does not produce a valid session name at request time, the
+  // request is rejected. At most one of session_name and session_name_expression
+  // may be set.
+  string session_name_expression = 4;
 }
 
 // AWS STS session tag passed to AssumeRole for cost attribution.

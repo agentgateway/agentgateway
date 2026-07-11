@@ -1035,13 +1035,32 @@ fn backend_auth_from_proto(
 							})
 						})
 						.collect::<Result<Vec<_>, _>>()?;
+					// An unset proto string is indistinguishable from an empty one; treat
+					// empty as unset for both session name forms.
+					let session_name = match (
+						assume_role.session_name.is_empty(),
+						assume_role.session_name_expression.is_empty(),
+					) {
+						(true, true) => None,
+						(false, true) => Some(auth::aws::AwsSessionName::Static(assume_role.session_name)),
+						// Permissive: a bad expression fails requests that hit this policy
+						// (fail closed) instead of rejecting the whole policy update.
+						(true, false) => Some(auth::aws::AwsSessionName::Dynamic {
+							expression: permissive_cel_expression_arc(
+								diagnostics,
+								"AWS session name",
+								assume_role.session_name_expression,
+							),
+						}),
+						(false, false) => {
+							return Err(ProtoError::Generic(
+								"assumeRole sets both sessionName and sessionNameExpression".to_string(),
+							));
+						},
+					};
 					Ok(auth::AwsAssumeRole {
 						role_arn: assume_role.role_arn,
-						session_name: if assume_role.session_name.is_empty() {
-							None
-						} else {
-							Some(assume_role.session_name)
-						},
+						session_name,
 						tags: auth::aws::AwsSessionTags::try_new(tags)
 							.map_err(|e| ProtoError::Generic(e.to_string()))?,
 					})
