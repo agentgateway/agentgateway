@@ -77,6 +77,9 @@ config:
       tags: [premium, expensive, deep-reasoning]
 
     signals:
+      # This coding policy does not use domain signals. Set an empty list to
+      # avoid inheriting the chart's general-purpose domain defaults.
+      domains: []
       keywords:
       - name: immediate_response_probe
         operator: OR
