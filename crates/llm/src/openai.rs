@@ -18,6 +18,15 @@ pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 
 pub const DEFAULT_BASE_PATH: &str = "/v1";
 
+impl Provider {
+	pub fn prefers_completions_only_for_model(request_model: Option<&str>) -> bool {
+		matches!(
+			request_model,
+			Some("gpt-5.6-sol" | "gpt-5.6-luna" | "gpt-5.6-terra")
+		)
+	}
+}
+
 pub fn path_suffix(route: RouteType) -> &'static str {
 	match route {
 		RouteType::Responses => "/responses",
