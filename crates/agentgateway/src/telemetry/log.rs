@@ -56,6 +56,15 @@ fn u128_to_i64(value: u128) -> i64 {
 	value.min(i64::MAX as u128) as i64
 }
 
+fn llm_context_for_logging(info: llm::LLMInfo, model_catalog: &ModelCatalog) -> LLMContext {
+	let input_tokens = info.telemetry_input_tokens();
+	let total_tokens = info.telemetry_total_tokens();
+	let mut context = LLMContext::from_llm_info(info, Some(model_catalog));
+	context.input_tokens = input_tokens;
+	context.total_tokens = total_tokens;
+	context
+}
+
 fn kv_to_json(kv: &[(&str, Option<ValueBag>)]) -> Value {
 	let mut map = serde_json::Map::with_capacity(kv.len());
 	for (key, value) in kv {
@@ -1097,7 +1106,7 @@ impl Drop for DropOnLog {
 			let mut llm_response: Option<LLMContext> = log
 				.llm_response
 				.take()
-				.map(|llm_info| LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref())));
+				.map(|info| llm_context_for_logging(info, log.model_catalog.as_ref()));
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
 			}
@@ -2154,6 +2163,29 @@ mod tests {
 		)
 	}
 
+	fn test_llm_info(convention: llm::CacheTokenConvention, input_tokens: u64) -> llm::LLMInfo {
+		llm::LLMInfo::new(
+			llm::LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Messages,
+				cache_convention: convention,
+				request_model: strng::literal!("test-model"),
+				provider: strng::literal!("test-provider"),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			llm::LLMResponse {
+				input_tokens: Some(input_tokens),
+				cached_input_tokens: Some(81_408),
+				output_tokens: Some(231),
+				total_tokens: Some(input_tokens + 231),
+				..Default::default()
+			},
+		)
+	}
+
 	fn test_request_log() -> RequestLog {
 		let cel = CelLogging {
 			cel_context: crate::cel::ContextBuilder::new(),
@@ -2178,6 +2210,26 @@ mod tests {
 				raw_peer_addr: None,
 			},
 		)
+	}
+
+	#[test]
+	fn logging_context_normalizes_cache_conventions() {
+		let catalog = ModelCatalog::empty();
+		let openai = llm_context_for_logging(
+			test_llm_info(llm::CacheTokenConvention::InputIncludesCache, 82_846),
+			catalog.as_ref(),
+		);
+		let anthropic = llm_context_for_logging(
+			test_llm_info(llm::CacheTokenConvention::InputExcludesCache, 1_438),
+			catalog.as_ref(),
+		);
+
+		for context in [openai, anthropic] {
+			assert_eq!(context.input_tokens, Some(1_438));
+			assert_eq!(context.cached_input_tokens, Some(81_408));
+			assert_eq!(context.output_tokens, Some(231));
+			assert_eq!(context.total_tokens, Some(83_077));
+		}
 	}
 
 	#[test]

@@ -144,11 +144,39 @@ pub mod from_messages {
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
 	}
 
+	struct TranslatedResponse {
+		provider: types::completions::Response,
+		client: messages::MessagesResponse,
+	}
+
+	impl ResponseType for TranslatedResponse {
+		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::LLMResponse {
+			self.provider.to_llm_response(include_completion_in_log)
+		}
+
+		fn to_webhook_choices(&self) -> Vec<crate::webhook::ResponseChoice> {
+			self.client.to_webhook_choices()
+		}
+
+		fn set_webhook_choices(
+			&mut self,
+			resp: Vec<crate::webhook::ResponseChoice>,
+		) -> anyhow::Result<()> {
+			self.client.set_webhook_choices(resp)
+		}
+
+		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
+			self.client.serialize()
+		}
+	}
+
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
-		let resp = serde_json::from_slice::<completions::Response>(bytes)
+		let provider = serde_json::from_slice::<types::completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
-		let anthropic = translate_response_internal(resp)?;
-		Ok(Box::new(anthropic))
+		let typed = serde_json::from_slice::<completions::Response>(bytes)
+			.map_err(logged_response_parsing(bytes))?;
+		let client = translate_response_internal(typed)?;
+		Ok(Box::new(TranslatedResponse { provider, client }))
 	}
 
 	fn translate_response_internal(
@@ -213,14 +241,33 @@ pub mod from_messages {
 			usage: messages::Usage {
 				input_tokens: usage
 					.as_ref()
-					.map(|u| u.prompt_tokens as usize)
+					.map(|u| {
+						let cached = u
+							.prompt_tokens_details
+							.as_ref()
+							.and_then(|d| d.cached_tokens)
+							.or(u.cache_read_input_tokens)
+							.unwrap_or(0);
+						(u.prompt_tokens as u64).saturating_sub(cached) as usize
+					})
 					.unwrap_or(0),
 				output_tokens: usage
 					.as_ref()
 					.map(|u| u.completion_tokens as usize)
 					.unwrap_or(0),
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
+				cache_creation_input_tokens: usage
+					.as_ref()
+					.and_then(|u| u.cache_creation_input_tokens)
+					.map(|v| v as usize),
+				cache_read_input_tokens: usage
+					.as_ref()
+					.and_then(|u| {
+						u.prompt_tokens_details
+							.as_ref()
+							.and_then(|d| d.cached_tokens)
+							.or(u.cache_read_input_tokens)
+					})
+					.map(|v| v as usize),
 				service_tier,
 			},
 			input_audio_tokens: usage.as_ref().and_then(|u| {
@@ -402,10 +449,23 @@ pub mod from_messages {
 			close_text_block(state, events);
 			close_all_tool_blocks(state, events);
 
-			let (input_tokens, output_tokens) = usage
-				.as_ref()
-				.map(|u| (u.prompt_tokens as usize, u.completion_tokens as usize))
-				.unwrap_or((0, 0));
+			let (input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens) =
+				usage
+					.as_ref()
+					.map(|u| {
+						let cached = u
+							.prompt_tokens_details
+							.as_ref()
+							.and_then(|d| d.cached_tokens)
+							.or(u.cache_read_input_tokens);
+						(
+							(u.prompt_tokens as u64).saturating_sub(cached.unwrap_or(0)) as usize,
+							u.completion_tokens as usize,
+							cached.map(|v| v as usize),
+							u.cache_creation_input_tokens.map(|v| v as usize),
+						)
+					})
+					.unwrap_or((0, 0, None, None));
 
 			push_event(
 				events,
@@ -417,8 +477,8 @@ pub mod from_messages {
 					usage: messages::MessageDeltaUsage {
 						input_tokens: Some(input_tokens),
 						output_tokens: Some(output_tokens),
-						cache_creation_input_tokens: None,
-						cache_read_input_tokens: None,
+						cache_creation_input_tokens,
+						cache_read_input_tokens,
 					},
 				},
 			);
@@ -430,6 +490,16 @@ pub mod from_messages {
 					r.response.input_tokens = Some(usage.prompt_tokens as u64);
 					r.response.output_tokens = Some(usage.completion_tokens as u64);
 					r.response.total_tokens = Some(usage.total_tokens as u64);
+					r.response.cached_input_tokens = usage
+						.prompt_tokens_details
+						.as_ref()
+						.and_then(|d| d.cached_tokens)
+						.or(usage.cache_read_input_tokens);
+					r.response.cache_creation_input_tokens = usage.cache_creation_input_tokens;
+					r.response.reasoning_tokens = usage
+						.completion_tokens_details
+						.as_ref()
+						.and_then(|d| d.reasoning_tokens);
 				});
 			}
 		}
@@ -952,6 +1022,79 @@ pub mod from_messages {
 			service_tier: None,
 			parallel_tool_calls,
 			web_search_options: None,
+		}
+	}
+
+	#[cfg(test)]
+	mod tests {
+		use std::sync::{Arc, Mutex};
+
+		use agent_core::strng;
+		use http_body_util::BodyExt;
+
+		use super::*;
+		use crate::{
+			CacheTokenConvention, InputFormat, LLMInfo, LLMRequest, LLMResponse, StreamingUsageReporter,
+		};
+
+		struct TestReporter(Arc<Mutex<LLMInfo>>);
+
+		impl StreamingUsageReporter for TestReporter {
+			fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
+				f(&mut self.0.lock().unwrap());
+			}
+
+			fn report_usage(&mut self) {}
+		}
+
+		fn test_usage_guard() -> (StreamingUsageGuard, Arc<Mutex<LLMInfo>>) {
+			let info = Arc::new(Mutex::new(LLMInfo::new(
+				LLMRequest {
+					input_tokens: None,
+					input_format: InputFormat::Messages,
+					cache_convention: CacheTokenConvention::InputIncludesCache,
+					request_model: strng::new("test-model"),
+					provider: strng::new("test-provider"),
+					streaming: true,
+					params: Default::default(),
+					prompt: None,
+					provider_state: None,
+				},
+				LLMResponse::default(),
+			)));
+			(
+				StreamingUsageGuard::new(Box::new(TestReporter(info.clone()))),
+				info,
+			)
+		}
+
+		#[tokio::test]
+		async fn translate_stream_preserves_cached_and_reasoning_tokens() {
+			let input = r#"data: {"id":"chatcmpl_1","object":"chat.completion.chunk","created":1,"model":"test-model","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":null}],"usage":null}
+
+data: {"id":"chatcmpl_1","object":"chat.completion.chunk","created":1,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":null}
+
+data: {"id":"chatcmpl_1","object":"chat.completion.chunk","created":1,"model":"test-model","choices":[],"usage":{"prompt_tokens":250000,"completion_tokens":258,"total_tokens":250258,"prompt_tokens_details":{"cached_tokens":246272},"completion_tokens_details":{"reasoning_tokens":200}}}
+
+data: [DONE]
+
+"#;
+			let (guard, info) = test_usage_guard();
+			let output = translate_stream(Body::from(input), 1024 * 1024, guard)
+				.collect()
+				.await
+				.unwrap()
+				.to_bytes();
+			let output = String::from_utf8(output.to_vec()).unwrap();
+
+			assert!(output.contains("\"input_tokens\":3728"));
+			assert!(output.contains("\"cache_read_input_tokens\":246272"));
+			let response = &info.lock().unwrap().response;
+			assert_eq!(response.input_tokens, Some(250_000));
+			assert_eq!(response.cached_input_tokens, Some(246_272));
+			assert_eq!(response.output_tokens, Some(258));
+			assert_eq!(response.reasoning_tokens, Some(200));
+			assert_eq!(response.total_tokens, Some(250_258));
 		}
 	}
 }
