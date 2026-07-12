@@ -59,9 +59,7 @@ spec:
         port: 50051
       processingOptions:
         requestHeaderMode: Send
-        requestBodyMode: FullDuplexStreamed
+        requestBodyMode: Buffered
         responseHeaderMode: Send
         responseBodyMode: Buffered
-        requestTrailerMode: Send
-        responseTrailerMode: Send
         allowModeOverride: true
