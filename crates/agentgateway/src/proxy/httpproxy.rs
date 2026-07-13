@@ -3197,6 +3197,26 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn mcp_meta_traceparent_malformed_returns_none_without_panic() {
+		// 55-char value with no hyphens previously panicked in TraceParent parsing.
+		let long = "0".repeat(55);
+		for bad in [json!(long), json!("not-a-traceparent"), json!(42)] {
+			let body = json!({"params": {"_meta": {"traceparent": bad}}});
+			let mut req = ::http::Request::builder()
+				.method(Method::POST)
+				.body(http::Body::from(serde_json::to_vec(&body).unwrap()))
+				.unwrap();
+			assert!(mcp_meta_traceparent(&mut req).await.is_none());
+		}
+		// Non-JSON body must also be tolerated.
+		let mut req = ::http::Request::builder()
+			.method(Method::POST)
+			.body(http::Body::from(b"not json".to_vec()))
+			.unwrap();
+		assert!(mcp_meta_traceparent(&mut req).await.is_none());
+	}
+
+	#[tokio::test]
 	async fn apply_llm_request_policies_skips_streaming_guardrails_when_disabled() {
 		let policies =
 			response_prompt_guards_for_streaming_mode(PromptGuardStreamingMode::Disabled).await;
