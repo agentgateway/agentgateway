@@ -172,6 +172,80 @@ func TestOverlayApplier_ApplyOverlays_DeploymentSpec(t *testing.T) {
 	assert.Equal(t, "512Mi", result.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String())
 }
 
+func TestOverlayApplier_ApplyOverlays_DaemonSetSpec(t *testing.T) {
+	specPatch := []byte(`{
+		"updateStrategy": {
+			"type": "RollingUpdate"
+		},
+		"template": {
+			"spec": {
+				"tolerations": [{
+					"operator": "Exists"
+				}]
+			}
+		}
+	}`)
+
+	params := &agentgateway.AgentgatewayParameters{
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
+				DaemonSet: &agentgateway.KubernetesResourceOverlay{
+					Spec: &apiextensionsv1.JSON{Raw: specPatch},
+				},
+			},
+		},
+	}
+
+	applier := NewOverlayApplier(params)
+	daemonSet := &appsv1.DaemonSet{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "DaemonSet",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-daemonset",
+		},
+		Spec: appsv1.DaemonSetSpec{
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				Type: appsv1.OnDeleteDaemonSetStrategyType,
+			},
+		},
+	}
+	objs := []client.Object{daemonSet}
+
+	objs, err := applier.ApplyOverlays(objs)
+	require.NoError(t, err)
+
+	result := objs[0].(*appsv1.DaemonSet)
+	assert.Equal(t, appsv1.RollingUpdateDaemonSetStrategyType, result.Spec.UpdateStrategy.Type)
+	require.Len(t, result.Spec.Template.Spec.Tolerations, 1)
+	assert.Equal(t, corev1.TolerationOpExists, result.Spec.Template.Spec.Tolerations[0].Operator)
+}
+
+func TestOverlayApplier_RejectsHPADaemonSetWorkload(t *testing.T) {
+	params := &agentgateway.AgentgatewayParameters{
+		Spec: agentgateway.AgentgatewayParametersSpec{
+			AgentgatewayParametersOverlays: agentgateway.AgentgatewayParametersOverlays{
+				HorizontalPodAutoscaler: &agentgateway.KubernetesResourceOverlay{},
+			},
+		},
+	}
+
+	daemonSet := &appsv1.DaemonSet{
+		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "DaemonSet"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-daemonset",
+			Namespace: "default",
+		},
+		Spec: appsv1.DaemonSetSpec{},
+	}
+
+	applier := NewOverlayApplier(params)
+	_, err := applier.ApplyOverlays([]client.Object{daemonSet})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "horizontalPodAutoscaler overlay is not supported for DaemonSet workload")
+}
+
 func TestOverlayApplier_ApplyOverlays_DeleteContainerWithPatchDirective(t *testing.T) {
 	// Test strategic merge patch with $patch: delete directive
 	specPatch := []byte(`{
@@ -385,6 +459,29 @@ func TestCreatePodDisruptionBudget_OverlayLabelsMergeOnTop(t *testing.T) {
 	for k, v := range gatewayLabels {
 		assert.Equal(t, v, pdb.GetLabels()[k])
 	}
+}
+
+func TestCreatePodDisruptionBudget_UsesDaemonSetSelector(t *testing.T) {
+	daemonSet := &appsv1.DaemonSet{
+		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "DaemonSet"},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-daemonset",
+			Namespace: "default",
+			Labels:    gatewayLabels,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{MatchLabels: gatewayLabels},
+		},
+	}
+
+	overlay := &agentgateway.KubernetesResourceOverlay{}
+
+	obj, err := createPodDisruptionBudget(gatewayWorkloadFromDaemonSet(daemonSet), overlay)
+	require.NoError(t, err)
+
+	pdb := obj.(*policyv1.PodDisruptionBudget)
+	assert.Equal(t, daemonSet.Spec.Selector, pdb.Spec.Selector)
+	assert.Equal(t, gatewayLabels, pdb.GetLabels())
 }
 
 func TestCreateHorizontalPodAutoscaler_InheritsDeploymentLabels(t *testing.T) {

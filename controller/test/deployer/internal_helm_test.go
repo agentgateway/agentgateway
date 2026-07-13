@@ -80,6 +80,10 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway",
 			Validate: func(t *testing.T, outputYaml string) {
 				t.Helper()
+				assert.Contains(t, outputYaml, "kind: Deployment",
+					"default workload should render a Deployment")
+				assert.NotContains(t, outputYaml, "kind: DaemonSet",
+					"default workload should not render a DaemonSet")
 				assert.Contains(t, outputYaml, "name: SESSION_KEY",
 					"deployment should inject the managed session key via env")
 				assert.Contains(t, outputYaml, "secretKeyRef:",
@@ -412,6 +416,36 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 					"HPA should have maxReplicas from overlay spec")
 				assert.Contains(t, outputYaml, "averageUtilization: 80",
 					"HPA should have CPU utilization target from overlay spec")
+			},
+		},
+		{
+			Name:      "agentgateway with GatewayClass DaemonSet workload",
+			InputFile: "agentgateway-daemonset-gwc",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "kind: DaemonSet",
+					"DaemonSet workload should render a DaemonSet")
+				assert.NotContains(t, outputYaml, "kind: Deployment",
+					"DaemonSet workload should not render a Deployment")
+				assert.NotContains(t, outputYaml, "replicas:",
+					"DaemonSet workload should not render replicas")
+				assert.Contains(t, outputYaml, "daemonset-label: from-overlay",
+					"DaemonSet overlay metadata should be applied")
+				assert.Contains(t, outputYaml, "operator: Exists",
+					"DaemonSet overlay spec should be applied")
+				assert.Contains(t, outputYaml, "kind: PodDisruptionBudget",
+					"DaemonSet workload should support PDB generation")
+			},
+		},
+		{
+			Name:      "agentgateway Gateway parameters override DaemonSet class workload",
+			InputFile: "agentgateway-daemonset-gw-override",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "kind: Deployment",
+					"Gateway-level workload.kind should override the GatewayClass setting")
+				assert.NotContains(t, outputYaml, "kind: DaemonSet",
+					"Gateway-level Deployment override should not render a DaemonSet")
 			},
 		},
 
