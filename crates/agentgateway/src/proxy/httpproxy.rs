@@ -1177,6 +1177,7 @@ impl HTTPProxy {
 		}
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
+		// TODO(SEP-414): also seed the parent from the MCP body `_meta.traceparent` when the HTTP header is absent.
 		let trace_parent = trc::TraceParent::from_request(req);
 		let trace_sampled = sampler.trace_sampled(req, trace_parent.as_ref());
 

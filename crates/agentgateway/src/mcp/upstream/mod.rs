@@ -9,7 +9,7 @@ use std::io;
 use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 pub use openapi::ParseError as OpenAPIParseError;
-use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
+use rmcp::model::{ClientNotification, ClientRequest, GetMeta, JsonRpcRequest};
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::common::http_header::HEADER_SESSION_ID;
 use thiserror::Error;
@@ -95,6 +95,21 @@ impl IncomingRequestContext {
 			uri.authority = Some(authority);
 			Ok(())
 		})
+	}
+	// Copy W3C trace context into the message's `_meta` so it propagates with the
+	// JSON-RPC message itself (SEP-414). Uses un-prefixed keys per the spec's exception
+	// to `_meta` DNS namespacing, mirroring the `traceparent` header `apply` forwards.
+	// This is the only trace carrier for stdio upstreams, which have no request headers.
+	fn stamp_trace_context<T: GetMeta>(&self, msg: &mut T) {
+		for key in ["traceparent", "tracestate", "baggage"] {
+			let Some(value) = self.headers.get(key).and_then(|v| v.to_str().ok()) else {
+				continue;
+			};
+			msg
+				.get_meta_mut()
+				.0
+				.insert(key.to_string(), serde_json::Value::String(value.to_string()));
+		}
 	}
 	// Empty-bodied Request mirroring the incoming headers/extensions, for CEL input.
 	pub fn as_request(&self) -> crate::http::Request {
@@ -202,9 +217,10 @@ impl Upstream {
 	}
 	pub(crate) async fn generic_stream(
 		&self,
-		request: JsonRpcRequest<ClientRequest>,
+		mut request: JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
+		ctx.stamp_trace_context(&mut request.request);
 		match &self {
 			Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
 				Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?,
@@ -233,9 +249,10 @@ impl Upstream {
 
 	pub(crate) async fn generic_notification(
 		&self,
-		request: ClientNotification,
+		mut request: ClientNotification,
 		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError> {
+		ctx.stamp_trace_context(&mut request);
 		match &self {
 			Upstream::McpStdio(c) => {
 				c.send_notification(request, ctx).await?;
@@ -537,5 +554,38 @@ mod tests {
 		ctx.apply(&mut req).unwrap();
 		assert_eq!(req.headers().get("authorization").unwrap(), "Bearer token");
 		assert_eq!(req.headers().get("x-request-id").unwrap(), "req-1");
+	}
+
+	fn ping_request() -> ClientRequest {
+		serde_json::from_value(serde_json::json!({"method": "ping"})).unwrap()
+	}
+
+	#[test]
+	fn stamp_trace_context_copies_w3c_keys_into_meta_unprefixed() {
+		let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		let ctx = ctx_with_headers(&[
+			("traceparent", traceparent),
+			("tracestate", "vendor=abc"),
+			("baggage", "userId=42"),
+			("authorization", "Bearer token"),
+		]);
+		let mut req = ping_request();
+		ctx.stamp_trace_context(&mut req);
+
+		let meta = &req.get_meta().0;
+		// SEP-414: un-prefixed keys, verbatim W3C values, matching the forwarded headers.
+		assert_eq!(meta.get("traceparent").unwrap(), traceparent);
+		assert_eq!(meta.get("tracestate").unwrap(), "vendor=abc");
+		assert_eq!(meta.get("baggage").unwrap(), "userId=42");
+		// Non-trace headers are not smuggled into `_meta`.
+		assert!(meta.get("authorization").is_none());
+	}
+
+	#[test]
+	fn stamp_trace_context_noop_without_trace_headers() {
+		let ctx = ctx_with_headers(&[("authorization", "Bearer token")]);
+		let mut req = ping_request();
+		ctx.stamp_trace_context(&mut req);
+		assert!(req.get_meta().0.get("traceparent").is_none());
 	}
 }
