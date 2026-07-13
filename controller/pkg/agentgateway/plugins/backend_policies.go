@@ -1695,8 +1695,12 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 
 func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, namespace string) (*api.BackendAuthPolicy, error) {
 	var errs []error
+	alg, err := translateJwtSignSigningAlg(auth.Alg)
+	if err != nil {
+		errs = append(errs, err)
+	}
 	jwtSign := &api.JwtSign{
-		Alg:                   translateJwtSignSigningAlg(auth.Alg),
+		Alg:                   alg,
 		Kid:                   auth.KeyID,
 		Claims:                auth.Claims,
 		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
@@ -1723,22 +1727,26 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 	}, errors.Join(errs...)
 }
 
-func translateJwtSignSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.JwtSign_SigningAlg {
+// translateJwtSignSigningAlg maps a nil alg to UNSPECIFIED so the data plane
+// applies its RS256 default, but rejects unrecognized values instead of
+// silently signing with the wrong algorithm. Unrecognized values are normally
+// unreachable behind the CRD enum validation; this guards against version skew.
+func translateJwtSignSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) (api.JwtSign_SigningAlg, error) {
 	if alg == nil {
-		return api.JwtSign_SIGNING_ALG_UNSPECIFIED
+		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, nil
 	}
 	switch *alg {
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
-		return api.JwtSign_RS256
+		return api.JwtSign_RS256, nil
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
-		return api.JwtSign_RS384
+		return api.JwtSign_RS384, nil
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
-		return api.JwtSign_RS512
+		return api.JwtSign_RS512, nil
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
-		return api.JwtSign_ES256
+		return api.JwtSign_ES256, nil
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
-		return api.JwtSign_ES384
+		return api.JwtSign_ES384, nil
 	default:
-		return api.JwtSign_SIGNING_ALG_UNSPECIFIED
+		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, fmt.Errorf("unsupported jwtSign signing algorithm %q", *alg)
 	}
 }

@@ -37,7 +37,7 @@ pub struct JwtSignAuth {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	ttl: Option<Duration>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub location: Option<AuthorizationLocation>,
+	pub(super) location: Option<AuthorizationLocation>,
 }
 
 impl fmt::Debug for JwtSignAuth {
@@ -85,6 +85,7 @@ struct RawJwtSignAuth {
 	kid: Option<String>,
 	/// Static claims added to every token (e.g. iss, sub, aud). `iat` and
 	/// `exp` are always set by the signer and cannot be configured here.
+	#[cfg_attr(feature = "schema", schemars(extend("minProperties" = 1)))]
 	claims: BTreeMap<String, String>,
 	/// Token lifetime used for `exp`. Defaults to 300s.
 	#[serde(
@@ -140,9 +141,9 @@ impl JwtSignAuth {
 			}
 		}
 		if let Some(ttl) = ttl
-			&& ttl.is_zero()
+			&& ttl.as_secs() == 0
 		{
-			return Err("jwtSign ttl must be greater than zero".into());
+			return Err("jwtSign ttl must be at least one second".into());
 		}
 		let signing_key = alg
 			.encoding_key(signing_key_pem.as_bytes())
@@ -168,8 +169,11 @@ impl JwtSignAuth {
 		for (key, value) in &self.claims {
 			claims.insert(key.clone(), serde_json::Value::String(value.clone()));
 		}
+		let exp = now
+			.checked_add(ttl.as_secs())
+			.context("jwtSign ttl overflows the exp timestamp")?;
 		claims.insert("iat".to_string(), now.into());
-		claims.insert("exp".to_string(), (now + ttl.as_secs()).into());
+		claims.insert("exp".to_string(), exp.into());
 
 		let mut header = Header::new(self.alg.algorithm());
 		header.kid = self.kid.clone();
