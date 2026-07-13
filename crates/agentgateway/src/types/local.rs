@@ -4185,7 +4185,10 @@ async fn convert_llm_config(
 				AIProvider::Anthropic(anthropic::Provider { model })
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::OpenAI) => {
-				AIProvider::OpenAI(openai::Provider { model })
+				AIProvider::OpenAI(openai::Provider {
+					model,
+					moderation: None,
+				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Copilot) => {
 				AIProvider::Copilot(copilot::Provider { model })

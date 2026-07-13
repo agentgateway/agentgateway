@@ -327,23 +327,70 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	]
 };
 
-fn render_openai_completions(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+fn render_openai_completions(
+	req: types::ChatRequest<'_>,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Completions(req) => {
-			serde_json::to_vec(req).map_err(AIError::RequestMarshal)
+		types::ChatRequest::Completions(req) => serialize_openai_request(req, ctx),
+		types::ChatRequest::Messages(req) => {
+			let translated = conversion::completions::from_messages::translate_request(req)?;
+			serialize_openai_request(&translated, ctx)
 		},
-		types::ChatRequest::Messages(req) => conversion::completions::from_messages::translate(req),
-		types::ChatRequest::Responses(req) => conversion::openai_compat::from_responses::translate(req),
+		types::ChatRequest::Responses(req) => {
+			let translated = conversion::openai_compat::from_responses::translate_request(req)?;
+			serialize_openai_request(&translated, ctx)
+		},
 	}
 }
 
-fn render_openai_responses(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+fn render_openai_responses(
+	req: types::ChatRequest<'_>,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Responses(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Responses(req) => serialize_openai_request(req, ctx),
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"expected responses request"
 		))),
 	}
+}
+
+trait OpenAIRequestWithModeration: Clone + serde::Serialize {
+	fn set_moderation(&mut self, moderation: async_openai::types::chat::ModerationParam);
+}
+
+impl OpenAIRequestWithModeration for types::completions::Request {
+	fn set_moderation(&mut self, moderation: async_openai::types::chat::ModerationParam) {
+		self.moderation = Some(moderation);
+	}
+}
+
+impl OpenAIRequestWithModeration for types::completions::typed::Request {
+	fn set_moderation(&mut self, moderation: async_openai::types::chat::ModerationParam) {
+		self.moderation = Some(moderation);
+	}
+}
+
+impl OpenAIRequestWithModeration for types::responses::Request {
+	fn set_moderation(&mut self, moderation: async_openai::types::chat::ModerationParam) {
+		self.moderation = Some(moderation);
+	}
+}
+
+fn serialize_openai_request<T: OpenAIRequestWithModeration>(
+	req: &T,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
+	let Some(moderation) = (match ctx.provider {
+		AIProvider::OpenAI(provider) => provider.moderation.as_ref(),
+		_ => None,
+	}) else {
+		return serde_json::to_vec(req).map_err(AIError::RequestMarshal);
+	};
+	let mut req = req.clone();
+	req.set_moderation(moderation.to_openai_param());
+	serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
 }
 
 fn render_anthropic_messages(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
@@ -439,8 +486,8 @@ impl ChatTranslation {
 		ctx: &ChatRequestContext<'_>,
 	) -> Result<RenderedChatRequest, AIError> {
 		let body = match self.output {
-			ChatFormat::OpenAICompletions => render_openai_completions(req),
-			ChatFormat::OpenAIResponses => render_openai_responses(req),
+			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
+			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
 				vertex::prepare_anthropic_message_body(render_anthropic_messages(req)?)
 			},

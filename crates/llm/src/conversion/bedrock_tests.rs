@@ -612,6 +612,7 @@ fn test_completions_request_metadata_only_uses_bedrock_header() {
 
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
+		moderation: None,
 		messages: vec![types::completions::typed::RequestMessage::User(
 			types::completions::typed::RequestUserMessage {
 				content: types::completions::typed::RequestUserMessageContent::Text("Hello".to_string()),
@@ -705,6 +706,7 @@ fn test_completions_json_schema_response_format_maps_to_converse_output_config()
 
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
+		moderation: None,
 		messages: vec![types::completions::typed::RequestMessage::User(
 			types::completions::typed::RequestUserMessage {
 				content: types::completions::typed::RequestUserMessageContent::Text(
@@ -791,6 +793,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
+		moderation: None,
 		messages: vec![types::completions::typed::RequestMessage::User(
 			types::completions::typed::RequestUserMessage {
 				content: types::completions::typed::RequestUserMessageContent::Text(
@@ -865,6 +868,7 @@ fn test_completions_explicit_thinking_budget_forces_enabled_thinking() {
 
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
+		moderation: None,
 		messages: vec![types::completions::typed::RequestMessage::User(
 			types::completions::typed::RequestUserMessage {
 				content: types::completions::typed::RequestUserMessageContent::Text(
