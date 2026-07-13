@@ -190,7 +190,7 @@ func TestOAuthTokenExchangeClientAuthMissingSecretKeyPreservesExplicitSecretInte
 		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "gateway",
-			SecretRef: &agentgateway.LocalSecretObjectRef{
+			SecretRef: &agentgateway.LocalSecretKeyRef{
 				Name: "oauth-client",
 			},
 		},
@@ -205,6 +205,63 @@ func TestOAuthTokenExchangeClientAuthMissingSecretKeyPreservesExplicitSecretInte
 	}
 	if got := clientAuth.GetClientSecret(); got != "" {
 		t.Fatalf("client secret = %q, want empty", got)
+	}
+}
+
+func TestOAuthTokenExchangeClientAuthCustomSecretKey(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "oauth-client",
+		},
+		Data: map[string][]byte{
+			"customSecretKey": []byte("s3cr3t"),
+		},
+	})
+
+	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
+		TokenEndpoint: oauthTokenEndpointRef(),
+		ClientAuth: &agentgateway.OAuthClientAuth{
+			ClientID: "gateway",
+			SecretRef: &agentgateway.LocalSecretKeyRef{
+				Name: "oauth-client",
+				Key:  new("customSecretKey"),
+			},
+		},
+	}, "default")
+	if err != nil {
+		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want nil", err)
+	}
+
+	clientAuth := policy.GetOauthTokenExchange().GetClientAuth()
+	if got := clientAuth.GetClientSecret(); got != "s3cr3t" {
+		t.Fatalf("client secret = %q, want s3cr3t", got)
+	}
+}
+
+func TestOAuthTokenExchangeClientAuthCustomSecretKeyMissingReportsCustomKeyName(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "oauth-client",
+		},
+		Data: map[string][]byte{
+			"other": []byte("value"),
+		},
+	})
+
+	_, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
+		TokenEndpoint: oauthTokenEndpointRef(),
+		ClientAuth: &agentgateway.OAuthClientAuth{
+			ClientID: "gateway",
+			SecretRef: &agentgateway.LocalSecretKeyRef{
+				Name: "oauth-client",
+				Key:  new("customSecretKey"),
+			},
+		},
+	}, "default")
+	if err == nil || !strings.Contains(err.Error(), "missing customSecretKey value") {
+		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want missing customSecretKey error", err)
 	}
 }
 
@@ -225,7 +282,7 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 			ClientID: "gateway",
 			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
 			PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
-				SigningKeyRef: agentgateway.LocalSecretObjectRef{
+				SigningKeyRef: agentgateway.LocalSecretKeyRef{
 					Name: "oauth-signing-key",
 				},
 				Alg:               ptr.Of(agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256),
@@ -260,6 +317,71 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	}
 	if privateKeyJWT.GetAssertionAudience() != "https://issuer.example.com/oauth/token" {
 		t.Fatalf("privateKeyJwt assertion audience = %q, want token endpoint URL", privateKeyJWT.GetAssertionAudience())
+	}
+}
+
+func TestOAuthTokenExchangeClientAuthPrivateKeyJWTCustomSigningKey(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "oauth-signing-key",
+		},
+		Data: map[string][]byte{
+			"customSigningKey": []byte("-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"),
+		},
+	})
+
+	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
+		TokenEndpoint: oauthTokenEndpointRef(),
+		ClientAuth: &agentgateway.OAuthClientAuth{
+			ClientID: "gateway",
+			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
+			PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
+				SigningKeyRef: agentgateway.LocalSecretKeyRef{
+					Name: "oauth-signing-key",
+					Key:  new("customSigningKey"),
+				},
+				AssertionAudience: "https://issuer.example.com/oauth/token",
+			},
+		},
+	}, "default")
+	if err != nil {
+		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want nil", err)
+	}
+
+	privateKeyJWT := policy.GetOauthTokenExchange().GetClientAuth().GetPrivateKeyJwt()
+	if got, want := privateKeyJWT.GetSigningKey(), "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"; got != want {
+		t.Fatalf("signing key = %q, want %q", got, want)
+	}
+}
+
+func TestOAuthTokenExchangeClientAuthPrivateKeyJWTCustomSigningKeyMissingReportsCustomKeyName(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "oauth-signing-key",
+		},
+		Data: map[string][]byte{
+			"other": []byte("value"),
+		},
+	})
+
+	_, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
+		TokenEndpoint: oauthTokenEndpointRef(),
+		ClientAuth: &agentgateway.OAuthClientAuth{
+			ClientID: "gateway",
+			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
+			PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
+				SigningKeyRef: agentgateway.LocalSecretKeyRef{
+					Name: "oauth-signing-key",
+					Key:  new("customSigningKey"),
+				},
+				AssertionAudience: "https://issuer.example.com/oauth/token",
+			},
+		},
+	}, "default")
+	if err == nil || !strings.Contains(err.Error(), "missing customSigningKey value") {
+		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want missing customSigningKey error", err)
 	}
 }
 
@@ -359,7 +481,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 				ClientAuth: &agentgateway.OAuthClientAuth{
 					ClientID: "gateway",
 					PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
-						SigningKeyRef: agentgateway.LocalSecretObjectRef{
+						SigningKeyRef: agentgateway.LocalSecretKeyRef{
 							Name: "missing",
 						},
 						AssertionAudience: "https://issuer.example.com/oauth/token",
@@ -440,7 +562,7 @@ func TestOAuthTokenExchangeEnumDefaulting(t *testing.T) {
 		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "gateway",
-			SecretRef: &agentgateway.LocalSecretObjectRef{
+			SecretRef: &agentgateway.LocalSecretKeyRef{
 				Name: "oauth-client",
 			},
 		},

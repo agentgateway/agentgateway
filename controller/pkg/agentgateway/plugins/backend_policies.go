@@ -1111,15 +1111,19 @@ func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, nam
 	}
 
 	if auth.SecretRef != nil && auth.PrivateKeyJWT == nil {
-		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
+		key := wellknown.ClientSecret
+		if auth.SecretRef.Key != nil && *auth.SecretRef.Key != "" {
+			key = *auth.SecretRef.Key
+		}
+		data, err := ctx.ResolveCredentialRef(auth.SecretRef.ObjectRef(), namespace)
 		if err != nil {
 			clientSecret := ""
 			res.ClientSecret = &clientSecret
 			errs = append(errs, err)
-		} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.ClientSecret); !exists || value == "" {
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
 			clientSecret := ""
 			res.ClientSecret = &clientSecret
-			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, wellknown.ClientSecret))
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, key))
 		} else {
 			res.ClientSecret = &value
 		}
@@ -1146,11 +1150,15 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt assertionAudience must not be empty"))
 	}
 
-	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)
+	key := wellknown.SigningKey
+	if auth.SigningKeyRef.Key != nil && *auth.SigningKeyRef.Key != "" {
+		key = *auth.SigningKeyRef.Key
+	}
+	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef.ObjectRef(), namespace)
 	if err != nil {
 		errs = append(errs, err)
-	} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SigningKey); !exists || value == "" {
-		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, wellknown.SigningKey))
+	} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, key))
 	} else {
 		res.SigningKey = value
 	}
@@ -1469,11 +1477,15 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 		// missing or malformed. An explicit empty credential fails in the proxy
 		// instead of falling back to ambient GCP credentials.
 		credential = new("")
-		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
+		key := wellknown.GCPCredentialsJSON
+		if auth.SecretRef.Key != nil && *auth.SecretRef.Key != "" {
+			key = *auth.SecretRef.Key
+		}
+		data, err := ctx.ResolveCredentialRef(auth.SecretRef.ObjectRef(), namespace)
 		if err != nil {
 			errs = append(errs, err)
-		} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.GCPCredentialsJSON); !exists {
-			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, wellknown.GCPCredentialsJSON))
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, key))
 		} else {
 			credential = &value
 		}

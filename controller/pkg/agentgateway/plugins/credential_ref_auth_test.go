@@ -3,6 +3,7 @@ package plugins
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"istio.io/istio/pkg/kube/krt"
@@ -284,6 +285,92 @@ func TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret(t *testing.T) 
 	}, nil, "base", types.NamespacedName{Namespace: "default", Name: "policy"})
 	if !errors.Is(err, kubeutils.ErrUnsupportedCredentialKind) {
 		t.Fatalf("processBasicAuthenticationPolicy() error = %v, want ErrUnsupportedCredentialKind", err)
+	}
+}
+
+func TestGcpAuthResolvesDefaultCredentialsKey(t *testing.T) {
+	stop := test.NewStop(t)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "gcp-creds",
+		},
+		Data: map[string][]byte{
+			"credentials.json": []byte(`{"foo":"bar"}`),
+		},
+	}
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestGcpAuthResolvesDefaultCredentialsKey"), krt.WithStop(stop))
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	policy, err := buildGcpAuthPolicy(ctx, &agentgateway.GcpAuth{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
+			Name: "gcp-creds",
+		},
+	}, "default")
+	if err != nil {
+		t.Fatalf("buildGcpAuthPolicy() error = %v, want nil", err)
+	}
+	if got := policy.GetGcp().GetCredential(); got != `{"foo":"bar"}` {
+		t.Fatalf("gcp credential = %q, want %q", got, `{"foo":"bar"}`)
+	}
+}
+
+func TestGcpAuthResolvesCustomCredentialsKey(t *testing.T) {
+	stop := test.NewStop(t)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "gcp-creds",
+		},
+		Data: map[string][]byte{
+			"customCredentialsKey": []byte(`{"foo":"bar"}`),
+		},
+	}
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestGcpAuthResolvesCustomCredentialsKey"), krt.WithStop(stop))
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	policy, err := buildGcpAuthPolicy(ctx, &agentgateway.GcpAuth{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
+			Name: "gcp-creds",
+			Key:  new("customCredentialsKey"),
+		},
+	}, "default")
+	if err != nil {
+		t.Fatalf("buildGcpAuthPolicy() error = %v, want nil", err)
+	}
+	if got := policy.GetGcp().GetCredential(); got != `{"foo":"bar"}` {
+		t.Fatalf("gcp credential = %q, want %q", got, `{"foo":"bar"}`)
+	}
+}
+
+func TestGcpAuthCustomCredentialsKeyMissingReportsCustomKeyName(t *testing.T) {
+	stop := test.NewStop(t)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "gcp-creds",
+		},
+		Data: map[string][]byte{
+			"other": []byte("value"),
+		},
+	}
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestGcpAuthCustomCredentialsKeyMissingReportsCustomKeyName"), krt.WithStop(stop))
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	_, err := buildGcpAuthPolicy(ctx, &agentgateway.GcpAuth{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
+			Name: "gcp-creds",
+			Key:  new("customCredentialsKey"),
+		},
+	}, "default")
+	if err == nil || !strings.Contains(err.Error(), "missing customCredentialsKey value") {
+		t.Fatalf("buildGcpAuthPolicy() error = %v, want missing customCredentialsKey error", err)
 	}
 }
 

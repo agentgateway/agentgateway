@@ -1500,10 +1500,11 @@ type OAuthClientAuth struct {
 	// +required
 	ClientID string `json:"clientId"`
 
-	// Secret providing the `clientSecret` key. When omitted, client_id is sent
-	// without a secret, which is only valid with ClientSecretPost.
+	// Secret providing the `clientSecret` key by default; override via
+	// `secretRef.key`. When omitted, client_id is sent without a secret, which
+	// is only valid with ClientSecretPost.
 	// +optional
-	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
 	// privateKeyJwt client assertion settings. Required when method is PrivateKeyJwt.
 	// +optional
@@ -1516,9 +1517,10 @@ type OAuthClientAuth struct {
 
 // OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
 type OAuthPrivateKeyJWT struct {
-	// Secret providing the `signingKey` key with a PEM-encoded RSA or EC private key.
+	// Secret providing the `signingKey` key by default with a PEM-encoded RSA
+	// or EC private key; override the key name via `signingKeyRef.key`.
 	// +required
-	SigningKeyRef LocalSecretObjectRef `json:"signingKeyRef"`
+	SigningKeyRef LocalSecretKeyRef `json:"signingKeyRef"`
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
@@ -1580,10 +1582,11 @@ type GcpAuth struct {
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, containing ADC-compatible Google credential JSON. When using
 	// the default Secret resolver, this must be stored in the `credentials.json`
-	// key. When omitted, ambient credentials are used.
+	// key by default; override via `secretRef.key`. When omitted, ambient
+	// credentials are used.
 	//
 	// +optional
-	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 	// Explicit `aud` value for the ID token. Only
 	// valid with `IdToken` type. If not set, the `aud` is automatically
 	// derived from the backend hostname.

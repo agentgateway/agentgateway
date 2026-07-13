@@ -166,3 +166,44 @@ type LocalSecretObjectRef struct {
 	// +optional
 	Kind string `json:"kind,omitempty"`
 }
+
+// References a same-namespace credential and, optionally, a specific key
+// within it whose value should be used. Set only `name` to reference a
+// Kubernetes Secret. When `key` is omitted, a location-specific default key
+// is used.
+//
+// +structType=atomic
+// +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
+type LocalSecretKeyRef struct {
+	// The name of the referenced credential.
+	// +required
+	Name gwv1.ObjectName `json:"name"`
+
+	// The API group of the referenced credential.
+	// Empty selects the core API group.
+	// +optional
+	Group string `json:"group,omitempty"`
+
+	// The kind of the referenced credential.
+	// Empty defaults to `Secret`.
+	// +optional
+	Kind string `json:"kind,omitempty"`
+
+	// The key in the referenced Secret whose value is used. If omitted, a
+	// location-specific default key is used.
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +optional
+	Key *string `json:"key,omitempty"`
+}
+
+// ObjectRef returns the credential reference without the key override, for
+// APIs that expect a bare LocalSecretObjectRef.
+func (r LocalSecretKeyRef) ObjectRef() LocalSecretObjectRef {
+	return LocalSecretObjectRef{
+		Name:  r.Name,
+		Group: r.Group,
+		Kind:  r.Kind,
+	}
+}
