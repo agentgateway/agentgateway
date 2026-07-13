@@ -88,6 +88,9 @@ config:
       - name: advanced_markers
         operator: OR
         method: bm25
+        # Prefer high-specificity multi-word cues. Routine coding follow-ups
+        # should not escalate merely because the conversation mentions tests,
+        # errors, or a generic implementation detail.
         keywords:
         - distributed systems
         - consensus
@@ -101,26 +104,35 @@ config:
         - Alloy
         - Coq
         - Lean
-        - invariant
-        - proof
-        - prove
+        - safety invariant
+        - liveness invariant
+        - proof obligation
+        - counterexample
         - convergence
         - monotonicity
         - temporal logic
-        - advanced debugging
         - root cause
         - heisenbug
         - deadlock
         - race condition
         - memory ordering
+        - durable idempotency
+        - idempotency boundary
+        - fencing token
+        - stale writer
+        - regional failover
+        - network partition
+        - replicated state
+        - exactly-once
+        - at-least-once
+        - bounded staleness
         - research synthesis
-        - synthesize
         - literature review
         - operational transform
         - conflict resolution
         - compare tradeoffs
         case_sensitive: false
-        bm25_threshold: 0.1
+        bm25_threshold: 0.3
       - name: routine_coding_markers
         operator: OR
         method: bm25
