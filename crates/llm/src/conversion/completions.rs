@@ -139,9 +139,15 @@ pub mod from_messages {
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed);
+		let xlated = translate_request(req)?;
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(
+		req: &types::messages::Request,
+	) -> Result<types::completions::typed::Request, AIError> {
+		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		Ok(translate_internal(typed))
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {

@@ -479,9 +479,14 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 
 	// Extract auth token and model based on provider
 	if llm.OpenAI != nil {
+		moderation, err := translateOpenAIInlineModeration(llm.OpenAI.Moderation)
+		if err != nil {
+			return nil, err
+		}
 		provider.Provider = &api.AIBackend_Provider_Openai{
 			Openai: &api.AIBackend_OpenAI{
-				Model: llm.OpenAI.Model,
+				Model:      llm.OpenAI.Model,
+				Moderation: moderation,
 			},
 		}
 	} else if llm.AzureOpenAI != nil {
@@ -568,6 +573,62 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 	}
 
 	return provider, nil
+}
+
+const defaultOpenAIInlineModerationModel = "omni-moderation-latest"
+
+func translateOpenAIInlineModeration(m *agentgateway.OpenAIInlineModeration) (*api.AIBackend_OpenAI_Moderation, error) {
+	if m == nil {
+		return nil, nil
+	}
+	policy, err := translateOpenAIInlineModerationPolicy(m.Policy)
+	if err != nil {
+		return nil, err
+	}
+	model := string(m.Model)
+	if model == "" {
+		model = defaultOpenAIInlineModerationModel
+	}
+	return &api.AIBackend_OpenAI_Moderation{
+		Model:  model,
+		Policy: policy,
+	}, nil
+}
+
+func translateOpenAIInlineModerationPolicy(p *agentgateway.OpenAIInlineModerationPolicy) (*api.AIBackend_OpenAI_ModerationPolicy, error) {
+	if p == nil {
+		return nil, nil
+	}
+	input, err := translateOpenAIInlineModerationConfig(p.Input)
+	if err != nil {
+		return nil, err
+	}
+	output, err := translateOpenAIInlineModerationConfig(p.Output)
+	if err != nil {
+		return nil, err
+	}
+	return &api.AIBackend_OpenAI_ModerationPolicy{
+		Input:  input,
+		Output: output,
+	}, nil
+}
+
+func translateOpenAIInlineModerationConfig(c *agentgateway.OpenAIInlineModerationConfig) (*api.AIBackend_OpenAI_ModerationConfig, error) {
+	if c == nil {
+		return nil, nil
+	}
+	var mode api.AIBackend_OpenAI_ModerationMode
+	switch c.Mode {
+	case agentgateway.OpenAIInlineModerationModeScore:
+		mode = api.AIBackend_OpenAI_MODERATION_MODE_SCORE
+	case agentgateway.OpenAIInlineModerationModeBlock:
+		mode = api.AIBackend_OpenAI_MODERATION_MODE_BLOCK
+	default:
+		return nil, fmt.Errorf("unknown OpenAI inline moderation mode %q", c.Mode)
+	}
+	return &api.AIBackend_OpenAI_ModerationConfig{
+		Mode: mode,
+	}, nil
 }
 
 func translateProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*api.AIBackend_ProviderFormatConfig, error) {
