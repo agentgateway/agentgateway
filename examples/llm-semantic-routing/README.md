@@ -65,6 +65,12 @@ kubectl describe agentgatewaypolicy semantic-router-extproc -n agentgateway-syst
 `VSR_VERSION` sets both the chart version and the matching `v<version>`
 `extproc` image tag.
 
+> **Note:** This example uses buffered ExtProc while the streamed-body issue in
+> [vLLM Semantic Router #2486](https://github.com/vllm-project/semantic-router/issues/2486)
+> is unresolved. When that issue is fixed and this example is returned to
+> streamed mode, restore the `Verify Streamed ExtProc` section and its
+> deterministic immediate-response probe.
+
 ## Run a Request
 
 Set your gateway address:
