@@ -9,6 +9,9 @@ The included policy is tuned for coding prompts: routine implementation,
 refactoring, unit tests, documentation, and simple debugging go to
 `gpt-5.4-nano`. It escalates advanced distributed-systems design, formal
 verification, difficult debugging, and research synthesis to `gpt-5.5`.
+Its advanced keyword signal uses literal high-specificity phrases, while the
+remaining semantic, complexity, context, and structure signals handle less
+obvious requests.
 Customize the signals, candidates, weights, and thresholds for your traffic by
 following the [vLLM Semantic Router configuration guide](https://vllm-semantic-router.com/docs/installation/configuration/).
 

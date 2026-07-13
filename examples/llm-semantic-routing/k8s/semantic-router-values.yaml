@@ -87,12 +87,13 @@ config:
       keywords:
       - name: advanced_markers
         operator: OR
-        method: bm25
-        # Prefer high-specificity multi-word cues. Routine coding follow-ups
-        # should not escalate merely because the conversation mentions tests,
-        # errors, or a generic implementation detail.
+        # Leave method unset to use literal, word-boundary-aware matching.
+        # BM25 topic matching over-escalates routine coding follow-ups that
+        # merely resemble advanced work. The phrases below are deliberate,
+        # high-specificity escalation cues.
         keywords:
         - distributed systems
+        - distributed rate limiter
         - consensus
         - raft
         - paxos
@@ -119,9 +120,11 @@ config:
         - durable idempotency
         - idempotency boundary
         - fencing token
+        - fencing tokens
         - stale writer
         - regional failover
         - network partition
+        - network partitions
         - replicated state
         - exactly-once
         - at-least-once
@@ -131,8 +134,14 @@ config:
         - operational transform
         - conflict resolution
         - compare tradeoffs
+        - dual writes
+        - durable state transition
+        - duplicate business effects
+        - configuration replicas
+        - eventual-consistency
+        - leased message
+        - delayed, duplicated, and reordered
         case_sensitive: false
-        bm25_threshold: 0.3
       - name: routine_coding_markers
         operator: OR
         method: bm25
