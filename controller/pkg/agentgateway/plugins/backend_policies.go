@@ -936,6 +936,12 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		if err != nil {
 			errs = append(errs, err)
 		}
+	} else if auth.JwtSign != nil {
+		jwtSignAuth, err := buildJwtSignAuthPolicy(ctx, auth.JwtSign, policy.Namespace)
+		translatedAuth = jwtSignAuth
+		if err != nil {
+			errs = append(errs, err)
+		}
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Passthrough{
@@ -1685,4 +1691,54 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 			Gcp: gcp,
 		},
 	}, errors.Join(errs...)
+}
+
+func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, namespace string) (*api.BackendAuthPolicy, error) {
+	var errs []error
+	jwtSign := &api.JwtSign{
+		Alg:                   translateJwtSignSigningAlg(auth.Alg),
+		Kid:                   auth.KeyID,
+		Claims:                auth.Claims,
+		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+	}
+
+	if auth.TTL != nil {
+		ttl := uint64(auth.TTL.Duration.Seconds()) //nolint:gosec // G115: TTL is validated by kubebuilder to be a positive duration
+		jwtSign.Ttl = &ttl
+	}
+
+	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)
+	if err != nil {
+		errs = append(errs, err)
+	} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SigningKey); !exists || value == "" {
+		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, wellknown.SigningKey))
+	} else {
+		jwtSign.SigningKey = value
+	}
+
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_JwtSign{
+			JwtSign: jwtSign,
+		},
+	}, errors.Join(errs...)
+}
+
+func translateJwtSignSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.JwtSign_SigningAlg {
+	if alg == nil {
+		return api.JwtSign_SIGNING_ALG_UNSPECIFIED
+	}
+	switch *alg {
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
+		return api.JwtSign_RS256
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
+		return api.JwtSign_RS384
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
+		return api.JwtSign_RS512
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
+		return api.JwtSign_ES256
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
+		return api.JwtSign_ES384
+	default:
+		return api.JwtSign_SIGNING_ALG_UNSPECIFIED
+	}
 }

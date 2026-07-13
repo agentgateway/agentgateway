@@ -1186,8 +1186,37 @@ fn backend_auth_kind_from_proto(
 				diagnostics,
 			)?))
 		},
+		Some(proto::agent::backend_auth_policy::Kind::JwtSign(j)) => {
+			let location = optional_authorization_location(j.authorization_location.as_ref())?;
+			BackendAuthKind::JwtSign(Box::new(
+				auth::jwt_sign::JwtSignAuth::try_new(
+					j.signing_key.trim(),
+					jwt_sign_alg_from_proto(j.alg)?,
+					j.kid,
+					j.claims.into_iter().collect(),
+					j.ttl.map(std::time::Duration::from_secs),
+					location,
+				)
+				.map_err(ProtoError::Generic)?,
+			))
+		},
 		None => return Ok(None),
 	}))
+}
+
+fn jwt_sign_alg_from_proto(alg: i32) -> Result<auth::oauth::SigningAlg, ProtoError> {
+	use auth::oauth::SigningAlg;
+	use proto::agent::jwt_sign::SigningAlg as ProtoSigningAlg;
+
+	match ProtoSigningAlg::try_from(alg) {
+		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),
+		Ok(ProtoSigningAlg::Rs256) => Ok(SigningAlg::Rs256),
+		Ok(ProtoSigningAlg::Rs384) => Ok(SigningAlg::Rs384),
+		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
+		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
+		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
+		Err(_) => Err(ProtoError::EnumParse("unknown jwt_sign signing alg".into())),
+	}
 }
 
 fn listener_protocol_from_proto(

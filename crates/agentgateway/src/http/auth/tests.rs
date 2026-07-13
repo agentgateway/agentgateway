@@ -826,6 +826,7 @@ fn extract_subject_token_expression_falls_back_to_claims() {
 	assert_eq!(token.as_deref(), Some("claims-jwt"));
 }
 
+
 fn credential(name: &'static str, value: &str, prefix: Option<&str>) -> BackendAuthCredential {
 	BackendAuthCredential {
 		location: AuthorizationLocation::Header {
@@ -1129,4 +1130,224 @@ async fn test_backend_auth_credential_other_header_keeps_primary_marker() {
 		!applied.explicit,
 		"non-Authorization credentials must not override the primary marker"
 	);
+}
+
+const TEST_JWT_SIGN_EC_KEY: &str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
+7OtwJIZ/dpm8ygE2MBTjPCY3hgahRANCAARYzu50EeBrT0rELmTGroaGtn0zdjxL
+1lOGr9fGw5wOGcXO0+Gn5F5sIxGyTM0FwnUHFNz2SoixZR5dtxhNc+Lo
+-----END PRIVATE KEY-----
+";
+
+fn jwt_sign_auth(
+	kid: Option<String>,
+	ttl: Option<std::time::Duration>,
+	location: Option<AuthorizationLocation>,
+) -> BackendAuth {
+	let claims = [
+		("iss".to_string(), "ACCT.USER.SHA256:fp".to_string()),
+		("sub".to_string(), "ACCT.USER".to_string()),
+	]
+	.into_iter()
+	.collect();
+	BackendAuth::new(BackendAuthKind::JwtSign(Box::new(
+		JwtSignAuth::try_new(
+			TEST_JWT_SIGN_EC_KEY,
+			oauth::SigningAlg::Es256,
+			kid,
+			claims,
+			ttl,
+			location,
+		)
+		.expect("jwt sign auth should build"),
+	)))
+}
+
+fn decode_jwt_parts(token: &str) -> (serde_json::Value, serde_json::Value) {
+	use base64::Engine;
+	use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+
+	let parts: Vec<&str> = token.split('.').collect();
+	assert_eq!(parts.len(), 3, "expected a JWS compact serialization");
+	let header: serde_json::Value =
+		serde_json::from_slice(&BASE64_URL_SAFE_NO_PAD.decode(parts[0]).unwrap()).unwrap();
+	let payload: serde_json::Value =
+		serde_json::from_slice(&BASE64_URL_SAFE_NO_PAD.decode(parts[1]).unwrap()).unwrap();
+	(header, payload)
+}
+
+#[tokio::test]
+async fn test_backend_auth_jwt_sign() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let auth = jwt_sign_auth(
+		Some("kid-1".to_string()),
+		Some(std::time::Duration::from_secs(600)),
+		None,
+	);
+	apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let header_value = req
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.expect("authorization header must be set");
+	assert!(header_value.is_sensitive());
+	let token = header_value
+		.to_str()
+		.unwrap()
+		.strip_prefix("Bearer ")
+		.expect("default location must use a Bearer prefix");
+
+	let (header, payload) = decode_jwt_parts(token);
+	assert_eq!(header["alg"], "ES256");
+	assert_eq!(header["kid"], "kid-1");
+	assert_eq!(payload["iss"], "ACCT.USER.SHA256:fp");
+	assert_eq!(payload["sub"], "ACCT.USER");
+	let iat = payload["iat"].as_u64().expect("iat must be set");
+	let exp = payload["exp"].as_u64().expect("exp must be set");
+	assert_eq!(exp - iat, 600);
+
+	let ext = req
+		.extensions()
+		.get::<AppliedBackendAuthLocation>()
+		.expect("extension must be set");
+	assert!(
+		!ext.explicit,
+		"default location must not be marked explicit"
+	);
+}
+
+#[tokio::test]
+async fn test_backend_auth_jwt_sign_explicit_location() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let auth = jwt_sign_auth(
+		None,
+		None,
+		Some(AuthorizationLocation::Header {
+			name: http::HeaderName::from_static("x-signed-jwt"),
+			prefix: None,
+		}),
+	);
+	apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let header_value = req
+		.headers()
+		.get("x-signed-jwt")
+		.expect("custom header must be set");
+	let (header, payload) = decode_jwt_parts(header_value.to_str().unwrap());
+	assert_eq!(header["alg"], "ES256");
+	assert!(header.get("kid").is_none_or(|kid| kid.is_null()));
+	// Default 300s lifetime applies when ttl is unset.
+	let iat = payload["iat"].as_u64().unwrap();
+	let exp = payload["exp"].as_u64().unwrap();
+	assert_eq!(exp - iat, 300);
+
+	let ext = req
+		.extensions()
+		.get::<AppliedBackendAuthLocation>()
+		.expect("extension must be set");
+	assert!(ext.explicit, "explicit location must be marked explicit");
+}
+
+#[test]
+fn test_jwt_sign_rejects_reserved_and_empty_claims() {
+	let reserved = JwtSignAuth::try_new(
+		TEST_JWT_SIGN_EC_KEY,
+		oauth::SigningAlg::Es256,
+		None,
+		[("exp".to_string(), "123".to_string())]
+			.into_iter()
+			.collect(),
+		None,
+		None,
+	);
+	assert!(
+		reserved.is_err_and(|e| e.contains("exp")),
+		"reserved claims must be rejected"
+	);
+
+	let empty = JwtSignAuth::try_new(
+		TEST_JWT_SIGN_EC_KEY,
+		oauth::SigningAlg::Es256,
+		None,
+		Default::default(),
+		None,
+		None,
+	);
+	assert!(empty.is_err(), "empty claims must be rejected");
+}
+
+#[test]
+fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
+	let claims: std::collections::BTreeMap<_, _> = [("iss".to_string(), "me".to_string())]
+		.into_iter()
+		.collect();
+
+	let zero_ttl = JwtSignAuth::try_new(
+		TEST_JWT_SIGN_EC_KEY,
+		oauth::SigningAlg::Es256,
+		None,
+		claims.clone(),
+		Some(std::time::Duration::ZERO),
+		None,
+	);
+	assert!(zero_ttl.is_err(), "zero ttl must be rejected");
+
+	let bad_key = JwtSignAuth::try_new(
+		"not a pem",
+		oauth::SigningAlg::Es256,
+		None,
+		claims,
+		None,
+		None,
+	);
+	assert!(bad_key.is_err(), "invalid PEM must be rejected");
+}
+
+#[test]
+fn test_jwt_sign_deserializes() {
+	let kind: BackendAuthKind = serde_json::from_value(serde_json::json!({
+		"jwtSign": {
+			"signingKey": TEST_JWT_SIGN_EC_KEY,
+			"alg": "ES256",
+			"kid": "kid-1",
+			"claims": {"iss": "acct.user", "sub": "acct.user"},
+			"ttl": "600s",
+			"location": {"header": {"name": "x-signed-jwt"}}
+		}
+	}))
+	.expect("jwtSign auth should deserialize");
+	let BackendAuthKind::JwtSign(cfg) = kind else {
+		panic!("expected jwtSign variant");
+	};
+	assert!(cfg.location.is_some());
 }
