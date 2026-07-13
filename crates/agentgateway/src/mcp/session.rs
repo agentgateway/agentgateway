@@ -66,21 +66,27 @@ impl Session {
 	}
 
 	/// Send a downstream message to upstream server(s) in gateway stateless mode.
-	/// Every non-initialize message gets a gateway-generated InitializeRequest
-	/// first, because many legacy servers require initialize before any other
-	/// request. Once downstream stateless transport is supported, remove this
-	/// wrapper and forward the message as-is.
+	/// Legacy (pre-2026) non-initialize messages get a gateway-generated
+	/// InitializeRequest first, because legacy servers require initialize before
+	/// any other request. Modern (>= 2026-07-28) requests are stateless and are
+	/// forwarded as-is: a modern client only reaches a modern request after its
+	/// `server/discover` negotiated a modern server, so no handshake is needed.
 	pub async fn stateless_send_and_initialize(
 		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
 	) -> Result<Response, ProxyError> {
-		let (req_id, request_type) = match &message {
-			ClientJsonRpcMessage::Request(r) => (Some(r.id.clone()), Some(&r.request)),
-			_ => (None, None),
+		let req_id = match &message {
+			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
+			_ => None,
 		};
-		let is_init = request_type.is_some_and(|r| matches!(r, ClientRequest::InitializeRequest(_)));
-		if !is_init {
+		let is_init = matches!(&message,
+			ClientJsonRpcMessage::Request(r) if matches!(r.request, ClientRequest::InitializeRequest(_)));
+		let is_modern = parts
+			.extensions
+			.get::<crate::mcp::streamablehttp::RequestProtocol>()
+			.is_some_and(|p| p.is_modern());
+		if !is_init && !is_modern {
 			let mut client_info = get_client_info();
 			if let Some(protocol_version) =
 				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone())?
@@ -104,6 +110,10 @@ impl Session {
 				}
 			}
 			let init_request = rmcp::model::InitializeRequest::new(client_info);
+			let request_type = match &message {
+				ClientJsonRpcMessage::Request(r) => Some(&r.request),
+				_ => None,
+			};
 			// first, determine how widely to send the initialize
 			match request_type {
 				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_)) => {

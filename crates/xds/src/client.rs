@@ -211,6 +211,13 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 		let decode_failures: Vec<_> = decode_failures
 			.map(|r| r.expect_err("must be err"))
 			.collect();
+		// Do not advertise rejected resources as retained on reconnect.
+		let rejected_names: HashSet<_> = decode_failures
+			.iter()
+			.chain(result.as_ref().err().into_iter().flatten())
+			.filter(|reject| matches!(reject.severity, RejectedConfigSeverity::Error))
+			.map(|reject| reject.name.clone())
+			.collect();
 
 		for name in res.removed_resources {
 			let k = ResourceKey {
@@ -228,7 +235,9 @@ impl<T: 'static + prost::Message + Default + Debug> RawHandler for HandlerWrappe
 				name: r.name.into(),
 				type_url: type_url.clone(),
 			};
-			state.add_resource(key.type_url, key.name);
+			if !rejected_names.contains(&key.name) {
+				state.add_resource(key.type_url, key.name, r.version.into());
+			}
 		}
 
 		// Either can fail. Merge the results
@@ -322,17 +331,17 @@ impl Config {
 }
 
 pub struct State {
-	/// Stores all known workload resources. Map from type_url to name
-	known_resources: HashMap<Strng, HashSet<Strng>>,
+	/// Stores all known resources. Map from type_url to name to version.
+	known_resources: HashMap<Strng, HashMap<Strng, Strng>>,
 }
 
 impl State {
-	fn add_resource(&mut self, type_url: Strng, name: Strng) {
+	fn add_resource(&mut self, type_url: Strng, name: Strng, version: Strng) {
 		self
 			.known_resources
 			.entry(type_url)
 			.or_default()
-			.insert(name.clone());
+			.insert(name, version);
 	}
 }
 
@@ -486,8 +495,8 @@ impl AdsClient {
 		&self.config
 	}
 
-	async fn run_loop(&mut self, backoff: Duration) -> Duration {
-		match self.run_internal().await {
+	async fn run_loop(&mut self, mut backoff: Duration) -> Duration {
+		match self.run_internal(&mut backoff).await {
 			Err(e @ Error::Connection(_)) => {
 				// For connection errors, we add backoff
 				let backoff = std::cmp::min(MAX_BACKOFF, backoff * 2);
@@ -575,7 +584,7 @@ impl AdsClient {
 		}
 	}
 
-	async fn run_internal(&mut self) -> Result<(), Error> {
+	async fn run_internal(&mut self, backoff: &mut Duration) -> Result<(), Error> {
 		let (discovery_req_tx, mut discovery_req_rx) = mpsc::channel::<DeltaDiscoveryRequest>(100);
 		// For each type in initial_watches we will send a request on connection to subscribe
 		let initial_requests: Vec<DeltaDiscoveryRequest> = self
@@ -588,9 +597,10 @@ impl AdsClient {
 					.state
 					.known_resources
 					.get(&strng::new(&req.type_url))
-					.map(|hs| {
-						hs.iter()
-							.map(|n| (n.to_string(), "".to_string())) // Proto expects Name -> Version. We don't care about version
+					.map(|resources| {
+						resources
+							.iter()
+							.map(|(name, version)| (name.to_string(), version.to_string()))
 							.collect()
 					})
 					.unwrap_or_default();
@@ -639,6 +649,8 @@ impl AdsClient {
 						// This could be an explicit OK response, or if the stream is reset without a gRPC status.
 						return Ok(());
 					};
+					// A response proves the connection recovered from prior failures.
+					*backoff = INITIAL_BACKOFF;
 					let mut received_type = None;
 					if !self.types_to_expect.is_empty() {
 						received_type = Some(msg.type_url.clone())
