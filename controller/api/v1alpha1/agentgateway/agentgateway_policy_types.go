@@ -1323,9 +1323,11 @@ type BackendAuth struct {
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, storing the key to use as the authorization value. When using
 	// the default Secret resolver, this must be stored in the `Authorization`
+	// key by default; override via `secretRef.key`. A `Bearer ` prefix on the
+	// stored value is stripped only when reading the default `Authorization`
 	// key.
 	// +optional
-	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
 	// Passes through an existing token that has been sent by the
 	// client and validated. Other policies, like JWT and API key

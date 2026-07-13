@@ -1200,12 +1200,21 @@ spec:
                                                 Credential source, defaulting to a Kubernetes
                                                 `Secret`, storing the key to use as the authorization value. When using
                                                 the default Secret resolver, this must be stored in the `Authorization`
+                                                key by default; override via `secretRef.key`. A `Bearer ` prefix on the
+                                                stored value is stripped only when reading the default `Authorization`
                                                 key.
                                               properties:
                                                 group:
                                                   description: |-
                                                     The API group of the referenced credential.
                                                     Empty selects the core API group.
+                                                  type: string
+                                                key:
+                                                  description: |-
+                                                    The key in the referenced Secret whose value is used. If omitted, a
+                                                    location-specific default key is used.
+                                                  maxLength: 253
+                                                  minLength: 1
                                                   type: string
                                                 kind:
                                                   description: |-
@@ -2512,12 +2521,21 @@ spec:
                                                 Credential source, defaulting to a Kubernetes
                                                 `Secret`, storing the key to use as the authorization value. When using
                                                 the default Secret resolver, this must be stored in the `Authorization`
+                                                key by default; override via `secretRef.key`. A `Bearer ` prefix on the
+                                                stored value is stripped only when reading the default `Authorization`
                                                 key.
                                               properties:
                                                 group:
                                                   description: |-
                                                     The API group of the referenced credential.
                                                     Empty selects the core API group.
+                                                  type: string
+                                                key:
+                                                  description: |-
+                                                    The key in the referenced Secret whose value is used. If omitted, a
+                                                    location-specific default key is used.
+                                                  maxLength: 253
+                                                  minLength: 1
                                                   type: string
                                                 kind:
                                                   description: |-
@@ -3819,12 +3837,21 @@ spec:
                                                 Credential source, defaulting to a Kubernetes
                                                 `Secret`, storing the key to use as the authorization value. When using
                                                 the default Secret resolver, this must be stored in the `Authorization`
+                                                key by default; override via `secretRef.key`. A `Bearer ` prefix on the
+                                                stored value is stripped only when reading the default `Authorization`
                                                 key.
                                               properties:
                                                 group:
                                                   description: |-
                                                     The API group of the referenced credential.
                                                     Empty selects the core API group.
+                                                  type: string
+                                                key:
+                                                  description: |-
+                                                    The key in the referenced Secret whose value is used. If omitted, a
+                                                    location-specific default key is used.
+                                                  maxLength: 253
+                                                  minLength: 1
                                                   type: string
                                                 kind:
                                                   description: |-
@@ -5352,12 +5379,21 @@ spec:
                                                 Credential source, defaulting to a Kubernetes
                                                 `Secret`, storing the key to use as the authorization value. When using
                                                 the default Secret resolver, this must be stored in the `Authorization`
+                                                key by default; override via `secretRef.key`. A `Bearer ` prefix on the
+                                                stored value is stripped only when reading the default `Authorization`
                                                 key.
                                               properties:
                                                 group:
                                                   description: |-
                                                     The API group of the referenced credential.
                                                     Empty selects the core API group.
+                                                  type: string
+                                                key:
+                                                  description: |-
+                                                    The key in the referenced Secret whose value is used. If omitted, a
+                                                    location-specific default key is used.
+                                                  maxLength: 253
+                                                  minLength: 1
                                                   type: string
                                                 kind:
                                                   description: |-
@@ -6664,12 +6700,21 @@ spec:
                                                 Credential source, defaulting to a Kubernetes
                                                 `Secret`, storing the key to use as the authorization value. When using
                                                 the default Secret resolver, this must be stored in the `Authorization`
+                                                key by default; override via `secretRef.key`. A `Bearer ` prefix on the
+                                                stored value is stripped only when reading the default `Authorization`
                                                 key.
                                               properties:
                                                 group:
                                                   description: |-
                                                     The API group of the referenced credential.
                                                     Empty selects the core API group.
+                                                  type: string
+                                                key:
+                                                  description: |-
+                                                    The key in the referenced Secret whose value is used. If omitted, a
+                                                    location-specific default key is used.
+                                                  maxLength: 253
+                                                  minLength: 1
                                                   type: string
                                                 kind:
                                                   description: |-
@@ -8185,12 +8230,21 @@ spec:
                           Credential source, defaulting to a Kubernetes
                           `Secret`, storing the key to use as the authorization value. When using
                           the default Secret resolver, this must be stored in the `Authorization`
+                          key by default; override via `secretRef.key`. A `Bearer ` prefix on the
+                          stored value is stripped only when reading the default `Authorization`
                           key.
                         properties:
                           group:
                             description: |-
                               The API group of the referenced credential.
                               Empty selects the core API group.
+                            type: string
+                          key:
+                            description: |-
+                              The key in the referenced Secret whose value is used. If omitted, a
+                              location-specific default key is used.
+                            maxLength: 253
+                            minLength: 1
                             type: string
                           kind:
                             description: |-

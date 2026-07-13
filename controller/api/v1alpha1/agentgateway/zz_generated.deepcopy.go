@@ -1238,8 +1238,8 @@ func (in *BackendAuth) DeepCopyInto(out *BackendAuth) {
 	}
 	if in.SecretRef != nil {
 		in, out := &in.SecretRef, &out.SecretRef
-		*out = new(LocalSecretObjectRef)
-		**out = **in
+		*out = new(LocalSecretKeyRef)
+		(*in).DeepCopyInto(*out)
 	}
 	if in.Passthrough != nil {
 		in, out := &in.Passthrough, &out.Passthrough

@@ -848,8 +848,12 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			},
 		}
 	} else if auth.SecretRef != nil {
-		// Resolve secret and extract Authorization value
-		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, policy.Namespace)
+		// Resolve secret and extract the authorization value
+		key := wellknown.Authorization
+		if auth.SecretRef.Key != nil && *auth.SecretRef.Key != "" {
+			key = *auth.SecretRef.Key
+		}
+		data, err := ctx.ResolveCredentialRef(auth.SecretRef.ObjectRef(), policy.Namespace)
 		if err != nil {
 			errs = append(errs, err)
 			translatedAuth = &api.BackendAuthPolicy{
@@ -860,7 +864,14 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 				},
 			}
 		} else {
-			if authKey, ok := kubeutils.GetSecretDataAuth(data); ok {
+			var authKey string
+			var ok bool
+			if key == wellknown.Authorization {
+				authKey, ok = kubeutils.GetSecretDataAuth(data)
+			} else {
+				authKey, ok = kubeutils.GetSecretDataValue(data, key)
+			}
+			if ok {
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
 						Key: &api.Key{
@@ -870,7 +881,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 					},
 				}
 			} else {
-				errs = append(errs, fmt.Errorf("secret %s/%s missing Authorization value", policy.Namespace, auth.SecretRef.Name))
+				errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", policy.Namespace, auth.SecretRef.Name, key))
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
 						Key: &api.Key{
