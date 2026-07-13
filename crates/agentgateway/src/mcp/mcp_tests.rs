@@ -452,64 +452,6 @@ async fn apps_rbac_denied_ui_resource_strips_tool_meta() {
 	);
 }
 
-fn sse_first_data_message(body: &str) -> serde_json::Value {
-	let data = body
-		.lines()
-		.find_map(|l| l.strip_prefix("data: "))
-		.expect("SSE response should contain a data line");
-	serde_json::from_str(data).unwrap()
-}
-
-#[tokio::test]
-async fn apps_stateless_synthetic_initialize_forwards_meta_capabilities() {
-	let (apps, init) = mock_apps_streamable_http_server_with_init_capture().await;
-	let (_bind, io) = setup_proxy(&apps, false, false).await;
-	let client = reqwest::Client::new();
-	let url = format!("http://{io}/mcp");
-
-	let body = serde_json::json!({
-		"jsonrpc": "2.0",
-		"id": 1,
-		"method": "tools/list",
-		"params": { "_meta": {
-			"io.modelcontextprotocol/protocolVersion": "2026-07-28",
-			"io.modelcontextprotocol/clientInfo": {"name": "test-host", "version": "9.9.9"},
-			"io.modelcontextprotocol/clientCapabilities": {
-				"roots": {"listChanged": true},
-				"extensions": {
-					UI_EXTENSION_ID: {"mimeTypes": ["text/html;profile=mcp-app"]}
-				}
-			}
-		} }
-	});
-	let resp = mcp_json_post(&client, &url, &body)
-		.header("mcp-protocol-version", "2026-07-28")
-		.header("mcp-method", "tools/list")
-		.send()
-		.await
-		.unwrap();
-	assert_eq!(resp.status(), reqwest::StatusCode::OK);
-	let msg = sse_first_data_message(&resp.text().await.unwrap());
-	assert!(msg["result"]["tools"].is_array());
-
-	let init = init
-		.lock()
-		.unwrap()
-		.clone()
-		.expect("stateless gateway should synthesize an initialize");
-	let extensions = init.capabilities.extensions.as_ref().unwrap();
-	assert_eq!(
-		extensions[UI_EXTENSION_ID]["mimeTypes"],
-		serde_json::json!(["text/html;profile=mcp-app"]),
-		"per-request _meta capabilities must reach the upstream initialize"
-	);
-	assert!(
-		init.capabilities.roots.is_none(),
-		"capabilities requiring server-to-client routing are still scrubbed"
-	);
-	assert_eq!(init.client_info.name, "test-host");
-}
-
 #[tokio::test]
 async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
 	let mock_a = mock_streamable_http_server(true).await;

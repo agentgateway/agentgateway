@@ -93,22 +93,6 @@ impl Session {
 			{
 				client_info.protocol_version = protocol_version;
 			}
-
-			// stateless clients' metadata should be included on the initialize request
-			// to advertise client capabilties and information to upstream servers
-			let meta = match &message {
-				ClientJsonRpcMessage::Request(r) => Some(r.request.get_meta()),
-				ClientJsonRpcMessage::Notification(n) => Some(n.notification.get_meta()),
-				_ => None,
-			};
-			if let Some(meta) = meta {
-				if let Some(capabilities) = meta.client_capabilities() {
-					client_info.capabilities = capabilities;
-				}
-				if let Some(implementation) = meta.client_info() {
-					client_info.client_info = implementation;
-				}
-			}
 			let init_request = rmcp::model::InitializeRequest::new(client_info);
 			let request_type = match &message {
 				ClientJsonRpcMessage::Request(r) => Some(&r.request),
