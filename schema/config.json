@@ -3560,7 +3560,8 @@
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "minProperties": 1
         },
         "ttl": {
           "description": "Token lifetime used for `exp`. Defaults to 300s.",

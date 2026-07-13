@@ -1322,6 +1322,18 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 	);
 	assert!(zero_ttl.is_err(), "zero ttl must be rejected");
 
+	// Sub-second TTLs truncate to zero seconds and would mint tokens with
+	// exp == iat, so they must be rejected too.
+	let sub_second_ttl = JwtSignAuth::try_new(
+		TEST_JWT_SIGN_EC_KEY,
+		oauth::SigningAlg::Es256,
+		None,
+		claims.clone(),
+		Some(std::time::Duration::from_millis(500)),
+		None,
+	);
+	assert!(sub_second_ttl.is_err(), "sub-second ttl must be rejected");
+
 	let bad_key = JwtSignAuth::try_new(
 		"not a pem",
 		oauth::SigningAlg::Es256,
