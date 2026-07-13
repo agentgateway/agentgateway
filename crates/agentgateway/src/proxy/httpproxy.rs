@@ -138,18 +138,42 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	}
 }
 
+// Avoid materializing the entire request body as JSON.
+#[derive(serde::Deserialize)]
+struct MetaPeek {
+	params: Option<ParamsPeek>,
+}
+#[derive(serde::Deserialize)]
+struct ParamsPeek {
+	#[serde(rename = "_meta")]
+	meta: Option<TraceparentPeek>,
+}
+#[derive(serde::Deserialize)]
+struct TraceparentPeek {
+	traceparent: Option<String>,
+}
+
+impl MetaPeek {
+	fn traceparent(self) -> Option<String> {
+		self.params?.meta?.traceparent
+	}
+}
+
 // SEP-414: read trace context from an MCP body's `_meta` (body restored for downstream parsing).
 async fn mcp_meta_traceparent(req: &mut Request) -> Option<trc::TraceParent> {
 	let body = crate::http::inspect_body(req).await.ok()?;
-	let value: serde_json::Value = serde_json::from_slice(&body).ok()?;
-	// Single request, or the first element of a JSON-RPC batch.
-	let message = value.get(0).unwrap_or(&value);
-	let traceparent = message
-		.get("params")?
-		.get("_meta")?
-		.get("traceparent")?
-		.as_str()?;
-	trc::TraceParent::try_from(traceparent).ok()
+	// Single request, or the first element of a JSON-RPC batch (array).
+	let raw = serde_json::from_slice::<MetaPeek>(&body)
+		.ok()
+		.and_then(MetaPeek::traceparent)
+		.or_else(|| {
+			serde_json::from_slice::<Vec<MetaPeek>>(&body)
+				.ok()?
+				.into_iter()
+				.next()?
+				.traceparent()
+		})?;
+	trc::TraceParent::try_from(raw.as_str()).ok()
 }
 
 async fn apply_request_policies(
