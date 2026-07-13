@@ -1,0 +1,142 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret
+        alg: RS256
+        kid: key-1
+        claims:
+          iss: acct.user
+          sub: acct.user
+        ttl: 300s
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jwt-sign-secret
+  namespace: default
+type: Opaque
+data:
+  signingKey: cGVtLXZhbHVl
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign-secret-not-found
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret-missing
+        claims:
+          iss: acct.user
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          jwtSign:
+            claims:
+              iss: acct.user
+      key: backend/default/jwt-sign-secret-not-found:backend-auth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: jwt-sign-secret-not-found
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          jwtSign:
+            alg: RS256
+            claims:
+              iss: acct.user
+              sub: acct.user
+            kid: key-1
+            signingKey: pem-value
+            ttl: "300"
+      key: backend/default/jwt-sign:backend-auth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: jwt-sign
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: jwt-sign
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: jwt-sign-secret-not-found
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: secret default/jwt-sign-secret-missing not found
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

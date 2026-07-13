@@ -24,7 +24,7 @@ use crate::types::proto::{ProtoError, agent as proto};
 use crate::{apply, cel, schema_enum};
 
 mod cache;
-mod client_auth;
+pub(crate) mod client_auth;
 mod cross_app_access;
 mod transport;
 
