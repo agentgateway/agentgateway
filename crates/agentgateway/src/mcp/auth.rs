@@ -558,7 +558,8 @@ pub(super) fn entra_authorize(
 /// not supply one. Entra app registrations under the Web platform are confidential clients
 /// and require the secret at the token endpoint, while public clients (PKCE-only) do not.
 ///
-/// The secret is only attached to user-delegated grants (`authorization_code`,
+/// The secret is only attached when the request is for the configured `clientId` (the app
+/// registration the secret belongs to) and uses a user-delegated grant (`authorization_code`,
 /// `refresh_token`). This endpoint is reachable pre-authentication, so injecting the secret
 /// into other grant types — notably `client_credentials` — would let any caller mint
 /// app-level tokens with the gateway's credential.
@@ -588,9 +589,14 @@ pub(super) async fn entra_token(
 		.map_err(ProxyError::Body)?;
 
 	let parsed = parse_entra_token_form(&bytes);
+	// The configured secret belongs to the app registration identified by the configured
+	// clientId (the one the DCR short-circuit hands out); never attach it to a request for
+	// any other client_id.
+	let client_id_matches = auth.client_id.is_some() && parsed.client_id == auth.client_id;
 	let mut form = parsed.form;
 	if authorization.is_none()
 		&& !parsed.has_client_secret
+		&& client_id_matches
 		&& entra_grant_may_use_client_secret(parsed.grant_type.as_deref())
 		&& let Some(secret) = &auth.client_secret
 	{
@@ -624,6 +630,7 @@ struct EntraTokenForm {
 	form: String,
 	has_client_secret: bool,
 	grant_type: Option<String>,
+	client_id: Option<String>,
 }
 
 /// Only user-delegated grants may have the gateway's client secret attached; see
@@ -635,11 +642,13 @@ fn entra_grant_may_use_client_secret(grant_type: Option<&str>) -> bool {
 fn parse_entra_token_form(input: &[u8]) -> EntraTokenForm {
 	let mut has_client_secret = false;
 	let mut grant_type = None;
+	let mut client_id = None;
 	let mut serializer = url::form_urlencoded::Serializer::new(String::new());
 	for (k, v) in url::form_urlencoded::parse(input) {
 		match k.as_ref() {
 			"client_secret" => has_client_secret = true,
 			"grant_type" => grant_type = Some(v.to_string()),
+			"client_id" => client_id = Some(v.to_string()),
 			_ => {},
 		}
 		if k != "resource" {
@@ -650,6 +659,7 @@ fn parse_entra_token_form(input: &[u8]) -> EntraTokenForm {
 		form: serializer.finish(),
 		has_client_secret,
 		grant_type,
+		client_id,
 	}
 }
 
@@ -1052,10 +1062,11 @@ mod tests {
 	#[test]
 	fn parse_entra_token_form_removes_resource_and_detects_client_secret() {
 		let parsed = parse_entra_token_form(
-			b"grant_type=authorization_code&code=abc&resource=https%3A%2F%2Fgw%2Fmcp&code_verifier=v",
+			b"grant_type=authorization_code&client_id=abc-123&code=abc&resource=https%3A%2F%2Fgw%2Fmcp&code_verifier=v",
 		);
 		assert!(!parsed.has_client_secret);
 		assert_eq!(parsed.grant_type.as_deref(), Some("authorization_code"));
+		assert_eq!(parsed.client_id.as_deref(), Some("abc-123"));
 		assert!(!parsed.form.contains("resource"));
 		assert!(parsed.form.contains("grant_type=authorization_code"));
 		assert!(parsed.form.contains("code=abc"));
