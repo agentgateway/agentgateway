@@ -716,10 +716,6 @@ mod traceparent {
 		type Error = anyhow::Error;
 
 		fn try_from(value: &str) -> Result<Self, Self::Error> {
-			if value.len() != 55 {
-				anyhow::bail!("traceparent malformed length was {}", value.len())
-			}
-
 			let segs: [&str; 4] = value
 				.split('-')
 				.collect::<Vec<_>>()
@@ -771,7 +767,10 @@ mod tests {
 	#[test]
 	fn traceparent_parses_valid_and_rejects_malformed() {
 		let valid = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
-		assert_eq!(format!("{:?}", TraceParent::try_from(valid).unwrap()), valid);
+		assert_eq!(
+			format!("{:?}", TraceParent::try_from(valid).unwrap()),
+			valid
+		);
 
 		// 55 chars but no hyphens: must not panic on segment indexing.
 		assert!(TraceParent::try_from("0".repeat(55).as_str()).is_err());

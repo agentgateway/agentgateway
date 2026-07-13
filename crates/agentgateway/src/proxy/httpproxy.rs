@@ -138,9 +138,7 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	}
 }
 
-// SEP-414: extract `params._meta.traceparent` from an MCP request body so the gateway
-// span can join the client's trace when no HTTP traceparent header is present. Non-
-// destructive (the body is restored for downstream parsing); returns None on any miss.
+// SEP-414: read trace context from an MCP body's `_meta` (body restored for downstream parsing).
 async fn mcp_meta_traceparent(req: &mut Request) -> Option<trc::TraceParent> {
 	let body = crate::http::inspect_body(req).await.ok()?;
 	let value: serde_json::Value = serde_json::from_slice(&body).ok()?;
@@ -1194,10 +1192,8 @@ impl HTTPProxy {
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
 		let mut trace_parent = trc::TraceParent::from_request(req);
-		// SEP-414: modern MCP requests may carry trace context only in the body `_meta`
-		// (e.g. stdio-origin clients with no HTTP traceparent header). Fall back to it so
-		// the gateway span joins the client's trace instead of starting a new root. Gated
-		// on the required mcp-protocol-version header so only MCP requests get body-peeked.
+		// SEP-414 fallback: MCP clients may carry trace context only in the body `_meta`, not a
+		// header. Gated on the required mcp-protocol-version header so only MCP bodies get peeked.
 		if trace_parent.is_none()
 			&& req
 				.headers()
@@ -3197,23 +3193,19 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn mcp_meta_traceparent_malformed_returns_none_without_panic() {
-		// 55-char value with no hyphens previously panicked in TraceParent parsing.
-		let long = "0".repeat(55);
-		for bad in [json!(long), json!("not-a-traceparent"), json!(42)] {
-			let body = json!({"params": {"_meta": {"traceparent": bad}}});
+	async fn mcp_meta_traceparent_tolerates_bad_input() {
+		// Malformed traceparent (parser edge cases are covered in trc.rs) and non-JSON bodies.
+		let bad_meta = json!({"params": {"_meta": {"traceparent": "not-a-traceparent"}}});
+		for body in [
+			http::Body::from(serde_json::to_vec(&bad_meta).unwrap()),
+			http::Body::from(b"not json".to_vec()),
+		] {
 			let mut req = ::http::Request::builder()
 				.method(Method::POST)
-				.body(http::Body::from(serde_json::to_vec(&body).unwrap()))
+				.body(body)
 				.unwrap();
 			assert!(mcp_meta_traceparent(&mut req).await.is_none());
 		}
-		// Non-JSON body must also be tolerated.
-		let mut req = ::http::Request::builder()
-			.method(Method::POST)
-			.body(http::Body::from(b"not json".to_vec()))
-			.unwrap();
-		assert!(mcp_meta_traceparent(&mut req).await.is_none());
 	}
 
 	#[tokio::test]

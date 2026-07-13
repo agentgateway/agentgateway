@@ -96,19 +96,17 @@ impl IncomingRequestContext {
 			Ok(())
 		})
 	}
-	// Copy W3C trace context into the message's `_meta` so it propagates with the
-	// JSON-RPC message itself (SEP-414). Uses un-prefixed keys per the spec's exception
-	// to `_meta` DNS namespacing, mirroring the `traceparent` header `apply` forwards.
-	// This is the only trace carrier for stdio upstreams, which have no request headers.
+	// SEP-414: copy W3C trace context into the message's `_meta` (un-prefixed keys, per spec).
+	// The only trace carrier for stdio upstreams, which have no request headers.
 	fn stamp_trace_context<T: GetMeta>(&self, msg: &mut T) {
 		for key in ["traceparent", "tracestate", "baggage"] {
 			let Some(value) = self.headers.get(key).and_then(|v| v.to_str().ok()) else {
 				continue;
 			};
-			msg
-				.get_meta_mut()
-				.0
-				.insert(key.to_string(), serde_json::Value::String(value.to_string()));
+			msg.get_meta_mut().0.insert(
+				key.to_string(),
+				serde_json::Value::String(value.to_string()),
+			);
 		}
 	}
 	// Empty-bodied Request mirroring the incoming headers/extensions, for CEL input.
