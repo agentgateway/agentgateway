@@ -99,8 +99,9 @@ func TestBuildOAuthTokenExchangeRejectsNilAuth(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 
 	oauth, err := BuildOAuthTokenExchange(ctx, nil, "default", nil)
-	if err == nil || !strings.Contains(err.Error(), "oauth token exchange must not be nil") {
-		t.Fatalf("BuildOAuthTokenExchange() error = %v, want nil auth error", err)
+	want := "oauthTokenExchange must not be nil"
+	if err == nil || err.Error() != want {
+		t.Fatalf("BuildOAuthTokenExchange() error = %v, want %q", err, want)
 	}
 	if oauth != nil {
 		t.Fatalf("BuildOAuthTokenExchange() oauth = %v, want nil", oauth)
@@ -126,8 +127,9 @@ func TestBuildOAuthTokenExchangeSuppliedTokenEndpointPreservesValidationErrors(t
 			},
 		},
 	}, "default", tokenEndpoint)
-	if err == nil || !strings.Contains(err.Error(), "oauth subjectToken source expression is not a valid CEL expression") {
-		t.Fatalf("BuildOAuthTokenExchange() error = %v, want invalid CEL error", err)
+	want := "oauth subjectToken source expression is not a valid CEL expression"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("BuildOAuthTokenExchange() error = %v, want containing %q", err, want)
 	}
 	if calls != 0 {
 		t.Fatalf("backend ref resolution calls = %d, want 0", calls)

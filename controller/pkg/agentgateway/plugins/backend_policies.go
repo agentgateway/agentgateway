@@ -964,7 +964,7 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 // BuildOAuthTokenExchange lowers an OAuth token exchange policy into its xDS representation.
 func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
 	if auth == nil {
-		return nil, errors.New("oauth token exchange must not be nil")
+		return nil, errors.New("oauthTokenExchange must not be nil")
 	}
 
 	var errs []error
