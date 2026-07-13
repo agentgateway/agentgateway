@@ -138,6 +138,22 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	}
 }
 
+// SEP-414: extract `params._meta.traceparent` from an MCP request body so the gateway
+// span can join the client's trace when no HTTP traceparent header is present. Non-
+// destructive (the body is restored for downstream parsing); returns None on any miss.
+async fn mcp_meta_traceparent(req: &mut Request) -> Option<trc::TraceParent> {
+	let body = crate::http::inspect_body(req).await.ok()?;
+	let value: serde_json::Value = serde_json::from_slice(&body).ok()?;
+	// Single request, or the first element of a JSON-RPC batch.
+	let message = value.get(0).unwrap_or(&value);
+	let traceparent = message
+		.get("params")?
+		.get("_meta")?
+		.get("traceparent")?
+		.as_str()?;
+	trc::TraceParent::try_from(traceparent).ok()
+}
+
 async fn apply_request_policies(
 	pol: &store::RoutePolicies,
 	c: &PolicyClient,
@@ -1177,8 +1193,18 @@ impl HTTPProxy {
 		}
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
-		// TODO(SEP-414): also seed the parent from the MCP body `_meta.traceparent` when the HTTP header is absent.
-		let trace_parent = trc::TraceParent::from_request(req);
+		let mut trace_parent = trc::TraceParent::from_request(req);
+		// SEP-414: modern MCP requests may carry trace context only in the body `_meta`
+		// (e.g. stdio-origin clients with no HTTP traceparent header). Fall back to it so
+		// the gateway span joins the client's trace instead of starting a new root. Gated
+		// on the required mcp-protocol-version header so only MCP requests get body-peeked.
+		if trace_parent.is_none()
+			&& req
+				.headers()
+				.contains_key(rmcp::transport::common::http_header::HEADER_MCP_PROTOCOL_VERSION)
+		{
+			trace_parent = mcp_meta_traceparent(req).await;
+		}
 		let trace_sampled = sampler.trace_sampled(req, trace_parent.as_ref());
 
 		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
@@ -3051,7 +3077,7 @@ mod tests {
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
+		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers, mcp_meta_traceparent,
 		resolved_workload_target_hostname, select_service_target_port,
 	};
 	use crate::http::filters::AutoHostname;
@@ -3135,6 +3161,39 @@ mod tests {
 		)
 		.await
 		.expect("LLM request policies should apply")
+	}
+
+	#[tokio::test]
+	async fn mcp_meta_traceparent_extracts_and_restores_body() {
+		let tp = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		let body = json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "tools/call",
+			"params": {"name": "echo", "_meta": {"traceparent": tp}},
+		});
+		let mut req = ::http::Request::builder()
+			.method(Method::POST)
+			.body(http::Body::from(serde_json::to_vec(&body).unwrap()))
+			.unwrap();
+
+		let parent = mcp_meta_traceparent(&mut req).await.expect("traceparent");
+		assert_eq!(format!("{parent:?}"), tp);
+
+		// Body must remain readable for downstream MCP parsing.
+		let restored = http::inspect_body(&mut req).await.unwrap();
+		let reparsed: serde_json::Value = serde_json::from_slice(&restored).unwrap();
+		assert_eq!(reparsed["params"]["name"], "echo");
+	}
+
+	#[tokio::test]
+	async fn mcp_meta_traceparent_absent_returns_none() {
+		let body = json!({"method": "tools/call", "params": {"name": "echo"}});
+		let mut req = ::http::Request::builder()
+			.method(Method::POST)
+			.body(http::Body::from(serde_json::to_vec(&body).unwrap()))
+			.unwrap();
+		assert!(mcp_meta_traceparent(&mut req).await.is_none());
 	}
 
 	#[tokio::test]
