@@ -1695,11 +1695,14 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 }
 
 func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, namespace string) (*api.BackendAuthPolicy, error) {
-	var errs []error
+	// translateJwtSignSigningAlg rejects unrecognized alg values rather than
+	// falling back to a default, so an error here must not fall through to
+	// building a policy that silently signs with RS256 instead.
 	alg, err := translateJwtSignSigningAlg(auth.Alg)
 	if err != nil {
-		errs = append(errs, err)
+		return nil, err
 	}
+	var errs []error
 	jwtSign := &api.JwtSign{
 		Alg:                   alg,
 		Kid:                   auth.KeyID,
