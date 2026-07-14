@@ -1348,3 +1348,62 @@ spec:
     timeouts:
       request: 30s
 ---
+_err: 'ttl must be at least 1 second'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign-ttl-too-short
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret
+        claims:
+          iss: acct.user
+        ttl: 500ms
+---
+_err: 'invalid duration value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign-ttl-bad-format
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret
+        claims:
+          iss: acct.user
+        ttl: not-a-duration
+---
+_err: 'location may only be set for key, secretRef, or passthrough auth'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign-top-level-location-invalid
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret
+        claims:
+          iss: acct.user
+      location:
+        header:
+          name: x-signed-jwt
+---

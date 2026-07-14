@@ -19,6 +19,13 @@ const DEFAULT_TTL: Duration = Duration::from_secs(300);
 /// collide with these.
 const RESERVED_CLAIMS: &[&str] = &["iat", "exp", "nbf"];
 
+/// Rounds a ttl up to the next whole second so a sub-second component (e.g.
+/// 1500ms) never yields a shorter lifetime than configured, in both the
+/// signed token and any serialized/debug representation of the config.
+fn ttl_secs_ceil(ttl: Duration) -> u64 {
+	ttl.as_secs() + u64::from(ttl.subsec_nanos() > 0)
+}
+
 /// Signs a short-lived JWT with a private key on each request and sends it to
 /// the backend. For upstreams that require per-request keypair JWTs (e.g. the
 /// Snowflake SQL API) rather than a static credential.
@@ -64,7 +71,7 @@ impl serde::Serialize for JwtSignAuth {
 		state.serialize_field("alg", &self.alg)?;
 		state.serialize_field("kid", &self.kid)?;
 		state.serialize_field("claims", &self.claims)?;
-		state.serialize_field("ttl", &self.ttl.map(|ttl| format!("{}s", ttl.as_secs())))?;
+		state.serialize_field("ttl", &self.ttl.map(|ttl| format!("{}s", ttl_secs_ceil(ttl))))?;
 		state.serialize_field("location", &self.location)?;
 		state.end()
 	}
@@ -169,11 +176,8 @@ impl JwtSignAuth {
 		for (key, value) in &self.claims {
 			claims.insert(key.clone(), serde_json::Value::String(value.clone()));
 		}
-		// Round up to the next whole second so a sub-second component (e.g.
-		// 1500ms) doesn't silently shorten the configured token lifetime.
-		let ttl_secs = ttl.as_secs() + u64::from(ttl.subsec_nanos() > 0);
 		let exp = now
-			.checked_add(ttl_secs)
+			.checked_add(ttl_secs_ceil(ttl))
 			.context("jwtSign ttl overflows the exp timestamp")?;
 		claims.insert("iat".to_string(), now.into());
 		claims.insert("exp".to_string(), exp.into());
