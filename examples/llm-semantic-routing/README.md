@@ -124,11 +124,13 @@ Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
 observability source of record. Use isolated evaluation traffic with forced
 lower-cost and always-expensive baselines before adopting the policy broadly.
 
-## Use Codex Through the Gateway
+## Optional: Use Codex Through the Gateway
 
-Codex uses the OpenAI Responses API. The nightly vSR image configured above
-translates streamed Responses events, so Codex can send the same `auto` model
-name through the gateway. Configure a user-level Codex profile:
+The gateway works with any OpenAI API-compatible client or agent. This optional
+section shows a Codex-specific configuration. Codex uses the OpenAI Responses
+API, and the nightly vSR image configured above translates streamed Responses
+events so it can send the same `auto` model name through the gateway. Configure
+a user-level Codex profile:
 
 ```toml
 # ~/.codex/agentgateway.config.toml
