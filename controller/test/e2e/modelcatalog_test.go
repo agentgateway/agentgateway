@@ -50,6 +50,18 @@ func maxLoggedCost(logs string) float64 {
 	return maxCost
 }
 
+// hasLoggedCostBelow reports whether logs contain an agw.ai.usage.cost.total value strictly below ceiling.
+func hasLoggedCostBelow(logs string, ceiling float64) bool {
+	for line := range strings.SplitSeq(logs, "\n") {
+		if m := costTotalRe.FindStringSubmatch(line); m != nil {
+			if cost, err := strconv.ParseFloat(m[1], 64); err == nil && cost < ceiling {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestModelCatalogCost(tt *testing.T) {
 	t := New(tt, base.WithMinGwApiVersion(base.GwApiRequireRouteNames))
 
@@ -95,12 +107,8 @@ func TestModelCatalogCost(tt *testing.T) {
 
 		g := gomega.NewWithT(t)
 
-		podsBefore, err := gatewayPodNames(t, modelCatalogGatewayName)
+		podsBefore, err := gatewayPodUIDs(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
-
-		baseline, err := gatewayAccessLogs(t, modelCatalogGatewayName)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		baselineLen := len(baseline)
 
 		t.Apply(modelCatalogUpdatedManifest)
 		g.Eventually(func() error {
@@ -115,20 +123,16 @@ func TestModelCatalogCost(tt *testing.T) {
 			if err != nil {
 				return err
 			}
-			if len(logs) <= baselineLen {
-				return fmt.Errorf("no new gateway logs since ConfigMap patch")
-			}
-			maxCost := maxLoggedCost(logs[baselineLen:])
-			if maxCost < 0 {
-				return fmt.Errorf("no agw.ai.usage.cost.total in gateway logs since ConfigMap patch")
-			}
-			if maxCost >= minSentinelCost {
-				return fmt.Errorf("logged cost %v >= ceiling %v (ConfigMap update not yet reflected by running pod)", maxCost, minSentinelCost)
+			// The pre-patch sentinel-rate cost never leaves the log, so we can't compare
+			// against the max; instead look for any request logged below the ceiling,
+			// which is only possible once the reloaded (low-rate) catalog is in effect.
+			if !hasLoggedCostBelow(logs, minSentinelCost) {
+				return fmt.Errorf("no agw.ai.usage.cost.total below ceiling %v in gateway logs (ConfigMap update not yet reflected by running pod)", minSentinelCost)
 			}
 			return nil
 		}).WithTimeout(45 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
 
-		podsAfter, err := gatewayPodNames(t, modelCatalogGatewayName)
+		podsAfter, err := gatewayPodUIDs(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		g.Expect(podsAfter).To(gomega.Equal(podsBefore),
 			"gateway pod must not have restarted for the ConfigMap update to take effect")
@@ -167,9 +171,9 @@ func TestModelCatalogCost(tt *testing.T) {
 	})
 }
 
-// gatewayPodNames returns the sorted names of the running gateway pods, so callers
+// gatewayPodUIDs returns the sorted UIDs of the running gateway pods, so callers
 // can assert that a ConfigMap update took effect without a pod restart/rollout.
-func gatewayPodNames(t base.Test, gatewayName string) ([]string, error) {
+func gatewayPodUIDs(t base.Test, gatewayName string) ([]string, error) {
 	cluster := t.TestInstallation.ClusterContext
 	pods, err := cluster.Client.Kube().CoreV1().Pods(modelCatalogNamespace).List(t.Ctx, metav1.ListOptions{
 		LabelSelector: "gateway.networking.k8s.io/gateway-name=" + gatewayName,
@@ -177,12 +181,12 @@ func gatewayPodNames(t base.Test, gatewayName string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, 0, len(pods.Items))
+	uids := make([]string, 0, len(pods.Items))
 	for _, pod := range pods.Items {
-		names = append(names, string(pod.UID))
+		uids = append(uids, string(pod.UID))
 	}
-	slices.Sort(names)
-	return names, nil
+	slices.Sort(uids)
+	return uids, nil
 }
 
 func gatewayAccessLogs(t base.Test, gatewayName string) (string, error) {
