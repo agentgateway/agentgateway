@@ -34,10 +34,17 @@ curl -s 127.0.0.1:3000/headers
 The echoed `Authorization` header carries a fresh JWT. Decode its claims:
 
 ```bash
-curl -s 127.0.0.1:3000/headers \
-  | jq -r '.headers.Authorization' \
-  | cut -d' ' -f2 | cut -d. -f2 | base64 -d 2>/dev/null | jq .
+payload=$(curl -s 127.0.0.1:3000/headers | jq -r '.headers.Authorization' | cut -d' ' -f2 | cut -d. -f2 | tr '_-' '/+')
+case $(( ${#payload} % 4 )) in
+  2) payload="${payload}==" ;;
+  3) payload="${payload}=" ;;
+esac
+echo "$payload" | base64 -d | jq .
 ```
+
+The payload is base64url-encoded (RFC 7515): unlike standard base64, it uses
+`-`/`_` instead of `+`/`/` and omits padding, so `base64 -d` needs both fixed
+up first.
 
 Every request gets a new token: `iat`/`exp` are set by the signer (`ttl`
 controls the lifetime, 300s by default) and cannot be configured as claims.

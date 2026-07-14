@@ -1430,3 +1430,10 @@ fn test_jwt_sign_deserializes() {
 	};
 	assert!(cfg.location.is_some());
 }
+
+#[test]
+fn test_jwt_sign_serialize_rounds_up_sub_second_ttl() {
+	let auth = jwt_sign_auth(None, Some(std::time::Duration::from_millis(1500)), None);
+	let value = serde_json::to_value(&auth).expect("jwtSign auth should serialize");
+	assert_eq!(value["jwtSign"]["ttl"], "2s");
+}
