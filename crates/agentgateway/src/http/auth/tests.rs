@@ -1219,7 +1219,9 @@ async fn test_backend_auth_jwt_sign() {
 	assert_eq!(payload["sub"], "ACCT.USER");
 	let iat = payload["iat"].as_u64().expect("iat must be set");
 	let exp = payload["exp"].as_u64().expect("exp must be set");
+	let nbf = payload["nbf"].as_u64().expect("nbf must be set");
 	assert_eq!(exp - iat, 600);
+	assert_eq!(nbf, iat);
 
 	let ext = req
 		.extensions()
@@ -1269,7 +1271,9 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 	// Default 300s lifetime applies when ttl is unset.
 	let iat = payload["iat"].as_u64().unwrap();
 	let exp = payload["exp"].as_u64().unwrap();
+	let nbf = payload["nbf"].as_u64().unwrap();
 	assert_eq!(exp - iat, 300);
+	assert_eq!(nbf, iat);
 
 	let ext = req
 		.extensions()
@@ -1292,6 +1296,21 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 	);
 	assert!(
 		reserved.is_err_and(|e| e.contains("exp")),
+		"reserved claims must be rejected"
+	);
+
+	let reserved_nbf = JwtSignAuth::try_new(
+		TEST_JWT_SIGN_EC_KEY,
+		oauth::SigningAlg::Es256,
+		None,
+		[("nbf".to_string(), "123".to_string())]
+			.into_iter()
+			.collect(),
+		None,
+		None,
+	);
+	assert!(
+		reserved_nbf.is_err_and(|e| e.contains("nbf")),
 		"reserved claims must be rejected"
 	);
 
