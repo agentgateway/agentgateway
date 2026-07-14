@@ -32,18 +32,20 @@ The `AgentgatewayBackend` in `k8s/agentgateway-routing.yaml` expects an
 ## Configure Routing
 
 Replace any existing `HTTPRoute` attached to this Gateway that matches
-`/v1/chat/completions` before applying this example.
+`/v1/chat/completions` or `/v1/responses` before applying this example.
 
 Install vLLM Semantic Router:
 
 ```bash
-export VSR_VERSION=0.3.0
+export VSR_CHART_VERSION=0.0.0-latest
+export VSR_IMAGE_TAG=latest
 
 helm upgrade -i semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version "${VSR_VERSION}" \
+  --version "${VSR_CHART_VERSION}" \
   --namespace agentgateway-system \
   -f examples/llm-semantic-routing/k8s/semantic-router-values.yaml \
-  --set-string "image.tag=v${VSR_VERSION}"
+  --set-string "image.tag=${VSR_IMAGE_TAG}" \
+  --set "image.pullPolicy=Always"
 
 kubectl wait --for=condition=Available deployment/semantic-router \
   -n agentgateway-system \
@@ -62,8 +64,10 @@ kubectl describe httproute openai-semantic-routing -n agentgateway-system
 kubectl describe agentgatewaypolicy semantic-router-extproc -n agentgateway-system
 ```
 
-`VSR_VERSION` sets both the chart version and the matching `v<version>`
-`extproc` image tag.
+This example defaults to the latest vSR chart and image, which include the
+[Responses API streaming fix](https://github.com/vllm-project/semantic-router/issues/2446).
+For a repeatable historical deployment, override both values with released
+chart and image versions that contain the fix.
 
 > **Note:** This example uses buffered ExtProc while the streamed-body issue in
 > [vLLM Semantic Router #2486](https://github.com/vllm-project/semantic-router/issues/2486)
@@ -119,6 +123,37 @@ by application traffic.
 Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
 observability source of record. Use isolated evaluation traffic with forced
 lower-cost and always-expensive baselines before adopting the policy broadly.
+
+## Use Codex Through the Gateway
+
+Codex uses the OpenAI Responses API. The nightly vSR image configured above
+translates streamed Responses events, so Codex can send the same `auto` model
+name through the gateway. Configure a user-level Codex profile:
+
+```toml
+# ~/.codex/agentgateway.config.toml
+model = "auto"
+model_provider = "agentgateway"
+
+[model_providers.agentgateway]
+name = "Corporate agentgateway"
+base_url = "https://my.corp.agentgateway.com/v1"
+wire_api = "responses"
+env_key = "OPENAI_API_KEY"
+```
+
+Set your OpenAI API key, then start Codex with the profile:
+
+```bash
+export OPENAI_API_KEY='sk-...'
+codex --profile agentgateway
+```
+
+The gateway authenticates to OpenAI with its configured provider credential and
+records the selected model and cost as it does for other OpenAI-compatible
+clients. Users can still select a concrete model unless the organization
+separately enforces or rewrites direct model requests at the gateway. Treat
+`auto` as the supported client path when testing this policy.
 
 ## Cleanup
 

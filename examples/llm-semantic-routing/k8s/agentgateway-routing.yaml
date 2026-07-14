@@ -33,6 +33,9 @@ spec:
     - path:
         type: PathPrefix
         value: /v1/chat/completions
+    - path:
+        type: PathPrefix
+        value: /v1/responses
     backendRefs:
     - group: agentgateway.dev
       kind: AgentgatewayBackend
