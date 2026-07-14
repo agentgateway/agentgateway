@@ -548,7 +548,28 @@ type MCPBackend struct {
 	// entire session if any target fails.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// How tool/prompt/resource names are prefixed with the target name.
+	// `Conditional` (default) prefixes only when there are multiple targets.
+	// `Always` prefixes even with a single target. `Never` exposes unprefixed
+	// names and routes calls by looking up which target serves the name;
+	// names must be unique across targets.
+	// +optional
+	PrefixMode PrefixMode `json:"prefixMode,omitempty"`
 }
+
+const (
+	// Conditional prefixes names with the target name only when there are multiple targets.
+	PrefixConditional PrefixMode = "Conditional"
+	// Always prefixes names, even with a single target.
+	PrefixAlways PrefixMode = "Always"
+	// Never prefixes names; calls are routed by looking up which target serves the name.
+	// Names must be unique across targets.
+	PrefixNever PrefixMode = "Never"
+)
+
+// +k8s:enum
+type PrefixMode string
 
 const (
 	// FailClosed fails the entire MCP session if any target fails.

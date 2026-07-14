@@ -2282,6 +2282,9 @@ type MCPBackend_PrefixMode int32
 const (
 	MCPBackend_CONDITIONAL MCPBackend_PrefixMode = 0
 	MCPBackend_ALWAYS      MCPBackend_PrefixMode = 1
+	// Never prefix names, even with multiple targets; tool/prompt calls are
+	// routed by looking up which target serves the name.
+	MCPBackend_NEVER MCPBackend_PrefixMode = 2
 )
 
 // Enum value maps for MCPBackend_PrefixMode.
@@ -2289,10 +2292,12 @@ var (
 	MCPBackend_PrefixMode_name = map[int32]string{
 		0: "CONDITIONAL",
 		1: "ALWAYS",
+		2: "NEVER",
 	}
 	MCPBackend_PrefixMode_value = map[string]int32{
 		"CONDITIONAL": 0,
 		"ALWAYS":      1,
+		"NEVER":       2,
 	}
 )
 
@@ -16665,7 +16670,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x15ANTHROPIC_TOKEN_COUNT\x10\x05\x12\f\n" +
 	"\bREALTIME\x10\x06\x12\n" +
 	"\n" +
-	"\x06RERANK\x10\a\"\xd5\x03\n" +
+	"\x06RERANK\x10\a\"\xe0\x03\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +
@@ -16675,12 +16680,13 @@ const file_resource_proto_rawDesc = "" +
 	"\ffailure_mode\x18\x05 \x01(\x0e21.agentgateway.dev.resource.MCPBackend.FailureModeR\vfailureMode\"+\n" +
 	"\fStatefulMode\x12\f\n" +
 	"\bSTATEFUL\x10\x00\x12\r\n" +
-	"\tSTATELESS\x10\x01\")\n" +
+	"\tSTATELESS\x10\x01\"4\n" +
 	"\n" +
 	"PrefixMode\x12\x0f\n" +
 	"\vCONDITIONAL\x10\x00\x12\n" +
 	"\n" +
-	"\x06ALWAYS\x10\x01\"-\n" +
+	"\x06ALWAYS\x10\x01\x12\t\n" +
+	"\x05NEVER\x10\x02\"-\n" +
 	"\vFailureMode\x12\x0f\n" +
 	"\vFAIL_CLOSED\x10\x00\x12\r\n" +
 	"\tFAIL_OPEN\x10\x01\"\xfe\x01\n" +
