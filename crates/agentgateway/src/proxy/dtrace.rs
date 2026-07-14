@@ -826,7 +826,7 @@ mod tests {
 		// Scope the watcher to a unique path so concurrent tests can't consume its one-shot sender.
 		const PATH: &str = "/cel-eval-emits-events-probe";
 		let mut trace_rx = track_expression(Some(
-			Expression::new_strict(&format!("request.path == '{PATH}'")).expect("filter compiles"),
+			Expression::new_strict(format!("request.path == '{PATH}'")).expect("filter compiles"),
 		));
 		let req = http::Request::builder()
 			.uri(format!("http://example.com{PATH}"))
