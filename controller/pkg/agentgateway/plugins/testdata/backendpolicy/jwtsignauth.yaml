@@ -47,6 +47,25 @@ spec:
         claims:
           iss: acct.user
 ---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign-sub-second-ttl
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret
+        claims:
+          iss: acct.user
+        ttl: 1500ms
+---
 # Output
 output:
 - gateway:
@@ -63,6 +82,28 @@ output:
       name:
         kind: AgentgatewayPolicy
         name: jwt-sign-secret-not-found
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        auth:
+          jwtSign:
+            claims:
+              iss: acct.user
+            signingKey: pem-value
+            ttl: "2"
+      key: backend/default/jwt-sign-sub-second-ttl:backend-auth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: jwt-sign-sub-second-ttl
         namespace: default
       target:
         route:
@@ -139,4 +180,29 @@ status:
         reason: PartiallyValid
         status: "True"
         type: Accepted
+      controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: jwt-sign-sub-second-ttl
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway

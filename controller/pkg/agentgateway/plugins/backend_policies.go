@@ -1711,8 +1711,10 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 	}
 
 	if auth.TTL != nil {
+		// Round up to the next whole second so a sub-second component (e.g.
+		// "1500ms") doesn't silently shorten the configured token lifetime.
 		// kubebuilder enforces ttl >= 1s, so this is always positive and non-zero.
-		ttl := uint64(auth.TTL.Duration / time.Second) //nolint:gosec // G115: kubebuilder enforces ttl >= 1s
+		ttl := uint64((auth.TTL.Duration + time.Second - 1) / time.Second) //nolint:gosec // G115: kubebuilder enforces ttl >= 1s
 		jwtSign.Ttl = &ttl
 	}
 
