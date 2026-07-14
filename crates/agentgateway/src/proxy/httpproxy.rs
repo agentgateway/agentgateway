@@ -162,17 +162,9 @@ impl MetaPeek {
 // SEP-414: read trace context from an MCP body's `_meta` (body restored for downstream parsing).
 async fn mcp_meta_traceparent(req: &mut Request) -> Option<trc::TraceParent> {
 	let body = crate::http::inspect_body(req).await.ok()?;
-	// Single request, or the first element of a JSON-RPC batch (array).
 	let raw = serde_json::from_slice::<MetaPeek>(&body)
 		.ok()
-		.and_then(MetaPeek::traceparent)
-		.or_else(|| {
-			serde_json::from_slice::<Vec<MetaPeek>>(&body)
-				.ok()?
-				.into_iter()
-				.next()?
-				.traceparent()
-		})?;
+		.and_then(MetaPeek::traceparent)?;
 	trc::TraceParent::try_from(raw.as_str()).ok()
 }
 
@@ -1197,8 +1189,9 @@ impl HTTPProxy {
 				});
 		}
 
+		let tracing = frontend_policies.tracing.as_deref();
 		let mut sampler = TraceSampler::default();
-		if let Some(tp) = frontend_policies.tracing.as_deref() {
+		if let Some(tp) = tracing {
 			// Apply sampling overrides if present
 			if let Some(rs) = &tp.config.random_sampling {
 				sampler.random_sampling = Some(rs.clone());
@@ -1216,9 +1209,10 @@ impl HTTPProxy {
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
 		let mut trace_parent = trc::TraceParent::from_request(req);
-		// SEP-414 fallback: MCP clients may carry trace context only in the body `_meta`, not a
-		// header. Gated on the required mcp-protocol-version header so only MCP bodies get peeked.
+		// SEP-414: MCP clients may carry trace context only in the body `_meta`. This peeks the body
+		// pre-authz, so gate it on a tracer existing to consume the parent.
 		if trace_parent.is_none()
+			&& tracing.is_some()
 			&& req
 				.headers()
 				.contains_key(rmcp::transport::common::http_header::HEADER_MCP_PROTOCOL_VERSION)
@@ -1227,9 +1221,8 @@ impl HTTPProxy {
 		}
 		let trace_sampled = sampler.trace_sampled(req, trace_parent.as_ref());
 
-		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
 		if trace_sampled {
-			log.tracer = if let Some(tp) = frontend_policies.tracing.as_deref() {
+			log.tracer = if let Some(tp) = tracing {
 				debug!(
 					resources_count=%tp.config.resources.len(),
 					attrs_count=%tp.config.attributes.len(),
