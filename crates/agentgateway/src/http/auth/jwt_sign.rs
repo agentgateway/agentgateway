@@ -109,7 +109,7 @@ impl TryFrom<RawJwtSignAuth> for JwtSignAuth {
 		let pem = raw
 			.signing_key
 			.load()
-			.map_err(|e| format!("failed to load jwtSign signing_key: {e}"))?;
+			.map_err(|e| format!("failed to load jwtSign signingKey: {e}"))?;
 		Self::try_new(
 			pem.trim(),
 			raw.alg,
@@ -147,7 +147,7 @@ impl JwtSignAuth {
 		}
 		let signing_key = alg
 			.encoding_key(signing_key_pem.as_bytes())
-			.map_err(|e| format!("failed to parse jwtSign signing_key: {e}"))?;
+			.map_err(|e| format!("failed to parse jwtSign signingKey: {e}"))?;
 		Ok(Self {
 			signing_key: ParsedEncodingKey(signing_key),
 			alg,
