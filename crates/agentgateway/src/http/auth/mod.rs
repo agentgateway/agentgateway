@@ -249,6 +249,10 @@ async fn apply_backend_auth_kind(
 				.location
 				.as_ref()
 				.unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
+			// jwtSign fully replaces backend auth; strip any client-supplied
+			// Authorization header instead of letting it ride through
+			// alongside (or instead of, if `location` differs) the signed JWT.
+			DEFAULT_AUTHORIZATION_LOCATION.remove(req)?;
 			resolved.insert(req, &token)?;
 			req
 				.extensions_mut()

@@ -1236,6 +1236,10 @@ async fn test_backend_auth_jwt_sign() {
 #[tokio::test]
 async fn test_backend_auth_jwt_sign_explicit_location() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		http::header::AUTHORIZATION,
+		http::HeaderValue::from_static("Bearer client-supplied-token"),
+	);
 	let t = setup_proxy_test("{}").expect("setup proxy inputs");
 	let inputs = t.inputs();
 
@@ -1274,6 +1278,11 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 	let nbf = payload["nbf"].as_u64().unwrap();
 	assert_eq!(exp - iat, 300);
 	assert_eq!(nbf, iat);
+
+	assert!(
+		req.headers().get(http::header::AUTHORIZATION).is_none(),
+		"client-supplied Authorization header must not be forwarded to the backend"
+	);
 
 	let ext = req
 		.extensions()
