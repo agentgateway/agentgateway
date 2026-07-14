@@ -52,7 +52,7 @@ kubectl wait --for=condition=Available deployment/semantic-router \
   --timeout=600s
 ```
 
-Apply the routed backend, route, and buffered ExtProc policy:
+Apply the routed backend, route, and streamed ExtProc policy:
 
 ```bash
 kubectl apply -f examples/llm-semantic-routing/k8s/agentgateway-routing.yaml
@@ -65,17 +65,12 @@ kubectl describe agentgatewaypolicy semantic-router-extproc -n agentgateway-syst
 ```
 
 This example defaults to the latest vSR chart and image, which include the
-[Responses API streaming fix](https://github.com/vllm-project/semantic-router/issues/2446).
+[Responses API streaming fix](https://github.com/vllm-project/semantic-router/issues/2446)
+and the [FullDuplexStreamed request-body fix](https://github.com/vllm-project/semantic-router/issues/2486).
 For a repeatable historical deployment, override both values with released
-chart and image versions that contain the fix.
+chart and image versions that contain both fixes.
 
-> **Note:** This example uses buffered ExtProc while the streamed-body issue in
-> [vLLM Semantic Router #2486](https://github.com/vllm-project/semantic-router/issues/2486)
-> is unresolved. When that issue is fixed and this example is returned to
-> streamed mode, restore the `Verify Streamed ExtProc` section and its
-> deterministic immediate-response probe.
-
-## Run a Request
+## Verify Streamed ExtProc
 
 Set your gateway address:
 
@@ -84,6 +79,29 @@ export INGRESS_GW_ADDRESS="http://$(kubectl get gateway agentgateway-proxy \
   -n agentgateway-system \
   -o jsonpath='{.status.addresses[0].value}')"
 ```
+
+The values include a narrow, deterministic immediate-response probe. It proves
+that `FullDuplexStreamed` request processing reaches vSR without sending tokens
+to OpenAI:
+
+```bash
+curl -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -H "X-VSR-Debug: true" \
+  -d '{
+    "model": "auto",
+    "messages": [
+      {"role": "user", "content": "VSR_IMMEDIATE_RESPONSE_PROBE"}
+    ],
+    "max_tokens": 16
+  }'
+```
+
+Expect a `200` response with `x-vsr-fast-response`; the request should not
+reach OpenAI. Remove the probe signal and decision before using this policy in
+a production route.
+
+## Run a Request
 
 Routine coding prompts should use the lower-cost model:
 
