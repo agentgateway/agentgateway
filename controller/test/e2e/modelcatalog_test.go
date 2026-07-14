@@ -5,7 +5,7 @@ package e2e_test
 import (
 	"fmt"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -71,7 +71,7 @@ func TestModelCatalogCost(tt *testing.T) {
 			curl.WithHeader("Content-Type", "application/json"),
 		)
 		gomega.NewWithT(t).Eventually(func() error {
-			logs, err := gatewayAccessLogs(t, modelCatalogNamespace, modelCatalogGatewayName)
+			logs, err := gatewayAccessLogs(t, modelCatalogGatewayName)
 			if err != nil {
 				return err
 			}
@@ -95,10 +95,10 @@ func TestModelCatalogCost(tt *testing.T) {
 
 		g := gomega.NewWithT(t)
 
-		podsBefore, err := gatewayPodNames(t, modelCatalogNamespace, modelCatalogGatewayName)
+		podsBefore, err := gatewayPodNames(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 
-		baseline, err := gatewayAccessLogs(t, modelCatalogNamespace, modelCatalogGatewayName)
+		baseline, err := gatewayAccessLogs(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		baselineLen := len(baseline)
 
@@ -111,7 +111,7 @@ func TestModelCatalogCost(tt *testing.T) {
 				curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
 				curl.WithHeader("Content-Type", "application/json"),
 			)
-			logs, err := gatewayAccessLogs(t, modelCatalogNamespace, modelCatalogGatewayName)
+			logs, err := gatewayAccessLogs(t, modelCatalogGatewayName)
 			if err != nil {
 				return err
 			}
@@ -128,7 +128,7 @@ func TestModelCatalogCost(tt *testing.T) {
 			return nil
 		}).WithTimeout(45 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
 
-		podsAfter, err := gatewayPodNames(t, modelCatalogNamespace, modelCatalogGatewayName)
+		podsAfter, err := gatewayPodNames(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		g.Expect(podsAfter).To(gomega.Equal(podsBefore),
 			"gateway pod must not have restarted for the ConfigMap update to take effect")
@@ -151,7 +151,7 @@ func TestModelCatalogCost(tt *testing.T) {
 			curl.WithHeader("Content-Type", "application/json"),
 		)
 		gomega.NewWithT(t).Eventually(func() error {
-			logs, err := gatewayAccessLogs(t, modelCatalogNamespace, modelCatalogAltGatewayName)
+			logs, err := gatewayAccessLogs(t, modelCatalogAltGatewayName)
 			if err != nil {
 				return err
 			}
@@ -169,9 +169,9 @@ func TestModelCatalogCost(tt *testing.T) {
 
 // gatewayPodNames returns the sorted names of the running gateway pods, so callers
 // can assert that a ConfigMap update took effect without a pod restart/rollout.
-func gatewayPodNames(t base.Test, ns, gatewayName string) ([]string, error) {
+func gatewayPodNames(t base.Test, gatewayName string) ([]string, error) {
 	cluster := t.TestInstallation.ClusterContext
-	pods, err := cluster.Client.Kube().CoreV1().Pods(ns).List(t.Ctx, metav1.ListOptions{
+	pods, err := cluster.Client.Kube().CoreV1().Pods(modelCatalogNamespace).List(t.Ctx, metav1.ListOptions{
 		LabelSelector: "gateway.networking.k8s.io/gateway-name=" + gatewayName,
 	})
 	if err != nil {
@@ -181,24 +181,24 @@ func gatewayPodNames(t base.Test, ns, gatewayName string) ([]string, error) {
 	for _, pod := range pods.Items {
 		names = append(names, string(pod.UID))
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names, nil
 }
 
-func gatewayAccessLogs(t base.Test, ns, gatewayName string) (string, error) {
+func gatewayAccessLogs(t base.Test, gatewayName string) (string, error) {
 	cluster := t.TestInstallation.ClusterContext
-	pods, err := cluster.Client.Kube().CoreV1().Pods(ns).List(t.Ctx, metav1.ListOptions{
+	pods, err := cluster.Client.Kube().CoreV1().Pods(modelCatalogNamespace).List(t.Ctx, metav1.ListOptions{
 		LabelSelector: "gateway.networking.k8s.io/gateway-name=" + gatewayName,
 	})
 	if err != nil {
 		return "", err
 	}
 	if len(pods.Items) == 0 {
-		return "", fmt.Errorf("no gateway pods found for %s/%s", ns, gatewayName)
+		return "", fmt.Errorf("no gateway pods found for %s/%s", modelCatalogNamespace, gatewayName)
 	}
 	var sb strings.Builder
 	for _, pod := range pods.Items {
-		logs, err := cluster.Client.PodLogs(t.Ctx, pod.Name, ns, "agentgateway", false)
+		logs, err := cluster.Client.PodLogs(t.Ctx, pod.Name, modelCatalogNamespace, "agentgateway", false)
 		if err != nil {
 			return "", fmt.Errorf("failed to read logs for pod %s: %w", pod.Name, err)
 		}
