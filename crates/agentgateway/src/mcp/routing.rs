@@ -55,9 +55,8 @@ impl NameRouting {
 	}
 
 	/// Whether resource URIs carry the target name (`{target}+{scheme}://...`).
-	/// Unlike names, URIs stay encoded in Resolve mode: clients only ever see
-	/// URIs we produced, so the encoding is transparent to them, and it is how
-	/// we route resource reads and Apps ui:// resources back to their target.
+	/// Unlike names, URIs stay encoded even in Resolve mode: clients only ever
+	/// see URIs we produced, so the encoding is transparent to them.
 	pub fn encodes_uris(&self) -> bool {
 		!matches!(self, NameRouting::Single(_))
 	}

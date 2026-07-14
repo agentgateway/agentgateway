@@ -1,10 +1,12 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use agent_core::prelude::{AssertSize, Strng};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
+use futures_util::StreamExt;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
@@ -27,7 +29,7 @@ use crate::mcp::router::McpBackendGroup;
 use crate::mcp::routing::{NameDecision, NameRouting};
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, resolve, upstream};
+use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 
@@ -71,6 +73,55 @@ fn set_subscription_ack_id(
 		ack.params.meta = Some(meta);
 	}
 	message
+}
+
+/// What kind of name is being resolved to a target (`prefixMode: never`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolveKind {
+	Tool,
+	Prompt,
+}
+
+impl ResolveKind {
+	pub fn as_str(&self) -> &'static str {
+		match self {
+			ResolveKind::Tool => "tool",
+			ResolveKind::Prompt => "prompt",
+		}
+	}
+
+	fn list_request(&self) -> ClientRequest {
+		match self {
+			ResolveKind::Tool => ClientRequest::ListToolsRequest(Default::default()),
+			ResolveKind::Prompt => ClientRequest::ListPromptsRequest(Default::default()),
+		}
+	}
+
+	fn contains_name(&self, result: &ServerResult, name: &str) -> bool {
+		match (self, result) {
+			(ResolveKind::Tool, ServerResult::ListToolsResult(r)) => {
+				r.tools.iter().any(|t| t.name == name)
+			},
+			(ResolveKind::Prompt, ServerResult::ListPromptsResult(r)) => {
+				r.prompts.iter().any(|p| p.name == name)
+			},
+			_ => false,
+		}
+	}
+}
+
+// Gateway-generated list requests share upstream sessions with forwarded
+// client requests, so their ids must not collide with client-chosen ids.
+static RESOLVE_ID: AtomicU64 = AtomicU64::new(0);
+
+fn next_resolve_id() -> RequestId {
+	RequestId::String(
+		format!(
+			"agentgateway-resolve-{}",
+			RESOLVE_ID.fetch_add(1, Ordering::Relaxed)
+		)
+		.into(),
+	)
 }
 
 #[derive(Debug, Clone)]
@@ -149,21 +200,12 @@ impl Relay {
 		})
 	}
 
-	pub fn needs_resolution(&self) -> bool {
-		self.upstreams.name_routing.needs_resolution()
-	}
-
-	/// Statically map a name to its target. Only valid when names carry the
-	/// routing information themselves; `Resolve` mode needs `resolve_resource_name`.
-	pub fn parse_resource_name<'a, 'b: 'a>(
-		&'a self,
-		res: &'b str,
-	) -> Result<(&'a str, &'b str), UpstreamError> {
-		match self.upstreams.name_routing.decode_name(res)? {
-			NameDecision::Target { service, name } => Ok((service, name)),
-			NameDecision::NeedsResolution => Err(UpstreamError::InvalidRequest(
-				"internal error: unprefixed name requires resolution".to_string(),
-			)),
+	/// Statically decode a name's target, or `None` when the owning target can
+	/// only be found by resolving against upstream listings (`prefixMode: never`).
+	pub fn static_target<'a>(&'a self, name: &'a str) -> Result<Option<&'a str>, UpstreamError> {
+		match self.upstreams.name_routing.decode_name(name)? {
+			NameDecision::Target { service, .. } => Ok(Some(service)),
+			NameDecision::NeedsResolution => Ok(None),
 		}
 	}
 
@@ -171,7 +213,7 @@ impl Relay {
 	/// name itself carries no routing information (`prefixMode: never`).
 	pub async fn resolve_resource_name<'a, 'b: 'a>(
 		&'a self,
-		kind: resolve::ResolveKind,
+		kind: ResolveKind,
 		res: &'b str,
 		ctx: &IncomingRequestContext,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
@@ -182,6 +224,102 @@ impl Relay {
 				Ok((Cow::Owned(target.to_string()), res))
 			},
 		}
+	}
+
+	/// Find the single target serving the unprefixed `name` by listing every
+	/// target at call time. Deliberately uncached; a cache can sit in front later.
+	async fn resolve_unprefixed(
+		&self,
+		kind: ResolveKind,
+		name: &str,
+		ctx: &IncomingRequestContext,
+	) -> Result<Strng, UpstreamError> {
+		let req = JsonRpcRequest::new(next_resolve_id(), kind.list_request());
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(target, con)| {
+				let req = req.clone();
+				async move {
+					let res = match con.generic_stream(req, ctx).await {
+						Ok(stream) => Self::first_response(stream).await,
+						Err(e) => Err(e),
+					};
+					(target, res)
+				}
+			})
+			.collect();
+
+		let mut owners: Vec<Strng> = Vec::new();
+		let mut skipped: Option<UpstreamError> = None;
+		for (target, res) in futures::future::join_all(futs).await {
+			match res {
+				Ok(Some(result)) => {
+					if kind.contains_name(&result, name) {
+						owners.push(target);
+					}
+				},
+				// The target does not support this list method, so it serves no names of this kind.
+				Ok(None) => {},
+				Err(e) => {
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!(
+							"upstream '{}' failed while resolving {} '{}', skipping (failure_mode=FailOpen): {}",
+							target,
+							kind.as_str(),
+							name,
+							e
+						);
+						skipped.get_or_insert(e);
+					} else {
+						return Err(e);
+					}
+				},
+			}
+		}
+
+		// Match the authorization-denied message so callers cannot probe which
+		// names exist. Collisions get the same treatment: naming the targets
+		// would leak topology, so they are only logged.
+		let denied = || UpstreamError::Authorization {
+			resource_type: kind.as_str().to_string(),
+			resource_name: name.to_string(),
+		};
+		match owners.as_slice() {
+			[one] => Ok(one.clone()),
+			// A skipped target might have served the name; surface the outage
+			// rather than reporting a possibly-existing name as unknown.
+			[] => Err(skipped.unwrap_or_else(denied)),
+			many => {
+				warn!(
+					"{} '{}' is served by multiple targets ({}); names must be unique across targets when prefixMode is 'never'",
+					kind.as_str(),
+					name,
+					many.iter().join(", "),
+				);
+				Err(denied())
+			},
+		}
+	}
+
+	/// Consume a response stream until the first result, error data, or end.
+	/// `Ok(None)` means the target rejected the list method as unsupported.
+	async fn first_response(stream: Messages) -> Result<Option<ServerResult>, UpstreamError> {
+		let mut stream = std::pin::pin!(stream);
+		while let Some(msg) = stream.next().await {
+			match msg {
+				Ok(ServerJsonRpcMessage::Response(resp)) => return Ok(Some(resp.result)),
+				Ok(ServerJsonRpcMessage::Error(err)) => {
+					if err.error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND {
+						return Ok(None);
+					}
+					return Err(UpstreamError::InvalidRequest(err.error.message.to_string()));
+				},
+				Ok(_) => {},
+				Err(e) => return Err(e.into()),
+			}
+		}
+		Err(UpstreamError::Recv)
 	}
 
 	/// Reverse of `NameRouting::encode_uri`, plus validation that the decoded
@@ -360,7 +498,7 @@ impl Relay {
 			// Duplicates are computed pre-authorization to match caller-independent
 			// call-time resolution.
 			let duplicates = routing.duplicate_names(
-				"tool",
+				ResolveKind::Tool.as_str(),
 				per_target
 					.iter()
 					.flat_map(|(target, tools)| tools.iter().map(move |t| (target, t.name.as_ref()))),
@@ -531,7 +669,7 @@ impl Relay {
 				})
 				.collect_vec();
 			let duplicates = routing.duplicate_names(
-				"prompt",
+				ResolveKind::Prompt.as_str(),
 				per_target
 					.iter()
 					.flat_map(|(target, prompts)| prompts.iter().map(move |p| (target, p.name.as_str()))),

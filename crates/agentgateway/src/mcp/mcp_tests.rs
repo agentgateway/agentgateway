@@ -495,14 +495,19 @@ async fn multiplex_never_prefix_routes_unprefixed_names() {
 		.iter()
 		.find(|t| t.name == "show_dashboard")
 		.unwrap();
-	assert_eq!(
-		show
-			.meta
-			.as_ref()
-			.and_then(|m| m.0.get("ui"))
-			.and_then(|ui| ui.get("resourceUri"))
-			.and_then(|v| v.as_str()),
-		Some("ui://a+apps-mock/dashboard.html")
+	let ui_uri = show
+		.meta
+		.as_ref()
+		.and_then(|m| m.0.get("ui"))
+		.and_then(|ui| ui.get("resourceUri"))
+		.and_then(|v| v.as_str())
+		.expect("show_dashboard should carry a ui resourceUri")
+		.to_string();
+	assert!(ui_uri.starts_with("ui://"), "{ui_uri}");
+	assert_ne!(
+		ui_uri,
+		appsmockserver::DASHBOARD_URI,
+		"URI should be target-encoded"
 	);
 
 	// Unprefixed calls route to the one target serving the name.
@@ -540,9 +545,7 @@ async fn multiplex_never_prefix_routes_unprefixed_names() {
 
 	// The rewritten app resource resolves through the mux.
 	let read = client
-		.read_resource(rmcp::model::ReadResourceRequestParams::new(
-			"ui://a+apps-mock/dashboard.html",
-		))
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(ui_uri))
 		.await
 		.unwrap();
 	let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read.contents[0] else {
@@ -573,8 +576,9 @@ async fn multiplex_never_prefix_collisions_are_dropped_and_unroutable() {
 	assert!(!names.contains(&"echo".to_string()), "{names:?}");
 	assert!(names.contains(&"show_dashboard".to_string()), "{names:?}");
 
-	// Calling a colliding name fails rather than guessing a target.
-	let err = client
+	// Calling a colliding name fails rather than guessing a target, and is
+	// indistinguishable from an unknown name so callers cannot probe topology.
+	let collision_err = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
 				serde_json::json!({"hi": "world"})
@@ -585,9 +589,13 @@ async fn multiplex_never_prefix_collisions_are_dropped_and_unroutable() {
 		)
 		.await
 		.unwrap_err();
-	assert!(
-		format!("{err}").contains("multiple targets"),
-		"unexpected error: {err}"
+	let unknown_err = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("no_such_tool"))
+		.await
+		.unwrap_err();
+	assert_eq!(
+		format!("{collision_err}").replace("echo", "no_such_tool"),
+		format!("{unknown_err}"),
 	);
 
 	// Unique names keep working alongside collisions.

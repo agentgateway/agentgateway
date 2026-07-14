@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, OnceLock};
@@ -21,11 +22,11 @@ use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::http::Response;
-use crate::mcp::handler::{Relay, RelayInputs};
+use crate::mcp::handler::{Relay, RelayInputs, ResolveKind};
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, rbac, resolve};
+use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop};
 use crate::{mcp, *};
@@ -105,22 +106,23 @@ impl Session {
 			}
 			let init_request = rmcp::model::InitializeRequest::new(client_info);
 			// first, determine how widely to send the initialize
-			match request_type {
-				// Single-target methods only hit one backend, so initialize/initialized should be scoped
-				// to that backend rather than fanning out. With unprefixed names the target is only
-				// known after listing every target, which itself requires initialize, so fan out instead.
-				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_))
-					if !self.relay.needs_resolution() =>
-				{
-					let name = match request_type {
-						Some(ClientRequest::CallToolRequest(ctr)) => ctr.params.name.to_string(),
-						Some(ClientRequest::GetPromptRequest(gpr)) => gpr.params.name.clone(),
-						_ => unreachable!("match arm guarantees single-target request type"),
-					};
-					let (service_name, _) = match self.relay.parse_resource_name(&name) {
-						Ok(target) => target,
-						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
-					};
+			// Single-target methods get initialize/initialized scoped to their one backend.
+			// Unprefixed names (Resolve mode) can only be mapped by listing every target,
+			// which itself requires initialize, so they fan out with everything else.
+			let single_target_name = match request_type {
+				Some(ClientRequest::CallToolRequest(ctr)) => Some(ctr.params.name.as_ref()),
+				Some(ClientRequest::GetPromptRequest(gpr)) => Some(gpr.params.name.as_str()),
+				_ => None,
+			};
+			let scoped_target = match single_target_name {
+				Some(name) => match self.relay.static_target(name) {
+					Ok(target) => target,
+					Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
+				},
+				None => None,
+			};
+			match scoped_target {
+				Some(service_name) => {
 					let res = self
 						.send_init_single(parts.clone(), init_request, service_name)
 						.await;
@@ -142,7 +144,7 @@ impl Session {
 					)
 					.await?;
 				},
-				_ => {
+				None => {
 					// We should fan out the initialize request to all MCP servers
 					let _ = self
 						.send(
@@ -178,19 +180,18 @@ impl Session {
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
 		ctx: &IncomingRequestContext,
-	) -> Result<(String, &'b str), UpstreamError> {
+	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		let (service_name, prompt) = self
 			.relay
-			.resolve_resource_name(resolve::ResolveKind::Prompt, name, ctx)
+			.resolve_resource_name(ResolveKind::Prompt, name, ctx)
 			.await?;
-		let service_name = service_name.to_string();
 		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
-			l.set_prompt(service_name.clone(), prompt.to_string());
+			l.set_prompt(service_name.to_string(), prompt.to_string());
 		});
 		if !self.relay.policies.validate(
 			&rbac::ResourceType::Prompt(rbac::ResourceId::new(
-				service_name.clone(),
+				service_name.to_string(),
 				prompt.to_string(),
 			)),
 			cel,
@@ -529,16 +530,15 @@ impl Session {
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
 						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
-							resolve::ResolveKind::Tool,
+							ResolveKind::Tool,
 							&name,
 							&ctx,
 						))
 						.await?;
-						let service_name = service_name.to_string();
 						span.rename_span(format!("{method} {service_name}"));
 						let call_arguments = ctr.params.arguments.clone();
 						log.non_atomic_mutate(|l| {
-							l.set_tool(service_name.clone(), tool.to_string());
+							l.set_tool(service_name.to_string(), tool.to_string());
 							l.capture_call_arguments(call_arguments);
 						});
 						let tn = tool.to_string();
@@ -549,7 +549,7 @@ impl Session {
 							&mut ctr.params,
 							&mut ctx,
 							rbac::ResourceType::Tool(rbac::ResourceId::new(
-								service_name.clone(),
+								service_name.to_string(),
 								tool.to_string(),
 							)),
 							"tool",
@@ -566,15 +566,14 @@ impl Session {
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
 						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
-							resolve::ResolveKind::Prompt,
+							ResolveKind::Prompt,
 							&name,
 							&ctx,
 						))
 						.await?;
-						let service_name = service_name.to_string();
 						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
-							l.set_prompt(service_name.clone(), prompt.to_string());
+							l.set_prompt(service_name.to_string(), prompt.to_string());
 						});
 						gpr.params.name = prompt.to_string();
 						Box::pin(self.authorize_with_ctx(
@@ -583,7 +582,7 @@ impl Session {
 							&mut gpr.params,
 							&mut ctx,
 							rbac::ResourceType::Prompt(rbac::ResourceId::new(
-								service_name.clone(),
+								service_name.to_string(),
 								prompt.to_string(),
 							)),
 							"prompt",

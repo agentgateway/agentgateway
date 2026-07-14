@@ -2,9 +2,7 @@
 mcp:
   port: 3000
   # Apps call tools by names hardcoded in their HTML, which never carry the
-  # gateway's target prefix. `never` exposes names unprefixed and routes calls
-  # by looking up which target serves the name; names must be unique across
-  # targets (colliding names are dropped from listings and fail on call).
+  # gateway's target prefix; `never` exposes unprefixed names and routes by lookup.
   prefixMode: never
   policies:
     cors:
