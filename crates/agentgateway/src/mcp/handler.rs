@@ -15,7 +15,7 @@ use rmcp::model::{
 	CacheScope, ClientNotification, ClientRequest, DiscoverResult, ExtensionCapabilities,
 	Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
 	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Meta, ProtocolVersion,
-	RequestId, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification,
+	RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification,
 	ServerResult, SubscriptionsListenResult,
 };
 use tracing::{debug, warn};
@@ -1280,62 +1280,91 @@ fn normalize_outbound_for_protocol(
 	mut msg: ServerJsonRpcMessage,
 	downstream_modern: bool,
 ) -> ServerJsonRpcMessage {
-	if downstream_modern {
-		return msg;
-	}
-
 	let ServerJsonRpcMessage::Response(resp) = &mut msg else {
 		return msg;
 	};
 
 	match &mut resp.result {
 		ServerResult::DiscoverResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
-		},
-		ServerResult::InitializeResult(r) => r.result_type = None,
-		ServerResult::CompleteResult(r) => r.result_type = None,
-		ServerResult::GetPromptResult(r) => r.result_type = None,
-		ServerResult::ListPromptsResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
-		},
-		ServerResult::ListResourcesResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
-		},
-		ServerResult::ListResourceTemplatesResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
-		},
-		ServerResult::ReadResourceResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
 		ServerResult::ListToolsResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
-		ServerResult::ElicitResult(r) => r.result_type = None,
-		ServerResult::CreateTaskResult(r) => r.result_type = None,
-		ServerResult::ListTasksResult(r) => r.result_type = None,
-		ServerResult::GetTaskResult(r) => r.result_type = None,
-		ServerResult::CancelTaskResult(r) => r.result_type = None,
-		ServerResult::SubscriptionsListenResult(r) => r.result_type = None,
-		ServerResult::CallToolResult(r) => r.result_type = None,
-		ServerResult::GetTaskPayloadResult(r) => strip_protocol_result_fields(&mut r.0),
-		ServerResult::EmptyResult(r) => r.result_type = None,
-		ServerResult::CustomResult(r) => strip_protocol_result_fields(&mut r.0),
+		ServerResult::ListPromptsResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::ListResourcesResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::ListResourceTemplatesResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::ReadResourceResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::InitializeResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::CompleteResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::GetPromptResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::ElicitResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::CreateTaskResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::ListTasksResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::GetTaskResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::CancelTaskResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::SubscriptionsListenResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::CallToolResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::EmptyResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::GetTaskPayloadResult(r) => {
+			if !downstream_modern {
+				strip_protocol_result_fields(&mut r.0)
+			}
+		},
+		ServerResult::CustomResult(r) => {
+			if !downstream_modern {
+				strip_protocol_result_fields(&mut r.0)
+			}
+		},
 		ServerResult::InputRequiredResult(_) => {},
 	}
 
 	msg
+}
+
+fn normalize_result_type(result_type: &mut Option<ResultType>, downstream_modern: bool) {
+	if downstream_modern {
+		result_type.get_or_insert(ResultType::COMPLETE);
+	} else {
+		*result_type = None;
+	}
+}
+
+fn normalize_cache_fields(
+	ttl_ms: &mut Option<u64>,
+	cache_scope: &mut Option<CacheScope>,
+	downstream_modern: bool,
+) {
+	if !downstream_modern {
+		*ttl_ms = None;
+		*cache_scope = None;
+	}
 }
 
 fn strip_protocol_result_fields(value: &mut serde_json::Value) {

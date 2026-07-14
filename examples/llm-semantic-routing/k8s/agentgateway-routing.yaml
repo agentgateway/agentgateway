@@ -1,0 +1,67 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: openai-router-selected
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/name: llm-semantic-routing
+spec:
+  ai:
+    provider:
+      # vSR selects the model before agentgateway forwards the request.
+      openai: {}
+  policies:
+    auth:
+      secretRef:
+        name: openai-secret
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: openai-semantic-routing
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/name: llm-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    namespace: agentgateway-system
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: openai-router-selected
+      namespace: agentgateway-system
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: semantic-router-extproc
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/name: llm-semantic-routing
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: openai-semantic-routing
+  traffic:
+    extProc:
+      backendRef:
+        name: semantic-router
+        namespace: agentgateway-system
+        port: 50051
+      processingOptions:
+        requestHeaderMode: Send
+        requestBodyMode: FullDuplexStreamed
+        responseHeaderMode: Send
+        responseBodyMode: Buffered
+        requestTrailerMode: Send
+        responseTrailerMode: Send
+        allowModeOverride: true

@@ -148,9 +148,17 @@ func TestXDSUpdate(t *testing.T) {
 
 func TestXDSDisconnect(t *testing.T) {
 	t.Run("addresses", func(t *testing.T) {
-		s := NewFakeDiscoveryServer(t, testWorkload1)
+		stable := syncer.Address{
+			Workload: new(syncer.PrecomputeWorkload(model.WorkloadInfo{Workload: &workloadapi.Workload{Uid: "stable"}})),
+		}
+		s := NewFakeDiscoveryServer(t, testWorkload1, stable)
 		ads := s.ConnectDeltaADS().WithType(krtxds.TargetTypeAddressUrl)
-		ads.RequestResponseAck(nil)
+		initial := ads.RequestResponseAck(nil)
+		initialVersions := make(map[string]string, len(initial.Resources))
+		for _, resource := range initial.Resources {
+			assert.Equal(t, resource.Version != "", true)
+			initialVersions[resource.Name] = resource.Version
+		}
 		ads.Cleanup()
 
 		wl2 := syncer.Address{
@@ -167,14 +175,14 @@ func TestXDSDisconnect(t *testing.T) {
 		ads.Request(&discovery.DeltaDiscoveryRequest{
 			ResourceNamesSubscribe:   []string{"*"},
 			ResourceNamesUnsubscribe: []string{"*"},
-			InitialResourceVersions: map[string]string{
-				"wl1": "",
-			},
+			InitialResourceVersions:  initialVersions,
 		})
 		resp := ads.ExpectResponse()
-		// We should see wl1 deleted, wl2 added
+		// We should see wl1 deleted and wl2 added, while stable is not resent.
 		assert.Equal(t, len(resp.Resources), 1)
+		assert.Equal(t, resp.Resources[0].Name, "wl2")
 		assert.Equal(t, len(resp.RemovedResources), 1)
+		assert.Equal(t, resp.RemovedResources[0], "wl1")
 	})
 	t.Run("resource", func(t *testing.T) {
 		bind1 := agwir.AgwResource{

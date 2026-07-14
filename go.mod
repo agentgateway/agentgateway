@@ -8,6 +8,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/agentgateway/agentgateway/api v0.0.0
 	github.com/avast/retry-go/v4 v4.7.0
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2
 	github.com/envoyproxy/go-control-plane/envoy v1.37.1-0.20260627225610-70ff85c381ff
 	github.com/gdamore/tcell/v2 v2.13.10
@@ -38,7 +39,7 @@ require (
 	go.uber.org/zap v1.28.0
 	golang.design/x/clipboard v0.8.0
 	golang.org/x/net v0.56.0
-	golang.org/x/sync v0.21.0
+	golang.org/x/sync v0.22.0
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.47.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260630182238-925bb5da69e7
@@ -81,7 +82,6 @@ require (
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cbeuw/connutil v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
-	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chai2010/gettext-go v1.0.3 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
@@ -233,7 +233,7 @@ require (
 	k8s.io/component-base v0.36.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20260501160325-927ab1f70cd6 // indirect
 	k8s.io/kubectl v0.36.1 // indirect
-	oras.land/oras-go/v2 v2.6.1 // indirect
+	oras.land/oras-go/v2 v2.6.2 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.34.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
