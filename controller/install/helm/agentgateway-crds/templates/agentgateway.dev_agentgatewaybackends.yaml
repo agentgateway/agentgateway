@@ -5090,6 +5090,11 @@ spec:
                                             description: Token lifetime used for exp.
                                               Defaults to 300s.
                                             type: string
+                                            x-kubernetes-validations:
+                                            - message: invalid duration value
+                                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                            - message: ttl must be at least 1 second
+                                              rule: duration(self) >= duration('1s')
                                         required:
                                         - claims
                                         - signingKeyRef
@@ -8171,6 +8176,11 @@ spec:
                                           description: Token lifetime used for exp.
                                             Defaults to 300s.
                                           type: string
+                                          x-kubernetes-validations:
+                                          - message: invalid duration value
+                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                          - message: ttl must be at least 1 second
+                                            rule: duration(self) >= duration('1s')
                                       required:
                                       - claims
                                       - signingKeyRef
@@ -13225,6 +13235,11 @@ spec:
                             description: Token lifetime used for exp. Defaults to
                               300s.
                             type: string
+                            x-kubernetes-validations:
+                            - message: invalid duration value
+                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                            - message: ttl must be at least 1 second
+                              rule: duration(self) >= duration('1s')
                         required:
                         - claims
                         - signingKeyRef
