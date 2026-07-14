@@ -151,9 +151,12 @@ codex --profile agentgateway
 
 The gateway authenticates to OpenAI with its configured provider credential and
 records the selected model and cost as it does for other OpenAI-compatible
-clients. Users can still select a concrete model unless the organization
-separately enforces or rewrites direct model requests at the gateway. Treat
-`auto` as the supported client path when testing this policy.
+clients. Agentgateway can [rewrite client-facing model names with model
+aliases](https://agentgateway.dev/docs/kubernetes/latest/llm/alias/). An
+organization can also [validate and reject unsupported request-body model
+values](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/),
+such as any value other than `auto`. Treat `auto` as the supported client path
+when testing this policy.
 
 ## Cleanup
 
