@@ -11,8 +11,7 @@ use serde_json::Value;
 use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, Response};
 use crate::types::agent::{
-	Authorization, BackendReference, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch,
-	RouteBackendReference,
+	Authorization, BackendReference, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
 };
 use crate::{apply, cel, llm, schema_enum};
 
@@ -368,27 +367,8 @@ fn header_matches(matches: &[Vec<HeaderMatch>], req: &Request) -> bool {
 
 fn headers_match(headers: &[HeaderMatch], req: &Request) -> bool {
 	for HeaderMatch { name, value } in headers {
-		let Some(have) = http::get_pseudo_or_header_value(name, req) else {
+		if !http::request_header_matches(name, value, req) {
 			return false;
-		};
-		match value {
-			HeaderValueMatch::Exact(want) => {
-				if have.as_ref() != *want {
-					return false;
-				}
-			},
-			HeaderValueMatch::Regex(want) => {
-				let Some(have_str) = have.to_str().ok() else {
-					return false;
-				};
-				let Some(m) = want.find(have_str) else {
-					return false;
-				};
-				if !(m.start() == 0 && m.end() == have_str.len()) {
-					return false;
-				}
-			},
-			HeaderValueMatch::Invalid => return false,
 		}
 	}
 	true
