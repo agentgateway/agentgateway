@@ -1407,3 +1407,56 @@ spec:
         header:
           name: x-signed-jwt
 ---
+_err: 'alg: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign-unsupported-alg
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret
+        alg: HS256
+        claims:
+          iss: acct.user
+---
+_err: 'spec.backend.auth.jwtSign.claims: Invalid value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign-empty-claims
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret
+        claims: {}
+---
+_err: 'spec.backend.auth.jwtSign.signingKeyRef.name: Required value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: jwt-sign-missing-signing-key-ref-name
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef: {}
+        claims:
+          iss: acct.user
+---

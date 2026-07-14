@@ -1139,6 +1139,36 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
 -----END PRIVATE KEY-----
 ";
 
+const TEST_JWT_SIGN_RSA_KEY: &str = "-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDcmuLma5j1MBQs
+yXsGn15tsQEjEQusgFfVahUxPIFdyI0X60Hfv89rYVClkxOFI92GA63XDu5Ez6jO
+wyPQm1CBzhgZ7eQG42hCP48iqUR23E3Cfamszxol7aOg8bWTMLfmElfPB+vwEXEZ
+951s6eVQet7e+4I1Nu6+kAayrxz8YFLkF0tGyj74566q9w9s6HuA6tvJ6e8xhT3D
+ARdj1VT91WdHw5lzS/0vXDuUv3wXUp1nAyUvfsBRqGTxqXDvhmm6FBiUi6kmZs6u
+5xtH+klGTbNzT2UedemtBgHURZ8R/mDxasclzzZEUoZ29upnvoO0s8cQ9GraHPqK
+FFA2sppBAgMBAAECggEAAh+PY9Ts+Y3qUUuphoDi3gDZSjvlHCaGdeVb5avTsc4r
+AbwV59IxBBtJRTU0F7zOil5TYlusZlsWcJJFMFIo3013SttY1apDWfkiMsTs3c0h
+Nlgq2ZD7GyqpR6yg5Q0v1XAHcmSk2CxGTa/19ucNygFrPwueG06Tc+AHcPmFkJ4l
+BO/bGAGn/dXo4ZwV7jXlBrvG7nQYYmwsqexvrzoLV3PK49pA7JilsLKRYg4c15H/
+EbB1RF1KT1MDSRgXqH47ekmlmzg8kvGUOSvrynG4lxeoNOPNQXsz/u1NXOoetWmg
+ufy7gsJqgjNVbDUo/zh2UlL7Nc48z8ghkNW4KbuIoQKBgQD38aTLFZuXMy40wfcf
+6UMpemtwcO8JVPxMHA8+AwCv9J10LIkft3VVOYUB4pkSoG/jxuyglORa4Km9xlvx
+enIm5Ylun7DNB4G3q+BFsiwxECh1IgKqHbCVAH1jwz00xY07r6TMELLDdxBogMQA
+nJkaF7WGHDP/lGaDlRpDabCz4QKBgQDjxdebekxFLjTd576xNfjNneuF4zxhhenk
+tsun3/7wZdyihm12NJlyg9uuromH5FogcdK76/byeiKDXE6zqaFA7rGKkfslGYtK
+yEXLM7ZdLfdc6h9oKLMtr3GiBjvyGrDVDj9hWKNYywOXlaZoU41kunV+vmo0jSb1
+ZEqFwyyyYQKBgAFV4t5ZKnJhCzGrjco1NnBlwWhko1T4iTdbu1VJLNrFxYdXqhFq
+qo4f9jBxaQOpq5CdhK7EvooixadJBzvAvhapi9j1sT0ZekBkA5w8fnJxNNaUrVD/
+QfE7hHFiHtVG7yDQLGIRAPV+ka8Oan/aWBTE5exoAHuy7+5rgi20xwfhAoGBAN8b
+1SU7t2fwaeKPdS/agTrPnHuKaYPRi5j4ISbwd6V88ZDVgnVN8pzEYjSKTLcqy8mK
+FPT0nvFHB3WKvqCn4Qdch9YHRm1BxzpaUFtJ7TD6rJl7z4XUkCaI+xLNbnyo/lvD
+1/t/uoloWr1p3hXE+fQX3K1o0VlmhinKsmCyHJ8hAoGBANe5tdFqvZl5hxe2G4uW
+BGd4xBvRmuztIN0KtWOi959fWJGkZi2F9tu9asaYDh47jSz7553+p1lfYjur2Zrl
+BqOQbiy+bEAngKRBgRq14YeIynwV30uCXnItBN8RTevsrrQy5bcyQ6/Xqnzr3P9v
+ehBAQUBIgwI9zUaXIhEw8jNW
+-----END PRIVATE KEY-----
+";
+
 fn jwt_sign_auth(
 	kid: Option<String>,
 	ttl: Option<std::time::Duration>,
@@ -1323,6 +1353,21 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 		"reserved claims must be rejected"
 	);
 
+	let reserved_iat = JwtSignAuth::try_new(
+		TEST_JWT_SIGN_EC_KEY,
+		oauth::SigningAlg::Es256,
+		None,
+		[("iat".to_string(), "123".to_string())]
+			.into_iter()
+			.collect(),
+		None,
+		None,
+	);
+	assert!(
+		reserved_iat.is_err_and(|e| e.contains("iat")),
+		"reserved claims must be rejected"
+	);
+
 	let empty = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
 		oauth::SigningAlg::Es256,
@@ -1436,4 +1481,91 @@ fn test_jwt_sign_serialize_rounds_up_sub_second_ttl() {
 	let auth = jwt_sign_auth(None, Some(std::time::Duration::from_millis(1500)), None);
 	let value = serde_json::to_value(&auth).expect("jwtSign auth should serialize");
 	assert_eq!(value["jwtSign"]["ttl"], "2s");
+}
+
+#[tokio::test]
+async fn test_backend_auth_jwt_sign_rsa() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let auth = BackendAuth::JwtSign(Box::new(
+		JwtSignAuth::try_new(
+			TEST_JWT_SIGN_RSA_KEY,
+			oauth::SigningAlg::Rs256,
+			None,
+			[("iss".to_string(), "acct.user".to_string())]
+				.into_iter()
+				.collect(),
+			None,
+			None,
+		)
+		.expect("rsa jwt sign auth should build"),
+	));
+	apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let token = req
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.expect("authorization header must be set")
+		.to_str()
+		.unwrap()
+		.strip_prefix("Bearer ")
+		.expect("default location must use a Bearer prefix");
+	let (header, payload) = decode_jwt_parts(token);
+	assert_eq!(header["alg"], "RS256");
+	assert_eq!(payload["iss"], "acct.user");
+}
+
+#[tokio::test]
+async fn test_backend_auth_jwt_sign_rejects_ttl_that_overflows_exp() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let auth = jwt_sign_auth(None, Some(std::time::Duration::from_secs(u64::MAX)), None);
+	let err = apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect_err("a ttl that overflows the exp timestamp must be rejected");
+	assert!(
+		err.to_string().contains("overflows"),
+		"unexpected error: {err}"
+	);
+}
+
+#[test]
+fn test_jwt_sign_rejects_unknown_field() {
+	let result: Result<BackendAuth, _> = serde_json::from_value(serde_json::json!({
+		"jwtSign": {
+			"signingKey": TEST_JWT_SIGN_EC_KEY,
+			"claims": {"iss": "acct.user"},
+			"notAField": "oops"
+		}
+	}));
+	assert!(
+		result.is_err(),
+		"unknown fields in jwtSign config must be rejected"
+	);
 }
