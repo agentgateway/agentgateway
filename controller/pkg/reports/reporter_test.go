@@ -102,6 +102,32 @@ func TestBuildGatewayStatus(t *testing.T) {
 		assert.Equal(t, string(gwv1.GatewayReasonInvalid), programmed.Reason)
 		assert.Equal(t, "bad params", programmed.Message)
 	})
+
+	t.Run("explicit programmed condition wins over accepted false default", func(t *testing.T) {
+		gw := gw()
+		rm := reports.NewReportMap()
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionAccepted,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.GatewayReasonInvalidParameters,
+			Message: "bad params",
+		})
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionProgrammed,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.GatewayReasonAddressNotUsable,
+			Message: "address is not usable",
+		})
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+
+		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
+		assert.Equal(t, true, programmed != nil)
+		assert.Equal(t, metav1.ConditionFalse, programmed.Status)
+		assert.Equal(t, string(gwv1.GatewayReasonAddressNotUsable), programmed.Reason)
+		assert.Equal(t, "address is not usable", programmed.Message)
+	})
+
 	t.Run("set negative listener conditions from report and not add extra conditions", func(t *testing.T) {
 		gw := gw()
 		rm := reports.NewReportMap()
