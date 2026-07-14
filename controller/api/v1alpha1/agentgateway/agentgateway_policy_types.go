@@ -1885,6 +1885,8 @@ type JwtSignAuth struct {
 	Claims map[string]string `json:"claims"`
 
 	// Token lifetime used for exp. Defaults to 300s.
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="ttl must be at least 1 second"
 	// +optional
 	TTL *metav1.Duration `json:"ttl,omitempty"`
 

@@ -417,8 +417,8 @@ message JwtSign {
   SigningAlg alg = 2;
   // Optional JWS key ID header.
   optional string kid = 3;
-  // Static claims added to every token (e.g. iss, sub, aud). iat and exp are
-  // always set by the signer and cannot be overridden here.
+  // Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
+  // nbf are always set by the signer and cannot be overridden here.
   map<string, string> claims = 4;
   // Token lifetime in seconds used for exp. Defaults to 300.
   optional uint64 ttl = 5;

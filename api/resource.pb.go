@@ -4850,8 +4850,8 @@ type JwtSign struct {
 	Alg JwtSign_SigningAlg `protobuf:"varint,2,opt,name=alg,proto3,enum=agentgateway.dev.resource.JwtSign_SigningAlg" json:"alg,omitempty"`
 	// Optional JWS key ID header.
 	Kid *string `protobuf:"bytes,3,opt,name=kid,proto3,oneof" json:"kid,omitempty"`
-	// Static claims added to every token (e.g. iss, sub, aud). iat and exp are
-	// always set by the signer and cannot be overridden here.
+	// Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
+	// nbf are always set by the signer and cannot be overridden here.
 	Claims map[string]string `protobuf:"bytes,4,rep,name=claims,proto3" json:"claims,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Token lifetime in seconds used for exp. Defaults to 300.
 	Ttl *uint64 `protobuf:"varint,5,opt,name=ttl,proto3,oneof" json:"ttl,omitempty"`

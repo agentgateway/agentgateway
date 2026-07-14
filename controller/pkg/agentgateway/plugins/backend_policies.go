@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -1707,7 +1708,8 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 	}
 
 	if auth.TTL != nil {
-		ttl := uint64(auth.TTL.Duration.Seconds()) //nolint:gosec // G115: TTL is validated by kubebuilder to be a positive duration
+		// kubebuilder enforces ttl >= 1s, so this is always positive and non-zero.
+		ttl := uint64(auth.TTL.Duration / time.Second) //nolint:gosec // G115: kubebuilder enforces ttl >= 1s
 		jwtSign.Ttl = &ttl
 	}
 
