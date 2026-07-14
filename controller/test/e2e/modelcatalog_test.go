@@ -123,9 +123,6 @@ func TestModelCatalogCost(tt *testing.T) {
 			if err != nil {
 				return err
 			}
-			// The pre-patch sentinel-rate cost never leaves the log, so we can't compare
-			// against the max; instead look for any request logged below the ceiling,
-			// which is only possible once the reloaded (low-rate) catalog is in effect.
 			if !hasLoggedCostBelow(logs, minSentinelCost) {
 				return fmt.Errorf("no agw.ai.usage.cost.total below ceiling %v in gateway logs (ConfigMap update not yet reflected by running pod)", minSentinelCost)
 			}
