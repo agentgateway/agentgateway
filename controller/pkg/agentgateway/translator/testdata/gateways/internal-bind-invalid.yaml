@@ -51,9 +51,10 @@ status:
       status: "False"
       type: Accepted
     - lastTransitionTime: fake
-      message: Successfully programmed Gateway
-      reason: Programmed
-      status: "True"
+      message: 'invalid agentgateway.dev/internal-ports annotation: port 9999 is not
+        defined by any listener on this resource'
+      reason: Invalid
+      status: "False"
       type: Programmed
     listeners:
     - attachedRoutes: 0

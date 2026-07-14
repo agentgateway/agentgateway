@@ -104,9 +104,11 @@ status:
       status: "False"
       type: Accepted
     - lastTransitionTime: fake
-      message: Successfully programmed Gateway
-      reason: Programmed
-      status: "True"
+      message: 'Some listeners are not accepted: https: GatewayTLSConfig validation
+        caCertificateRefs cannot be configured with DYNAMIC_CA TLS certificate source;
+        https: Bad TLS configuration'
+      reason: Invalid
+      status: "False"
       type: Programmed
     listeners:
     - attachedRoutes: 0
