@@ -1,0 +1,72 @@
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "inference-perf.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Create a default fully qualified app name.
+We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
+If release name contains chart name it will be used as a full name.
+*/}}
+{{- define "inference-perf.fullname" -}}
+{{- if .Values.fullnameOverride }}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- $name := default .Chart.Name .Values.nameOverride }}
+{{- if contains $name .Release.Name }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create chart name and version as used by the chart label.
+*/}}
+{{- define "inference-perf.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Common labels
+*/}}
+{{- define "inference-perf.labels" -}}
+helm.sh/chart: {{ include "inference-perf.chart" . }}
+{{ include "inference-perf.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "inference-perf.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "inference-perf.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Common Secret Name for HuggingFace credentials
+*/}}
+{{- define "inference-perf.hfSecret" -}}
+{{ include "inference-perf.fullname" . }}-hf-secret
+{{- end -}}
+
+{{/*
+Common Secret Key for HuggingFace credentials
+*/}}
+{{- define "inference-perf.hfKey" -}}
+{{ include "inference-perf.fullname" . }}-hf-key
+{{- end -}}
+
+{{/*
+Mount path for config map
+*/}}
+{{- define "inference-perf.configMount" -}}
+/cfg
+{{- end -}}
