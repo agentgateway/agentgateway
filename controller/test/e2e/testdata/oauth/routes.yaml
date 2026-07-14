@@ -1,6 +1,18 @@
 apiVersion: v1
 kind: Service
 metadata:
+  name: cross-app-access-backend
+  namespace: agentgateway-base
+spec:
+  ports:
+  - name: http
+    port: 80
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: oauth-token-exchange-backend
   namespace: agentgateway-base
 spec:
@@ -21,6 +33,21 @@ spec:
     port: 80
   selector:
     app.kubernetes.io/name: testbox
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: cross-app-access
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "cross-app-access.com"
+  rules:
+  - backendRefs:
+    - name: cross-app-access-backend
+      port: 80
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -64,6 +91,48 @@ spec:
   static:
     host: dummy-idp.default
     port: 8443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: cross-app-access
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: cross-app-access-backend
+  backend:
+    auth:
+      crossAppAccess:
+        identityProvider:
+          backendRef:
+            group: agentgateway.dev
+            kind: AgentgatewayBackend
+            name: oauth-dummy-idp
+            port: 8443
+          path: /token-exchange
+          clientAuth:
+            clientId: cross-app-idp-client
+            method: ClientSecretPost
+        resourceAuthorizationServer:
+          backendRef:
+            group: agentgateway.dev
+            kind: AgentgatewayBackend
+            name: oauth-dummy-idp
+            port: 8443
+          path: /token-exchange
+          clientAuth:
+            clientId: cross-app-resource-client
+            method: ClientSecretPost
+        audience: api://cross-app-resource
+        resources:
+        - https://cross-app.example.com
+        scopes:
+        - cross-app.read
+        cache:
+          inMemory:
+            maxEntries: 0
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

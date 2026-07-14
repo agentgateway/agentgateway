@@ -344,6 +344,7 @@ message BackendAuthPolicy {
     Aws aws = 4;
     Azure azure = 5;
     OAuthTokenExchange oauth_token_exchange = 6;
+    CrossAppAccessAuth cross_app_access = 7;
   }
 }
 
@@ -1901,4 +1902,29 @@ message OAuthTokenExchange {
   }
   // Response cache configuration. When unset uses InMemory cache with defaults
   TokenCache cache = 14;
+}
+
+// Cross App Access / ID-JAG backend authentication.
+message CrossAppAccessAuth {
+  message Endpoint {
+    // Authorization server token endpoint.
+    BackendReference token_endpoint = 1;
+    // Token endpoint path on the backend that must start with "/" (defaults to "/")
+    optional string token_endpoint_path = 2;
+    // Client authentication used when calling this token endpoint.
+    OAuthClientAuth client_auth = 3;
+  }
+
+  // User identity provider authorization server, used for the RFC 8693 ID-JAG exchange.
+  Endpoint identity_provider = 1;
+  // Resource authorization server, used for the RFC 7523 jwt-bearer exchange.
+  Endpoint resource_authorization_server = 2;
+  // Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.
+  string audience = 3;
+  // resource parameters naming the protected resource APIs.
+  repeated string resources = 4;
+  // scope values for the requested token.
+  repeated string scopes = 5;
+  // Response cache configuration. When unset uses InMemory cache with defaults.
+  OAuthTokenExchange.TokenCache cache = 6;
 }

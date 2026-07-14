@@ -1344,7 +1344,7 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
 // +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
@@ -1388,11 +1388,62 @@ type BackendAuth struct {
 	// +optional
 	OAuthTokenExchange *OAuthTokenExchange `json:"oauthTokenExchange,omitempty"`
 
+	// Cross App Access (Identity Assertion / ID-JAG) authentication.
+	// +optional
+	CrossAppAccess *CrossAppAccessAuth `json:"crossAppAccess,omitempty"`
+
 	// Where backend credentials are inserted. Defaults to the `Authorization`
 	// header with the `Bearer ` prefix. Applies to `key`, `secretRef`, and
 	// `passthrough`.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+// Cross App Access settings for backend authentication.
+type CrossAppAccessAuth struct {
+	// User identity provider authorization server, used for the RFC 8693 ID-JAG exchange.
+	// +required
+	IdentityProvider CrossAppAccessEndpoint `json:"identityProvider"`
+
+	// Resource authorization server, used for the RFC 7523 jwt-bearer exchange.
+	// +required
+	ResourceAuthorizationServer CrossAppAccessEndpoint `json:"resourceAuthorizationServer"`
+
+	// Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.
+	// +kubebuilder:validation:MinLength=1
+	// +required
+	Audience string `json:"audience"`
+
+	// Resources sent to the token endpoint.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Resources []string `json:"resources,omitempty"`
+
+	// Scopes sent to the token endpoint.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Scopes []string `json:"scopes,omitempty"`
+
+	// Response cache configuration.
+	// +optional
+	Cache *OAuthTokenCache `json:"cache,omitempty"`
+}
+
+type CrossAppAccessEndpoint struct {
+	// Token endpoint backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Token endpoint path; defaults to "/". Must start with "/".
+	// +kubebuilder:validation:Pattern=`^/`
+	// +optional
+	Path *string `json:"path,omitempty"`
+
+	// Client authentication for the token endpoint.
+	// +required
+	ClientAuth OAuthClientAuth `json:"clientAuth"`
 }
 
 // OAuth token exchange settings for backend authentication.

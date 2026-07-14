@@ -1154,6 +1154,9 @@ fn backend_auth_from_proto(
 				diagnostics,
 			)?))
 		},
+		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(s)) => {
+			BackendAuth::CrossAppAccess(Box::new(auth::oauth::CrossAppAccessAuth::from_proto(s)?))
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
