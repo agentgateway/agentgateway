@@ -1,0 +1,54 @@
+# prefill-heavy: long input, short output - stresses TTFT
+# base_url is overridden at runtime by setup-benchmarks.sh
+
+job:
+  image:
+    repository: quay.io/inference-perf/inference-perf
+    tag: "latest"
+  resources: {}
+
+logLevel: INFO
+
+config:
+  load:
+    type: poisson
+    num_workers: 2
+    worker_max_concurrency: 50
+    stages:
+      - rate: 1
+        duration: 30
+      - rate: 3
+        duration: 30
+      - rate: 5
+        duration: 30
+  api:
+    type: completion
+    streaming: true
+  server:
+    type: vllm
+    model_name: mock-model
+    base_url: http://standalone-router-epp:8081
+    ignore_eos: true
+  tokenizer:
+    pretrained_model_name_or_path: Qwen/Qwen3-32B
+  data:
+    type: shared_prefix
+    shared_prefix:
+      num_groups: 2
+      num_prompts_per_group: 50
+      system_prompt_len: 1000
+      question_len: 2000
+      output_len: 50
+      enable_multi_turn_chat: true
+  storage:
+    local_storage:
+      path: "/reports"
+  metrics:
+    type: prometheus
+    prometheus:
+      url: "http://localhost:9090"
+  report:
+    request_lifecycle:
+      summary: true
+      per_stage: true
+      per_request: true
