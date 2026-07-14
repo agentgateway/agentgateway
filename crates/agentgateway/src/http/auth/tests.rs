@@ -1373,6 +1373,45 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 	assert!(bad_key.is_err(), "invalid PEM must be rejected");
 }
 
+#[tokio::test]
+async fn test_backend_auth_jwt_sign_rounds_up_sub_second_ttl() {
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let inputs = t.inputs();
+
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs,
+	};
+
+	let auth = jwt_sign_auth(None, Some(std::time::Duration::from_millis(1500)), None);
+	apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect("apply backend auth");
+
+	let token = req
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.expect("authorization header must be set")
+		.to_str()
+		.unwrap()
+		.strip_prefix("Bearer ")
+		.expect("default location must use a Bearer prefix");
+	let (_, payload) = decode_jwt_parts(token);
+	let iat = payload["iat"].as_u64().expect("iat must be set");
+	let exp = payload["exp"].as_u64().expect("exp must be set");
+	assert_eq!(
+		exp - iat,
+		2,
+		"a 1500ms ttl must round up to 2s, not truncate to 1s"
+	);
+}
+
 #[test]
 fn test_jwt_sign_deserializes() {
 	let kind: BackendAuthKind = serde_json::from_value(serde_json::json!({

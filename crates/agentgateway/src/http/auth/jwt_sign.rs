@@ -169,8 +169,11 @@ impl JwtSignAuth {
 		for (key, value) in &self.claims {
 			claims.insert(key.clone(), serde_json::Value::String(value.clone()));
 		}
+		// Round up to the next whole second so a sub-second component (e.g.
+		// 1500ms) doesn't silently shorten the configured token lifetime.
+		let ttl_secs = ttl.as_secs() + u64::from(ttl.subsec_nanos() > 0);
 		let exp = now
-			.checked_add(ttl.as_secs())
+			.checked_add(ttl_secs)
 			.context("jwtSign ttl overflows the exp timestamp")?;
 		claims.insert("iat".to_string(), now.into());
 		claims.insert("exp".to_string(), exp.into());
