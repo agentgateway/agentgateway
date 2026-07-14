@@ -4,11 +4,12 @@ mod sse;
 mod stdio;
 mod streamablehttp;
 
-use std::collections::{BTreeMap, HashMap, btree_map};
+use std::collections::HashMap;
 use std::io;
 
 use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
+use itertools::Itertools;
 pub use openapi::ParseError as OpenAPIParseError;
 use rmcp::model::{
 	ClientNotification, ClientRequest, ExtensionCapabilities, JsonObject, JsonRpcRequest,
@@ -369,12 +370,12 @@ impl UpstreamGroup {
 		fresh: &HashMap<Strng, ExtensionCapabilities>,
 	) -> Option<ExtensionCapabilities> {
 		let store = self.extensions.read().expect("read lock");
-		merge_extension_capabilities(
-			self
-				.by_name
-				.keys()
-				.filter_map(|name| fresh.get(name).or_else(|| store.get(name))),
-		)
+		merge_extension_capabilities(self.by_name.keys().filter_map(|name| {
+			fresh
+				.get(name)
+				.or_else(|| store.get(name))
+				.map(|ext| (name.as_str(), ext))
+		}))
 	}
 
 	fn setup_upstream(&self, target: &McpTarget) -> Result<upstream::Upstream, mcp::Error> {
@@ -486,36 +487,27 @@ impl UpstreamGroup {
 /// on the same settings object. If any target has a different settings object for the same
 /// extension, we log a warning and advertise the extension with empty settings.
 fn merge_extension_capabilities<'a>(
-	per_target: impl Iterator<Item = &'a ExtensionCapabilities>,
+	per_target: impl Iterator<Item = (&'a str, &'a ExtensionCapabilities)>,
 ) -> Option<ExtensionCapabilities> {
-	let mut merged: BTreeMap<&'a str, Option<&'a JsonObject>> = BTreeMap::new();
-	for ext in per_target {
-		for (k, v) in ext {
-			match merged.entry(k.as_str()) {
-				btree_map::Entry::Vacant(e) => {
-					e.insert(Some(v));
-				},
-				btree_map::Entry::Occupied(mut e) => {
-					if e.get().is_some_and(|existing| existing != v) {
-						warn!(
-							extension = %k,
-							"targets advertise divergent extension settings, advertising support without settings"
-						);
-						e.insert(None);
-					}
-				},
-			}
-		}
-	}
-	if merged.is_empty() {
-		return None;
-	}
-	Some(
-		merged
-			.into_iter()
-			.map(|(k, v)| (k.to_string(), v.cloned().unwrap_or_default()))
-			.collect(),
-	)
+	let merged: ExtensionCapabilities = per_target
+		.flat_map(|(target, ext)| ext.iter().map(move |(k, v)| (k.as_str(), (target, v))))
+		.into_group_map()
+		.into_iter()
+		.map(|(k, advertisers)| {
+			let settings = if advertisers.iter().map(|(_, v)| v).all_equal() {
+				advertisers[0].1.clone()
+			} else {
+				warn!(
+					extension = %k,
+					targets = ?advertisers.iter().map(|(t, _)| t).collect::<Vec<_>>(),
+					"targets advertise divergent extension settings, advertising support without settings"
+				);
+				JsonObject::default()
+			};
+			(k.to_string(), settings)
+		})
+		.collect();
+	(!merged.is_empty()).then_some(merged)
 }
 
 #[cfg(test)]
@@ -532,7 +524,7 @@ mod tests {
 	fn merge_extensions_agreeing_settings_pass_through() {
 		let a = ext("io.modelcontextprotocol/ui", serde_json::json!({"x": 1}));
 		let b = ext("io.modelcontextprotocol/ui", serde_json::json!({"x": 1}));
-		let merged = merge_extension_capabilities([&a, &b].into_iter()).unwrap();
+		let merged = merge_extension_capabilities([("a", &a), ("b", &b)].into_iter()).unwrap();
 		assert_eq!(
 			merged.get("io.modelcontextprotocol/ui"),
 			serde_json::json!({"x": 1}).as_object()
@@ -543,7 +535,7 @@ mod tests {
 	fn merge_extensions_divergent_settings_advertise_empty() {
 		let a = ext("io.modelcontextprotocol/ui", serde_json::json!({"x": 1}));
 		let b = ext("io.modelcontextprotocol/ui", serde_json::json!({"x": 2}));
-		let merged = merge_extension_capabilities([&a, &b].into_iter()).unwrap();
+		let merged = merge_extension_capabilities([("a", &a), ("b", &b)].into_iter()).unwrap();
 		assert_eq!(
 			merged.get("io.modelcontextprotocol/ui"),
 			serde_json::json!({}).as_object()
@@ -554,7 +546,7 @@ mod tests {
 	fn merge_extensions_unions_distinct_extensions() {
 		let a = ext("io.modelcontextprotocol/ui", serde_json::json!({}));
 		let b = ext("example/other", serde_json::json!({"y": true}));
-		let merged = merge_extension_capabilities([&a, &b].into_iter()).unwrap();
+		let merged = merge_extension_capabilities([("a", &a), ("b", &b)].into_iter()).unwrap();
 		assert_eq!(merged.len(), 2);
 		assert_eq!(
 			merged.get("example/other"),
