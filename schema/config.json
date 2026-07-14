@@ -3546,7 +3546,7 @@
           ]
         },
         "claims": {
-          "description": "Static claims added to every token (e.g. iss, sub, aud). `iat` and\n`exp` are always set by the signer and cannot be configured here.",
+          "description": "Static claims added to every token (e.g. iss, sub, aud). `iat`, `exp`,\nand `nbf` are always set by the signer and cannot be configured here.",
           "type": "object",
           "additionalProperties": {
             "type": "string"

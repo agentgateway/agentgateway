@@ -17,7 +17,7 @@ const DEFAULT_TTL: Duration = Duration::from_secs(300);
 
 /// Claims the signer always sets itself; user-configured claims must not
 /// collide with these.
-const RESERVED_CLAIMS: &[&str] = &["iat", "exp"];
+const RESERVED_CLAIMS: &[&str] = &["iat", "exp", "nbf"];
 
 /// Signs a short-lived JWT with a private key on each request and sends it to
 /// the backend. For upstreams that require per-request keypair JWTs (e.g. the
@@ -83,8 +83,8 @@ struct RawJwtSignAuth {
 	/// Optional JWS key ID header.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	kid: Option<String>,
-	/// Static claims added to every token (e.g. iss, sub, aud). `iat` and
-	/// `exp` are always set by the signer and cannot be configured here.
+	/// Static claims added to every token (e.g. iss, sub, aud). `iat`, `exp`,
+	/// and `nbf` are always set by the signer and cannot be configured here.
 	#[cfg_attr(feature = "schema", schemars(extend("minProperties" = 1)))]
 	claims: BTreeMap<String, String>,
 	/// Token lifetime used for `exp`. Defaults to 300s.
@@ -174,6 +174,7 @@ impl JwtSignAuth {
 			.context("jwtSign ttl overflows the exp timestamp")?;
 		claims.insert("iat".to_string(), now.into());
 		claims.insert("exp".to_string(), exp.into());
+		claims.insert("nbf".to_string(), now.into());
 
 		let mut header = Header::new(self.alg.algorithm());
 		header.kid = self.kid.clone();
