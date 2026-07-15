@@ -276,6 +276,14 @@ pub(super) async fn authorization_server_metadata(
 			{
 				*re = format!("{current_uri}/client-registration");
 			}
+
+			// RFC 8414 §3.3: the issuer in AS metadata MUST match the URL from which it was fetched.
+			// Strict clients (Claude Desktop, ChatGPT, Codex) reject metadata when issuer ≠ gateway URL.
+			if let Some(serde_json::Value::String(issuer_val)) =
+				json::traverse_mut(&mut resp, &["issuer"])
+			{
+				*issuer_val = issuer_from_metadata_uri(&current_uri.to_string());
+			}
 		},
 		Some(McpIDP::Descope {}) => {
 			// Descope supports RFC 8707, so no audience workaround needed.
@@ -439,6 +447,14 @@ async fn build_mock_dcr_response(
 	)
 }
 
+/// Strips the `/.well-known/...` suffix from a metadata URI to derive the gateway base URL,
+/// which becomes the `issuer` value satisfying RFC 8414 §3.3.
+fn issuer_from_metadata_uri(uri: &str) -> String {
+	uri.split_once("/.well-known/")
+		.map(|(base, _)| base.to_string())
+		.unwrap_or_else(|| uri.to_string())
+}
+
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
@@ -528,6 +544,34 @@ mod tests {
 			.expect("request should build");
 		req.extensions_mut().insert(auth);
 		req
+	}
+
+	#[test]
+	fn issuer_strips_well_known_suffix_from_root_gateway() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/.well-known/oauth-authorization-server"
+			),
+			"https://gateway.example.com"
+		);
+	}
+
+	#[test]
+	fn issuer_strips_well_known_suffix_from_path_prefixed_gateway() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/base/path/.well-known/oauth-authorization-server"
+			),
+			"https://gateway.example.com/base/path"
+		);
+	}
+
+	#[test]
+	fn issuer_returns_uri_unchanged_when_no_well_known_present() {
+		assert_eq!(
+			issuer_from_metadata_uri("https://gateway.example.com"),
+			"https://gateway.example.com"
+		);
 	}
 
 	fn default_auth() -> McpAuthentication {
