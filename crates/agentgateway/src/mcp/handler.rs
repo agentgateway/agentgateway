@@ -89,6 +89,26 @@ fn per_target_deduped<T>(
 		.collect_vec()
 }
 
+/// Returns the byte length of an RFC 3986 scheme prefix ending at `:`, if present.
+///
+/// MCP resource identifiers are URIs, which include hierarchical forms (`http://…`)
+/// and opaque forms (`foo:bar`, `urn:uuid:…`). Multiplexing must accept both.
+fn uri_scheme_prefix_len(uri: &str) -> Option<usize> {
+	let bytes = uri.as_bytes();
+	if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
+		return None;
+	}
+	let mut i = 1;
+	while i < bytes.len() {
+		match bytes[i] {
+			b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'-' | b'.' => i += 1,
+			b':' => return Some(i),
+			_ => return None,
+		}
+	}
+	None
+}
+
 fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
 	if default_target_name.is_none() {
 		// Apps UI resources must keep their ui:// scheme so hosts still
@@ -96,13 +116,13 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 		if let Some(rewritten) = apps::encode_ui_uri(target, uri) {
 			return rewritten;
 		}
-		// Transform URI to service+scheme:// format for multiplexing
-		// e.g., "http://example.com" becomes "service+http://example.com"
-		if let Some(scheme_end) = uri.find("://") {
-			let (scheme, rest) = uri.split_at(scheme_end);
-			format!("{target}+{scheme}{rest}")
+		// Prefix with `service+` for multiplexing whenever the URI has a scheme.
+		// e.g. "http://example.com" → "service+http://example.com"
+		//      "memo:insights"      → "service+memo:insights"
+		if uri_scheme_prefix_len(uri).is_some() {
+			format!("{target}+{uri}")
 		} else {
-			// URI must have a scheme - if not, return as-is and let validation handle it
+			// Scheme-less / relative references stay unchanged; validation handles rejects.
 			uri.to_string()
 		}
 	} else {
@@ -414,8 +434,8 @@ impl Relay {
 	}
 
 	/// Reverse of `resource_uri`: extracts the service name and original URI from a
-	/// multiplexed URI of the form `service+scheme://rest` (or `ui://service+rest`
-	/// for Apps UI resources).
+	/// multiplexed URI of the form `service+<original-uri>` (hierarchical or opaque),
+	/// or `ui://service+rest` for Apps UI resources.
 	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
 		if let Some(default) = self.upstreams.default_target_name.as_ref() {
 			Ok((default.as_str(), uri.to_string()))
@@ -428,7 +448,7 @@ impl Relay {
 				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
 			Ok((validated_name, original_uri))
 		} else {
-			// URI format: "service+scheme://rest"
+			// URI format: "service+<original-uri>" where original-uri is any absolute URI
 			let plus_pos = uri
 				.find('+')
 				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
@@ -1315,7 +1335,7 @@ impl Relay {
 	) -> ServerInfo {
 		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
-			// Resources are supported with multiplexing using service+scheme:// URI prefixing.
+			// Resources are supported with multiplexing using service+<uri> prefixing.
 			let mut builder = ServerCapabilities::builder()
 				.enable_tools()
 				.enable_tool_list_changed()
@@ -1715,6 +1735,44 @@ mod tests {
 	use serde_json::json;
 
 	use super::*;
+
+	#[test]
+	fn uri_scheme_prefix_accepts_hierarchical_and_opaque() {
+		assert_eq!(uri_scheme_prefix_len("http://example.com/x"), Some(4));
+		assert_eq!(uri_scheme_prefix_len("svn+ssh://host/repo"), Some(7));
+		assert_eq!(uri_scheme_prefix_len("memo:insights"), Some(4));
+		assert_eq!(uri_scheme_prefix_len("urn:uuid:1234"), Some(3));
+		assert_eq!(uri_scheme_prefix_len("relative/path"), None);
+		assert_eq!(uri_scheme_prefix_len("/absolute/path"), None);
+		assert_eq!(uri_scheme_prefix_len(""), None);
+	}
+
+	#[test]
+	fn resource_uri_multiplexes_opaque_and_hierarchical() {
+		let single = Some("only".to_string());
+		assert_eq!(
+			resource_uri(single.as_ref(), "svc", "memo:insights"),
+			"memo:insights"
+		);
+		assert_eq!(
+			resource_uri(None, "svc", "http://example.com/x"),
+			"svc+http://example.com/x"
+		);
+		assert_eq!(
+			resource_uri(None, "svc", "memo:insights"),
+			"svc+memo:insights"
+		);
+		assert_eq!(
+			resource_uri(None, "svc", "svn+ssh://host/repo"),
+			"svc+svn+ssh://host/repo"
+		);
+		assert_eq!(resource_uri(None, "svc", "relative/path"), "relative/path");
+		// Apps: ui:// must stay on the left; never become svc+ui://…
+		assert_eq!(
+			resource_uri(None, "svc", "ui://weather/dashboard.html"),
+			"ui://svc+weather/dashboard.html"
+		);
+	}
 
 	#[test]
 	fn normalize_outbound_result_type_by_downstream_protocol() {
