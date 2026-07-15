@@ -931,6 +931,7 @@ mod tests {
 				Default::default(),
 			)),
 			model_catalog: ModelCatalog::empty(),
+			admin: None,
 			upstream: client,
 			ca: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
@@ -991,7 +992,7 @@ mod tests {
 		);
 		assert!(result.http_version_override.is_none());
 		assert!(result.transport_override.is_none());
-		assert!(result.network_gateway.is_none());
+		assert!(result.network_gateway().is_none());
 	}
 
 	#[test]

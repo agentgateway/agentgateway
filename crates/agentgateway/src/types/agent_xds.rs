@@ -112,7 +112,7 @@ fn permissive_cel_expression(
 	expression
 }
 
-fn permissive_cel_expression_arc(
+pub(crate) fn permissive_cel_expression_arc(
 	diagnostics: &mut Diagnostics,
 	context: impl AsRef<str>,
 	original_expression: impl Into<String>,
@@ -490,6 +490,7 @@ fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
 		x if x == McpIdp::Auth0 as i32 => Some(McpIDP::Auth0 {}),
 		x if x == McpIdp::Keycloak as i32 => Some(McpIDP::Keycloak {}),
 		x if x == McpIdp::Okta as i32 => Some(McpIDP::Okta {}),
+		x if x == McpIdp::Descope as i32 => Some(McpIDP::Descope {}),
 		_ => None,
 	}
 }
@@ -624,8 +625,10 @@ fn convert_mcp_guardrails(
 			),
 		};
 		Ok(crate::mcp::guardrails::Remote {
-			target,
-			policies: Vec::new(),
+			target: SimpleBackendReferenceWithPolicies {
+				target,
+				policies: Vec::new(),
+			},
 			failure_mode,
 			metadata,
 			request_headers,
@@ -960,7 +963,7 @@ fn convert_backend_ai_policy(
 
 fn backend_auth_from_proto(
 	s: proto::agent::BackendAuthPolicy,
-	_diagnostics: &mut Diagnostics,
+	diagnostics: &mut Diagnostics,
 ) -> Result<BackendAuth, ProtoError> {
 	use proto::agent::azure_managed_identity_credential::user_assigned_identity;
 	use proto::agent::{azure_explicit_config, gcp};
@@ -996,9 +999,54 @@ fn backend_auth_from_proto(
 			} else {
 				Some(a.service_name.clone())
 			};
-			let assume_role = a.assume_role.map(|assume_role| auth::AwsAssumeRole {
-				role_arn: assume_role.role_arn,
-			});
+			let assume_role = a
+				.assume_role
+				.map(|assume_role| -> Result<_, ProtoError> {
+					let tags = assume_role
+						.tags
+						.into_iter()
+						.map(|tag| -> Result<_, ProtoError> {
+							// A tag is dynamic iff expression is set; an unset proto value is
+							// indistinguishable from an empty one, and STS allows empty values.
+							if tag.expression.is_empty() {
+								return Ok(auth::aws::AwsSessionTag {
+									key: tag.key,
+									value: Some(tag.value),
+									expression: None,
+								});
+							}
+							if !tag.value.is_empty() {
+								return Err(ProtoError::Generic(format!(
+									"session tag {:?} sets both value and expression",
+									tag.key
+								)));
+							}
+							// Permissive: a bad expression fails requests that hit this tag
+							// (fail closed) instead of rejecting the whole policy update.
+							let expression = permissive_cel_expression_arc(
+								diagnostics,
+								format!("AWS session tag {:?}", tag.key),
+								tag.expression,
+							);
+							Ok(auth::aws::AwsSessionTag {
+								key: tag.key,
+								value: None,
+								expression: Some(expression),
+							})
+						})
+						.collect::<Result<Vec<_>, _>>()?;
+					Ok(auth::AwsAssumeRole {
+						role_arn: assume_role.role_arn,
+						session_name: if assume_role.session_name.is_empty() {
+							None
+						} else {
+							Some(assume_role.session_name)
+						},
+						tags: auth::aws::AwsSessionTags::try_new(tags)
+							.map_err(|e| ProtoError::Generic(e.to_string()))?,
+					})
+				})
+				.transpose()?;
 			let aws_auth = match a.kind {
 				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
 					if assume_role.is_some() {
@@ -1080,6 +1128,12 @@ fn backend_auth_from_proto(
 			};
 			BackendAuth::Azure(azure_auth)
 		},
+		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
+			BackendAuth::OAuthTokenExchange(Box::new(auth::oauth::OAuthTokenExchangeAuth::from_proto(
+				s,
+				diagnostics,
+			)?))
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -1147,6 +1201,10 @@ impl Bind {
 				proto::agent::bind::TunnelProtocol::HboneWaypoint => TunnelProtocol::HboneWaypoint,
 				proto::agent::bind::TunnelProtocol::Proxy => TunnelProtocol::Proxy,
 				proto::agent::bind::TunnelProtocol::Connect => TunnelProtocol::Connect,
+			},
+			mode: match proto::agent::bind::Mode::try_from(s.mode)? {
+				proto::agent::bind::Mode::Standard => BindMode::Standard,
+				proto::agent::bind::Mode::Internal => BindMode::Internal,
 			},
 		})
 	}
@@ -1339,13 +1397,11 @@ pub(crate) fn backend_with_policies_from_proto(
 							})
 						},
 						Some(provider::Provider::Bedrock(bedrock)) => {
-							AIProvider::Bedrock(llm::bedrock::Provider {
+							AIProvider::bedrock(llm::bedrock::Provider {
 								model: bedrock.model.as_deref().map(strng::new),
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								source_credentials_cache: Default::default(),
-								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
@@ -1355,13 +1411,12 @@ pub(crate) fn backend_with_policies_from_proto(
 								},
 								_ => llm::azure::AzureResourceType::OpenAI,
 							};
-							AIProvider::Azure(llm::azure::Provider {
+							AIProvider::azure(llm::azure::Provider {
 								model: azure.model.as_deref().map(strng::new),
 								resource_name: strng::new(&azure.resource_name),
 								resource_type,
 								api_version: azure.api_version.as_deref().map(strng::new),
 								project_name: azure.project_name.as_deref().map(strng::new),
-								cached_cred: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azureopenai(_)) => {
@@ -2086,9 +2141,11 @@ fn traffic_policy_from_proto(
 			TrafficPolicy::RemoteRateLimit(RequestPolicy::single(
 				http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),
-					target: Arc::new(target),
-					// Not supported inline from xDS
-					policies: Vec::new(),
+					target: SimpleBackendReferenceWithPolicies {
+						target: Arc::new(target),
+						// Not supported inline from xDS
+						policies: Vec::new(),
+					},
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
 					failure_mode,
 				},
@@ -2143,9 +2200,11 @@ fn traffic_policy_from_proto(
 				}
 			}
 			TrafficPolicy::ExtProc(RequestPolicy::single(http::ext_proc::ExtProc {
-				target: Arc::new(target),
-				// Not supported inline from xDS
-				policies: Vec::new(),
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
+				},
 				failure_mode,
 				request_attributes: to_cel_attrs(
 					diagnostics,
@@ -2349,21 +2408,30 @@ fn traffic_policy_from_proto(
 						.map(serde_json::to_value)
 						.transpose()?
 						.unwrap_or_default();
-					Ok::<_, ProtoError>((http::apikey::APIKey::new(u.key.clone()), meta))
+					let key = match (u.key.is_empty(), u.key_hash.is_empty()) {
+						(false, true) => http::apikey::APIKey::new(u.key.clone()).sha256(),
+						(true, false) => {
+							http::apikey::APIKeyHash::parse(&u.key_hash).map_err(ProtoError::Generic)?
+						},
+						_ => {
+							return Err(ProtoError::Generic(
+								"exactly one of API key or keyHash must be set".to_string(),
+							));
+						},
+					};
+					Ok::<_, ProtoError>((key, meta))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
-			TrafficPolicy::APIKey(RequestPolicy::single(
-				http::apikey::APIKeyAuthentication::new(
-					keys,
-					mode,
-					authorization_location(
-						diagnostics,
-						"apiKeyAuthentication.authorizationLocation.expression",
-						ba.authorization_location.as_ref(),
-						http::auth::AuthorizationLocation::bearer_header(),
-					)?,
-				),
-			))
+			TrafficPolicy::APIKey(RequestPolicy::single(http::apikey::APIKeyAuthentication {
+				users: Arc::new(keys.into_iter().collect()),
+				mode,
+				location: authorization_location(
+					diagnostics,
+					"apiKeyAuthentication.authorizationLocation.expression",
+					ba.authorization_location.as_ref(),
+					http::auth::AuthorizationLocation::bearer_header(),
+				)?,
+			}))
 		},
 		Some(tps::Kind::HostRewrite(hr)) => {
 			let mode = tps::host_rewrite::Mode::try_from(hr.mode)?;
@@ -2373,9 +2441,15 @@ fn traffic_policy_from_proto(
 			})
 		},
 		Some(tps::Kind::Buffer(buffer)) => {
-			let to_body = |b: Option<proto::agent::BufferBody>| {
+			use proto::agent::traffic_policy_spec::buffer;
+
+			let to_body = |b: Option<proto::agent::traffic_policy_spec::buffer::BufferBody>| {
 				b.map(|bb| BufferBody {
 					max_bytes: bb.max_bytes.map(|v| v as usize),
+					failure_mode: match buffer::FailureMode::try_from(bb.failure_mode) {
+						Ok(buffer::FailureMode::FailOpen) => http::buffer::FailureMode::FailOpen,
+						_ => http::buffer::FailureMode::FailClosed,
+					},
 				})
 			};
 			TrafficPolicy::Buffer(RequestPolicy::single(http::buffer::Buffer {
@@ -2515,8 +2589,10 @@ fn external_auth_from_proto(
 		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
 	Ok(http::ext_authz::ExtAuthz {
 		protocol,
-		target: Arc::new(target),
-		policies: Vec::new(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: Arc::new(target),
+			policies: Vec::new(),
+		},
 		failure_mode,
 		include_request_headers: ea
 			.include_request_headers
@@ -2543,7 +2619,7 @@ fn convert_duration(d: prost_types::Duration) -> Duration {
 	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
 }
 
-fn authorization_location(
+pub(crate) fn authorization_location(
 	diagnostics: &mut Diagnostics,
 	context: impl AsRef<str>,
 	location: Option<&proto::agent::AuthorizationLocation>,
@@ -2566,16 +2642,16 @@ fn authorization_location(
 		Some(Kind::Cookie(cookie)) => Ok(http::auth::AuthorizationLocation::Cookie {
 			name: cookie.name.clone().into(),
 		}),
-		Some(Kind::Expression(expression)) => Ok(http::auth::AuthorizationLocation::Expression {
-			expression: permissive_cel_expression_arc(diagnostics, context, expression),
-		}),
+		Some(Kind::Expression(expression)) => Ok(http::auth::AuthorizationLocation::Expression(
+			permissive_cel_expression_arc(diagnostics, context, expression),
+		)),
 		None => Ok(default),
 	}
 }
 
 /// Like [`authorization_location`], but returns `None` when the proto field is absent,
 /// preserving the distinction between "not set" (default) and "explicitly configured".
-fn optional_authorization_location(
+pub(crate) fn optional_authorization_location(
 	location: Option<&proto::agent::AuthorizationLocation>,
 ) -> Result<Option<http::auth::AuthorizationLocation>, ProtoError> {
 	use proto::agent::authorization_location::Kind;
@@ -2776,9 +2852,37 @@ fn frontend_policy_from_proto(
 						_ => types::agent::TracingProtocol::Http,
 					};
 					let path = oal.path.clone().unwrap_or_else(|| "/v1/logs".to_string());
+					let fields = oal
+						.fields
+						.as_ref()
+						.map(|f| {
+							let add = f
+								.add
+								.iter()
+								.map(|f| {
+									let expr = permissive_cel_expression_arc(
+										diagnostics,
+										format!("frontend.logging.otlp.fields.add.{}", f.name),
+										&f.expression,
+									);
+									Ok::<_, ProtoError>((f.name.clone(), expr))
+								})
+								.collect::<Result<Vec<_>, _>>()?;
+							Ok::<_, ProtoError>(frontend::AccessLogFields {
+								add: Arc::new(OrderedStringMap::from_iter(add)),
+								remove: Arc::new(FzHashSet::new(f.remove.clone())),
+							})
+						})
+						.transpose()?;
 					Ok(frontend::OtlpLoggingConfig {
-						provider_backend,
-						policies,
+						target: SimpleBackendReferenceWithPolicies {
+							target: Arc::new(provider_backend),
+							policies,
+						},
+						filter: oal.filter.as_ref().map(|expr| {
+							permissive_cel_expression_arc(diagnostics, "frontend.logging.otlp.filter", expr)
+						}),
+						fields,
 						protocol,
 						path,
 					})
@@ -2902,9 +3006,11 @@ fn tracing_config_from_proto(
 		};
 
 	types::agent::TracingConfig {
-		provider_backend,
-		// Not supported inline from xDS
-		policies: Vec::new(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: Arc::new(provider_backend),
+			// Not supported inline from xDS
+			policies: Vec::new(),
+		},
 		attributes,
 		resources,
 		remove: t.remove.clone(),
@@ -3191,7 +3297,7 @@ impl From<&proto::agent::ListenerName> for ListenerName {
 	}
 }
 
-fn resolve_simple_reference(
+pub(crate) fn resolve_simple_reference(
 	target: Option<&proto::agent::BackendReference>,
 ) -> SimpleBackendReference {
 	let Some(target) = target else {

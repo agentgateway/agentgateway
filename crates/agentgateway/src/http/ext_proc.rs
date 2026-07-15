@@ -24,11 +24,15 @@ use crate::proxy::ProxyError;
 use crate::proxy::dtrace::{self, pol_result};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
+use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
 use crate::{http, *};
 
 /// The namespace key used for ext_proc attributes in ProcessingRequest.attributes
 const EXTPROC_ATTRIBUTES_NAMESPACE: &str = "envoy.filters.http.ext_proc";
+/// Reserved internal metadata_context namespace whose key/value pairs are copied
+/// into outbound gRPC initial metadata when the ext_proc stream is opened.
+pub(crate) const EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE: &str =
+	"agentgateway.dev.grpc_initial_metadata";
 
 #[cfg(test)]
 #[path = "ext_proc_tests.rs"]
@@ -176,8 +180,10 @@ impl InferenceRouting {
 			destination_mode: self.destination_mode,
 			ext_proc: Some(ExtProcInstance::new(
 				client,
-				Vec::new(),
-				self.target.clone(),
+				SimpleBackendReferenceWithPolicies {
+					target: self.target.clone(),
+					policies: Vec::new(),
+				},
 				self.failure_mode,
 				None,
 				None,
@@ -195,6 +201,10 @@ impl InferenceRouting {
 }
 
 impl InferencePoolRouter {
+	pub fn is_enabled(&self) -> bool {
+		self.ext_proc.is_some()
+	}
+
 	pub async fn mutate_request(
 		&mut self,
 		req: &mut http::Request,
@@ -238,17 +248,9 @@ impl InferencePoolRouter {
 
 #[apply(schema!)]
 pub struct ExtProc {
-	/// Backend that receives external processing calls.
+	/// Backend that receives external processing calls and policies used when connecting to it.
 	#[serde(flatten)]
-	pub target: Arc<SimpleBackendReference>,
-	/// Backend policies used when connecting to the external processing service.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<BackendTrafficPolicy>,
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Behavior when the external processing service is unavailable or returns an error.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
@@ -274,7 +276,6 @@ impl ExtProc {
 		ExtProcRequest {
 			ext_proc: Some(ExtProcInstance::new(
 				client,
-				self.policies.clone(),
 				self.target.clone(),
 				self.failure_mode,
 				self.metadata_context.clone(),
@@ -377,7 +378,8 @@ struct ExtProcInstance {
 	request_body_immediate_response: Arc<Mutex<Option<http::Response>>>,
 	protocol_config_sent: bool,
 	mode_state: ModeStateMachine,
-	tx_req: Sender<ProcessingRequest>,
+	client: Option<proto::external_processor_client::ExternalProcessorClient<GrpcReferenceChannel>>,
+	tx_req: Option<Sender<ProcessingRequest>>,
 	rx_resp_for_request: Option<Receiver<ProcessingResponse>>,
 	rx_resp_for_response: Option<Receiver<ProcessingResponse>>,
 	metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
@@ -389,28 +391,51 @@ impl ExtProcInstance {
 	#[allow(clippy::too_many_arguments)]
 	fn new(
 		client: PolicyClient,
-		policies: Vec<BackendTrafficPolicy>,
-		target: Arc<SimpleBackendReference>,
+		target: SimpleBackendReferenceWithPolicies,
 		failure_mode: FailureMode,
 		metadata_context: Option<HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
 		req_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 		resp_attributes: Option<HashMap<String, Arc<cel::Expression>>>,
 		processing_options: ProcessingOptions,
 	) -> ExtProcInstance {
-		trace!("connecting to {:?}", target);
-		let chan = GrpcReferenceChannel {
-			target,
-			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtProc),
-			policies: Arc::new(policies),
+		trace!("connecting to {:?}", target.target);
+		let chan = target
+			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtProc));
+		Self {
+			skipped: Default::default(),
+			request_body_immediate_response: Arc::new(Mutex::new(None)),
+			failure_mode,
+			protocol_config_sent: false,
+			mode_state: processing_options.into(),
+			client: Some(proto::external_processor_client::ExternalProcessorClient::new(chan)),
+			tx_req: None,
+			rx_resp_for_request: None,
+			rx_resp_for_response: None,
+			metadata_context,
+			req_attributes,
+			resp_attributes,
+		}
+	}
+
+	fn ensure_stream_started(&mut self, exec: &Executor<'_>) -> Result<(), Error> {
+		if self.tx_req.is_some() {
+			return Ok(());
+		}
+
+		// Delay stream creation until we have a request/response executor so
+		// metadata_context CEL can be resolved into gRPC initial metadata.
+		let grpc_initial_metadata = build_grpc_initial_metadata(exec, self.metadata_context.as_ref());
+		let Some(mut client) = self.client.take() else {
+			return Err(Error::RequestSend);
 		};
-		let mut c = proto::external_processor_client::ExternalProcessorClient::new(chan);
+		let failure_mode = self.failure_mode;
 		let (tx_req, rx_req) = tokio::sync::mpsc::channel(10);
 		let (tx_resp, mut rx_resp) = tokio::sync::mpsc::channel(10);
 		let req_stream = tokio_stream::wrappers::ReceiverStream::new(rx_req);
 		tokio::task::spawn(async move {
-			// Spawn a task to handle processing requests.
-			// Incoming requests get send to tx_req and will be piped through here.
-			let responses = match c.process(req_stream).await {
+			let mut request = tonic::Request::new(req_stream);
+			*request.metadata_mut() = grpc_initial_metadata;
+			let responses = match client.process(request).await {
 				Ok(r) => r,
 				Err(e) => {
 					warn!(?failure_mode, "failed to initialize extproc client: {e:?}");
@@ -424,6 +449,7 @@ impl ExtProcInstance {
 				let _ = tx_resp.send(item).await;
 			}
 		});
+
 		let (tx_resp_for_request, rx_resp_for_request) = tokio::sync::mpsc::channel(1);
 		let (tx_resp_for_response, rx_resp_for_response) = tokio::sync::mpsc::channel(1);
 		tokio::task::spawn(async move {
@@ -440,8 +466,8 @@ impl ExtProcInstance {
 						let _ = tx_resp_for_request.send(item).await;
 					},
 					Some(processing_response::Response::ImmediateResponse(_)) => {
-						// In this case we aren't sure which is going to handle things...
-						// Send to both
+						// Immediate responses can terminate either the request-side or
+						// response-side flow, so fan them out to both waiters.
 						let _ = tx_resp_for_request.send(item.clone()).await;
 						let _ = tx_resp_for_response.send(item).await;
 					},
@@ -449,23 +475,25 @@ impl ExtProcInstance {
 				}
 			}
 		});
-		Self {
-			skipped: Default::default(),
-			request_body_immediate_response: Arc::new(Mutex::new(None)),
-			failure_mode,
-			protocol_config_sent: false,
-			mode_state: processing_options.into(),
-			tx_req,
-			rx_resp_for_request: Some(rx_resp_for_request),
-			rx_resp_for_response: Some(rx_resp_for_response),
-			metadata_context,
-			req_attributes,
-			resp_attributes,
-		}
+
+		self.tx_req = Some(tx_req);
+		self.rx_resp_for_request = Some(rx_resp_for_request);
+		self.rx_resp_for_response = Some(rx_resp_for_response);
+		Ok(())
 	}
 
 	async fn send_request(&mut self, req: ProcessingRequest) -> Result<(), Error> {
-		self.tx_req.send(req).await.map_err(|_| Error::RequestSend)
+		self
+			.tx_req
+			.as_ref()
+			.ok_or(Error::RequestSend)?
+			.send(req)
+			.await
+			.map_err(|_| Error::RequestSend)
+	}
+
+	fn request_sender(&self) -> Result<Sender<ProcessingRequest>, Error> {
+		self.tx_req.clone().ok_or(Error::RequestSend)
 	}
 
 	fn protocol_config_for_headers(
@@ -507,7 +535,7 @@ impl ExtProcInstance {
 				Self::send_body_stream(
 					metadata_context.clone(),
 					body,
-					self.tx_req.clone(),
+					self.request_sender()?,
 					body_direction,
 					send_trailers,
 					first_message,
@@ -526,7 +554,7 @@ impl ExtProcInstance {
 					FirstExtProcMessage::take_for_send(first_message);
 				Self::send_partial_body(
 					metadata_context.clone(),
-					self.tx_req.clone(),
+					self.request_sender()?,
 					body_direction,
 					body,
 					end_stream,
@@ -786,28 +814,13 @@ impl ExtProcInstance {
 		let headers = req_to_header_map(&req);
 
 		let exec = cel::Executor::new_request(&req);
+		self.ensure_stream_started(&exec)?;
 		// request_attributes should only be sent on first ProcessingRequest
 		// this will need to be modified if we configure which Requests to send
 		// Wrap metadata_context in Arc for cheap cloning across body chunks
-		let metadata_context = self.metadata_context.as_ref().map(|meta| {
-			Arc::new(Metadata {
-				filter_metadata: meta
-					.iter()
-					.filter_map(|(n, e)| {
-						eval_to_struct(&exec, e).map(|v| (n.clone(), v)).ok() // TODO(mk): where best to log convertion issues
-					})
-					.collect(),
-			})
-		});
-		let attributes = self
-			.req_attributes
-			.as_ref()
-			.and_then(|attrs| {
-				eval_to_struct(&exec, attrs)
-					.map(|v| HashMap::from([(EXTPROC_ATTRIBUTES_NAMESPACE.to_string(), v)]))
-					.ok()
-			})
-			.unwrap_or_default();
+		let metadata_context = build_processing_metadata_context(&exec, self.metadata_context.as_ref())
+			.map(|filter_metadata| Arc::new(Metadata { filter_metadata }));
+		let attributes = build_request_attributes(&exec, self.req_attributes.as_ref());
 
 		let failure_mode = self.failure_mode;
 		let end_of_stream = req.body().is_end_stream();
@@ -893,7 +906,7 @@ impl ExtProcInstance {
 			self.spawn_body_stream(
 				&metadata_context,
 				&mut pending_full_duplex_body,
-				tx.clone(),
+				tx.clone().ok_or(Error::RequestSend)?,
 				BodyStreamDirection::Request,
 				send_request_trailers,
 				first_message,
@@ -1099,7 +1112,7 @@ impl ExtProcInstance {
 					self.spawn_body_stream(
 						&metadata_context,
 						&mut pending_full_duplex_body,
-						tx.clone(),
+						tx.clone().ok_or(Error::RequestSend)?,
 						BodyStreamDirection::Request,
 						send_request_trailers,
 						first_message,
@@ -1310,6 +1323,7 @@ impl ExtProcInstance {
 		let send_response_headers = self.mode_state.response_header_mode == HeaderSendMode::Send;
 
 		let exec = cel::Executor::new_response(request, &response);
+		self.ensure_stream_started(&exec)?;
 		// Wrap metadata_context in Arc for cheap cloning across body chunks
 		let metadata_context = if self.metadata_context.is_none()
 			&& let Some(rd) = resolved_destination_metadata
@@ -1323,14 +1337,8 @@ impl ExtProcInstance {
 				)]),
 			}))
 		} else {
-			self.metadata_context.as_ref().map(|meta| {
-				Arc::new(Metadata {
-					filter_metadata: meta
-						.iter()
-						.filter_map(|(n, e)| eval_to_struct(&exec, e).map(|v| (n.clone(), v)).ok())
-						.collect(),
-				})
-			})
+			build_processing_metadata_context(&exec, self.metadata_context.as_ref())
+				.map(|filter_metadata| Arc::new(Metadata { filter_metadata }))
 		};
 		// response_attributes should only be sent on first ProcessingRequest
 		// this will need to be modified if we configure which Requests to send
@@ -1405,7 +1413,7 @@ impl ExtProcInstance {
 			self.spawn_body_stream(
 				&metadata_context,
 				&mut pending_response_body,
-				tx.clone(),
+				tx.clone().ok_or(Error::RequestSend)?,
 				BodyStreamDirection::Response,
 				send_response_trailers,
 				first_message,
@@ -1436,7 +1444,7 @@ impl ExtProcInstance {
 				self.spawn_body_stream(
 					&metadata_context,
 					&mut pending_response_body,
-					tx.clone(),
+					tx.clone().ok_or(Error::RequestSend)?,
 					BodyStreamDirection::Response,
 					send_response_trailers,
 					first_message,
@@ -1547,7 +1555,7 @@ impl ExtProcInstance {
 						self.spawn_body_stream(
 							&metadata_context,
 							&mut pending_response_body,
-							tx.clone(),
+							tx.clone().ok_or(Error::RequestSend)?,
 							BodyStreamDirection::Response,
 							send_response_trailers,
 							first_message,
@@ -1601,4 +1609,109 @@ fn eval_to_struct(
 			})
 			.collect(),
 	})
+}
+
+fn build_processing_metadata_context(
+	exec: &Executor<'_>,
+	metadata_context: Option<&HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
+) -> Option<HashMap<String, prost_wkt_types::Struct>> {
+	metadata_context.map(|meta| {
+		meta
+			// The reserved namespace is transported as gRPC initial metadata
+			// instead of regular ext_proc metadata_context.
+			.iter()
+			.filter(|(namespace, _)| namespace.as_str() != EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE)
+			.filter_map(|(namespace, expressions)| {
+				eval_to_struct(exec, expressions)
+					.map(|value| (namespace.clone(), value))
+					.ok()
+			})
+			.collect()
+	})
+}
+
+fn build_request_attributes(
+	exec: &Executor<'_>,
+	request_attributes: Option<&HashMap<String, Arc<cel::Expression>>>,
+) -> HashMap<String, prost_wkt_types::Struct> {
+	let Some(attributes) = request_attributes else {
+		return HashMap::new();
+	};
+
+	let fields = eval_to_struct(exec, attributes)
+		.map(|s| s.fields)
+		.unwrap_or_default();
+	if fields.is_empty() {
+		HashMap::new()
+	} else {
+		HashMap::from([(
+			EXTPROC_ATTRIBUTES_NAMESPACE.to_string(),
+			prost_wkt_types::Struct { fields },
+		)])
+	}
+}
+
+fn build_grpc_initial_metadata(
+	exec: &Executor<'_>,
+	metadata_context: Option<&HashMap<String, HashMap<String, Arc<cel::Expression>>>>,
+) -> tonic::metadata::MetadataMap {
+	let mut metadata = tonic::metadata::MetadataMap::new();
+	let Some(expressions) =
+		metadata_context.and_then(|ctx| ctx.get(EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE))
+	else {
+		return metadata;
+	};
+
+	// CEL values in the reserved namespace are copied into the outbound gRPC
+	// stream-open metadata, skipping entries that cannot be represented there.
+	for (key, expr) in expressions {
+		let value = match eval_expression(exec, expr) {
+			Ok(value) => value,
+			Err(error) => {
+				warn!(
+					%key,
+					%error,
+					"failed to evaluate gRPC initial metadata CEL expression"
+				);
+				continue;
+			},
+		};
+		let Some(string_value) = prost_value_to_metadata_string(&value) else {
+			continue;
+		};
+		let metadata_key = match tonic::metadata::MetadataKey::from_bytes(key.as_bytes()) {
+			Ok(metadata_key) => metadata_key,
+			Err(error) => {
+				warn!(%key, %error, "failed to convert gRPC initial metadata key");
+				continue;
+			},
+		};
+		let metadata_value = match tonic::metadata::MetadataValue::try_from(string_value.as_str()) {
+			Ok(metadata_value) => metadata_value,
+			Err(error) => {
+				warn!(
+					%key,
+					value = %string_value,
+					%error,
+					"failed to convert gRPC initial metadata value"
+				);
+				continue;
+			},
+		};
+		metadata.insert(metadata_key, metadata_value);
+	}
+
+	metadata
+}
+
+fn prost_value_to_metadata_string(value: &prost_wkt_types::Value) -> Option<String> {
+	use prost_wkt_types::value::Kind;
+
+	match value.kind.as_ref()? {
+		Kind::StringValue(s) => Some(s.clone()),
+		Kind::NumberValue(n) => Some(n.to_string()),
+		Kind::BoolValue(b) => Some(b.to_string()),
+		Kind::NullValue(_) => None,
+		Kind::StructValue(_) | Kind::ListValue(_) => None,
+	}
 }

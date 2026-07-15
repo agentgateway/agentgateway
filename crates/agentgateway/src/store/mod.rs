@@ -23,8 +23,8 @@ pub use policy::{
 	RequestPolicyTrait, ResponsePolicy, ResponsePolicyTrait,
 };
 
-use crate::store;
 use crate::types::discovery::Workload;
+use crate::{apply, schema_ser_schema, store};
 
 /// Set-once holder for the gateway's own Workload (locality-aware LB reads this).
 /// Populated at startup in Static mode, or when WDS delivers a matching workload in Wds mode.
@@ -92,9 +92,7 @@ impl Stores {
 	}
 }
 
-#[derive(serde::Serialize)]
-#[cfg_attr(feature = "schema", derive(crate::JsonSchema))]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct StoresDump {
 	#[serde(flatten)]
 	pub discovery: discovery::Dump,

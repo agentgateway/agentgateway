@@ -1,6 +1,7 @@
 ---
 source: crates/agentgateway/src/llm/tests.rs
-description: src/llm/tests/response/anthropic/basic.json
+assertion_line: 163
+description: "../llm/src/tests/response/anthropic/basic.json"
 info:
   id: msg_012JYtNYb8sv6Hb67TcGT7xW
   type: message
@@ -50,6 +51,7 @@ info:
     "input_tokens": 15,
     "output_tokens": 21,
     "total_tokens": 36,
+    "cache_creation_input_tokens": 13,
     "cached_input_tokens": 12,
     "service_tier": "standard",
     "provider_model": "claude-haiku-4-5-20251001"

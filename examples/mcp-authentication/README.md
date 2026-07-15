@@ -2,7 +2,7 @@
 
 This example shows how to protect MCP servers with agentgateway using the MCP Authorization spec.
 
-> Note: The current MCP Authorization spec focuses on authentication; m
+> Note: The current MCP Authorization spec primarily covers authentication and protected resource metadata.
 
 ### Running the example
 
@@ -50,10 +50,15 @@ Taken from `examples/mcp-authentication/config.yaml`:
       - content-type
       allowOrigins:
       - '*'
+      exposeHeaders:
+      - "Mcp-Session-Id"
     mcpAuthentication:
+      mode: strict
       issuer: http://localhost:9000
-      jwksUrl: http://localhost:9000/.well-known/jwks.json
-      audience: http://localhost:3000/stdio/mcp
+      audiences:
+      - http://localhost:3000/stdio/mcp
+      jwks:
+        url: http://localhost:9000/.well-known/jwks.json
       resourceMetadata:
         resource: http://localhost:3000/stdio/mcp
         scopesSupported:
@@ -90,17 +95,20 @@ Also in `examples/mcp-authentication/config.yaml`:
   - path:
       exact: /.well-known/oauth-protected-resource/remote/mcp
   policies:
-    backendTLS: {}
     cors:
       allowHeaders:
       - mcp-protocol-version
       - content-type
       allowOrigins:
       - '*'
+      exposeHeaders:
+      - "Mcp-Session-Id"
     mcpAuthentication:
       issuer: http://localhost:9000
-      jwksUrl: http://localhost:9000/.well-known/jwks.json
-      audience: http://localhost:3000/remote/mcp
+      audiences:
+      - http://localhost:3000/remote/mcp
+      jwks:
+        url: http://localhost:9000/.well-known/jwks.json
       resourceMetadata:
         resource: http://localhost:3000/remote/mcp
         scopesSupported:
@@ -118,7 +126,7 @@ Also in `examples/mcp-authentication/config.yaml`:
 ### Scenario C: Adapting a vendor Authorization Server (e.g., Keycloak)
 
 When your Authorization Server doesn’t implement the spec as-is, agentgateway can fill in the gaps.
-Currently, three providers are supported: Keycloak, Auth0, and Okta.
+Currently, four providers are supported: Keycloak, Auth0, Okta, and Descope.
 
 Excerpt from `examples/mcp-authentication/config.yaml`:
 
@@ -136,15 +144,16 @@ Excerpt from `examples/mcp-authentication/config.yaml`:
   - path: { exact: /.well-known/oauth-protected-resource/keycloak/mcp }
   - path: { exact: /.well-known/oauth-authorization-server/keycloak/mcp }
   - path: { exact: /.well-known/oauth-authorization-server/keycloak/mcp/client-registration }
-  - path: { exact: /realms/mcp/protocol/openid-connect/certs }
   policies:
     cors:
       allowHeaders: [mcp-protocol-version, content-type]
       allowOrigins: ['*']
     mcpAuthentication:
       issuer: http://localhost:7080/realms/mcp
-      jwksUrl: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
-      audience: mcp_proxy
+      audiences:
+      - mcp_proxy
+      jwks:
+        url: http://localhost:7080/realms/mcp/protocol/openid-connect/certs
       provider:
         keycloak: {}
       resourceMetadata:
@@ -165,6 +174,7 @@ What setting a provider does (high level):
   - Auth0 → `<issuer>/.well-known/jwks.json`
   - Keycloak → `<issuer>/protocol/openid-connect/certs`
   - Okta → `<issuer>/.well-known/jwks.json`
+  - Descope → `https://api.descope.com/{project-id}/.well-known/jwks.json` (derived from agentic issuer path)
 
 Auth0-specific notes:
 - Gateway appends `?audience=...` to the authorization endpoint it exposes.
@@ -176,8 +186,14 @@ Keycloak-specific notes:
 Okta-specific notes:
 - Okta supports RFC 8414 (like Auth0), so the gateway uses standard AS metadata discovery.
 - No RFC 8707 support; gateway appends `?audience=...` to the authorization endpoint (same workaround as Auth0).
-- Client registration is proxied by the gateway at `.../client-registration` to forward to Okta's `oauth2/v1/clients`.
+- Client registration is proxied by the gateway at `.../client-registration` to forward to Okta’s `oauth2/v1/clients`.
 - Okta DCR requires an SSWS API token; the gateway proxies the request and the MCP client must provide the token.
+
+Descope-specific notes:
+- Uses OIDC discovery (`{issuer}/.well-known/openid-configuration`), not RFC 8414.
+- Supports RFC 8707 resource indicators — no audience workaround needed.
+- DCR requires a management key belonging to the server operator (not the MCP client). **Prefer setting `clientId` in config to skip DCR entirely.**
+- Client registration is proxied by the gateway at `.../client-registration` to forward to Descope’s management DCR endpoint.
 
 Notes:
 - Omit the `provider` block for spec-compliant servers. Use it only when adaptation is needed.

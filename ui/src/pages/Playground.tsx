@@ -13,10 +13,11 @@ import {
   User,
 } from "lucide-react";
 import { sendChatCompletion, sendMcpJsonRpc } from "../api/playgroundApi";
+import { claudeSubscriptionWarning } from "../claudeSubscription";
 import { providerLabel } from "../config";
 import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
-import { keyLabel } from "../credentialDisplay";
-import { gatewayEndpoint, gatewayOrigin } from "../gatewayUrls";
+import { hasKeyValue, keyLabel } from "../credentialDisplay";
+import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from "../gatewayUrls";
 import {
   useGatewayConfig,
   useStoredStringState,
@@ -152,12 +153,17 @@ export function PlaygroundPage() {
     () => config.data?.llm?.policies?.apiKey?.keys ?? [],
     [config.data],
   );
+  const rawVirtualKeys = useMemo(
+    () => virtualKeys.filter(hasKeyValue),
+    [virtualKeys],
+  );
   const [storedModel, setStoredModel] = useStoredStringState(
     storageKeys.model,
     "",
   );
   const [model, setModel] = useState(() => queryModel() ?? storedModel);
-  const llmBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
+  const llmEndpoint = llmPlaygroundEndpoint(config.data);
+  const llmBaseUrl = llmEndpoint.baseUrl;
   const [specificModel, setSpecificModel] = useStoredStringState(
     storageKeys.specificModel,
     "",
@@ -177,10 +183,8 @@ export function PlaygroundPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [runSteps, setRunSteps] = useState<RunStep[]>([]);
-  const derivedMcpBaseUrl = gatewayEndpoint(
-    config.data?.mcp?.port ?? 3000,
-    "/mcp",
-  );
+  const mcpEndpoint = mcpPlaygroundEndpoint(config.data);
+  const derivedMcpBaseUrl = mcpEndpoint.baseUrl;
   const [mcpEnabled, setMcpEnabled] = useState(false);
   const [mcpSessionId, setMcpSessionId] = useState("");
   const [mcpTools, setMcpTools] = useState<PlaygroundTool[]>([]);
@@ -221,27 +225,28 @@ export function PlaygroundPage() {
   const selectedCatalogProvider = selectedModelConfig
     ? modelProviderLabel(selectedModelConfig, providers)
     : null;
-  const selectedKeyOptionRef = virtualKeys.some(
+  const selectedKeyOptionRef = rawVirtualKeys.some(
     (item, index) => virtualKeyStorageRef(item, index) === selectedKeyRef,
   )
     ? selectedKeyRef
-    : virtualKeys[0]
-      ? virtualKeyStorageRef(virtualKeys[0], 0)
+    : rawVirtualKeys[0]
+      ? virtualKeyStorageRef(rawVirtualKeys[0], 0)
       : "";
   const savedKey =
-    virtualKeys.find(
+    rawVirtualKeys.find(
       (item, index) =>
         virtualKeyStorageRef(item, index) === selectedKeyOptionRef,
     )?.key ??
-    virtualKeys[0]?.key ??
+    rawVirtualKeys[0]?.key ??
     "";
   const selectedKeyValue =
-    apiKeyMode === "saved" && virtualKeys.length > 0 ? savedKey : apiKey;
-  const needsCors = config.data
-    ? corsNeedsUpdate(config.data.llm?.policies?.cors, "llm")
-    : false;
+    apiKeyMode === "saved" && rawVirtualKeys.length > 0 ? savedKey : apiKey;
+  const needsCors =
+    config.data && !llmEndpoint.sameOrigin
+      ? corsNeedsUpdate(config.data.llm?.policies?.cors, "llm")
+      : false;
   const needsMcpCors =
-    mcpEnabled && config.data
+    mcpEnabled && config.data && !mcpEndpoint.sameOrigin
       ? corsNeedsUpdate(config.data.mcp?.policies?.cors, "mcp")
       : false;
   const sendBlockers = sendReadinessBlockers({
@@ -251,7 +256,7 @@ export function PlaygroundPage() {
     modelOptionsCount: modelOptions.length,
     selectedKeyValue,
     apiKeyMode,
-    virtualKeysCount: virtualKeys.length,
+    virtualKeysCount: rawVirtualKeys.length,
   });
 
   useEffect(() => {
@@ -264,14 +269,14 @@ export function PlaygroundPage() {
 
   useEffect(() => {
     if (
-      virtualKeys[0]?.key &&
-      !virtualKeys.some(
+      rawVirtualKeys[0]?.key &&
+      !rawVirtualKeys.some(
         (item, index) => virtualKeyStorageRef(item, index) === selectedKeyRef,
       )
     ) {
-      setSelectedKeyRef(virtualKeyStorageRef(virtualKeys[0], 0));
+      setSelectedKeyRef(virtualKeyStorageRef(rawVirtualKeys[0], 0));
     }
-  }, [selectedKeyRef, setSelectedKeyRef, virtualKeys]);
+  }, [selectedKeyRef, setSelectedKeyRef, rawVirtualKeys]);
 
   useEffect(() => {
     localStorage.setItem(storageKeys.apiKeyMode, apiKeyMode);
@@ -560,6 +565,11 @@ export function PlaygroundPage() {
           Create a model before testing chat traffic.
         </StatusBanner>
       ) : null}
+      {claudeSubscriptionWarning(selectedModelConfig, providers) ? (
+        <StatusBanner state="warn" title="Claude subscription key detected">
+          {claudeSubscriptionWarning(selectedModelConfig, providers)}
+        </StatusBanner>
+      ) : null}
       {error ? (
         <StatusBanner state="bad" title="Playground request failed">
           {error}
@@ -580,15 +590,9 @@ export function PlaygroundPage() {
                   searchable
                   options={modelOptions.map((item) => ({
                     value: item.name,
-                    label:
-                      item.kind === "virtual" ? (
-                        <span className="select-option-copy">
-                          <strong>{item.name}</strong>
-                          <small>Virtual model</small>
-                        </span>
-                      ) : (
-                        item.name
-                      ),
+                    label: item.name,
+                    description:
+                      item.kind === "virtual" ? "Virtual model" : undefined,
                     icon: item.icon,
                     searchText: item.searchText,
                   }))}
@@ -624,12 +628,12 @@ export function PlaygroundPage() {
                 <Dropdown
                   ariaLabel="Virtual API key"
                   value={
-                    apiKeyMode === "saved" && virtualKeys.length > 0
+                    apiKeyMode === "saved" && rawVirtualKeys.length > 0
                       ? selectedKeyOptionRef
                       : "__raw__"
                   }
                   options={[
-                    ...virtualKeys.map((item, index) => ({
+                    ...rawVirtualKeys.map((item, index) => ({
                       value: virtualKeyStorageRef(item, index),
                       label: keyLabel(item),
                       icon: <KeyRound size={16} />,
@@ -650,7 +654,7 @@ export function PlaygroundPage() {
                   }}
                 />
               </FieldGroup>
-              {apiKeyMode === "raw" || virtualKeys.length === 0 ? (
+              {apiKeyMode === "raw" || rawVirtualKeys.length === 0 ? (
                 <Field label="Raw API key">
                   <input
                     value={apiKey}
@@ -801,10 +805,7 @@ function storedApiKeyMode(): "saved" | "raw" {
     : "saved";
 }
 
-function virtualKeyStorageRef(
-  key: { key: string; metadata?: unknown },
-  index: number,
-) {
+function virtualKeyStorageRef(key: { metadata?: unknown }, index: number) {
   const metadata =
     key.metadata &&
     typeof key.metadata === "object" &&

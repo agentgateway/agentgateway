@@ -29,6 +29,7 @@
       "items": true
     }
   },
+  "additionalProperties": false,
   "required": [
     "workloads",
     "services",
@@ -53,6 +54,10 @@
         "tunnelProtocol": {
           "$ref": "#/$defs/TunnelProtocol"
         },
+        "mode": {
+          "description": "Controls whether this bind opens an OS listener socket.\n`standard` (default) binds the `address`; `internal` does not bind a socket and is only\nreachable via in-process routing (e.g. CONNECT tunnel re-entry by other listeners).",
+          "$ref": "#/$defs/BindMode"
+        },
         "listeners": {
           "type": "object",
           "additionalProperties": {
@@ -60,11 +65,13 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "address",
         "protocol",
         "tunnelProtocol",
+        "mode",
         "listeners",
         "listeners"
       ]
@@ -94,6 +101,20 @@
         "hboneGateway",
         "proxy",
         "connect"
+      ]
+    },
+    "BindMode": {
+      "oneOf": [
+        {
+          "description": "Open a listener socket on the bind's address (the normal behavior).",
+          "type": "string",
+          "const": "standard"
+        },
+        {
+          "description": "Do not open a socket. The bind is registered for routing only and is reachable\nvia in-process re-entry (e.g. another listener redirecting CONNECT traffic to it).",
+          "type": "string",
+          "const": "internal"
+        }
       ]
     },
     "Listener": {
@@ -129,6 +150,7 @@
           "$ref": "#/$defs/ListenerProtocol"
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "gatewayName",
@@ -261,6 +283,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "gatewayName",
@@ -339,6 +362,7 @@
           "items": true
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "name",
@@ -541,6 +565,7 @@
       "required": [
         "weight"
       ],
+      "unevaluatedProperties": false,
       "oneOf": [
         {
           "type": "object",
@@ -558,6 +583,7 @@
                   "maximum": 65535
                 }
               },
+              "additionalProperties": false,
               "required": [
                 "name",
                 "port"
@@ -658,6 +684,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "name",
@@ -681,6 +708,7 @@
           "items": true
         }
       },
+      "additionalProperties": false,
       "required": [
         "weight",
         "backend"
@@ -777,6 +805,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "httpMesh",
         "tcpMesh",

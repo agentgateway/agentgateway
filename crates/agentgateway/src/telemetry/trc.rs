@@ -145,6 +145,7 @@ pub enum Protocol {
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct DeprecatedConfig {
 	pub endpoint: Option<String>,
+	#[serde(serialize_with = "crate::serdes::ser_sensitive_header_map")]
 	pub headers: HashMap<String, String>,
 	pub protocol: Protocol,
 	pub fields: LoggingFields,
@@ -227,12 +228,13 @@ impl Tracer {
 		// Choose exporter based on per-policy protocol:
 		// - gRPC when protocol is "grpc"
 		// - otherwise HTTP (fall back to gRPC if no HTTP path is available)
+		let target = &config.target;
 		let (provider, processor) = if config.protocol == crate::types::agent::TracingProtocol::Grpc {
 			// Use gRPC exporter that routes via PolicyClient/GrpcReferenceChannel
 			let exporter = PolicyGrpcSpanExporter::new(
 				policy_client.inputs.clone(),
-				Arc::new(config.provider_backend.clone()),
-				config.policies.clone(),
+				target.target.clone(),
+				target.policies.clone(),
 				exporter_runtime.clone(),
 			);
 			let processor = new_trace_processor(&resource, exporter);
@@ -245,8 +247,8 @@ impl Tracer {
 			let path = config.path.clone();
 			let http_client = PolicyOtelHttpClient {
 				policy_client,
-				backend_ref: config.provider_backend.clone(),
-				policies: config.policies.clone(),
+				backend_ref: target.target.as_ref().clone(),
+				policies: target.policies.clone(),
 				runtime: exporter_runtime,
 			};
 			let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -794,6 +796,8 @@ mod tests {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
 			fields: LoggingFields::default(),
+			otlp_filter: None,
+			otlp_fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
 			database_fields: LoggingFields::default(),
 		};
@@ -829,12 +833,16 @@ mod tests {
 
 		let filter = None;
 		let fields = LoggingFields::default();
+		let otlp_filter = None;
+		let otlp_fields = LoggingFields::default();
 		let metric_fields = Arc::new(MetricFields::default());
 		let database_fields = LoggingFields::default();
 		let cel_exec = CelLoggingExecutor {
 			executor: crate::cel::Executor::new_empty(),
 			filter: &filter,
 			fields: &fields,
+			otlp_filter: &otlp_filter,
+			otlp_fields: &otlp_fields,
 			metric_fields: &metric_fields,
 			database_fields: &database_fields,
 		};

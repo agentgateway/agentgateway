@@ -35,15 +35,28 @@ use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::transport::tls;
 use crate::types::agent::{
 	Backend, BackendReference, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind,
-	BindKey, BindProtocol, Listener, ListenerProtocol, ListenerSet, McpBackend, McpTarget,
-	McpTargetSpec, PathMatch, PolicyPhase, PolicyTarget, ResourceName, Route, RouteBackendReference,
-	RouteMatch, RouteName, SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
-	TCPRouteBackendReference, Target, TargetedPolicy,
+	BindKey, BindProtocol, FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget,
+	McpBackend, McpTarget, McpTargetSpec, PathMatch, PolicyInheritance, PolicyPhase, PolicyTarget,
+	ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, SimpleBackendReference,
+	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target,
+	TargetedPolicy,
 };
 use crate::types::loadbalancer::EndpointSet;
-use crate::types::local;
 use crate::types::local::LocalNamedAIProvider;
+use crate::types::{frontend, local};
 use crate::{ProxyInputs, client, mcp};
+
+// Copied from examples/mcp-tls/certs/ca-cert.pem.
+const MOCK_TLS_CA_CERT: &[u8] = b"-----BEGIN CERTIFICATE-----\n\
+MIIBezCCASCgAwIBAgIRAOnmoc9aVSZkyJ59U9r+6KAwCgYIKoZIzj0EAwIwGzEZ\n\
+MBcGA1UEAxMQYWdlbnRnYXRld2F5LmRldjAeFw0yNTEwMTUxOTQzMzZaFw0zNTEw\n\
+MTMxOTQzMzZaMBsxGTAXBgNVBAMTEGFnZW50Z2F0ZXdheS5kZXYwWTATBgcqhkjO\n\
+PQIBBggqhkjOPQMBBwNCAAScPuAg65+9D2YuOrFl4xAYOB6h2460QhZTIStE1PHP\n\
+MIOUJAAqBdAWAH5JG4UiVUH/tKYEd73CfaBsHSNrOJlLo0UwQzAOBgNVHQ8BAf8E\n\
+BAMCAQYwEgYDVR0TAQH/BAgwBgEB/wIBATAdBgNVHQ4EFgQUcwtMh/9FfJvcR9JU\n\
+bISOus7YDMowCgYIKoZIzj0EAwIDSQAwRgIhAL2agfEI9TBl060Y0aGQ7SX69aLC\n\
+7/ifjLmH38SGOWCJAiEA63NRyf5oz6rzvvIHpK8OM2hSHqWQFQnhBTCbyzNAe5U=\n\
+-----END CERTIFICATE-----\n";
 
 pub async fn send_request(
 	io: Client<MemoryConnector, Body>,
@@ -147,9 +160,11 @@ pub fn setup_llm_named_provider_mock(
 	config: &str,
 ) -> (MockServer, TestBind, Client<MemoryConnector, Body>) {
 	let t = setup_proxy_test(config).unwrap();
-	let be = crate::types::local::LocalAIBackend::Provider(provider)
-		.translate()
-		.unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::direct(t.pi.upstream.clone());
+	let be = futures::executor::block_on(
+		crate::types::local::LocalAIBackend::Provider(provider).translate(&resources),
+	)
+	.unwrap();
 	let b = Backend::AI(
 		ResourceName::new(strng::format!("{}", mock.address()), "".into()),
 		be,
@@ -288,6 +303,7 @@ pub fn simple_bind() -> Bind {
 		}]),
 		protocol: BindProtocol::http,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	}
 }
 
@@ -308,6 +324,7 @@ pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
 		}]),
 		protocol: BindProtocol::http,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	}
 }
 
@@ -324,6 +341,7 @@ pub fn simple_tcp_bind() -> Bind {
 		}]),
 		protocol: BindProtocol::tcp,
 		tunnel_protocol: Default::default(),
+		mode: Default::default(),
 	}
 }
 
@@ -813,13 +831,12 @@ impl TestBind {
 	}
 	pub async fn attach_backend(&mut self, p: serde_json::Value) {
 		let b: local::FullLocalBackend = serde_json::from_value(p).unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
 
-		let policies = b
-			.policies
-			.map(|p| p.translate())
-			.transpose()
-			.unwrap()
-			.unwrap_or_default();
+		let policies = match b.policies {
+			Some(p) => p.translate(&resources).await.unwrap(),
+			None => Vec::new(),
+		};
 		let local::FullLocalBackendSpec::Opaque(host) = b.spec else {
 			panic!("attach_backend only supports Opaque (host) backends");
 		};
@@ -837,15 +854,11 @@ impl TestBind {
 	pub async fn attach_route(&mut self, p: serde_json::Value) {
 		let pol: local::LocalRoute = serde_json::from_value(p).unwrap();
 		self.routes += 1;
-		let (route, backends) = local::convert_route(
-			self.pi.upstream.clone(),
-			&self.pi.cfg,
-			pol,
-			self.routes,
-			LISTENER_KEY,
-		)
-		.await
-		.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let (route, backends) =
+			local::convert_route(&resources, &self.pi.cfg, pol, self.routes, LISTENER_KEY)
+				.await
+				.unwrap();
 		for b in backends {
 			self
 				.pi
@@ -864,13 +877,10 @@ impl TestBind {
 	pub async fn attach_route_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(
-			self.pi.upstream.clone(),
-			pol,
-			self.pi.cfg.as_policy_context(oidc_key),
-		)
-		.await
-		.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let pols = local::split_policies(&resources, pol, self.pi.cfg.as_policy_context(oidc_key))
+			.await
+			.unwrap();
 		assert!(pols.backend_policies.is_empty());
 		for v in pols.route_policies {
 			self.policies += 1;
@@ -892,13 +902,10 @@ impl TestBind {
 	pub async fn attach_gateway_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("pol/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(
-			self.pi.upstream.clone(),
-			pol,
-			self.pi.cfg.as_policy_context(&oidc_key),
-		)
-		.await
-		.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let pols = local::split_policies(&resources, pol, self.pi.cfg.as_policy_context(&oidc_key))
+			.await
+			.unwrap();
 		assert!(pols.backend_policies.is_empty());
 		for v in pols.route_policies {
 			self.policies += 1;
@@ -920,13 +927,10 @@ impl TestBind {
 	pub async fn attach_service_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(
-			self.pi.upstream.clone(),
-			pol,
-			self.pi.cfg.as_policy_context(oidc_key),
-		)
-		.await
-		.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let pols = local::split_policies(&resources, pol, self.pi.cfg.as_policy_context(oidc_key))
+			.await
+			.unwrap();
 		assert!(pols.backend_policies.is_empty());
 		for v in pols.route_policies {
 			self.policies += 1;
@@ -948,9 +952,10 @@ impl TestBind {
 		let cfg = serde_json::json!({
 			"frontendPolicies": p,
 		});
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
 		let normalized = local::NormalizedLocalConfig::from(
 			self.pi.cfg.as_ref(),
-			self.pi.upstream.clone(),
+			&resources,
 			self.pi.cfg.gateway(),
 			&serde_json::to_string(&cfg).unwrap(),
 		)
@@ -966,9 +971,8 @@ impl TestBind {
 	}
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
-		let pols = local::split_policies(self.pi.upstream.clone(), pol, None)
-			.await
-			.unwrap();
+		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
+		let pols = local::split_policies(&resources, pol, None).await.unwrap();
 		for v in pols.backend_policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {
@@ -988,6 +992,35 @@ impl TestBind {
 	pub fn with_policy(&mut self, p: TargetedPolicy) {
 		self.pi.stores.binds.write().insert_policy(p);
 	}
+
+	pub fn with_connect_enabled(self) -> Self {
+		self.with_connect_mode(frontend::ConnectMode::Route)
+	}
+
+	pub fn with_connect_mode(self, mode: frontend::ConnectMode) -> Self {
+		self.with_connect_policy(mode, None)
+	}
+
+	pub fn with_connect_mode_on_port(self, mode: frontend::ConnectMode, port: u16) -> Self {
+		self.with_connect_policy(mode, Some(port))
+	}
+
+	pub fn with_connect_policy(mut self, mode: frontend::ConnectMode, port: Option<u16>) -> Self {
+		self.with_policy(TargetedPolicy {
+			key: strng::literal!("pol/frontend-connect"),
+			name: None,
+			inheritance: PolicyInheritance::default(),
+			target: PolicyTarget::Gateway(ListenerTarget {
+				gateway_name: strng::literal!("default"),
+				gateway_namespace: strng::literal!("default"),
+				listener_name: None,
+				port,
+			}),
+			policy: FrontendPolicy::Connect(frontend::Connect { mode }).into(),
+		});
+		self
+	}
+
 	fn memory_client(io: DuplexStream) -> Client<MemoryConnector, Body> {
 		::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
@@ -1009,7 +1042,7 @@ impl TestBind {
 		let tls: BackendTLS = crate::http::backendtls::ResolvedBackendTLS {
 			cert: None,
 			key: None,
-			root: Some(include_bytes!("../../../../examples/tls/certs/ca-cert.pem").to_vec()),
+			root: Some(MOCK_TLS_CA_CERT.to_vec()),
 			hostname: sni.map(|s| s.to_string()),
 			insecure: false,
 			insecure_host: true,
@@ -1198,6 +1231,7 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 			Default::default(),
 		)),
 		model_catalog: cost::ModelCatalog::empty(),
+		admin: None,
 		upstream: client.clone(),
 		ca: None,
 

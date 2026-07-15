@@ -4,6 +4,7 @@ use frozen_collections::{FzHashSet, Len};
 use serde::{Deserialize, Serialize};
 
 use crate::telemetry::log::OrderedStringMap;
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::{apply, defaults, *};
 
 fn empty_string_set(set: &Arc<FzHashSet<String>>) -> bool {
@@ -42,6 +43,7 @@ pub enum HTTPHeaderCase {
 }
 
 #[apply(schema!)]
+#[serde_with::skip_serializing_none]
 #[cfg_attr(feature = "schema", schemars(rename = "FrontendHTTP"))]
 pub struct HTTP {
 	/// Maximum request or response body size buffered by the frontend.
@@ -244,6 +246,24 @@ pub struct MetricsFieldsPolicy {
 }
 
 #[apply(schema!)]
+pub struct AccessLogFields {
+	/// Access log field names to remove.
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashSet<String>")
+	)]
+	#[serde(default, skip_serializing_if = "empty_string_set")]
+	pub remove: Arc<FzHashSet<String>>,
+	/// Access log fields to add, computed from CEL expressions.
+	#[serde(default, skip_serializing_if = "OrderedStringMap::is_empty")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "std::collections::HashMap<String, String>")
+	)]
+	pub add: Arc<OrderedStringMap<Arc<cel::Expression>>>,
+}
+
+#[apply(schema!)]
 pub struct LoggingPolicy {
 	/// CEL expression that decides whether a request is logged.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -300,17 +320,15 @@ impl LoggingPolicy {
 
 #[apply(schema!)]
 pub struct OtlpLoggingConfig {
-	/// Backend that receives OTLP logs.
+	/// Backend that receives OTLP logs and policies used when connecting to it.
 	#[serde(flatten)]
-	pub provider_backend: super::agent::SimpleBackendReference,
-	/// Backend policies used when exporting OTLP logs.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<super::agent::BackendTrafficPolicy>,
+	pub(super) target: SimpleBackendReferenceWithPolicies,
+	/// CEL expression that decides whether a request is exported over OTLP.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub filter: Option<Arc<cel::Expression>>,
+	/// OTLP-specific access log fields. If unset, the parent access log fields are used.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub fields: Option<AccessLogFields>,
 	/// OTLP protocol used to export logs.
 	#[serde(default)]
 	pub protocol: super::agent::TracingProtocol,

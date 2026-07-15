@@ -20,6 +20,7 @@ import {
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
   ReactNode,
 } from "react";
 
@@ -570,13 +571,36 @@ function clamp(value: number, min: number, max: number) {
 export function Drawer(props: {
   title: string;
   children: ReactNode;
-  footer?: ReactNode;
+  footer?: ReactNode | ((requestClose: () => void) => ReactNode);
   headerActions?: ReactNode;
   onClose: () => void;
   variant?: "default" | "nested";
+  dirty?: boolean;
+  saving?: boolean;
 }) {
   const drawerRef = useRef<HTMLElement>(null);
   const drawerId = useRef(Symbol("drawer"));
+  const [formChanged, setFormChanged] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const dirty = props.dirty ?? formChanged;
+  const closeStateRef = useRef({
+    dirty,
+    saving: props.saving,
+    confirmClose,
+    onClose: props.onClose,
+  });
+  closeStateRef.current = {
+    dirty,
+    saving: props.saving,
+    confirmClose,
+    onClose: props.onClose,
+  };
+
+  function requestClose() {
+    const state = closeStateRef.current;
+    if (state.dirty && !state.saving) setConfirmClose(true);
+    else state.onClose();
+  }
 
   useEffect(() => {
     const id = drawerId.current;
@@ -584,8 +608,11 @@ export function Drawer(props: {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       if (drawerStack.at(-1) !== id) return;
+      const state = closeStateRef.current;
+      if (state.confirmClose) return;
       event.preventDefault();
-      props.onClose();
+      if (state.dirty && !state.saving) setConfirmClose(true);
+      else state.onClose();
     }
     document.addEventListener("keydown", closeOnEscape);
     return () => {
@@ -593,7 +620,27 @@ export function Drawer(props: {
       const index = drawerStack.indexOf(id);
       if (index >= 0) drawerStack.splice(index, 1);
     };
-  }, [props.onClose]);
+  }, []);
+
+  useEffect(() => {
+    if (!dirty || props.saving) return;
+    function preventUnload(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", preventUnload);
+    return () => window.removeEventListener("beforeunload", preventUnload);
+  }, [dirty, props.saving]);
+
+  function trackButtonChange(event: ReactMouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement;
+    if (
+      target.closest(
+        '[role="option"], [role="radio"], .segmented-control button',
+      )
+    )
+      setFormChanged(true);
+  }
 
   useEffect(() => {
     const previousFocus =
@@ -634,47 +681,69 @@ export function Drawer(props: {
   }
 
   return (
-    <div
-      className={
-        props.variant === "nested"
-          ? "drawer-backdrop nested"
-          : "drawer-backdrop"
-      }
-      role="presentation"
-      onMouseDown={props.onClose}
-    >
-      <aside
-        className={props.variant === "nested" ? "drawer nested" : "drawer"}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="drawer-title"
-        tabIndex={-1}
-        ref={drawerRef}
-        onKeyDown={trapFocus}
-        onMouseDown={(event) => event.stopPropagation()}
+    <>
+      <div
+        className={
+          props.variant === "nested"
+            ? "drawer-backdrop nested"
+            : "drawer-backdrop"
+        }
+        role="presentation"
+        onMouseDown={requestClose}
       >
-        <div className="drawer-header">
-          <h3 id="drawer-title">{props.title}</h3>
-          <div className="drawer-header-actions">
-            {props.headerActions}
-            <Tooltip content="Close">
-              <button
-                className="icon-button"
-                type="button"
-                aria-label="Close"
-                onClick={props.onClose}
-              >
-                <X size={17} />
-              </button>
-            </Tooltip>
+        <aside
+          className={props.variant === "nested" ? "drawer nested" : "drawer"}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="drawer-title"
+          tabIndex={-1}
+          ref={drawerRef}
+          onKeyDown={trapFocus}
+          onChangeCapture={() => setFormChanged(true)}
+          onClickCapture={trackButtonChange}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="drawer-header">
+            <h3 id="drawer-title">{props.title}</h3>
+            <div className="drawer-header-actions">
+              {props.headerActions}
+              <Tooltip content="Close">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Close"
+                  onClick={requestClose}
+                >
+                  <X size={17} />
+                </button>
+              </Tooltip>
+            </div>
           </div>
-        </div>
-        <div className="drawer-body">{props.children}</div>
-        {props.footer ? (
-          <div className="drawer-footer">{props.footer}</div>
-        ) : null}
-      </aside>
-    </div>
+          <div className="drawer-body">{props.children}</div>
+          {props.footer ? (
+            <div className="drawer-footer">
+              {typeof props.footer === "function"
+                ? props.footer(requestClose)
+                : props.footer}
+            </div>
+          ) : null}
+        </aside>
+      </div>
+      {confirmClose ? (
+        <ConfirmDialog
+          title="Discard unsaved changes?"
+          destructive
+          confirmLabel="Discard changes"
+          onCancel={() => setConfirmClose(false)}
+          onConfirm={() => {
+            setConfirmClose(false);
+            props.onClose();
+          }}
+        >
+          <p>Your changes have not been saved and will be lost.</p>
+        </ConfirmDialog>
+      ) : null}
+    </>
   );
 }
 

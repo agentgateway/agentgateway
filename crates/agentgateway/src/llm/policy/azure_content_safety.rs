@@ -6,7 +6,9 @@ use tracing::{debug, warn};
 use crate::http::auth::BackendAuth;
 use crate::http::jwt::Claims;
 use crate::llm::RequestType;
-use crate::llm::policy::{AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig};
+use crate::llm::policy::{
+	AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig, with_default_timeout,
+};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
@@ -245,7 +247,7 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 
 	let resp = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-		.call_with_explicit_policies_list(req, mock_be, pols)
+		.call_with_explicit_policies_list(with_default_timeout(req), mock_be, pols)
 		.await?;
 
 	let status = resp.status();

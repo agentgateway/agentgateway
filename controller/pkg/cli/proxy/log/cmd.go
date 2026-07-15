@@ -9,8 +9,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
+
+const proxyAdminPort = 15000
 
 type flags struct {
 	namespace      string
@@ -20,7 +21,7 @@ type flags struct {
 }
 
 func Command() *cobra.Command {
-	f := &flags{proxyAdminPort: wellknown.ProxyAdminPort}
+	f := &flags{proxyAdminPort: proxyAdminPort}
 
 	cmd := &cobra.Command{
 		Use:   "log [resource]",
@@ -76,7 +77,7 @@ func run(cmd *cobra.Command, f *flags, args []string) error {
 		return err
 	}
 
-	pods, err := kubeutil.ResolvePodsForResource(kubeClient, resourceName, namespace)
+	pods, err := kubeutil.ResolvePodsForResource(cmd.Context(), kubeClient, resourceName, namespace)
 	if err != nil {
 		return err
 	}
@@ -87,7 +88,7 @@ func run(cmd *cobra.Command, f *flags, args []string) error {
 	}
 
 	return kubeutil.ForEachPod(cmd.Context(), pods, cmd.OutOrStdout(), func(ctx context.Context, pod kubeutil.Pod) (string, error) {
-		out, err := kubeClient.EnvoyDoWithPort(ctx, pod.Name, pod.Namespace, "POST", path, f.proxyAdminPort)
+		out, err := kubeClient.AgentgatewayRequest(ctx, pod.Name, pod.Namespace, "POST", path, f.proxyAdminPort)
 		if err != nil {
 			return "", err
 		}

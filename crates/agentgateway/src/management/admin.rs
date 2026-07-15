@@ -2,9 +2,10 @@
 
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::fmt;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use agent_core::drain::DrainWatcher;
@@ -29,6 +30,9 @@ use tracing_subscriber::filter;
 use super::hyper_helpers::{Server, plaintext_response};
 use crate::Config;
 use crate::http::{Request, Response};
+#[cfg(test)]
+#[path = "admin_tests.rs"]
+mod tests;
 
 // Constants for pprof profiling
 #[cfg(target_os = "linux")]
@@ -37,14 +41,6 @@ const PPROF_DEFAULT_SECONDS: u64 = 10;
 const PPROF_MIN_SECONDS: u64 = 1;
 #[cfg(target_os = "linux")]
 const PPROF_MAX_SECONDS: u64 = 300;
-
-pub trait ConfigDumpHandler: Sync + Send {
-	fn key(&self) -> &'static str;
-	// sadly can't use async trait because no Sync
-	// see: https://github.com/dtolnay/async-trait/issues/248, https://github.com/dtolnay/async-trait/issues/142
-	// we can't use FutureExt::shared because our result is not clonable
-	fn handle(&self) -> anyhow::Result<serde_json::Value>;
-}
 
 struct AdminError(anyhow::Error);
 
@@ -66,17 +62,24 @@ where
 #[derive(Clone)]
 struct AdminState {
 	stores: crate::store::Stores,
+	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+	resource_manager: crate::resource_manager::ResourceManager,
 	config: Arc<Config>,
 	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
 	model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 	shutdown_trigger: signal::ShutdownTrigger,
-	config_dump_handlers: Vec<Arc<dyn ConfigDumpHandler>>,
 	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 	dataplane_handle: Handle,
 }
 
 pub struct Service {
-	s: Server<AdminState>,
+	s: Server<AdminService>,
+	service: AdminService,
+}
+
+#[derive(Clone)]
+pub struct AdminService {
+	router: Router,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -112,44 +115,56 @@ impl Service {
 		config: Arc<Config>,
 		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 		stores: crate::store::Stores,
+		resource_manager: crate::resource_manager::ResourceManager,
 		shutdown_trigger: signal::ShutdownTrigger,
 		drain_rx: DrainWatcher,
 		dataplane_handle: Handle,
 	) -> anyhow::Result<Self> {
-		Server::<AdminState>::bind(
+		let state = Arc::new(AdminState {
+			config,
+			model_catalog,
+			stores,
+			resource_manager,
+			shutdown_trigger,
+			dataplane_handle,
+		});
+		let service = AdminService {
+			router: admin_router(state.clone()),
+		};
+		Server::<AdminService>::bind(
 			"admin",
-			config.admin_addr.clone(),
+			state.config.admin_addr.clone(),
 			drain_rx,
-			AdminState {
-				config,
-				model_catalog,
-				stores,
-				shutdown_trigger,
-				config_dump_handlers: vec![],
-				dataplane_handle,
-			},
+			service.clone(),
 		)
 		.await
-		.map(|s| Service { s })
+		.map(|s| Service { s, service })
 	}
 
 	pub fn address(&self) -> Option<SocketAddr> {
 		self.s.address()
 	}
 
-	pub fn add_config_dump_handler(&mut self, handler: Arc<dyn ConfigDumpHandler>) {
-		self.s.state_mut().config_dump_handlers.push(handler);
+	pub fn service(&self) -> AdminService {
+		self.service.clone()
 	}
 
 	pub fn spawn(self) {
-		let router = Arc::new(OnceLock::new());
-		self.s.spawn(move |state, req| {
-			let router = router.clone();
-			async move {
-				let router = router.get_or_init(|| admin_router(state)).clone();
-				Ok(router.oneshot(req).await.unwrap())
-			}
+		self.s.spawn(move |service, req| async move {
+			Ok(service.handle(req.map(crate::http::Body::new)).await)
 		})
+	}
+}
+
+impl fmt::Debug for AdminService {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("AdminService").finish_non_exhaustive()
+	}
+}
+
+impl AdminService {
+	pub async fn handle(&self, req: Request) -> Response {
+		self.router.clone().oneshot(req).await.unwrap()
 	}
 }
 
@@ -171,6 +186,7 @@ fn admin_router(state: Arc<AdminState>) -> Router {
 	let router = router.merge(crate::ui::router(
 		state.config.clone(),
 		state.model_catalog.clone(),
+		state.resource_manager.clone(),
 	));
 	#[cfg(not(feature = "ui"))]
 	let router = router.route("/", get(handle_dashboard));
@@ -439,16 +455,12 @@ async fn handle_config_dump(
 		version: BuildInfo::new(),
 		config: state.config.clone(),
 	};
-	let serde_json::Value::Object(mut kv) = serde_json::to_value(&dump)? else {
+	let serde_json::Value::Object(kv) = serde_json::to_value(&dump)? else {
 		return Err(AdminError(anyhow::anyhow!(
 			"config dump is not a key-value pair"
 		)));
 	};
 
-	for h in &state.config_dump_handlers {
-		let x = h.handle()?;
-		kv.insert(h.key().to_string(), x);
-	}
 	let body = serde_json::to_string_pretty(&kv)?;
 	Ok(
 		::http::Response::builder()

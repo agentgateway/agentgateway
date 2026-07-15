@@ -6,6 +6,7 @@ mod streamablehttp;
 
 use std::io;
 
+use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 pub use openapi::ParseError as OpenAPIParseError;
 use rmcp::model::{ClientNotification, ClientRequest, JsonRpcRequest};
@@ -206,14 +207,14 @@ impl Upstream {
 	) -> Result<mergestream::Messages, UpstreamError> {
 		match &self {
 			Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
-				c.send_message(request, ctx).await?,
+				Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?,
 			)),
 			Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
-				c.send_message(request, ctx).await?,
+				Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?,
 			)),
 			Upstream::McpStreamable(c) => {
 				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
-				let res = c.send_request(request, ctx).await?;
+				let res = Box::pin(c.send_request(request, ctx).assert_size::<{ 6 * 1024 }>()).await?;
 				if is_init {
 					let sid = match &res {
 						StreamableHttpPostResponse::Accepted => None,
@@ -224,7 +225,9 @@ impl Upstream {
 				}
 				res.try_into().map_err(Into::into)
 			},
-			Upstream::OpenAPI(c) => Ok(c.send_message(request, ctx).await?),
+			Upstream::OpenAPI(c) => {
+				Ok(Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?)
+			},
 		}
 	}
 

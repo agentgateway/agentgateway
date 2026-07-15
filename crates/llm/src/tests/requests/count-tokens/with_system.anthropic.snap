@@ -1,0 +1,20 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/count-tokens/with_system.json
+info:
+  model: claude-3-5-sonnet-20241022
+  system: You are a helpful assistant.
+  messages:
+    - role: user
+      content: What is the weather today?
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is the weather today?"
+    }
+  ],
+  "model": "claude-3-5-sonnet-20241022",
+  "system": "You are a helpful assistant."
+}

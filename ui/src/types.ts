@@ -24,6 +24,8 @@ import type {
   LocalTransformationConfig,
   LocalSimpleMcpConfig,
   LocalBind,
+  LocalGateway,
+  LocalGatewayListener,
   LocalListener,
   LocalRoute,
   LocalRouteBackend,
@@ -33,14 +35,14 @@ import type {
   McpPrefixMode as GeneratedMcpPrefixMode,
   McpStatefulMode as GeneratedMcpStatefulMode,
   CustomProvider as GeneratedCustomProvider,
-  ProviderFormat as GeneratedProviderFormat,
+  ProviderFormatConfig as GeneratedProviderFormatConfig,
 } from "./gateway-config";
 import type { StoresDump } from "./gateway-admin";
 
 export type ProviderName =
   | Extract<LocalLLMModels["provider"], string>
   | keyof Extract<LocalLLMModels["provider"], { custom: unknown }>;
-export type ProviderFormat = GeneratedProviderFormat;
+export type ProviderFormat = GeneratedProviderFormatConfig["type"];
 export type CustomProvider = GeneratedCustomProvider;
 export type ModelProvider = LocalLLMModels["provider"];
 export type ProviderAuth = BackendAuthCompat;
@@ -69,6 +71,8 @@ export type ExtAuthzPolicy = ExtAuthz;
 export type ExtProcPolicy = ExtProc;
 export type OidcPolicy = Partial<LocalOidcConfig>;
 export type TrafficBind = LocalBind;
+export type TrafficGateway = LocalGateway;
+export type TrafficGatewayListener = LocalGatewayListener;
 export type TrafficListener = LocalListener;
 export type TrafficRoute = LocalRoute;
 export type TrafficRouteBackend = LocalRouteBackend;

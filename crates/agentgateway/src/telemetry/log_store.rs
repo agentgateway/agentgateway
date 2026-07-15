@@ -9,6 +9,8 @@ use serde_json::Value;
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
+use crate::{apply, schema};
+
 const INSERT_LOG_PREFIX: &str = r#"
 INSERT INTO request_logs (
 	id, started_at, completed_at, duration_ms, trace_id, span_id, http_status, error,
@@ -67,9 +69,7 @@ mod sqlite;
 
 static REQUEST_LOG_STORE: OnceLock<RequestLogStore> = OnceLock::new();
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[apply(schema!)]
 pub struct Config {
 	pub url: String,
 }

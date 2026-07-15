@@ -21,7 +21,6 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	"sigs.k8s.io/yaml"
 
@@ -217,7 +216,7 @@ func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 		Grants:      grants,
 		References:  plugins.BuildReferenceIndex(nil, nil, plugins.DefaultReferenceTypes(collections)),
 		Resolver:    resolver,
-		JWKSLookup:  jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace), jwks.NewResolver(resolver)),
+		JWKSLookup:  jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace, collections.KrtOpts.ToOptions("jwks/PersistedEntries")...), jwks.NewResolver(resolver)),
 
 		CredentialResolver: plugins.DefaultCredentialResolverFactory(collections),
 	}
@@ -225,6 +224,8 @@ func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 
 func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 	mock := krttest.NewMock(t, inputs)
+	// Create a stop channel for collections that need it
+	krtOpts := krtutil.NewKrtOptions(test.NewStop(t), nil)
 	col := &plugins.AgwCollections{
 		Namespaces:           krttest.GetMockCollection[*corev1.Namespace](mock),
 		Nodes:                krttest.GetMockCollection[*corev1.Node](mock),
@@ -239,7 +240,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		Gateways:             krttest.GetMockCollection[*gwv1.Gateway](mock),
 		HTTPRoutes:           krttest.GetMockCollection[*gwv1.HTTPRoute](mock),
 		GRPCRoutes:           krttest.GetMockCollection[*gwv1.GRPCRoute](mock),
-		TCPRoutes:            krttest.GetMockCollection[*gwv1a2.TCPRoute](mock),
+		TCPRoutes:            krttest.GetMockCollection[*gwv1.TCPRoute](mock),
 		TLSRoutes:            krttest.GetMockCollection[*gwv1.TLSRoute](mock),
 		ReferenceGrants:      krttest.GetMockCollection[*gwv1b1.ReferenceGrant](mock),
 		BackendTLSPolicies:   krttest.GetMockCollection[*gwv1.BackendTLSPolicy](mock),
@@ -251,6 +252,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		SystemNamespace:      "agentgateway-system",
 		IstioNamespace:       "istio-system",
 		IstioClusterId:       "Kubernetes",
+		KrtOpts:              krtOpts,
 	}
 	col.SetupIndexes()
 	return col

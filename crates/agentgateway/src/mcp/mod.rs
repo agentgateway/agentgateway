@@ -17,20 +17,17 @@ use std::time::Duration;
 use axum_core::BoxError;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
 pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
-use rmcp::model::RequestId;
+use rmcp::model::{ErrorCode, ErrorData, JsonRpcError, RequestId};
 pub use router::App;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[cfg(feature = "schema")]
-use crate::JsonSchema;
 use crate::http::SendDirectResponse;
 use crate::proxy::ProxyError;
+use crate::{apply, schema};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "schema", schemars(rename = "McpBackendFailureMode"))]
-#[serde(rename_all = "camelCase")]
 pub enum FailureMode {
 	/// Fail the entire session if any target fails to initialize or any
 	/// upstream fails during a fanout. This is the default and matches
@@ -52,6 +49,8 @@ mod tests;
 pub enum Error {
 	#[error("method not allowed; must be GET, POST, or DELETE")]
 	MethodNotAllowed,
+	#[error("GET event stream is not supported by any upstream")]
+	GetStreamNotSupported,
 	#[error("client must accept both application/json and text/event-stream")]
 	InvalidAccept,
 	#[error("client must accept text/event-stream")]
@@ -72,6 +71,16 @@ pub enum Error {
 	InvalidSessionIdHeader,
 	#[error("invalid MCP protocol version header")]
 	InvalidProtocolVersion,
+	#[error("unsupported MCP protocol version: {1}")]
+	UnsupportedVersion(Option<RequestId>, String),
+	#[error("unsupported MCP protocol version for initialize: {1}")]
+	UnsupportedVersionForInitialize(Option<RequestId>, String),
+	#[error("MCP protocol version header/body mismatch")]
+	VersionMismatch(Option<RequestId>),
+	#[error("{1} header/body mismatch")]
+	HeaderBodyMismatch(Option<RequestId>, &'static str),
+	#[error("invalid MCP routing header: {1}")]
+	InvalidRoutingHeader(Option<RequestId>, &'static str),
 	#[error("failed to start stdio server: {0}")]
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
@@ -95,6 +104,71 @@ pub enum Error {
 	OpenAPI(upstream::OpenAPIParseError),
 	#[error("no backends configured")]
 	NoBackends,
+}
+
+impl Error {
+	pub fn jsonrpc_error_body(&self) -> Option<String> {
+		let (id, error) = match self {
+			Error::SendError(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::INTERNAL_ERROR,
+					message: format!("failed to send message: {self}").into(),
+					data: None,
+				},
+			),
+			Error::Authorization(id, _, _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::INVALID_PARAMS,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::McpGuardrails(id, rejection) => (id.clone(), rejection.clone()),
+			Error::UnsupportedVersion(Some(id), _)
+			| Error::UnsupportedVersionForInitialize(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::VersionMismatch(Some(id)) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::HEADER_MISMATCH,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::HeaderBodyMismatch(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::HEADER_MISMATCH,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			Error::InvalidRoutingHeader(Some(id), _) => (
+				id.clone(),
+				ErrorData {
+					code: ErrorCode::HEADER_MISMATCH,
+					message: self.to_string().into(),
+					data: None,
+				},
+			),
+			_ => return None,
+		};
+
+		serde_json::to_string(&JsonRpcError {
+			jsonrpc: Default::default(),
+			id: Some(id),
+			error,
+		})
+		.ok()
+	}
 }
 
 impl From<Error> for ProxyError {
@@ -149,10 +223,9 @@ impl Display for MCPOperation {
 	}
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Debug, PartialEq, ::cel::DynamicType)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
+#[derive(Default, PartialEq, ::cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct MCPTool {
 	/// The target handling the tool call after multiplexing resolution.
 	pub target: String,
@@ -169,10 +242,9 @@ pub struct MCPTool {
 	pub error: Option<serde_json::Value>,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Debug, PartialEq, ::cel::DynamicType)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema!)]
+#[derive(Default, PartialEq, ::cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
 pub struct MCPInfo {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub method_name: Option<String>,

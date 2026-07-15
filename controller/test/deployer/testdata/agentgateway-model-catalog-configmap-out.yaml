@@ -135,7 +135,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: MODEL_CATALOG_PATHS
-          value: /config/model-catalog/my-model-costs.json
+          value: /etc/agentgateway/model-catalog/my-model-costs.json
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:
@@ -175,10 +175,10 @@ spec:
         - mountPath: /var/run/secrets/xds-tokens
           name: xds-token
           readOnly: true
-        - mountPath: /config/model-catalog/my-model-costs.json
+        - mountPath: /etc/agentgateway/model-catalog/my-model-costs.json
           name: model-catalog-my-model-costs
           readOnly: true
-          subPath: catalog.json
+          subPath: my-model-costs.json
       securityContext:
         sysctls:
         - name: net.ipv4.ip_unprivileged_port_start

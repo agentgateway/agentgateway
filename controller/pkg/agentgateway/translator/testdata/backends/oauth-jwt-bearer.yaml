@@ -1,0 +1,99 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: token-endpoint
+spec:
+  static:
+    host: sts.example.com
+    port: 443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: static-backend
+spec:
+  static:
+    host: example.com
+    port: 8888
+  policies:
+    auth:
+      oauthTokenExchange:
+        tokenEndpoint:
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: token-endpoint
+        grantType: JwtBearer
+        subjectToken:
+          source:
+            expression: request.headers["x-client-assertion"]
+        clientAuth:
+          clientId: public-client
+          method: ClientSecretPost
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - auth:
+          oauthTokenExchange:
+            clientAuth:
+              clientId: public-client
+              method: CLIENT_SECRET_POST
+            grantType: JWT_BEARER
+            subjectToken:
+              source:
+                expression: request.headers["x-client-assertion"]
+            tokenEndpoint:
+              backend: default/token-endpoint
+      key: default/static-backend
+      name:
+        name: static-backend
+        namespace: default
+      static:
+        host: example.com
+        port: 8888
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/token-endpoint
+      name:
+        name: token-endpoint
+        namespace: default
+      static:
+        host: sts.example.com
+        port: 443
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: static-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: token-endpoint
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

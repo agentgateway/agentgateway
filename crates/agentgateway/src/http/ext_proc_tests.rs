@@ -2049,10 +2049,12 @@ fn build_ext_proc_request_for_test(
 	let bind = setup_proxy_test("{}").unwrap().with_backend(ext_proc_addr);
 	let client = crate::proxy::httpproxy::PolicyClient::new(bind.inputs());
 	super::ExtProc {
-		target: Arc::new(crate::types::agent::SimpleBackendReference::Backend(
-			strng::format!("/{}", ext_proc_addr),
-		)),
-		policies: Vec::new(),
+		target: crate::types::agent::SimpleBackendReferenceWithPolicies {
+			target: Arc::new(crate::types::agent::SimpleBackendReference::Backend(
+				strng::format!("/{}", ext_proc_addr),
+			)),
+			policies: Vec::new(),
+		},
 		failure_mode: ext_proc::FailureMode::FailClosed,
 		metadata_context: None,
 		request_attributes: None,
@@ -2474,7 +2476,7 @@ mod standalone_inference_routing {
 #[tokio::test]
 async fn custom_llm_provider_service_backend_runs_inference_routing() {
 	let backend = body_mock(include_bytes!(
-		"../llm/tests/response/completions/basic.json"
+		"../../../llm/src/tests/response/completions/basic.json"
 	))
 	.await;
 	let backend_addr = *backend.address();
@@ -2528,7 +2530,7 @@ async fn custom_llm_provider_service_backend_runs_inference_routing() {
 		io,
 		Method::POST,
 		"http://lo/v1/chat/completions",
-		include_bytes!("../llm/tests/requests/completions/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
 	)
 	.await;
 	assert_eq!(res.status(), 200);
@@ -2551,7 +2553,10 @@ async fn custom_llm_provider_service_backend_runs_inference_routing() {
 
 #[tokio::test]
 async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token_rate_limit() {
-	let backend = body_mock(include_bytes!("../llm/tests/response/anthropic/basic.json")).await;
+	let backend = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/anthropic/basic.json"
+	))
+	.await;
 	let backend_addr = *backend.address();
 	let request_headers_seen = Arc::new(AtomicUsize::new(0));
 	let request_path_seen = Arc::new(Mutex::new(None));
@@ -2639,7 +2644,7 @@ async fn custom_llm_provider_inference_routing_sees_input_shape_and_amends_token
 		io,
 		Method::POST,
 		"http://lo/v1/chat/completions",
-		include_bytes!("../llm/tests/requests/completions/basic.json"),
+		include_bytes!("../../../llm/src/tests/requests/completions/basic.json"),
 	)
 	.await;
 	assert_eq!(res.status(), 200);
@@ -3782,12 +3787,14 @@ fn request_log() -> RequestLog {
 #[derive(Clone)]
 struct RequestRecorder {
 	requests: RequestLog,
+	open_metadata: Arc<Mutex<Vec<HashMap<String, String>>>>,
 }
 
 impl RequestRecorder {
 	fn new() -> Self {
 		Self {
 			requests: request_log(),
+			open_metadata: Arc::new(Mutex::new(Vec::new())),
 		}
 	}
 }
@@ -3796,6 +3803,18 @@ type MetadataTracker = RequestRecorder;
 
 #[async_trait::async_trait]
 impl Handler for RequestRecorder {
+	async fn on_open(&mut self, metadata: &tonic::metadata::MetadataMap) {
+		let mut values = HashMap::new();
+		for key_and_value in metadata.iter() {
+			if let tonic::metadata::KeyAndValueRef::Ascii(key, value) = key_and_value
+				&& let Ok(value) = value.to_str()
+			{
+				values.insert(key.to_string(), value.to_string());
+			}
+		}
+		self.open_metadata.lock().unwrap().push(values);
+	}
+
 	async fn on_request(&mut self, request: &proto::ProcessingRequest) {
 		self.requests.lock().unwrap().push(request.clone());
 	}
@@ -4603,6 +4622,116 @@ mod metadata_context_and_attributes {
 	}
 
 	#[tokio::test]
+	async fn test_reserved_metadata_context_becomes_grpc_initial_metadata() {
+		let mock = simple_mock().await;
+		let tracker = MetadataTracker::new();
+		let requests = tracker.requests.clone();
+		let open_metadata = tracker.open_metadata.clone();
+
+		let meta = HashMap::from([
+			(
+				super::super::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE.to_string(),
+				[(
+					"x-policy-ref".to_string(),
+					Arc::new(Expression::new_strict("'default/my-policy'").unwrap()),
+				)]
+				.into(),
+			),
+			(
+				"envoy.filters.http.ext_proc".to_string(),
+				[(
+					"still-present".to_string(),
+					Arc::new(Expression::new_strict("'value'").unwrap()),
+				)]
+				.into(),
+			),
+		]);
+
+		let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+			mock,
+			ext_proc::FailureMode::FailClosed,
+			ExtProcMock::new(move || tracker.clone()),
+			"{}",
+			Some(meta),
+			None,
+			None,
+		)
+		.await;
+
+		let res = send_request(io, Method::GET, "http://lo/test-path").await;
+		assert_eq!(res.status(), 200);
+
+		let open = open_metadata.lock().unwrap();
+		assert!(!open.is_empty());
+		assert_eq!(
+			open[0].get("x-policy-ref").map(String::as_str),
+			Some("default/my-policy")
+		);
+
+		let reqs = requests.lock().unwrap();
+		assert!(!reqs.is_empty());
+		let req = &reqs[0];
+		let meta_ctx = req
+			.metadata_context
+			.as_ref()
+			.expect("should have metadata_context");
+		assert!(
+			!meta_ctx
+				.filter_metadata
+				.contains_key(super::super::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE)
+		);
+		assert!(
+			meta_ctx
+				.filter_metadata
+				.contains_key("envoy.filters.http.ext_proc")
+		);
+	}
+
+	#[tokio::test]
+	async fn test_invalid_reserved_metadata_entries_are_skipped() {
+		let mock = simple_mock().await;
+		let tracker = MetadataTracker::new();
+		let open_metadata = tracker.open_metadata.clone();
+
+		let meta = HashMap::from([(
+			super::super::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE.to_string(),
+			[
+				(
+					"x-policy-ref".to_string(),
+					Arc::new(Expression::new_strict("'default/my-policy'").unwrap()),
+				),
+				(
+					"BadKey".to_string(),
+					Arc::new(Expression::new_strict("'should-be-skipped'").unwrap()),
+				),
+			]
+			.into(),
+		)]);
+
+		let (_mock, _ext_proc, _bind, io) = setup_ext_proc_mock_with_meta(
+			mock,
+			ext_proc::FailureMode::FailClosed,
+			ExtProcMock::new(move || tracker.clone()),
+			"{}",
+			Some(meta),
+			None,
+			None,
+		)
+		.await;
+
+		let res = send_request(io, Method::GET, "http://lo/test-path").await;
+		assert_eq!(res.status(), 200);
+
+		let open = open_metadata.lock().unwrap();
+		assert!(!open.is_empty());
+		assert_eq!(
+			open[0].get("x-policy-ref").map(String::as_str),
+			Some("default/my-policy")
+		);
+		assert!(!open[0].contains_key("BadKey"));
+	}
+
+	#[tokio::test]
 	async fn test_cel_req_attributes() {
 		let mock = simple_mock().await;
 		let tracker = MetadataTracker::new();
@@ -4647,6 +4776,80 @@ mod metadata_context_and_attributes {
 		match &ns_attrs.fields.get("method").unwrap().kind {
 			Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "GET"),
 			invalid => panic!("exepected a string got {:?}", invalid),
+		}
+	}
+
+	#[test]
+	fn test_request_attributes_can_be_supplied_by_cel() {
+		let mut req = Request::builder()
+			.method(Method::GET)
+			.uri("http://lo/foo")
+			.version(::http::Version::HTTP_2)
+			.body(Body::empty())
+			.unwrap();
+		let tcp = crate::transport::stream::TCPConnectionInfo {
+			peer_addr: "192.168.0.1:12345".parse().unwrap(),
+			local_addr: "10.0.0.1:8080".parse().unwrap(),
+			start: std::time::Instant::now(),
+			raw_peer_addr: None,
+		};
+		req
+			.extensions_mut()
+			.insert(crate::cel::SourceContext::from_tcp_connection(
+				&tcp, None, None,
+			));
+		req
+			.extensions_mut()
+			.insert(crate::cel::DestinationContext::from_tcp_connection(&tcp));
+
+		let exec = crate::cel::Executor::new_request(&req);
+		let attrs = HashMap::from([
+			(
+				"source.address".to_string(),
+				Arc::new(Expression::new_strict("source.address").unwrap()),
+			),
+			(
+				"source.port".to_string(),
+				Arc::new(Expression::new_strict("source.port").unwrap()),
+			),
+			(
+				"destination.address".to_string(),
+				Arc::new(Expression::new_strict("destination.address").unwrap()),
+			),
+			(
+				"destination.port".to_string(),
+				Arc::new(Expression::new_strict("destination.port").unwrap()),
+			),
+			(
+				"request.protocol".to_string(),
+				Arc::new(Expression::new_strict("request.version").unwrap()),
+			),
+		]);
+
+		let built = super::super::build_request_attributes(&exec, Some(&attrs));
+		let ext_proc = built
+			.get("envoy.filters.http.ext_proc")
+			.expect("envoy ext_proc namespace");
+
+		match &ext_proc.fields.get("source.address").unwrap().kind {
+			Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "192.168.0.1"),
+			invalid => panic!("expected source.address string, got {invalid:?}"),
+		}
+		match &ext_proc.fields.get("source.port").unwrap().kind {
+			Some(prost_wkt_types::value::Kind::NumberValue(n)) => assert_eq!(*n, 12345.0),
+			invalid => panic!("expected source.port number, got {invalid:?}"),
+		}
+		match &ext_proc.fields.get("destination.address").unwrap().kind {
+			Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "10.0.0.1"),
+			invalid => panic!("expected destination.address string, got {invalid:?}"),
+		}
+		match &ext_proc.fields.get("destination.port").unwrap().kind {
+			Some(prost_wkt_types::value::Kind::NumberValue(n)) => assert_eq!(*n, 8080.0),
+			invalid => panic!("expected destination.port number, got {invalid:?}"),
+		}
+		match &ext_proc.fields.get("request.protocol").unwrap().kind {
+			Some(prost_wkt_types::value::Kind::StringValue(s)) => assert_eq!(s, "HTTP/2"),
+			invalid => panic!("expected request.protocol string, got {invalid:?}"),
 		}
 	}
 

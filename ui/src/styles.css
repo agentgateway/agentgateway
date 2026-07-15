@@ -198,7 +198,7 @@ a {
 }
 
 .nav-section {
-  margin: 11px 8px 3px;
+  margin: 9px 8px 2px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
@@ -211,7 +211,7 @@ a {
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 32px;
+  min-height: 30px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -224,13 +224,13 @@ a {
 
 .nav-item.nav-group-start {
   position: relative;
-  margin-top: 11px;
+  margin-top: 9px;
 }
 
 .nav-item.nav-group-start::before {
   content: "";
   position: absolute;
-  top: -6px;
+  top: -5px;
   left: 9px;
   right: 9px;
   height: 1px;
@@ -5526,6 +5526,11 @@ details summary {
 .raw-config-editor {
   height: min(72vh, 780px);
   min-height: 560px;
+}
+
+.config-diff-editor {
+  height: min(68vh, 720px);
+  min-height: 460px;
 }
 
 .schema-yaml-editor.policy-yaml-editor {

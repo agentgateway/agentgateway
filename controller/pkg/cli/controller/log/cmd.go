@@ -10,8 +10,9 @@ import (
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/namespaces"
-	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
+
+const controllerAdminPort = 9095
 
 type flags struct {
 	namespace           string
@@ -21,7 +22,7 @@ type flags struct {
 }
 
 func Command() *cobra.Command {
-	f := &flags{controllerAdminPort: int(wellknown.AdminPort)}
+	f := &flags{controllerAdminPort: controllerAdminPort}
 
 	cmd := &cobra.Command{
 		Use:   "log",
@@ -74,7 +75,7 @@ func run(cmd *cobra.Command, f *flags) error {
 	// The controller /logging handler requires POST or PUT even for reads;
 	// sending POST with no query params returns the current levels.
 	return kubeutil.ForEachPod(cmd.Context(), pods, cmd.OutOrStdout(), func(ctx context.Context, pod kubeutil.Pod) (string, error) {
-		out, err := kubeClient.EnvoyDoWithPort(ctx, pod.Name, pod.Namespace, "POST", path, f.controllerAdminPort)
+		out, err := kubeClient.AgentgatewayRequest(ctx, pod.Name, pod.Namespace, "POST", path, f.controllerAdminPort)
 		if err != nil {
 			return "", err
 		}

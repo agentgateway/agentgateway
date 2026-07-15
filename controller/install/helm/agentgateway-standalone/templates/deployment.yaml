@@ -1,0 +1,116 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" . }}
+  namespace: {{ include "agentgateway-standalone.namespace" . }}
+  labels:
+    {{- include "agentgateway-standalone.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "agentgateway-standalone.selectorLabels" . | nindent 6 }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "agentgateway-standalone.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "agentgateway-standalone.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+      - name: config-bootstrap
+        image: {{ include "agentgateway-standalone.configBootstrapImage" . | quote }}
+        {{- with .Values.configBootstrap.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        command:
+        - sh
+        - -ec
+        - |
+          if [ "{{ .Values.configBootstrap.overwrite }}" = "true" ] || [ ! -f /config/config.yaml ]; then
+            tmp="$(mktemp /config/config.yaml.XXXXXX)"
+            cp /bootstrap/config.yaml "$tmp"
+            mv "$tmp" /config/config.yaml
+          fi
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: config-bootstrap
+          mountPath: /bootstrap
+          readOnly: true
+      containers:
+      - name: agentgateway
+        image: {{ include "agentgateway-standalone.mainImage" . | quote }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{- with .Values.securityContext }}
+        securityContext:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        args:
+        - -f
+        - /config/config.yaml
+        ports:
+        - name: admin
+          containerPort: {{ .Values.admin.service.port }}
+          protocol: TCP
+        env:
+        - name: RUST_BACKTRACE
+          value: "1"
+        {{- with .Values.extraEnv }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: tmp
+          mountPath: /tmp
+        {{- with .Values.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      volumes:
+      - name: config
+        {{- if .Values.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.persistence.existingClaim | default (printf "%s-config" (include "agentgateway-standalone.fullname" .)) }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      - name: config-bootstrap
+        configMap:
+          name: {{ include "agentgateway-standalone.fullname" . }}-config-bootstrap
+      - name: tmp
+        emptyDir: {}
+      {{- with .Values.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

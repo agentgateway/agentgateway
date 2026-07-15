@@ -1,0 +1,141 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth-token-exchange-backend
+  namespace: agentgateway-base
+spec:
+  ports:
+  - name: http
+    port: 80
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth-jwt-bearer-backend
+  namespace: agentgateway-base
+spec:
+  ports:
+  - name: http
+    port: 80
+  selector:
+    app.kubernetes.io/name: testbox
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: oauth-token-exchange
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "oauth-token-exchange.com"
+  rules:
+  - backendRefs:
+    - name: oauth-token-exchange-backend
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: oauth-jwt-bearer
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "oauth-jwt-bearer.com"
+  rules:
+  - backendRefs:
+    - name: oauth-jwt-bearer-backend
+      port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: oauth-dummy-idp
+  namespace: agentgateway-base
+spec:
+  policies:
+    tls:
+      insecureSkipVerify: All
+  static:
+    host: dummy-idp.default
+    port: 8443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-token-exchange
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: oauth-token-exchange-backend
+  backend:
+    auth:
+      oauthTokenExchange:
+        tokenEndpoint:
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: oauth-dummy-idp
+          port: 8443
+          path: /token-exchange
+        grantType: TokenExchange
+        actorToken:
+          source:
+            header:
+              name: X-Actor-Token
+          tokenType: Jwt
+        audiences:
+        - api://echo
+        scopes:
+        - echo.read
+        resources:
+        - https://echo.example.com
+        requestedTokenType: AccessToken
+        additionalParams:
+          tenant: request.headers["x-tenant"]
+        clientAuth:
+          clientId: oauth-e2e-client
+          method: ClientSecretPost
+        cache:
+          inMemory:
+            maxEntries: 0
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-jwt-bearer
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: oauth-jwt-bearer-backend
+  backend:
+    auth:
+      oauthTokenExchange:
+        tokenEndpoint:
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: oauth-dummy-idp
+          port: 8443
+          path: /token-exchange
+        grantType: JwtBearer
+        subjectToken:
+          source:
+            header:
+              name: X-Client-Assertion
+        clientAuth:
+          clientId: oauth-e2e-jwt-client
+          method: ClientSecretPost
+        location:
+          header:
+            name: X-Exchanged-Token
+        cache:
+          inMemory:
+            maxEntries: 0

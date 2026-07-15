@@ -613,6 +613,7 @@
               "format": "double"
             }
           },
+          "additionalProperties": false,
           "required": [
             "total",
             "input",
@@ -680,7 +681,8 @@
               ],
               "format": "double"
             }
-          }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false,
@@ -826,6 +828,30 @@
       },
       "additionalProperties": false
     },
+    "destination": {
+      "description": "`destination` contains attributes about the downstream request destination at agentgateway.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "address": {
+          "description": "The IP address of the downstream request destination at agentgateway.",
+          "type": "string",
+          "format": "ip",
+          "default": "0.0.0.0"
+        },
+        "port": {
+          "description": "The port of the downstream request destination at agentgateway.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "default": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "mcp": {
       "description": "`mcp` contains attributes about the MCP request.\nRequest-time CEL only includes identity fields such as `tool`, `prompt`, or `resource`.\nPost-request CEL may also include fields like `methodName`, `sessionId`, and tool payloads.",
       "type": [
@@ -874,6 +900,7 @@
               "description": "The terminal JSON-RPC error payload, if available."
             }
           },
+          "additionalProperties": false,
           "required": [
             "target",
             "name"
@@ -895,7 +922,8 @@
               "type": "string",
               "default": ""
             }
-          }
+          },
+          "additionalProperties": false
         },
         "resource": {
           "type": [
@@ -913,9 +941,11 @@
               "type": "string",
               "default": ""
             }
-          }
+          },
+          "additionalProperties": false
         }
-      }
+      },
+      "additionalProperties": false
     },
     "backend": {
       "description": "`backend` contains information about the backend being used.",

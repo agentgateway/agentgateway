@@ -7,13 +7,64 @@ use secrecy::SecretString;
 use crate::llm::{AIProvider, NamedAIProvider};
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
-	Backend, BackendTrafficPolicy, ListenerTarget, PolicyPhase, PolicyTarget, PolicyType,
+	Backend, BackendTrafficPolicy, ListenerTarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType,
 	ResourceName, RouteBackendTarget, Target, TrafficPolicy,
 };
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
 
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
+
+struct ClearTracingEnv {
+	_guard: std::sync::MutexGuard<'static, ()>,
+	values: Vec<(&'static str, Option<std::ffi::OsString>)>,
+}
+
+impl ClearTracingEnv {
+	fn new() -> Self {
+		let guard = crate::config::lock_env_for_tests();
+		let keys = [
+			"OTLP_ENDPOINT",
+			"OTLP_HEADERS",
+			"OTLP_PROTOCOL",
+			"OTEL_EXPORTER_OTLP_ENDPOINT",
+			"OTEL_EXPORTER_OTLP_HEADERS",
+			"OTEL_EXPORTER_OTLP_PROTOCOL",
+			"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+			"OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+			"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+		];
+		let values = keys
+			.into_iter()
+			.map(|key| {
+				let value = std::env::var_os(key);
+				unsafe {
+					std::env::remove_var(key);
+				}
+				(key, value)
+			})
+			.collect();
+		Self {
+			_guard: guard,
+			values,
+		}
+	}
+}
+
+impl Drop for ClearTracingEnv {
+	fn drop(&mut self) {
+		for (key, value) in &self.values {
+			match value {
+				Some(value) => unsafe {
+					std::env::set_var(key, value);
+				},
+				None => unsafe {
+					std::env::remove_var(key);
+				},
+			}
+		}
+	}
+}
 
 fn test_client() -> client::Client {
 	client::Client::new(
@@ -67,8 +118,9 @@ fn test_oidc_policy() -> super::FilterOrPolicy {
 async fn normalize_test_policies(
 	policies: Vec<super::LocalPolicy>,
 ) -> anyhow::Result<super::NormalizedLocalConfig> {
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
 	super::convert(
-		test_client(),
+		&resources,
 		ListenerTarget {
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
@@ -85,17 +137,22 @@ async fn normalize_test_policies(
 			services: vec![],
 			backends: vec![],
 			route_groups: vec![],
+			gateways: Default::default(),
+			routes: vec![],
+			tcp_routes: vec![],
 			llm: None,
 			mcp: None,
+			ui: None,
 		},
 	)
 	.await
 }
 
 async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig> {
+	let resources = crate::resource_manager::ResourceFetcher::direct(test_client());
 	NormalizedLocalConfig::from(
 		&test_config(),
-		test_client(),
+		&resources,
 		ListenerTarget {
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
@@ -109,11 +166,12 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 
 async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocalConfig> {
 	let client = test_client();
+	let resources = crate::resource_manager::ResourceFetcher::direct(client);
 	let config = crate::config::parse_config(yaml_str.to_string(), None).unwrap();
 
 	NormalizedLocalConfig::from(
 		&config,
-		client,
+		&resources,
 		ListenerTarget {
 			gateway_name: "name".into(),
 			gateway_namespace: "ns".into(),
@@ -184,6 +242,107 @@ binds:
 		backend.to_string(),
 		"/ns/name/bind/1080/listener0/default/route0/backend0"
 	);
+}
+
+#[tokio::test]
+async fn test_multiple_wildcard_binds_rejected() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect_err("two wildcard binds should be rejected");
+	assert!(
+		err.to_string().contains("at most one wildcard bind"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_explicit_port_zero_counts_as_wildcard() {
+	// `port: 0` on an internal bind is the same wildcard sentinel as omitting the port. A portless
+	// wildcard plus an explicit `port: 0` wildcard must still be rejected as two wildcards.
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+- port: 0
+  mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect_err("port: 0 and a portless wildcard are both wildcards and should be rejected");
+	assert!(
+		err.to_string().contains("at most one wildcard bind"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_single_explicit_port_zero_wildcard_allowed() {
+	// A lone `port: 0` internal bind is a valid wildcard and normalizes to the same `bind/wildcard`
+	// key as a portless one.
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 0
+  mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect("a single port: 0 internal bind should normalize");
+	assert!(
+		normalized.binds.iter().any(|b| b.key == "bind/wildcard"),
+		"expected a bind/wildcard key, got: {:?}",
+		normalized.binds.iter().map(|b| &b.key).collect::<Vec<_>>()
+	);
+}
+
+#[tokio::test]
+async fn test_single_wildcard_bind_with_exact_internal_bind_allowed() {
+	// One exact internal bind (port 443) plus one wildcard internal bind is valid: the exact
+	// bind is matched by port, the wildcard serves everything else.
+	normalize_test_yaml(
+		r#"
+binds:
+- port: 443
+  mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+- mode: internal
+  listeners:
+  - routes:
+    - backends:
+      - dynamic: {}
+"#,
+	)
+	.await
+	.expect("one wildcard bind alongside an exact internal bind should normalize");
 }
 
 async fn test_config_parsing(test_name: &str) {
@@ -413,38 +572,22 @@ llm:
 		.find(|route| route.key == "llm:request")
 		.expect("expected single LLM request route");
 	assert!(
-		llm_route.llm_router.is_some(),
-		"LLM request route should carry the native model router"
+		llm_route.llm_router.is_none(),
+		"LLM request route should route through the LLMRouter backend"
 	);
-}
-
-#[tokio::test]
-async fn test_llm_failover_virtual_model_rejects_authorized_target() {
-	let err = normalize_test_config(
-		r#"
-llm:
-  models:
-  - name: concrete
-    provider: openAI
-    authorization:
-      rules:
-      - 'request.headers["x-user"] == "admin"'
-  virtualModels:
-  - name: smart
-    routing:
-      failover:
-        targets:
-        - model: concrete
-          priority: 0
-"#,
-	)
-	.await
-	.expect_err("failover target authorization cannot be enforced after provider selection");
 	assert!(
-		err.to_string().contains(
-			"virtual model target concrete has authorization; failover virtual models cannot target authorized models"
-		),
-		"{err:?}"
+		llm_route
+			.backends
+			.iter()
+			.any(|backend| matches!(&backend.target, RouteBackendTarget::Backend(name) if name.as_str() == "/llm:router")),
+		"LLM request route should target the LLMRouter backend"
+	);
+	assert!(
+		normalized
+			.backends
+			.iter()
+			.any(|backend| matches!(&backend.backend, Backend::LLMRouter(name, _) if name.name.as_str() == "llm:router")),
+		"normalized config should contain the LLMRouter backend"
 	);
 }
 
@@ -483,8 +626,22 @@ llm:
 		.find(|route| route.key == "llm:request")
 		.expect("expected single LLM request route");
 	assert!(
-		llm_route.llm_router.is_some(),
-		"LLM request route should carry the native model router"
+		llm_route.llm_router.is_none(),
+		"LLM request route should route through the LLMRouter backend"
+	);
+	assert!(
+		llm_route
+			.backends
+			.iter()
+			.any(|backend| matches!(&backend.target, RouteBackendTarget::Backend(name) if name.as_str() == "/llm:router")),
+		"LLM request route should target the LLMRouter backend"
+	);
+	assert!(
+		normalized
+			.backends
+			.iter()
+			.any(|backend| matches!(&backend.backend, Backend::LLMRouter(name, _) if name.name.as_str() == "llm:router")),
+		"normalized config should contain the LLMRouter backend"
 	);
 	assert!(
 		!routes
@@ -626,6 +783,362 @@ async fn test_mcp_simple_config() {
 }
 
 #[tokio::test]
+async fn test_llm_mcp_same_port_share_listener_routes() {
+	let normalized = normalize_test_yaml(
+		r#"
+llm:
+  port: 3000
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+"#,
+	)
+	.await
+	.expect("same-port LLM and MCP should normalize");
+
+	assert_eq!(normalized.binds.len(), 1);
+	assert_eq!(normalized.binds[0].address.port(), 3000);
+	assert_eq!(
+		normalized.binds[0]
+			.listeners
+			.iter()
+			.map(|listener| listener.key.as_str())
+			.collect::<Vec<_>>(),
+		vec!["llm"],
+	);
+	assert_eq!(normalized.listener_routes.len(), 1);
+	assert_eq!(normalized.listener_routes[0].0.as_str(), "llm");
+	let routes = &normalized.listener_routes[0].1;
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "llm:request")
+	);
+	let mcp_route = routes
+		.iter()
+		.find(|route| route.key.as_str() == "mcp:default")
+		.expect("expected MCP route on shared listener");
+	assert_eq!(
+		mcp_route
+			.matches
+			.iter()
+			.map(|route_match| match &route_match.path {
+				PathMatch::PathPrefix(path) => path.as_str(),
+				other => panic!("expected path prefix match, got {other:?}"),
+			})
+			.collect::<Vec<_>>(),
+		vec!["/mcp", "/sse", "/.well-known"],
+	);
+}
+
+#[tokio::test]
+async fn test_llm_mcp_same_port_rejects_llm_tls() {
+	let err = normalize_test_yaml(
+		r#"
+llm:
+  port: 3000
+  tls:
+    cert: inline
+    key: inline
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+"#,
+	)
+	.await
+	.expect_err("same-port LLM and MCP should reject llm.tls");
+	assert!(
+		err
+			.to_string()
+			.contains("top-level llm and mcp cannot share a port when llm.tls is configured"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_gateways_attach_llm_mcp_and_ui_to_one_listener() {
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+gateways:
+  public:
+    port: 3000
+llm:
+  gateways: public
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  gateways: [public]
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+ui:
+  gateways: [public]
+  policies:
+    oidc:
+      issuer: https://issuer.example.com
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      jwks: '{TEST_OIDC_JWKS}'
+      clientId: client-id
+      clientSecret: client-secret
+      redirectURI: http://localhost:3000/oauth/callback
+"#,
+	))
+	.await
+	.expect("gateway-attached LLM, MCP, and UI should normalize");
+
+	assert_eq!(normalized.binds.len(), 1);
+	assert_eq!(normalized.binds[0].address.port(), 3000);
+	assert_eq!(
+		normalized.binds[0]
+			.listeners
+			.iter()
+			.map(|listener| listener.key.as_str())
+			.collect::<Vec<_>>(),
+		vec!["gateway/public"],
+	);
+
+	let routes = normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "gateway/public")
+		.map(|(_, routes)| routes)
+		.expect("public gateway listener routes");
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/public/llm:request")
+	);
+	let mcp_route = routes
+		.iter()
+		.find(|route| route.key.as_str() == "gateway/public/mcp:default")
+		.expect("MCP route");
+	assert_eq!(
+		mcp_route
+			.matches
+			.iter()
+			.map(|route_match| match &route_match.path {
+				PathMatch::PathPrefix(path) => path.as_str(),
+				other => panic!("expected path prefix match, got {other:?}"),
+			})
+			.collect::<Vec<_>>(),
+		vec!["/mcp", "/sse", "/.well-known"],
+	);
+	let ui_route = routes
+		.iter()
+		.find(|route| route.key.as_str() == "gateway/public/ui")
+		.expect("UI route");
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == "/")
+	));
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::PathPrefix(path) if path.as_str() == "/ui")
+	));
+	assert!(ui_route.matches.iter().any(
+		|route_match| matches!(&route_match.path, PathMatch::Exact(path) if path.as_str() == "/oauth/callback")
+	));
+	assert!(
+		ui_route
+			.inline_policies
+			.iter()
+			.any(|policy| matches!(policy, TrafficPolicy::Oidc(_)))
+	);
+	assert!(normalized.backends.iter().any(|backend| {
+		matches!(&backend.backend, Backend::Internal(name, _) if name.name.as_str() == "ui")
+	}));
+}
+
+#[tokio::test]
+async fn test_default_gateway_is_implicit_for_attached_surfaces_and_routes() {
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+gateways:
+  default:
+    port: 3000
+routes:
+- name: app
+  matches:
+  - path:
+      exact: /app
+  backends:
+  - host: example.com:80
+llm:
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+ui:
+  policies:
+    oidc:
+      issuer: https://issuer.example.com
+      authorizationEndpoint: https://issuer.example.com/authorize
+      tokenEndpoint: https://issuer.example.com/token
+      jwks: '{TEST_OIDC_JWKS}'
+      clientId: client-id
+      clientSecret: client-secret
+      redirectURI: http://localhost:3000/oauth/callback
+"#,
+	))
+	.await
+	.expect("default gateway should be implicit");
+
+	assert_eq!(normalized.binds.len(), 1);
+	assert_eq!(normalized.binds[0].address.port(), 3000);
+	let routes = normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "gateway/default")
+		.map(|(_, routes)| routes)
+		.expect("default gateway listener routes");
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/default/default/app")
+	);
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/default/llm:request")
+	);
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/default/mcp:default")
+	);
+	assert!(
+		routes
+			.iter()
+			.any(|route| route.key.as_str() == "gateway/default/ui")
+	);
+}
+
+#[tokio::test]
+async fn test_explicit_llm_mcp_ports_take_precedence_over_default_gateway() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  default:
+    port: 8080
+llm:
+  port: 4000
+  models:
+  - name: gpt-4
+    provider: openAI
+mcp:
+  port: 3000
+  targets:
+  - name: time
+    stdio:
+      cmd: uvx
+"#,
+	)
+	.await
+	.expect("explicit LLM/MCP ports should stay port-bound");
+
+	assert_eq!(
+		normalized
+			.binds
+			.iter()
+			.map(|bind| bind.address.port())
+			.collect::<Vec<_>>(),
+		vec![8080, 4000, 3000],
+	);
+	assert!(normalized.listener_routes.iter().any(|(listener, routes)| {
+		listener.as_str() == "llm"
+			&& routes
+				.iter()
+				.any(|route| route.key.as_str() == "llm:request")
+	}));
+	assert!(normalized.listener_routes.iter().any(|(listener, routes)| {
+		listener.as_str() == "mcp"
+			&& routes
+				.iter()
+				.any(|route| route.key.as_str() == "mcp:default")
+	}));
+}
+
+#[tokio::test]
+async fn test_llm_gateways_preserves_route_policies() {
+	let normalized = normalize_test_yaml(
+		r#"
+gateways:
+  public:
+    port: 3000
+llm:
+  gateways: [public]
+  policies:
+    authorization:
+      rules:
+      - 'request.path == "/"'
+  models:
+  - name: gpt-4
+    provider: openAI
+"#,
+	)
+	.await
+	.expect("llm.gateways should allow route-level llm.policies");
+
+	let llm_route = normalized
+		.listener_routes
+		.iter()
+		.find(|(listener, _)| listener.as_str() == "gateway/public")
+		.and_then(|(_, routes)| {
+			routes
+				.iter()
+				.find(|route| route.key.as_str() == "gateway/public/llm:request")
+		})
+		.expect("gateway-attached LLM route");
+	assert!(
+		llm_route
+			.inline_policies
+			.iter()
+			.any(|policy| matches!(policy, TrafficPolicy::Authorization(_)))
+	);
+}
+
+#[tokio::test]
+async fn test_ui_policies_rejects_non_ui_policy() {
+	for field in ["ai", "requestHeaderModifier", "responseHeaderModifier"] {
+		let err = normalize_test_yaml(&format!(
+			r#"
+gateways:
+  public:
+    port: 3000
+ui:
+  gateways: [public]
+  policies:
+    {field}: {{}}
+"#,
+		))
+		.await
+		.expect_err("ui.policies should reject non-UI policies");
+
+		assert!(
+			err
+				.to_string()
+				.contains(&format!("unknown field `{field}`")),
+			"{err:?}"
+		);
+	}
+}
+
+#[tokio::test]
 async fn test_local_mcp_target_name_wiring_rejects_plus() {
 	let yaml = r#"
 mcp:
@@ -659,8 +1172,8 @@ async fn test_aws_config() {
 }
 
 #[tokio::test]
-async fn test_health_config() {
-	test_config_parsing("health").await;
+async fn test_gateway_config() {
+	test_config_parsing("gateway").await;
 }
 
 #[tokio::test]
@@ -1039,6 +1552,7 @@ binds:
 
 #[test]
 fn test_migrate_deprecated_local_config_moves_fields() {
+	let _env = ClearTracingEnv::new();
 	let input = r#"
 config:
   logging:
@@ -1083,6 +1597,53 @@ config:
 	assert_eq!(tracing.get("protocol").unwrap(), "http");
 }
 
+#[test]
+fn test_migrate_deprecated_tracing_https_endpoint_adds_backend_tls() {
+	let _env = ClearTracingEnv::new();
+	let input = r#"
+config:
+  tracing:
+    otlpEndpoint: https://tracing.example.com:4318
+    otlpProtocol: http
+"#;
+	let out = super::migrate_deprecated_local_config(input).unwrap();
+	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
+	let policies = tracing
+		.get("policies")
+		.and_then(serde_json::Value::as_array)
+		.expect("https tracing endpoint should add backend TLS policy");
+	assert!(
+		policies.iter().any(|policy| {
+			policy
+				.get("backendTLS")
+				.and_then(|tls| tls.get("systemRoots"))
+				.and_then(serde_json::Value::as_bool)
+				.unwrap_or(false)
+		}),
+		"https tracing endpoint should use system root TLS"
+	);
+}
+
+#[test]
+fn test_migrate_deprecated_tracing_https_endpoint_uses_default_port_and_path() {
+	let _env = ClearTracingEnv::new();
+	let input = r#"
+config:
+  tracing:
+    otlpEndpoint: https://tracing.example.com/api/public/otel/v1/traces
+    otlpProtocol: http
+"#;
+	let out = super::migrate_deprecated_local_config(input).unwrap();
+	let v: serde_json::Value = crate::serdes::yamlviajson::from_str(&out).unwrap();
+	let tracing = v.get("frontendPolicies").unwrap().get("tracing").unwrap();
+	assert_eq!(
+		tracing.get("inlineBackend").unwrap(),
+		"tracing.example.com:443"
+	);
+	assert_eq!(tracing.get("path").unwrap(), "/api/public/otel/v1/traces");
+}
+
 #[rstest::rstest]
 #[case::https_scheme("https://tracing.example.com:4318", "http", "tracing.example.com:4318")]
 #[case::http_scheme("http://tracing.example.com:4318", "http", "tracing.example.com:4318")]
@@ -1093,6 +1654,7 @@ fn test_deprecated_tracing_endpoint_schemes(
 	#[case] protocol: &str,
 	#[case] expected: &str,
 ) {
+	let _env = ClearTracingEnv::new();
 	let input =
 		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: {protocol}\n");
 	let out = super::migrate_deprecated_local_config(&input).unwrap();
@@ -1104,6 +1666,7 @@ fn test_deprecated_tracing_endpoint_schemes(
 #[rstest::rstest]
 #[case::unrecognized_scheme("nateisgreat://tracing.example.com:4317")]
 fn test_deprecated_tracing_endpoint_unrecognized_scheme_error(#[case] endpoint: &str) {
+	let _env = ClearTracingEnv::new();
 	let input =
 		format!("config:\n  tracing:\n    otlpEndpoint: {endpoint}\n    otlpProtocol: grpc\n");
 	let err = super::migrate_deprecated_local_config(&input)
@@ -1285,5 +1848,33 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 			.to_string()
 			.contains("cannot mix host/port with backend for MCP target backend configuration"),
 		"{err}"
+	);
+}
+
+#[tokio::test]
+async fn test_oauth_token_exchange_reports_validation_errors_from_local_config() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauthTokenExchange:
+              host: 127.0.0.1:9000
+              clientAuth:
+                clientId: gateway-client
+                clientSecret: ""
+"#,
+	)
+	.await
+	.expect_err("empty client secret should fail at config load");
+
+	assert!(
+		err.to_string().contains("client_secret"),
+		"returned unexpected error: {err}"
 	);
 }

@@ -14,7 +14,7 @@ use sse_stream::SseStream;
 use crate::client::ResolvedDestination;
 use crate::http::Request;
 use crate::mcp::ClientError;
-use crate::mcp::streamablehttp::StreamableHttpPostResponse;
+use crate::mcp::streamablehttp::{StreamableHttpPostResponse, emit_standard_headers};
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::*;
 
@@ -93,6 +93,7 @@ impl Client {
 		self.maybe_insert_session_id(&mut req)?;
 
 		ctx.apply(&mut req).map_err(ClientError::new)?;
+		emit_standard_headers(req.headers_mut(), &message);
 
 		let resp = self.http_client.call(req).await?;
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -7,7 +7,6 @@ import {
   KeyRound,
   Pencil,
   Plus,
-  Save,
   SlidersHorizontal,
   Trash2,
   X,
@@ -18,8 +17,9 @@ import {
   removeVirtualKey,
   upsertVirtualKey,
 } from "../config";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { EnumSelector } from "../components/EnumSelector";
-import { maskKey } from "../credentialDisplay";
+import { hasKeyValue, keyValue, maskKey } from "../credentialDisplay";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import {
@@ -41,7 +41,7 @@ import {
 } from "../policies/PolicyLayout";
 import { KeyValueEditor } from "../policies/PolicyFormControls";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
-import type { LlmApiKeyPolicy, VirtualApiKey } from "../types";
+import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
 import type { AuthorizationLocation } from "../gateway-config";
 
 export function KeysPage() {
@@ -66,7 +66,7 @@ export function KeysPage() {
     (keyDrawer === "new"
       ? { key: newVirtualKey() }
       : linkedKey
-        ? { previousKey: linkedKey.key, key: structuredClone(linkedKey) }
+        ? { previousKey: keyValue(linkedKey), key: structuredClone(linkedKey) }
         : null);
   const advancedOpen = keyDrawer === "settings";
 
@@ -180,12 +180,12 @@ export function KeysPage() {
               </thead>
               <tbody>
                 {keys.map((item, index) => (
-                  <tr key={item.key}>
+                  <tr key={keyValue(item)}>
                     <td className="strong key-name-cell">
                       {keyName(item) || "Unnamed key"}
                     </td>
                     <td className="key-cell">
-                      <VirtualKeyValue value={item.key} />
+                      <VirtualKeyValue value={keyValue(item)} />
                     </td>
                     <td>
                       <MetadataSummary value={item.metadata} />
@@ -228,6 +228,7 @@ export function KeysPage() {
         <KeyEditor
           key={activeEditing.previousKey ?? "new"}
           initial={activeEditing.key}
+          config={config.data}
           previousKey={activeEditing.previousKey}
           help={help}
           existingKeys={keys}
@@ -249,8 +250,8 @@ export function KeysPage() {
           confirmDisabled={update.isPending}
           onCancel={() => setDeleteKey(null)}
           onConfirm={() => {
-            const keyValue = deleteKey.key;
-            update.mutate((next) => removeVirtualKey(next, keyValue), {
+            const value = keyValue(deleteKey);
+            update.mutate((next) => removeVirtualKey(next, value), {
               onSuccess: () => setDeleteKey(null),
             });
           }}
@@ -285,6 +286,7 @@ export function KeysPage() {
       ) : null}
       {advancedOpen ? (
         <AdvancedSettingsDrawer
+          config={config.data}
           policy={policy}
           keyCount={keys.length}
           help={help}
@@ -310,6 +312,7 @@ export function KeysPage() {
 }
 
 function AdvancedSettingsDrawer(props: {
+  config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
   keyCount: number;
   help: SchemaHelp;
@@ -323,6 +326,7 @@ function AdvancedSettingsDrawer(props: {
     <Drawer title="Settings" onClose={props.onClose}>
       <PolicyControls
         policy={props.policy}
+        config={props.config}
         keyCount={props.keyCount}
         help={props.help}
         saving={props.saving}
@@ -339,6 +343,7 @@ function AdvancedSettingsDrawer(props: {
 }
 
 function PolicyControls(props: {
+  config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
   keyCount: number;
   help: SchemaHelp;
@@ -355,6 +360,12 @@ function PolicyControls(props: {
     header?.header.name ?? "authorization",
   );
   const [prefix, setPrefix] = useState(header?.header.prefix ?? "Bearer ");
+  const patch: Partial<LlmApiKeyPolicy> = {
+    mode,
+    location: customHeaderLocation
+      ? { header: { name: headerName, prefix } }
+      : undefined,
+  };
   return (
     <div className="policy-controls api-key-policy-controls">
       <FieldGroup
@@ -406,22 +417,16 @@ function PolicyControls(props: {
           }
         />
       ) : null}
-      <button
-        className="button"
-        type="button"
-        disabled={props.saving}
-        onClick={() =>
-          props.onSave({
-            mode,
-            location: customHeaderLocation
-              ? { header: { name: headerName, prefix } }
-              : undefined,
-          })
-        }
-      >
-        <Save size={16} />
-        Save policy
-      </button>
+      <ConfigDiffSaveActions
+        config={props.config}
+        diffTitle="API key policy config diff"
+        saveLabel="Save policy"
+        saving={props.saving}
+        onSave={() => props.onSave(patch)}
+        applyDiff={(next) => {
+          Object.assign(getApiKeyPolicy(next), patch);
+        }}
+      />
     </div>
   );
 }
@@ -518,6 +523,7 @@ function ApiKeyLocationSetting(props: {
 
 function KeyEditor(props: {
   initial: VirtualApiKey;
+  config?: GatewayConfig | null;
   previousKey?: string;
   help: SchemaHelp;
   existingKeys: VirtualApiKey[];
@@ -532,20 +538,31 @@ function KeyEditor(props: {
   const [keyMode, setKeyMode] = useState<"auto" | "custom">(
     isNew ? "auto" : "custom",
   );
-  const [key, setKey] = useState(isNew ? "" : props.initial.key);
+  const [key, setKey] = useState(
+    isNew || !hasKeyValue(props.initial) ? "" : props.initial.key,
+  );
   const [replaceKey, setReplaceKey] = useState(false);
   const [metadataValues, setMetadataValues] = useState(() =>
     stringMetadata(withoutManagedMetadata(initialMetadata)),
   );
   const [submitted, setSubmitted] = useState(false);
+  const generatedKey = useRef<string | null>(null);
+  const draft = JSON.stringify({
+    name,
+    keyMode,
+    key,
+    replaceKey,
+    metadataValues,
+  });
+  const [initialDraft] = useState(() => draft);
   const nameRequired = isNew && !name.trim();
   const duplicateName = isNew
     ? duplicateKeyName(name, props.existingKeys)
     : false;
 
-  function save() {
+  function nextVirtualKey() {
     setSubmitted(true);
-    if (nameRequired) return;
+    if (nameRequired) return null;
     const metadataId =
       typeof initialMetadata.id === "string" && initialMetadata.id.trim()
         ? initialMetadata.id.trim()
@@ -557,37 +574,46 @@ function KeyEditor(props: {
     };
     const nextKey = isNew
       ? keyMode === "auto"
-        ? `agw_sk_${randomKey(32)}`
+        ? (generatedKey.current ??= `agw_sk_${randomKey(32)}`)
         : key
       : replaceKey
         ? key
-        : props.initial.key;
-    props.onSave(
-      { ...props.initial, key: nextKey, metadata },
-      props.previousKey,
-    );
+        : "";
+    return isNew || replaceKey
+      ? { key: nextKey, metadata }
+      : { ...props.initial, metadata };
+  }
+
+  function save() {
+    const virtualKey = nextVirtualKey();
+    if (!virtualKey) return;
+    props.onSave(virtualKey, props.previousKey);
   }
 
   return (
     <Drawer
       title={props.previousKey ? "Edit virtual key" : "Create virtual key"}
       onClose={props.onCancel}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving || (keyMode === "custom" && !key.trim())}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save key
-          </button>
-        </div>
-      }
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Virtual API key config diff"
+          saveLabel="Save key"
+          saving={props.saving}
+          saveDisabled={keyMode === "custom" && !key.trim()}
+          onCancel={requestClose}
+          onSave={save}
+          beforeDiff={() => Boolean(nextVirtualKey())}
+          applyDiff={(next) => {
+            const virtualKey = nextVirtualKey();
+            if (virtualKey) {
+              upsertVirtualKey(next, virtualKey, props.previousKey);
+            }
+          }}
+        />
+      )}
     >
       <Field label="Name">
         <input
@@ -628,7 +654,7 @@ function KeyEditor(props: {
           tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "key")}
         >
           <div className="key-editor-value-row">
-            <VirtualKeyValue value={props.initial.key} />
+            <VirtualKeyValue value={keyValue(props.initial)} />
             <button
               className="button"
               type="button"
@@ -710,7 +736,7 @@ function keyName(key: VirtualApiKey) {
 
 function virtualKeyDeleteLabel(key: VirtualApiKey) {
   const name = keyName(key).trim();
-  return name || maskKey(key.key);
+  return name || maskKey(keyValue(key));
 }
 
 function duplicateKeyName(name: string, keys: VirtualApiKey[]) {

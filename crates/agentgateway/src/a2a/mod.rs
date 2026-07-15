@@ -79,12 +79,31 @@ pub async fn apply_to_response(
 			let Ok(mut agent_card) = json::from_body_with_limit::<Value>(body, buffer_limit).await else {
 				anyhow::bail!("agent card invalid JSON");
 			};
-			let Some(url_field) = json::traverse_mut(&mut agent_card, &["url"]) else {
-				anyhow::bail!("agent card missing URL");
-			};
-			let new_uri = build_agent_path(uri);
+			let gateway_base = build_agent_path(uri);
 
-			*url_field = Value::String(new_uri);
+			if let Some(interfaces) = agent_card.get_mut("supportedInterfaces") {
+				// A2A v1.0: rewrite url inside each AgentInterface entry.
+				let arr = interfaces
+					.as_array_mut()
+					.ok_or_else(|| anyhow::anyhow!("agent card supportedInterfaces is not an array"))?;
+				for iface in arr.iter_mut() {
+					if let Some(url_val) = iface.get_mut("url")
+						&& let Some(s) = url_val.as_str()
+						&& let Ok(iface_uri) = s.parse::<Uri>()
+					{
+						let path_and_query = iface_uri
+							.path_and_query()
+							.map(|pq| pq.as_str())
+							.unwrap_or_else(|| iface_uri.path());
+						*url_val = Value::String(format!("{gateway_base}{path_and_query}"));
+					}
+				}
+			} else if let Some(url_field) = json::traverse_mut(&mut agent_card, &["url"]) {
+				// A2A v0.3: rewrite the single top-level url.
+				*url_field = Value::String(gateway_base);
+			} else {
+				anyhow::bail!("agent card missing URL (no 'url' or 'supportedInterfaces' field)");
+			}
 
 			resp.headers_mut().remove(header::CONTENT_LENGTH);
 			*resp.body_mut() = json::to_body(agent_card)?;

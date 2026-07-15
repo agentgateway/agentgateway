@@ -1,0 +1,28 @@
+{
+  "output": {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "toolUse": {
+            "toolUseId": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
+            "name": "top_song",
+            "input": {
+              "sign": "WZPZ"
+            }
+          }
+        },
+        {
+          "toolUse": {
+            "toolUseId": "tooluse_kZJMlvQmRJ6eAyxxx",
+            "name": "hello",
+            "input": {
+              "sign": "world"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "stopReason": "tool_use"
+}

@@ -282,22 +282,22 @@ func GetPromCollector(c any) prometheus.Collector {
 // When disabled, metrics instrumentation will collapse into no-op statements,
 // which can be useful for performance testing, or when metrics are not needed.
 var (
-	disabled uint32
+	disabled atomic.Uint32
 )
 
 // SetActive sets the globally active state for metrics.
 // Setting this does not effect metrics that are already being collected.
 func SetActive(active bool) {
 	if active {
-		atomic.StoreUint32(&disabled, 0)
+		disabled.Store(0)
 	} else {
-		atomic.StoreUint32(&disabled, 1)
+		disabled.Store(1)
 	}
 }
 
 // Active checks if metrics are globally active.
 func Active() bool {
-	return atomic.LoadUint32(&disabled) == 0
+	return disabled.Load() == 0
 }
 
 // RegistererGatherer combines the Registerer and Gatherer interfaces from the
@@ -323,15 +323,17 @@ func SetRegistry(useBuiltinRegistry bool, r RegistererGatherer) {
 	registryLock.Lock()
 	defer registryLock.Unlock()
 
-	if !useBuiltinRegistry {
-		metrics.Registry = registry
-	}
+	// Always point controller-runtime's metrics to our local registry,
+	// which already has process/go collectors and all init-registered metrics.
+	metrics.Registry = registry
 
 	if isNil(r) {
-		registry = metrics.Registry
-	} else {
-		registry = r
+		// Keep using our local registry.
+		return
 	}
+	registry = r
+	// Also update controller-runtime to use the external registry.
+	metrics.Registry = r
 }
 
 // isNil checks if the provided interface contains nil or a nil value.

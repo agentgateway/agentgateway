@@ -2,6 +2,7 @@ pub mod aws;
 pub mod azure;
 mod copilot;
 pub mod gcp;
+pub mod oauth;
 
 use std::borrow::Cow;
 
@@ -10,6 +11,10 @@ pub use aws::{AwsAssumeRole, AwsAuth};
 pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;
+pub use oauth::{
+	CrossAppAccessAuth, OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType,
+	OAuthTokenExchangeAuth, PrivateKeyJwt,
+};
 use secrecy::{ExposeSecret, SecretString};
 use url::form_urlencoded;
 
@@ -54,6 +59,12 @@ pub enum BackendAuth {
 	/// Authenticate to GitHub Copilot.
 	#[serde(rename = "copilot")]
 	Copilot,
+	/// Use OAuth token exchange flows to obtain a backend access token.
+	#[serde(rename = "oauthTokenExchange")]
+	OAuthTokenExchange(Box<OAuthTokenExchangeAuth>),
+	/// Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.
+	#[serde(rename = "crossAppAccess")]
+	CrossAppAccess(Box<CrossAppAccessAuth>),
 }
 
 /// Records whether the backend auth location was explicitly configured by the user
@@ -158,6 +169,18 @@ pub async fn apply_backend_auth(
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
+		BackendAuth::OAuthTokenExchange(te_auth) => {
+			let explicit = oauth::apply_token_exchange(&backend_info.inputs, te_auth, req).await?;
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
+		},
+		BackendAuth::CrossAppAccess(auth) => {
+			let explicit = oauth::apply_identity_assertion(&backend_info.inputs, auth, req).await?;
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
+		},
 	}
 	Ok(())
 }
@@ -166,22 +189,13 @@ pub async fn apply_late_backend_auth(
 	auth: Option<&BackendAuth>,
 	req: &mut Request,
 ) -> Result<(), ProxyError> {
-	let Some(auth) = auth else {
+	let Some(BackendAuth::Aws(aws_auth)) = auth else {
 		return Ok(());
 	};
-	match auth {
-		BackendAuth::Passthrough { .. } => {},
-		BackendAuth::Key { .. } => {},
-		BackendAuth::Gcp(_) => {},
-		BackendAuth::Aws(aws_auth) => {
-			aws::sign_request(req, aws_auth)
-				.await
-				.map_err(ProxyError::BackendAuthenticationFailed)?;
-		},
-		BackendAuth::Azure(_) => {},
-		BackendAuth::Copilot => {},
-	};
-	Ok(())
+
+	aws::sign_request(req, aws_auth)
+		.await
+		.map_err(ProxyError::BackendAuthenticationFailed)
 }
 
 #[apply(schema!)]
@@ -207,10 +221,8 @@ pub enum AuthorizationLocation {
 		name: Strng,
 	},
 	/// Read the credential from a CEL expression evaluated against the incoming request.
-	Expression {
-		/// CEL expression that returns the credential string. This location can extract credentials but cannot insert them.
-		expression: Arc<crate::cel::Expression>,
-	},
+	/// CEL expression that returns the credential string. This location can extract credentials but cannot insert them.
+	Expression(Arc<crate::cel::Expression>),
 }
 
 impl Default for AuthorizationLocation {
@@ -248,7 +260,7 @@ impl AuthorizationLocation {
 			},
 			AuthorizationLocation::QueryParameter { name } => query_parameter(req, name),
 			AuthorizationLocation::Cookie { name } => crate::http::read_request_cookie(req, name),
-			AuthorizationLocation::Expression { expression } => crate::cel::Executor::new_request(req)
+			AuthorizationLocation::Expression(expression) => crate::cel::Executor::new_request(req)
 				.eval(expression)
 				.ok()
 				.and_then(|v| v.as_str().ok().map(Cow::into_owned))
@@ -272,7 +284,7 @@ impl AuthorizationLocation {
 			AuthorizationLocation::Cookie { name } => {
 				set_request_cookie(req, name, None)?;
 			},
-			AuthorizationLocation::Expression { .. } => {},
+			AuthorizationLocation::Expression(_) => {},
 		}
 		Ok(())
 	}
@@ -300,7 +312,7 @@ impl AuthorizationLocation {
 			AuthorizationLocation::Cookie { name } => {
 				set_request_cookie(req, name, Some(value))?;
 			},
-			AuthorizationLocation::Expression { .. } => {
+			AuthorizationLocation::Expression(_) => {
 				return Err(ProcessingString(
 					"expression auth location is only supported for credential extraction".to_string(),
 				));
@@ -311,7 +323,7 @@ impl AuthorizationLocation {
 
 	pub fn expression(&self) -> Option<&crate::cel::Expression> {
 		match self {
-			AuthorizationLocation::Expression { expression } => Some(expression),
+			AuthorizationLocation::Expression(expression) => Some(expression),
 			_ => None,
 		}
 	}

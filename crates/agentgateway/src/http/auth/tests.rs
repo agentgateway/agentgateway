@@ -27,27 +27,195 @@ fn test_aws_auth_deserializes_assume_role() {
 }
 
 #[test]
+fn test_aws_auth_deserializes_assume_role_with_session_name_and_tags() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"sessionName": "acme-payments-invoice-processor",
+			"tags": [
+				{"key": "Team", "value": "acme-payments"},
+				{"key": "App", "value": "invoice-processor"}
+			]
+		}
+	}))
+	.expect("should deserialize assume role with session name and tags");
+	match implicit {
+		AwsAuth::Implicit {
+			assume_role: Some(ar),
+			..
+		} => {
+			assert_eq!(ar.role_arn, "arn:aws:iam::123456789012:role/my-role");
+			assert_eq!(
+				ar.session_name.as_deref(),
+				Some("acme-payments-invoice-processor")
+			);
+			// Tags are stored sorted by key, regardless of configured order.
+			assert_eq!(
+				ar.tags.static_tags().as_ref(),
+				&[
+					("App".to_string(), "invoice-processor".to_string()),
+					("Team".to_string(), "acme-payments".to_string()),
+				]
+			);
+		},
+		_ => panic!("expected implicit AWS auth with assume role"),
+	}
+}
+
+#[test]
+fn test_aws_auth_deserializes_dynamic_session_tags() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"tags": [
+				{"key": "Team", "value": "acme-payments"},
+				{"key": "App", "expression": "request.headers[\"x-app\"]"},
+				{"key": "User", "expression": "jwt.sub"}
+			]
+		}
+	}))
+	.expect("should deserialize mixed static and dynamic tags");
+	match implicit {
+		AwsAuth::Implicit {
+			assume_role: Some(ar),
+			..
+		} => {
+			assert!(ar.tags.has_dynamic());
+			assert_eq!(
+				ar.tags.static_tags().as_ref(),
+				&[("Team".to_string(), "acme-payments".to_string())]
+			);
+			let expressions: Vec<&str> = ar
+				.tags
+				.expressions()
+				.map(|e| e.original_expression.as_str())
+				.collect();
+			// Dynamic tags are sorted by key: App before User.
+			assert_eq!(expressions, vec![r#"request.headers["x-app"]"#, "jwt.sub"]);
+		},
+		_ => panic!("expected implicit AWS auth with assume role"),
+	}
+}
+
+#[test]
+fn test_aws_session_tags_round_trip_through_serialization() {
+	let source = serde_json::json!({
+		"roleArn": "arn:aws:iam::123456789012:role/my-role",
+		"tags": [
+			{"key": "Team", "value": "acme-payments"},
+			{"key": "App", "expression": "request.headers[\"x-app\"]"}
+		]
+	});
+	let ar: AwsAssumeRole = serde_json::from_value(source).expect("should deserialize");
+	let serialized = serde_json::to_value(&ar).expect("should serialize");
+	let round_tripped: AwsAssumeRole =
+		serde_json::from_value(serialized).expect("serialized form should deserialize");
+	assert_eq!(ar.tags, round_tripped.tags);
+}
+
+#[test]
+fn test_aws_session_tag_rejects_invalid_configs() {
+	for (name, tags) in [
+		(
+			"both value and expression",
+			serde_json::json!([{"key": "App", "value": "x", "expression": "jwt.sub"}]),
+		),
+		(
+			"neither value nor expression",
+			serde_json::json!([{"key": "App"}]),
+		),
+		(
+			"duplicate keys",
+			serde_json::json!([
+				{"key": "App", "value": "x"},
+				{"key": "App", "expression": "jwt.sub"}
+			]),
+		),
+		(
+			"invalid CEL expression",
+			serde_json::json!([{"key": "App", "expression": "this is not cel ("}]),
+		),
+		(
+			"static value with invalid characters",
+			serde_json::json!([{"key": "App", "value": "a,b"}]),
+		),
+		("empty key", serde_json::json!([{"key": "", "value": "x"}])),
+	] {
+		let result = serde_json::from_value::<AwsAssumeRole>(serde_json::json!({
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"tags": tags,
+		}));
+		assert!(result.is_err(), "{name} should be rejected");
+	}
+}
+
+#[test]
+fn test_aws_session_tags_rejects_more_than_sts_limit() {
+	let tags: Vec<serde_json::Value> = (0..51)
+		.map(|i| serde_json::json!({"key": format!("Key{i}"), "value": "x"}))
+		.collect();
+	let result = serde_json::from_value::<AwsAssumeRole>(serde_json::json!({
+		"roleArn": "arn:aws:iam::123456789012:role/my-role",
+		"tags": tags,
+	}));
+	assert!(result.is_err(), "more than 50 tags should be rejected");
+}
+
+#[test]
+fn test_aws_auth_assume_role_defaults_session_name_and_tags() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/backend"
+		}
+	}))
+	.expect("assume role without session name or tags should deserialize");
+	match implicit {
+		AwsAuth::Implicit {
+			assume_role: Some(ar),
+			..
+		} => {
+			assert_eq!(ar.session_name, None);
+			assert!(ar.tags.is_empty());
+		},
+		_ => panic!("expected implicit AWS auth with assume role"),
+	}
+}
+
+#[test]
 fn test_authorization_location_expression_extracts_from_cel() {
 	let req = ::http::Request::builder()
 		.uri("http://example.com/")
 		.header("x-token", "from-cel")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	let location = AuthorizationLocation::Expression {
-		expression: std::sync::Arc::new(
-			crate::cel::Expression::new_strict(r#"request.headers["x-token"]"#).unwrap(),
-		),
-	};
+	let location = AuthorizationLocation::Expression(std::sync::Arc::new(
+		crate::cel::Expression::new_strict(r#"request.headers["x-token"]"#).unwrap(),
+	));
 
 	assert_eq!(location.extract(&req).as_deref(), Some("from-cel"));
 }
 
 #[test]
+fn test_authorization_location_expression_deserializes_flat_expression() {
+	let location: AuthorizationLocation =
+		crate::serdes::yamlviajson::from_str(r#"expression: 'request.headers["authorization"]'"#)
+			.expect("expression location should deserialize");
+
+	let expression = location
+		.expression()
+		.expect("location should contain an expression");
+	assert_eq!(
+		expression.original_expression,
+		r#"request.headers["authorization"]"#
+	);
+}
+
+#[test]
 fn test_authorization_location_expression_cannot_insert() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
-	let location = AuthorizationLocation::Expression {
-		expression: std::sync::Arc::new(crate::cel::Expression::new_strict(r#""token""#).unwrap()),
-	};
+	let location = AuthorizationLocation::Expression(std::sync::Arc::new(
+		crate::cel::Expression::new_strict(r#""token""#).unwrap(),
+	));
 
 	let err = location.insert(&mut req, "token").unwrap_err();
 	assert!(
@@ -393,4 +561,134 @@ async fn test_aws_sign_request_implicit_with_extension() {
 	}
 
 	result.expect("signing failed");
+}
+
+#[test]
+fn extract_subject_token_falls_back_to_claims_for_authorization_header() {
+	// Default source is the Authorization Bearer header; a JWT policy stripped it,
+	// leaving only the Claims extension.
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::from("claims-jwt"),
+	});
+
+	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
+	assert_eq!(token.as_deref(), Some("claims-jwt"));
+}
+
+#[test]
+fn extract_subject_token_uses_authorization_header_without_claims() {
+	let req = ::http::Request::builder()
+		.uri("http://example/")
+		.header(::http::header::AUTHORIZATION, "Bearer header-tok")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
+	assert_eq!(token.as_deref(), Some("header-tok"));
+}
+
+#[test]
+fn extract_subject_token_empty_authorization_header_falls_back_to_claims() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.header(::http::header::AUTHORIZATION, "Bearer ")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::from("claims-jwt"),
+	});
+
+	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
+	assert_eq!(token.as_deref(), Some("claims-jwt"));
+}
+
+#[test]
+fn extract_subject_token_empty_authorization_header_is_missing() {
+	let req = ::http::Request::builder()
+		.uri("http://example/")
+		.header(::http::header::AUTHORIZATION, "Bearer ")
+		.body(crate::http::Body::empty())
+		.unwrap();
+
+	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
+	assert_eq!(token, None);
+}
+
+#[test]
+fn extract_subject_token_prefers_authorization_header_over_claims() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.header(::http::header::AUTHORIZATION, "Bearer header-tok")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::from("claims-jwt"),
+	});
+
+	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
+	assert_eq!(token.as_deref(), Some("header-tok"));
+}
+
+#[test]
+fn extract_subject_token_custom_source_prefers_configured_location_over_claims() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.header("x-subject", "custom-tok")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::from("claims-jwt"),
+	});
+	let source = AuthorizationLocation::Header {
+		name: ::http::HeaderName::from_static("x-subject"),
+		prefix: None,
+	};
+
+	let token = oauth::extract_subject_token(&source, &req);
+	assert_eq!(token.as_deref(), Some("custom-tok"));
+}
+
+#[test]
+fn extract_subject_token_custom_header_falls_back_to_claims() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::from("claims-jwt"),
+	});
+	let source = AuthorizationLocation::Header {
+		name: ::http::HeaderName::from_static("x-subject"),
+		prefix: None,
+	};
+
+	let token = oauth::extract_subject_token(&source, &req);
+	assert_eq!(token.as_deref(), Some("claims-jwt"));
+}
+
+#[test]
+fn extract_subject_token_expression_falls_back_to_claims() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::from("claims-jwt"),
+	});
+	let source = AuthorizationLocation::Expression(std::sync::Arc::new(
+		crate::cel::Expression::new_strict(r#"request.headers["x-subject"]"#).unwrap(),
+	));
+
+	let token = oauth::extract_subject_token(&source, &req);
+	assert_eq!(token.as_deref(), Some("claims-jwt"));
 }

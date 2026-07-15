@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, Clipboard, Code2, KeyRound, Terminal } from "lucide-react";
+import {
+  Check,
+  Clipboard,
+  Code2,
+  GitBranch,
+  KeyRound,
+  Terminal,
+} from "lucide-react";
 import {
   Dropdown,
   Field,
@@ -10,10 +17,11 @@ import {
   StatusBanner,
 } from "../components/Primitives";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
-import { keyLabel, maskKey } from "../credentialDisplay";
-import { gatewayOrigin } from "../gatewayUrls";
+import { claudeSubscriptionWarning } from "../claudeSubscription";
+import { providerLabel } from "../config";
+import { hasKeyValue, keyLabel, maskKey } from "../credentialDisplay";
+import { llmGatewayOrigin } from "../gatewayUrls";
 import { useGatewayConfig } from "../hooks";
-import { llmModelOptions, resolveLlmModelOption } from "../llmModelOptions";
 import {
   isWildcardModelName,
   modelProviderLabel,
@@ -49,17 +57,58 @@ type ClientRecipe = {
   code: string;
 };
 
+type RequestModelOption =
+  | {
+      kind: "model";
+      name: string;
+      config: LlmModel;
+      icon: ReactNode;
+      searchText: string;
+    }
+  | { kind: "virtual"; name: string; icon: ReactNode; searchText: string };
+
 export function ClientSetupPage() {
   const config = useGatewayConfig();
-  const modelOptions = useMemo(
-    () => llmModelOptions(config.data?.llm),
+  const models = useMemo(() => config.data?.llm?.models ?? [], [config.data]);
+  const virtualModels = useMemo(
+    () => config.data?.llm?.virtualModels ?? [],
     [config.data],
+  );
+  const providers = useMemo(
+    () => config.data?.llm?.providers ?? [],
+    [config.data],
+  );
+  const modelOptions = useMemo(
+    () => [
+      ...models.map((item) => ({
+        kind: "model" as const,
+        name: item.name,
+        icon: (
+          <ProviderIcon
+            provider={modelProviderLabel(item, providers) as ProviderName}
+          />
+        ),
+        searchText: `${item.name} ${modelProviderLabel(item, providers)} ${providerLabel(item.provider)}`,
+        config: item,
+      })),
+      ...virtualModels.map((item) => ({
+        kind: "virtual" as const,
+        name: item.name,
+        icon: <GitBranch size={16} />,
+        searchText: `${item.name} virtual`,
+      })),
+    ],
+    [models, providers, virtualModels],
   );
   const virtualKeys = useMemo(
     () => config.data?.llm?.policies?.apiKey?.keys ?? [],
     [config.data],
   );
-  const derivedBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
+  const rawVirtualKeys = useMemo(
+    () => virtualKeys.filter(hasKeyValue),
+    [virtualKeys],
+  );
+  const derivedBaseUrl = llmGatewayOrigin(config.data);
   const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
   const [baseUrlTouched, setBaseUrlTouched] = useState(false);
   const [model, setModel] = useState("");
@@ -77,7 +126,7 @@ export function ClientSetupPage() {
   );
   const selectedModelConfig =
     selectedModelOption?.kind === "model"
-      ? selectedModelOption.model
+      ? selectedModelOption.config
       : undefined;
   const wildcardPrefix =
     selectedModelConfig && isWildcardModelName(selectedModelConfig.name)
@@ -91,18 +140,20 @@ export function ClientSetupPage() {
       )
     : "";
   const selectedCatalogProvider = selectedModelConfig
-    ? modelProviderLabel(selectedModelConfig, config.data?.llm?.providers ?? [])
+    ? modelProviderLabel(selectedModelConfig, providers)
     : null;
   const selectedVirtualKey =
     apiKeyMode === "saved"
-      ? (virtualKeys.find((item) => item.key === selectedKey) ?? virtualKeys[0])
+      ? (rawVirtualKeys.find((item) => item.key === selectedKey) ??
+        rawVirtualKeys[0])
       : undefined;
   const apiKey = selectedVirtualKey?.key ?? rawKey;
   const effectiveBaseUrl = baseUrlTouched ? baseUrl : derivedBaseUrl;
   const requestModel = clientSetupRequestModel(
     selectedModelOption,
+    selectedModel,
     specificModel,
-    config.data?.llm?.providers ?? [],
+    providers,
   );
   const recipes = clientRecipes({
     baseUrl: effectiveBaseUrl,
@@ -126,6 +177,11 @@ export function ClientSetupPage() {
       {modelOptions.length === 0 && !config.isLoading ? (
         <StatusBanner state="warn" title="No models configured">
           Create an LLM model before wiring clients to the gateway.
+        </StatusBanner>
+      ) : null}
+      {claudeSubscriptionWarning(selectedModelConfig, providers) ? (
+        <StatusBanner state="warn" title="Claude subscription key detected">
+          {claudeSubscriptionWarning(selectedModelConfig, providers)}
         </StatusBanner>
       ) : null}
 
@@ -155,14 +211,13 @@ export function ClientSetupPage() {
               searchable
               options={modelOptions.map((item) => ({
                 value: item.name,
-                label: item.label,
+                label: item.name,
+                description:
+                  item.kind === "virtual" ? "Virtual model" : undefined,
                 icon: item.icon,
                 searchText: item.searchText,
               }))}
-              onChange={(value) => {
-                setModel(value);
-                setSpecificModel("");
-              }}
+              onChange={setModel}
             />
           </FieldGroup>
           {selectedModelConfig &&
@@ -196,7 +251,7 @@ export function ClientSetupPage() {
                   : "__raw__"
               }
               options={[
-                ...virtualKeys.map((item) => ({
+                ...rawVirtualKeys.map((item) => ({
                   value: item.key,
                   label: keyLabel(item),
                   icon: <KeyRound size={16} />,
@@ -217,7 +272,7 @@ export function ClientSetupPage() {
               }}
             />
           </FieldGroup>
-          {apiKeyMode === "raw" ? (
+          {apiKeyMode === "raw" || rawVirtualKeys.length === 0 ? (
             <Field label="Raw API key">
               <input
                 value={rawKey}
@@ -256,19 +311,21 @@ export function ClientSetupPage() {
 }
 
 function clientSetupRequestModel(
-  option: ReturnType<typeof llmModelOptions>[number] | undefined,
+  option: RequestModelOption | undefined,
+  selectedModel: string,
   specificModel: string,
   providers: LlmProvider[],
 ) {
   if (!option) return "";
-  if (option.kind === "virtual")
-    return resolveLlmModelOption(option, specificModel, providers);
-  if (!option.model) return "";
-  if (!isWildcardModelName(option.model.name))
-    return resolveModelName(option.model, specificModel, providers);
-  const normalized = normalizedClientSpecificModel(option.model, specificModel);
-  if (normalized) return resolveModelName(option.model, normalized, providers);
-  const prefix = wildcardModelPrefix(option.model.name);
+  if (option.kind === "virtual") return selectedModel;
+  if (!isWildcardModelName(option.config.name))
+    return resolveModelName(option.config, specificModel, providers);
+  const normalized = normalizedClientSpecificModel(
+    option.config,
+    specificModel,
+  );
+  if (normalized) return resolveModelName(option.config, normalized, providers);
+  const prefix = wildcardModelPrefix(option.config.name);
   return prefix ? `${prefix}<model>` : "<model>";
 }
 

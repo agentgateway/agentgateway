@@ -1,11 +1,4 @@
-import {
-  Pencil,
-  Plus,
-  Save,
-  Server,
-  SlidersHorizontal,
-  Trash2,
-} from "lucide-react";
+import { Pencil, Plus, Server, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   ensureMcp,
@@ -14,10 +7,16 @@ import {
   upsertMcpTarget,
 } from "../config";
 import { EnumSelector } from "../components/EnumSelector";
+import {
+  GatewayBindingEditor,
+  type GatewayBindingValue,
+} from "../components/GatewayBindingEditor";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import {
+  ConfirmDialog,
   Drawer,
   EmptyState,
   Field,
@@ -29,8 +28,10 @@ import {
   Tooltip,
 } from "../components/Primitives";
 import { parseYamlText, toYamlMappingText } from "../policies/policyUtils";
+import { PolicySection } from "../policies/PolicyLayout";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type {
+  GatewayConfig,
   McpConfig,
   McpFailureMode,
   McpPrefixMode,
@@ -40,6 +41,11 @@ import type {
 } from "../types";
 
 const targetKinds: McpTargetKind[] = ["mcp", "sse", "stdio"];
+
+type McpSettingsPatch = Partial<Omit<McpConfig, "gateways" | "port">> & {
+  gateways?: McpConfig["gateways"] | null;
+  port?: number | null;
+};
 
 export function McpServersPage() {
   const config = useGatewayConfig();
@@ -51,6 +57,7 @@ export function McpServersPage() {
     previousName?: string;
     target: McpTarget;
   } | null>(null);
+  const [deletingServer, setDeletingServer] = useState<string | null>(null);
   const [serverDrawer, setServerDrawer] = useStickyQueryParam("server");
   const linkedTarget =
     serverDrawer && serverDrawer !== "new" && serverDrawer !== "settings"
@@ -191,11 +198,8 @@ export function McpServersPage() {
                             className="icon-button danger"
                             aria-label="Delete server"
                             type="button"
-                            onClick={() =>
-                              update.mutate((next) =>
-                                removeMcpTarget(next, target.name),
-                              )
-                            }
+                            disabled={update.isPending}
+                            onClick={() => setDeletingServer(target.name)}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -214,6 +218,7 @@ export function McpServersPage() {
         <McpServerEditor
           key={activeEditing.previousName ?? "new"}
           initial={activeEditing.target}
+          config={config.data}
           previousName={activeEditing.previousName}
           help={help}
           saving={update.isPending}
@@ -231,6 +236,7 @@ export function McpServersPage() {
       ) : null}
       {settingsOpen ? (
         <McpSettingsDrawer
+          config={config.data}
           mcp={mcp}
           help={help}
           saving={update.isPending}
@@ -248,21 +254,42 @@ export function McpServersPage() {
           }
         />
       ) : null}
+      {deletingServer ? (
+        <ConfirmDialog
+          title="Delete MCP server?"
+          destructive
+          confirmLabel="Delete server"
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeletingServer(null)}
+          onConfirm={() =>
+            update.mutate((next) => removeMcpTarget(next, deletingServer), {
+              onSuccess: () => setDeletingServer(null),
+            })
+          }
+        >
+          <p>
+            Delete <strong>{deletingServer}</strong>? Traffic can no longer be
+            sent to this target.
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
 
-function McpSettingsDrawer(props: {
+export function McpSettingsDrawer(props: {
+  config?: GatewayConfig | null;
   mcp?: McpConfig | null;
   help: SchemaHelp;
   saving: boolean;
   saveError?: string | null;
   onClose: () => void;
-  onSave: (settings: Partial<McpConfig>) => void;
+  onSave: (settings: McpSettingsPatch) => void;
 }) {
   return (
     <Drawer title="Settings" onClose={props.onClose}>
       <McpSettings
+        config={props.config}
         mcp={props.mcp}
         help={props.help}
         saving={props.saving}
@@ -278,12 +305,16 @@ function McpSettingsDrawer(props: {
 }
 
 function McpSettings(props: {
+  config?: GatewayConfig | null;
   mcp?: McpConfig | null;
   help: SchemaHelp;
   saving: boolean;
-  onSave: (settings: Partial<McpConfig>) => void;
+  onSave: (settings: McpSettingsPatch) => void;
 }) {
-  const [port, setPort] = useState(props.mcp?.port?.toString() ?? "");
+  const [binding, setBinding] = useState<GatewayBindingValue>({
+    gateways: props.mcp?.gateways ?? null,
+    port: props.mcp?.port ?? null,
+  });
   const [statefulMode, setStatefulMode] = useState<McpStatefulMode>(
     props.mcp?.statefulMode ?? "stateless",
   );
@@ -293,139 +324,160 @@ function McpSettings(props: {
   const [failureMode, setFailureMode] = useState<McpFailureMode>(
     props.mcp?.failureMode ?? "failClosed",
   );
+  const patch: McpSettingsPatch = {
+    gateways: binding.gateways ?? null,
+    port: binding.gateways ? null : (binding.port ?? null),
+    statefulMode,
+    prefixMode: prefixMode === "none" ? null : prefixMode,
+    failureMode,
+  };
 
   return (
-    <div className="policy-controls api-key-policy-controls">
-      <Field
-        label="Port"
-        tooltip={props.help.field<McpConfig>(
-          "LocalSimpleMcpConfig",
-          "port",
-          "Gateway port for MCP traffic.",
-        )}
+    <form
+      className="policy-editor-stack"
+      onSubmit={(event) => {
+        event.preventDefault();
+        props.onSave(patch);
+      }}
+    >
+      <PolicySection
+        icon={<Server size={17} />}
+        title="Gateway binding"
+        description="Choose how MCP is exposed."
       >
-        <input
-          value={port}
-          onChange={(event) => setPort(event.target.value)}
-          placeholder="3001"
-        />
-      </Field>
-      <FieldGroup
-        label="State mode"
-        tooltip={props.help.field<McpConfig>(
-          "LocalSimpleMcpConfig",
-          "statefulMode",
-          "Controls whether MCP sessions are preserved by the gateway.",
-        )}
+        <div className="form-grid">
+          <GatewayBindingEditor
+            config={props.config}
+            value={binding}
+            defaultPort={3000}
+            portLabel="Port"
+            portPlaceholder="3000"
+            portTooltip={props.help.field<McpConfig>(
+              "LocalSimpleMcpConfig",
+              "port",
+              "Gateway port for MCP traffic.",
+            )}
+            onChange={setBinding}
+          />
+        </div>
+      </PolicySection>
+      <PolicySection
+        icon={<SlidersHorizontal size={17} />}
+        title="MCP behavior"
+        description="Choose session, tool-prefix, and failure behavior."
       >
-        <EnumSelector
-          ariaLabel="State mode"
-          value={statefulMode}
-          options={[
-            {
-              value: "stateless",
-              label: "Stateless",
-              description:
-                "Do not preserve MCP session state between requests.",
-            },
-            {
-              value: "stateful",
-              label: "Stateful",
-              description:
-                "Preserve MCP sessions so targets can keep per-session context.",
-            },
-          ]}
-          schema={props.help.node([
-            "$defs",
-            "LocalSimpleMcpConfig",
-            "properties",
-            "statefulMode",
-          ])}
-          showSelectedDescription
-          onChange={setStatefulMode}
-        />
-      </FieldGroup>
-      <FieldGroup
-        label="Prefix mode"
-        tooltip={props.help.field<McpConfig>(
-          "LocalSimpleMcpConfig",
-          "prefixMode",
-          "Controls whether target names are prefixed when exposing tools.",
-        )}
-      >
-        <EnumSelector
-          ariaLabel="Prefix mode"
-          value={prefixMode}
-          options={[
-            {
-              value: "none",
-              label: "None",
-              description: "Expose tool names without adding the target name.",
-            },
-            {
-              value: "always",
-              label: "Always",
-              description:
-                "Always prefix exposed tool names with the target name.",
-            },
-            {
-              value: "conditional",
-              label: "Conditional",
-              description:
-                "Prefix only when needed to avoid tool-name conflicts.",
-            },
-          ]}
-          schema={props.help.node([
-            "$defs",
-            "LocalSimpleMcpConfig",
-            "properties",
-            "prefixMode",
-          ])}
-          showSelectedDescription
-          onChange={setPrefixMode}
-        />
-      </FieldGroup>
-      <FieldGroup
-        label="Failure mode"
-        tooltip={props.help.field<McpConfig>(
-          "LocalSimpleMcpConfig",
-          "failureMode",
-        )}
-      >
-        <EnumSelector
-          ariaLabel="Failure mode"
-          value={failureMode}
-          options={[
-            { value: "failClosed", label: "Fail closed" },
-            { value: "failOpen", label: "Fail open" },
-          ]}
-          schema={props.help.node(["$defs", "McpBackendFailureMode"])}
-          showSelectedDescription
-          onChange={setFailureMode}
-        />
-      </FieldGroup>
-      <button
-        className="button"
-        type="button"
-        disabled={props.saving}
-        onClick={() =>
-          props.onSave({
-            port: port.trim() ? Number(port) : null,
-            statefulMode,
-            prefixMode: prefixMode === "none" ? null : prefixMode,
-            failureMode,
-          })
-        }
-      >
-        <Save size={16} />
-        Save settings
-      </button>
-    </div>
+        <div className="form-grid">
+          <FieldGroup
+            label="State mode"
+            tooltip={props.help.field<McpConfig>(
+              "LocalSimpleMcpConfig",
+              "statefulMode",
+              "Controls whether MCP sessions are preserved by the gateway.",
+            )}
+          >
+            <EnumSelector
+              ariaLabel="State mode"
+              value={statefulMode}
+              options={[
+                {
+                  value: "stateless",
+                  label: "Stateless",
+                  description:
+                    "Do not preserve MCP session state between requests.",
+                },
+                {
+                  value: "stateful",
+                  label: "Stateful",
+                  description:
+                    "Preserve MCP sessions so targets can keep per-session context.",
+                },
+              ]}
+              schema={props.help.node([
+                "$defs",
+                "LocalSimpleMcpConfig",
+                "properties",
+                "statefulMode",
+              ])}
+              onChange={setStatefulMode}
+            />
+          </FieldGroup>
+          <FieldGroup
+            label="Prefix mode"
+            tooltip={props.help.field<McpConfig>(
+              "LocalSimpleMcpConfig",
+              "prefixMode",
+              "Controls whether target names are prefixed when exposing tools.",
+            )}
+          >
+            <EnumSelector
+              ariaLabel="Prefix mode"
+              value={prefixMode}
+              options={[
+                {
+                  value: "none",
+                  label: "None",
+                  description:
+                    "Expose tool names without adding the target name.",
+                },
+                {
+                  value: "always",
+                  label: "Always",
+                  description:
+                    "Always prefix exposed tool names with the target name.",
+                },
+                {
+                  value: "conditional",
+                  label: "Conditional",
+                  description:
+                    "Prefix only when needed to avoid tool-name conflicts.",
+                },
+              ]}
+              schema={props.help.node([
+                "$defs",
+                "LocalSimpleMcpConfig",
+                "properties",
+                "prefixMode",
+              ])}
+              onChange={setPrefixMode}
+            />
+          </FieldGroup>
+          <FieldGroup
+            label="Failure mode"
+            tooltip={props.help.field<McpConfig>(
+              "LocalSimpleMcpConfig",
+              "failureMode",
+            )}
+          >
+            <EnumSelector
+              ariaLabel="Failure mode"
+              value={failureMode}
+              options={[
+                { value: "failClosed", label: "Fail closed" },
+                { value: "failOpen", label: "Fail open" },
+              ]}
+              schema={props.help.node(["$defs", "McpBackendFailureMode"])}
+              onChange={setFailureMode}
+            />
+          </FieldGroup>
+        </div>
+      </PolicySection>
+      <ConfigDiffSaveActions
+        config={props.config}
+        diffTitle="MCP settings config diff"
+        saveLabel="Save settings"
+        saving={props.saving}
+        onSave={() => props.onSave(patch)}
+        applyDiff={(next) => {
+          Object.assign(ensureMcp(next), patch);
+        }}
+      />
+    </form>
   );
 }
 
 function McpServerEditor(props: {
   initial: McpTarget;
+  config?: GatewayConfig | null;
   previousName?: string;
   help: SchemaHelp;
   saving: boolean;
@@ -446,71 +498,85 @@ function McpServerEditor(props: {
   const [envText, setEnvText] = useState(toYamlMappingText(stdio?.env));
   const [clearEnv, setClearEnv] = useState(Boolean(stdio?.clear_env));
   const [error, setError] = useState<string | null>(null);
+  const draft = JSON.stringify({
+    name,
+    kind,
+    url,
+    cmd,
+    args,
+    envText,
+    clearEnv,
+  });
+  const [initialDraft] = useState(() => draft);
 
-  function save() {
+  function targetPreview() {
+    const base = {
+      ...props.initial,
+      name: name.trim(),
+      policies: props.initial.policies,
+    } as McpTarget;
+    delete (base as Record<string, unknown>).mcp;
+    delete (base as Record<string, unknown>).sse;
+    delete (base as Record<string, unknown>).stdio;
+    delete (base as Record<string, unknown>).openapi;
+    if (kind === "stdio") {
+      const env = envText.trim() ? parseEnvYaml(envText) : {};
+      return {
+        ...base,
+        stdio: {
+          cmd: cmd.trim(),
+          args: splitArgs(args),
+          env,
+          clear_env: clearEnv,
+        },
+      };
+    }
+    const target = {
+      host: url.trim() || null,
+    };
+    return kind === "sse" ? { ...base, sse: target } : { ...base, mcp: target };
+  }
+
+  function validTargetPreview() {
     try {
       setError(null);
-      const base = {
-        ...props.initial,
-        name: name.trim(),
-        policies: props.initial.policies,
-      } as McpTarget;
-      delete (base as Record<string, unknown>).mcp;
-      delete (base as Record<string, unknown>).sse;
-      delete (base as Record<string, unknown>).stdio;
-      delete (base as Record<string, unknown>).openapi;
-      if (kind === "stdio") {
-        const env = envText.trim() ? parseEnvYaml(envText) : {};
-        props.onSave(
-          {
-            ...base,
-            stdio: {
-              cmd: cmd.trim(),
-              args: splitArgs(args),
-              env,
-              clear_env: clearEnv,
-            },
-          },
-          props.previousName,
-        );
-        return;
-      }
-      const target = {
-        host: url.trim() || null,
-      };
-      props.onSave(
-        kind === "sse" ? { ...base, sse: target } : { ...base, mcp: target },
-        props.previousName,
-      );
+      return targetPreview();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Invalid server configuration",
       );
+      return null;
     }
+  }
+
+  function save() {
+    const target = validTargetPreview();
+    if (!target) return;
+    props.onSave(target, props.previousName);
   }
 
   return (
     <Drawer
       title={props.previousName ? "Edit MCP server" : "Add MCP server"}
       onClose={props.onCancel}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={
-              props.saving || !name.trim() || (kind === "stdio" && !cmd.trim())
-            }
-            onClick={save}
-          >
-            <Save size={16} />
-            Save server
-          </button>
-        </div>
-      }
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="MCP server config diff"
+          saveLabel="Save server"
+          saving={props.saving}
+          saveDisabled={!name.trim() || (kind === "stdio" && !cmd.trim())}
+          onCancel={requestClose}
+          onSave={save}
+          beforeDiff={() => Boolean(validTargetPreview())}
+          applyDiff={(next) => {
+            const target = targetPreview();
+            upsertMcpTarget(next, target, props.previousName);
+          }}
+        />
+      )}
     >
       <div className="form-grid">
         <Field

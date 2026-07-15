@@ -29,6 +29,21 @@ import (
 
 var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
+func (s *Test) applyYAML(contents ...string) {
+	yaml := strings.Join(contents, "\n---\n")
+	done := func() {}
+	if len(contents) > 0 {
+		done = traceStep(s, "applied YAML %q", yaml)
+	}
+	err := s.TestInstallation.ClusterContext.Client.ApplyYAMLContents("", contents...)
+	if err != nil {
+		istioassert.NoError(s, fmt.Errorf("failed to apply YAML %q: %w", yaml, err))
+	}
+	done()
+
+	s.waitForResources(s.loadYAMLResources(contents...))
+}
+
 func (s *Test) applyManifests(manifests ...string) {
 	manifests = interceptManifestFiles(s, s.TestInstallation.GeneratedFiles.TempDir, manifests...)
 	done := func() {}
@@ -39,10 +54,12 @@ func (s *Test) applyManifests(manifests ...string) {
 	istioassert.NoError(s, err)
 	done()
 
-	manifestResources := s.loadManifestResources(manifests...)
-	dynamicResources := s.loadDynamicResources(manifestResources)
+	s.waitForResources(s.loadManifestResources(manifests...))
+}
 
-	allResources := slices.Concat(manifestResources, dynamicResources)
+func (s *Test) waitForResources(resources []client.Object) {
+	dynamicResources := s.loadDynamicResources(resources)
+	allResources := slices.Concat(resources, dynamicResources)
 	for _, resource := range allResources {
 		var ns, name string
 		if pod, ok := resource.(*corev1.Pod); ok {
@@ -79,6 +96,21 @@ func (s *Test) Apply(manifests ...string) {
 			return
 		}
 		s.deleteManifests(manifests...)
+	})
+}
+
+// ApplyYAML is just like Apply, but instead of reading from a file it takes the yaml string directly.
+func (s *Test) ApplyYAML(contents ...string) {
+	s.Helper()
+	if s.ShouldSkip() {
+		s.Skip("Skipping test due to gateway API version requirements")
+	}
+	s.applyYAML(contents...)
+	s.Cleanup(func() {
+		if testutils.ShouldSkipCleanup(s) {
+			return
+		}
+		s.deleteYAML(contents...)
 	})
 }
 
@@ -124,12 +156,10 @@ func manifestNames(manifests []string) []string {
 	return names
 }
 
-func stripNamespaceResources(t test.Failer, manifests ...string) string {
+func stripNamespaceResources(t test.Failer, contents ...string) string {
 	cfgs := []string{}
-	for _, manifest := range manifests {
-		d, err := os.ReadFile(manifest)
-		istioassert.NoError(t, err)
-		for _, yml := range yml.SplitString(string(d)) {
+	for _, data := range contents {
+		for _, yml := range yml.SplitString(data) {
 			obj := &unstructured.Unstructured{}
 			_, gvk, err := decUnstructured.Decode([]byte(yml), nil, obj)
 			if runtime.IsMissingKind(err) {
@@ -147,7 +177,22 @@ func stripNamespaceResources(t test.Failer, manifests ...string) string {
 
 func (s *Test) deleteManifests(manifests ...string) {
 	manifests = interceptManifestFiles(s, s.TestInstallation.GeneratedFiles.TempDir, manifests...)
-	nf := stripNamespaceResources(s, manifests...)
+	contents := []string{}
+	for _, manifest := range manifests {
+		data, err := os.ReadFile(manifest)
+		istioassert.NoError(s, err)
+		contents = append(contents, string(data))
+	}
+	nf := stripNamespaceResources(s, contents...)
+	fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_manifests.yaml")
+	istioassert.NoError(s, os.WriteFile(fp, []byte(nf), 0o644)) //nolint:gosec // G306: Golden test file can be readable
+
+	err := s.TestInstallation.ClusterContext.Client.DeleteYAMLFiles("", fp)
+	istioassert.NoError(s, err)
+}
+
+func (s *Test) deleteYAML(contents ...string) {
+	nf := stripNamespaceResources(s, contents...)
 	fp := filepath.Join(s.TestInstallation.GeneratedFiles.TempDir, "delete_manifests.yaml")
 	istioassert.NoError(s, os.WriteFile(fp, []byte(nf), 0o644)) //nolint:gosec // G306: Golden test file can be readable
 
@@ -164,6 +209,16 @@ func (s *Test) loadManifestResources(manifests ...string) []client.Object {
 	var resources []client.Object
 	for _, manifest := range manifests {
 		objs, err := testutils.LoadFromFiles(manifest, s.TestInstallation.ClusterContext.ControllerClient.Scheme(), s.validator)
+		istioassert.NoError(s, err)
+		resources = append(resources, objs...)
+	}
+	return resources
+}
+
+func (s *Test) loadYAMLResources(contents ...string) []client.Object {
+	var resources []client.Object
+	for _, data := range contents {
+		objs, err := testutils.LoadFromBytes([]byte(data), s.TestInstallation.ClusterContext.ControllerClient.Scheme(), s.validator)
 		istioassert.NoError(s, err)
 		resources = append(resources, objs...)
 	}

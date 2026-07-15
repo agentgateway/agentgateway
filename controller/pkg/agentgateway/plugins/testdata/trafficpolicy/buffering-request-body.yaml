@@ -13,6 +13,7 @@ spec:
       request: {}
       response:
         maxBytes: 5Mi
+        failureMode: "FailOpen"
 ---
 # Output
 output:
@@ -35,6 +36,7 @@ output:
         buffer:
           request: {}
           response:
+            failureMode: FAIL_OPEN
             maxBytes: 5242880
 status:
 - apiVersion: agentgateway.dev/v1alpha1

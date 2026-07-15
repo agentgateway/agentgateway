@@ -15,13 +15,16 @@ mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 tls-aws-lc = ["rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs"]
 tls-openssl = ["dep:openssl", "dep:rustls-openssl"]
 ui = []
-schema = ["schemars"]
+schema = ["schemars", "agent-core/schema", "agent-llm/schema"]
 internal_benches = ["divan"]
+assert_size_runtime = ["agent-core/assert_size_runtime"]
 
 [dependencies]
 agent-core.workspace = true
 agent-celx.workspace = true
 agent-hbone.workspace = true
+agent-http.workspace = true
+agent-llm.workspace = true
 agent-xds.workspace = true
 agent-pool.workspace = true
 anyhow.workspace = true
@@ -78,11 +81,11 @@ ipnet.workspace = true
 itertools.workspace = true
 jsonwebtoken.workspace = true
 lazy_static.workspace = true
-macro_rules_attribute.workspace = true
 notify-debouncer-full.workspace = true
 notify.workspace = true
 num_cpus.workspace = true
 once_cell.workspace = true
+multer.workspace = true
 openapiv3.workspace = true
 opentelemetry-otlp.workspace = true
 opentelemetry-proto.workspace = true
@@ -106,10 +109,11 @@ libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
-rmcp = { version = "1.5", features = [
+rmcp = { version = "2.0", features = [
     "client",
     "server",
     "base64",
+    "server-side-http",
     "transport-child-process",
 ] }
 rust_decimal.workspace = true
@@ -118,19 +122,19 @@ rustls-pki-types.workspace = true
 rustls.workspace = true
 schemars = { workspace = true, optional = true }
 secrecy.workspace = true
-serde-transcode.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_json_path_to_error.workspace = true
 serde_regex.workspace = true
 serde_urlencoded.workspace = true
 serde_with.workspace = true
 serde_yaml.workspace = true
 serde-untagged.workspace = true
+sha2.workspace = true
 stacker.workspace = true
 shellexpand.workspace = true
 socket2.workspace = true
 sse-stream.workspace = true
+subtle.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
@@ -186,7 +190,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "1.5", features = [
+rmcp = { version = "2.0", features = [
     "client",
     "server",
     "base64",
@@ -222,6 +226,7 @@ borrow_interior_mutable_const = "allow"
 declare_interior_mutable_const = "allow"
 
 [lints.rust]
+linker_messages = "allow"
 # This rule makes code more confusing
 mismatched_lifetime_syntaxes = "allow"
 # ossl350 is set by the openssl-sys crate when OpenSSL >= 3.5.0 is detected.

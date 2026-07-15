@@ -1,0 +1,42 @@
+{
+  "id": "chatcmpl-audioTokens123",
+  "object": "chat.completion",
+  "created": 1755008546,
+  "model": "gpt-4o-audio-preview",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Here is the transcription and spoken answer.",
+        "audio": {
+          "id": "audio_junk_123",
+          "data": "ZmFrZS1hdWRpby1ieXRlcw==",
+          "expires_at": 1755009546,
+          "transcript": "Here is the transcription and spoken answer."
+        },
+        "refusal": null,
+        "annotations": []
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 320,
+    "completion_tokens": 180,
+    "total_tokens": 500,
+    "prompt_tokens_details": {
+      "cached_tokens": 12,
+      "audio_tokens": 240
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 15,
+      "audio_tokens": 90,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "service_tier": "default",
+  "system_fingerprint": null
+}

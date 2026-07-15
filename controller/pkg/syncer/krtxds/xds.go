@@ -15,6 +15,7 @@ import (
 	stdatomic "sync/atomic"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	envoycorev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discovery "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/uuid"
@@ -33,7 +34,6 @@ import (
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/security"
-	"istio.io/istio/pkg/slices"
 	"istio.io/istio/pkg/util/sets"
 	"istio.io/istio/pkg/xds"
 	"k8s.io/apimachinery/pkg/types"
@@ -140,11 +140,13 @@ func PerGatewayCollection[T IntoProto[TT], TT proto.Message](collection krt.Coll
 			if extract != nil {
 				forGateway = new(extract(i))
 			}
+			resource := protoconv.MessageToAny(i.IntoProto())
 			return &DiscoveryResource{
 				Resource: &discovery.Resource{
-					Name:         getKey(i),
-					Version:      "",
-					Resource:     protoconv.MessageToAny(i.IntoProto()),
+					Name: getKey(i),
+					// Content hashes remain stable across controller replicas.
+					Version:      strconv.FormatUint(xxhash.Sum64(resource.Value), 16),
+					Resource:     resource,
 					Ttl:          nil,
 					CacheControl: nil,
 					Metadata:     nil,
@@ -527,7 +529,8 @@ func (s *DiscoveryServer) processDeltaRequest(req *discovery.DeltaDiscoveryReque
 
 	subs, _, _ := deltaWatchedResources(nil, req)
 	request := &PushRequest{
-		IsFromRequest: true,
+		IsFromRequest:           true,
+		InitialResourceVersions: req.InitialResourceVersions,
 		Delta: model.ResourceDelta{
 			// Record sub/unsub, but drop synthetic wildcard info
 			Subscribed:   subs,
@@ -648,7 +651,7 @@ func shouldRespondDelta(con *Connection, request *discovery.DeltaDiscoveryReques
 	// 1. no subscribed resources change from spontaneous delta request.
 	// 2. subscribed resources changes from ACK.
 	if spontaneousReq && !subChanged || !spontaneousReq && subChanged {
-		log.Error("ADS: Subscribed resources check mismatch", "type", stype, "spontaneous", spontaneousReq, "subChanged", subChanged)
+		log.Error("ADS: Subscribed resources check mismatch", "type", stype, "spontaneous", spontaneousReq, "sub_changed", subChanged)
 		if features.EnableUnsafeAssertions {
 			panic(fmt.Sprintf("ADS:%s: Subscribed resources check mismatch: %v vs %v", stype, spontaneousReq, subChanged))
 		}
@@ -1064,15 +1067,15 @@ func debounce(ch chan *PushRequest, stopCh <-chan struct{}, opts DebounceOptions
 				if req.ConfigsUpdated == nil {
 					log.Info("push debounce stable",
 						"id", pushCounter,
-						"debouncedEvents", debouncedEvents,
-						"lastChange", quietTime.String(),
-						"lastPush", eventDelay.String())
+						"debounced_events", debouncedEvents,
+						"last_change", quietTime.String(),
+						"last_push", eventDelay.String())
 				} else {
 					log.Info("push debounce stable",
 						"id", pushCounter,
-						"debouncedEvents", debouncedEvents,
-						"lastChange", quietTime.String(),
-						"lastPush", eventDelay.String(),
+						"debounced_events", debouncedEvents,
+						"last_change", quietTime.String(),
+						"last_push", eventDelay.String(),
 						"cause", configsUpdated(req),
 					)
 				}
@@ -1171,16 +1174,18 @@ type CollectionGenerator struct {
 // On-demand clients are expected to handle this (for wildcard, this is not applicable, as they don't specify any resources at all).
 func (e CollectionGenerator) GenerateDeltas(req *PushRequest, w *model.WatchedResource, gw types.NamespacedName) (model.Resources, model.DeletedResources, error) {
 	if req.IsRequest() {
-		// Full update, expect everything
-		res := slices.MapFilter(e.Col.List(), func(e DiscoveryResource) **discovery.Resource {
-			if !e.IsForGateway(gw) {
-				return nil
-			}
-			return &e.Resource
-		})
+		res := make(model.Resources, 0)
 		toDeleted := req.Delta.Subscribed
-		for _, r := range res {
+		for _, r := range e.Col.List() {
+			if !r.IsForGateway(gw) {
+				continue
+			}
 			toDeleted.Delete(r.Name)
+			// The client already retained resources with matching content.
+			if version := req.InitialResourceVersions[r.Name]; version != "" && version == r.Version {
+				continue
+			}
+			res = append(res, r.Resource)
 		}
 		deletes := sets.SortedList(toDeleted)
 		return res, deletes, nil
@@ -1233,6 +1238,8 @@ type PushRequest struct {
 	ConfigsUpdated map[TypeUrl]sets.String
 
 	IsFromRequest bool
+	// InitialResourceVersions contains the versions the client retained across a reconnect.
+	InitialResourceVersions map[string]string
 
 	// PushVersion represent the version of the push
 	PushVersion string

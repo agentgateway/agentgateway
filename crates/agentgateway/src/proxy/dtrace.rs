@@ -366,17 +366,20 @@ pub enum MessageType {
 	LlmRequestDetected {
 		provider: String,
 		inputFormat: String,
-		nativeFormat: Option<String>,
+		upstreamRouteType: Option<String>,
 		requestModel: String,
 		streaming: bool,
 	},
 	LlmStreamingTranslation {
 		provider: String,
 		inputFormat: String,
-		nativeFormat: Option<String>,
+		upstreamRouteType: Option<String>,
 		streamFormat: String,
 	},
-	RequestFinished,
+	RequestFinished {
+		status: Option<u16>,
+		error: Option<String>,
+	},
 }
 
 impl MessageType {
@@ -396,8 +399,7 @@ impl MessageType {
 			| MessageType::LlmRequestDetected { .. }
 			| MessageType::LlmStreamingTranslation { .. }
 			| MessageType::Policy { .. }
-			| MessageType::PolicyEvent { .. }
-			| MessageType::RequestFinished => Severity::Info,
+			| MessageType::PolicyEvent { .. } => Severity::Info,
 
 			MessageType::AuthorizationResult {
 				result: AuthorizationResult::Allow,
@@ -413,7 +415,8 @@ impl MessageType {
 				..
 			} => Severity::Error,
 			MessageType::Cel { result, .. } => cel_severity(result),
-			MessageType::BackendCallResult { status, error, .. } => {
+			MessageType::BackendCallResult { status, error, .. }
+			| MessageType::RequestFinished { status, error, .. } => {
 				if error.is_some() || status.is_some_and(|status| status >= 500) {
 					Severity::Error
 				} else if status.is_some_and(|status| status >= 400) {
@@ -484,7 +487,6 @@ pub struct TraceReceiver {
 }
 
 impl TraceReceiver {
-	#[cfg(test)]
 	pub async fn recv(&mut self) -> Option<Message> {
 		self.receiver.recv().await
 	}
@@ -631,8 +633,8 @@ impl DebugTracer {
 	pub fn request_started(&self) {
 		self.send(MessageType::RequestStarted)
 	}
-	pub fn request_completed(&self) {
-		self.send(MessageType::RequestFinished)
+	pub fn request_completed(&self, status: Option<u16>, error: Option<String>) {
+		self.send(MessageType::RequestFinished { status, error })
 	}
 	pub fn cel_eval(
 		&self,
@@ -748,14 +750,14 @@ impl DebugTracer {
 		&self,
 		provider: String,
 		input_format: String,
-		native_format: Option<String>,
+		upstream_route_type: Option<String>,
 		request_model: String,
 		streaming: bool,
 	) {
 		self.send(MessageType::LlmRequestDetected {
 			provider,
 			inputFormat: input_format,
-			nativeFormat: native_format,
+			upstreamRouteType: upstream_route_type,
 			requestModel: request_model,
 			streaming,
 		})
@@ -764,13 +766,13 @@ impl DebugTracer {
 		&self,
 		provider: String,
 		input_format: String,
-		native_format: Option<String>,
+		upstream_route_type: Option<String>,
 		stream_format: String,
 	) {
 		self.send(MessageType::LlmStreamingTranslation {
 			provider,
 			inputFormat: input_format,
-			nativeFormat: native_format,
+			upstreamRouteType: upstream_route_type,
 			streamFormat: stream_format,
 		})
 	}

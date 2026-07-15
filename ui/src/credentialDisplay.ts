@@ -1,9 +1,21 @@
+import type { VirtualApiKey } from "./types";
+
 export function maskKey(key: string) {
   if (key.length <= 10) return key;
   return `${key.slice(0, 7)}...${key.slice(-4)}`;
 }
 
-export function keyLabel(key: { key: string; metadata?: unknown }) {
+export function hasKeyValue<T extends { metadata?: unknown }>(
+  key: T,
+): key is T & { key: string } {
+  return "key" in key;
+}
+
+export function keyValue(key: VirtualApiKey) {
+  return hasKeyValue(key) ? key.key : key.keyHash;
+}
+
+export function keyLabel(key: VirtualApiKey) {
   const metadata =
     key.metadata &&
     typeof key.metadata === "object" &&
@@ -14,5 +26,7 @@ export function keyLabel(key: { key: string; metadata?: unknown }) {
     typeof metadata.name === "string" && metadata.name.trim()
       ? metadata.name.trim()
       : "";
-  return name ? `${name} (${maskKey(key.key)})` : maskKey(key.key);
+  const value = keyValue(key);
+  const masked = hasKeyValue(key) ? maskKey(value) : `hash ${maskKey(value)}`;
+  return name ? `${name} (${masked})` : masked;
 }

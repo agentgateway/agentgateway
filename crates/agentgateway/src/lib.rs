@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::io::Read;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::{fmt, io, str};
@@ -34,11 +35,11 @@ pub mod management;
 pub mod mcp;
 pub mod parse;
 pub mod proxy;
+pub mod resource_manager;
 pub mod serdes;
 pub mod state_manager;
 pub mod store;
 pub mod telemetry;
-#[cfg(any(test, feature = "internal_benches"))]
 pub mod test_helpers;
 pub mod transport;
 pub mod types;
@@ -62,9 +63,8 @@ pub struct NestedRawConfig {
 	config: Option<RawConfig>,
 }
 
-#[derive(serde::Deserialize, Clone, Debug, Default)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
+#[derive(Default)]
 pub struct RawStandardAttributes {
 	/// CEL expression used to populate the `agentgateway.user` request log attribute.
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
@@ -126,9 +126,8 @@ impl DnsLookupFamily {
 	}
 }
 
-#[derive(serde::Deserialize, Default, Clone, Debug)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
+#[derive(Default)]
 pub struct RawDnsConfig {
 	/// Controls which IP address families the DNS resolver will query for
 	/// upstream connections.
@@ -142,9 +141,8 @@ pub struct RawDnsConfig {
 	edns0: Option<bool>,
 }
 
-#[derive(serde::Deserialize, Default, Clone, Debug)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema_de!)]
+#[derive(Default)]
 // RawConfig represents the inputs a user can pass in. Config represents the internal representation of this.
 pub struct RawConfig {
 	enable_ipv6: Option<bool>,
@@ -190,6 +188,15 @@ pub struct RawConfig {
 
 	/// MCP gateway settings.
 	mcp: Option<RawMcpConfig>,
+
+	/// Custom CEL functions available to all CEL expressions. These can define re-usable snippets that
+	/// can be used in any expressions.
+	/// Configure as a block string containing one or more definitions, for example:
+	/// `customFunctions: |`
+	/// `  isInternal() { request.headers["x-env"] == "internal" }`
+	/// `  this.joined(prefix, parts...) { prefix + this + parts.join("") }`
+	#[serde(default)]
+	custom_functions: String,
 
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
@@ -687,6 +694,7 @@ pub struct ProxyInputs {
 	pub metrics: Arc<metrics::Metrics>,
 	pub model_catalog: Arc<llm::cost::ModelCatalog>,
 
+	pub admin: Option<management::admin::AdminService>,
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
 }
@@ -712,6 +720,7 @@ impl ProxyInputs {
 			upstream,
 			metrics,
 			model_catalog: Arc::new(model_catalog.unwrap_or_default()),
+			admin: None,
 			mcp_state,
 			ca,
 		}

@@ -25,7 +25,7 @@ thiserror = "2.0"
 paste = "1.0"
 hashbrown = "0.17.1"
 vector-map = { version = "1.1.0", features = ["serde_impl"] }
-itertools = "0.14.0"
+itertools = "0.15.0"
 http = "1.4.1"
 cel-derive = { path = "../cel-derive" }
 arcstr = "1.2.0"

@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  logging:
+    format: json
+frontendPolicies:
+  accessLog:
+    add:
+      backend: backend
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        cors:
+          allowOrigins:
+          - '*'
+          allowHeaders:
+          - content-type
+          - cache-control
+        # Mark this route as a2a traffic
+        a2a: {}
+      backends:
+      - host: localhost:9999

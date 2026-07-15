@@ -5,7 +5,7 @@ use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::http::filters::HeaderModifier;
+use crate::http::filters::{BackendRequestTimeout, HeaderModifier};
 use crate::http::jwt::Claims;
 use crate::http::{Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
@@ -16,6 +16,13 @@ use crate::types::agent::{
 	BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference,
 };
 use crate::*;
+
+fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
+	req
+		.extensions_mut()
+		.insert(BackendRequestTimeout(Duration::from_secs(10)));
+	req
+}
 
 pub mod webhook;
 
@@ -149,6 +156,16 @@ pub struct Policy {
 	pub routes: SortedRoutes,
 }
 
+impl crate::store::HasExpressions for Policy {
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self
+			.transformations
+			.iter()
+			.flatten()
+			.map(|(_, expr)| expr.as_ref())
+	}
+}
+
 /// Wildcard pattern converted to regex for model name matching.
 /// Stores the compiled regex and original pattern length for specificity sorting.
 #[apply(schema!)]
@@ -187,41 +204,7 @@ impl ModelAliasPattern {
 	}
 }
 
-#[apply(schema!)]
-#[serde(default)]
-pub struct PromptCachingConfig {
-	/// Add cache markers to system prompts when supported by the provider.
-	#[serde(rename = "cacheSystem")]
-	pub cache_system: bool,
-
-	/// Add cache markers to chat messages when supported by the provider.
-	#[serde(rename = "cacheMessages")]
-	pub cache_messages: bool,
-
-	/// Add cache markers to tool definitions when supported by the provider.
-	#[serde(rename = "cacheTools")]
-	pub cache_tools: bool,
-
-	/// Minimum prompt size required before cache markers are added.
-	#[serde(rename = "minTokens")]
-	pub min_tokens: Option<usize>,
-
-	/// Message offset used when choosing where to place cache markers.
-	#[serde(rename = "cacheMessageOffset")]
-	pub cache_message_offset: usize,
-}
-
-impl Default for PromptCachingConfig {
-	fn default() -> Self {
-		Self {
-			cache_system: true,
-			cache_messages: true,
-			cache_tools: false,
-			min_tokens: Some(1024),
-			cache_message_offset: 0,
-		}
-	}
-}
+pub use agent_llm::PromptCachingConfig;
 
 #[apply(schema!)]
 pub struct PromptEnrichment {
@@ -606,18 +589,42 @@ impl Policy {
 		wildcard.unwrap_or(crate::llm::RouteType::Completions)
 	}
 
+	pub fn has_request_body_mutations(&self) -> bool {
+		self.defaults.is_some() || self.overrides.is_some() || self.transformations.is_some()
+	}
+
 	pub fn unmarshal_request<T: DeserializeOwned>(
 		&self,
 		bytes: &Bytes,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<T, AIError> {
-		if self.defaults.is_none() && self.overrides.is_none() && self.transformations.is_none() {
+		if !self.has_request_body_mutations() {
 			// Fast path: directly bytes to typed
 			return serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing);
 		}
 		// Slow path: bytes --> json (transform) --> typed
 		let v: serde_json::Value =
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
+		self.unmarshal_request_value(v, log)
+	}
+
+	pub fn unmarshal_request_value<T: DeserializeOwned>(
+		&self,
+		v: serde_json::Value,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<T, AIError> {
+		let v = self.apply_request_body_mutations(v, log)?;
+		serde_json::from_value(v).map_err(AIError::RequestParsing)
+	}
+
+	pub fn apply_request_body_mutations(
+		&self,
+		v: serde_json::Value,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<serde_json::Value, AIError> {
+		if !self.has_request_body_mutations() {
+			return Ok(v);
+		}
 		let exec = cel::Executor::new_llm(log.as_ref().and_then(|x| x.request_snapshot.as_deref()), &v);
 		let to_set: Vec<_> = self
 			.transformations
@@ -645,7 +652,7 @@ impl Policy {
 		for (k, v) in self.defaults.iter().flatten() {
 			map.entry(k.clone()).or_insert_with(|| v.clone());
 		}
-		serde_json::from_value(serde_json::Value::Object(map)).map_err(AIError::RequestParsing)
+		Ok(serde_json::Value::Object(map))
 	}
 
 	fn eval_transformation_expression(
@@ -1090,8 +1097,7 @@ impl Policy {
 				let MaskActionBody::ResponseChoices(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
-				let msgs = body.choices;
-				resp.set_webhook_choices(msgs)?;
+				resp.set_webhook_choices(body.choices)?;
 				Ok(GuardrailOutcome::Masked)
 			},
 			ResponseAction::Reject(rej) => {
@@ -1192,10 +1198,8 @@ impl Policy {
 	// }
 
 	fn apply_prompt_guard_regex(original_content: &str, rgx: &RegexRules) -> Option<RegexResult> {
-		let mut current_content = original_content.to_string();
-		let mut content_modified = false;
+		let mut working: Option<String> = None;
 
-		// Process each rule sequentially, updating the content as we go
 		for r in &rgx.rules {
 			match r {
 				RegexRule::Builtin { builtin } => {
@@ -1206,62 +1210,54 @@ impl Policy {
 						Builtin::Email => &*pii::EMAIL,
 						Builtin::CaSin => &*pii::CA_SIN,
 					};
-					let results = pii::recognizer(rec, &current_content);
-
-					if !results.is_empty() {
-						match &rgx.action {
-							Action::Reject => {
-								return Some(RegexResult::Reject);
-							},
-							Action::Mask => {
-								// Replace matches in reverse order while also combining any overlapping ranges
-								let replacement = format!("<{}>", results[0].entity_type);
-								for range in results
-									.into_iter()
-									.map(|r| r.start..r.end)
-									.sorted_unstable_by(|a, b| b.start.cmp(&a.start).then_with(|| a.end.cmp(&b.end)))
-									.coalesce(|a, b| {
-										if b.end > a.start {
-											Ok(b.start..std::cmp::max(a.end, b.end))
-										} else {
-											Err((a, b))
-										}
-									}) {
-									current_content.replace_range(range, &replacement);
-								}
-								content_modified = true;
-							},
-						}
+					let results = pii::recognizer(rec, working.as_deref().unwrap_or(original_content));
+					if results.is_empty() {
+						continue;
+					}
+					match &rgx.action {
+						Action::Reject => return Some(RegexResult::Reject),
+						Action::Mask => {
+							let replacement = format!("<{}>", results[0].entity_type);
+							let buf = working.get_or_insert_with(|| original_content.to_string());
+							// Replace in reverse order to avoid index shifting, coalescing overlaps
+							for range in results
+								.into_iter()
+								.map(|r| r.start..r.end)
+								.sorted_unstable_by(|a, b| b.start.cmp(&a.start).then_with(|| a.end.cmp(&b.end)))
+								.coalesce(|a, b| {
+									if b.end > a.start {
+										Ok(b.start..std::cmp::max(a.end, b.end))
+									} else {
+										Err((a, b))
+									}
+								}) {
+								buf.replace_range(range, &replacement);
+							}
+						},
 					}
 				},
 				RegexRule::Regex { pattern } => {
-					let ranges: Vec<std::ops::Range<usize>> = pattern
-						.find_iter(&current_content)
-						.map(|m| m.range())
-						.collect();
-
-					if !ranges.is_empty() {
-						match &rgx.action {
-							Action::Reject => {
-								return Some(RegexResult::Reject);
-							},
-							Action::Mask => {
-								// Process matches in reverse order to avoid index shifting
-								for range in ranges.into_iter().rev() {
-									current_content.replace_range(range, "<masked>");
-								}
-								content_modified = true;
-							},
+					let content = working.as_deref().unwrap_or(original_content);
+					if matches!(rgx.action, Action::Reject) {
+						if pattern.is_match(content) {
+							return Some(RegexResult::Reject);
 						}
+						continue;
+					}
+					let ranges: Vec<std::ops::Range<usize>> =
+						pattern.find_iter(content).map(|m| m.range()).collect();
+					if ranges.is_empty() {
+						continue;
+					}
+					let buf = working.get_or_insert_with(|| original_content.to_string());
+					// Reverse order to avoid index shifting
+					for range in ranges.into_iter().rev() {
+						buf.replace_range(range, "<masked>");
 					}
 				},
 			}
 		}
-		// Only update the message if content was actually modified
-		if content_modified {
-			return Some(RegexResult::Mask(current_content));
-		}
-		None
+		working.map(RegexResult::Mask)
 	}
 
 	pub async fn apply_response_prompt_guard(
@@ -1924,4 +1920,19 @@ fn test_apply_prompt_guard_regex_mask(
 		Some(RegexResult::Mask(masked)) => assert_eq!(masked, expected),
 		_ => panic!("expected masked result"),
 	}
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::regex(vec![RegexRule::Regex { pattern: regex::Regex::new(r"\d{2}").unwrap() }], "id:12")]
+#[case::builtin(vec![RegexRule::Builtin { builtin: Builtin::Email }], "contact john.doe@example.com")]
+fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] input: &str) {
+	let result = Policy::apply_prompt_guard_regex(
+		input,
+		&RegexRules {
+			action: Action::Reject,
+			rules,
+		},
+	);
+	assert!(matches!(result, Some(RegexResult::Reject)));
 }

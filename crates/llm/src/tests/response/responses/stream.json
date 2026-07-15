@@ -1,0 +1,35 @@
+event: response.created
+data: {"type":"response.created","sequence_number":1,"response":{"created_at":123,"id":"","model":"gpt-4.1-mini","object":"response","output":[],"status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":2,"output_index":0,"item":{"type":"message","content":[],"id":"","role":"assistant","status":"in_progress"}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":3,"item_id":"","output_index":0,"content_index":0,"delta":"Hello"}
+
+event: response.output_text.done
+data: {"type":"response.output_text.done","sequence_number":4,"item_id":"","output_index":0,"content_index":0,"text":"Hello"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"type":"message","content":[{"type":"output_text","text":"Hello"}],"id":"","role":"assistant","status":"completed"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":6,"output_index":1,"item":{"type":"function_call","arguments":"","call_id":"call_xxx","name":"get_weather","id":"","status":"in_progress"}}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":7,"item_id":"","output_index":1,"delta":"{\"loc"}
+
+event: response.function_call_arguments.delta
+data: {"type":"response.function_call_arguments.delta","sequence_number":8,"item_id":"","output_index":1,"delta":"ation\":\"San Francisco\"}"}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","name":"get_weather","sequence_number":9,"item_id":"","output_index":1,"arguments":"{\"location\":\"San Francisco\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":10,"output_index":1,"item":{"type":"function_call","arguments":"{\"location\":\"San Francisco\"}","call_id":"call_xxx","name":"get_weather","id":"","status":"completed"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":11,"response":{"created_at":123,"id":"","model":"gpt-4.1-mini","object":"response","output":[],"status":"completed","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":0},"output_tokens":8,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":20}}}
+
+data: [DONE]
+

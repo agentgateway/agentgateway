@@ -33,6 +33,11 @@ func GetPortsValues(gw *collections.GatewayForDeployer, noListenersDummyPort int
 
 	// Add ports from Gateway listeners
 	for _, port := range listenerPorts {
+		// Internal binds are routing-only; they open no socket and must not be exposed
+		// via a Service port or container port.
+		if gw.InternalPorts.Contains(port) {
+			continue
+		}
 		portName := GenerateListenerNameFromPort(port)
 		if err := validateListenerPortForParent(port); err != nil {
 			// skip invalid ports; statuses are handled in the translator

@@ -40,10 +40,20 @@ message Bind {
     HBONE_GATEWAY = 3;
     CONNECT = 4;
   }
+  // Mode controls whether the bind opens an OS listener socket.
+  enum Mode {
+    // Open a listener socket on the bind's port (the normal behavior).
+    STANDARD = 0;
+    // Do not open a socket. The bind is routing-only and reachable via in-process re-entry
+    // (e.g. another listener redirecting CONNECT traffic to it). A port of 0 designates the
+    // wildcard fallback that serves any destination port.
+    INTERNAL = 1;
+  }
   string key = 1;
   uint32 port = 2;
   Protocol protocol = 3;
   TunnelProtocol tunnel_protocol = 4;
+  Mode mode = 5;
 }
 
 message RouteName {
@@ -333,6 +343,7 @@ message BackendAuthPolicy {
     Gcp gcp = 3;
     Aws aws = 4;
     Azure azure = 5;
+    OAuthTokenExchange oauth_token_exchange = 6;
   }
 }
 
@@ -428,6 +439,27 @@ message AwsImplicit {}
 message AwsAssumeRole {
   // Role ARN to assume before signing backend requests.
   string role_arn = 1;
+  // Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report
+  // attribution. Must match [\w+=,.@-]{2,64}. If unset, the AWS SDK generates a
+  // random session name.
+  string session_name = 2;
+  // Session tags passed to STS AssumeRole. Once activated as cost allocation
+  // tags, they surface as columns in the AWS Cost & Usage Report for per-tenant
+  // cost attribution.
+  repeated AwsSessionTag tags = 3;
+}
+
+// AWS STS session tag passed to AssumeRole for cost attribution.
+// Exactly one of value and expression may be set.
+message AwsSessionTag {
+  // Tag key.
+  string key = 1;
+  // Static tag value.
+  string value = 2;
+  // CEL expression evaluated against each request to produce the tag value,
+  // for example `jwt.sub` or `request.headers["x-app"]`. If the expression does
+  // not produce a valid tag value at request time, the request is rejected.
+  string expression = 3;
 }
 
 // Explicit Azure credentials configuration
@@ -524,16 +556,6 @@ message DirectResponse {
   string body_expression = 3;
   repeated ExpressionHeader headers = 4;
 }
-
-message BufferBody {
-  optional uint32 max_bytes = 1;
-}
-
-message Buffer {
-  optional BufferBody request = 1;
-  optional BufferBody response = 2;
-}
-
 
 message ExpressionHeader {
   string name = 1;
@@ -722,6 +744,10 @@ message FrontendPolicySpec {
       Protocol protocol = 3;
       // OTLP/HTTP path. Only applicable when protocol is HTTP. Default is /v1/logs.
       optional string path = 4;
+      // CEL expression to filter OTLP logs. If unset, inherits Logging.filter.
+      optional string filter = 5;
+      // Fields applied to OTLP logs. If unset, inherits Logging.fields.
+      Fields fields = 6;
 
       enum Protocol {
         HTTP = 0;
@@ -997,6 +1023,7 @@ message TrafficPolicySpec {
     message User {
       string key = 1;
       google.protobuf.Struct metadata = 2;
+      string key_hash = 3;
     }
 
     repeated User api_keys = 1;
@@ -1091,6 +1118,22 @@ message TrafficPolicySpec {
   }
 
   PolicyPhase phase = 1;
+
+  message Buffer {
+    enum FailureMode {
+      FAIL_CLOSED = 0;
+      FAIL_OPEN = 1;
+    }
+
+    message BufferBody {
+      optional uint32 max_bytes = 1;
+      FailureMode failure_mode = 2;
+    }
+
+    optional BufferBody request = 1;
+    optional BufferBody response = 2;
+  }
+
   oneof kind {
     Timeout timeout = 2;
     Retry retry = 3;
@@ -1435,6 +1478,7 @@ message BackendPolicySpec {
       AUTH0 = 1;
       KEYCLOAK = 2;
       OKTA = 3;
+      DESCOPE = 4;
     }
 
     // Validation mode for JWT authentication
@@ -1710,4 +1754,141 @@ message BackendReference {
 
 message Alpn {
   repeated string protocols = 1;
+}
+
+// Reusable OAuth client authentication (client_secret_basic /
+// client_secret_post / private_key_jwt). Shared by OAuthTokenExchange and
+// (soon) MCP authentication so both reference one client-auth shape.
+message OAuthClientAuth {
+  enum Method {
+      UNSPECIFIED         = 0; // defaults to CLIENT_SECRET_BASIC
+      CLIENT_SECRET_BASIC = 1; // id:secret in the Authorization: Basic header
+      CLIENT_SECRET_POST  = 2; // client_id/client_secret in the form body
+      PRIVATE_KEY_JWT     = 3; // private_key_jwt client assertion (RFC 7523)
+  }
+
+  message PrivateKeyJwt {
+    enum SigningAlg {
+      SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
+      RS256                   = 1;
+      RS384                   = 2;
+      RS512                   = 3;
+      ES256                   = 4;
+      ES384                   = 5;
+    }
+
+    // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
+    // EC keys are used with ES* algorithms.
+    string signing_key = 1;
+    // JWS signing algorithm. Defaults to RS256.
+    SigningAlg alg = 2;
+    // Optional JWS key ID header.
+    optional string kid = 3;
+    // Audience for the client assertion, typically the token endpoint URL.
+    string assertion_audience = 4;
+  }
+
+  // Required and non-empty when client_auth is set.
+  string client_id = 1;
+  // When omitted, client_id is sent without a secret; only valid with
+  // CLIENT_SECRET_POST. For no client authentication fields at all, leave
+  // client_auth unset. An explicitly empty secret is rejected.
+  optional string client_secret = 2;
+  // RFC 6749 §2.3 client authentication method.
+  Method method = 3;
+  // Required when method is PRIVATE_KEY_JWT.
+  PrivateKeyJwt private_key_jwt = 4;
+}
+
+// Token exchange for the OAuth family (RFC 8693 / RFC 7523).
+message OAuthTokenExchange {
+  message TokenSpec {
+    // Where to extract the token from the incoming request. The `expression`
+    // (CEL) variant is permitted here. A Header/Authorization source also reads
+    // from the Claims extension when an upstream JWT policy has stripped the
+    // header, so the default keeps working behind a JWT auth policy.
+    AuthorizationLocation source = 1;
+    // RFC 8693 §3 token type URN sent as subject_token_type / actor_token_type.
+    // e.g. "urn:ietf:params:oauth:token-type:access_token"
+    // Empty defaults to access_token under TOKEN_EXCHANGE. Ignored for the
+    // JWT_BEARER subject token because RFC 7523 sends the token as `assertion`
+    // and has no subject_token_type parameter.
+    string token_type = 2;
+  }
+
+  message ActorToken {
+    // Where to extract the RFC 8693 actor_token from the incoming request. The
+    // expression (CEL) variant is permitted here. Unlike subject_token, actor
+    // tokens have no default source: if actor_token is configured, source must
+    // be set explicitly so actor and subject are not accidentally the same
+    // credential.
+    AuthorizationLocation source = 1;
+
+    // RFC 8693 §3 token type URN sent as actor_token_type.
+    // e.g. "urn:ietf:params:oauth:token-type:access_token"
+    // Empty defaults to access_token, and actor_token_type is still sent.
+    string token_type = 2;
+
+    // Enforce that the subject's `may_act` claim authorizes the actor before exchanging.
+    bool enforce_may_act = 3;
+  }
+
+  enum GrantType {
+    UNSPECIFIED    = 0; // defaults to TOKEN_EXCHANGE
+    TOKEN_EXCHANGE = 1; // RFC 8693
+    JWT_BEARER     = 2; // RFC 7523
+  }
+
+  // ----- Token endpoint -----
+  BackendReference token_endpoint = 1;
+  // Token endpoint path on the backend that must start with "/" (defaults to "/")
+  optional string token_endpoint_path = 7;
+
+  // ----- Grant and incoming tokens -----
+  // Selects which RFC the request follows. Defaults to TOKEN_EXCHANGE (RFC 8693)
+  GrantType grant_type = 9;
+  // Subject token (RFC 8693) / assertion (RFC 7523). When unset, defaults to
+  // {source: Authorization header, Bearer prefix; token_type: access_token}
+  TokenSpec subject_token = 10;
+  // RFC 8693 §2.1 delegation actor token. TOKEN_EXCHANGE only; rejected under
+  // JWT_BEARER.
+  // When set, its token_type defaults to access_token if empty.
+  ActorToken actor_token = 11;
+
+  // ----- Token request parameters -----
+  // Properties sent only when non-empty.
+  repeated string audiences = 2;
+  repeated string scopes = 3; // joined with spaces into a single `scope` param
+  repeated string resources = 4;
+  // requested_token_type parameter sent under TOKEN_EXCHANGE only. Rejected
+  // under JWT_BEARER. When unset, no requested_token_type is sent; if the token
+  // endpoint returns issued_token_type, the gateway expects access_token.
+  optional string requested_token_type = 5;
+  // Arbitrary extra string form fields appended to the token exchange request.
+  // Values are CEL expressions evaluated against the incoming request.
+  map<string, string> additional_params = 12;
+
+  // ----- Authorization server client authentication -----
+  // When unset, no client authentication fields are sent; this supports
+  // public-client exchanges such as Google STS.
+  OAuthClientAuth client_auth = 6;
+
+  // ----- Output and runtime behavior -----
+  // Where to forward the exchanged token to the upstream. The expression
+  // location is not valid here because this field inserts a credential.
+  // Defaults to the Authorization header with a "Bearer " prefix if unset,
+  // matching the behavior of the Passthrough and Key auth policies.
+  AuthorizationLocation authorization_location = 13;
+
+  message TokenCache {
+    message InMemory {
+      optional uint32 max_entries = 1; // default 8192 (0 disables cache)
+      // TTL used when the token endpoint omits expires_in.
+      optional google.protobuf.Duration default_ttl = 3; // default 300s
+    }
+
+    InMemory in_memory = 1; // default when cache is unset
+  }
+  // Response cache configuration. When unset uses InMemory cache with defaults
+  TokenCache cache = 14;
 }

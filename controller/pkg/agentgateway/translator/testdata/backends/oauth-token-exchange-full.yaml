@@ -1,0 +1,164 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: token-endpoint
+spec:
+  static:
+    host: sts.example.com
+    port: 443
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  namespace: default
+  name: oauth-client
+data:
+  clientSecret: czNjcjN0
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: static-backend
+spec:
+  static:
+    host: example.com
+    port: 8888
+  policies:
+    auth:
+      oauthTokenExchange:
+        tokenEndpoint:
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: token-endpoint
+          path: /oauth/token
+        grantType: TokenExchange
+        subjectToken:
+          source:
+            header:
+              name: Authorization
+              prefix: "Bearer "
+          tokenType: AccessToken
+        actorToken:
+          source:
+            header:
+              name: X-Actor-Token
+          tokenType: Jwt
+          mayAct: Required
+        audiences:
+        - api://payments
+        scopes:
+        - read:invoices
+        - write:invoices
+        resources:
+        - https://payments.example.com
+        requestedTokenType: AccessToken
+        additionalParams:
+          tenant: request.headers["x-tenant"]
+        clientAuth:
+          clientId: gateway
+          secretRef:
+            name: oauth-client
+          method: ClientSecretBasic
+        location:
+          header:
+            name: X-Forwarded-Access-Token
+        cache:
+          inMemory:
+            maxEntries: 128
+            defaultTtl: 120s
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - auth:
+          oauthTokenExchange:
+            actorToken:
+              enforceMayAct: true
+              source:
+                header:
+                  name: X-Actor-Token
+              tokenType: urn:ietf:params:oauth:token-type:jwt
+            additionalParams:
+              tenant: request.headers["x-tenant"]
+            audiences:
+            - api://payments
+            authorizationLocation:
+              header:
+                name: X-Forwarded-Access-Token
+            cache:
+              inMemory:
+                defaultTtl: 120s
+                maxEntries: 128
+            clientAuth:
+              clientId: gateway
+              clientSecret: s3cr3t
+              method: CLIENT_SECRET_BASIC
+            grantType: TOKEN_EXCHANGE
+            requestedTokenType: urn:ietf:params:oauth:token-type:access_token
+            resources:
+            - https://payments.example.com
+            scopes:
+            - read:invoices
+            - write:invoices
+            subjectToken:
+              source:
+                header:
+                  name: Authorization
+                  prefix: 'Bearer '
+              tokenType: urn:ietf:params:oauth:token-type:access_token
+            tokenEndpoint:
+              backend: default/token-endpoint
+            tokenEndpointPath: /oauth/token
+      key: default/static-backend
+      name:
+        name: static-backend
+        namespace: default
+      static:
+        host: example.com
+        port: 8888
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/token-endpoint
+      name:
+        name: token-endpoint
+        namespace: default
+      static:
+        host: sts.example.com
+        port: 443
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: static-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: token-endpoint
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

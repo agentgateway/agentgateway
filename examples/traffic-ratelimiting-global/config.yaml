@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  tracing:
+    otlpEndpoint: http://localhost:4317
+    randomSampling: true
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTP
+    routes:
+    - policies:
+        remoteRateLimit:
+          domain: "agentgateway"
+          host: "127.0.0.1:8081"
+          # failureMode controls behavior when the rate limit service is unavailable.
+          # "failOpen" (default): allow requests through on service failure.
+          # "failClosed": deny requests with 500 on service failure.
+          failureMode: failOpen
+          descriptors:
+          - entries:
+            - key: "method"
+              value: request.method
+            - key: "path"
+              value: request.path
+            type: "requests"
+      backends:
+      - host: localhost:8080

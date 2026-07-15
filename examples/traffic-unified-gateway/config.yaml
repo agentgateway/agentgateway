@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+gateways:
+  default:
+    port: 3000
+llm:
+  policies:
+    apiKey:
+      keys:
+      - key: agw_sk_example
+        metadata:
+          name: Example key
+          owner: platform
+      mode: strict
+      location:
+        header:
+          name: authorization
+          prefix: 'Bearer '
+  providers:
+  - name: openai
+    provider: openAI
+    params:
+      apiKey: $OPENAI_API_KEY
+  models:
+  - name: gpt-4o-mini
+    provider:
+      reference: openai
+    params:
+      model: gpt-4o-mini
+  - name: ollama/*
+    provider: ollama
+    transformation:
+      model: llmRequest.model.stripPrefix("ollama/")
+  virtualModels:
+  - name: split
+    routing:
+      weighted:
+        targets:
+        - model: ollama/gemma3:270m
+          weight: 1
+        - model: gpt-4o-mini
+          weight: 1
+mcp:
+  targets:
+  - name: everything
+    stdio:
+      cmd: npx
+      args:
+      - '@modelcontextprotocol/server-everything'
+ui:
+  policies:
+    oidc:
+      issuer: http://localhost:7080/realms/agentgateway
+      clientId: agentgateway-browser
+      clientSecret: agentgateway-secret
+      redirectURI: http://localhost:3000/oauth/callback
+      scopes:
+      - profile
+      - email
+    authorization:
+      rules:
+      - allow: jwt.email.endsWith("@example.com")

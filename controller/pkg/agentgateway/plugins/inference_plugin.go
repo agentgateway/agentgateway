@@ -1,8 +1,9 @@
 package plugins
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -272,11 +273,11 @@ func desiredInferencePoolParentRefs(attachedGateways map[types.NamespacedName]st
 	for g := range attachedGateways {
 		gateways = append(gateways, g)
 	}
-	sort.SliceStable(gateways, func(i, j int) bool {
-		if gateways[i].Namespace == gateways[j].Namespace {
-			return gateways[i].Name < gateways[j].Name
+	slices.SortStableFunc(gateways, func(a, b types.NamespacedName) int {
+		if a.Namespace == b.Namespace {
+			return cmp.Compare(a.Name, b.Name)
 		}
-		return gateways[i].Namespace < gateways[j].Namespace
+		return cmp.Compare(a.Namespace, b.Namespace)
 	})
 
 	refs := make([]inf.ParentReference, 0, len(gateways))

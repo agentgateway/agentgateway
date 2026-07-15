@@ -1,7 +1,9 @@
 use ::http::header::CONTENT_TYPE;
 use ::http::{HeaderMap, HeaderValue, header};
+pub use agent_llm::webhook::{Message, ResponseChoice};
 use serde::{Deserialize, Serialize};
 
+use crate::llm::policy::with_default_timeout;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::SimpleBackendReference;
@@ -46,21 +48,11 @@ pub struct GuardrailsResponseResponse {
 	pub action: ResponseAction,
 }
 
-// For convenience, re-use SimpleChatCompletionMessage
-pub type Message = crate::llm::SimpleChatCompletionMessage;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct PromptMessages {
 	/// List of prompt messages including role and content.
 	pub messages: Vec<Message>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ResponseChoice {
-	/// message contains the role and text content of the response from the LLM model.
-	pub message: Message,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,7 +169,7 @@ pub async fn send_request(
 	http_headers: &HeaderMap,
 	messages: Vec<Message>,
 ) -> anyhow::Result<GuardrailsPromptResponse> {
-	let whr = build_request_for_request(http_headers, messages)?;
+	let whr = with_default_timeout(build_request_for_request(http_headers, messages)?);
 	let res = Box::pin(
 		client
 			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
@@ -194,7 +186,7 @@ pub async fn send_response(
 	http_headers: &HeaderMap,
 	choices: Vec<ResponseChoice>,
 ) -> anyhow::Result<GuardrailsResponseResponse> {
-	let whr = build_request_for_response(http_headers, choices)?;
+	let whr = with_default_timeout(build_request_for_response(http_headers, choices)?);
 	let res = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
 		.call_reference(whr, target)

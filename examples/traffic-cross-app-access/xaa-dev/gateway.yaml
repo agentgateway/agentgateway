@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# agentgateway Cross App Access (ID-JAG) pointed at the xaa.dev playground.
+#
+#   IdP (issuer)            : idp.xaa.dev            (issues the ID-JAG)
+#   Resource Authz Server   : auth.resource.xaa.dev (issues the access token)
+#   Resource API (upstream) : api.resource.xaa.dev  (Todo0 protected API)
+#
+#   inbound:  Authorization: Bearer <IdenX ID token for the registered client>
+#   leg 1  :  token exchange at idp.xaa.dev            -> ID-JAG
+#   leg 2  :  jwt-bearer at auth.resource.xaa.dev      -> Bearer access token
+#   upstream: GET api.resource.xaa.dev  with Authorization: Bearer <access token>
+#
+# Credentials come from environment variables (expanded at load time). Export them first
+# (see README.md): XAA_CLIENT_ID, XAA_IDP_SECRET, XAA_RESOURCE_SECRET. Then:
+#   cargo run --release --bin agentgateway -- -f ./gateway.yaml
+binds:
+- port: 3031
+  listeners:
+  - protocol: HTTP
+    routes:
+    - policies:
+        # TLS to the upstream resource API. Route backends take a `host:port` (no scheme),
+        # so HTTPS on the backend still needs an explicit backendTLS (unlike the crossAppAccess
+        # endpoints below, which accept the `https://` host form).
+        backendTLS: {}
+
+        # Validate the inbound IdenX ID token. Its audience is the registered client_id.
+        jwtAuth:
+          issuer: https://idp.xaa.dev
+          audiences:
+          - $XAA_CLIENT_ID
+          jwks:
+            url: https://idp.xaa.dev/jwks
+
+        backendAuth:
+          crossAppAccess:
+            # Leg 1 — IdenX token endpoint (requesting-app client credentials).
+            identityProvider:
+              # `https://` host = HTTPS with TLS auto-configured (no :443 + backendTLS needed).
+              host: https://idp.xaa.dev
+              tokenEndpointPath: /token
+              clientAuth:
+                clientId: $XAA_CLIENT_ID
+                method: clientSecretPost
+                clientSecret: $XAA_IDP_SECRET
+            # Leg 2 — resource authorization server (resource-client credentials).
+            resourceAuthorizationServer:
+              host: https://auth.resource.xaa.dev
+              tokenEndpointPath: /token
+              clientAuth:
+                clientId: ${XAA_CLIENT_ID}-at-todo0
+                method: clientSecretPost
+                clientSecret: $XAA_RESOURCE_SECRET
+            # The resource authorization server identifier; the ID-JAG is bound to it.
+            audience: https://auth.resource.xaa.dev
+            # RFC 8707 resource — the protected API (sent on the token-exchange leg).
+            resources:
+            - https://api.resource.xaa.dev
+            scopes:
+            - todos.read
+
+      backends:
+      # The Todo0 protected API the agent calls on the user's behalf.
+      - host: api.resource.xaa.dev:443

@@ -8,7 +8,6 @@ import {
   Pencil,
   Play,
   Plus,
-  Save,
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
@@ -28,8 +27,10 @@ import {
 } from "../config";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
 import {
+  ConfirmDialog,
   Drawer,
   Dropdown,
   EmptyState,
@@ -91,6 +92,7 @@ import type {
   LlmModel,
   LlmProvider,
   LlmVirtualModel,
+  GatewayConfig,
   ProviderName,
 } from "../types";
 import type {
@@ -129,6 +131,10 @@ export function ModelsPage() {
   const [editingVirtual, setEditingVirtual] = useState<{
     previousName?: string;
     model: LlmVirtualModel;
+  } | null>(null);
+  const [deleting, setDeleting] = useState<{
+    kind: "model" | "virtual model";
+    name: string;
   } | null>(null);
   const [modelHash, setModelHashState] = useState<ModelHash | null>(() =>
     modelHashFromUrl(),
@@ -230,20 +236,20 @@ export function ModelsPage() {
         actions={
           <div className="button-row">
             <button
-              className="button primary"
-              type="button"
-              onClick={openNewModel}
-            >
-              <Plus size={16} />
-              Add model
-            </button>
-            <button
               className="button"
               type="button"
               onClick={openNewVirtualModel}
             >
               <GitBranch size={16} />
               Add virtual model
+            </button>
+            <button
+              className="button primary"
+              type="button"
+              onClick={openNewModel}
+            >
+              <Plus size={16} />
+              Add model
             </button>
           </div>
         }
@@ -351,12 +357,13 @@ export function ModelsPage() {
                               className="icon-button danger"
                               aria-label="Delete model"
                               type="button"
-                              onClick={() => {
-                                if (confirmDelete("virtual model", model.name))
-                                  update.mutate((next) =>
-                                    removeVirtualModel(next, model.name),
-                                  );
-                              }}
+                              disabled={update.isPending}
+                              onClick={() =>
+                                setDeleting({
+                                  kind: "virtual model",
+                                  name: model.name,
+                                })
+                              }
                             >
                               <Trash2 size={16} />
                             </button>
@@ -409,12 +416,10 @@ export function ModelsPage() {
                             className="icon-button danger"
                             aria-label="Delete model"
                             type="button"
-                            onClick={() => {
-                              if (confirmDelete("model", model.name))
-                                update.mutate((next) =>
-                                  removeModel(next, model.name),
-                                );
-                            }}
+                            disabled={update.isPending}
+                            onClick={() =>
+                              setDeleting({ kind: "model", name: model.name })
+                            }
                           >
                             <Trash2 size={16} />
                           </button>
@@ -434,6 +439,7 @@ export function ModelsPage() {
           key={activeEditing.previousName ?? "new"}
           previousName={activeEditing.previousName}
           initial={activeEditing.model}
+          config={config.data}
           providers={providers}
           help={help}
           saving={update.isPending}
@@ -451,6 +457,7 @@ export function ModelsPage() {
           key={activeVirtualEditing.previousName ?? "new"}
           previousName={activeVirtualEditing.previousName}
           initial={activeVirtualEditing.model}
+          config={config.data}
           baseModels={models}
           providers={providers}
           help={help}
@@ -467,12 +474,35 @@ export function ModelsPage() {
           }
         />
       ) : null}
+      {deleting ? (
+        <ConfirmDialog
+          title={`Delete ${deleting.kind}?`}
+          destructive
+          confirmLabel={`Delete ${deleting.kind}`}
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() =>
+            update.mutate(
+              (next) =>
+                deleting.kind === "virtual model"
+                  ? removeVirtualModel(next, deleting.name)
+                  : removeModel(next, deleting.name),
+              { onSuccess: () => setDeleting(null) },
+            )
+          }
+        >
+          <p>
+            Delete <strong>{deleting.name}</strong>? This cannot be undone.
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
 
 function ModelEditor(props: {
   initial: LlmModel;
+  config?: GatewayConfig;
   providers: LlmProvider[];
   previousName?: string;
   help: SchemaHelp;
@@ -526,6 +556,22 @@ function ModelEditor(props: {
   );
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [saveAttempted, setSaveAttempted] = useState(false);
+  const draft = JSON.stringify({
+    model,
+    autoModelMatch,
+    upstreamMode,
+    explicitModel,
+    customModelExpression,
+    transformation,
+    health,
+    defaultsText,
+    overridesText,
+    requestHeaders,
+    responseHeaders,
+    promptCaching,
+    authorization,
+  });
+  const [initialDraft] = useState(() => draft);
   const warnings = modelWarnings(model);
   const invalidApiKey = invalidProviderApiKey(model.params?.apiKey);
   const providerApiKeyError =
@@ -566,26 +612,39 @@ function ModelEditor(props: {
     props.onSave(preview ?? model, props.previousName);
   }
 
+  function validateBeforeDiff() {
+    setSaveAttempted(true);
+    if (!preview?.provider) return false;
+    if (invalidApiKey) return false;
+    if (policyPatch.error) {
+      setPolicyError(policyPatch.error);
+      return false;
+    }
+    setPolicyError(null);
+    return true;
+  }
+
   return (
     <Drawer
       title={props.previousName ? "Edit model" : "Add model"}
       onClose={props.onCancel}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving || !model.name.trim() || !preview?.provider}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save model
-          </button>
-        </div>
-      }
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Model config diff"
+          saveLabel="Save model"
+          saving={props.saving}
+          saveDisabled={!model.name.trim() || !preview?.provider}
+          onCancel={requestClose}
+          onSave={save}
+          beforeDiff={validateBeforeDiff}
+          applyDiff={(next) =>
+            upsertModel(next, preview ?? model, props.previousName)
+          }
+        />
+      )}
     >
       <details className="schema-details model-help-details">
         <summary>Help</summary>
@@ -1113,6 +1172,7 @@ function modelPolicySummary(model: Partial<LlmModel>) {
 
 function VirtualModelEditor(props: {
   initial: LlmVirtualModel;
+  config?: GatewayConfig;
   previousName?: string;
   baseModels: LlmModel[];
   providers: LlmProvider[];
@@ -1131,7 +1191,7 @@ function VirtualModelEditor(props: {
   const weightedTargets = model.routing.weighted?.targets ?? [];
   const failoverTargets = model.routing.failover?.targets ?? [];
   const conditionalTargets = model.routing.conditional?.targets ?? [];
-  const targetOptions = modelTargetOptions(props.baseModels);
+  const targetOptions = modelTargetOptions(props.baseModels, props.providers);
   const preview = cleanEmpty(model) as LlmVirtualModel | undefined;
   const activeTargets =
     strategy === "weighted"
@@ -1152,6 +1212,13 @@ function VirtualModelEditor(props: {
     );
   const failoverGroups = failoverTargetGroups(failoverTargets);
   const defaultTarget = defaultVirtualTargetModel(props.baseModels);
+  const saveDisabled =
+    props.saving ||
+    !model.name.trim() ||
+    activeTargets.length === 0 ||
+    hasInvalidTarget ||
+    hasInvalidConditionalFallback;
+  const [initialDraft] = useState(() => JSON.stringify(model));
 
   function setStrategy(next: VirtualRoutingStrategy) {
     if (next === "weighted") {
@@ -1248,28 +1315,22 @@ function VirtualModelEditor(props: {
     <Drawer
       title={props.previousName ? "Edit virtual model" : "Add virtual model"}
       onClose={props.onCancel}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={
-              props.saving ||
-              !model.name.trim() ||
-              activeTargets.length === 0 ||
-              hasInvalidTarget ||
-              hasInvalidConditionalFallback
-            }
-            onClick={() => props.onSave(preview ?? model, props.previousName)}
-          >
-            <Save size={16} />
-            Save virtual model
-          </button>
-        </div>
-      }
+      dirty={JSON.stringify(model) !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Virtual model config diff"
+          saveLabel="Save virtual model"
+          saving={props.saving}
+          saveDisabled={saveDisabled}
+          onCancel={requestClose}
+          onSave={() => props.onSave(preview ?? model, props.previousName)}
+          applyDiff={(next) =>
+            upsertVirtualModel(next, preview ?? model, props.previousName)
+          }
+        />
+      )}
     >
       <Field
         label="Virtual model name"
@@ -1837,10 +1898,6 @@ function defaultIncomingModelMatch(provider: LlmModel["provider"]) {
   const providerName =
     providerReferenceName(provider) ?? providerLabel(provider);
   return `${providerName === "openAI" ? "openai" : providerName || "model"}/*`;
-}
-
-function confirmDelete(kind: string, name: string) {
-  return window.confirm(`Delete ${kind} "${name}"? This cannot be undone.`);
 }
 
 function applyUpstreamMode(

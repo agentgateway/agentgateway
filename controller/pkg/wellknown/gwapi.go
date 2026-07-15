@@ -4,7 +4,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 )
 
@@ -78,12 +77,12 @@ var (
 	}
 	TCPRouteGVK = schema.GroupVersionKind{
 		Group:   GatewayGroup,
-		Version: gwv1a2.GroupVersion.Version,
+		Version: gwv1.GroupVersion.Version,
 		Kind:    TCPRouteKind,
 	}
 	TCPRouteGVR = schema.GroupVersionResource{
 		Group:    GatewayGroup,
-		Version:  gwv1a2.GroupVersion.Version,
+		Version:  gwv1.GroupVersion.Version,
 		Resource: "tcproutes",
 	}
 	GRPCRouteGVK = schema.GroupVersionKind{

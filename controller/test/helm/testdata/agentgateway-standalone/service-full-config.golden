@@ -1,0 +1,292 @@
+---
+# Source: agentgateway-standalone/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentgateway-standalone
+  namespace: agentgateway-system
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: agentgateway-standalone/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-standalone-config-bootstrap
+  namespace: agentgateway-system
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+data:
+  config.yaml: |
+
+    config:
+      adminAddr: 0.0.0.0:15000
+      database:
+        url: sqlite:///config/data.db
+    binds:
+    - port: 8080
+      listeners: []
+    - port: 8443
+      listeners: []
+---
+# Source: agentgateway-standalone/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agentgateway-standalone-config
+  namespace: agentgateway-system
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "1Gi"
+---
+# Source: agentgateway-standalone/templates/service-admin.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway-standalone-admin
+  namespace: agentgateway-system
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+    plane: admin
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+spec:
+  type: "LoadBalancer"
+
+  clusterIPs:
+    - 10.96.0.10
+  externalIPs:
+    - 203.0.113.10
+  loadBalancerIP: 198.51.100.10
+  loadBalancerSourceRanges:
+    - 10.0.0.0/8
+  loadBalancerClass: service.k8s.aws/nlb
+  externalTrafficPolicy: Local
+  internalTrafficPolicy: Cluster
+  healthCheckNodePort: 32100
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  publishNotReadyAddresses: true
+  allocateLoadBalancerNodePorts: false
+  trafficDistribution: PreferClose
+  ports:
+  - name: "admin"
+    protocol: "TCP"
+    port: 15000
+    targetPort: admin
+  selector:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+---
+# Source: agentgateway-standalone/templates/service-gateway-extra.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway-standalone-public-3000
+  namespace: agentgateway-system
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+    listener: public-3000
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+spec:
+  type: "LoadBalancer"
+
+  loadBalancerClass: service.k8s.aws/nlb
+  externalTrafficPolicy: Local
+  ports:
+  - name: "listener-3000"
+    protocol: "TCP"
+    port: 3000
+    targetPort: 3000
+  selector:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+---
+# Source: agentgateway-standalone/templates/service-gateway.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway-standalone-gateway
+  namespace: agentgateway-system
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+    plane: gateway
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: "LoadBalancer"
+
+  clusterIPs:
+    - 10.96.0.20
+  externalIPs:
+    - 203.0.113.20
+    - 203.0.113.21
+  loadBalancerIP: 198.51.100.20
+  loadBalancerSourceRanges:
+    - 192.168.0.0/16
+  loadBalancerClass: service.k8s.aws/nlb
+  externalTrafficPolicy: Local
+  internalTrafficPolicy: Cluster
+  healthCheckNodePort: 32101
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  publishNotReadyAddresses: true
+  allocateLoadBalancerNodePorts: false
+  trafficDistribution: PreferClose
+  ports:
+  - name: "public-http"
+    protocol: "TCP"
+    port: 80
+    targetPort: 8080
+  - name: "public-https"
+    protocol: "TCP"
+    port: 443
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+---
+# Source: agentgateway-standalone/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentgateway-standalone
+  namespace: agentgateway-system
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway-standalone
+      app.kubernetes.io/instance: test-release
+      app.kubernetes.io/component: standalone
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        checksum/config: a4a01e6f84715137354407d5e86c6f46f1831be144f67526a13d58d6d640d0d8
+      labels:
+        app.kubernetes.io/name: agentgateway-standalone
+        app.kubernetes.io/instance: test-release
+        app.kubernetes.io/component: standalone
+    spec:
+      serviceAccountName: agentgateway-standalone
+      initContainers:
+      - name: config-bootstrap
+        image: "docker.io/library/busybox:1.36"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        command:
+        - sh
+        - -ec
+        - |
+          if [ "false" = "true" ] || [ ! -f /config/config.yaml ]; then
+            tmp="$(mktemp /config/config.yaml.XXXXXX)"
+            cp /bootstrap/config.yaml "$tmp"
+            mv "$tmp" /config/config.yaml
+          fi
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: config-bootstrap
+          mountPath: /bootstrap
+          readOnly: true
+      containers:
+      - name: agentgateway
+        image: "cr.agentgateway.dev/agentgateway:v0.0.0-dev"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+        args:
+        - -f
+        - /config/config.yaml
+        ports:
+        - name: admin
+          containerPort: 15000
+          protocol: TCP
+        env:
+        - name: RUST_BACKTRACE
+          value: "1"
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: agentgateway-standalone-config
+      - name: config-bootstrap
+        configMap:
+          name: agentgateway-standalone-config-bootstrap
+      - name: tmp
+        emptyDir: {}

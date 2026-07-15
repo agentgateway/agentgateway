@@ -2,17 +2,20 @@
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "f3e45a59786debf49e67d6bd6d8dcffc004d39ff" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
 wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b96083125fdabc3e62f92790ee15ae3a10d" }
+rmcp = { git = "https://github.com/howardjohn/rust-sdk", rev = "7366ffc42beb89f27410ae348a67001beb4c6ba5" }
 
 [workspace]
 resolver = "2"
 members = [
     "crates/agentgateway",
     "crates/agentgateway-app",
+    "crates/llm",
     "crates/cel-fork/cel",
     "crates/cel-fork/cel-derive",
     "crates/celx",
     "crates/pool",
     "crates/core",
+    "crates/http",
     "crates/hbone",
     "crates/protos",
     "crates/xds",
@@ -42,6 +45,8 @@ publish = false
 agent-core = { path = "crates/core" }
 agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
+agent-http = { path = "crates/http" }
+agent-llm = { path = "crates/llm" }
 agent-pool = { path = "crates/pool" }
 agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }
@@ -68,6 +73,7 @@ rustls-openssl = { version = "0.3", features = ["tls12"] }
 axum = { version = "0.8", features = ["macros"] }
 axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
+multer = "3.0.0"
 # Disable default features to avoid pulling in native-tls and requiring openssl
 # TODO: allow default features if we ever add an openssl feature
 azure_identity = { version = "1.0", default-features = false }
@@ -115,7 +121,7 @@ include_dir = "0.7"
 indexmap = { version = "2.13", features = ["serde"] }
 insta = { version = "1.47", features = ["json", "redactions", "filters", "yaml"] }
 ipnet = { version = "2.12", features = ["serde"] }
-itertools = "0.14"
+itertools = "0.15"
 jsonwebtoken = { version = "10.4", features = ["aws_lc_rs"] }
 lazy_static = "1.5"
 libc = "0.2"
@@ -142,6 +148,7 @@ pprof = { version = "0.15", features = [
     "protobuf",
     "protobuf-codec",
     "criterion",
+    "frame-pointer"
 ] }
 pretty_env_logger = "0.5"
 prometheus-client = "0.25"
@@ -152,7 +159,7 @@ prost-wkt-types = { version = "0.7", features = ["vendored-protox"] }
 prost-wkt-build = "0.7"
 pwhash = "1"
 rand = "0.10"
-quick_cache = "0.6.22"
+quick_cache = "0.7.0"
 rcgen = { version = "0.14", default-features = false, features = ["pem", "x509-parser", "aws_lc_rs"] }
 regex = "1.12"
 reqwest = { version = "0.13", default-features = false, features = [
@@ -197,6 +204,7 @@ sqlx = { version = "0.9", default-features = false, features = [
     "uuid",
 ] }
 stacker = "0.1"
+subtle = "2"
 tempfile = "3.27"
 thiserror = "2.0"
 tiktoken-rs = "0.12"
@@ -211,7 +219,7 @@ tonic-prost = { version = "0.14" }
 tonic-prost-build = { version = "0.14", features = ["transport"] }
 tonic-build = { version = "0.14", features = ["transport"] }
 tower = { version = "0.5" }
-tower-http = { version = "0.6", features = ["cors"] }
+tower-http = { version = "0.7", features = ["cors"] }
 tower-serve-static = "0.1"
 tower-service = "0.3"
 tracing = "0.1"
@@ -256,7 +264,7 @@ async-compression = { version = "0.4", features = [
     "tokio",
 ] }
 core_affinity = "0.8"
-frozen-collections = "0.9"
+frozen-collections = { version = "0.9", default-features = false, features = ["std", "serde"] }
 heck = "0.5"
 macro_rules_attribute = "0.2"
 
