@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -181,6 +182,32 @@ async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocal
 		yaml_str,
 	)
 	.await
+}
+
+#[tokio::test]
+async fn tls_cert_and_key_can_share_pem_bundle() {
+	let mut bundle = tempfile::NamedTempFile::new().unwrap();
+	bundle
+		.write_all(include_bytes!(
+			"../../../../examples/mcp-tls/certs/cert.pem"
+		))
+		.unwrap();
+	bundle
+		.write_all(include_bytes!("../../../../examples/mcp-tls/certs/key.pem"))
+		.unwrap();
+
+	let path = bundle.path().to_path_buf();
+	super::LocalTLSServerConfig {
+		cert: path.clone(),
+		key: path,
+		..Default::default()
+	}
+	.into_server_tls_config_with_resources(
+		Default::default(),
+		&crate::resource_manager::ResourceFetcher::files_only(),
+	)
+	.await
+	.expect("certificate and private key should load from one PEM bundle");
 }
 
 fn selected_ai_provider(normalized: &NormalizedLocalConfig) -> Arc<NamedAIProvider> {

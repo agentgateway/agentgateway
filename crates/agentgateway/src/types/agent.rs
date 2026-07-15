@@ -577,33 +577,34 @@ impl JsonSchema for ServerTLSConfig {
 }
 
 pub fn parse_cert(cert: &[u8]) -> Result<Vec<CertificateDer<'static>>, anyhow::Error> {
-	let parsed = <(SectionKind, Vec<u8>)>::pem_slice_iter(cert).collect::<Result<Vec<_>, _>>()?;
+	let parsed = <(SectionKind, Vec<u8>)>::pem_slice_iter(cert)
+		.filter_map(|section| match section {
+			Ok((SectionKind::Certificate, der)) => Some(Ok(CertificateDer::from(der))),
+			Ok(_) => None,
+			Err(err) => Some(Err(err)),
+		})
+		.collect::<Result<Vec<_>, _>>()?;
 	if parsed.is_empty() {
 		return Err(anyhow!("no certificate"));
 	}
-
-	parsed
-		.into_iter()
-		.map(|(kind, der)| {
-			if kind != SectionKind::Certificate {
-				return Err(anyhow!("no certificate"));
-			}
-			Ok(CertificateDer::from(der))
-		})
-		.collect()
+	Ok(parsed)
 }
 
 pub fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
-	let (kind, der) = <(SectionKind, Vec<u8>)>::from_pem_slice(key).map_err(|e| match e {
-		rustls_pki_types::pem::Error::NoItemsFound => anyhow!("no key"),
-		_ => anyhow!(e),
-	})?;
-	match kind {
-		SectionKind::PrivateKey => Ok(PrivateKeyDer::Pkcs8(der.into())),
-		SectionKind::RsaPrivateKey => Ok(PrivateKeyDer::Pkcs1(der.into())),
-		SectionKind::EcPrivateKey => Ok(PrivateKeyDer::Sec1(der.into())),
-		_ => Err(anyhow!("unsupported key")),
+	let mut parsed = None;
+	for section in <(SectionKind, Vec<u8>)>::pem_slice_iter(key) {
+		let (kind, der) = section?;
+		let key = match kind {
+			SectionKind::PrivateKey => PrivateKeyDer::Pkcs8(der.into()),
+			SectionKind::RsaPrivateKey => PrivateKeyDer::Pkcs1(der.into()),
+			SectionKind::EcPrivateKey => PrivateKeyDer::Sec1(der.into()),
+			_ => continue,
+		};
+		if parsed.replace(key).is_some() {
+			return Err(anyhow!("multiple private keys"));
+		}
 	}
+	parsed.ok_or_else(|| anyhow!("no key"))
 }
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -3221,6 +3222,16 @@ AwEHoUQDQgAEwWSdCtU7tQGYtpNpJXSB5VN4yT1lRXzHh8UOgWWqiYXX1WYHk8vf
 			PrivateKeyDer::Sec1(_) => {}, // Expected
 			_ => panic!("Expected SEC1 (EC) private key format"),
 		}
+	}
+
+	#[test]
+	fn test_parse_multiple_keys() {
+		let key = include_bytes!("../../../../examples/mcp-tls/certs/key.pem");
+		let bundle = [key.as_slice(), key.as_slice()].concat();
+		assert_eq!(
+			parse_key(&bundle).unwrap_err().to_string(),
+			"multiple private keys"
+		);
 	}
 
 	#[test]
