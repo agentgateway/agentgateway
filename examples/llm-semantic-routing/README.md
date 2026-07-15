@@ -129,14 +129,18 @@ user-level Codex profile:
 
 ```bash
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+export AGENTGATEWAY_BASE_URL="http://$(kubectl get gateway agentgateway-proxy \
+  -n agentgateway-system \
+  -o jsonpath='{.status.addresses[0].value}')/v1"
+# For a TLS-enabled corporate gateway, set AGENTGATEWAY_BASE_URL to its https URL.
 mkdir -p "$CODEX_HOME"
-cat > "$CODEX_HOME/agentgateway.config.toml" <<'EOF'
+cat > "$CODEX_HOME/agentgateway.config.toml" <<EOF
 model = "auto"
 model_provider = "agentgateway"
 
 [model_providers.agentgateway]
 name = "Corporate agentgateway"
-base_url = "https://my.corp.agentgateway.com/v1"
+base_url = "${AGENTGATEWAY_BASE_URL}"
 wire_api = "responses"
 env_key = "OPENAI_API_KEY"
 EOF
