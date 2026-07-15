@@ -19,9 +19,9 @@ use rmcp::transport::common::http_header::HEADER_SESSION_ID;
 use thiserror::Error;
 use tokio::process::Command;
 
+use crate::mcp::handler::NameRouting;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
-use crate::mcp::routing::NameRouting;
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{FailureMode, mergestream, upstream};
 use crate::proxy::ProxyError;

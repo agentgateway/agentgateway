@@ -100,25 +100,30 @@ impl Session {
 				_ => None,
 			};
 			// first, determine how widely to send the initialize
-			// Single-target methods get initialize/initialized scoped to their one backend.
-			// Unprefixed names (Resolve mode) can only be mapped by listing every target,
-			// which itself requires initialize, so they fan out with everything else.
-			let single_target_name = match request_type {
-				Some(ClientRequest::CallToolRequest(ctr)) => Some(ctr.params.name.as_ref()),
-				Some(ClientRequest::GetPromptRequest(gpr)) => Some(gpr.params.name.as_str()),
-				_ => None,
-			};
-			let scoped_target = match single_target_name {
-				Some(name) => match self.relay.static_target(name) {
-					Ok(target) => target,
-					Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
-				},
-				None => None,
-			};
-			match scoped_target {
-				Some(service_name) => {
+			match request_type {
+				// Single-target methods only hit one backend, so initialize/initialized should be scoped
+				// to that backend rather than fanning out. In Resolve mode (prefixMode: never) the owner
+				// is only found by listing targets — which itself requires initialize — so those fan
+				// out with everything else.
+				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_))
+					if !self.relay.needs_resolution() =>
+				{
+					let (kind, name) = match request_type {
+						Some(ClientRequest::CallToolRequest(ctr)) => {
+							(ResolveKind::Tool, ctr.params.name.to_string())
+						},
+						Some(ClientRequest::GetPromptRequest(gpr)) => {
+							(ResolveKind::Prompt, gpr.params.name.clone())
+						},
+						_ => unreachable!("match arm guarantees single-target request type"),
+					};
+					let ctx = IncomingRequestContext::new(&parts);
+					let (service_name, _) = match self.relay.parse_resource_name(kind, &name, &ctx).await {
+						Ok(target) => target,
+						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
+					};
 					let res = self
-						.send_init_single(parts.clone(), init_request, service_name)
+						.send_init_single(parts.clone(), init_request, &service_name)
 						.await;
 					if let Some(sessions) = self.relay.get_sessions() {
 						let s = http::sessionpersistence::SessionState::MCP(
@@ -133,12 +138,12 @@ impl Session {
 					let _ = Self::handle_error(
 						None,
 						self
-							.send_initialized_notification_single(parts.clone(), service_name)
+							.send_initialized_notification_single(parts.clone(), &service_name)
 							.await,
 					)
 					.await?;
 				},
-				None => {
+				_ => {
 					// We should fan out the initialize request to all MCP servers
 					let _ = self
 						.send(
@@ -177,7 +182,7 @@ impl Session {
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		let (service_name, prompt) = self
 			.relay
-			.resolve_resource_name(ResolveKind::Prompt, name, ctx)
+			.parse_resource_name(ResolveKind::Prompt, name, ctx)
 			.await?;
 		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
@@ -523,7 +528,7 @@ impl Session {
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
-						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
+						let (service_name, tool) = Box::pin(self.relay.parse_resource_name(
 							ResolveKind::Tool,
 							&name,
 							&ctx,
@@ -559,7 +564,7 @@ impl Session {
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
-						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
+						let (service_name, prompt) = Box::pin(self.relay.parse_resource_name(
 							ResolveKind::Prompt,
 							&name,
 							&ctx,

@@ -576,8 +576,7 @@ async fn multiplex_never_prefix_collisions_are_dropped_and_unroutable() {
 	assert!(!names.contains(&"echo".to_string()), "{names:?}");
 	assert!(names.contains(&"show_dashboard".to_string()), "{names:?}");
 
-	// Calling a colliding name fails rather than guessing a target, and is
-	// indistinguishable from an unknown name so callers cannot probe topology.
+	// Calling a colliding name fails rather than guessing a target.
 	let collision_err = client
 		.call_tool(
 			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
@@ -589,13 +588,17 @@ async fn multiplex_never_prefix_collisions_are_dropped_and_unroutable() {
 		)
 		.await
 		.unwrap_err();
+	assert!(
+		format!("{collision_err}").contains("served by multiple targets"),
+		"{collision_err}"
+	);
 	let unknown_err = client
 		.call_tool(rmcp::model::CallToolRequestParams::new("no_such_tool"))
 		.await
 		.unwrap_err();
-	assert_eq!(
-		format!("{collision_err}").replace("echo", "no_such_tool"),
-		format!("{unknown_err}"),
+	assert!(
+		format!("{unknown_err}").contains("unknown tool no_such_tool"),
+		"{unknown_err}"
 	);
 
 	// Unique names keep working alongside collisions.
