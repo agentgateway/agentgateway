@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use agent_core::strng;
+use base64::Engine;
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 
@@ -225,332 +226,13 @@ async fn test_streaming(
 	});
 }
 
-fn test_request<I>(
-	provider: &str,
-	relative_path: &str,
-	xlate: impl Fn(I) -> Result<Vec<u8>, AIError>,
-) where
-	I: DeserializeOwned,
-{
-	let input_path = fixture_path(relative_path);
-	let input_str = &fs::read_to_string(&input_path).expect("Failed to read input file");
-	let input_raw: Value = serde_json::from_str(input_str).expect("Failed to parse input json");
-	let input_typed: I = serde_json::from_str(input_str).expect("Failed to parse input JSON");
-
-	let provider_response =
-		xlate(input_typed).expect("Failed to translate input format to provider request ");
-	let provider_value =
-		serde_json::from_slice::<Value>(&provider_response).expect("Failed to parse provider response");
-	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
-
-	insta::with_settings!({
-			info => &input_raw,
-			description => input_path.to_string_lossy().to_string(),
-			omit_expression => true,
-			prepend_module_to_snapshot => false,
-			snapshot_path => snapshot_path,
-	}, {
-			 insta::assert_json_snapshot!(snapshot_name, provider_value, {
-			".id" => "[id]",
-			".created" => "[date]",
-		});
-	});
-}
-
 const ANTHROPIC: &str = "anthropic";
 const BEDROCK: &str = "bedrock";
 const VERTEX: &str = "vertex";
 const OPENAI: &str = "openai";
-const GEMINI: &str = "gemini";
-const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 const COHERE: &str = "cohere";
-const VERTEX_GEMINI: &str = "vertex-gemini";
-
-mod requests {
-	use super::*;
-
-	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
-		("full", &[ANTHROPIC, BEDROCK]),
-		("tool-call", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
-		("parallel-tool-call", &[BEDROCK, VERTEX_GEMINI]),
-		("reasoning", &[ANTHROPIC, BEDROCK, VERTEX_GEMINI]),
-		("reasoning_max", &[ANTHROPIC, VERTEX_GEMINI]),
-		// Replaying a prior assistant thinking turn back to Bedrock: a signed reasoning block is
-		// re-emitted as a `reasoningContent` block (signature preserved), an unsigned one is not.
-		("reasoning_replay", &[BEDROCK]),
-		("reasoning_replay_unsigned", &[BEDROCK]),
-		// `generation-config` stands in for `full`, whose remote http image the Gemini path rejects.
-		("image-inline", &[VERTEX_GEMINI]),
-		("image-file", &[VERTEX_GEMINI]),
-		("structured-output", &[VERTEX_GEMINI]),
-		("multi-turn-tools", &[VERTEX_GEMINI]),
-		("generation-config", &[VERTEX_GEMINI]),
-	];
-	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
-		("system_message", &[COMPLETIONS, BEDROCK, VERTEX]),
-		("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
-		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
-		// Replaying a prior assistant `thinking` block to Bedrock Converse must preserve its
-		// cryptographic `signature` (mapped to reasoningContent.reasoningText.signature) so
-		// Bedrock can validate the replayed thinking.
-		("reasoning_replay", &[BEDROCK]),
-	];
-	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[BEDROCK, GEMINI]),
-		("instructions", &[BEDROCK, GEMINI]),
-		("input-list", &[BEDROCK, GEMINI]),
-		("parallel-tool-call", &[BEDROCK, GEMINI]),
-	];
-	pub const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
-		("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
-	];
-	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
-		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
-	];
-	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[COHERE, BEDROCK, VERTEX]),
-		("passthrough-fields", &[COHERE, BEDROCK, VERTEX]),
-	];
-
-	#[test]
-	fn from_completions() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-
-		let bedrock =
-			|i| conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None);
-		let anthropic = |i| conversion::messages::from_completions::translate(&i);
-		let vertex_gemini =
-			|i| conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"));
-
-		for (name, providers) in COMPLETION_REQUESTS {
-			for provider in *providers {
-				match *provider {
-					BEDROCK => test_request(
-						BEDROCK,
-						&format!("requests/completions/{name}.json"),
-						bedrock,
-					),
-					ANTHROPIC => test_request(
-						ANTHROPIC,
-						&format!("requests/completions/{name}.json"),
-						anthropic,
-					),
-					VERTEX_GEMINI => test_request(
-						VERTEX_GEMINI,
-						&format!("requests/completions/{name}.json"),
-						vertex_gemini,
-					),
-					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[test]
-	fn from_messages() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-		let vertex_provider = vertex::Provider {
-			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
-			region: Some(strng::new("us-central1")),
-			project_id: strng::new("test-project-123"),
-		};
-
-		let bedrock_request =
-			|i| conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None);
-		let vertex_request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
-			let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
-			vertex_provider.prepare_anthropic_message_body(anthropic_body)
-		};
-		let completions_request = |i| conversion::completions::from_messages::translate(&i);
-		for (name, providers) in MESSAGES_REQUESTS {
-			let test = &format!("requests/messages/{name}.json");
-			for provider in *providers {
-				match *provider {
-					BEDROCK => test_request(BEDROCK, test, bedrock_request),
-					COMPLETIONS => test_request(COMPLETIONS, test, completions_request),
-					VERTEX => test_request(VERTEX, test, vertex_request),
-					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[test]
-	fn from_responses() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-
-		for (name, providers) in RESPONSES_REQUESTS {
-			let test = &format!("requests/responses/{name}.json");
-			for provider in *providers {
-				match *provider {
-					BEDROCK => test_request(BEDROCK, test, |req| {
-						conversion::bedrock::from_responses::translate(&req, &bedrock_provider, None, None)
-					}),
-					GEMINI => test_request(GEMINI, test, |req| {
-						conversion::openai_compat::from_responses::translate(&req)
-					}),
-					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_embeddings() {
-		let titan_provider = bedrock::Provider {
-			model: Some(strng::new("amazon.titan-embed-text-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-
-		let cohere_provider = bedrock::Provider {
-			model: Some(strng::new("cohere.embed-english-v3")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-
-		let vertex_provider = vertex::Provider {
-			model: Some(strng::new("text-embedding-004")),
-			region: Some(strng::new("us-central1")),
-			project_id: strng::new("test-project-123"),
-		};
-
-		let titan_request = |i| conversion::bedrock::from_embeddings::translate(&i, &titan_provider);
-		let cohere_request = |i| conversion::bedrock::from_embeddings::translate(&i, &cohere_provider);
-		let vertex_request = |i: types::embeddings::Request| i.to_vertex(&vertex_provider);
-		let openai_request = |i: types::embeddings::Request| i.to_openai();
-		for (name, providers) in EMBEDDINGS_REQUESTS {
-			for provider in *providers {
-				match *provider {
-					BEDROCK_TITAN => {
-						test_request(
-							BEDROCK_TITAN,
-							&format!("requests/embeddings/{name}.json"),
-							titan_request,
-						);
-					},
-					BEDROCK_COHERE => test_request(
-						BEDROCK_COHERE,
-						&format!("requests/embeddings/{name}.json"),
-						cohere_request,
-					),
-					VERTEX => {
-						test_request(
-							VERTEX,
-							&format!("requests/embeddings/{name}.json"),
-							vertex_request,
-						);
-					},
-					OPENAI => {
-						test_request(
-							OPENAI,
-							&format!("requests/embeddings/{name}.json"),
-							openai_request,
-						);
-					},
-					other => panic!("unsupported provider in EMBEDDINGS_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_rerank() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("cohere.rerank-v3-5:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-		let vertex_provider = vertex::Provider {
-			model: Some(strng::new("semantic-ranker-default@latest")),
-			region: Some(strng::new("global")),
-			project_id: strng::new("test-project-123"),
-		};
-
-		let bedrock_request = |i: types::rerank::Request| {
-			conversion::bedrock::from_rerank::translate(&i, &bedrock_provider)
-		};
-		let vertex_request = |i: types::rerank::Request| i.to_vertex(&vertex_provider);
-		let cohere_request = |i: types::rerank::Request| i.to_openai();
-		for (name, providers) in RERANK_REQUESTS {
-			for provider in *providers {
-				let path = format!("requests/rerank/{name}.json");
-				match *provider {
-					BEDROCK => test_request(BEDROCK, &path, bedrock_request),
-					VERTEX => test_request(VERTEX, &path, vertex_request),
-					COHERE => test_request(COHERE, &path, cohere_request),
-					other => panic!("unsupported provider in RERANK_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_count_tokens() {
-		let mut headers = http::HeaderMap::new();
-		headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
-		let vertex_provider = vertex::Provider {
-			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
-			region: Some(strng::new("us-central1")),
-			project_id: strng::new("test-project-123"),
-		};
-
-		let bedrock_request =
-			|input: types::count_tokens::Request| input.to_bedrock_token_count(&headers);
-		let anthropic_request = |i: types::count_tokens::Request| i.to_anthropic();
-		let vertex_request = |input: types::count_tokens::Request| -> Result<Vec<u8>, AIError> {
-			let anthropic_body = input.to_anthropic()?;
-			vertex_provider.prepare_anthropic_count_tokens_body(anthropic_body)
-		};
-		for (name, providers) in COUNT_TOKENS_REQUESTS {
-			let test = &format!("requests/count-tokens/{name}.json");
-			for provider in *providers {
-				match *provider {
-					ANTHROPIC => test_request(provider, test, anthropic_request),
-					BEDROCK => test_request(provider, test, bedrock_request),
-					VERTEX => test_request(provider, test, vertex_request),
-					other => panic!("unsupported provider in COUNT_TOKENS_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-}
 
 mod response {
 	use super::*;
@@ -757,7 +439,7 @@ mod response {
 
 	fn test_response_for_provider(provider: &str, test: &str) {
 		let (p, r) = build_provider_request(provider);
-		let test_fn = |i: Bytes| p.process_success(&r, &i);
+		let test_fn = |i: Bytes| p.translate_chat_or_detect_response(&r, &i);
 		test_response(provider, test, test_fn)
 	}
 
@@ -777,20 +459,17 @@ mod response {
 				None,
 				i,
 			)
-			.await
 		};
 		test_streaming(provider, test, test_fn).await
 	}
 
 	fn build_provider_request(provider: &str) -> (AIProvider, LLMRequest) {
-		let bedrock_provider = AIProvider::Bedrock(bedrock::Provider {
+		let bedrock_provider = AIProvider::Bedrock(BedrockProvider::new(bedrock::Provider {
 			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		});
+		}));
 		let (p, r) = match provider {
 			RESPONSES_TO_RESPONSES => (
 				AIProvider::OpenAI(openai::Provider { model: None }),
@@ -850,13 +529,13 @@ mod response {
 		LLMRequest {
 			input_tokens: None,
 			input_format,
-			native_format: input_format.provider_format_preferences().first().copied(),
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "input-model".into(),
 			provider: Default::default(),
 			streaming: false,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		}
 	}
 

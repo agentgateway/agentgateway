@@ -27,7 +27,7 @@ fn resp(v: Value) -> Value {
 
 /// Run a Gemini response through `translate_response` and return the `LLMResponse` used to
 /// populate CEL/log fields.
-fn llm_resp(v: Value) -> crate::llm::LLMResponse {
+fn llm_resp(v: Value) -> crate::LLMResponse {
 	to_completions::translate_response(&gemini_response_bytes(v))
 		.expect("translate_response ok")
 		.to_llm_response(false)

@@ -308,6 +308,7 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// Completions
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
+		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		// Messages
 		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
@@ -345,6 +346,25 @@ fn render_anthropic_messages(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIE
 		types::ChatRequest::Messages(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
+		))),
+	}
+}
+
+fn render_vertex_gemini(
+	req: types::ChatRequest<'_>,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
+	let AIProvider::Vertex(provider) = ctx.provider else {
+		return Err(AIError::UnsupportedConversion(strng::literal!(
+			"expected vertex provider"
+		)));
+	};
+	match req {
+		types::ChatRequest::Completions(req) => {
+			conversion::vertex_gemini::from_completions::translate(req, provider.model.as_deref())
+		},
+		_ => Err(AIError::UnsupportedConversion(strng::literal!(
+			"vertex gemini only supports completions input"
 		))),
 	}
 }
@@ -403,6 +423,7 @@ impl ChatTranslation {
 				InputFormat::Responses => custom::ProviderFormat::Responses,
 				_ => unreachable!("chat translation selected for non-chat input"),
 			},
+			ChatFormat::VertexGemini => custom::ProviderFormat::Completions,
 		}
 	}
 
@@ -419,6 +440,7 @@ impl ChatTranslation {
 			},
 			ChatFormat::AnthropicMessages => render_anthropic_messages(req),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
+			ChatFormat::VertexGemini => render_vertex_gemini(req, ctx),
 		}?;
 		Ok(RenderedChatRequest {
 			body,
@@ -481,6 +503,16 @@ impl ChatTranslation {
 					ctx.model,
 					ctx.tool_name_map,
 				),
+				_ => Err(AIError::UnsupportedConversion(strng::format!(
+					"from {:?} to {:?}",
+					self.output,
+					self.input
+				))),
+			},
+			ChatFormat::VertexGemini => match self.input {
+				InputFormat::Completions => {
+					conversion::vertex_gemini::to_completions::translate_response(bytes)
+				},
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -580,6 +612,18 @@ impl ChatTranslation {
 				},
 				_ => resp,
 			},
+
+			ChatFormat::VertexGemini => match self.input {
+				InputFormat::Completions => resp.map(|b| {
+					conversion::vertex_gemini::to_completions::translate_stream(
+						b,
+						ctx.buffer_limit,
+						strng::new(&ctx.model),
+						ctx.logger,
+					)
+				}),
+				_ => resp,
+			},
 		}
 	}
 
@@ -654,6 +698,11 @@ impl ChatTranslation {
 					InputFormat::Messages => Ok(bytes.clone()),
 					_ => unsupported(),
 				},
+				_ => unsupported(),
+			},
+
+			ChatFormat::VertexGemini => match format {
+				ChatErrorFormat::Google => conversion::completions::translate_google_error(bytes),
 				_ => unsupported(),
 			},
 		}
@@ -786,6 +835,9 @@ impl AIProvider {
 			AIProvider::Vertex(p) if p.is_anthropic_model(request_model) => {
 				vec![ChatFormat::AnthropicMessages]
 			},
+			AIProvider::Vertex(p) if p.is_gemini_model(request_model) => {
+				vec![ChatFormat::VertexGemini]
+			},
 			AIProvider::Vertex(_) => vec![ChatFormat::OpenAICompletions],
 
 			AIProvider::Custom(p) => p
@@ -816,6 +868,7 @@ impl AIProvider {
 			(_, ChatFormat::BedrockConverse) => ChatErrorFormat::Bedrock,
 			(_, ChatFormat::AnthropicMessages) => ChatErrorFormat::Anthropic,
 			(_, ChatFormat::OpenAICompletions | ChatFormat::OpenAIResponses) => ChatErrorFormat::OpenAI,
+			(_, ChatFormat::VertexGemini) => ChatErrorFormat::Google,
 		}
 	}
 

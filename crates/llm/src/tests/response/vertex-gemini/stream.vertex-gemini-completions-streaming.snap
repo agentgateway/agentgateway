@@ -1,0 +1,20 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/response/vertex-gemini/stream.json
+---
+data: {"id":"resp-stream-1","choices":[{"index":0,"delta":{"content":"Hello","role":"assistant"}}],"created":123,"model":"gemini-2.5-pro","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp-stream-1","choices":[{"index":0,"delta":{"content":" there!"}}],"created":123,"model":"gemini-2.5-pro","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"resp-stream-1","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"created":123,"model":"gemini-2.5-pro","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 5,
+  "output_tokens": 3,
+  "total_tokens": 8,
+  "provider_model": "gemini-2.5-pro"
+}

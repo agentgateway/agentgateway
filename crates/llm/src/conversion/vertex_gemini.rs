@@ -2,8 +2,8 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
 
-use crate::llm::types::{ResponseType, vertex_gemini as vg};
-use crate::llm::{AIError, logged_response_parsing, types};
+use crate::types::{ResponseType, vertex_gemini as vg};
+use crate::{AIError, logged_response_parsing, types};
 
 #[cfg(test)]
 #[path = "vertex_gemini_tests.rs"]
@@ -36,7 +36,7 @@ pub mod from_completions {
 	use serde_json::{Value, json};
 
 	use super::*;
-	use crate::llm::conversion::completions::parse_data_url;
+	use crate::conversion::completions::parse_data_url;
 
 	fn canonical_mime(mime: &str) -> &str {
 		match mime {
@@ -917,13 +917,14 @@ pub mod from_completions {
 pub mod to_completions {
 	use std::time::Instant;
 
+	use axum_core::body::Body;
+	use futures_util::StreamExt;
+	use futures_util::stream::{self, BoxStream};
 	use serde_json::Value;
 
 	use super::*;
-	use crate::http::Body;
-	use crate::llm::AmendOnDrop;
-	use crate::llm::types::completions::typed as completions;
-	use crate::{json, parse};
+	use crate::types::completions::typed as completions;
+	use crate::{StreamingUsageGuard, json, parse};
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp: vg::GenerateContentResponse =
@@ -1299,7 +1300,12 @@ pub mod to_completions {
 	/// Translate a native Gemini `:streamGenerateContent?alt=sse` stream into OpenAI
 	/// `chat.completion.chunk` SSE. Gemini ends the HTTP stream without a `[DONE]`
 	/// sentinel, so one is appended on successful close.
-	pub fn translate_stream(b: Body, buffer_limit: usize, model: Strng, log: AmendOnDrop) -> Body {
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		model: Strng,
+		log: StreamingUsageGuard,
+	) -> Body {
 		let mut state = StreamState::new();
 		let mut saw_token = false;
 		let body = parse::sse::json_transform_multi::<
@@ -1318,10 +1324,10 @@ pub mod to_completions {
 
 			if !saw_token {
 				saw_token = true;
-				log.non_atomic_mutate(|r| r.response.first_token = Some(Instant::now()));
+				log.update(|r| r.response.first_token = Some(Instant::now()));
 			}
 			if let Some(m) = &chunk.model_version {
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					if r.response.provider_model.is_none() {
 						r.response.provider_model = Some(strng::new(m));
 					}
@@ -1329,7 +1335,7 @@ pub mod to_completions {
 			}
 			if let Some(um) = &chunk.usage_metadata {
 				let (prompt, completion, total) = usage_counts(um);
-				log.non_atomic_mutate(|r| {
+				log.update(|r| {
 					r.response.input_tokens = Some(prompt);
 					r.response.output_tokens = Some(completion);
 					r.response.total_tokens = Some(total);
@@ -1349,7 +1355,31 @@ pub mod to_completions {
 				None => vec![],
 			}
 		});
-		parse::sse::append_done_on_close(body.into_data_stream())
+		append_done_on_close(body.into_data_stream())
+	}
+
+	/// Gemini ends the HTTP stream without a `[DONE]` sentinel; append one on successful close
+	/// (mirrors `conversion::bedrock::from_completions::append_done_on_success`).
+	fn append_done_on_close<S>(stream: S) -> Body
+	where
+		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
+	{
+		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
+		let stream = stream::unfold(
+			(Some(stream.boxed()), Some(done)),
+			|(stream, done): (
+				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
+				Option<Bytes>,
+			)| async move {
+				let mut stream = stream?;
+				match stream.next().await {
+					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
+					Some(Err(err)) => Some((Err(err), (None, None))),
+					None => done.map(|done| (Ok(done), (None, None))),
+				}
+			},
+		);
+		Body::from_stream(stream)
 	}
 
 	/// Prompt, completion, and total token counts from Gemini usage metadata

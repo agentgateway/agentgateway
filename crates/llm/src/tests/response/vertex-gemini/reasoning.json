@@ -1,0 +1,22 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "role": "model",
+        "parts": [
+          { "text": "Let me think about the weather.", "thought": true },
+          { "text": "It is sunny." }
+        ]
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 10,
+    "candidatesTokenCount": 12,
+    "thoughtsTokenCount": 5,
+    "totalTokenCount": 27
+  },
+  "modelVersion": "gemini-2.5-pro"
+}
