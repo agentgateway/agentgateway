@@ -119,13 +119,19 @@ Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
 observability source of record. Use isolated evaluation traffic with forced
 lower-cost and always-expensive baselines before adopting the policy broadly.
 
-## Optional: Use Codex CLI Through the Gateway
+## Optional: Use Codex Through the Gateway
 
 The gateway works with any OpenAI API-compatible client or agent. This optional
-section configures the Codex CLI. It was tested with `codex-cli 0.144.4`. Codex
-CLI uses the OpenAI Responses API, and the nightly vSR image configured above
-translates streamed Responses events so it can send the same `auto` model name
-through the gateway. Create a user-level Codex CLI profile:
+section configures Codex to use the gateway's stable `auto` model name. Codex
+uses the OpenAI Responses API, and the nightly vSR image configured above
+translates streamed Responses events before forwarding to the selected model.
+
+### Codex CLI
+
+This configuration was tested with `codex-cli 0.144.4`. The
+[Codex CLI profile documentation](https://learn.chatgpt.com/docs/config-file/config-advanced#profiles)
+describes how `--profile` overlays a named user-level configuration file.
+Create the profile:
 
 ```bash
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
@@ -142,21 +148,50 @@ model_provider = "agentgateway"
 name = "Corporate agentgateway"
 base_url = "${AGENTGATEWAY_BASE_URL}"
 wire_api = "responses"
-env_key = "OPENAI_API_KEY"
 EOF
 ```
 
-Set your OpenAI API key, then start Codex with that profile:
+Start Codex with that profile:
 
 ```bash
-export OPENAI_API_KEY='sk-...'
 codex --profile agentgateway
 ```
 
-### Verify Codex CLI Routing
+### Codex in the ChatGPT Desktop App
 
-After sending a task from Codex CLI, inspect the vSR decision and the completed
-agentgateway request:
+Codex is available in the ChatGPT desktop app as a Codex environment. This
+configuration was tested with ChatGPT desktop app version `26.707.72221`.
+See the [Codex environment documentation](https://learn.chatgpt.com/docs/environments/modes)
+and [Codex configuration basics](https://learn.chatgpt.com/docs/config-file/config-basic).
+
+For the same gateway configuration, back up and replace the user-level config,
+then restart the ChatGPT desktop app:
+
+```bash
+export AGENTGATEWAY_BASE_URL="http://$(kubectl get gateway agentgateway-proxy \
+  -n agentgateway-system \
+  -o jsonpath='{.status.addresses[0].value}')/v1"
+# For a TLS-enabled corporate gateway, set AGENTGATEWAY_BASE_URL to its https URL.
+cp ~/.codex/config.toml ~/.codex/config.toml.bak
+cat > ~/.codex/config.toml <<EOF
+model = "auto"
+model_provider = "agentgateway"
+
+[model_providers.agentgateway]
+name = "Corporate agentgateway"
+base_url = "${AGENTGATEWAY_BASE_URL}"
+wire_api = "responses"
+EOF
+```
+
+Replacing `~/.codex/config.toml` also replaces other user-level Codex settings.
+To edit that file through the app instead, open **Settings > Configuration >
+Open config.toml** and apply the same configuration.
+
+### Verify Codex Routing
+
+After sending a task from Codex CLI or the ChatGPT desktop app, inspect the vSR
+decision and the completed agentgateway request:
 
 ```bash
 kubectl logs -n agentgateway-system deploy/semantic-router --since=5m \
@@ -173,10 +208,10 @@ successful `response_status`. The agentgateway output identifies the
 `openai-semantic-routing` route, the selected request and response model,
 catalog-priced token usage, and the realized request cost.
 
-Codex CLI also probes `/v1/models` to discover model metadata. Until
-[agentgateway issue #1462](https://github.com/agentgateway/agentgateway/issues/1462)
-adds a gateway-generated model list, Codex may warn that metadata for `auto` is
-not found. That warning does not prevent `/v1/responses` traffic from routing.
+Codex also probes `/v1/models` to discover model metadata. Until [agentgateway
+issue #1462](https://github.com/agentgateway/agentgateway/issues/1462) adds a
+gateway-generated model list, Codex may warn that metadata for `auto` is not
+found. That warning does not prevent `/v1/responses` traffic from routing.
 
 The gateway authenticates to OpenAI with its configured provider credential and
 records the selected model and cost as it does for other OpenAI-compatible
