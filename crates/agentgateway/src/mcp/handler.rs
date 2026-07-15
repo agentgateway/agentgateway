@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use agent_core::prelude::{AssertSize, Strng};
 use agent_core::version::BuildInfo;
@@ -25,7 +24,7 @@ use crate::http::sessionpersistence::MCPSession;
 use crate::mcp;
 use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
-use crate::mcp::router::{McpBackendGroup, McpTarget};
+use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
@@ -33,8 +32,46 @@ use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
 use crate::types::agent::McpPrefixMode;
 
+const DELIMITER: &str = "_";
+
+fn resource_name(prefix_names: bool, target: &str, name: &str) -> String {
+	if prefix_names {
+		format!("{target}{DELIMITER}{name}")
+	} else {
+		name.to_string()
+	}
+}
+
+fn duplicate_names<'a>(enabled: bool, names: impl Iterator<Item = &'a str>) -> HashSet<String> {
+	if !enabled {
+		return HashSet::new();
+	}
+	names.duplicates().map(str::to_owned).collect()
+}
+
+fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
+	if default_target_name.is_none() {
+		// Apps UI resources must keep their ui:// scheme so hosts still
+		// recognize them; the target is carried in the authority instead.
+		if let Some(rewritten) = apps::encode_ui_uri(target, uri) {
+			return rewritten;
+		}
+		// Transform URI to service+scheme:// format for multiplexing
+		// e.g., "http://example.com" becomes "service+http://example.com"
+		if let Some(scheme_end) = uri.find("://") {
+			let (scheme, rest) = uri.split_at(scheme_end);
+			format!("{target}+{scheme}{rest}")
+		} else {
+			// URI must have a scheme - if not, return as-is and let validation handle it
+			uri.to_string()
+		}
+	} else {
+		uri.to_string()
+	}
+}
+
 fn rewrite_resource_messages(
-	routing: &NameRouting,
+	default_target_name: Option<&String>,
 	target: &str,
 	mut message: ServerJsonRpcMessage,
 ) -> ServerJsonRpcMessage {
@@ -42,7 +79,11 @@ fn rewrite_resource_messages(
 		&& let ServerNotification::ResourceUpdatedNotification(resource_updated) =
 			&mut notification.notification
 	{
-		resource_updated.params.uri = routing.encode_uri(target, resource_updated.params.uri.as_str());
+		resource_updated.params.uri = resource_uri(
+			default_target_name,
+			target,
+			resource_updated.params.uri.as_str(),
+		);
 	}
 	if let ServerJsonRpcMessage::Response(resp) = &mut message
 		&& let ServerResult::ReadResourceResult(read) = &mut resp.result
@@ -51,7 +92,7 @@ fn rewrite_resource_messages(
 			match content {
 				rmcp::model::ResourceContents::TextResourceContents { uri, .. }
 				| rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => {
-					*uri = routing.encode_uri(target, uri);
+					*uri = resource_uri(default_target_name, target, uri);
 				},
 				_ => {},
 			}
@@ -75,139 +116,15 @@ fn set_subscription_ack_id(
 	message
 }
 
-const DELIMITER: &str = "_";
-
-/// How downstream-visible tool/prompt names map to upstream targets.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NameRouting {
-	/// Single target: names pass through untouched and everything routes to it.
-	Single(String),
-	/// Names are exposed as `{target}_{name}`; the prefix is parsed off to route.
-	Prefix,
-	/// Names pass through untouched; calls are routed by looking up which
-	/// target serves the name. Requires names to be unique across targets.
-	Resolve,
-}
-
-impl NameRouting {
-	pub fn new(prefix_mode: McpPrefixMode, targets: &[Arc<McpTarget>]) -> Self {
-		if targets.len() != 1 {
-			match prefix_mode {
-				McpPrefixMode::Never => NameRouting::Resolve,
-				_ => NameRouting::Prefix,
-			}
-		} else if prefix_mode == McpPrefixMode::Always {
-			NameRouting::Prefix
-		} else {
-			NameRouting::Single(targets[0].name.to_string())
-		}
-	}
-
-	/// Whether the owning target must be resolved against upstream listings.
-	pub fn needs_resolution(&self) -> bool {
-		matches!(self, NameRouting::Resolve)
-	}
-
-	/// Whether resource URIs carry the target name (`{target}+{scheme}://...`).
-	/// Unlike names, URIs stay encoded even in Resolve mode: clients only ever
-	/// see URIs we produced, so the encoding is transparent to them.
-	pub fn encodes_uris(&self) -> bool {
-		!matches!(self, NameRouting::Single(_))
-	}
-
-	/// Downstream-visible form of an upstream tool/prompt name.
-	pub fn encode_name(&self, target: &str, name: &str) -> String {
-		match self {
-			NameRouting::Prefix => format!("{target}{DELIMITER}{name}"),
-			_ => name.to_string(),
-		}
-	}
-
-	/// Downstream-visible form of an upstream resource URI.
-	pub fn encode_uri(&self, target: &str, uri: &str) -> String {
-		if !self.encodes_uris() {
-			return uri.to_string();
-		}
-		// Apps UI resources must keep their ui:// scheme so hosts still
-		// recognize them; the target is carried in the authority instead.
-		if let Some(rewritten) = apps::encode_ui_uri(target, uri) {
-			return rewritten;
-		}
-		// Transform URI to service+scheme:// format for multiplexing
-		// e.g., "http://example.com" becomes "service+http://example.com"
-		if let Some(scheme_end) = uri.find("://") {
-			let (scheme, rest) = uri.split_at(scheme_end);
-			format!("{target}+{scheme}{rest}")
-		} else {
-			// URI must have a scheme - if not, return as-is and let validation handle it
-			uri.to_string()
-		}
-	}
-
-	/// Reverse of `encode_uri`: extract the (unvalidated) service name and the
-	/// original URI from a downstream URI. The caller is responsible for
-	/// validating the service name against the known targets.
-	pub fn decode_uri<'a, 'b: 'a>(
-		&'a self,
-		uri: &'b str,
-	) -> Result<(&'a str, String), UpstreamError> {
-		if let NameRouting::Single(default) = self {
-			return Ok((default.as_str(), uri.to_string()));
-		}
-		if apps::is_ui_uri(uri) {
-			return apps::decode_ui_uri(uri)
-				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()));
-		}
-		// URI format: "service+scheme://rest"
-		let (service, original_uri) = uri
-			.split_once('+')
-			.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
-		// ui:// resources use the ui://service+rest namespace exclusively
-		if apps::is_ui_uri(original_uri) {
-			return Err(UpstreamError::InvalidRequest(
-				"invalid resource URI".to_string(),
-			));
-		}
-		Ok((service, original_uri.to_string()))
-	}
-
-	/// Names served by more than one target, which are unroutable in Resolve
-	/// mode and dropped from merged listings; empty for the other modes.
-	pub fn duplicate_names<'a>(
-		&self,
-		kind: &str,
-		names: impl Iterator<Item = (&'a Strng, &'a str)>,
-	) -> HashSet<String> {
-		if !self.needs_resolution() {
-			return HashSet::new();
-		}
-		let mut owners: HashMap<&str, Vec<&Strng>> = HashMap::new();
-		for (target, name) in names {
-			owners.entry(name).or_default().push(target);
-		}
-		owners
-			.into_iter()
-			.filter(|(_, targets)| targets.len() > 1)
-			.map(|(name, targets)| {
-				warn!(
-					"dropping {kind} '{name}': served by multiple targets ({})",
-					targets.iter().join(", "),
-				);
-				name.to_string()
-			})
-			.collect()
-	}
-}
-
 /// What kind of name is being resolved to a target (`prefixMode: never`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ResolveKind {
+pub(crate) enum ResolveKind {
 	Tool,
 	Prompt,
 }
 
 impl ResolveKind {
-	pub fn as_str(&self) -> &'static str {
+	fn as_str(&self) -> &'static str {
 		match self {
 			ResolveKind::Tool => "tool",
 			ResolveKind::Prompt => "prompt",
@@ -232,20 +149,6 @@ impl ResolveKind {
 			_ => false,
 		}
 	}
-}
-
-// Gateway-generated list requests share upstream sessions with forwarded
-// client requests, so their ids must not collide with client-chosen ids.
-static RESOLVE_ID: AtomicU64 = AtomicU64::new(0);
-
-fn next_resolve_id() -> RequestId {
-	RequestId::String(
-		format!(
-			"agentgateway-resolve-{}",
-			RESOLVE_ID.fetch_add(1, Ordering::Relaxed)
-		)
-		.into(),
-	)
 }
 
 #[derive(Debug, Clone)]
@@ -302,10 +205,10 @@ impl Relay {
 		cel: CelExecWrapper,
 	) -> Messages {
 		let target = target.to_string();
-		let routing = self.upstreams.name_routing.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
-			let message = rewrite_resource_messages(&routing, &target, message);
+			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
 
 			let mut resource_allowed = |uri: &str| {
 				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against
@@ -316,7 +219,7 @@ impl Relay {
 				)
 			};
 			apps::rewrite_tool_list_ui_meta(
-				routing.encodes_uris(),
+				default_target_name.is_none(),
 				&target,
 				&mut resource_allowed,
 				message,
@@ -327,31 +230,38 @@ impl Relay {
 	/// Whether names carry no routing information (`prefixMode: never`), so the
 	/// owning target can only be found by listing upstreams.
 	pub fn needs_resolution(&self) -> bool {
-		self.upstreams.name_routing.needs_resolution()
+		self.upstreams.is_multiplexing && self.upstreams.prefix_mode == McpPrefixMode::Never
 	}
 
-	/// Map a downstream name to its `(target, upstream_name)`. In Resolve mode
-	/// (`prefixMode: never`) the name carries no route, so the owner is found by
-	/// listing every target.
-	pub async fn parse_resource_name<'a, 'b: 'a>(
+	pub fn parse_resource_name<'a, 'b: 'a>(
+		&'a self,
+		res: &'b str,
+	) -> Result<(&'a str, &'b str), UpstreamError> {
+		if let Some(default) = self.upstreams.default_target_name.as_ref() {
+			Ok((default.as_str(), res))
+		} else {
+			res
+				.split_once(DELIMITER)
+				.ok_or(UpstreamError::InvalidRequest(
+					"invalid resource name".to_string(),
+				))
+		}
+	}
+
+	/// Find the target for an unprefixed name from the corresponding list response.
+	pub async fn resolve_resource_name<'a, 'b: 'a>(
 		&'a self,
 		kind: ResolveKind,
 		res: &'b str,
+		request_id: RequestId,
 		ctx: &IncomingRequestContext,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
-		match &self.upstreams.name_routing {
-			NameRouting::Single(default) => Ok((Cow::Borrowed(default.as_str()), res)),
-			NameRouting::Prefix => res
-				.split_once(DELIMITER)
-				.map(|(service, name)| (Cow::Borrowed(service), name))
-				.ok_or(UpstreamError::InvalidRequest(
-					"invalid resource name".to_string(),
-				)),
-			NameRouting::Resolve => {
-				let target = self.resolve_unprefixed(kind, res, ctx).await?;
-				Ok((Cow::Owned(target.to_string()), res))
-			},
+		if self.needs_resolution() {
+			let target = self.resolve_unprefixed(kind, res, request_id, ctx).await?;
+			return Ok((Cow::Owned(target.to_string()), res));
 		}
+		let (target, name) = self.parse_resource_name(res)?;
+		Ok((Cow::Borrowed(target), name))
 	}
 
 	/// Find the single target serving the unprefixed `name` by listing every
@@ -360,9 +270,10 @@ impl Relay {
 		&self,
 		kind: ResolveKind,
 		name: &str,
+		request_id: RequestId,
 		ctx: &IncomingRequestContext,
 	) -> Result<Strng, UpstreamError> {
-		let req = JsonRpcRequest::new(next_resolve_id(), kind.list_request());
+		let req = JsonRpcRequest::new(request_id, kind.list_request());
 		let futs: Vec<_> = self
 			.upstreams
 			.iter_named()
@@ -378,27 +289,25 @@ impl Relay {
 			})
 			.collect();
 
-		let mut owners: Vec<Strng> = Vec::new();
-		let mut skipped: Option<UpstreamError> = None;
+		let mut owner = None;
 		for (target, res) in futures::future::join_all(futs).await {
 			match res {
-				Ok(Some(result)) => {
-					if kind.contains_name(&result, name) {
-						owners.push(target);
+				Ok(Some(result)) if kind.contains_name(&result, name) => {
+					if owner.is_some() {
+						return Err(UpstreamError::InvalidRequest(format!(
+							"{} {name} is served by multiple targets",
+							kind.as_str()
+						)));
 					}
+					owner = Some(target);
 				},
-				// The target does not support this list method, so it serves no names of this kind.
-				Ok(None) => {},
+				Ok(_) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						warn!(
-							"upstream '{}' failed while resolving {} '{}', skipping (failure_mode=FailOpen): {}",
-							target,
-							kind.as_str(),
-							name,
-							e
+							"upstream '{target}' failed while resolving {} '{name}', skipping: {e}",
+							kind.as_str()
 						);
-						skipped.get_or_insert(e);
 					} else {
 						return Err(e);
 					}
@@ -406,27 +315,7 @@ impl Relay {
 			}
 		}
 
-		match owners.as_slice() {
-			[one] => Ok(one.clone()),
-			// A skipped target might have served the name; surface the outage
-			// rather than reporting a possibly-existing name as unknown.
-			[] => Err(skipped.unwrap_or_else(|| {
-				UpstreamError::InvalidRequest(format!("unknown {} {}", kind.as_str(), name))
-			})),
-			many => {
-				warn!(
-					"{} '{}' is served by multiple targets ({}); names must be unique across targets when prefixMode is 'never'",
-					kind.as_str(),
-					name,
-					many.iter().join(", "),
-				);
-				Err(UpstreamError::InvalidRequest(format!(
-					"{} {} is served by multiple targets",
-					kind.as_str(),
-					name
-				)))
-			},
-		}
+		owner.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown {} {name}", kind.as_str())))
 	}
 
 	/// Consume a response stream until the first result, error data, or end.
@@ -449,15 +338,37 @@ impl Relay {
 		Err(UpstreamError::Recv)
 	}
 
-	/// Reverse of `NameRouting::encode_uri`, plus validation that the decoded
-	/// service name corresponds to a known upstream.
 	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
-		let (service_name, original_uri) = self.upstreams.name_routing.decode_uri(uri)?;
-		let validated_name = self
-			.upstreams
-			.get_name(service_name)
-			.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
-		Ok((validated_name, original_uri))
+		if let Some(default) = self.upstreams.default_target_name.as_ref() {
+			Ok((default.as_str(), uri.to_string()))
+		} else if apps::is_ui_uri(uri) {
+			let (service_name, original_uri) = apps::decode_ui_uri(uri)
+				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
+			let validated_name = self
+				.upstreams
+				.get_name(service_name)
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+			Ok((validated_name, original_uri))
+		} else {
+			// URI format: "service+scheme://rest"
+			let plus_pos = uri
+				.find('+')
+				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
+			let service_name = &uri[..plus_pos];
+			let original_uri = &uri[plus_pos + 1..];
+			// ui:// resources use the ui://service+rest namespace exclusively
+			if apps::is_ui_uri(original_uri) {
+				return Err(UpstreamError::InvalidRequest(
+					"invalid resource URI".to_string(),
+				));
+			}
+			// Validate that the extracted service name corresponds to a known upstream
+			let validated_name = self
+				.upstreams
+				.get_name(service_name)
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+			Ok((validated_name, original_uri.to_string()))
+		}
 	}
 
 	pub fn get_sessions(&self) -> Option<Vec<MCPSession>> {
@@ -610,7 +521,8 @@ impl Relay {
 
 	pub fn merge_tools(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let routing = self.upstreams.name_routing.clone();
+		let prefix_names = self.upstreams.default_target_name.is_none() && !self.needs_resolution();
+		let reject_duplicates = self.needs_resolution();
 		Box::new(move |streams, cel| {
 			let per_target = streams
 				.into_iter()
@@ -622,20 +534,18 @@ impl Relay {
 					(server_name, tools)
 				})
 				.collect_vec();
-			// Duplicates are computed pre-authorization to match caller-independent
-			// call-time resolution.
-			let duplicates = routing.duplicate_names(
-				ResolveKind::Tool.as_str(),
+			let duplicates = duplicate_names(
+				reject_duplicates,
 				per_target
 					.iter()
-					.flat_map(|(target, tools)| tools.iter().map(move |t| (target, t.name.as_ref()))),
+					.flat_map(|(_, tools)| tools.iter().map(|tool| tool.name.as_ref())),
 			);
 			let tools = per_target
 				.into_iter()
 				.flat_map(|(server_name, tools)| {
 					tools
 						.into_iter()
-						.filter(|t| !duplicates.contains(t.name.as_ref()))
+						.filter(|tool| !duplicates.contains(tool.name.as_ref()))
 						// Apply authorization policies, filtering tools that are not allowed.
 						.filter(|t| {
 							policies.validate(
@@ -648,7 +558,7 @@ impl Relay {
 						})
 						// Rename to handle multiplexing
 						.map(|mut t| {
-							t.name = Cow::Owned(routing.encode_name(server_name.as_str(), &t.name));
+							t.name = Cow::Owned(resource_name(prefix_names, server_name.as_str(), &t.name));
 							t
 						})
 						.collect_vec()
@@ -783,7 +693,8 @@ impl Relay {
 
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let routing = self.upstreams.name_routing.clone();
+		let prefix_names = self.upstreams.default_target_name.is_none() && !self.needs_resolution();
+		let reject_duplicates = self.needs_resolution();
 		Box::new(move |streams, cel| {
 			let per_target = streams
 				.into_iter()
@@ -795,18 +706,18 @@ impl Relay {
 					(server_name, prompts)
 				})
 				.collect_vec();
-			let duplicates = routing.duplicate_names(
-				ResolveKind::Prompt.as_str(),
+			let duplicates = duplicate_names(
+				reject_duplicates,
 				per_target
 					.iter()
-					.flat_map(|(target, prompts)| prompts.iter().map(move |p| (target, p.name.as_str()))),
+					.flat_map(|(_, prompts)| prompts.iter().map(|prompt| prompt.name.as_str())),
 			);
 			let prompts = per_target
 				.into_iter()
 				.flat_map(|(server_name, prompts)| {
 					prompts
 						.into_iter()
-						.filter(|p| !duplicates.contains(&p.name))
+						.filter(|prompt| !duplicates.contains(&prompt.name))
 						.filter(|p| {
 							policies.validate(
 								&rbac::ResourceType::Prompt(rbac::ResourceId::new(
@@ -817,7 +728,7 @@ impl Relay {
 							)
 						})
 						.map(|mut p| {
-							p.name = routing.encode_name(server_name.as_str(), &p.name);
+							p.name = resource_name(prefix_names, server_name.as_str(), &p.name);
 							p
 						})
 						.collect_vec()
@@ -836,7 +747,7 @@ impl Relay {
 	}
 	pub fn merge_resources(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let routing = self.upstreams.name_routing.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
 			let resources = streams
 				.into_iter()
@@ -858,7 +769,7 @@ impl Relay {
 						})
 						// Prefix URI with service name when multiplexing to avoid conflicts
 						.map(|mut r| {
-							r.uri = routing.encode_uri(server_name.as_str(), &r.uri);
+							r.uri = resource_uri(default_target_name.as_ref(), server_name.as_str(), &r.uri);
 							r
 						})
 						.collect_vec()
@@ -877,7 +788,7 @@ impl Relay {
 	}
 	pub fn merge_resource_templates(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let routing = self.upstreams.name_routing.clone();
+		let default_target_name = self.upstreams.default_target_name.clone();
 		Box::new(move |streams, cel| {
 			let resource_templates = streams
 				.into_iter()
@@ -899,7 +810,11 @@ impl Relay {
 						})
 						// Prefix uri_template with service name when multiplexing
 						.map(|mut rt| {
-							rt.uri_template = routing.encode_uri(server_name.as_str(), &rt.uri_template);
+							rt.uri_template = resource_uri(
+								default_target_name.as_ref(),
+								server_name.as_str(),
+								&rt.uri_template,
+							);
 							rt
 						})
 						.collect_vec()

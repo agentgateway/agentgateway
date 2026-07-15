@@ -99,26 +99,18 @@ impl Session {
 				ClientJsonRpcMessage::Request(r) => Some(&r.request),
 				_ => None,
 			};
-			// first, determine how widely to send the initialize
 			match request_type {
-				// Single-target methods only hit one backend, so initialize/initialized should be scoped
-				// to that backend rather than fanning out. In Resolve mode (prefixMode: never) the owner
-				// is only found by listing targets — which itself requires initialize — so those fan
-				// out with everything else.
+				// Initialize only the target named by a prefixed call. With prefixMode: never,
+				// the list request used to find that target requires every target to be initialized.
 				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_))
 					if !self.relay.needs_resolution() =>
 				{
-					let (kind, name) = match request_type {
-						Some(ClientRequest::CallToolRequest(ctr)) => {
-							(ResolveKind::Tool, ctr.params.name.to_string())
-						},
-						Some(ClientRequest::GetPromptRequest(gpr)) => {
-							(ResolveKind::Prompt, gpr.params.name.clone())
-						},
+					let name = match request_type {
+						Some(ClientRequest::CallToolRequest(ctr)) => ctr.params.name.to_string(),
+						Some(ClientRequest::GetPromptRequest(gpr)) => gpr.params.name.clone(),
 						_ => unreachable!("match arm guarantees single-target request type"),
 					};
-					let ctx = IncomingRequestContext::new(&parts);
-					let (service_name, _) = match self.relay.parse_resource_name(kind, &name, &ctx).await {
+					let (service_name, _) = match self.relay.parse_resource_name(&name) {
 						Ok(target) => target,
 						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
 					};
@@ -178,11 +170,12 @@ impl Session {
 		span: &mut SpanWriteOnDrop,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
+		request_id: RequestId,
 		ctx: &IncomingRequestContext,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		let (service_name, prompt) = self
 			.relay
-			.parse_resource_name(ResolveKind::Prompt, name, ctx)
+			.resolve_resource_name(ResolveKind::Prompt, name, request_id, ctx)
 			.await?;
 		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
@@ -423,6 +416,7 @@ impl Session {
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method().to_string();
+				let request_id = r.id.clone();
 				let mut ctx = IncomingRequestContext::new(&parts);
 				let (mut span, log, cel) = mcp::handler::setup_request_log(parts, &method);
 				let session_id = self.id.to_string();
@@ -528,9 +522,10 @@ impl Session {
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
-						let (service_name, tool) = Box::pin(self.relay.parse_resource_name(
+						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Tool,
 							&name,
+							request_id,
 							&ctx,
 						))
 						.await?;
@@ -564,9 +559,10 @@ impl Session {
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
-						let (service_name, prompt) = Box::pin(self.relay.parse_resource_name(
+						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Prompt,
 							&name,
+							request_id,
 							&ctx,
 						))
 						.await?;
@@ -653,10 +649,11 @@ impl Session {
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {
 							let name = prompt.name.clone();
-							let (service_name, prompt_name) = Box::pin(
-								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel, &ctx),
-							)
-							.await?;
+							let (service_name, prompt_name) =
+								Box::pin(self.authorize_prompt_request(
+									&name, &method, &mut span, &log, &cel, request_id, &ctx,
+								))
+								.await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
 							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},

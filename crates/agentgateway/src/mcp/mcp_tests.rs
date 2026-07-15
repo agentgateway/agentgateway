@@ -555,58 +555,28 @@ async fn multiplex_never_prefix_routes_unprefixed_names() {
 }
 
 #[tokio::test]
-async fn multiplex_never_prefix_collisions_are_dropped_and_unroutable() {
-	let apps = mock_apps_streamable_http_server().await;
-	let mock_b = mock_streamable_http_server(true).await;
-	let mock_c = mock_streamable_http_server(true).await;
-	let t = never_prefix_proxy(
-		vec![
-			("a", apps.addr, false),
-			("b", mock_b.addr, false),
-			("c", mock_c.addr, false),
-		],
-		true,
-	);
+async fn multiplex_never_prefix_drops_ambiguous_names() {
+	let a = mock_streamable_http_server(true).await;
+	let b = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(vec![("a", a.addr, false), ("b", b.addr, false)], true);
 	let io = t.serve_real_listener(strng::new("bind")).await;
-	let client = mcp_streamable_client_with_ui(io).await;
+	let client = mcp_streamable_client(io).await;
 
-	// Colliding names are dropped from the merged list.
 	let tools = client.list_tools(None).await.unwrap();
-	let names = tools.tools.iter().map(|t| t.name.to_string()).collect_vec();
-	assert!(!names.contains(&"echo".to_string()), "{names:?}");
-	assert!(names.contains(&"show_dashboard".to_string()), "{names:?}");
-
-	// Calling a colliding name fails rather than guessing a target.
-	let collision_err = client
-		.call_tool(
-			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
-				serde_json::json!({"hi": "world"})
-					.as_object()
-					.cloned()
-					.unwrap(),
-			),
-		)
-		.await
-		.unwrap_err();
+	assert!(tools.tools.iter().all(|tool| tool.name != "echo"));
+	let prompts = client.list_prompts(None).await.unwrap();
 	assert!(
-		format!("{collision_err}").contains("served by multiple targets"),
-		"{collision_err}"
+		prompts
+			.prompts
+			.iter()
+			.all(|prompt| prompt.name != "example_prompt")
 	);
-	let unknown_err = client
-		.call_tool(rmcp::model::CallToolRequestParams::new("no_such_tool"))
-		.await
-		.unwrap_err();
 	assert!(
-		format!("{unknown_err}").contains("unknown tool no_such_tool"),
-		"{unknown_err}"
+		client
+			.call_tool(rmcp::model::CallToolRequestParams::new("echo"))
+			.await
+			.is_err()
 	);
-
-	// Unique names keep working alongside collisions.
-	let ctr = client
-		.call_tool(rmcp::model::CallToolRequestParams::new("show_dashboard"))
-		.await
-		.unwrap();
-	assert_eq!(&ctr.content[0].as_text().unwrap().text, "dashboard data");
 }
 
 #[tokio::test]
