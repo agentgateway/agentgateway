@@ -122,9 +122,9 @@ lower-cost and always-expensive baselines before adopting the policy broadly.
 ## Optional: Use Codex Through the Gateway
 
 The gateway works with any OpenAI API-compatible client or agent. This optional
-section configures Codex to use the gateway's stable `auto` model name. Codex
-uses the OpenAI Responses API, and the nightly vSR image configured above
-translates streamed Responses events before forwarding to the selected model.
+section configures Codex to use the gateway's `auto` model name. Codex uses the
+OpenAI Responses API and vSR translates streamed Responses events before the
+gateway forwards the request to the selected model.
 
 ### Codex CLI
 
