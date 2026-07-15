@@ -28,11 +28,11 @@ spec:
   policies:
     auth:
       oauthTokenExchange:
-        tokenEndpoint:
+        backendRef:
           group: agentgateway.dev
           kind: AgentgatewayBackend
           name: token-endpoint
-          path: /oauth/token
+        path: /oauth/token
         grantType: TokenExchange
         subjectToken:
           source:

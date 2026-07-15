@@ -9,6 +9,9 @@ The included policy is tuned for coding prompts: routine implementation,
 refactoring, unit tests, documentation, and simple debugging go to
 `gpt-5.4-nano`. It escalates advanced distributed-systems design, formal
 verification, difficult debugging, and research synthesis to `gpt-5.5`.
+Its advanced keyword signal uses literal high-specificity phrases, while the
+remaining semantic, complexity, context, and structure signals handle less
+obvious requests.
 Customize the signals, candidates, weights, and thresholds for your traffic by
 following the [vLLM Semantic Router configuration guide](https://vllm-semantic-router.com/docs/installation/configuration/).
 
@@ -47,7 +50,7 @@ kubectl wait --for=condition=Available deployment/semantic-router \
   --timeout=600s
 ```
 
-Apply the routed backend, route, and Streamed ExtProc policy:
+Apply the routed backend, route, and buffered ExtProc policy:
 
 ```bash
 kubectl apply -f examples/llm-semantic-routing/k8s/agentgateway-routing.yaml
@@ -62,7 +65,13 @@ kubectl describe agentgatewaypolicy semantic-router-extproc -n agentgateway-syst
 `VSR_VERSION` sets both the chart version and the matching `v<version>`
 `extproc` image tag.
 
-## Verify Streamed ExtProc
+> **Note:** This example uses buffered ExtProc while the streamed-body issue in
+> [vLLM Semantic Router #2486](https://github.com/vllm-project/semantic-router/issues/2486)
+> is unresolved. When that issue is fixed and this example is returned to
+> streamed mode, restore the `Verify Streamed ExtProc` section and its
+> deterministic immediate-response probe.
+
+## Run a Request
 
 Set your gateway address:
 
@@ -71,29 +80,6 @@ export INGRESS_GW_ADDRESS="http://$(kubectl get gateway agentgateway-proxy \
   -n agentgateway-system \
   -o jsonpath='{.status.addresses[0].value}')"
 ```
-
-The values include a narrow, deterministic immediate-response probe. It proves
-that `FullDuplexStreamed` request processing reaches vSR without sending tokens
-to OpenAI:
-
-```bash
-curl -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -H "X-VSR-Debug: true" \
-  -d '{
-    "model": "auto",
-    "messages": [
-      {"role": "user", "content": "VSR_IMMEDIATE_RESPONSE_PROBE"}
-    ],
-    "max_tokens": 16
-  }'
-```
-
-Expect a `200` response with `x-vsr-fast-response`; the request should not
-reach OpenAI. Remove the probe signal and decision from the values before using
-this policy in a production route.
-
-## Run a Request
 
 Routine coding prompts should use the lower-cost model:
 

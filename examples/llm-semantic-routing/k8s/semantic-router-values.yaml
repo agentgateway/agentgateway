@@ -30,8 +30,15 @@ config:
   providers:
     defaults:
       default_model: gpt-5.4-nano
+      # Preserve OpenAI's top-level reasoning_effort request parameter when
+      # vSR rewrites model:auto to either configured model.
+      reasoning_families:
+        gpt:
+          type: reasoning_effort
+          parameter: reasoning_effort
     models:
     - name: gpt-5.4-nano
+      reasoning_family: gpt
       provider_model_id: gpt-5.4-nano
       api_format: openai
       pricing:
@@ -43,10 +50,11 @@ config:
         openai: gpt-5.4-nano
       backend_refs:
       - name: agentgateway-openai
-        endpoint: api.openai.com:443
-        protocol: https
+        base_url: https://api.openai.com/v1
+        provider: openai
         weight: 100
     - name: gpt-5.5
+      reasoning_family: gpt
       provider_model_id: gpt-5.5
       api_format: openai
       pricing:
@@ -58,8 +66,8 @@ config:
         openai: gpt-5.5
       backend_refs:
       - name: agentgateway-openai
-        endpoint: api.openai.com:443
-        protocol: https
+        base_url: https://api.openai.com/v1
+        provider: openai
         weight: 100
 
   routing:
@@ -85,19 +93,15 @@ config:
       # avoid inheriting the chart's general-purpose domain defaults.
       domains: []
       keywords:
-      - name: immediate_response_probe
-        operator: OR
-        method: ngram
-        keywords:
-        - VSR_IMMEDIATE_RESPONSE_PROBE
-        case_sensitive: true
-        ngram_threshold: 0.95
-        ngram_arity: 3
       - name: advanced_markers
         operator: OR
-        method: bm25
+        # Leave method unset to use literal, word-boundary-aware matching.
+        # BM25 topic matching over-escalates routine coding follow-ups that
+        # merely resemble advanced work. The phrases below are deliberate,
+        # high-specificity escalation cues.
         keywords:
         - distributed systems
+        - distributed rate limiter
         - consensus
         - raft
         - paxos
@@ -109,26 +113,43 @@ config:
         - Alloy
         - Coq
         - Lean
-        - invariant
-        - proof
-        - prove
+        - safety invariant
+        - liveness invariant
+        - proof obligation
+        - counterexample
         - convergence
         - monotonicity
         - temporal logic
-        - advanced debugging
         - root cause
         - heisenbug
         - deadlock
         - race condition
         - memory ordering
+        - durable idempotency
+        - idempotency boundary
+        - fencing token
+        - fencing tokens
+        - stale writer
+        - regional failover
+        - network partition
+        - network partitions
+        - replicated state
+        - exactly-once
+        - at-least-once
+        - bounded staleness
         - research synthesis
-        - synthesize
         - literature review
         - operational transform
         - conflict resolution
         - compare tradeoffs
+        - dual writes
+        - durable state transition
+        - duplicate business effects
+        - configuration replicas
+        - eventual-consistency
+        - leased message
+        - delayed, duplicated, and reordered
         case_sensitive: false
-        bm25_threshold: 0.1
       - name: routine_coding_markers
         operator: OR
         method: bm25
@@ -275,20 +296,7 @@ config:
         - name: expensive_lane
           gte: 0.35
 
-    # The immediate probe verifies ExtProc; the remaining decisions route traffic.
     decisions:
-    - name: immediate_response_probe
-      description: Deterministic immediate response used only to verify streamed ExtProc short-circuit behavior.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-        - type: keyword
-          name: immediate_response_probe
-      plugins:
-      - type: fast_response
-        configuration:
-          message: Semantic Router immediate response probe matched before the request reached the upstream model.
     - name: route_to_expensive
       description: Escalate advanced distributed systems, formal verification, hard debugging, and research synthesis.
       priority: 200
@@ -319,9 +327,7 @@ config:
       auto_model_name: auto
       strategy: priority
       streamed_body:
-        enabled: true
-        max_bytes: 10485760
-        timeout_sec: 30
+        enabled: false
       skip_processing:
         enabled: true
     services:

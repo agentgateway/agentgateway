@@ -20,11 +20,11 @@ spec:
   policies:
     auth:
       oauthTokenExchange:
-        tokenEndpoint:
+        backendRef:
           group: agentgateway.dev
           kind: AgentgatewayBackend
           name: token-endpoint
-          path: /token
+        path: /token
         audiences:
         - api://payments
 ---
