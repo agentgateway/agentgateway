@@ -115,7 +115,7 @@ impl Session {
 						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
 					};
 					let res = self
-						.send_init_single(parts.clone(), init_request, &service_name)
+						.send_init_single(parts.clone(), init_request, service_name)
 						.await;
 					if let Some(sessions) = self.relay.get_sessions() {
 						let s = http::sessionpersistence::SessionState::MCP(
@@ -130,7 +130,7 @@ impl Session {
 					let _ = Self::handle_error(
 						None,
 						self
-							.send_initialized_notification_single(parts.clone(), &service_name)
+							.send_initialized_notification_single(parts.clone(), service_name)
 							.await,
 					)
 					.await?;
@@ -163,6 +163,7 @@ impl Session {
 		self
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	async fn authorize_prompt_request<'a, 'b: 'a>(
 		&'a self,
 		name: &'b str,

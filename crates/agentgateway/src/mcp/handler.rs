@@ -46,7 +46,17 @@ fn duplicate_names<'a>(enabled: bool, names: impl Iterator<Item = &'a str>) -> H
 	if !enabled {
 		return HashSet::new();
 	}
-	names.duplicates().map(str::to_owned).collect()
+	let duplicates = names
+		.duplicates()
+		.map(str::to_owned)
+		.collect::<HashSet<_>>();
+	if !duplicates.is_empty() {
+		warn!(
+			"dropping ambiguous MCP names served by multiple targets: {}",
+			duplicates.iter().sorted().join(", ")
+		);
+	}
+	duplicates
 }
 
 fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
@@ -265,7 +275,9 @@ impl Relay {
 	}
 
 	/// Find the single target serving the unprefixed `name` by listing every
-	/// target at call time. Deliberately uncached; a cache can sit in front later.
+	/// target at call time.
+	/// TODO cache list results so every tool call/prompt get doesn't require making
+	/// tons of extra list calls to every upstream.
 	async fn resolve_unprefixed(
 		&self,
 		kind: ResolveKind,
@@ -338,6 +350,9 @@ impl Relay {
 		Err(UpstreamError::Recv)
 	}
 
+	/// Reverse of `resource_uri`: extracts the service name and original URI from a
+	/// multiplexed URI of the form `service+scheme://rest` (or `ui://service+rest`
+	/// for Apps UI resources).
 	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
 		if let Some(default) = self.upstreams.default_target_name.as_ref() {
 			Ok((default.as_str(), uri.to_string()))
@@ -1011,7 +1026,6 @@ impl Relay {
 				"no upstreams available".to_string(),
 			));
 		}
-
 		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
 		// fans out to (just the one name when there is a single backend).
 		let service_names = self.mcp_guardrails.as_ref().map(|_| {

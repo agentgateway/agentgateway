@@ -549,7 +549,8 @@ type MCPBackend struct {
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
 
-	// How tool/prompt/resource names are prefixed with the target name.
+	// How tool and prompt names are prefixed with the target name. Resource URIs
+	// always retain target routing information when multiplexing and are unaffected.
 	// `Conditional` (default) prefixes only when there are multiple targets.
 	// `Always` prefixes even with a single target. `Never` exposes unprefixed
 	// names and routes calls by looking up which target serves the name;
@@ -559,11 +560,11 @@ type MCPBackend struct {
 }
 
 const (
-	// Conditional prefixes names with the target name only when there are multiple targets.
+	// Conditional prefixes tool and prompt names only when there are multiple targets.
 	PrefixConditional PrefixMode = "Conditional"
-	// Always prefixes names, even with a single target.
+	// Always prefixes tool and prompt names, even with a single target.
 	PrefixAlways PrefixMode = "Always"
-	// Never prefixes names; calls are routed by looking up which target serves the name.
+	// Never prefixes tool and prompt names; calls are routed by target lookup.
 	// Names must be unique across targets.
 	PrefixNever PrefixMode = "Never"
 )
