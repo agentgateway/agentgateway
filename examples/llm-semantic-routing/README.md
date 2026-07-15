@@ -124,11 +124,12 @@ lower-cost and always-expensive baselines before adopting the policy broadly.
 The gateway works with any OpenAI API-compatible client or agent. This optional
 section shows a Codex-specific configuration. Codex uses the OpenAI Responses
 API, and the nightly vSR image configured above translates streamed Responses
-events so it can send the same `auto` model name through the gateway. Configure
-a user-level Codex profile:
+events so it can send the same `auto` model name through the gateway. Create a
+user-level Codex profile:
 
-```toml
-# ~/.codex/agentgateway.config.toml
+```bash
+mkdir -p ~/.codex
+cat > ~/.codex/agentgateway.config.toml <<'EOF'
 model = "auto"
 model_provider = "agentgateway"
 
@@ -137,9 +138,10 @@ name = "Corporate agentgateway"
 base_url = "https://my.corp.agentgateway.com/v1"
 wire_api = "responses"
 env_key = "OPENAI_API_KEY"
+EOF
 ```
 
-Set your OpenAI API key, then start Codex with the profile:
+Set your OpenAI API key, then start Codex with that profile:
 
 ```bash
 export OPENAI_API_KEY='sk-...'
