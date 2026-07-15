@@ -1791,6 +1791,7 @@ impl SimpleLocalBackend {
 	}
 }
 
+/// Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).
 #[apply(schema_de!)]
 #[derive(Default)]
 pub enum McpStatefulMode {
@@ -1811,7 +1812,6 @@ pub enum McpPrefixMode {
 pub struct LocalMcpBackend {
 	/// MCP server targets to multiplex together.
 	pub targets: Vec<Arc<LocalMcpTarget>>,
-	/// Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).
 	#[serde(default)]
 	pub stateful_mode: McpStatefulMode,
 	/// How to namespace tool names when multiplexing: always prefix with the target name, or only when needed (Conditional).
