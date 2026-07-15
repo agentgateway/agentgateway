@@ -508,3 +508,111 @@ func TestOAuthTokenExchangeTokenTypeTranslation(t *testing.T) {
 		t.Fatalf("authorization location header = %q, want X-Exchanged-Token", oauth.GetAuthorizationLocation().GetHeader().GetName())
 	}
 }
+
+func TestOAuthTokenExchangeCustomSubjectTokenTypeTranslation(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+
+	path := "/oauth/token"
+	customTokenType := agentgateway.OAuthTokenType("urn:company:domain:human")
+	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
+		BackendRef: oauthTokenEndpointRef(),
+		Path:       &path,
+		SubjectToken: &agentgateway.OAuthTokenSpec{
+			TokenType: ptr.Of(customTokenType),
+		},
+	}, "default")
+	if err != nil {
+		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want nil", err)
+	}
+
+	oauth := policy.GetOauthTokenExchange()
+	if oauth.GetSubjectToken().GetTokenType() != string(customTokenType) {
+		t.Fatalf("subject token type = %q, want %q", oauth.GetSubjectToken().GetTokenType(), customTokenType)
+	}
+}
+
+func TestOAuthTokenExchangeRejectsInvalidCustomTokenTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		buildAuth func(agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange
+		tokenType agentgateway.OAuthTokenType
+		wantErr   string
+	}{
+		{
+			name: "subject typo",
+			buildAuth: func(tokenType agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange {
+				return &agentgateway.OAuthTokenExchange{
+					BackendRef: oauthTokenEndpointRef(),
+					SubjectToken: &agentgateway.OAuthTokenSpec{
+						TokenType: ptr.Of(tokenType),
+					},
+				}
+			},
+			tokenType: agentgateway.OAuthTokenType("JWt"),
+			wantErr:   "oauth subjectToken tokenType",
+		},
+		{
+			name: "subject fragment",
+			buildAuth: func(tokenType agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange {
+				return &agentgateway.OAuthTokenExchange{
+					BackendRef: oauthTokenEndpointRef(),
+					SubjectToken: &agentgateway.OAuthTokenSpec{
+						TokenType: ptr.Of(tokenType),
+					},
+				}
+			},
+			tokenType: agentgateway.OAuthTokenType("https://tokens.example/custom#fragment"),
+			wantErr:   "without a fragment",
+		},
+		{
+			name: "actor typo",
+			buildAuth: func(tokenType agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange {
+				return &agentgateway.OAuthTokenExchange{
+					BackendRef: oauthTokenEndpointRef(),
+					ActorToken: &agentgateway.OAuthActorToken{
+						Source: agentgateway.AuthorizationExtractionLocation{
+							AuthorizationLocationFields: agentgateway.AuthorizationLocationFields{
+								Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Actor-Token"},
+							},
+						},
+						TokenType: ptr.Of(tokenType),
+					},
+				}
+			},
+			tokenType: agentgateway.OAuthTokenType("JWt"),
+			wantErr:   "oauth actorToken tokenType",
+		},
+		{
+			name: "actor fragment",
+			buildAuth: func(tokenType agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange {
+				return &agentgateway.OAuthTokenExchange{
+					BackendRef: oauthTokenEndpointRef(),
+					ActorToken: &agentgateway.OAuthActorToken{
+						Source: agentgateway.AuthorizationExtractionLocation{
+							AuthorizationLocationFields: agentgateway.AuthorizationLocationFields{
+								Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Actor-Token"},
+							},
+						},
+						TokenType: ptr.Of(tokenType),
+					},
+				}
+			},
+			tokenType: agentgateway.OAuthTokenType("https://tokens.example/custom#fragment"),
+			wantErr:   "without a fragment",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := oauthTestPolicyCtx(t)
+
+			_, err := buildOAuthTokenExchangePolicy(ctx, tt.buildAuth(tt.tokenType), "default")
+			if err == nil {
+				t.Fatal("buildOAuthTokenExchangePolicy() error = nil, want invalid token type error")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("buildOAuthTokenExchangePolicy() error = %q, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}

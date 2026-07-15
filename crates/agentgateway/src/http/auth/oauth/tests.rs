@@ -249,12 +249,15 @@ fn local_cache_config_can_disable_storage() {
 }
 
 #[test]
-fn deserialize_rejects_unsupported_subject_token_type() {
-	let err = serde_json::from_str::<OAuthTokenExchangeAuth>(
-		r#"{"host": "localhost:8089", "subjectToken": {"tokenType": "urn:ietf:params:oauth:token-type:saml2"}}"#,
+fn deserializes_custom_subject_token_type_uri() {
+	let auth = serde_json::from_str::<OAuthTokenExchangeAuth>(
+		r#"{"host": "localhost:8089", "subjectToken": {"tokenType": "urn:company:domain:human"}}"#,
 	)
-	.expect_err("unsupported token type should fail to deserialize");
-	assert!(err.to_string().contains("unknown variant"), "got: {err}");
+	.expect("custom absolute URI token type should deserialize");
+	assert_eq!(
+		auth.subject_token.token_type.as_str(),
+		"urn:company:domain:human"
+	);
 }
 
 #[tokio::test]
@@ -335,6 +338,28 @@ async fn sends_optional_params() {
 		!pairs.contains_key("client_secret"),
 		"public client sends no secret"
 	);
+}
+
+#[tokio::test]
+async fn sends_custom_subject_token_type() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
+	let a = OAuthTokenExchangeAuth {
+		subject_token: TokenSpec {
+			source: AuthorizationLocation::default(),
+			token_type: token_type_from_urn("urn:company:domain:human"),
+		},
+		..base_auth(endpoint(&mock))
+	};
+
+	fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("subj", "urn:company:domain:human"),
+	)
+	.await
+	.unwrap();
+	let pairs = sent_form_params(&mock).await;
+	assert_eq!(pairs["subject_token_type"], "urn:company:domain:human");
 }
 
 #[tokio::test]
@@ -1172,10 +1197,10 @@ fn private_key_jwt_client_auth_from_proto() {
 	},
 	"only supported by local backendAuth.crossAppAccess"
 )]
-#[case::unsupported_subject_token_type(
+#[case::invalid_subject_token_type(
 	proto::OAuthTokenExchange {
 		subject_token: Some(proto::o_auth_token_exchange::TokenSpec {
-			token_type: "urn:ietf:params:oauth:token-type:saml2".to_string(),
+			token_type: "not a uri".to_string(),
 			..Default::default()
 		}),
 		..Default::default()
@@ -1400,7 +1425,10 @@ fn in_memory_cache_from_proto_accepts_large_default_ttl() {
 #[case(TOKEN_TYPE_ACCESS, true)]
 #[case(TOKEN_TYPE_JWT, true)]
 #[case(TOKEN_TYPE_ID, true)]
-#[case("urn:ietf:params:oauth:token-type:saml2", false)]
+#[case("urn:ietf:params:oauth:token-type:saml2", true)]
+#[case("urn:company:domain:human", true)]
+#[case("not a uri", false)]
+#[case("https://tokens.example/custom#fragment", false)]
 fn oauth_token_type_from_urn_cases(#[case] token_type: &str, #[case] expected: bool) {
 	assert_eq!(OAuthTokenType::from_urn(token_type).is_some(), expected);
 }

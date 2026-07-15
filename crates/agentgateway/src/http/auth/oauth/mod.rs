@@ -188,6 +188,11 @@ impl OAuthTokenExchangeAuth {
 		if let Some(client_auth) = &self.client_auth {
 			client_auth.validate_load()?;
 		}
+		if let Some(OAuthTokenType::Custom(token_type)) = &self.requested_token_type {
+			return Err(format!(
+				"unsupported requested_token_type {token_type:?}; custom token types are only supported for subject_token and actor_token"
+			));
+		}
 
 		validate_additional_params(&self.additional_params)?;
 
@@ -252,9 +257,10 @@ impl OAuthTokenExchangeAuth {
 			.transpose()?;
 
 		let requested_token_type = match t.requested_token_type {
-			Some(token_type) if !token_type.is_empty() => {
-				Some(proto_token_type("requested_token_type", &token_type)?)
-			},
+			Some(token_type) if !token_type.is_empty() => Some(proto_requested_token_type(
+				"requested_token_type",
+				&token_type,
+			)?),
 			_ => None,
 		};
 		if requested_token_type == Some(OAuthTokenType::IdJag) {
@@ -310,7 +316,7 @@ impl OAuthTokenExchangeAuth {
 
 	fn expected_issued_token_type(&self) -> Option<OAuthTokenType> {
 		match self.grant_type {
-			OAuthGrantType::TokenExchange => Some(self.requested_token_type.unwrap_or_default()),
+			OAuthGrantType::TokenExchange => Some(self.requested_token_type.clone().unwrap_or_default()),
 			OAuthGrantType::JwtBearer => None,
 		}
 	}
@@ -350,7 +356,7 @@ impl OAuthTokenExchangeAuth {
 
 		Ok(ExchangeRequest {
 			subject_token: subject_token.into(),
-			subject_token_type: self.subject_token.token_type,
+			subject_token_type: self.subject_token.token_type.clone(),
 			actor,
 			extra_params,
 			chained_extra_params,
@@ -385,19 +391,14 @@ pub enum OAuthGrantType {
 	JwtBearer,
 }
 
-#[derive(
-	Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 enum OAuthTokenType {
-	#[serde(rename = "urn:ietf:params:oauth:token-type:access_token")]
 	#[default]
 	AccessToken,
-	#[serde(rename = "urn:ietf:params:oauth:token-type:jwt")]
 	Jwt,
-	#[serde(rename = "urn:ietf:params:oauth:token-type:id_token")]
 	IdToken,
-	#[serde(rename = "urn:ietf:params:oauth:token-type:id-jag")]
 	IdJag,
+	Custom(String),
 }
 
 impl OAuthTokenType {
@@ -407,17 +408,52 @@ impl OAuthTokenType {
 			TOKEN_TYPE_JWT => Some(Self::Jwt),
 			TOKEN_TYPE_ID => Some(Self::IdToken),
 			TOKEN_TYPE_ID_JAG => Some(Self::IdJag),
+			_ if is_oauth_absolute_uri(token_type) => Some(Self::Custom(token_type.into())),
 			_ => None,
 		}
 	}
 
-	fn as_str(self) -> &'static str {
+	fn supported_requested_from_urn(token_type: &str) -> Option<Self> {
+		match token_type {
+			TOKEN_TYPE_ACCESS => Some(Self::AccessToken),
+			TOKEN_TYPE_JWT => Some(Self::Jwt),
+			TOKEN_TYPE_ID => Some(Self::IdToken),
+			TOKEN_TYPE_ID_JAG => Some(Self::IdJag),
+			_ => None,
+		}
+	}
+
+	fn as_str(&self) -> &str {
 		match self {
 			Self::AccessToken => TOKEN_TYPE_ACCESS,
 			Self::Jwt => TOKEN_TYPE_JWT,
 			Self::IdToken => TOKEN_TYPE_ID,
 			Self::IdJag => TOKEN_TYPE_ID_JAG,
+			Self::Custom(token_type) => token_type,
 		}
+	}
+}
+
+impl serde::Serialize for OAuthTokenType {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		serializer.serialize_str(self.as_str())
+	}
+}
+
+impl<'de> serde::Deserialize<'de> for OAuthTokenType {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let token_type = <String as serde::Deserialize>::deserialize(deserializer)?;
+		Self::from_urn(&token_type).ok_or_else(|| {
+			serde::de::Error::custom(format!(
+				"OAuth token type must be an absolute URI without a fragment, got {token_type:?}"
+			))
+		})
 	}
 }
 
@@ -590,6 +626,14 @@ fn validate_additional_params(
 	Ok(())
 }
 
+// RFC 8707 resource identifiers and RFC 8693 token type identifiers must both be
+// absolute URIs without a fragment.
+fn is_oauth_absolute_uri(value: &str) -> bool {
+	url::Url::parse(value)
+		.map(|url| url.fragment().is_none())
+		.unwrap_or(false)
+}
+
 fn evaluate_additional_params(
 	params: &BTreeMap<String, Arc<cel::Expression>>,
 	req: &Request,
@@ -706,7 +750,7 @@ fn actor_token_from_request(
 		debug!("oauth token exchange actor is not authorized by the subject's may_act claim");
 		return Err(ProxyError::AuthorizationFailed);
 	}
-	Ok((SecretString::from(token), spec.token_type))
+	Ok((SecretString::from(token), spec.token_type.clone()))
 }
 
 fn may_act_authorizes(req: &Request, subject_token: &str, actor_token: &str) -> bool {
@@ -772,6 +816,11 @@ fn claim_satisfies(actor_value: Option<&Value>, expected: &Value) -> bool {
 
 fn proto_token_type(field: &str, token_type: &str) -> Result<OAuthTokenType, ProtoError> {
 	OAuthTokenType::from_urn(token_type)
+		.ok_or_else(|| ProtoError::Generic(format!("unsupported {field} {token_type:?}")))
+}
+
+fn proto_requested_token_type(field: &str, token_type: &str) -> Result<OAuthTokenType, ProtoError> {
+	OAuthTokenType::supported_requested_from_urn(token_type)
 		.ok_or_else(|| ProtoError::Generic(format!("unsupported {field} {token_type:?}")))
 }
 

@@ -3,6 +3,7 @@ package plugins
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
@@ -1005,10 +1006,16 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		if err := validateExtractionAuthorizationLocation(auth.SubjectToken.Source, "oauth subjectToken source"); err != nil {
 			errs = append(errs, err)
 		}
+		if auth.SubjectToken.TokenType != nil {
+			errs = append(errs, validateOAuthTokenType(*auth.SubjectToken.TokenType, "oauth subjectToken tokenType"))
+		}
 	}
 	if auth.ActorToken != nil {
 		if err := validateExtractionAuthorizationLocation(&auth.ActorToken.Source, "oauth actorToken source"); err != nil {
 			errs = append(errs, err)
+		}
+		if auth.ActorToken.TokenType != nil {
+			errs = append(errs, validateOAuthTokenType(*auth.ActorToken.TokenType, "oauth actorToken tokenType"))
 		}
 	}
 
@@ -1173,6 +1180,21 @@ func translateOAuthTokenTypePtr(tokenType *agentgateway.OAuthTokenType) *string 
 		return nil
 	}
 	return new(translateOAuthTokenType(*tokenType))
+}
+
+func validateOAuthTokenType(tokenType agentgateway.OAuthTokenType, field string) error {
+	switch tokenType {
+	case agentgateway.OAuthTokenTypeAccessToken,
+		agentgateway.OAuthTokenTypeJWT,
+		agentgateway.OAuthTokenTypeIDToken,
+		agentgateway.OAuthTokenTypeIDJAG:
+		return nil
+	}
+	parsed, err := url.Parse(string(tokenType))
+	if err != nil || !parsed.IsAbs() || parsed.Fragment != "" {
+		return fmt.Errorf("%s %q must be a built-in token type or an absolute URI without a fragment", field, tokenType)
+	}
+	return nil
 }
 
 func translateOAuthTokenType(tokenType agentgateway.OAuthTokenType) string {

@@ -1818,8 +1818,9 @@ message OAuthTokenExchange {
     // from the Claims extension when an upstream JWT policy has stripped the
     // header, so the default keeps working behind a JWT auth policy.
     AuthorizationLocation source = 1;
-    // RFC 8693 §3 token type URN sent as subject_token_type / actor_token_type.
-    // e.g. "urn:ietf:params:oauth:token-type:access_token"
+    // RFC 8693 token type URI sent as subject_token_type / actor_token_type.
+    // Built-ins such as "urn:ietf:params:oauth:token-type:access_token" and
+    // custom absolute URIs such as "urn:company:domain:human" are accepted.
     // Empty defaults to access_token under TOKEN_EXCHANGE. Ignored for the
     // JWT_BEARER subject token because RFC 7523 sends the token as `assertion`
     // and has no subject_token_type parameter.
@@ -1834,8 +1835,8 @@ message OAuthTokenExchange {
     // credential.
     AuthorizationLocation source = 1;
 
-    // RFC 8693 §3 token type URN sent as actor_token_type.
-    // e.g. "urn:ietf:params:oauth:token-type:access_token"
+    // RFC 8693 token type URI sent as actor_token_type. Built-ins and custom
+    // absolute URIs are accepted.
     // Empty defaults to access_token, and actor_token_type is still sent.
     string token_type = 2;
 

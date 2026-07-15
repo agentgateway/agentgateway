@@ -712,13 +712,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for actor tokens.
                                                       type: string
                                                   required:
                                                   - source
@@ -1067,12 +1063,14 @@ spec:
                                                   pattern: ^/
                                                   type: string
                                                 requestedTokenType:
-                                                  description: RFC 8693 requested_token_type.
+                                                  description: |-
+                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+                                                    built-in values may be requested; custom URIs are not supported here.
                                                   enum:
                                                   - AccessToken
-                                                  - IdJag
-                                                  - IdToken
                                                   - Jwt
+                                                  - IdToken
+                                                  - IdJag
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -1091,9 +1089,10 @@ spec:
                                                   minItems: 1
                                                   type: array
                                                 subjectToken:
-                                                  description: Subject token / assertion
-                                                    source and type. Defaults to Authorization
-                                                    Bearer, AccessToken.
+                                                  description: |-
+                                                    Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+                                                    The token type may be a built-in value or a custom absolute URI for providers
+                                                    that support custom token exchange profiles.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -1161,13 +1160,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for subject tokens.
                                                       type: string
                                                   type: object
                                               required:
@@ -2033,13 +2028,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for actor tokens.
                                                       type: string
                                                   required:
                                                   - source
@@ -2388,12 +2379,14 @@ spec:
                                                   pattern: ^/
                                                   type: string
                                                 requestedTokenType:
-                                                  description: RFC 8693 requested_token_type.
+                                                  description: |-
+                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+                                                    built-in values may be requested; custom URIs are not supported here.
                                                   enum:
                                                   - AccessToken
-                                                  - IdJag
-                                                  - IdToken
                                                   - Jwt
+                                                  - IdToken
+                                                  - IdJag
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -2412,9 +2405,10 @@ spec:
                                                   minItems: 1
                                                   type: array
                                                 subjectToken:
-                                                  description: Subject token / assertion
-                                                    source and type. Defaults to Authorization
-                                                    Bearer, AccessToken.
+                                                  description: |-
+                                                    Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+                                                    The token type may be a built-in value or a custom absolute URI for providers
+                                                    that support custom token exchange profiles.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -2482,13 +2476,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for subject tokens.
                                                       type: string
                                                   type: object
                                               required:
@@ -3349,13 +3339,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for actor tokens.
                                                       type: string
                                                   required:
                                                   - source
@@ -3704,12 +3690,14 @@ spec:
                                                   pattern: ^/
                                                   type: string
                                                 requestedTokenType:
-                                                  description: RFC 8693 requested_token_type.
+                                                  description: |-
+                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+                                                    built-in values may be requested; custom URIs are not supported here.
                                                   enum:
                                                   - AccessToken
-                                                  - IdJag
-                                                  - IdToken
                                                   - Jwt
+                                                  - IdToken
+                                                  - IdJag
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -3728,9 +3716,10 @@ spec:
                                                   minItems: 1
                                                   type: array
                                                 subjectToken:
-                                                  description: Subject token / assertion
-                                                    source and type. Defaults to Authorization
-                                                    Bearer, AccessToken.
+                                                  description: |-
+                                                    Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+                                                    The token type may be a built-in value or a custom absolute URI for providers
+                                                    that support custom token exchange profiles.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -3798,13 +3787,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for subject tokens.
                                                       type: string
                                                   type: object
                                               required:
@@ -4891,13 +4876,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for actor tokens.
                                                       type: string
                                                   required:
                                                   - source
@@ -5246,12 +5227,14 @@ spec:
                                                   pattern: ^/
                                                   type: string
                                                 requestedTokenType:
-                                                  description: RFC 8693 requested_token_type.
+                                                  description: |-
+                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+                                                    built-in values may be requested; custom URIs are not supported here.
                                                   enum:
                                                   - AccessToken
-                                                  - IdJag
-                                                  - IdToken
                                                   - Jwt
+                                                  - IdToken
+                                                  - IdJag
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -5270,9 +5253,10 @@ spec:
                                                   minItems: 1
                                                   type: array
                                                 subjectToken:
-                                                  description: Subject token / assertion
-                                                    source and type. Defaults to Authorization
-                                                    Bearer, AccessToken.
+                                                  description: |-
+                                                    Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+                                                    The token type may be a built-in value or a custom absolute URI for providers
+                                                    that support custom token exchange profiles.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -5340,13 +5324,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for subject tokens.
                                                       type: string
                                                   type: object
                                               required:
@@ -6212,13 +6192,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for actor tokens.
                                                       type: string
                                                   required:
                                                   - source
@@ -6567,12 +6543,14 @@ spec:
                                                   pattern: ^/
                                                   type: string
                                                 requestedTokenType:
-                                                  description: RFC 8693 requested_token_type.
+                                                  description: |-
+                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+                                                    built-in values may be requested; custom URIs are not supported here.
                                                   enum:
                                                   - AccessToken
-                                                  - IdJag
-                                                  - IdToken
                                                   - Jwt
+                                                  - IdToken
+                                                  - IdJag
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -6591,9 +6569,10 @@ spec:
                                                   minItems: 1
                                                   type: array
                                                 subjectToken:
-                                                  description: Subject token / assertion
-                                                    source and type. Defaults to Authorization
-                                                    Bearer, AccessToken.
+                                                  description: |-
+                                                    Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+                                                    The token type may be a built-in value or a custom absolute URI for providers
+                                                    that support custom token exchange profiles.
                                                   properties:
                                                     source:
                                                       description: Where to read the
@@ -6661,13 +6640,9 @@ spec:
                                                         rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                           == 1'
                                                     tokenType:
-                                                      description: OAuth token type.
-                                                        Empty defaults to AccessToken.
-                                                      enum:
-                                                      - AccessToken
-                                                      - IdJag
-                                                      - IdToken
-                                                      - Jwt
+                                                      description: |-
+                                                        OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                                        are supported for subject tokens.
                                                       type: string
                                                   type: object
                                               required:
@@ -7791,12 +7766,9 @@ spec:
                                   rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                     == 1'
                               tokenType:
-                                description: OAuth token type. Empty defaults to AccessToken.
-                                enum:
-                                - AccessToken
-                                - IdJag
-                                - IdToken
-                                - Jwt
+                                description: |-
+                                  OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                  are supported for actor tokens.
                                 type: string
                             required:
                             - source
@@ -8108,12 +8080,14 @@ spec:
                             pattern: ^/
                             type: string
                           requestedTokenType:
-                            description: RFC 8693 requested_token_type.
+                            description: |-
+                              RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+                              built-in values may be requested; custom URIs are not supported here.
                             enum:
                             - AccessToken
-                            - IdJag
-                            - IdToken
                             - Jwt
+                            - IdToken
+                            - IdJag
                             type: string
                           resources:
                             description: Resources sent to the token endpoint.
@@ -8130,8 +8104,10 @@ spec:
                             minItems: 1
                             type: array
                           subjectToken:
-                            description: Subject token / assertion source and type.
-                              Defaults to Authorization Bearer, AccessToken.
+                            description: |-
+                              Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+                              The token type may be a built-in value or a custom absolute URI for providers
+                              that support custom token exchange profiles.
                             properties:
                               source:
                                 description: Where to read the token. CEL `expression`
@@ -8195,12 +8171,9 @@ spec:
                                   rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                     == 1'
                               tokenType:
-                                description: OAuth token type. Empty defaults to AccessToken.
-                                enum:
-                                - AccessToken
-                                - IdJag
-                                - IdToken
-                                - Jwt
+                                description: |-
+                                  OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+                                  are supported for subject tokens.
                                 type: string
                             type: object
                         required:

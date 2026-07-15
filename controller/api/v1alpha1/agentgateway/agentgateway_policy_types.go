@@ -1385,6 +1385,8 @@ type OAuthTokenExchange struct {
 	GrantType *OAuthGrantType `json:"grantType,omitempty"`
 
 	// Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+	// The token type may be a built-in value or a custom absolute URI for providers
+	// that support custom token exchange profiles.
 	// +optional
 	SubjectToken *OAuthTokenSpec `json:"subjectToken,omitempty"`
 
@@ -1410,7 +1412,9 @@ type OAuthTokenExchange struct {
 	// +optional
 	Resources []string `json:"resources,omitempty"`
 
-	// RFC 8693 requested_token_type.
+	// RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+	// built-in values may be requested; custom URIs are not supported here.
+	// +kubebuilder:validation:Enum=AccessToken;Jwt;IdToken;IdJag
 	// +optional
 	RequestedTokenType *OAuthTokenType `json:"requestedTokenType,omitempty"`
 
@@ -1446,7 +1450,8 @@ type OAuthTokenSpec struct {
 	// +optional
 	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
 
-	// OAuth token type. Empty defaults to AccessToken.
+	// OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+	// are supported for subject tokens.
 	// +optional
 	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
 }
@@ -1457,7 +1462,8 @@ type OAuthActorToken struct {
 	// +required
 	Source AuthorizationExtractionLocation `json:"source"`
 
-	// OAuth token type. Empty defaults to AccessToken.
+	// OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+	// are supported for actor tokens.
 	// +optional
 	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
 
@@ -1466,7 +1472,10 @@ type OAuthActorToken struct {
 	MayAct *OAuthMayActValidationMode `json:"mayAct,omitempty"`
 }
 
-// +k8s:enum
+// OAuthTokenType is an RFC 8693 token type. The built-in values below are
+// translated to their URN form; any other value must be a custom absolute URI
+// and is passed through unchanged. It is intentionally not a closed enum so
+// subject/actor tokens can use provider-specific token type URIs.
 type OAuthTokenType string
 
 const (
