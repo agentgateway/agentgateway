@@ -7026,7 +7026,6 @@
           }
         },
         "statefulMode": {
-          "description": "Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).",
           "$ref": "#/$defs/McpStatefulMode"
         },
         "prefixMode": {
@@ -7432,6 +7431,7 @@
       "additionalProperties": false
     },
     "McpStatefulMode": {
+      "description": "Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).",
       "type": "string",
       "enum": [
         "stateless",
@@ -11098,7 +11098,6 @@
           }
         },
         "statefulMode": {
-          "description": "Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).",
           "$ref": "#/$defs/McpStatefulMode"
         },
         "prefixMode": {
