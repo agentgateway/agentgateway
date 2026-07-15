@@ -19,6 +19,8 @@ use crate::types::agent::{McpAuthentication, McpIDP};
 pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
 	path.starts_with("/.well-known/oauth-protected-resource")
 		|| path.starts_with("/.well-known/oauth-authorization-server")
+		|| path == "/authorize"
+		|| path == "/token"
 }
 
 pub(super) async fn apply_token_validation(
@@ -91,6 +93,30 @@ pub(crate) async fn handle_mcp_request(
 				})
 				.into_response(),
 		)),
+		path if path == "/authorize" => match &auth.provider {
+			Some(McpIDP::Okta {}) => Ok(Some(
+				okta_authorize_redirect(req, auth)
+					.await
+					.map_err(|e| {
+						warn!("okta_authorize_redirect error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response(),
+			)),
+			_ => Ok(None),
+		},
+		path if path == "/token" => match &auth.provider {
+			Some(McpIDP::Okta {}) => Ok(Some(
+				okta_token_proxy(req, auth, client.clone())
+					.await
+					.map_err(|e| {
+						warn!("okta_token_proxy error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response(),
+			)),
+			_ => Ok(None),
+		},
 		_ => {
 			// Not handled
 			Ok(None)
@@ -257,32 +283,38 @@ pub(super) async fn authorization_server_metadata(
 			}
 		},
 		Some(McpIDP::Okta {}) => {
-			// Okta does not support RFC 8707. Workaround by appending audience as a query param.
-			let Some(serde_json::Value::String(ae)) =
-				json::traverse_mut(&mut resp, &["authorization_endpoint"])
-			else {
-				return Err(ProxyError::ProcessingString(
-					"authorization_endpoint missing".to_string(),
-				));
-			};
-			if let Some(aud) = auth.audiences.first() {
-				ae.push_str(&format!("?audience={}", aud));
-			}
-
-			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak)
 			let current_uri = request_uri_for_oauth_metadata(req);
-			if let Some(serde_json::Value::String(re)) =
-				json::traverse_mut(&mut resp, &["registration_endpoint"])
-			{
-				*re = format!("{current_uri}/client-registration");
-			}
 
-			// RFC 8414 §3.3: the issuer in AS metadata MUST match the URL from which it was fetched.
+			// RFC 8414 §3.3: issuer MUST match the URL from which the metadata was fetched.
 			// Strict clients (Claude Desktop, ChatGPT, Codex) reject metadata when issuer ≠ gateway URL.
 			if let Some(serde_json::Value::String(issuer_val)) =
 				json::traverse_mut(&mut resp, &["issuer"])
 			{
 				*issuer_val = issuer_from_metadata_uri(&current_uri.to_string());
+			}
+
+			// Rewrite authorization_endpoint and token_endpoint to gateway-local paths.
+			// Claude Desktop and claude.ai construct these from issuer ({issuer}/authorize,
+			// {issuer}/token) instead of reading metadata fields — agentgateway handles both
+			// paths natively: /authorize redirects to Okta (injecting audience), /token proxies
+			// the token exchange. This eliminates the need for an external nginx issuer-proxy.
+			if let Some(serde_json::Value::String(ae)) =
+				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+			{
+				*ae = format!("{current_uri}/authorize");
+			}
+
+			if let Some(serde_json::Value::String(te)) =
+				json::traverse_mut(&mut resp, &["token_endpoint"])
+			{
+				*te = format!("{current_uri}/token");
+			}
+
+			// Okta doesn't do CORS for client registrations — proxy via gateway.
+			if let Some(serde_json::Value::String(re)) =
+				json::traverse_mut(&mut resp, &["registration_endpoint"])
+			{
+				*re = format!("{current_uri}/client-registration");
 			}
 		},
 		Some(McpIDP::Descope {}) => {
@@ -330,6 +362,71 @@ pub(super) async fn authorization_server_metadata(
 		)))?;
 
 	Ok(response)
+}
+
+/// Redirects /authorize to Okta's actual authorize endpoint, injecting `audience` (RFC 8707
+/// workaround — Okta does not support resource indicators natively) and a default `scope=openid`
+/// when the client omits scope entirely.
+async fn okta_authorize_redirect(
+	req: &Request,
+	auth: &McpAuthentication,
+) -> Result<Response, ProxyError> {
+	let issuer = auth.issuer.trim_end_matches('/');
+	let existing_query = req.uri().query().unwrap_or("");
+
+	let aud = auth.audiences.first().map(String::as_str).unwrap_or("");
+	let has_scope = existing_query.split('&').any(|p| p.starts_with("scope="));
+
+	let mut query = format!("audience={aud}");
+	if !has_scope {
+		query.push_str("&scope=openid");
+	}
+	if !existing_query.is_empty() {
+		query.push('&');
+		query.push_str(existing_query);
+	}
+
+	let location = format!("{issuer}/v1/authorize?{query}");
+	Ok(Response::builder()
+		.status(StatusCode::FOUND)
+		.header("location", location)
+		.body(axum::body::Body::empty())?)
+}
+
+/// Proxies POST /token to Okta's token endpoint.
+///
+/// OAuth clients must not follow redirects for token exchange (RFC 6749), so a 302 is not
+/// viable here — we proxy the request directly to Okta and return its response verbatim.
+async fn okta_token_proxy(
+	req: &mut Request,
+	auth: &McpAuthentication,
+	client: PolicyClient,
+) -> Result<Response, ProxyError> {
+	let issuer = auth.issuer.trim_end_matches('/');
+	let token_uri = format!("{issuer}/v1/token");
+
+	let content_type = req.headers().get("content-type").cloned();
+	let authorization = req.headers().get("authorization").cloned();
+
+	let body = std::mem::take(req.body_mut());
+
+	let mut builder = ::http::Request::builder()
+		.uri(token_uri)
+		.method(Method::POST);
+	if let Some(ct) = content_type {
+		builder = builder.header("content-type", ct);
+	}
+	if let Some(auth_hdr) = authorization {
+		builder = builder.header("authorization", auth_hdr);
+	}
+
+	let ureq = builder.body(body)?;
+	let upstream = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
+		.simple_call(ureq)
+		.await?;
+
+	Ok(upstream)
 }
 
 pub(super) async fn client_registration(
