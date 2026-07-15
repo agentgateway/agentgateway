@@ -267,6 +267,11 @@ pub(super) async fn authorization_server_metadata(
 	let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
 		.await
 		.map_err(ProxyError::Body)?;
+
+	// Pre-compute once — used in provider-specific rewrites below and in universal blocks.
+	let current_uri = request_uri_for_oauth_metadata(req);
+	let gateway_base = issuer_from_metadata_uri(current_uri.to_string());
+
 	match &auth.provider {
 		Some(McpIDP::Auth0 {}) => {
 			// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
@@ -283,9 +288,6 @@ pub(super) async fn authorization_server_metadata(
 			}
 		},
 		Some(McpIDP::Okta {}) => {
-			let current_uri = request_uri_for_oauth_metadata(req);
-			let gateway_base = issuer_from_metadata_uri(current_uri.to_string());
-
 			// Rewrite authorization_endpoint and token_endpoint to gateway-local paths.
 			// Claude Desktop and claude.ai derive these from issuer ({issuer}/authorize,
 			// {issuer}/token) instead of reading metadata fields — agentgateway handles both
@@ -347,9 +349,8 @@ pub(super) async fn authorization_server_metadata(
 	// RFC 8414 §3.3: the issuer in AS metadata MUST match the URL from which it was fetched.
 	// Applied universally across all providers — strict clients (Claude Desktop, ChatGPT, Codex)
 	// validate this and abort if issuer ≠ gateway URL.
-	let current_uri = request_uri_for_oauth_metadata(req);
 	if let Some(serde_json::Value::String(issuer_val)) = json::traverse_mut(&mut resp, &["issuer"]) {
-		*issuer_val = issuer_from_metadata_uri(current_uri.to_string());
+		*issuer_val = gateway_base;
 	}
 
 	let response = ::http::Response::builder()
@@ -375,15 +376,25 @@ async fn okta_authorize_redirect(
 	let issuer = auth.issuer.trim_end_matches('/');
 	let existing_query = req.uri().query().unwrap_or("");
 
-	let aud = auth.audiences.first().map(String::as_str).unwrap_or("");
 	let has_scope = existing_query.split('&').any(|p| p.starts_with("scope="));
 
-	let mut query = format!("audience={aud}");
+	// Inject audience only when configured — sending audience= (empty) causes Okta to reject
+	// the request; absence of the param is preferable to an invalid value.
+	let mut query = auth
+		.audiences
+		.first()
+		.map(|aud| format!("audience={aud}"))
+		.unwrap_or_default();
 	if !has_scope {
-		query.push_str("&scope=openid");
+		if !query.is_empty() {
+			query.push('&');
+		}
+		query.push_str("scope=openid");
 	}
 	if !existing_query.is_empty() {
-		query.push('&');
+		if !query.is_empty() {
+			query.push('&');
+		}
 		query.push_str(existing_query);
 	}
 
