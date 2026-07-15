@@ -580,6 +580,26 @@ async fn multiplex_never_prefix_drops_ambiguous_names() {
 }
 
 #[tokio::test]
+async fn multiplex_never_prefix_resolves_names_on_later_pages() {
+	let paging = mock_paging_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(
+		vec![("a", paging.addr, false), ("b", other.addr, false)],
+		true,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	// paged_echo only appears on page 2 of target a's tools/list; resolution
+	// must follow the cursor to find its owner.
+	let ctr = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("paged_echo"))
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, "paged ok");
+}
+
+#[tokio::test]
 async fn stateless_multiplex_never_prefix_tool_call_resolves_target() {
 	let apps = mock_apps_streamable_http_server().await;
 	let other = mock_streamable_http_server(true).await;
@@ -2351,6 +2371,40 @@ async fn mock_streamable_http_server_inner(
 	}
 }
 
+async fn mock_paging_streamable_http_server() -> MockServer {
+	use mockserver::PagingServer;
+	use rmcp::transport::streamable_http_server::StreamableHttpService;
+	use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
+	agent_core::telemetry::testing::setup_test_logging();
+
+	let service = StreamableHttpService::new(
+		|| Ok(PagingServer),
+		LocalSessionManager::default().into(),
+		StreamableHttpServerConfig::default()
+			.with_sse_retry(None)
+			.with_sse_keep_alive(None)
+			.with_stateful_mode(true)
+			.with_json_response(false),
+	);
+
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let router = axum::Router::new().nest_service("/mcp", service);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	MockServer {
+		addr,
+		init_counter: std::sync::Arc::new(tokio::sync::Mutex::new(0)),
+		_cancel: tx,
+	}
+}
+
 async fn mock_apps_streamable_http_server() -> MockServer {
 	mock_apps_streamable_http_server_with_init_capture().await.0
 }
@@ -2885,6 +2939,48 @@ mod mockserver {
 			let mut init_counter = self.init_counter.lock().await;
 			*init_counter += 1;
 			Ok(self.get_info())
+		}
+	}
+
+	/// Serves one tool per page so tests can exercise cursor-following.
+	#[derive(Clone)]
+	pub struct PagingServer;
+
+	impl ServerHandler for PagingServer {
+		fn get_info(&self) -> ServerInfo {
+			ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+		}
+
+		async fn list_tools(
+			&self,
+			request: Option<PaginatedRequestParams>,
+			_: RequestContext<RoleServer>,
+		) -> Result<ListToolsResult, McpError> {
+			let schema = Arc::new(json!({"type": "object"}).as_object().cloned().unwrap());
+			match request.and_then(|p| p.cursor).as_deref() {
+				None => Ok(ListToolsResult {
+					tools: vec![Tool::new("first_page_tool", "page 1", schema)],
+					next_cursor: Some("page2".to_string()),
+					..Default::default()
+				}),
+				Some("page2") => Ok(ListToolsResult {
+					tools: vec![Tool::new("paged_echo", "page 2", schema)],
+					..Default::default()
+				}),
+				Some(_) => Err(McpError::invalid_params("bad cursor", None)),
+			}
+		}
+
+		async fn call_tool(
+			&self,
+			request: CallToolRequestParams,
+			_: RequestContext<RoleServer>,
+		) -> Result<CallToolResult, McpError> {
+			match request.name.as_ref() {
+				"paged_echo" => Ok(CallToolResult::success(vec![ContentBlock::text("paged ok")])),
+				"first_page_tool" => Ok(CallToolResult::success(vec![ContentBlock::text("first")])),
+				_ => Err(McpError::invalid_params("unknown tool", None)),
+			}
 		}
 	}
 }

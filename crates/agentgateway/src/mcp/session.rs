@@ -163,7 +163,6 @@ impl Session {
 		self
 	}
 
-	#[allow(clippy::too_many_arguments)]
 	async fn authorize_prompt_request<'a, 'b: 'a>(
 		&'a self,
 		name: &'b str,
@@ -171,12 +170,11 @@ impl Session {
 		span: &mut SpanWriteOnDrop,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
-		request_id: RequestId,
 		ctx: &IncomingRequestContext,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		let (service_name, prompt) = self
 			.relay
-			.resolve_resource_name(ResolveKind::Prompt, name, request_id, ctx)
+			.resolve_resource_name(ResolveKind::Prompt, name, ctx)
 			.await?;
 		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
@@ -417,7 +415,6 @@ impl Session {
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method().to_string();
-				let request_id = r.id.clone();
 				let mut ctx = IncomingRequestContext::new(&parts);
 				let (mut span, log, cel) = mcp::handler::setup_request_log(parts, &method);
 				let session_id = self.id.to_string();
@@ -526,7 +523,6 @@ impl Session {
 						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Tool,
 							&name,
-							request_id,
 							&ctx,
 						))
 						.await?;
@@ -563,7 +559,6 @@ impl Session {
 						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Prompt,
 							&name,
-							request_id,
 							&ctx,
 						))
 						.await?;
@@ -652,7 +647,7 @@ impl Session {
 							let name = prompt.name.clone();
 							let (service_name, prompt_name) =
 								Box::pin(self.authorize_prompt_request(
-									&name, &method, &mut span, &log, &cel, request_id, &ctx,
+									&name, &method, &mut span, &log, &cel, &ctx,
 								))
 								.await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());

@@ -13,7 +13,8 @@ use rmcp::ErrorData;
 use rmcp::model::{
 	CacheScope, ClientNotification, ClientRequest, DiscoverResult, ExtensionCapabilities,
 	Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
-	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Meta, ProtocolVersion,
+	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Meta, PaginatedRequestParams,
+	ProtocolVersion,
 	RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification,
 	ServerResult, SubscriptionsListenResult,
 };
@@ -51,12 +52,42 @@ fn duplicate_names<'a>(enabled: bool, names: impl Iterator<Item = &'a str>) -> H
 		.map(str::to_owned)
 		.collect::<HashSet<_>>();
 	if !duplicates.is_empty() {
-		warn!(
+		debug!(
 			"dropping ambiguous MCP names served by multiple targets: {}",
 			duplicates.iter().sorted().join(", ")
 		);
 	}
 	duplicates
+}
+
+/// Split per-target list results and, when rejecting duplicates, drop names
+/// served by more than one target.
+fn per_target_deduped<T>(
+	streams: Vec<(Strng, ServerResult)>,
+	reject_duplicates: bool,
+	extract: impl Fn(ServerResult) -> Vec<T>,
+	name: impl for<'a> Fn(&'a T) -> &'a str,
+) -> Vec<(Strng, Vec<T>)> {
+	let per_target = streams
+		.into_iter()
+		.map(|(server_name, s)| (server_name, extract(s)))
+		.collect_vec();
+	let duplicates = duplicate_names(
+		reject_duplicates,
+		per_target
+			.iter()
+			.flat_map(|(_, items)| items.iter().map(&name)),
+	);
+	per_target
+		.into_iter()
+		.map(|(server_name, items)| {
+			let items = items
+				.into_iter()
+				.filter(|item| !duplicates.contains(name(item)))
+				.collect_vec();
+			(server_name, items)
+		})
+		.collect_vec()
 }
 
 fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
@@ -141,10 +172,25 @@ impl ResolveKind {
 		}
 	}
 
-	fn list_request(&self) -> ClientRequest {
+	fn list_request(&self, cursor: Option<String>) -> ClientRequest {
+		let params = cursor.map(|c| PaginatedRequestParams::default().with_cursor(Some(c)));
 		match self {
-			ResolveKind::Tool => ClientRequest::ListToolsRequest(Default::default()),
-			ResolveKind::Prompt => ClientRequest::ListPromptsRequest(Default::default()),
+			ResolveKind::Tool => ClientRequest::ListToolsRequest(rmcp::model::ListToolsRequest {
+				params,
+				..Default::default()
+			}),
+			ResolveKind::Prompt => ClientRequest::ListPromptsRequest(rmcp::model::ListPromptsRequest {
+				params,
+				..Default::default()
+			}),
+		}
+	}
+
+	fn next_cursor(&self, result: &ServerResult) -> Option<String> {
+		match (self, result) {
+			(ResolveKind::Tool, ServerResult::ListToolsResult(r)) => r.next_cursor.clone(),
+			(ResolveKind::Prompt, ServerResult::ListPromptsResult(r)) => r.next_cursor.clone(),
+			_ => None,
 		}
 	}
 
@@ -243,6 +289,11 @@ impl Relay {
 		self.upstreams.is_multiplexing && self.upstreams.prefix_mode == McpPrefixMode::Never
 	}
 
+	/// Whether tool/prompt names are exposed to clients with a target prefix.
+	fn prefix_names(&self) -> bool {
+		self.upstreams.default_target_name.is_none() && !self.needs_resolution()
+	}
+
 	pub fn parse_resource_name<'a, 'b: 'a>(
 		&'a self,
 		res: &'b str,
@@ -263,11 +314,10 @@ impl Relay {
 		&'a self,
 		kind: ResolveKind,
 		res: &'b str,
-		request_id: RequestId,
 		ctx: &IncomingRequestContext,
 	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
 		if self.needs_resolution() {
-			let target = self.resolve_unprefixed(kind, res, request_id, ctx).await?;
+			let target = self.resolve_unprefixed(kind, res, ctx).await?;
 			return Ok((Cow::Owned(target.to_string()), res));
 		}
 		let (target, name) = self.parse_resource_name(res)?;
@@ -282,29 +332,21 @@ impl Relay {
 		&self,
 		kind: ResolveKind,
 		name: &str,
-		request_id: RequestId,
 		ctx: &IncomingRequestContext,
 	) -> Result<Strng, UpstreamError> {
-		let req = JsonRpcRequest::new(request_id, kind.list_request());
 		let futs: Vec<_> = self
 			.upstreams
 			.iter_named()
-			.map(|(target, con)| {
-				let req = req.clone();
-				async move {
-					let res = match con.generic_stream(req, ctx).await {
-						Ok(stream) => Self::first_response(stream).await,
-						Err(e) => Err(e),
-					};
-					(target, res)
-				}
+			.map(|(target, con)| async move {
+				let res = Self::serves_name(&con, kind, name, ctx).await;
+				(target, res)
 			})
 			.collect();
 
 		let mut owner = None;
 		for (target, res) in futures::future::join_all(futs).await {
 			match res {
-				Ok(Some(result)) if kind.contains_name(&result, name) => {
+				Ok(true) => {
 					if owner.is_some() {
 						return Err(UpstreamError::InvalidRequest(format!(
 							"{} {name} is served by multiple targets",
@@ -313,7 +355,7 @@ impl Relay {
 					}
 					owner = Some(target);
 				},
-				Ok(_) => {},
+				Ok(false) => {},
 				Err(e) => {
 					if self.upstreams.failure_mode == FailureMode::FailOpen {
 						warn!(
@@ -328,6 +370,43 @@ impl Relay {
 		}
 
 		owner.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown {} {name}", kind.as_str())))
+	}
+
+	/// Page through one target's `kind` list until `name` is found or the pages
+	/// run out. `Ok(false)` includes targets that don't support the list method.
+	async fn serves_name(
+		con: &upstream::Upstream,
+		kind: ResolveKind,
+		name: &str,
+		ctx: &IncomingRequestContext,
+	) -> Result<bool, UpstreamError> {
+		// Gateway-generated ids: reusing the client's id here would make the upstream
+		// see it twice (list probe, then the forwarded call) in one session.
+		static RESOLVE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+		// Bounds paging against upstreams that return cursors forever.
+		const MAX_LIST_PAGES: usize = 64;
+		let mut cursor = None;
+		for _ in 0..MAX_LIST_PAGES {
+			let seq = RESOLVE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			let req = JsonRpcRequest::new(
+				RequestId::String(format!("agw-resolve-{seq}").into()),
+				kind.list_request(cursor),
+			);
+			let Some(result) = Self::first_response(con.generic_stream(req, ctx).await?).await? else {
+				return Ok(false);
+			};
+			if kind.contains_name(&result, name) {
+				return Ok(true);
+			}
+			cursor = kind.next_cursor(&result);
+			if cursor.is_none() {
+				return Ok(false);
+			}
+		}
+		Err(UpstreamError::InvalidRequest(format!(
+			"exceeded {MAX_LIST_PAGES} pages listing {}s",
+			kind.as_str()
+		)))
 	}
 
 	/// Consume a response stream until the first result, error data, or end.
@@ -536,31 +615,23 @@ impl Relay {
 
 	pub fn merge_tools(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let prefix_names = self.upstreams.default_target_name.is_none() && !self.needs_resolution();
+		let prefix_names = self.prefix_names();
 		let reject_duplicates = self.needs_resolution();
 		Box::new(move |streams, cel| {
-			let per_target = streams
-				.into_iter()
-				.map(|(server_name, s)| {
-					let tools = match s {
-						ServerResult::ListToolsResult(ltr) => ltr.tools,
-						_ => vec![],
-					};
-					(server_name, tools)
-				})
-				.collect_vec();
-			let duplicates = duplicate_names(
+			let per_target = per_target_deduped(
+				streams,
 				reject_duplicates,
-				per_target
-					.iter()
-					.flat_map(|(_, tools)| tools.iter().map(|tool| tool.name.as_ref())),
+				|s| match s {
+					ServerResult::ListToolsResult(ltr) => ltr.tools,
+					_ => vec![],
+				},
+				|tool| tool.name.as_ref(),
 			);
 			let tools = per_target
 				.into_iter()
 				.flat_map(|(server_name, tools)| {
 					tools
 						.into_iter()
-						.filter(|tool| !duplicates.contains(tool.name.as_ref()))
 						// Apply authorization policies, filtering tools that are not allowed.
 						.filter(|t| {
 							policies.validate(
@@ -708,31 +779,23 @@ impl Relay {
 
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let prefix_names = self.upstreams.default_target_name.is_none() && !self.needs_resolution();
+		let prefix_names = self.prefix_names();
 		let reject_duplicates = self.needs_resolution();
 		Box::new(move |streams, cel| {
-			let per_target = streams
-				.into_iter()
-				.map(|(server_name, s)| {
-					let prompts = match s {
-						ServerResult::ListPromptsResult(lpr) => lpr.prompts,
-						_ => vec![],
-					};
-					(server_name, prompts)
-				})
-				.collect_vec();
-			let duplicates = duplicate_names(
+			let per_target = per_target_deduped(
+				streams,
 				reject_duplicates,
-				per_target
-					.iter()
-					.flat_map(|(_, prompts)| prompts.iter().map(|prompt| prompt.name.as_str())),
+				|s| match s {
+					ServerResult::ListPromptsResult(lpr) => lpr.prompts,
+					_ => vec![],
+				},
+				|prompt| prompt.name.as_str(),
 			);
 			let prompts = per_target
 				.into_iter()
 				.flat_map(|(server_name, prompts)| {
 					prompts
 						.into_iter()
-						.filter(|prompt| !duplicates.contains(&prompt.name))
 						.filter(|p| {
 							policies.validate(
 								&rbac::ResourceType::Prompt(rbac::ResourceId::new(
