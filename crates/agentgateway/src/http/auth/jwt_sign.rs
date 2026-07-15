@@ -71,7 +71,10 @@ impl serde::Serialize for JwtSignAuth {
 		state.serialize_field("alg", &self.alg)?;
 		state.serialize_field("kid", &self.kid)?;
 		state.serialize_field("claims", &self.claims)?;
-		state.serialize_field("ttl", &self.ttl.map(|ttl| format!("{}s", ttl_secs_ceil(ttl))))?;
+		state.serialize_field(
+			"ttl",
+			&self.ttl.map(|ttl| format!("{}s", ttl_secs_ceil(ttl))),
+		)?;
 		state.serialize_field("location", &self.location)?;
 		state.end()
 	}

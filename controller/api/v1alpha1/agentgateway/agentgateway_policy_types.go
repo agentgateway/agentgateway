@@ -1882,6 +1882,7 @@ type JwtSignAuth struct {
 	// Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
 	// nbf are always set by the signer and cannot be configured here.
 	// +kubebuilder:validation:MinProperties=1
+	// +required
 	Claims map[string]string `json:"claims"`
 
 	// Token lifetime used for exp. Defaults to 300s.
