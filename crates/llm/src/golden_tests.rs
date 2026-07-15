@@ -422,6 +422,15 @@ fn response_conversion_golden() {
 			.map(|e| Box::new(e) as Box<dyn ResponseType>)
 			.map_err(AIError::ResponseParsing)
 	});
+
+	// Native Vertex Gemini responses translated to the OpenAI completions shape.
+	// Streaming translation is covered by conversion::vertex_gemini unit tests.
+	for name in ["basic", "tool", "reasoning", "blocked"] {
+		let path = format!("response/vertex-gemini/{name}.json");
+		test_response("vertex-gemini-completions", &path, |i| {
+			conversion::vertex_gemini::to_completions::translate_response(&i)
+		});
+	}
 }
 
 #[test]

@@ -1,6 +1,6 @@
 ---
-source: crates/agentgateway/src/llm/tests.rs
-description: src/llm/tests/response/vertex-gemini/reasoning.json
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/reasoning.json
 info:
   candidates:
     - content:
