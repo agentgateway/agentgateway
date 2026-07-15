@@ -284,30 +284,23 @@ pub(super) async fn authorization_server_metadata(
 		},
 		Some(McpIDP::Okta {}) => {
 			let current_uri = request_uri_for_oauth_metadata(req);
-
-			// RFC 8414 §3.3: issuer MUST match the URL from which the metadata was fetched.
-			// Strict clients (Claude Desktop, ChatGPT, Codex) reject metadata when issuer ≠ gateway URL.
-			if let Some(serde_json::Value::String(issuer_val)) =
-				json::traverse_mut(&mut resp, &["issuer"])
-			{
-				*issuer_val = issuer_from_metadata_uri(&current_uri.to_string());
-			}
+			let gateway_base = issuer_from_metadata_uri(current_uri.to_string());
 
 			// Rewrite authorization_endpoint and token_endpoint to gateway-local paths.
-			// Claude Desktop and claude.ai construct these from issuer ({issuer}/authorize,
+			// Claude Desktop and claude.ai derive these from issuer ({issuer}/authorize,
 			// {issuer}/token) instead of reading metadata fields — agentgateway handles both
 			// paths natively: /authorize redirects to Okta (injecting audience), /token proxies
 			// the token exchange. This eliminates the need for an external nginx issuer-proxy.
 			if let Some(serde_json::Value::String(ae)) =
 				json::traverse_mut(&mut resp, &["authorization_endpoint"])
 			{
-				*ae = format!("{current_uri}/authorize");
+				*ae = format!("{gateway_base}/authorize");
 			}
 
 			if let Some(serde_json::Value::String(te)) =
 				json::traverse_mut(&mut resp, &["token_endpoint"])
 			{
-				*te = format!("{current_uri}/token");
+				*te = format!("{gateway_base}/token");
 			}
 
 			// Okta doesn't do CORS for client registrations — proxy via gateway.
@@ -349,6 +342,14 @@ pub(super) async fn authorization_server_metadata(
 			*re = format!("{current_uri}/client-registration");
 		},
 		_ => {},
+	}
+
+	// RFC 8414 §3.3: the issuer in AS metadata MUST match the URL from which it was fetched.
+	// Applied universally across all providers — strict clients (Claude Desktop, ChatGPT, Codex)
+	// validate this and abort if issuer ≠ gateway URL.
+	let current_uri = request_uri_for_oauth_metadata(req);
+	if let Some(serde_json::Value::String(issuer_val)) = json::traverse_mut(&mut resp, &["issuer"]) {
+		*issuer_val = issuer_from_metadata_uri(current_uri.to_string());
 	}
 
 	let response = ::http::Response::builder()
@@ -544,12 +545,18 @@ async fn build_mock_dcr_response(
 	)
 }
 
-/// Strips the `/.well-known/...` suffix from a metadata URI to derive the gateway base URL,
-/// which becomes the `issuer` value satisfying RFC 8414 §3.3.
-fn issuer_from_metadata_uri(uri: &str) -> String {
-	uri.split_once("/.well-known/")
-		.map(|(base, _)| base.to_string())
-		.unwrap_or_else(|| uri.to_string())
+/// Derives the gateway issuer from an AS metadata URI, satisfying RFC 8414 §3.3.
+///
+/// Removes the `/.well-known/oauth-authorization-server` segment while preserving any
+/// path suffix that follows it, as required by the RFC §3.1 path-based issuer form:
+///   `https://example.com/.well-known/oauth-authorization-server/issuer1`
+///   → `https://example.com/issuer1`
+fn issuer_from_metadata_uri(mut uri: String) -> String {
+	const WELL_KNOWN: &str = "/.well-known/oauth-authorization-server";
+	if let Some(idx) = uri.find(WELL_KNOWN) {
+		uri.replace_range(idx..idx + WELL_KNOWN.len(), "");
+	}
+	uri
 }
 
 #[cfg(test)]
@@ -647,7 +654,7 @@ mod tests {
 	fn issuer_strips_well_known_suffix_from_root_gateway() {
 		assert_eq!(
 			issuer_from_metadata_uri(
-				"https://gateway.example.com/.well-known/oauth-authorization-server"
+				"https://gateway.example.com/.well-known/oauth-authorization-server".to_string()
 			),
 			"https://gateway.example.com"
 		);
@@ -658,15 +665,32 @@ mod tests {
 		assert_eq!(
 			issuer_from_metadata_uri(
 				"https://gateway.example.com/base/path/.well-known/oauth-authorization-server"
+					.to_string()
 			),
 			"https://gateway.example.com/base/path"
+		);
+	}
+
+	// RFC 8414 §3.1 path-based issuer form:
+	// issuer = https://example.com/issuer1
+	// metadata URL = https://example.com/.well-known/oauth-authorization-server/issuer1
+	// The /.well-known/oauth-authorization-server segment must be removed while the
+	// trailing /issuer1 path is preserved.
+	#[test]
+	fn issuer_preserves_path_suffix_after_well_known_segment() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/.well-known/oauth-authorization-server/issuer1"
+					.to_string()
+			),
+			"https://gateway.example.com/issuer1"
 		);
 	}
 
 	#[test]
 	fn issuer_returns_uri_unchanged_when_no_well_known_present() {
 		assert_eq!(
-			issuer_from_metadata_uri("https://gateway.example.com"),
+			issuer_from_metadata_uri("https://gateway.example.com".to_string()),
 			"https://gateway.example.com"
 		);
 	}
