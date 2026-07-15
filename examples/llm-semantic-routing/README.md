@@ -119,13 +119,14 @@ Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
 observability source of record. Use isolated evaluation traffic with forced
 lower-cost and always-expensive baselines before adopting the policy broadly.
 
-## Optional: Use Codex Through the Gateway
+## Optional: Use Codex CLI Through the Gateway
 
 The gateway works with any OpenAI API-compatible client or agent. This optional
-section shows a Codex-specific configuration. Codex uses the OpenAI Responses
-API, and the nightly vSR image configured above translates streamed Responses
-events so it can send the same `auto` model name through the gateway. Create a
-user-level Codex profile:
+section configures the Codex CLI, not the Codex desktop GUI app. It was tested
+with `codex-cli 0.144.4`. Codex CLI uses the OpenAI Responses API, and the
+nightly vSR image configured above translates streamed Responses events so it
+can send the same `auto` model name through the gateway. Create a user-level
+Codex CLI profile:
 
 ```bash
 export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
