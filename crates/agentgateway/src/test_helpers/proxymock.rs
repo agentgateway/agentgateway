@@ -972,7 +972,9 @@ impl TestBind {
 	pub async fn attached_backend_policy(&mut self, addr: &SocketAddr, p: serde_json::Value) {
 		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
 		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
-		let pols = local::split_policies(&resources, pol, None).await.unwrap();
+		let pols = local::split_policies_for_target(&resources, pol, None, true)
+			.await
+			.unwrap();
 		for v in pols.backend_policies.into_iter() {
 			self.policies += 1;
 			self.with_policy(TargetedPolicy {

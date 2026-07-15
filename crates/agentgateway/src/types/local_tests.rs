@@ -1852,6 +1852,109 @@ fn test_mcp_backend_host_rejects_mixed_host_and_backend() {
 }
 
 #[tokio::test]
+async fn test_top_level_backend_targeted_transformations_are_backend_policies() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: upstream-1
+  host: 127.0.0.1:8000
+policies:
+- name:
+    name: add-header
+    namespace: ""
+  target:
+    backend:
+      backend:
+        name: upstream-1
+        namespace: ""
+  policy:
+    transformations:
+      request:
+        set:
+          x-test: "'backend'"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - backend: upstream-1
+"#,
+	)
+	.await
+	.expect("backend-targeted transformations should normalize");
+
+	let policy = normalized
+		.policies
+		.iter()
+		.find(|policy| {
+			policy
+				.name
+				.as_ref()
+				.is_some_and(|name| name.name.as_str() == "add-header")
+		})
+		.expect("expected top-level add-header policy");
+
+	assert!(
+		matches!(policy.target, PolicyTarget::Backend(_)),
+		"expected backend target, got {:?}",
+		policy.target
+	);
+	assert!(
+		matches!(
+			&policy.policy,
+			PolicyType::Backend(BackendTrafficPolicy::Transformation(_))
+		),
+		"expected BackendTrafficPolicy::Transformation, got {:?}",
+		policy.policy
+	);
+	assert!(
+		policy.policy.as_backend().is_some(),
+		"backend-targeted transformations must surface via as_backend()"
+	);
+}
+
+#[tokio::test]
+async fn test_top_level_backend_targeted_conditional_transformations_are_rejected() {
+	let err = normalize_test_yaml(
+		r#"
+backends:
+- name: upstream-1
+  host: 127.0.0.1:8000
+policies:
+- name:
+    name: add-header
+    namespace: ""
+  target:
+    backend:
+      backend:
+        name: upstream-1
+        namespace: ""
+  policy:
+    transformations:
+      conditional:
+      - request:
+          set:
+            x-test: "'backend'"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - backend: upstream-1
+"#,
+	)
+	.await
+	.expect_err("conditional transformations on backend targets should fail");
+
+	assert!(
+		err
+			.to_string()
+			.contains("conditional transformations are not supported on backend-targeted policies"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
 async fn test_oauth_token_exchange_reports_validation_errors_from_local_config() {
 	let err = normalize_test_yaml(
 		r#"

@@ -2803,7 +2803,14 @@ async fn convert(
 	for p in policies {
 		p.target.validate()?;
 		let policy_key = p.name.to_string();
-		let res = split_policies(resources, p.policy, config.as_policy_context(&policy_key)).await?;
+		let backend_target = matches!(p.target, PolicyTarget::Backend(_));
+		let res = split_policies_for_target(
+			resources,
+			p.policy,
+			config.as_policy_context(&policy_key),
+			backend_target,
+		)
+		.await?;
 		if (res.route_policies.len() + res.backend_policies.len()) != 1 {
 			bail!("'policies' must contain exactly 1 policy");
 		}
@@ -5015,6 +5022,18 @@ pub(crate) async fn split_policies(
 	pol: FilterOrPolicy,
 	attached: Option<AttachedPolicyContext<'_>>,
 ) -> Result<ResolvedPolicies, Error> {
+	split_policies_for_target(resources, pol, attached, false).await
+}
+
+/// Like [`split_policies`], but when `backend_target` is true dual-role policy
+/// types (transformations, header modifiers, etc.) become [`BackendTrafficPolicy`]
+/// so top-level `policies` with `target.backend` apply via `as_backend()`.
+pub(crate) async fn split_policies_for_target(
+	resources: &crate::resource_manager::ResourceFetcher,
+	pol: FilterOrPolicy,
+	attached: Option<AttachedPolicyContext<'_>>,
+	backend_target: bool,
+) -> Result<ResolvedPolicies, Error> {
 	let mut resolved = ResolvedPolicies::default();
 	let ResolvedPolicies {
 		backend_policies,
@@ -5052,23 +5071,39 @@ pub(crate) async fn split_policies(
 		retry,
 	} = pol;
 	if let Some(p) = request_header_modifier {
-		route_policies.push(TrafficPolicy::RequestHeaderModifier(RequestPolicy::single(
-			p,
-		)));
+		if backend_target {
+			backend_policies.push(BackendTrafficPolicy::RequestHeaderModifier(p));
+		} else {
+			route_policies.push(TrafficPolicy::RequestHeaderModifier(RequestPolicy::single(
+				p,
+			)));
+		}
 	}
 	if let Some(p) = response_header_modifier {
-		route_policies.push(TrafficPolicy::ResponseHeaderModifier(
-			RequestPolicy::single(p),
-		));
+		if backend_target {
+			backend_policies.push(BackendTrafficPolicy::ResponseHeaderModifier(Arc::new(p)));
+		} else {
+			route_policies.push(TrafficPolicy::ResponseHeaderModifier(
+				RequestPolicy::single(p),
+			));
+		}
 	}
 	if let Some(p) = request_redirect {
-		route_policies.push(TrafficPolicy::RequestRedirect(RequestPolicy::single(p)));
+		if backend_target {
+			backend_policies.push(BackendTrafficPolicy::RequestRedirect(p));
+		} else {
+			route_policies.push(TrafficPolicy::RequestRedirect(RequestPolicy::single(p)));
+		}
 	}
 	if let Some(p) = url_rewrite {
 		route_policies.push(TrafficPolicy::UrlRewrite(RequestPolicy::single(p)));
 	}
 	if let Some(p) = request_mirror {
-		route_policies.push(TrafficPolicy::RequestMirror(vec![p]));
+		if backend_target {
+			backend_policies.push(BackendTrafficPolicy::RequestMirror(vec![p]));
+		} else {
+			route_policies.push(TrafficPolicy::RequestMirror(vec![p]));
+		}
 	}
 
 	// Filters
@@ -5113,10 +5148,14 @@ pub(crate) async fn split_policies(
 		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
 	}
 
-	// Route policies
+	// Route policies (AI is dual-role when targeting a backend)
 	if let Some(mut p) = ai {
 		p.compile_model_alias_patterns();
-		route_policies.push(TrafficPolicy::AI(Arc::new(p)))
+		if backend_target {
+			backend_policies.push(BackendTrafficPolicy::AI(Arc::new(p)));
+		} else {
+			route_policies.push(TrafficPolicy::AI(Arc::new(p)));
+		}
 	}
 	if let Some(p) = jwt_auth {
 		route_policies.push(TrafficPolicy::JwtAuth(RequestPolicy::single(
@@ -5156,20 +5195,43 @@ pub(crate) async fn split_policies(
 		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(p.into())));
 	}
 	if let Some(p) = transformations {
-		route_policies.push(TrafficPolicy::Transformation(
-			p.into_transformation_policy()?,
-		));
+		if backend_target {
+			let LocalExplicitOrConditional::Explicit(cfg) = p else {
+				bail!(
+					"conditional transformations are not supported on backend-targeted policies"
+				);
+			};
+			backend_policies.push(BackendTrafficPolicy::Transformation(Arc::new(
+				Transformation::try_from_local_config(cfg, true)?,
+			)));
+		} else {
+			route_policies.push(TrafficPolicy::Transformation(
+				p.into_transformation_policy()?,
+			));
+		}
 	}
 	if let Some(p) = csrf {
 		route_policies.push(TrafficPolicy::Csrf(RequestPolicy::single(p)))
 	}
 	if let Some(p) = authorization {
-		route_policies.push(TrafficPolicy::Authorization(p))
+		if backend_target {
+			backend_policies.push(BackendTrafficPolicy::Authorization(p));
+		} else {
+			route_policies.push(TrafficPolicy::Authorization(p));
+		}
 	}
 	if let Some(p) = ext_authz {
-		route_policies.push(TrafficPolicy::ExtAuthz(
-			configure_ext_authz_cache_store(p).into_policy()?,
-		))
+		if backend_target {
+			let LocalExplicitOrConditional::Explicit(cfg) = configure_ext_authz_cache_store(p)
+			else {
+				bail!("conditional extAuthz is not supported on backend-targeted policies");
+			};
+			backend_policies.push(BackendTrafficPolicy::ExtAuthz(Arc::new(cfg)));
+		} else {
+			route_policies.push(TrafficPolicy::ExtAuthz(
+				configure_ext_authz_cache_store(p).into_policy()?,
+			));
+		}
 	}
 	if let Some(p) = ext_proc {
 		route_policies.push(TrafficPolicy::ExtProc(p.into_policy()?))
