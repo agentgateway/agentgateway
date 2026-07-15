@@ -12,9 +12,9 @@ use anyhow::anyhow;
 use futures_util::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
-	ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, GetMeta,
-	Implementation, InitializeRequest, JsonRpcRequest, ProtocolVersion, Reference, RequestId,
-	ServerJsonRpcMessage,
+	ClientCapabilities, ClientInfo, ClientJsonRpcMessage, ClientNotification, ClientRequest,
+	ConstString, GetMeta, Implementation, InitializeRequest, JsonRpcRequest, ProtocolVersion,
+	Reference, RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{EVENT_STREAM_MIME_TYPE, JSON_MIME_TYPE};
 use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
@@ -23,7 +23,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use crate::http::Response;
 use crate::mcp::handler::{Relay, RelayInputs};
 use crate::mcp::mergestream::Messages;
-use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
+use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
@@ -66,24 +66,32 @@ impl Session {
 	}
 
 	/// Send a downstream message to upstream server(s) in gateway stateless mode.
-	/// When `initialize_upstream` is true, every non-initialize message gets a
-	/// gateway-generated InitializeRequest first because many legacy servers
-	/// require initialize before any other request. The caller sets it to false
-	/// for modern requests, which are forwarded as-is without a synthetic
-	/// handshake.
+	/// Legacy requests get a gateway-generated InitializeRequest before every
+	/// non-initialize message because many legacy servers require the handshake.
+	/// Modern requests are forwarded as-is.
 	pub async fn stateless_send_and_initialize(
 		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
-		initialize_upstream: bool,
 	) -> Result<Response, ProxyError> {
-		let req_id = match &message {
-			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
-			_ => None,
+		if matches!(
+			&message,
+			ClientJsonRpcMessage::Response(_) | ClientJsonRpcMessage::Error(_)
+		) {
+			return Err(
+				mcp::Error::InvalidParams(
+					None,
+					"cannot correlate a client response in stateless mode".to_string(),
+				)
+				.into(),
+			);
+		}
+		let (req_id, request_type) = match &message {
+			ClientJsonRpcMessage::Request(r) => (Some(r.id.clone()), Some(&r.request)),
+			_ => (None, None),
 		};
-		let is_init = matches!(&message,
-			ClientJsonRpcMessage::Request(r) if matches!(r.request, ClientRequest::InitializeRequest(_)));
-		if initialize_upstream && !is_init {
+		let is_init = request_type.is_some_and(|r| matches!(r, ClientRequest::InitializeRequest(_)));
+		if self.legacy_protocol(&parts) && !is_init {
 			let mut client_info = get_client_info();
 			if let Some(protocol_version) =
 				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone(), true)?
@@ -91,10 +99,6 @@ impl Session {
 				client_info.protocol_version = protocol_version;
 			}
 			let init_request = rmcp::model::InitializeRequest::new(client_info);
-			let request_type = match &message {
-				ClientJsonRpcMessage::Request(r) => Some(&r.request),
-				_ => None,
-			};
 			// first, determine how widely to send the initialize
 			match request_type {
 				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_)) => {
@@ -151,7 +155,7 @@ impl Session {
 			}
 		}
 		// Now we can send the message like normal (if it's tools/call, it'll go to the initialized target)
-		if initialize_upstream {
+		if self.legacy_protocol(&parts) {
 			return self.send(parts, message).await;
 		}
 		let res = self
@@ -171,6 +175,13 @@ impl Session {
 	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
 		self.relay = Arc::new(self.relay.with_policies(inputs.policies));
 		self
+	}
+
+	fn legacy_protocol(&self, parts: &Parts) -> bool {
+		parts
+			.extensions
+			.get::<RequestProtocol>()
+			.is_none_or(RequestProtocol::uses_sessions)
 	}
 
 	fn authorize_prompt_request<'a, 'b: 'a>(
@@ -382,8 +393,8 @@ impl Session {
 			l.method_name = Some(method.clone());
 			l.session_id = Some(session_id);
 		});
+		strip_reply_requiring_client_capabilities(&mut init_request.params.capabilities);
 
-		self.strip_unsupported_client_capabilities(&mut init_request.params.capabilities);
 		self
 			.relay
 			.send_single(
@@ -431,6 +442,7 @@ impl Session {
 		// some per-request merge logic across all the responses.
 		// For example, this may return [server1-notification, server2-notification, server2-notification, merge(server1-response, server2-response)].
 		// It's very common to not have any notifications, though.
+		let strip_legacy_capabilities = self.legacy_protocol(&parts);
 		match message {
 			ClientJsonRpcMessage::Request(mut r) => {
 				let method = r.request.method().to_string();
@@ -441,11 +453,14 @@ impl Session {
 					l.method_name = Some(method.clone());
 					l.session_id = Some(session_id);
 				});
-				self.strip_unsupported_client_capabilities_from_meta(&mut r.request);
+				if strip_legacy_capabilities {
+					strip_reply_requiring_client_capabilities_from_meta(&mut r.request);
+				}
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
-						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
-
+						if strip_legacy_capabilities {
+							strip_reply_requiring_client_capabilities(&mut ir.params.capabilities);
+						}
 						let pv = ir.params.protocol_version.clone();
 						let res = Box::pin(
 							self.relay.send_fanout(
@@ -708,36 +723,17 @@ impl Session {
 					l.method_name = Some(method.to_string());
 					l.session_id = Some(session_id);
 				});
-				self.strip_unsupported_client_capabilities_from_meta(&mut r.notification);
-				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
-				// however, we don't have a way to map to the correct service yet
+				if strip_legacy_capabilities {
+					strip_reply_requiring_client_capabilities_from_meta(&mut r.notification);
+				}
+				// TODO: route notifications to one target or fan them out once the service can be resolved.
 				Box::pin(self.relay.send_notification(r, ctx)).await
 			},
 
-			_ => Err(UpstreamError::InvalidRequest(
-				"unsupported message type".to_string(),
-			)),
+			ClientJsonRpcMessage::Response(_) | ClientJsonRpcMessage::Error(_) => Err(
+				UpstreamError::InvalidRequest("unexpected client response".to_string()),
+			),
 		}
-	}
-
-	fn strip_unsupported_client_capabilities(
-		&self,
-		capabilities: &mut rmcp::model::ClientCapabilities,
-	) {
-		// Until server-to-client request routing is implemented, do not advertise
-		// capabilities that require the proxy to route upstream requests back to
-		// the downstream client and route the client's JSON-RPC response upstream.
-		capabilities.roots = None;
-		capabilities.sampling = None;
-		capabilities.elicitation = None;
-	}
-
-	fn strip_unsupported_client_capabilities_from_meta<T: GetMeta>(&self, message: &mut T) {
-		let Some(mut capabilities) = message.get_meta().client_capabilities() else {
-			return;
-		};
-		self.strip_unsupported_client_capabilities(&mut capabilities);
-		message.get_meta_mut().set_client_capabilities(capabilities);
 	}
 }
 
@@ -1005,4 +1001,23 @@ fn get_client_info() -> ClientInfo {
 	client_info.client_info =
 		Implementation::new("agentgateway", BuildInfo::new().version.to_string());
 	client_info
+}
+
+/// Suppresses capabilities that require standalone server-to-client routing on legacy sessions.
+fn strip_reply_requiring_client_capabilities(capabilities: &mut ClientCapabilities) {
+	capabilities.roots = None;
+	capabilities.sampling = None;
+	capabilities.elicitation = None;
+}
+
+fn strip_reply_requiring_client_capabilities_from_meta<T: GetMeta>(message: &mut T) {
+	// Modify raw JSON in place; `ClientCapabilities` drops keys newer than the pinned rmcp model.
+	if let Some(serde_json::Value::Object(capabilities)) = message
+		.get_meta_mut()
+		.get_mut(rmcp::model::META_KEY_CLIENT_CAPABILITIES)
+	{
+		capabilities.remove("roots");
+		capabilities.remove("sampling");
+		capabilities.remove("elicitation");
+	}
 }

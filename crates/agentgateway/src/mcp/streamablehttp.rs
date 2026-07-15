@@ -150,7 +150,7 @@ impl StreamableHttpService {
 		part.extensions.insert(protocol.clone());
 
 		if !self.config.stateful_mode {
-			return self.serve_stateless(inputs, part, message, protocol).await;
+			return self.serve_stateless(inputs, part, message).await;
 		}
 
 		let session_id = part
@@ -173,7 +173,7 @@ impl StreamableHttpService {
 		}
 
 		if !protocol.uses_sessions() {
-			return self.serve_stateless(inputs, part, message, protocol).await;
+			return self.serve_stateless(inputs, part, message).await;
 		}
 
 		// No session header... we need to create one, if it is an initialize.
@@ -205,23 +205,21 @@ impl StreamableHttpService {
 		inputs: RelayInputs,
 		part: ::http::request::Parts,
 		message: ClientJsonRpcMessage,
-		protocol: RequestProtocol,
 	) -> Result<Response, ProxyError> {
 		let relay = inputs.build_new_connections()?;
 		// Use stateless session - not registered in session manager
 		let mut session = self.session_manager.create_stateless_session(relay);
-		let initialize_upstream = protocol.uses_sessions();
-		let needs_cleanup = initialize_upstream || session.has_connection_teardown();
-		// Teardown is needed when the synthetic upstream initialize may open upstream sessions,
-		// or when stdio/SSE targets hold per-connection state. Modern requests (no synthetic
-		// initialize) against plain streamable/OpenAPI targets have nothing to clean up.
+		let needs_cleanup = part
+			.extensions
+			.get::<RequestProtocol>()
+			.is_none_or(RequestProtocol::uses_sessions)
+			|| session.has_connection_teardown();
+		// Cleanup closes synthetic upstream sessions and per-connection stdio/SSE state.
 		if !needs_cleanup {
-			return Box::pin(session.stateless_send_and_initialize(part, message, initialize_upstream))
-				.await;
+			return Box::pin(session.stateless_send_and_initialize(part, message)).await;
 		}
 		let cleanup_part = part.clone();
-		let response =
-			Box::pin(session.stateless_send_and_initialize(part, message, initialize_upstream)).await;
+		let response = Box::pin(session.stateless_send_and_initialize(part, message)).await;
 
 		let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 		tokio::task::spawn(async move {

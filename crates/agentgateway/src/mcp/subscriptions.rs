@@ -100,6 +100,7 @@ pub(super) fn filter_and_tag_listen_notification(
 		ServerJsonRpcMessage::Error(_) => return Some(Ok(message)),
 		// The gateway emits the ack. Drop upstream ack responses and other non-notifications.
 		ServerJsonRpcMessage::Notification(n) => n,
+		// Drop non-notifications. Server request IDs cannot be routed to the client.
 		_ => return None,
 	};
 	let forward = match &notification.notification {

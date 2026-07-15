@@ -27,6 +27,10 @@ We can respond with:
 If they support modern protocol, this will be a valid DiscoverResponse.
 Otherwise it will be an error, which is what we want: the client will fallback to the older protocol.
 
+Agentgateway supports ephemeral SEP-2322 `input_required` responses for routed tool, prompt, and
+resource requests. It forwards opaque retry state but cannot route standalone replies to server
+requests.
+
 > **Compatibility mode**: we may want to support a mode where we do not put the fallback onto the client.
 > Instead, we do the downgrade for them as the proxy.
 > This is plausible but pretty tricky.
