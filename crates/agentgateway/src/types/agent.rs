@@ -738,10 +738,14 @@ pub type RouteRuleName = Strng;
 #[derive(Hash, Eq, PartialEq)]
 #[cfg_attr(any(test, feature = "internal_benches"), derive(Default))]
 pub struct RouteName {
+	/// Name identifying this route.
 	pub name: Strng,
+	/// Namespace scoping this route, used in fully qualified `namespace/name` references.
 	pub namespace: Strng,
+	/// Specific rule within the route, for targeted policy references.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub rule_name: Option<Strng>,
+	/// Resource kind used in policy target references.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub kind: Option<Strng>,
 }
@@ -846,9 +850,13 @@ impl From<ListenerName> for ListenerTarget {
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
 pub struct ListenerTarget {
+	/// Name of the gateway this target references.
 	pub gateway_name: Strng,
+	/// Namespace of the gateway this target references.
 	pub gateway_namespace: Strng,
+	/// Specific listener within the gateway; if unset, targets the gateway itself.
 	pub listener_name: Option<Strng>,
+	/// Port to target, as an alternative to listener_name.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub port: Option<u16>,
 }
@@ -875,7 +883,9 @@ impl ListenerTarget {
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
 pub struct ResourceName {
+	/// Name identifying this resource.
 	pub name: Strng,
+	/// Namespace scoping this resource, used in fully qualified `namespace/name` references.
 	pub namespace: Strng,
 }
 
@@ -1032,12 +1042,16 @@ pub struct TCPRouteBackend {
 
 #[apply(schema!)]
 pub struct RouteMatch {
+	/// HTTP headers that must match for this route to apply.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub headers: Vec<HeaderMatch>,
+	/// Path match rule (exact, prefix, or regex). Defaults to a "/" prefix match.
 	#[serde(default = "default_route_match_path")]
 	pub path: PathMatch,
+	/// HTTP method that must match for this route to apply.
 	#[serde(default, flatten, skip_serializing_if = "Option::is_none")]
 	pub method: Option<MethodMatch>,
+	/// Query parameters that must match for this route to apply.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub query: Vec<QueryMatch>,
 }
@@ -1048,21 +1062,26 @@ fn default_route_match_path() -> PathMatch {
 
 #[apply(schema!)]
 pub struct MethodMatch {
+	/// HTTP method that must match for this route to apply.
 	pub method: Strng,
 }
 
 #[apply(schema!)]
 pub struct HeaderMatch {
+	/// HTTP header or pseudo-header name (such as `:method`) to match.
 	#[serde(serialize_with = "ser_display", deserialize_with = "de_parse")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub name: HeaderOrPseudo,
+	/// Exact or regex pattern the header value must match.
 	pub value: HeaderValueMatch,
 }
 
 #[apply(schema!)]
 pub struct QueryMatch {
+	/// Query parameter name to match.
 	#[serde(serialize_with = "ser_display")]
 	pub name: Strng,
+	/// Exact or regex pattern the query parameter value must match.
 	pub value: QueryValueMatch,
 }
 
@@ -2493,8 +2512,11 @@ pub type RouteTarget = RouteName;
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
 pub struct ListenerSetTarget {
+	/// Name of the listener set resource.
 	pub name: Strng,
+	/// Namespace of the listener set resource.
 	pub namespace: Strng,
+	/// Specific listener within the listener set to target.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub section: Option<Strng>,
 }
@@ -2966,16 +2988,20 @@ impl Target {
 
 #[apply(schema!)]
 pub struct KeepaliveConfig {
+	/// Enable TCP keepalive probes on backend connections. Defaults to true.
 	#[serde(default = "defaults::always_true")]
 	pub enabled: bool,
+	/// Idle time before the first keepalive probe is sent.
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::keepalive_time")]
 	pub time: Duration,
+	/// Time between successive keepalive probes.
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::keepalive_interval")]
 	pub interval: Duration,
+	/// Number of unacknowledged probes before the connection is considered dead.
 	#[serde(default = "defaults::keepalive_retries")]
 	pub retries: u32,
 }

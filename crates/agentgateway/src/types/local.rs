@@ -295,6 +295,8 @@ pub struct NormalizedLocalConfig {
 
 #[apply(schema_de!)]
 pub struct LocalConfig {
+	/// config defines top-level settings for DNS, admin, networking, observability, and session
+	/// management. Unlike other sections, these are applied only at startup and are not dynamically reloaded.
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
@@ -421,25 +423,35 @@ pub struct LocalLLMProvider {
 #[apply(schema_de!)]
 #[derive(Default)]
 pub struct LocalLLMProviderDefaults {
+	/// Request payload fields to set when not already present in the request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	defaults: Option<HashMap<String, serde_json::Value>>,
+	/// Request payload fields to set, overriding any existing values in the request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	overrides: Option<HashMap<String, serde_json::Value>>,
+	/// CEL expressions that compute request payload fields, overriding existing values.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	transformation: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// Headers to add, set, or remove on requests to the LLM provider.
 	#[serde(default)]
 	request_headers: Option<filters::HeaderModifier>,
+	/// Headers to add, set, or remove on responses from the LLM provider.
 	#[serde(default)]
 	response_headers: Option<filters::HeaderModifier>,
+	/// TLS configuration for connecting to the LLM provider.
 	#[serde(rename = "tls", alias = "backendTLS", default)]
 	backend_tls: Option<http::backendtls::LocalBackendTLS>,
+	/// Authentication configuration for connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
 	auth: Option<BackendAuth>,
+	/// Outlier detection and health checking for this provider backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
+	/// Tunneling configuration for connecting to the LLM provider.
 	#[serde(default)]
 	backend_tunnel: Option<backend::Tunnel>,
+	/// Cache-point insertion for LLM providers that support prompt caching.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	prompt_caching: Option<PromptCachingConfig>,
 }
@@ -479,6 +491,7 @@ pub struct LocalLLMWeightedRouting {
 pub struct LocalLLMWeightedTarget {
 	/// model is resolved against llm.models using the same wildcard matching as client requests.
 	model: String,
+	/// Relative proportion of traffic sent to this target model. Defaults to 1.
 	#[serde(default = "default_weight")]
 	weight: usize,
 }
@@ -524,6 +537,7 @@ pub struct LocalSimpleMcpConfig {
 	port: Option<u16>,
 	#[serde(flatten)]
 	backend: LocalMcpBackend,
+	/// Policies applied to MCP requests.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<FilterOrPolicy>,
 }
@@ -805,6 +819,7 @@ impl LocalLLMPassthrough {
 
 #[apply(schema_de!)]
 pub struct LLMRouteMatch {
+	/// Request headers to match for conditional model routing.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub headers: Vec<HeaderMatch>,
 }
@@ -861,10 +876,13 @@ pub struct LocalLLMParams {
 	/// If unset this will be automatically detected from the environment.
 	#[serde(default)]
 	api_key: Option<SecretFromFile>,
+	/// AWS region to use for the Bedrock provider.
 	// For Bedorkc: The AWS region to use
 	aws_region: Option<Strng>,
+	/// Google Cloud region to use for the Vertex AI provider.
 	// For Vertex: The Google region to use
 	vertex_region: Option<Strng>,
+	/// Google Cloud project ID to use for the Vertex AI provider.
 	// For Vertex: The Google project ID to use
 	vertex_project: Option<Strng>,
 	/// For Azure: the resource name of the deployment
@@ -1203,7 +1221,9 @@ struct LocalBind {
 	/// via in-process routing). A numeric port is required unless `mode` is `internal`.
 	#[serde(default)]
 	port: Option<u16>,
+	/// Named listeners bound on this port, which may use different protocols and TLS.
 	listeners: Vec<LocalListener>,
+	/// Protocol used to tunnel backend connections, such as Direct or HBONE.
 	#[serde(default)]
 	tunnel_protocol: TunnelProtocol,
 	/// Whether the bind opens an OS listener socket. Defaults to `standard` (binds the port).
@@ -1215,8 +1235,10 @@ struct LocalBind {
 #[apply(schema_de!)]
 pub struct LocalListenerName {
 	// User facing name
+	/// Name identifying this listener, referenced by `gateways: gateway-name/listener-name`.
 	#[serde(default)]
 	pub name: Option<Strng>,
+	/// Namespace scoping this listener.
 	#[serde(default)]
 	pub namespace: Option<Strng>,
 }
@@ -1227,11 +1249,16 @@ struct LocalListener {
 	name: LocalListenerName,
 	/// Can be a wildcard
 	hostname: Option<Strng>,
+	/// Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, or HBONE.
 	#[serde(default)]
 	protocol: LocalListenerProtocol,
+	/// TLS configuration, used with the HTTPS and TLS protocols.
 	tls: Option<LocalTLSServerConfig>,
+	/// HTTP routes attached directly to this listener.
 	routes: Option<Vec<LocalRoute>>,
+	/// TCP routes attached directly to this listener.
 	tcp_routes: Option<Vec<LocalTCPRoute>>,
+	/// Gateway-level policies applied to all traffic on this listener.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<LocalGatewayPolicy>,
 }
@@ -1256,8 +1283,11 @@ pub struct LocalTLSServerConfig {
 	/// mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.
 	#[serde(default)]
 	pub mode: LocalTLSServerMode,
+	/// Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).
 	pub cert: PathBuf,
+	/// Path to the TLS private key file.
 	pub key: PathBuf,
+	/// Path to a root CA certificate file used to validate client certificates.
 	pub root: Option<PathBuf>,
 	/// Optional cipher suite allowlist (order is preserved).
 	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
@@ -1295,17 +1325,22 @@ pub enum LocalTLSServerMode {
 
 #[apply(schema_de!)]
 pub struct LocalRouteName {
+	/// Name identifying this route.
 	#[serde(default)]
 	pub name: Option<Strng>,
+	/// Namespace scoping this route.
 	#[serde(default)]
 	pub namespace: Option<Strng>,
+	/// Specific rule within this route.
 	#[serde(default)]
 	pub rule_name: Option<Strng>,
 }
 
 #[apply(schema_de!)]
 pub struct LocalRouteGroup {
+	/// Identifier for this route group, referenced by delegating routes.
 	name: RouteGroupKey,
+	/// HTTP routes grouped together for delegation and reuse.
 	routes: Vec<LocalRoute>,
 }
 
@@ -1316,20 +1351,25 @@ pub struct LocalRoute {
 	/// Can be a wildcard
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	hostnames: Vec<Strng>,
+	/// Conditions (path, method, headers, query) that select this route.
 	#[serde(default = "default_matches")]
 	matches: Vec<RouteMatch>,
+	/// Route-level policies applied before backend selection.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<FilterOrPolicy>,
+	/// Weighted backends this route forwards traffic to.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	backends: Vec<LocalRouteBackend>,
 }
 
 #[apply(schema_de!)]
 pub struct LocalRouteBackend {
+	/// Relative weight for load balancing across backends. Defaults to 1.
 	#[serde(default = "default_weight")]
 	pub weight: usize,
 	#[serde(flatten)]
 	pub backend: LocalBackend,
+	/// Backend-level policies such as TLS, authentication, and transformations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<LocalBackendPolicies>,
 }
@@ -1340,9 +1380,11 @@ fn default_weight() -> usize {
 
 #[apply(schema_de!)]
 pub struct FullLocalBackend {
+	/// Identifier for this backend, referenced by routes.
 	pub name: BackendKey,
 	#[serde(flatten)]
 	pub spec: FullLocalBackendSpec,
+	/// Backend-level policies such as TLS, authentication, transformations, and health checks.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<LocalBackendPolicies>,
 }
@@ -1389,7 +1431,9 @@ pub enum LocalAwsService {
 
 #[apply(schema_de!)]
 pub struct LocalAgentCoreBackend {
+	/// ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).
 	pub agent_runtime_arn: String,
+	/// Endpoint qualifier (version or alias) for the AgentCore runtime invocation.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub qualifier: Option<String>,
 }
@@ -1469,12 +1513,15 @@ impl<'de> Deserialize<'de> for LocalAIBackend {
 
 #[apply(schema_de!)]
 pub struct LocalAIProviders {
+	/// LLM providers in this group, load balanced together.
 	providers: Vec<LocalNamedAIProvider>,
 }
 
 #[apply(schema_de!)]
 pub struct LocalNamedAIProvider {
+	/// Name identifying this provider, referenced by `llm.models[].provider`.
 	pub name: Strng,
+	/// The upstream LLM provider type and its configuration.
 	pub provider: AIProvider,
 	/// Override the upstream host for this provider.
 	pub host_override: Option<Target>,
@@ -1487,6 +1534,7 @@ pub struct LocalNamedAIProvider {
 	/// This comes with the cost of an expensive operation.
 	#[serde(default)]
 	pub tokenize: bool,
+	/// Backend policies applied to traffic to this provider.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<LocalBackendPolicies>,
 }
@@ -1761,9 +1809,12 @@ pub enum McpPrefixMode {
 
 #[apply(schema_de!)]
 pub struct LocalMcpBackend {
+	/// MCP server targets to multiplex together.
 	pub targets: Vec<Arc<LocalMcpTarget>>,
+	/// Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).
 	#[serde(default)]
 	pub stateful_mode: McpStatefulMode,
+	/// How to namespace tool names when multiplexing: always prefix with the target name, or only when needed (Conditional).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prefix_mode: Option<McpPrefixMode>,
 	/// Behavior when one or more MCP targets fail to initialize or fail during fanout.
@@ -1774,9 +1825,11 @@ pub struct LocalMcpBackend {
 
 #[apply(schema_de!)]
 pub struct LocalMcpTarget {
+	/// Name identifying this MCP target, used to prefix tool and resource names when multiplexing.
 	pub name: McpTargetName,
 	#[serde(flatten)]
 	pub spec: LocalMcpTargetSpec,
+	/// Policies applied to this MCP target.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<MCPLocalBackendPolicies>,
 }
@@ -2005,18 +2058,22 @@ struct LocalTCPRoute {
 	/// Can be a wildcard
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	hostnames: Vec<Strng>,
+	/// TCP-level policies applied to traffic on this route.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	policies: Option<TCPFilterOrPolicy>,
+	/// Weighted backends this TCP route forwards traffic to.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	backends: Vec<LocalTCPRouteBackend>,
 }
 
 #[apply(schema_de!)]
 pub struct LocalTCPRouteBackend {
+	/// Relative weight for load balancing across TCP backends. Defaults to 1.
 	#[serde(default = "default_weight")]
 	pub weight: usize,
 	#[serde(flatten)]
 	pub backend: SimpleLocalBackend,
+	/// Backend-level policies for TCP backends, such as TLS, authentication, and tunneling.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub policies: Option<LocalTCPBackendPolicies>,
 }
@@ -2704,6 +2761,7 @@ pub struct FilterOrPolicy {
 
 #[apply(schema_de!)]
 struct TCPFilterOrPolicy {
+	/// TLS configuration for connections to the TCP route's backend.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[serde(rename = "backendTLS")]
 	backend_tls: Option<LocalBackendTLS>,
