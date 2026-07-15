@@ -153,6 +153,31 @@ export OPENAI_API_KEY='sk-...'
 codex --profile agentgateway
 ```
 
+### Verify Codex CLI Routing
+
+After sending a task from Codex CLI, inspect the vSR decision and the completed
+agentgateway request:
+
+```bash
+kubectl logs -n agentgateway-system deploy/semantic-router --since=5m \
+  | grep -E '"event":"routing_decision"|"event":"router_replay_complete"' \
+  | tail -n 4
+
+kubectl logs -n agentgateway-system deploy/agentgateway-proxy --since=5m \
+  | grep 'http.path=/v1/responses' \
+  | tail -n 4
+```
+
+The vSR output identifies `original_model: auto`, the `selected_model`, and a
+successful `response_status`. The agentgateway output identifies the
+`openai-semantic-routing` route, the selected request and response model,
+catalog-priced token usage, and the realized request cost.
+
+Codex CLI also probes `/v1/models` to discover model metadata. Until
+[agentgateway issue #1462](https://github.com/agentgateway/agentgateway/issues/1462)
+adds a gateway-generated model list, Codex may warn that metadata for `auto` is
+not found. That warning does not prevent `/v1/responses` traffic from routing.
+
 The gateway authenticates to OpenAI with its configured provider credential and
 records the selected model and cost as it does for other OpenAI-compatible
 clients. Agentgateway can [rewrite client-facing model names with model
