@@ -14,9 +14,8 @@ use rmcp::model::{
 	CacheScope, ClientNotification, ClientRequest, DiscoverResult, ExtensionCapabilities,
 	Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
 	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Meta, PaginatedRequestParams,
-	ProtocolVersion,
-	RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage, ServerNotification,
-	ServerResult, SubscriptionsListenResult,
+	ProtocolVersion, RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
+	ServerNotification, ServerResult, SubscriptionsListenResult,
 };
 use tracing::{debug, warn};
 

@@ -2977,7 +2977,9 @@ mod mockserver {
 			_: RequestContext<RoleServer>,
 		) -> Result<CallToolResult, McpError> {
 			match request.name.as_ref() {
-				"paged_echo" => Ok(CallToolResult::success(vec![ContentBlock::text("paged ok")])),
+				"paged_echo" => Ok(CallToolResult::success(vec![ContentBlock::text(
+					"paged ok",
+				)])),
 				"first_page_tool" => Ok(CallToolResult::success(vec![ContentBlock::text("first")])),
 				_ => Err(McpError::invalid_params("unknown tool", None)),
 			}

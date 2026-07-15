@@ -645,11 +645,10 @@ impl Session {
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {
 							let name = prompt.name.clone();
-							let (service_name, prompt_name) =
-								Box::pin(self.authorize_prompt_request(
-									&name, &method, &mut span, &log, &cel, &ctx,
-								))
-								.await?;
+							let (service_name, prompt_name) = Box::pin(
+								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel, &ctx),
+							)
+							.await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
 							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},
