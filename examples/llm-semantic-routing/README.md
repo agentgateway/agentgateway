@@ -70,7 +70,7 @@ and the [FullDuplexStreamed request-body fix](https://github.com/vllm-project/se
 For a repeatable historical deployment, override both values with released
 chart and image versions that contain both fixes.
 
-## Verify Streamed ExtProc
+## Run a Request
 
 Set your gateway address:
 
@@ -79,29 +79,6 @@ export INGRESS_GW_ADDRESS="http://$(kubectl get gateway agentgateway-proxy \
   -n agentgateway-system \
   -o jsonpath='{.status.addresses[0].value}')"
 ```
-
-The values include a narrow, deterministic immediate-response probe. It proves
-that `FullDuplexStreamed` request processing reaches vSR without sending tokens
-to OpenAI:
-
-```bash
-curl -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -H "X-VSR-Debug: true" \
-  -d '{
-    "model": "auto",
-    "messages": [
-      {"role": "user", "content": "VSR_IMMEDIATE_RESPONSE_PROBE"}
-    ],
-    "max_tokens": 16
-  }'
-```
-
-Expect a `200` response with `x-vsr-fast-response`; the request should not
-reach OpenAI. Remove the probe signal and decision before using this policy in
-a production route.
-
-## Run a Request
 
 Routine coding prompts should use the lower-cost model:
 

@@ -93,14 +93,6 @@ config:
       # avoid inheriting the chart's general-purpose domain defaults.
       domains: []
       keywords:
-      - name: immediate_response_probe
-        operator: OR
-        method: ngram
-        keywords:
-        - VSR_IMMEDIATE_RESPONSE_PROBE
-        case_sensitive: true
-        ngram_threshold: 0.95
-        ngram_arity: 3
       - name: advanced_markers
         operator: OR
         # Leave method unset to use literal, word-boundary-aware matching.
@@ -305,20 +297,6 @@ config:
           gte: 0.35
 
     decisions:
-    # This narrow probe verifies the streamed immediate-response path. It is
-    # never selected by normal coding traffic.
-    - name: immediate_response_probe
-      description: Deterministic immediate response for streamed ExtProc verification.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-        - type: keyword
-          name: immediate_response_probe
-      plugins:
-      - type: fast_response
-        configuration:
-          message: Semantic Router immediate response probe matched before the request reached the upstream model.
     - name: route_to_expensive
       description: Escalate advanced distributed systems, formal verification, hard debugging, and research synthesis.
       priority: 200
