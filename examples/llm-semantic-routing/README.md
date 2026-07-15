@@ -128,8 +128,9 @@ events so it can send the same `auto` model name through the gateway. Create a
 user-level Codex profile:
 
 ```bash
-mkdir -p ~/.codex
-cat > ~/.codex/agentgateway.config.toml <<'EOF'
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+mkdir -p "$CODEX_HOME"
+cat > "$CODEX_HOME/agentgateway.config.toml" <<'EOF'
 model = "auto"
 model_provider = "agentgateway"
 
