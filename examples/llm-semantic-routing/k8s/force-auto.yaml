@@ -1,7 +1,7 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: semantic-router-require-auto
+  name: semantic-router-force-auto
   namespace: agentgateway-system
   labels:
     app.kubernetes.io/name: llm-semantic-routing
@@ -13,4 +13,4 @@ spec:
   traffic:
     transformation:
       request:
-        body: 'default(json(request.body).model, "") == "auto" ? request.body : fail("model must be auto")'
+        body: 'toJson(json(request.body).merge({"model": "auto"}))'

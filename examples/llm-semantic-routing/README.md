@@ -136,22 +136,22 @@ curl -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
 The response body `model` field identifies the serving model. vSR response
 headers record the explicit selection when available.
 
-### Require Automatic Routing
+### Force Automatic Routing
 
-To require `model: "auto"` and reject direct model requests, apply the
-optional validation policy:
+To require automatic routing regardless of a client-provided model, apply the
+optional override policy:
 
 ```bash
-kubectl apply -f examples/llm-semantic-routing/k8s/require-auto.yaml
+kubectl apply -f examples/llm-semantic-routing/k8s/force-auto.yaml
 ```
 
 The policy uses an [agentgateway request-body
 transformation](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/)
-to reject requests whose `model` is missing or is not `auto`. Remove it to
-restore direct model selection:
+to rewrite the request's `model` field to `auto` before vSR selects a model.
+Remove it to restore direct model selection:
 
 ```bash
-kubectl delete -f examples/llm-semantic-routing/k8s/require-auto.yaml
+kubectl delete -f examples/llm-semantic-routing/k8s/force-auto.yaml
 ```
 
 Keep this optional policy disabled when running an evaluation that includes a
@@ -260,9 +260,9 @@ The gateway authenticates to OpenAI with its configured provider credential and
 records the selected model and cost as it does for other OpenAI-compatible
 clients. Agentgateway can [rewrite client-facing model names with model
 aliases](https://agentgateway.dev/docs/kubernetes/latest/llm/alias/). An
-organization can also [validate and reject unsupported request-body model
-values](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/),
-such as any value other than `auto`. Treat `auto` as the supported client path
+organization can also use a [request-body
+transformation](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/)
+to rewrite every request to `auto`. Treat `auto` as the supported client path
 when testing this policy.
 
 ## Cleanup
