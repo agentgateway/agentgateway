@@ -3967,7 +3967,6 @@
       ]
     },
     "Duration": {
-      "description": "Schema-only mirror of `std::time::Duration` so the generated JSON schema documents\nthe `secs`/`nanos` fields. Does not affect serialization; runtime still uses `Duration`.",
       "type": "object",
       "properties": {
         "secs": {

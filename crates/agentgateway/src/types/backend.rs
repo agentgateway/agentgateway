@@ -78,8 +78,6 @@ pub struct TCP {
 	pub connect_timeout: Duration,
 }
 
-/// Schema-only mirror of `std::time::Duration` so the generated JSON schema documents
-/// the `secs`/`nanos` fields. Does not affect serialization; runtime still uses `Duration`.
 #[cfg(feature = "schema")]
 #[derive(schemars::JsonSchema)]
 #[schemars(rename = "Duration")]
