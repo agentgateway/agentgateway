@@ -830,13 +830,13 @@ func processBasicAuthenticationPolicy(
 	}
 
 	if s := ba.SecretRef; s != nil {
-		data, err := ctx.ResolveCredentialRef(*s, policy.Namespace)
+		data, key, err := ctx.ResolveCredentialKeyRef(*s, policy.Namespace, ".htaccess")
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			d, ok := data[".htaccess"]
+			d, ok := data[key]
 			if !ok {
-				errs = append(errs, fmt.Errorf("basic authentication secret %v found, but doesn't contain '.htaccess' key", s.Name))
+				errs = append(errs, fmt.Errorf("basic authentication secret %v found, but doesn't contain %q key", s.Name, key))
 			}
 			p.HtpasswdContent = string(d)
 		}

@@ -10873,11 +10873,11 @@ spec:
                       secretRef:
                         description: "Credential source, defaulting to a Kubernetes\n`Secret`,
                           storing the `.htaccess` file. When using the default Secret\nresolver,
-                          the `Secret` must have a key named `.htaccess`, and should\ncontain
-                          the complete `.htaccess` file.\n\nNote: passwords should
-                          be the hash of the password, not the raw password. Use the
-                          `htpasswd` or similar commands\nto generate a hash. MD5,
-                          bcrypt, crypt, and SHA-1 are supported.\n\nExample:\n\n\tapiVersion:
+                          the `Secret` must have a key named `.htaccess` by default;\noverride
+                          via `secretRef.key`. The value should contain the complete\n`.htaccess`
+                          file.\n\nNote: passwords should be the hash of the password,
+                          not the raw password. Use the `htpasswd` or similar commands\nto
+                          generate a hash. MD5, bcrypt, crypt, and SHA-1 are supported.\n\nExample:\n\n\tapiVersion:
                           v1\n\tkind: Secret\n\tmetadata:\n\t  name: basic-auth\n\tstringData:\n\t
                           \ .htaccess: |\n\t    alice:$apr1$3zSE0Abt$IuETi4l5yO87MuOrbSE4V.\n\t
                           \   bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/"
@@ -10886,6 +10886,13 @@ spec:
                             description: |-
                               The API group of the referenced credential.
                               Empty selects the core API group.
+                            type: string
+                          key:
+                            description: |-
+                              The key in the referenced Secret whose value is used. If omitted, a
+                              location-specific default key is used.
+                            maxLength: 253
+                            minLength: 1
                             type: string
                           kind:
                             description: |-

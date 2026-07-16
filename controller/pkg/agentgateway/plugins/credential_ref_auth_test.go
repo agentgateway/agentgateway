@@ -204,17 +204,18 @@ func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
 			Name:      "basic-auth",
 		},
 		Data: map[string]string{
-			".htaccess": "alice:hash",
+			"users": "alice:hash",
 		},
 	}
 	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, []*corev1.ConfigMap{configMap}, krt.WithName("plugins/TestBasicAuthCanUseInjectedCredentialResolver"), krt.WithStop(stop))
 	ctx := simpleAuthPolicyCtx(nil, configMapCredentialResolver{configMaps: configMaps})
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &agentgateway.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
 			Name:  "basic-auth",
 			Group: "example.agentgateway.dev",
 			Kind:  "ConfigMapCredential",
+			Key:   new("users"),
 		},
 	}, nil, "base", types.NamespacedName{Namespace: "default", Name: "policy"})
 	if err != nil {
@@ -248,7 +249,7 @@ func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *tes
 	)
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &agentgateway.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
 			Name: "basic-auth",
 			Kind: "Secret",
 		},
@@ -278,7 +279,7 @@ func TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret(t *testing.T) 
 	}, configMapCredentialResolver{})
 
 	_, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &agentgateway.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
 			Name: "basic-auth",
 			Kind: "Secret",
 		},

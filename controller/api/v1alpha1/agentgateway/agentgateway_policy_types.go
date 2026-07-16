@@ -1148,8 +1148,9 @@ type BasicAuthentication struct {
 
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, storing the `.htaccess` file. When using the default Secret
-	// resolver, the `Secret` must have a key named `.htaccess`, and should
-	// contain the complete `.htaccess` file.
+	// resolver, the `Secret` must have a key named `.htaccess` by default;
+	// override via `secretRef.key`. The value should contain the complete
+	// `.htaccess` file.
 	//
 	// Note: passwords should be the hash of the password, not the raw password. Use the `htpasswd` or similar commands
 	// to generate a hash. MD5, bcrypt, crypt, and SHA-1 are supported.
@@ -1165,7 +1166,7 @@ type BasicAuthentication struct {
 	//	    alice:$apr1$3zSE0Abt$IuETi4l5yO87MuOrbSE4V.
 	//	    bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/
 	// +optional
-	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
 	// Where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.

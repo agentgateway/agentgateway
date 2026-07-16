@@ -1610,8 +1610,8 @@ func (in *BasicAuthentication) DeepCopyInto(out *BasicAuthentication) {
 	}
 	if in.SecretRef != nil {
 		in, out := &in.SecretRef, &out.SecretRef
-		*out = new(LocalSecretObjectRef)
-		**out = **in
+		*out = new(LocalSecretKeyRef)
+		(*in).DeepCopyInto(*out)
 	}
 	if in.Location != nil {
 		in, out := &in.Location, &out.Location
