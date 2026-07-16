@@ -11947,7 +11947,7 @@ spec:
                                 failureMode:
                                   description: |-
                                     Behavior when the external processor is unavailable or returns an error.
-                                    "FailOpen" allows the request to continue unprocessed.
+                                    "FailOpen" allows the request to continue.
                                     "FailClosed" (default) rejects the request.
                                   enum:
                                   - FailClosed
@@ -12085,7 +12085,7 @@ spec:
                       failureMode:
                         description: |-
                           Behavior when the external processor is unavailable or returns an error.
-                          "FailOpen" allows the request to continue unprocessed.
+                          "FailOpen" allows the request to continue.
                           "FailClosed" (default) rejects the request.
                         enum:
                         - FailClosed

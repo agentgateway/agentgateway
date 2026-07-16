@@ -2246,7 +2246,7 @@ type ExtProc struct {
 	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 
 	// Behavior when the external processor is unavailable or returns an error.
-	// "FailOpen" allows the request to continue unprocessed.
+	// "FailOpen" allows the request to continue.
 	// "FailClosed" (default) rejects the request.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
