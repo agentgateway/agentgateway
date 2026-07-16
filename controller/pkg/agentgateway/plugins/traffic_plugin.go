@@ -1312,8 +1312,8 @@ func processExtProcTraffic(
 
 	spec := &api.TrafficPolicySpec_ExtProc{
 		Target: be,
-		// always use FAIL_CLOSED to prevent silent data loss when ExtProc is unavailable.
-		FailureMode: api.TrafficPolicySpec_ExtProc_FAIL_CLOSED,
+		// Defaults to FAIL_CLOSED to prevent silent data loss when ExtProc is unavailable.
+		FailureMode: extProcFailureMode(extProc.FailureMode),
 	}
 	if extProc.ProcessingOptions != nil {
 		spec.ProcessingOptions = &api.TrafficPolicySpec_ExtProc_ProcessingOptions{
@@ -1748,6 +1748,13 @@ func remoteRateLimitFailureMode(mode agentgateway.FailureMode) api.TrafficPolicy
 		return api.TrafficPolicySpec_RemoteRateLimit_FAIL_OPEN
 	}
 	return api.TrafficPolicySpec_RemoteRateLimit_FAIL_CLOSED
+}
+
+func extProcFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_ExtProc_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.TrafficPolicySpec_ExtProc_FAIL_OPEN
+	}
+	return api.TrafficPolicySpec_ExtProc_FAIL_CLOSED
 }
 
 // BuildBackendRef constructs an agentgateway backend reference from a Gateway

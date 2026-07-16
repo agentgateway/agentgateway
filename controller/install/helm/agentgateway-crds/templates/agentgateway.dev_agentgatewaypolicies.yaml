@@ -11944,6 +11944,15 @@ spec:
                                   - message: Must have port for Service reference
                                     rule: '(size(self.group) == 0 && self.kind ==
                                       ''Service'') ? has(self.port) : true'
+                                failureMode:
+                                  description: |-
+                                    Behavior when the external processor is unavailable or returns an error.
+                                    "FailOpen" allows the request to continue unprocessed.
+                                    "FailClosed" (default) rejects the request.
+                                  enum:
+                                  - FailClosed
+                                  - FailOpen
+                                  type: string
                                 metadataContext:
                                   additionalProperties:
                                     additionalProperties:
@@ -12073,6 +12082,15 @@ spec:
                         - message: conditional entries without condition must be last
                           rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
                             !has(e.condition)) || !has(self[size(self) - 1].condition))
+                      failureMode:
+                        description: |-
+                          Behavior when the external processor is unavailable or returns an error.
+                          "FailOpen" allows the request to continue unprocessed.
+                          "FailClosed" (default) rejects the request.
+                        enum:
+                        - FailClosed
+                        - FailOpen
+                        type: string
                       metadataContext:
                         additionalProperties:
                           additionalProperties:
@@ -12187,7 +12205,7 @@ spec:
                     type: object
                     x-kubernetes-validations:
                     - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.metadataContext),has(self.processingOptions),has(self.requestAttributes),has(self.responseAttributes)].filter(x,x==true).size()
+                      rule: 'has(self.conditional) ? [has(self.backendRef),has(self.failureMode),has(self.metadataContext),has(self.processingOptions),has(self.requestAttributes),has(self.responseAttributes)].filter(x,x==true).size()
                         == 0 : true'
                     - message: 'backendRef: Required value'
                       rule: 'has(self.conditional) ? true : has(self.backendRef)'
