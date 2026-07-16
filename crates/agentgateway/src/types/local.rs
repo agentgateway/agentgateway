@@ -1816,7 +1816,7 @@ pub struct LocalMcpBackend {
 	pub targets: Vec<Arc<LocalMcpTarget>>,
 	#[serde(default)]
 	pub stateful_mode: McpStatefulMode,
-	/// How to namespace tool names when multiplexing: always prefix with the target name, or only when needed (Conditional).
+	/// How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prefix_mode: Option<McpPrefixMode>,
 	/// Behavior when one or more MCP targets fail to initialize or fail during fanout.

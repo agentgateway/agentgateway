@@ -734,7 +734,7 @@
           "default": {}
         },
         "otlpProtocol": {
-          "description": "OTLP transport protocol: \"grpc\", \"grpc-web\", or \"http/protobuf\".",
+          "description": "OTLP transport protocol: `grpc` or `http`.",
           "$ref": "#/$defs/Protocol",
           "default": "grpc"
         },
@@ -839,7 +839,7 @@
           ]
         },
         "level": {
-          "description": "Log level, or a comma-separated list of per-module levels (e.g. \"info\" or \"info,agent_core=trace\").",
+          "description": "Log level: a single level (e.g. `info`), a comma-separated string of per-module levels (e.g. `info,agent_core=trace`), or a list of per-module levels (e.g. `[info, agent_core=trace]`).",
           "anyOf": [
             {
               "$ref": "#/$defs/RawLoggingLevel"
@@ -850,7 +850,7 @@
           ]
         },
         "format": {
-          "description": "Log output format: \"text\" or \"json\".",
+          "description": "Log output format: `text` or `json`.",
           "anyOf": [
             {
               "$ref": "#/$defs/LoggingFormat"
@@ -7036,7 +7036,7 @@
           "$ref": "#/$defs/McpStatefulMode"
         },
         "prefixMode": {
-          "description": "How to namespace tool names when multiplexing: always prefix with the target name, or only when needed (Conditional).",
+          "description": "How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).",
           "anyOf": [
             {
               "$ref": "#/$defs/McpPrefixMode"
@@ -11128,7 +11128,7 @@
           "$ref": "#/$defs/McpStatefulMode"
         },
         "prefixMode": {
-          "description": "How to namespace tool names when multiplexing: always prefix with the target name, or only when needed (Conditional).",
+          "description": "How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).",
           "anyOf": [
             {
               "$ref": "#/$defs/McpPrefixMode"

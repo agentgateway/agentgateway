@@ -371,7 +371,7 @@ pub struct RawTracing {
 	/// HTTP headers to include on OTLP trace exports, such as authentication headers.
 	#[serde(default)]
 	headers: HashMap<String, String>,
-	/// OTLP transport protocol: "grpc", "grpc-web", or "http/protobuf".
+	/// OTLP transport protocol: `grpc` or `http`.
 	#[serde(default)]
 	otlp_protocol: Protocol,
 	/// Custom fields to add to or remove from trace spans.
@@ -396,9 +396,9 @@ pub struct RawLogging {
 	filter: Option<String>,
 	/// Custom fields to add to or remove from log entries.
 	fields: Option<RawLoggingFields>,
-	/// Log level, or a comma-separated list of per-module levels (e.g. "info" or "info,agent_core=trace").
+	/// Log level: a single level (e.g. `info`), a comma-separated string of per-module levels (e.g. `info,agent_core=trace`), or a list of per-module levels (e.g. `[info, agent_core=trace]`).
 	level: Option<RawLoggingLevel>,
-	/// Log output format: "text" or "json".
+	/// Log output format: `text` or `json`.
 	format: Option<LoggingFormat>,
 	/// Log-store database configuration; enables request logging to a database backend.
 	database: Option<telemetry::log_store::Config>,
