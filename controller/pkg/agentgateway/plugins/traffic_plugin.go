@@ -148,6 +148,17 @@ func (ctx PolicyCtx) ResolveCredentialRef(ref agentgateway.LocalSecretObjectRef,
 	return ctx.CredentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
 }
 
+// ResolveCredentialKeyRef resolves a credential ref and returns the key to read,
+// using defaultKey when the ref does not override it.
+func (ctx PolicyCtx) ResolveCredentialKeyRef(ref agentgateway.LocalSecretKeyRef, namespace, defaultKey string) (map[string][]byte, string, error) {
+	key := defaultKey
+	if ref.Key != nil && *ref.Key != "" {
+		key = *ref.Key
+	}
+	data, err := ctx.ResolveCredentialRef(ref.ObjectRef(), namespace)
+	return data, key, err
+}
+
 type ResolvedTarget struct {
 	AgentgatewayTarget *api.PolicyTarget
 	GatewayTargets     []types.NamespacedName
