@@ -145,6 +145,7 @@ pub struct RawDnsConfig {
 #[derive(Default)]
 // RawConfig represents the inputs a user can pass in. Config represents the internal representation of this.
 pub struct RawConfig {
+	/// Enable IPv6 address resolution and binding. Defaults to true.
 	enable_ipv6: Option<bool>,
 
 	/// DNS resolver settings.
@@ -158,20 +159,30 @@ pub struct RawConfig {
 	/// Primary database used by local runtime features.
 	database: Option<telemetry::log_store::Config>,
 
+	/// Address of the Certificate Authority used to issue SPIFFE certificates.
 	ca_address: Option<String>,
+	/// Authentication token for communicating with the Certificate Authority.
 	ca_auth_token: Option<String>,
+	/// Address of the xDS control plane used for dynamic configuration.
 	xds_address: Option<String>,
+	/// Authentication token for communicating with the xDS control plane.
 	xds_auth_token: Option<String>,
+	/// Kubernetes namespace for this gateway instance.
 	namespace: Option<String>,
+	/// Name of this gateway. Required when xDS is configured.
 	gateway: Option<String>,
+	/// SPIFFE trust domain for this gateway.
 	trust_domain: Option<String>,
 	/// Comma-separated list of additional SPIFFE trust domains accepted on inbound HBONE
 	/// connections. The local trust_domain is always implicitly included.
 	additional_trust_domains: Option<String>,
 	/// When true, skip SPIFFE trust-domain verification on inbound HBONE connections.
 	skip_validate_trust_domain: Option<bool>,
+	/// Kubernetes service account for this gateway, used in its SPIFFE identity.
 	service_account: Option<String>,
+	/// Identifier for the cluster this gateway runs in. Defaults to "Kubernetes".
 	cluster_id: Option<String>,
+	/// Network name for this gateway, used for locality-aware routing.
 	network: Option<String>,
 
 	/// Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
@@ -198,19 +209,26 @@ pub struct RawConfig {
 	#[serde(default)]
 	custom_functions: String,
 
+	/// Maximum time to wait for connections to close gracefully during shutdown.
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_termination_deadline: Option<Duration>,
+	/// Minimum time to allow for graceful connection termination. Defaults to zero.
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	connection_min_termination_deadline: Option<Duration>,
 
+	/// Number of worker threads for the async runtime. Accepts a number or a string such as "auto".
 	worker_threads: Option<StringOrInt>,
 
+	/// Distributed tracing configuration.
 	tracing: Option<RawTracing>,
+	/// Logging configuration, including filter, level, format, and custom fields.
 	logging: Option<RawLogging>,
+	/// Metrics configuration, including metric removal and custom fields.
 	metrics: Option<RawMetrics>,
 
+	/// Configuration for upstream connections, including keepalives, timeouts, and pooling.
 	#[serde(default)]
 	backend: BackendConfig,
 
@@ -222,6 +240,7 @@ pub struct RawConfig {
 	#[cfg_attr(feature = "schema", schemars(skip))]
 	_listener: serdes::RenamedField,
 
+	/// HBONE (HTTP/2 CONNECT tunnel) protocol configuration.
 	hbone: Option<RawHBONE>,
 }
 
@@ -239,8 +258,10 @@ mod removed {
 
 #[apply(schema!)]
 pub struct BackendConfig {
+	/// TCP keepalive configuration for upstream connections.
 	#[serde(default)]
 	keepalives: types::agent::KeepaliveConfig,
+	/// Maximum time to wait when establishing a connection to an upstream. Defaults to 10 seconds.
 	#[serde(with = "serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	#[serde(default = "defaults::connect_timeout")]
@@ -311,10 +332,15 @@ mod defaults {
 
 #[apply(schema_de!)]
 pub struct RawHBONE {
+	/// HTTP/2 per-stream flow-control window size in bytes. Defaults to 4 MiB.
 	window_size: Option<u32>,
+	/// HTTP/2 connection-level flow-control window size in bytes. Defaults to 16 MiB.
 	connection_window_size: Option<u32>,
+	/// HTTP/2 maximum frame size in bytes. Defaults to 1 MiB.
 	frame_size: Option<u32>,
+	/// Maximum concurrent streams per pooled connection. Defaults to 100.
 	pool_max_streams_per_conn: Option<u16>,
+	/// Duration after which unused pooled connections are released.
 	#[serde(with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pool_unused_release_timeout: Option<Duration>,
@@ -332,6 +358,7 @@ pub struct RawSession {
 
 #[apply(schema_de!)]
 pub struct RawMcpConfig {
+	/// Time to live for MCP sessions before they are closed automatically. Defaults to 30 minutes.
 	#[serde(default, with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	session_ttl: Option<Duration>,
@@ -339,11 +366,15 @@ pub struct RawMcpConfig {
 
 #[apply(schema_de!)]
 pub struct RawTracing {
+	/// OTLP collector endpoint URL for exporting traces.
 	otlp_endpoint: Option<String>,
+	/// HTTP headers to include on OTLP trace exports, such as authentication headers.
 	#[serde(default)]
 	headers: HashMap<String, String>,
+	/// OTLP transport protocol: `grpc` or `http`.
 	#[serde(default)]
 	otlp_protocol: Protocol,
+	/// Custom fields to add to or remove from trace spans.
 	fields: Option<RawLoggingFields>,
 	/// Expression to determine the amount of *random sampling*.
 	/// Random sampling will initiate a new trace span if the incoming request does not have a trace already.
@@ -361,10 +392,15 @@ pub struct RawTracing {
 
 #[apply(schema_de!)]
 pub struct RawLogging {
+	/// CEL expression that selects which requests are logged.
 	filter: Option<String>,
+	/// Custom fields to add to or remove from log entries.
 	fields: Option<RawLoggingFields>,
+	/// Log level: a single level (e.g. `info`), a comma-separated string of per-module levels (e.g. `info,agent_core=trace`), or a list of per-module levels (e.g. `[info, agent_core=trace]`).
 	level: Option<RawLoggingLevel>,
+	/// Log output format: `text` or `json`.
 	format: Option<LoggingFormat>,
+	/// Log-store database configuration; enables request logging to a database backend.
 	database: Option<telemetry::log_store::Config>,
 }
 
@@ -385,13 +421,16 @@ pub enum LoggingFormat {
 
 #[apply(schema_de!)]
 pub struct RawMetrics {
+	/// Metric names to exclude from collection.
 	#[serde(default)]
 	remove: Vec<String>,
+	/// Custom fields to add to all metrics.
 	fields: Option<RawMetricFields>,
 }
 
 #[apply(schema_de!)]
 pub struct RawMetricFields {
+	/// Map of field name to a CEL expression that computes the value to add to metrics.
 	#[serde(default)]
 	#[cfg_attr(
 		feature = "schema",
@@ -402,8 +441,10 @@ pub struct RawMetricFields {
 
 #[apply(schema_de!)]
 pub struct RawLoggingFields {
+	/// Field names to remove from log entries.
 	#[serde(default)]
 	remove: Vec<String>,
+	/// Map of field name to a CEL expression that computes the value to add to logs.
 	#[serde(default)]
 	#[cfg_attr(
 		feature = "schema",
@@ -581,9 +622,18 @@ pub struct ModelCatalogConfig {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
 pub enum ModelCatalogSource {
-	File { file: PathBuf },
-	Inline { inline: String },
-	InlineCatalog { inline: llm::cost::Catalog },
+	File {
+		/// Path to a file on disk containing the model cost catalog.
+		file: PathBuf,
+	},
+	Inline {
+		/// Model cost catalog provided inline as a string.
+		inline: String,
+	},
+	InlineCatalog {
+		/// Model cost catalog provided inline as structured data.
+		inline: llm::cost::Catalog,
+	},
 }
 
 #[apply(schema!)]

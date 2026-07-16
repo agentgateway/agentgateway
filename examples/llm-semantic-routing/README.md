@@ -32,25 +32,27 @@ The `AgentgatewayBackend` in `k8s/agentgateway-routing.yaml` expects an
 ## Configure Routing
 
 Replace any existing `HTTPRoute` attached to this Gateway that matches
-`/v1/chat/completions` before applying this example.
+`/v1/chat/completions` or `/v1/responses` before applying this example.
 
 Install vLLM Semantic Router:
 
 ```bash
-export VSR_VERSION=0.3.0
+export VSR_CHART_VERSION=0.0.0-latest
+export VSR_IMAGE_TAG=latest
 
 helm upgrade -i semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version "${VSR_VERSION}" \
+  --version "${VSR_CHART_VERSION}" \
   --namespace agentgateway-system \
   -f examples/llm-semantic-routing/k8s/semantic-router-values.yaml \
-  --set-string "image.tag=v${VSR_VERSION}"
+  --set-string "image.tag=${VSR_IMAGE_TAG}" \
+  --set "image.pullPolicy=Always"
 
 kubectl wait --for=condition=Available deployment/semantic-router \
   -n agentgateway-system \
   --timeout=600s
 ```
 
-Apply the routed backend, route, and buffered ExtProc policy:
+Apply the routed backend, route, and streamed ExtProc policy:
 
 ```bash
 kubectl apply -f examples/llm-semantic-routing/k8s/agentgateway-routing.yaml
@@ -62,14 +64,11 @@ kubectl describe httproute openai-semantic-routing -n agentgateway-system
 kubectl describe agentgatewaypolicy semantic-router-extproc -n agentgateway-system
 ```
 
-`VSR_VERSION` sets both the chart version and the matching `v<version>`
-`extproc` image tag.
-
-> **Note:** This example uses buffered ExtProc while the streamed-body issue in
-> [vLLM Semantic Router #2486](https://github.com/vllm-project/semantic-router/issues/2486)
-> is unresolved. When that issue is fixed and this example is returned to
-> streamed mode, restore the `Verify Streamed ExtProc` section and its
-> deterministic immediate-response probe.
+This example defaults to the latest vSR chart and image, which include the
+[Responses API streaming fix](https://github.com/vllm-project/semantic-router/issues/2446)
+and the [FullDuplexStreamed request-body fix](https://github.com/vllm-project/semantic-router/issues/2486).
+For a repeatable historical deployment, override both values with released
+chart and image versions that contain both fixes.
 
 ## Run a Request
 
@@ -119,6 +118,109 @@ by application traffic.
 Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
 observability source of record. Use isolated evaluation traffic with forced
 lower-cost and always-expensive baselines before adopting the policy broadly.
+
+## Optional: Use Codex Through the Gateway
+
+The gateway works with any OpenAI API-compatible client or agent. This optional
+section configures Codex to use the gateway's `auto` model name. Codex uses the
+OpenAI Responses API and vSR translates streamed Responses events before the
+gateway forwards the request to the selected model.
+
+### Codex CLI
+
+This configuration was tested with `codex-cli 0.144.4`. The
+[Codex CLI profile documentation](https://learn.chatgpt.com/docs/config-file/config-advanced#profiles)
+describes how `--profile` overlays a named user-level configuration file.
+Create the profile:
+
+```bash
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+export AGENTGATEWAY_BASE_URL="http://$(kubectl get gateway agentgateway-proxy \
+  -n agentgateway-system \
+  -o jsonpath='{.status.addresses[0].value}')/v1"
+# For a TLS-enabled corporate gateway, set AGENTGATEWAY_BASE_URL to its https URL.
+mkdir -p "$CODEX_HOME"
+cat > "$CODEX_HOME/agentgateway.config.toml" <<EOF
+model = "auto"
+model_provider = "agentgateway"
+
+[model_providers.agentgateway]
+name = "Corporate agentgateway"
+base_url = "${AGENTGATEWAY_BASE_URL}"
+wire_api = "responses"
+EOF
+```
+
+Start Codex with that profile:
+
+```bash
+codex --profile agentgateway
+```
+
+### Codex in the ChatGPT Desktop App
+
+Codex is available in the ChatGPT desktop app as a Codex environment. This
+configuration was tested with ChatGPT desktop app version `26.707.72221`.
+See the [Codex environment documentation](https://learn.chatgpt.com/docs/environments/modes)
+and [Codex configuration basics](https://learn.chatgpt.com/docs/config-file/config-basic).
+
+For the same gateway configuration, back up and replace the user-level config,
+then restart the ChatGPT desktop app:
+
+```bash
+export AGENTGATEWAY_BASE_URL="http://$(kubectl get gateway agentgateway-proxy \
+  -n agentgateway-system \
+  -o jsonpath='{.status.addresses[0].value}')/v1"
+# For a TLS-enabled corporate gateway, set AGENTGATEWAY_BASE_URL to its https URL.
+cp ~/.codex/config.toml ~/.codex/config.toml.bak
+cat > ~/.codex/config.toml <<EOF
+model = "auto"
+model_provider = "agentgateway"
+
+[model_providers.agentgateway]
+name = "Corporate agentgateway"
+base_url = "${AGENTGATEWAY_BASE_URL}"
+wire_api = "responses"
+EOF
+```
+
+Replacing `~/.codex/config.toml` also replaces other user-level Codex settings.
+To edit that file through the app instead, open **Settings > Configuration >
+Open config.toml** and apply the same configuration.
+
+### Verify Codex Routing
+
+After sending a task from Codex CLI or the ChatGPT desktop app, inspect the vSR
+decision and the completed agentgateway request:
+
+```bash
+kubectl logs -n agentgateway-system deploy/semantic-router --since=5m \
+  | grep -E '"event":"routing_decision"|"event":"router_replay_complete"' \
+  | tail -n 4
+
+kubectl logs -n agentgateway-system deploy/agentgateway-proxy --since=5m \
+  | grep 'http.path=/v1/responses' \
+  | tail -n 4
+```
+
+The vSR output identifies `original_model: auto`, the `selected_model`, and a
+successful `response_status`. The agentgateway output identifies the
+`openai-semantic-routing` route, the selected request and response model,
+catalog-priced token usage, and the realized request cost.
+
+Codex also probes `/v1/models` to discover model metadata. Until [agentgateway
+issue #1462](https://github.com/agentgateway/agentgateway/issues/1462) adds a
+gateway-generated model list, Codex may warn that metadata for `auto` is not
+found. That warning does not prevent `/v1/responses` traffic from routing.
+
+The gateway authenticates to OpenAI with its configured provider credential and
+records the selected model and cost as it does for other OpenAI-compatible
+clients. Agentgateway can [rewrite client-facing model names with model
+aliases](https://agentgateway.dev/docs/kubernetes/latest/llm/alias/). An
+organization can also [validate and reject unsupported request-body model
+values](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/),
+such as any value other than `auto`. Treat `auto` as the supported client path
+when testing this policy.
 
 ## Cleanup
 

@@ -20,6 +20,7 @@ pub struct BufferBody {
 	/// Maximum body size to buffer in bytes.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub max_bytes: Option<usize>,
+	/// Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).
 	#[serde(default)]
 	pub failure_mode: FailureMode,
 }

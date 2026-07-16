@@ -108,6 +108,7 @@ enum RawOAuthClientAuth {
 struct RawDefaultClientSecretBasicAuth {
 	/// `client_id` parameter identifying the gateway at the authorization server.
 	client_id: String,
+	/// OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.
 	#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
 	#[serde(
 		rename = "clientSecret",

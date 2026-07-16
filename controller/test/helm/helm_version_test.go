@@ -242,6 +242,17 @@ func TestHelmChartTemplate(t *testing.T) {
 `,
 		},
 		{
+			name: "extra-containers",
+			valuesYAML: `controller:
+  extraContainers:
+    - name: httpbin
+      image: kennethreitz/httpbin
+      ports:
+        - containerPort: 80
+          name: httpbin
+`,
+		},
+		{
 			name: "extra-env",
 			valuesYAML: `controller:
   extraEnv:

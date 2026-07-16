@@ -327,7 +327,11 @@ config:
       auto_model_name: auto
       strategy: priority
       streamed_body:
-        enabled: false
+        enabled: true
+        # Explicit guardrails for accumulated full-duplex request bodies; these
+        # values are not vSR defaults.
+        max_bytes: 10485760
+        timeout_sec: 30
       skip_processing:
         enabled: true
     services:

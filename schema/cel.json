@@ -487,9 +487,11 @@
             "type": "object",
             "properties": {
               "role": {
+                "description": "Message role, such as \"system\", \"user\", or \"assistant\".",
                 "type": "string"
               },
               "content": {
+                "description": "Message text content.",
                 "type": "string"
               }
             },
