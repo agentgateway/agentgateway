@@ -243,7 +243,7 @@ pub(super) async fn authorization_server_metadata(
 		.map_err(ProxyError::Body)?;
 
 	// Pre-compute once — reused in the universal issuer rewrite below.
-	let gateway_base = issuer_from_metadata_uri(request_uri_for_oauth_metadata(req).to_string());
+	let gateway_base = issuer_from_metadata_uri(&request_uri_for_oauth_metadata(req).to_string());
 
 	match &auth.provider {
 		Some(McpIDP::Auth0 {}) => {
@@ -315,9 +315,9 @@ pub(super) async fn authorization_server_metadata(
 		_ => {},
 	}
 
-	// RFC 8414 §3.3: the issuer in AS metadata MUST match the URL from which it was fetched.
-	// Applied universally across all providers — strict clients (Claude Desktop, ChatGPT, Codex)
-	// validate this and abort if issuer ≠ gateway URL.
+	// RFC 8414 §3.3: the `issuer` in AS metadata MUST match the issuer identifier implied by the
+	// metadata URL (RFC 8414 §3.1). For well-known metadata requests, that is the request URI with
+	// `/.well-known/oauth-authorization-server` removed.
 	if let Some(serde_json::Value::String(issuer_val)) = json::traverse_mut(&mut resp, &["issuer"]) {
 		*issuer_val = gateway_base;
 	}
@@ -409,16 +409,28 @@ pub(super) async fn client_registration(
 
 /// Derives the gateway issuer from an AS metadata URI, satisfying RFC 8414 §3.3.
 ///
-/// Removes the `/.well-known/oauth-authorization-server` segment while preserving any
-/// path suffix that follows it, as required by the RFC §3.1 path-based issuer form:
+/// Removes the `/.well-known/oauth-authorization-server` segment from the URL path while
+/// preserving any path suffix that follows it, as required by the RFC §3.1 path-based
+/// issuer form:
 ///   `https://example.com/.well-known/oauth-authorization-server/issuer1`
 ///   → `https://example.com/issuer1`
-fn issuer_from_metadata_uri(mut uri: String) -> String {
+///
+/// Operates on the parsed URL path — not the raw string — so query parameters and fragments
+/// are stripped and cannot be mistaken for part of the issuer.
+fn issuer_from_metadata_uri(uri: &str) -> String {
 	const WELL_KNOWN: &str = "/.well-known/oauth-authorization-server";
-	if let Some(idx) = uri.find(WELL_KNOWN) {
-		uri.replace_range(idx..idx + WELL_KNOWN.len(), "");
+	let Ok(mut parsed) = url::Url::parse(uri) else {
+		return uri.to_owned();
+	};
+	let path = parsed.path().to_owned();
+	if let Some(idx) = path.find(WELL_KNOWN) {
+		let new_path = format!("{}{}", &path[..idx], &path[idx + WELL_KNOWN.len()..]);
+		parsed.set_path(if new_path.is_empty() { "/" } else { &new_path });
 	}
-	uri
+	parsed.set_query(None);
+	parsed.set_fragment(None);
+	// url::Url always appends `/` for root paths; strip it so the issuer has no trailing slash.
+	parsed.to_string().trim_end_matches('/').to_owned()
 }
 
 const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
@@ -700,7 +712,7 @@ mod tests {
 	fn issuer_strips_well_known_suffix_from_root_gateway() {
 		assert_eq!(
 			issuer_from_metadata_uri(
-				"https://gateway.example.com/.well-known/oauth-authorization-server".to_string()
+				"https://gateway.example.com/.well-known/oauth-authorization-server"
 			),
 			"https://gateway.example.com"
 		);
@@ -711,7 +723,6 @@ mod tests {
 		assert_eq!(
 			issuer_from_metadata_uri(
 				"https://gateway.example.com/base/path/.well-known/oauth-authorization-server"
-					.to_string()
 			),
 			"https://gateway.example.com/base/path"
 		);
@@ -727,7 +738,6 @@ mod tests {
 		assert_eq!(
 			issuer_from_metadata_uri(
 				"https://gateway.example.com/.well-known/oauth-authorization-server/issuer1"
-					.to_string()
 			),
 			"https://gateway.example.com/issuer1"
 		);
@@ -736,7 +746,17 @@ mod tests {
 	#[test]
 	fn issuer_returns_uri_unchanged_when_no_well_known_present() {
 		assert_eq!(
-			issuer_from_metadata_uri("https://gateway.example.com".to_string()),
+			issuer_from_metadata_uri("https://gateway.example.com"),
+			"https://gateway.example.com"
+		);
+	}
+
+	#[test]
+	fn issuer_ignores_query_and_fragment_in_metadata_uri() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/.well-known/oauth-authorization-server?foo=bar#frag"
+			),
 			"https://gateway.example.com"
 		);
 	}
