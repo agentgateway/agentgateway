@@ -1752,7 +1752,7 @@ mod context_compression {
 	use crate::llm::policy::compression::ContextCompression;
 	use crate::llm::policy::{FailureMode, Policy};
 	use crate::test_helpers::proxymock::{body_mock, setup_proxy_test};
-	use crate::types::agent::{BackendTarget, SimpleBackendReference};
+	use crate::types::agent::{BackendTarget, HeaderMatch, HeaderValueMatch, SimpleBackendReference};
 
 	// A compression service uses the flat Headroom `/v1/compress` wire: it returns the
 	// (rewritten) message array at the top level.
@@ -1964,5 +1964,109 @@ mod context_compression {
 		)
 		.unwrap();
 		assert_eq!(llm_request.input_tokens, Some(expected));
+	}
+
+	// --- forward_header_matches: default / override / disable ---
+
+	fn header_match(name: &'static str, value: HeaderValueMatch) -> HeaderMatch {
+		HeaderMatch {
+			name: crate::http::HeaderOrPseudo::Header(::http::HeaderName::from_static(name)),
+			value,
+		}
+	}
+
+	fn any_value() -> HeaderValueMatch {
+		HeaderValueMatch::Regex(::regex::Regex::new(".*").unwrap())
+	}
+
+	fn policy_with_forward(target: Target, matches: Vec<HeaderMatch>) -> Policy {
+		Policy {
+			context_compression: Some(ContextCompression {
+				target: SimpleBackendReference::InlineBackend(target),
+				path: "/v1/compress".to_string(),
+				forward_header_matches: matches,
+				failure_mode: FailureMode::FailOpen,
+				min_size_bytes: 0,
+			}),
+			..Default::default()
+		}
+	}
+
+	fn messages_request_with_headers(body: serde_json::Value, headers: &[(&str, &str)]) -> Request {
+		let mut b = ::http::Request::builder()
+			.uri("/v1/messages")
+			.header(::http::header::CONTENT_TYPE, "application/json");
+		for (k, v) in headers {
+			b = b.header(*k, *v);
+		}
+		b.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap()
+	}
+
+	// Headers the compression engine actually received on the /v1/compress callout.
+	async fn callout_headers(mock: &wiremock::MockServer) -> ::http::HeaderMap {
+		let reqs = mock.received_requests().await.expect("recording enabled");
+		let req = reqs
+			.iter()
+			.find(|r| r.url.path() == "/v1/compress")
+			.expect("compress callout was made");
+		req.headers.clone()
+	}
+
+	#[tokio::test]
+	async fn empty_config_forwards_curated_defaults_not_credentials() {
+		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "c"}]))).await;
+		let policy = policy_with_forward(Target::Address(*mock.address()), vec![]);
+
+		let req = messages_request_with_headers(
+			simple_body(),
+			&[("anthropic-beta", "prompt-caching-2024"), ("authorization", "Bearer secret")],
+		);
+		process(&policy, req, false).await.unwrap();
+
+		let headers = callout_headers(&mock).await;
+		// Curated default is forwarded...
+		assert_eq!(headers.get("anthropic-beta").unwrap(), "prompt-caching-2024");
+		// ...but credentials never are.
+		assert!(headers.get("authorization").is_none());
+	}
+
+	#[tokio::test]
+	async fn explicit_matches_replace_defaults() {
+		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "c"}]))).await;
+		// Only forward x-custom; this replaces (does not extend) the defaults.
+		let policy = policy_with_forward(
+			Target::Address(*mock.address()),
+			vec![header_match("x-custom", any_value())],
+		);
+
+		let req = messages_request_with_headers(
+			simple_body(),
+			&[("anthropic-beta", "beta"), ("x-custom", "kept")],
+		);
+		process(&policy, req, false).await.unwrap();
+
+		let headers = callout_headers(&mock).await;
+		assert_eq!(headers.get("x-custom").unwrap(), "kept");
+		// The default is gone because the list was overridden, not appended to.
+		assert!(headers.get("anthropic-beta").is_none());
+	}
+
+	#[tokio::test]
+	async fn match_nothing_forwards_no_headers() {
+		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "c"}]))).await;
+		// A non-empty list that matches nothing => defaults suppressed, nothing forwarded.
+		let policy = policy_with_forward(
+			Target::Address(*mock.address()),
+			vec![header_match(
+				"anthropic-beta",
+				HeaderValueMatch::Exact(::http::HeaderValue::from_static("will-never-match")),
+			)],
+		);
+
+		let req = messages_request_with_headers(simple_body(), &[("anthropic-beta", "beta")]);
+		process(&policy, req, false).await.unwrap();
+
+		let headers = callout_headers(&mock).await;
+		assert!(headers.get("anthropic-beta").is_none());
 	}
 }

@@ -11,13 +11,15 @@
 //! Compression always operates on raw messages — anything less would corrupt tool calls and
 //! cache markers — so it has no message-format knob.
 
+use std::sync::LazyLock;
+
 use crate::http::Response;
 use crate::llm::policy::webhook::ProcessorOutcome;
 use crate::llm::policy::{FailureMode, Policy, webhook};
 use crate::llm::types::RequestType;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::OutboundCallSubtype;
-use crate::types::agent::{HeaderMatch, SimpleBackendReference};
+use crate::types::agent::{HeaderMatch, HeaderValueMatch, SimpleBackendReference};
 use crate::*;
 
 fn default_failure_mode() -> FailureMode {
@@ -33,6 +35,28 @@ pub fn default_compress_path() -> String {
 	"/v1/compress".to_string()
 }
 
+/// Headers forwarded to the compression engine when `forward_header_matches` is left empty.
+///
+/// Compression engines (Headroom, litellm, ...) inspect these to decide what is *safe* to
+/// compress — chiefly which prefixes are prompt-cached, so they don't rewrite a cached prefix
+/// and bust the cache (which would raise cost, the opposite of the point). We forward a curated
+/// set of non-sensitive cache/context headers by default so the common case is correct out of
+/// the box. Credentials (`authorization`, `x-api-key`, ...) are deliberately never included.
+///
+/// This is a default, not a floor: setting `forward_header_matches` to any non-empty value
+/// *replaces* this list entirely (see [`ContextCompression::forward_header_matches`]).
+static DEFAULT_FORWARD_HEADERS: LazyLock<Vec<HeaderMatch>> = LazyLock::new(|| {
+	// `.*` + get_webhook_forward_headers' full-span check == "forward if present, any value".
+	let any = || HeaderValueMatch::Regex(::regex::Regex::new(".*").expect("static regex"));
+	["anthropic-beta", "anthropic-version"]
+		.into_iter()
+		.map(|h| HeaderMatch {
+			name: crate::http::HeaderOrPseudo::Header(::http::HeaderName::from_static(h)),
+			value: any(),
+		})
+		.collect()
+});
+
 /// Context compression shrinks request messages through an external compression service before
 /// they reach the LLM, to reduce token spend. Compression is an optimization: by default a
 /// failure is ignored and the original request is forwarded unchanged.
@@ -44,6 +68,12 @@ pub struct ContextCompression {
 	#[serde(default = "default_compress_path")]
 	pub path: String,
 	/// Incoming request headers to forward to the compression service.
+	///
+	/// When empty, a curated set of non-sensitive cache/context headers is forwarded by default
+	/// (e.g. `anthropic-beta`), so engines that decide compressibility from headers behave
+	/// correctly out of the box. Setting any value here *replaces* that default entirely — it is
+	/// not additive, so include the cache headers yourself if you still need them, or compression
+	/// may bust prompt caches. To forward nothing, supply a matcher that matches no header.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub forward_header_matches: Vec<HeaderMatch>,
 	/// Behavior when the service is unreachable, errors, or returns unusable messages.
@@ -104,7 +134,13 @@ impl ContextCompression {
 
 		let model = req.model();
 		let client = PolicyClient::new(backend_info.inputs.clone());
-		let headers = Policy::get_webhook_forward_headers(&parts.headers, &self.forward_header_matches);
+		// Empty config → curated defaults; any explicit matcher replaces them (not additive).
+		let matches = if self.forward_header_matches.is_empty() {
+			&*DEFAULT_FORWARD_HEADERS
+		} else {
+			&self.forward_header_matches
+		};
+		let headers = Policy::get_webhook_forward_headers(&parts.headers, matches);
 		let buffer_limit = parts
 			.extensions
 			.get::<crate::transport::BufferLimit>()
@@ -126,7 +162,7 @@ impl ContextCompression {
 			Err(e) => self.fail(&format!("compression call failed: {e}")),
 			Ok(ProcessorOutcome::Pass) => CompressionOutcome::Skipped,
 			Ok(ProcessorOutcome::Reject { body, status_code }) => {
-				CompressionOutcome::Rejected(Box::new(reject_response(&body, status_code)))
+				CompressionOutcome::Rejected(Box::new(reject_response(body, status_code)))
 			},
 			Ok(ProcessorOutcome::Replace(messages)) => {
 				if let Err(reason) = webhook::validate_replacement(&original, &messages) {
@@ -162,10 +198,10 @@ impl ContextCompression {
 	}
 }
 
-fn reject_response(body: &str, status_code: u16) -> Response {
+fn reject_response(body: impl Into<http::Body>, status_code: u16) -> Response {
 	::http::response::Builder::new()
 		.status(status_code)
-		.body(http::Body::from(body.to_owned()))
+		.body(body.into())
 		.unwrap_or_else(|_| {
 			::http::response::Builder::new()
 				.status(::http::StatusCode::INTERNAL_SERVER_ERROR)

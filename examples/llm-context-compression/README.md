@@ -23,6 +23,12 @@ blocks (`cache_control`, images, tool calls) survive the round-trip. The system 
 *not* included: it is the stable prefix that prompt-cache reuse depends on. `model` is a
 tokenizer/context-window hint.
 
+By default the gateway also forwards a curated set of non-sensitive cache/context headers
+(e.g. `anthropic-beta`) so engines that decide compressibility from headers stay cache-safe;
+credentials are never forwarded. Setting `forwardHeaderMatches` **replaces** that default
+(it is not additive) — list the cache headers yourself if you still need them, or use a
+matcher that matches nothing to forward no headers at all.
+
 The service responds `200` with the compressed array (plus optional telemetry, which the
 gateway ignores):
 

@@ -24,4 +24,7 @@ llm:
         host: 127.0.0.1:8787
       # path: /v1/compress      # default
       # failureMode: failOpen   # failOpen (default) | failClosed
-      # minSizeBytes: 16384     # skip requests below this serialized size
+      # minSizeBytes: 16384     # skip requests whose body is smaller than this
+      # forwardHeaderMatches:   # empty => curated cache headers (e.g. anthropic-beta) forwarded.
+      #   - name: x-custom      # Setting this REPLACES the defaults (not additive); to forward
+      #     value: {exact: v}   # nothing, use a matcher that matches no header.

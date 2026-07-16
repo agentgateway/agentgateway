@@ -461,7 +461,13 @@ type ContextCompressionConfig struct {
 	Path string `json:"path,omitempty"`
 
 	// Incoming request headers to forward to the compression service.
-	// By default, no headers are forwarded.
+	//
+	// When empty, a curated set of non-sensitive cache/context headers (such as
+	// `anthropic-beta`) is forwarded by default, so engines that decide compressibility
+	// from headers behave correctly out of the box. Setting any value here replaces that
+	// default entirely; it is not additive, so include the cache headers yourself if you
+	// still need them, or compression may bust prompt caches. To forward nothing, supply a
+	// matcher that matches no header.
 	// +optional
 	ForwardHeaderMatches []gwv1.HTTPHeaderMatch `json:"forwardHeaderMatches,omitempty"`
 
