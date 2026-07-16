@@ -17,6 +17,9 @@ use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{McpAuthentication, McpIDP};
 
 pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
+	// /authorize and /token are public OAuth endpoints — they must bypass JWT validation by
+	// definition. For non-Okta providers, handle_mcp_request returns 404 for these paths
+	// rather than Ok(None), so requests never reach the MCP backend unauthenticated.
 	path.starts_with("/.well-known/oauth-protected-resource")
 		|| path.starts_with("/.well-known/oauth-authorization-server")
 		|| path == "/authorize"
