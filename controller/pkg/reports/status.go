@@ -407,6 +407,19 @@ func addMissingGatewayConditions(gwReport *GatewayReport, gw *gwv1.Gateway) {
 		})
 	}
 	if cond := meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionProgrammed)); cond == nil {
+		accepted := meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionAccepted))
+		if accepted == nil && hasInvalidParams {
+			accepted = existingAccepted
+		}
+		if accepted != nil && accepted.Status == metav1.ConditionFalse {
+			gwReport.SetCondition(reporter.GatewayCondition{
+				Type:    gwv1.GatewayConditionProgrammed,
+				Status:  metav1.ConditionFalse,
+				Reason:  gwv1.GatewayReasonInvalid,
+				Message: accepted.Message,
+			})
+			return
+		}
 		gwReport.SetCondition(reporter.GatewayCondition{
 			Type:    gwv1.GatewayConditionProgrammed,
 			Status:  metav1.ConditionTrue,

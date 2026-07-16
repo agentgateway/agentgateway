@@ -138,9 +138,10 @@ status:
       status: "False"
       type: Accepted
     - lastTransitionTime: fake
-      message: Successfully programmed Gateway
-      reason: Programmed
-      status: "True"
+      message: 'conflicting agentgateway.dev/internal-ports annotation: port(s) [8080]
+        are marked internal by some listeners but standard by others'
+      reason: Invalid
+      status: "False"
       type: Programmed
     listeners:
     - attachedRoutes: 0
