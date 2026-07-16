@@ -94,27 +94,34 @@ pub(crate) async fn handle_mcp_request(
 				.into_response(),
 		)),
 		path if path == "/authorize" => match &auth.provider {
-			Some(McpIDP::Okta {}) => Ok(Some(
-				okta_authorize_redirect(req, auth)
-					.await
-					.map_err(|e| {
-						warn!("okta_authorize_redirect error: {}", e);
-						StatusCode::INTERNAL_SERVER_ERROR
-					})
-					.into_response(),
-			)),
+			Some(McpIDP::Okta {}) => {
+				let existing_query = req.uri().query().unwrap_or("").to_owned();
+				Ok(Some(
+					okta_authorize_redirect(&existing_query, auth)
+						.map_err(|e| {
+							warn!("okta_authorize_redirect error: {}", e);
+							StatusCode::INTERNAL_SERVER_ERROR
+						})
+						.into_response(),
+				))
+			},
 			_ => Ok(None),
 		},
 		path if path == "/token" => match &auth.provider {
-			Some(McpIDP::Okta {}) => Ok(Some(
-				okta_token_proxy(req, auth, client.clone())
-					.await
-					.map_err(|e| {
-						warn!("okta_token_proxy error: {}", e);
-						StatusCode::INTERNAL_SERVER_ERROR
-					})
-					.into_response(),
-			)),
+			Some(McpIDP::Okta {}) => {
+				let content_type = req.headers().get("content-type").cloned();
+				let authorization = req.headers().get("authorization").cloned();
+				let body = std::mem::take(req.body_mut());
+				Ok(Some(
+					okta_token_proxy(content_type, authorization, body, auth, client.clone())
+						.await
+						.map_err(|e| {
+							warn!("okta_token_proxy error: {}", e);
+							StatusCode::INTERNAL_SERVER_ERROR
+						})
+						.into_response(),
+				))
+			},
 			_ => Ok(None),
 		},
 		_ => {
@@ -369,12 +376,11 @@ pub(super) async fn authorization_server_metadata(
 /// Redirects /authorize to Okta's actual authorize endpoint, injecting `audience` (RFC 8707
 /// workaround — Okta does not support resource indicators natively) and a default `scope=openid`
 /// when the client omits scope entirely.
-async fn okta_authorize_redirect(
-	req: &Request,
+fn okta_authorize_redirect(
+	existing_query: &str,
 	auth: &McpAuthentication,
 ) -> Result<Response, ProxyError> {
 	let issuer = auth.issuer.trim_end_matches('/');
-	let existing_query = req.uri().query().unwrap_or("");
 
 	let has_scope = existing_query.split('&').any(|p| p.starts_with("scope="));
 
@@ -410,17 +416,14 @@ async fn okta_authorize_redirect(
 /// OAuth clients must not follow redirects for token exchange (RFC 6749), so a 302 is not
 /// viable here — we proxy the request directly to Okta and return its response verbatim.
 async fn okta_token_proxy(
-	req: &mut Request,
+	content_type: Option<http::HeaderValue>,
+	authorization: Option<http::HeaderValue>,
+	body: Body,
 	auth: &McpAuthentication,
 	client: PolicyClient,
 ) -> Result<Response, ProxyError> {
 	let issuer = auth.issuer.trim_end_matches('/');
 	let token_uri = format!("{issuer}/v1/token");
-
-	let content_type = req.headers().get("content-type").cloned();
-	let authorization = req.headers().get("authorization").cloned();
-
-	let body = std::mem::take(req.body_mut());
 
 	let mut builder = ::http::Request::builder()
 		.uri(token_uri)
