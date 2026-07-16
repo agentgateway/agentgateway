@@ -2016,6 +2016,18 @@ fn mcp_matches() -> Vec<RouteMatch> {
 			method: None,
 			query: vec![],
 		},
+		RouteMatch {
+			headers: vec![],
+			path: PathMatch::Exact("/authorize".into()),
+			method: None,
+			query: vec![],
+		},
+		RouteMatch {
+			headers: vec![],
+			path: PathMatch::Exact("/token".into()),
+			method: None,
+			query: vec![],
+		},
 	]
 }
 
