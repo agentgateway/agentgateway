@@ -4524,6 +4524,11 @@
           "description": "Reject the request or response when content matches.",
           "type": "string",
           "const": "reject"
+        },
+        {
+          "description": "Observe mode: record what the guard would have done (metrics + structured\nlog) but never block or mask — the content always passes through.",
+          "type": "string",
+          "const": "audit"
         }
       ]
     },
@@ -4605,6 +4610,10 @@
         "failureMode": {
           "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
           "$ref": "#/$defs/WebhookFailureMode"
+        },
+        "action": {
+          "description": "Whether to enforce the webhook's verdict or only observe it.\nDefaults to `reject` (enforce).",
+          "$ref": "#/$defs/RejectAuditAction"
         }
       },
       "additionalProperties": false,
@@ -4627,6 +4636,21 @@
         }
       ]
     },
+    "RejectAuditAction": {
+      "description": "Action for guards that cannot mask (only reject or observe). Bedrock,\nwebhook, OpenAI moderation, Google Model Armor, and Azure Content Safety\ndecide *what* they flag; the gateway only chooses whether to enforce that\nverdict or merely record it.",
+      "oneOf": [
+        {
+          "description": "Enforce the guard's native verdict (block, or — for Bedrock — anonymize).\nThis is the default and preserves the enforcing behavior.",
+          "type": "string",
+          "const": "reject"
+        },
+        {
+          "description": "Observe mode: invoke the guard and record its verdict (metrics +\nstructured log) but never block or mask — the content always passes\nthrough.",
+          "type": "string",
+          "const": "audit"
+        }
+      ]
+    },
     "Moderation": {
       "type": "object",
       "properties": {
@@ -4636,6 +4660,10 @@
             "string",
             "null"
           ]
+        },
+        "action": {
+          "description": "Whether to reject flagged content or only observe it.\nDefaults to `reject` (enforce).",
+          "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {
           "description": "Backend policies used when calling the moderation provider.",
@@ -4666,6 +4694,10 @@
         "region": {
           "description": "AWS region where the guardrail is deployed",
           "type": "string"
+        },
+        "action": {
+          "description": "Whether to enforce the guardrail's verdict or only observe it.\n\n`reject` (the default) enforces the guardrail: a `BLOCKED` assessment\nrejects the request/response and an `ANONYMIZED` assessment masks the\nmatched content, exactly as before.\n\n`audit` runs the guardrail in observe mode: it is still invoked and its\nassessment is recorded (metrics + structured log), but the request and\nresponse are never blocked or masked — the outcome always passes through.\nUse this to evaluate a guardrail's behavior without affecting traffic.\n`audit` guarantees non-enforcement gateway-side even when the AWS resource\nis configured to `BLOCK`/`ANONYMIZE`.",
+          "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {
           "description": "Backend policies for AWS authentication (optional, defaults to implicit AWS auth)",
@@ -4705,6 +4737,10 @@
             "null"
           ]
         },
+        "action": {
+          "description": "Whether to reject flagged content or only observe it.\nDefaults to `reject` (enforce).",
+          "$ref": "#/$defs/RejectAuditAction"
+        },
         "policies": {
           "description": "Backend policies for GCP authentication (optional, defaults to implicit GCP auth)",
           "anyOf": [
@@ -4730,6 +4766,10 @@
         "endpoint": {
           "description": "The Azure Content Safety endpoint hostname (e.g., \"<resource-name>.cognitiveservices.azure.com\")",
           "type": "string"
+        },
+        "action": {
+          "description": "Whether to reject flagged content or only observe it.\nDefaults to `reject` (enforce).",
+          "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {
           "description": "Backend policies for Azure authentication (optional, defaults to implicit Azure auth)",

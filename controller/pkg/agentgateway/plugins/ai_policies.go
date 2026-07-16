@@ -126,6 +126,7 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	w := &api.BackendPolicySpec_Ai_Webhook{
 		Backend:     be,
 		FailureMode: webhookFailureMode(webhook.FailureMode),
+		Action:      mapRejectAuditAction(webhook.Action),
 	}
 
 	if len(webhook.ForwardHeaderMatches) > 0 {
@@ -194,6 +195,16 @@ func processRegexRule(pattern string) *api.BackendPolicySpec_Ai_RegexRule {
 	}
 }
 
+// mapRejectAuditAction maps the CRD reject/audit action to its proto enum,
+// defaulting a nil pointer (field absent) to REJECT so the enforcing behavior
+// is preserved.
+func mapRejectAuditAction(action *agentgateway.RejectAuditAction) api.BackendPolicySpec_Ai_RejectAuditAction {
+	if action != nil && *action == agentgateway.RejectAuditAudit {
+		return api.BackendPolicySpec_Ai_REJECT_AUDIT_ACTION_AUDIT
+	}
+	return api.BackendPolicySpec_Ai_REJECT_AUDIT_ACTION_REJECT
+}
+
 func processRegex(regex *agentgateway.Regex) *api.BackendPolicySpec_Ai_RegexRules {
 	if regex == nil {
 		return nil
@@ -206,6 +217,8 @@ func processRegex(regex *agentgateway.Regex) *api.BackendPolicySpec_Ai_RegexRule
 			rules.Action = api.BackendPolicySpec_Ai_MASK
 		case agentgateway.REJECT:
 			rules.Action = api.BackendPolicySpec_Ai_REJECT
+		case agentgateway.AUDIT:
+			rules.Action = api.BackendPolicySpec_Ai_AUDIT
 		default:
 			logger.Warn("unsupported regex action", "action", *regex.Action)
 		}
@@ -229,6 +242,7 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 
 	pgModeration := &api.BackendPolicySpec_Ai_Moderation{}
 	pgModeration.Model = moderation.Model
+	pgModeration.Action = mapRejectAuditAction(moderation.Action)
 
 	if moderation.Policies != nil {
 		pol := &agentgateway.BackendFull{
@@ -254,6 +268,7 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 		Identifier: guardrails.GuardrailIdentifier,
 		Version:    guardrails.GuardrailVersion,
 		Region:     guardrails.Region,
+		Action:     mapRejectAuditAction(guardrails.Action),
 	}
 
 	if guardrails.Policies != nil {
@@ -279,6 +294,7 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	pgArmor := &api.BackendPolicySpec_Ai_GoogleModelArmor{
 		TemplateId: armor.TemplateID,
 		ProjectId:  armor.ProjectID,
+		Action:     mapRejectAuditAction(armor.Action),
 	}
 
 	// Set location with default value if not specified
