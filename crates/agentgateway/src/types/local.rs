@@ -5197,9 +5197,7 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = transformations {
 		if backend_target {
 			let LocalExplicitOrConditional::Explicit(cfg) = p else {
-				bail!(
-					"conditional transformations are not supported on backend-targeted policies"
-				);
+				bail!("conditional transformations are not supported on backend-targeted policies");
 			};
 			backend_policies.push(BackendTrafficPolicy::Transformation(Arc::new(
 				Transformation::try_from_local_config(cfg, true)?,
@@ -5222,8 +5220,7 @@ pub(crate) async fn split_policies_for_target(
 	}
 	if let Some(p) = ext_authz {
 		if backend_target {
-			let LocalExplicitOrConditional::Explicit(cfg) = configure_ext_authz_cache_store(p)
-			else {
+			let LocalExplicitOrConditional::Explicit(cfg) = configure_ext_authz_cache_store(p) else {
 				bail!("conditional extAuthz is not supported on backend-targeted policies");
 			};
 			backend_policies.push(BackendTrafficPolicy::ExtAuthz(Arc::new(cfg)));
