@@ -111,6 +111,18 @@ func TestModelCatalogCost(tt *testing.T) {
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 
 		t.Apply(modelCatalogUpdatedManifest)
+
+		podClient := t.TestInstallation.ClusterContext.Client.Kube().CoreV1().Pods(modelCatalogNamespace)
+		pods, err := podClient.List(t.Ctx, metav1.ListOptions{
+			LabelSelector: "gateway.networking.k8s.io/gateway-name=" + modelCatalogGatewayName,
+		})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Expect(pods.Items).To(gomega.HaveLen(1), "expected a single gateway pod")
+		pod := pods.Items[0]
+		metav1.SetMetaDataAnnotation(&pod.ObjectMeta, "throwawaytoupdateconfigmapdata", "true")
+		_, err = podClient.Update(t.Ctx, &pod, metav1.UpdateOptions{})
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+
 		g.Eventually(func() error {
 			gw.Send(
 				t,
@@ -127,7 +139,7 @@ func TestModelCatalogCost(tt *testing.T) {
 				return fmt.Errorf("no agw.ai.usage.cost.total below ceiling %v in gateway logs (ConfigMap update not yet reflected by running pod)", minSentinelCost)
 			}
 			return nil
-		}).WithTimeout(45 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
+		}).WithTimeout(10 * time.Second).WithPolling(1 * time.Second).Should(gomega.Succeed())
 
 		podsAfter, err := gatewayPodUIDs(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
