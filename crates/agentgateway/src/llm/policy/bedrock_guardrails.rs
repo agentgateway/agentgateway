@@ -89,6 +89,113 @@ impl ApplyGuardrailResponse {
 		self.outputs.iter().map(|o| o.text.clone()).collect()
 	}
 
+	/// The decision the guardrail would have enforced, as a stable string:
+	/// `BLOCKED`, `ANONYMIZED`, or `NONE`. Used for audit-mode logging/metrics.
+	pub fn would_action(&self) -> &'static str {
+		if self.is_blocked() {
+			"BLOCKED"
+		} else if self.is_anonymized() {
+			"ANONYMIZED"
+		} else {
+			"NONE"
+		}
+	}
+
+	/// Emit a structured, ingestible record of an audit-mode evaluation. The
+	/// `assessments` array carries the per-filter findings (category, confidence,
+	/// `detected`) as AWS returns them, with content-bearing fields redacted (see
+	/// `redacted_assessments`). Downstream log pipelines (e.g. a CloudWatch
+	/// subscription into a data lake) can parse the metadata. No prompt or
+	/// completion text and no matched sensitive strings are logged.
+	pub fn log_audit(&self, guardrail_id: &str, guardrail_version: &str, source: GuardrailSource) {
+		let assessments = serde_json::to_string(&self.redacted_assessments()).unwrap_or_default();
+		tracing::info!(
+			target: "agentgateway::guardrail::audit",
+			guardrail_id = %guardrail_id,
+			guardrail_version = %guardrail_version,
+			source = ?source,
+			would_action = %self.would_action(),
+			assessments = %assessments,
+			"bedrock guardrail audit evaluation"
+		);
+	}
+
+	/// Assessments with content-bearing fields stripped, safe to log.
+	///
+	/// Bedrock guardrail assessments echo the matched content in several places:
+	/// `sensitiveInformationPolicy.piiEntities[].match` and `...regexes[].{match,regex}`
+	/// carry raw matched PII, `wordPolicy.customWords[].match` echoes the matched
+	/// word, and AWS can add new content-bearing fields in future API versions.
+	/// Logging these verbatim would leak the very sensitive data the guardrail
+	/// exists to catch, even though the prompt/completion itself is not logged.
+	///
+	/// A denylist (drop keys named `match`) is not safe here: it silently passes
+	/// through any content-bearing field AWS adds later. This uses the inverse — an
+	/// allowlist of the structural metadata keys that audit mode exists to surface
+	/// (`type`, `action`, `confidence`, `detected`, `name`, `filterStrength`,
+	/// `threshold`, `score`, and the policy/filter container keys). Every other key,
+	/// known or not, is dropped. New AWS fields are excluded by default (fail
+	/// closed), and only scalar values survive under a leaf key, so no free-form
+	/// text can ride through under an allowed name.
+	pub(crate) fn redacted_assessments(&self) -> Vec<serde_json::Value> {
+		self.assessments.iter().map(Self::redact_value).collect()
+	}
+
+	/// Structural metadata keys that carry no user content and are safe to log.
+	/// Container keys (whose values are objects/arrays we recurse into) and leaf
+	/// metadata keys (whose scalar values describe the finding, not the matched
+	/// content) both live here; anything absent is dropped.
+	const SAFE_ASSESSMENT_KEYS: &'static [&'static str] = &[
+		// Policy containers
+		"topicPolicy",
+		"contentPolicy",
+		"wordPolicy",
+		"sensitiveInformationPolicy",
+		"contextualGroundingPolicy",
+		// Per-policy collections
+		"topics",
+		"filters",
+		"customWords",
+		"managedWordLists",
+		"piiEntities",
+		"regexes",
+		// Leaf metadata (no matched content). `name` is the operator-configured
+		// topic/regex label (e.g. "Finance"), not user content.
+		"type",
+		"action",
+		"confidence",
+		"detected",
+		"name",
+		"filterStrength",
+		"threshold",
+		"score",
+	];
+
+	/// Recursively keep only allowlisted, content-free keys from a guardrail
+	/// assessment value. Unknown keys are dropped rather than passed through, so a
+	/// content-bearing field AWS adds later cannot leak. A leaf metadata key
+	/// (e.g. `type`, `name`) keeps only a scalar value; if AWS ever nests text
+	/// under such a key, the object/array is dropped instead of recursed into.
+	fn redact_value(value: &serde_json::Value) -> serde_json::Value {
+		match value {
+			serde_json::Value::Object(map) => serde_json::Value::Object(
+				map
+					.iter()
+					.filter(|(k, _)| {
+						Self::SAFE_ASSESSMENT_KEYS
+							.iter()
+							.any(|safe| k.eq_ignore_ascii_case(safe))
+					})
+					.map(|(k, v)| (k.clone(), Self::redact_value(v)))
+					.collect(),
+			),
+			serde_json::Value::Array(arr) => {
+				serde_json::Value::Array(arr.iter().map(Self::redact_value).collect())
+			},
+			other => other.clone(),
+		}
+	}
+
 	/// Check if any assessment contains a BLOCKED action
 	fn has_blocked_assessment(&self) -> bool {
 		self.assessments.iter().any(Self::value_contains_blocked)

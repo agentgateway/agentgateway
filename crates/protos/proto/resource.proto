@@ -1223,6 +1223,21 @@ message BackendPolicySpec {
       ACTION_UNSPECIFIED = 0;
       MASK = 1;
       REJECT = 2;
+      // Audit (observe) mode: the guard is invoked and its verdict recorded
+      // (metrics + structured log), but the request/response is never blocked
+      // or masked.
+      AUDIT = 3;
+    }
+
+    // Action for guards that cannot mask (only reject or observe). REJECT (the
+    // default when unspecified) enforces the guard's native verdict; AUDIT
+    // invokes the guard and records what it would have done without enforcing.
+    // Value names are prefixed to avoid colliding with ActionKind's values,
+    // which share this message's enum-value namespace.
+    enum RejectAuditAction {
+      REJECT_AUDIT_ACTION_UNSPECIFIED = 0;
+      REJECT_AUDIT_ACTION_REJECT = 1;
+      REJECT_AUDIT_ACTION_AUDIT = 2;
     }
 
     message RegexRules {
@@ -1241,6 +1256,10 @@ message BackendPolicySpec {
         FAIL_OPEN = 1;
       }
       FailureMode failure_mode = 4;
+
+      // REJECT (default) enforces the webhook's verdict; AUDIT records it
+      // without blocking or masking.
+      RejectAuditAction action = 5;
     }
 
     message Moderation {
@@ -1249,6 +1268,10 @@ message BackendPolicySpec {
       repeated BackendPolicySpec inline_policies = 2;
       // Not yet implemented. Reserved for a future release.
       BackendReference backend_ref = 3;
+
+      // REJECT (default) rejects flagged content; AUDIT records the would-be
+      // rejection without blocking.
+      RejectAuditAction action = 4;
     }
 
     message BedrockGuardrails {
@@ -1261,6 +1284,11 @@ message BackendPolicySpec {
 
       // Not yet implemented. Reserved for a future release.
       BackendReference backend_ref = 5;
+
+      // REJECT (default) enforces the guardrail's verdict (block or anonymize,
+      // as decided by AWS at runtime); AUDIT invokes the guardrail and records
+      // its assessment without blocking or masking.
+      RejectAuditAction action = 6;
     }
 
     message GoogleModelArmor {
@@ -1274,6 +1302,10 @@ message BackendPolicySpec {
 
       // Not yet implemented. Reserved for a future release.
       BackendReference backend_ref = 5;
+
+      // REJECT (default) rejects flagged content; AUDIT records the would-be
+      // rejection without blocking.
+      RejectAuditAction action = 6;
     }
 
     message AzureContentSafety {
@@ -1296,6 +1328,10 @@ message BackendPolicySpec {
 
       // Not yet implemented. Reserved for a future release.
       BackendReference backend_ref = 7;
+
+      // REJECT (default) rejects flagged content; AUDIT records the would-be
+      // rejection without blocking.
+      RejectAuditAction action = 8;
     }
 
     // Response sent when rejecting a request
