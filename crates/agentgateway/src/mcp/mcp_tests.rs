@@ -1022,7 +1022,14 @@ async fn legacy_meta_client_capabilities_are_stripped() {
 		"id": 1,
 		"method": "tools/call",
 		"params": {
-			"_meta": {"io.modelcontextprotocol/clientCapabilities": {"elicitation": {}}},
+			"_meta": {"io.modelcontextprotocol/clientCapabilities": {
+				"elicitation": {},
+				"tasks": {},
+				"extensions": {
+					"io.modelcontextprotocol/tasks": {},
+					"io.modelcontextprotocol/ui": {}
+				}
+			}},
 			"name": "guarded_echo",
 			"arguments": {}
 		}
@@ -1043,6 +1050,22 @@ async fn legacy_meta_client_capabilities_are_stripped() {
 	assert!(
 		caps.get("elicitation").is_none(),
 		"legacy requests must still have elicitation stripped, got {call}"
+	);
+	assert!(
+		caps.get("tasks").is_none(),
+		"legacy tasks must be stripped, got {call}"
+	);
+	assert!(
+		caps
+			.pointer("/extensions/io.modelcontextprotocol~1tasks")
+			.is_none(),
+		"modern tasks extension must be stripped, got {call}"
+	);
+	assert!(
+		caps
+			.pointer("/extensions/io.modelcontextprotocol~1ui")
+			.is_some(),
+		"other extensions must be preserved, got {call}"
 	);
 }
 
@@ -2623,7 +2646,7 @@ mod appsmockserver {
 			let mut extensions = ExtensionCapabilities::new();
 			extensions.insert(
 				"io.modelcontextprotocol/ui".to_string(),
-				json!({"mimeTypes": [UI_MIME_TYPE]})
+				json!({ "mimeTypes": [UI_MIME_TYPE] })
 					.as_object()
 					.cloned()
 					.unwrap(),
@@ -2702,7 +2725,7 @@ mod appsmockserver {
 				])),
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
-					Some(json!({"uri": uri})),
+					Some(json!({ "uri": uri })),
 				)),
 			}
 		}
@@ -2965,9 +2988,7 @@ mod mockserver {
 				},
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
-					Some(json!({
-							"uri": uri
-					})),
+					Some(json!({ "uri": uri })),
 				)),
 			}
 		}
@@ -2990,9 +3011,7 @@ mod mockserver {
 				},
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
-					Some(json!({
-							"uri": uri
-					})),
+					Some(json!({ "uri": uri })),
 				)),
 			}
 		}
@@ -3006,9 +3025,7 @@ mod mockserver {
 				"str:////Users/to/some/path/" | "memo://insights" => Ok(()),
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
-					Some(json!({
-							"uri": uri
-					})),
+					Some(json!({ "uri": uri })),
 				)),
 			}
 		}
@@ -3262,9 +3279,7 @@ mod legacymockserver {
 				},
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
-					Some(json!({
-							"uri": uri
-					})),
+					Some(json!({ "uri": uri })),
 				)),
 			}
 		}

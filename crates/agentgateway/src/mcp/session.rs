@@ -358,7 +358,7 @@ impl Session {
 			l.session_id = Some(session_id);
 		});
 
-		self.strip_unsupported_client_capabilities(&mut init_request.params.capabilities);
+		self.strip_unsupported_client_capabilities(&mut init_request.params.capabilities, &ctx);
 		self
 			.relay
 			.send_single(
@@ -416,12 +416,10 @@ impl Session {
 					l.method_name = Some(method.clone());
 					l.session_id = Some(session_id);
 				});
-				if !mcp::handler::ctx_downstream_modern(&ctx) {
-					self.strip_unsupported_client_capabilities_from_meta(&mut r.request);
-				}
+				self.strip_unsupported_client_capabilities_from_meta(&mut r.request, &ctx);
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
-						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
+						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities, &ctx);
 
 						let pv = ir.params.protocol_version.clone();
 						let res = Box::pin(
@@ -670,9 +668,7 @@ impl Session {
 					l.method_name = Some(method.to_string());
 					l.session_id = Some(session_id);
 				});
-				if !mcp::handler::ctx_downstream_modern(&ctx) {
-					self.strip_unsupported_client_capabilities_from_meta(&mut r.notification);
-				}
+				self.strip_unsupported_client_capabilities_from_meta(&mut r.notification, &ctx);
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
 				Box::pin(self.relay.send_notification(r, ctx)).await
@@ -687,18 +683,34 @@ impl Session {
 	fn strip_unsupported_client_capabilities(
 		&self,
 		capabilities: &mut rmcp::model::ClientCapabilities,
+		ctx: &IncomingRequestContext,
 	) {
-		// Legacy clients require reverse JSON-RPC routing for these capabilities.
-		capabilities.roots = None;
-		capabilities.sampling = None;
-		capabilities.elicitation = None;
+		// TODO implement MCP tasks
+		capabilities.tasks = None;
+		if let Some(extensions) = capabilities.extensions.as_mut() {
+			extensions.remove("io.modelcontextprotocol/tasks");
+			if extensions.is_empty() {
+				capabilities.extensions = None;
+			}
+		}
+
+		if !mcp::handler::ctx_downstream_modern(ctx) {
+			// Legacy clients require reverse JSON-RPC routing for these capabilities.
+			capabilities.roots = None;
+			capabilities.sampling = None;
+			capabilities.elicitation = None;
+		}
 	}
 
-	fn strip_unsupported_client_capabilities_from_meta<T: GetMeta>(&self, message: &mut T) {
+	fn strip_unsupported_client_capabilities_from_meta<T: GetMeta>(
+		&self,
+		message: &mut T,
+		ctx: &IncomingRequestContext,
+	) {
 		let Some(mut capabilities) = message.get_meta().client_capabilities() else {
 			return;
 		};
-		self.strip_unsupported_client_capabilities(&mut capabilities);
+		self.strip_unsupported_client_capabilities(&mut capabilities, ctx);
 		message.get_meta_mut().set_client_capabilities(capabilities);
 	}
 }
