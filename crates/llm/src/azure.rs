@@ -17,12 +17,14 @@ pub enum AzureResourceType {
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "AzureProviderConfig"))]
 pub struct Provider {
+	/// Model ID to send to Azure, overriding the model in the client request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
 	/// The Azure resource name used to construct the endpoint host.
 	pub resource_name: Strng,
 	/// The type of Azure endpoint. Determines the host suffix.
 	pub resource_type: AzureResourceType,
+	/// Azure API version query parameter for the endpoint.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub api_version: Option<Strng>,
 	/// The Foundry project name, required when `resourceType` is `foundry`.

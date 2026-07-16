@@ -9,7 +9,7 @@ use rmcp::model::{
 };
 use tracing::warn;
 
-use crate::mcp::handler::rewrite_resource_update_message;
+use crate::mcp::handler::rewrite_resource_messages;
 use crate::mcp::mergestream::Messages;
 use crate::mcp::{ClientError, FailureMode};
 
@@ -121,7 +121,7 @@ pub(super) fn filter_and_tag_listen_notification(
 	if !forward {
 		return None;
 	}
-	let message = rewrite_resource_update_message(default_target_name, target, message);
+	let message = rewrite_resource_messages(default_target_name, target, message);
 	tag_listen_notification(message, subscription_id).map(Ok)
 }
 

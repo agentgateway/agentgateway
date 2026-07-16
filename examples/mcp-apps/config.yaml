@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+mcp:
+  port: 3000
+  policies:
+    cors:
+      allowOrigins:
+      - "*"
+      allowHeaders:
+      - mcp-protocol-version
+      - content-type
+      - cache-control
+      - mcp-session-id
+      - mcp-method
+      - mcp-name
+      exposeHeaders:
+      - "Mcp-Session-Id"
+  targets:
+  - name: monitor
+    stdio:
+      cmd: npx
+      args: ["-y", "@modelcontextprotocol/server-system-monitor", "--stdio"]

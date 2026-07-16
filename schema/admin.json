@@ -164,9 +164,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this resource.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace scoping this resource, used in fully qualified `namespace/name` references.",
           "type": "string"
         }
       },
@@ -318,18 +320,22 @@
           "maximum": 65535
         },
         "name": {
+          "description": "Name identifying this route.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace scoping this route, used in fully qualified `namespace/name` references.",
           "type": "string"
         },
         "ruleName": {
+          "description": "Specific rule within the route, for targeted policy references.",
           "type": [
             "string",
             "null"
           ]
         },
         "kind": {
+          "description": "Resource kind used in policy target references.",
           "type": [
             "string",
             "null"
@@ -376,21 +382,25 @@
       "type": "object",
       "properties": {
         "headers": {
+          "description": "HTTP headers that must match for this route to apply.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderMatch"
           }
         },
         "path": {
+          "description": "Path match rule (exact, prefix, or regex). Defaults to a \"/\" prefix match.",
           "$ref": "#/$defs/PathMatch",
           "default": {
             "pathPrefix": "/"
           }
         },
         "method": {
+          "description": "HTTP method that must match for this route to apply.",
           "type": "string"
         },
         "query": {
+          "description": "Query parameters that must match for this route to apply.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/QueryMatch"
@@ -406,9 +416,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "HTTP header or pseudo-header name (such as `:method`) to match.",
           "type": "string"
         },
         "value": {
+          "description": "Exact or regex pattern the header value must match.",
           "$ref": "#/$defs/HeaderValueMatch"
         }
       },
@@ -502,9 +514,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Query parameter name to match.",
           "type": "string"
         },
         "value": {
+          "description": "Exact or regex pattern the query parameter value must match.",
           "$ref": "#/$defs/QueryValueMatch"
         }
       },
@@ -654,18 +668,22 @@
           "maximum": 65535
         },
         "name": {
+          "description": "Name identifying this route.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace scoping this route, used in fully qualified `namespace/name` references.",
           "type": "string"
         },
         "ruleName": {
+          "description": "Specific rule within the route, for targeted policy references.",
           "type": [
             "string",
             "null"
           ]
         },
         "kind": {
+          "description": "Resource kind used in policy target references.",
           "type": [
             "string",
             "null"
@@ -724,9 +742,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,

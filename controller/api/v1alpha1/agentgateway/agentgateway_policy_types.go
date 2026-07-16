@@ -1368,9 +1368,14 @@ type BackendAuth struct {
 // +kubebuilder:validation:XValidation:rule="!(has(self.requestedTokenType) && has(self.grantType) && self.grantType == 'JwtBearer')",message="requestedTokenType is only valid with TokenExchange grantType"
 // +kubebuilder:validation:XValidation:rule="!has(self.requestedTokenType) || self.requestedTokenType != 'IdJag'",message="requestedTokenType IdJag is only supported by crossAppAccess"
 type OAuthTokenExchange struct {
-	// RFC 8693 token endpoint backend and path.
+	// RFC 8693 token endpoint backend.
 	// +required
-	TokenEndpoint OAuthTokenEndpoint `json:"tokenEndpoint"`
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Token endpoint path; defaults to "/". Must start with "/".
+	// +kubebuilder:validation:Pattern=`^/`
+	// +optional
+	Path *string `json:"path,omitempty"`
 
 	// RFC followed by the request. Defaults to TokenExchange (RFC 8693).
 	// +optional
@@ -1423,16 +1428,6 @@ type OAuthTokenExchange struct {
 	// Response cache configuration.
 	// +optional
 	Cache *OAuthTokenCache `json:"cache,omitempty"`
-}
-
-// OAuthTokenEndpoint references a token endpoint backend and optional path.
-type OAuthTokenEndpoint struct {
-	gwv1.BackendObjectReference `json:",inline"`
-
-	// Token endpoint path; defaults to "/". Must start with "/".
-	// +kubebuilder:validation:Pattern=`^/`
-	// +optional
-	Path *string `json:"path,omitempty"`
 }
 
 // +k8s:enum

@@ -13,6 +13,7 @@ define_schema_aliases!();
 #[serde(untagged)]
 pub enum FileInlineOrRemote {
 	File {
+		/// Path to a file on disk to load the value from.
 		file: PathBuf,
 	},
 	Inline(String),

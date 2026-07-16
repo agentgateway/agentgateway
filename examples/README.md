@@ -10,6 +10,7 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [mcp-authentication](mcp-authentication/README.md): authenticate MCP clients and protect MCP traffic.
 * [mcp-tls](mcp-tls/README.md): terminate TLS connections.
 * [mcp-openapi](mcp-openapi/README.md): serve an OpenAPI specification as MCP tools.
+* [mcp-apps](mcp-apps/README.md): proxy MCP Apps (interactive tool UIs) across multiplexed targets.
 * [mcp-telemetry](mcp-telemetry/README.md): visualize traces and metrics for MCP calls.
 
 ### LLM

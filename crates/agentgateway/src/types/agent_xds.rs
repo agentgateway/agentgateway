@@ -1509,9 +1509,10 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::StatefulMode::Stateful => true,
 					proto::agent::mcp_backend::StatefulMode::Stateless => false,
 				},
-				always_use_prefix: match m.prefix_mode() {
-					proto::agent::mcp_backend::PrefixMode::Always => true,
-					proto::agent::mcp_backend::PrefixMode::Conditional => false,
+				prefix_mode: match m.prefix_mode() {
+					proto::agent::mcp_backend::PrefixMode::Always => McpPrefixMode::Always,
+					proto::agent::mcp_backend::PrefixMode::Conditional => McpPrefixMode::Conditional,
+					proto::agent::mcp_backend::PrefixMode::Never => McpPrefixMode::Never,
 				},
 				failure_mode: match m.failure_mode() {
 					proto::agent::mcp_backend::FailureMode::FailOpen => FailureMode::FailOpen,

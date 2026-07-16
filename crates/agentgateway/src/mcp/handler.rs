@@ -1,19 +1,21 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use agent_core::prelude::{AssertSize, Strng};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
+use futures_util::StreamExt;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	CacheScope, ClientNotification, ClientRequest, DiscoverResult, Implementation,
-	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
-	ListResourcesResult, ListToolsResult, ProtocolVersion, RequestId, ResultType, ServerCapabilities,
-	ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerResult, SubscriptionFilter,
+	CacheScope, ClientNotification, ClientRequest, DiscoverResult, ExtensionCapabilities,
+	Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
+	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
+	ProtocolVersion, RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
+	ServerNotification, ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, warn};
 
@@ -25,22 +27,75 @@ use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
+use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
+use crate::types::agent::McpPrefixMode;
 
 const DELIMITER: &str = "_";
 
-fn resource_name(default_target_name: Option<&String>, target: &str, name: &str) -> String {
-	if default_target_name.is_none() {
+fn resource_name(prefix_names: bool, target: &str, name: &str) -> String {
+	if prefix_names {
 		format!("{target}{DELIMITER}{name}")
 	} else {
 		name.to_string()
 	}
 }
 
+fn duplicate_names<'a>(enabled: bool, names: impl Iterator<Item = &'a str>) -> HashSet<String> {
+	if !enabled {
+		return HashSet::new();
+	}
+	let duplicates = names
+		.duplicates()
+		.map(str::to_owned)
+		.collect::<HashSet<_>>();
+	if !duplicates.is_empty() {
+		debug!(
+			"dropping ambiguous MCP names served by multiple targets: {}",
+			duplicates.iter().sorted().join(", ")
+		);
+	}
+	duplicates
+}
+
+/// Split per-target list results and, when rejecting duplicates, drop names
+/// served by more than one target.
+fn per_target_deduped<T>(
+	streams: Vec<(Strng, ServerResult)>,
+	reject_duplicates: bool,
+	extract: impl Fn(ServerResult) -> Vec<T>,
+	name: impl for<'a> Fn(&'a T) -> &'a str,
+) -> Vec<(Strng, Vec<T>)> {
+	let per_target = streams
+		.into_iter()
+		.map(|(server_name, s)| (server_name, extract(s)))
+		.collect_vec();
+	let duplicates = duplicate_names(
+		reject_duplicates,
+		per_target
+			.iter()
+			.flat_map(|(_, items)| items.iter().map(&name)),
+	);
+	per_target
+		.into_iter()
+		.map(|(server_name, items)| {
+			let items = items
+				.into_iter()
+				.filter(|item| !duplicates.contains(name(item)))
+				.collect_vec();
+			(server_name, items)
+		})
+		.collect_vec()
+}
+
 fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
 	if default_target_name.is_none() {
+		// Apps UI resources must keep their ui:// scheme so hosts still
+		// recognize them; the target is carried in the authority instead.
+		if let Some(rewritten) = apps::encode_ui_uri(target, uri) {
+			return rewritten;
+		}
 		// Transform URI to service+scheme:// format for multiplexing
 		// e.g., "http://example.com" becomes "service+http://example.com"
 		if let Some(scheme_end) = uri.find("://") {
@@ -55,7 +110,7 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 	}
 }
 
-pub(super) fn rewrite_resource_update_message(
+pub(super) fn rewrite_resource_messages(
 	default_target_name: Option<&String>,
 	target: &str,
 	mut message: ServerJsonRpcMessage,
@@ -70,7 +125,70 @@ pub(super) fn rewrite_resource_update_message(
 			resource_updated.params.uri.as_str(),
 		);
 	}
+	if let ServerJsonRpcMessage::Response(resp) = &mut message
+		&& let ServerResult::ReadResourceResult(read) = &mut resp.result
+	{
+		for content in &mut read.contents {
+			match content {
+				rmcp::model::ResourceContents::TextResourceContents { uri, .. }
+				| rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => {
+					*uri = resource_uri(default_target_name, target, uri);
+				},
+				_ => {},
+			}
+		}
+	}
 	message
+}
+
+/// What kind of name is being resolved to a target (`prefixMode: never`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResolveKind {
+	Tool,
+	Prompt,
+}
+
+impl ResolveKind {
+	fn as_str(&self) -> &'static str {
+		match self {
+			ResolveKind::Tool => "tool",
+			ResolveKind::Prompt => "prompt",
+		}
+	}
+
+	fn list_request(&self, cursor: Option<String>) -> ClientRequest {
+		let params = cursor.map(|c| PaginatedRequestParams::default().with_cursor(Some(c)));
+		match self {
+			ResolveKind::Tool => ClientRequest::ListToolsRequest(rmcp::model::ListToolsRequest {
+				params,
+				..Default::default()
+			}),
+			ResolveKind::Prompt => ClientRequest::ListPromptsRequest(rmcp::model::ListPromptsRequest {
+				params,
+				..Default::default()
+			}),
+		}
+	}
+
+	fn next_cursor(&self, result: &ServerResult) -> Option<String> {
+		match (self, result) {
+			(ResolveKind::Tool, ServerResult::ListToolsResult(r)) => r.next_cursor.clone(),
+			(ResolveKind::Prompt, ServerResult::ListPromptsResult(r)) => r.next_cursor.clone(),
+			_ => None,
+		}
+	}
+
+	fn contains_name(&self, result: &ServerResult, name: &str) -> bool {
+		match (self, result) {
+			(ResolveKind::Tool, ServerResult::ListToolsResult(r)) => {
+				r.tools.iter().any(|t| t.name == name)
+			},
+			(ResolveKind::Prompt, ServerResult::ListPromptsResult(r)) => {
+				r.prompts.iter().any(|p| p.name == name)
+			},
+			_ => false,
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -120,12 +238,44 @@ impl Relay {
 		}
 	}
 
-	fn rewrite_outbound_server_messages(&self, target: &str, stream: Messages) -> Messages {
+	fn rewrite_outbound_server_messages(
+		&self,
+		target: &str,
+		stream: Messages,
+		cel: CelExecWrapper,
+	) -> Messages {
 		let target = target.to_string();
 		let default_target_name = self.upstreams.default_target_name.clone();
+		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
-			rewrite_resource_update_message(default_target_name.as_ref(), &target, message)
+			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
+
+			let mut resource_allowed = |uri: &str| {
+				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against
+				// these UI resources
+				policies.validate(
+					&rbac::ResourceType::Resource(rbac::ResourceId::new(target.clone(), uri.to_string())),
+					&cel,
+				)
+			};
+			apps::rewrite_tool_list_ui_meta(
+				default_target_name.is_none(),
+				&target,
+				&mut resource_allowed,
+				message,
+			)
 		})
+	}
+
+	/// Whether names carry no routing information (`prefixMode: never`), so the
+	/// owning target can only be found by listing upstreams.
+	pub fn needs_resolution(&self) -> bool {
+		self.upstreams.is_multiplexing && self.upstreams.prefix_mode == McpPrefixMode::Never
+	}
+
+	/// Whether tool/prompt names are exposed to clients with a target prefix.
+	fn prefix_names(&self) -> bool {
+		self.upstreams.default_target_name.is_none() && !self.needs_resolution()
 	}
 
 	pub fn parse_resource_name<'a, 'b: 'a>(
@@ -143,11 +293,140 @@ impl Relay {
 		}
 	}
 
+	/// Find the target for an unprefixed name from the corresponding list response.
+	pub async fn resolve_resource_name<'a, 'b: 'a>(
+		&'a self,
+		kind: ResolveKind,
+		res: &'b str,
+		ctx: &IncomingRequestContext,
+	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
+		if self.needs_resolution() {
+			let target = self.resolve_unprefixed(kind, res, ctx).await?;
+			return Ok((Cow::Owned(target.to_string()), res));
+		}
+		let (target, name) = self.parse_resource_name(res)?;
+		Ok((Cow::Borrowed(target), name))
+	}
+
+	/// Find the single target serving the unprefixed `name` by listing every
+	/// target at call time.
+	/// TODO cache list results so every tool call/prompt get doesn't require making
+	/// tons of extra list calls to every upstream.
+	async fn resolve_unprefixed(
+		&self,
+		kind: ResolveKind,
+		name: &str,
+		ctx: &IncomingRequestContext,
+	) -> Result<Strng, UpstreamError> {
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(target, con)| async move {
+				let res = Self::serves_name(&con, kind, name, ctx).await;
+				(target, res)
+			})
+			.collect();
+
+		let mut owner = None;
+		for (target, res) in futures::future::join_all(futs).await {
+			match res {
+				Ok(true) => {
+					if owner.is_some() {
+						return Err(UpstreamError::InvalidRequest(format!(
+							"{} {name} is served by multiple targets",
+							kind.as_str()
+						)));
+					}
+					owner = Some(target);
+				},
+				Ok(false) => {},
+				Err(e) => {
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!(
+							"upstream '{target}' failed while resolving {} '{name}', skipping: {e}",
+							kind.as_str()
+						);
+					} else {
+						return Err(e);
+					}
+				},
+			}
+		}
+
+		owner.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown {} {name}", kind.as_str())))
+	}
+
+	/// Page through one target's `kind` list until `name` is found or the pages
+	/// run out. `Ok(false)` includes targets that don't support the list method.
+	async fn serves_name(
+		con: &upstream::Upstream,
+		kind: ResolveKind,
+		name: &str,
+		ctx: &IncomingRequestContext,
+	) -> Result<bool, UpstreamError> {
+		// Gateway-generated ids: reusing the client's id here would make the upstream
+		// see it twice (list probe, then the forwarded call) in one session.
+		static RESOLVE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+		// Bounds paging against upstreams that return cursors forever.
+		const MAX_LIST_PAGES: usize = 64;
+		let mut cursor = None;
+		for _ in 0..MAX_LIST_PAGES {
+			let seq = RESOLVE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			let req = JsonRpcRequest::new(
+				RequestId::String(format!("agw-resolve-{seq}").into()),
+				kind.list_request(cursor),
+			);
+			let Some(result) = Self::first_response(con.generic_stream(req, ctx).await?).await? else {
+				return Ok(false);
+			};
+			if kind.contains_name(&result, name) {
+				return Ok(true);
+			}
+			cursor = kind.next_cursor(&result);
+			if cursor.is_none() {
+				return Ok(false);
+			}
+		}
+		Err(UpstreamError::InvalidRequest(format!(
+			"exceeded {MAX_LIST_PAGES} pages listing {}s",
+			kind.as_str()
+		)))
+	}
+
+	/// Consume a response stream until the first result, error data, or end.
+	/// `Ok(None)` means the target rejected the list method as unsupported.
+	async fn first_response(stream: Messages) -> Result<Option<ServerResult>, UpstreamError> {
+		let mut stream = std::pin::pin!(stream);
+		while let Some(msg) = stream.next().await {
+			match msg {
+				Ok(ServerJsonRpcMessage::Response(resp)) => return Ok(Some(resp.result)),
+				Ok(ServerJsonRpcMessage::Error(err)) => {
+					if err.error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND {
+						return Ok(None);
+					}
+					return Err(UpstreamError::InvalidRequest(err.error.message.to_string()));
+				},
+				Ok(_) => {},
+				Err(e) => return Err(e.into()),
+			}
+		}
+		Err(UpstreamError::Recv)
+	}
+
 	/// Reverse of `resource_uri`: extracts the service name and original URI from a
-	/// multiplexed URI of the form `service+scheme://rest`.
+	/// multiplexed URI of the form `service+scheme://rest` (or `ui://service+rest`
+	/// for Apps UI resources).
 	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
 		if let Some(default) = self.upstreams.default_target_name.as_ref() {
 			Ok((default.as_str(), uri.to_string()))
+		} else if apps::is_ui_uri(uri) {
+			let (service_name, original_uri) = apps::decode_ui_uri(uri)
+				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
+			let validated_name = self
+				.upstreams
+				.get_name(service_name)
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+			Ok((validated_name, original_uri))
 		} else {
 			// URI format: "service+scheme://rest"
 			let plus_pos = uri
@@ -155,6 +434,12 @@ impl Relay {
 				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
 			let service_name = &uri[..plus_pos];
 			let original_uri = &uri[plus_pos + 1..];
+			// ui:// resources use the ui://service+rest namespace exclusively
+			if apps::is_ui_uri(original_uri) {
+				return Err(UpstreamError::InvalidRequest(
+					"invalid resource URI".to_string(),
+				));
+			}
 			// Validate that the extracted service name corresponds to a known upstream
 			let validated_name = self
 				.upstreams
@@ -314,15 +599,21 @@ impl Relay {
 
 	pub fn merge_tools(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let prefix_names = self.prefix_names();
+		let reject_duplicates = self.needs_resolution();
 		Box::new(move |streams, cel| {
-			let tools = streams
+			let per_target = per_target_deduped(
+				streams,
+				reject_duplicates,
+				|s| match s {
+					ServerResult::ListToolsResult(ltr) => ltr.tools,
+					_ => vec![],
+				},
+				|tool| tool.name.as_ref(),
+			);
+			let tools = per_target
 				.into_iter()
-				.flat_map(|(server_name, s)| {
-					let tools = match s {
-						ServerResult::ListToolsResult(ltr) => ltr.tools,
-						_ => vec![],
-					};
+				.flat_map(|(server_name, tools)| {
 					tools
 						.into_iter()
 						// Apply authorization policies, filtering tools that are not allowed.
@@ -337,11 +628,7 @@ impl Relay {
 						})
 						// Rename to handle multiplexing
 						.map(|mut t| {
-							t.name = Cow::Owned(resource_name(
-								default_target_name.as_ref(),
-								server_name.as_str(),
-								&t.name,
-							));
+							t.name = Cow::Owned(resource_name(prefix_names, server_name.as_str(), &t.name));
 							t
 						})
 						.collect_vec()
@@ -361,19 +648,29 @@ impl Relay {
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
 		let resource_subscribe = self.upstreams.stateful();
+		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
 			if !multiplexing {
 				// Happy case: we can forward everything
-				let res = s.into_iter().next().and_then(|(_, r)| match r {
-					ServerResult::InitializeResult(ir) => Some(ir),
+				let res = s.into_iter().next().and_then(|(name, r)| match r {
+					ServerResult::InitializeResult(ir) => Some((name, ir)),
 					_ => None,
 				});
-				if let Some(ir) = res {
+				if let Some((name, ir)) = res {
+					upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
 					return Ok(ir.into());
 				}
 				// If we got here in FailOpen mode, it means the only target failed.
 				// Return a default info response to keep the client session alive.
-				return Ok(Self::get_info(pv, resource_subscribe, Vec::new()).into());
+				return Ok(
+					Self::get_info(
+						pv,
+						resource_subscribe,
+						Vec::new(),
+						upstreams.merged_extensions(&HashMap::new()),
+					)
+					.into(),
+				);
 			}
 
 			// Multiplexing is more complex. We need to find the lowest protocol version
@@ -383,6 +680,7 @@ impl Relay {
 
 			for (server_name, v) in s {
 				if let ServerResult::InitializeResult(r) = v {
+					upstreams.record_extensions(server_name.as_str(), r.capabilities.extensions.as_ref());
 					if r.protocol_version.to_string() < lowest_version.to_string() {
 						lowest_version = r.protocol_version;
 					}
@@ -394,12 +692,21 @@ impl Relay {
 				}
 			}
 
-			Ok(Self::get_info(lowest_version, resource_subscribe, upstream_instructions).into())
+			Ok(
+				Self::get_info(
+					lowest_version,
+					resource_subscribe,
+					upstream_instructions,
+					upstreams.merged_extensions(&HashMap::new()),
+				)
+				.into(),
+			)
 		})
 	}
 
 	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
 		let resource_subscribe = self.upstreams.stateful();
+		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
 			// Single server: forward the upstream's advertised versions untouched. The gateway
 			// does no version translation, so an old-only upstream must surface as-is and let
@@ -416,13 +723,27 @@ impl Relay {
 				}
 				// In FailOpen, a default discovery response lets the client continue negotiation
 				// when no upstream discovery response is available.
-				return Ok(Self::get_discovery(resource_subscribe, Vec::new()).into());
+				// Include the recorded extensions from initialize responses.
+				return Ok(
+					Self::get_discovery(
+						resource_subscribe,
+						Vec::new(),
+						upstreams.merged_extensions(&HashMap::new()),
+					)
+					.into(),
+				);
 			}
 
 			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
 			let mut supported_versions = ProtocolVersion::KNOWN_VERSIONS.to_vec();
+			let mut upstream_extensions: HashMap<Strng, ExtensionCapabilities> = HashMap::new();
 			for (server_name, v) in s {
-				if let ServerResult::DiscoverResult(r) = v {
+				if let ServerResult::DiscoverResult(mut r) = v {
+					if let Some(ext) = r.capabilities.extensions.take()
+						&& !ext.is_empty()
+					{
+						upstream_extensions.insert(server_name.clone(), ext);
+					}
 					supported_versions.retain(|version| r.supported_versions.contains(version));
 					if let Some(instructions) = r.instructions
 						&& !instructions.is_empty()
@@ -432,7 +753,11 @@ impl Relay {
 				}
 			}
 
-			let mut discover = Self::get_discovery(resource_subscribe, upstream_instructions);
+			let mut discover = Self::get_discovery(
+				resource_subscribe,
+				upstream_instructions,
+				upstreams.merged_extensions(&upstream_extensions),
+			);
 			discover.supported_versions = supported_versions;
 			Ok(discover.into())
 		})
@@ -440,15 +765,21 @@ impl Relay {
 
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let prefix_names = self.prefix_names();
+		let reject_duplicates = self.needs_resolution();
 		Box::new(move |streams, cel| {
-			let prompts = streams
+			let per_target = per_target_deduped(
+				streams,
+				reject_duplicates,
+				|s| match s {
+					ServerResult::ListPromptsResult(lpr) => lpr.prompts,
+					_ => vec![],
+				},
+				|prompt| prompt.name.as_str(),
+			);
+			let prompts = per_target
 				.into_iter()
-				.flat_map(|(server_name, s)| {
-					let prompts = match s {
-						ServerResult::ListPromptsResult(lpr) => lpr.prompts,
-						_ => vec![],
-					};
+				.flat_map(|(server_name, prompts)| {
 					prompts
 						.into_iter()
 						.filter(|p| {
@@ -461,7 +792,7 @@ impl Relay {
 							)
 						})
 						.map(|mut p| {
-							p.name = resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name);
+							p.name = resource_name(prefix_names, server_name.as_str(), &p.name);
 							p
 						})
 						.collect_vec()
@@ -771,9 +1102,11 @@ impl Relay {
 			)));
 		};
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
+		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(us.generic_stream(r, &ctx).assert_size::<{ 3 * 1024 }>()).await?,
+			cel,
 		);
 
 		respond_with_guardrails(id, stream, guardrails, mcp_log, &ctx)
@@ -828,10 +1161,11 @@ impl Relay {
 
 		let fut_results = futures::future::join_all(futs).await;
 
+		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
-					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
 					streams.push((name, s));
 				},
 				Err(e) => {
@@ -905,7 +1239,7 @@ impl Relay {
 		let streams = streams
 			.into_iter()
 			.map(|(name, s)| {
-				let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+				let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
 				(name, s)
 			})
 			.collect::<Vec<_>>();
@@ -977,6 +1311,7 @@ impl Relay {
 		pv: ProtocolVersion,
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
+		extensions: Option<ExtensionCapabilities>,
 	) -> ServerInfo {
 		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
@@ -991,7 +1326,9 @@ impl Relay {
 			if resource_subscribe {
 				builder = builder.enable_resources_subscribe();
 			}
-			builder.build()
+			let mut capabilities = builder.build();
+			capabilities.extensions = extensions;
+			capabilities
 		};
 		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
 		let instructions = if upstream_instructions.is_empty() {
@@ -1015,11 +1352,13 @@ impl Relay {
 	fn get_discovery(
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
+		extensions: Option<ExtensionCapabilities>,
 	) -> DiscoverResult {
 		let info = Self::get_info(
 			ProtocolVersion::default(),
 			resource_subscribe,
 			upstream_instructions,
+			extensions,
 		);
 		DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
 			.with_server_info(info.server_info)

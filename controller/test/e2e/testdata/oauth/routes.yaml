@@ -78,12 +78,12 @@ spec:
   backend:
     auth:
       oauthTokenExchange:
-        tokenEndpoint:
+        backendRef:
           group: agentgateway.dev
           kind: AgentgatewayBackend
           name: oauth-dummy-idp
           port: 8443
-          path: /token-exchange
+        path: /token-exchange
         grantType: TokenExchange
         actorToken:
           source:
@@ -119,12 +119,12 @@ spec:
   backend:
     auth:
       oauthTokenExchange:
-        tokenEndpoint:
+        backendRef:
           group: agentgateway.dev
           kind: AgentgatewayBackend
           name: oauth-dummy-idp
           port: 8443
-          path: /token-exchange
+        path: /token-exchange
         grantType: JwtBearer
         subjectToken:
           source:

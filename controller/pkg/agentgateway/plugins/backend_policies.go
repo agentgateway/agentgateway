@@ -953,11 +953,28 @@ var oauthReservedAdditionalParams = []string{
 }
 
 func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string) (*api.BackendAuthPolicy, error) {
+	oauth, err := BuildOAuthTokenExchange(ctx, auth, namespace, nil)
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_OauthTokenExchange{
+			OauthTokenExchange: oauth,
+		},
+	}, err
+}
+
+// BuildOAuthTokenExchange lowers an OAuth token exchange policy into its xDS representation.
+func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
+	if auth == nil {
+		return nil, errors.New("oauthTokenExchange must not be nil")
+	}
+
 	var errs []error
 
-	tokenEndpoint, err := BuildBackendRef(ctx, auth.TokenEndpoint.BackendObjectReference, namespace)
-	if err != nil {
-		errs = append(errs, err)
+	if tokenEndpoint == nil {
+		var err error
+		tokenEndpoint, err = BuildBackendRef(ctx, auth.BackendRef, namespace)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	additionalParams := castCELMap(auth.AdditionalParams, func(key string, expr agentgateway.CELExpression) {
@@ -987,7 +1004,7 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 
 	oauth := &api.OAuthTokenExchange{
 		TokenEndpoint:         tokenEndpoint,
-		TokenEndpointPath:     auth.TokenEndpoint.Path,
+		TokenEndpointPath:     auth.Path,
 		GrantType:             translateOAuthGrantType(auth.GrantType),
 		SubjectToken:          translateOAuthTokenSpec(auth.SubjectToken),
 		ActorToken:            translateOAuthActorToken(auth.ActorToken),
@@ -1000,8 +1017,8 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
 		Cache:                 translateOAuthTokenCache(auth.Cache),
 	}
-	if auth.TokenEndpoint.Path != nil && !strings.HasPrefix(*auth.TokenEndpoint.Path, "/") {
-		errs = append(errs, fmt.Errorf("oauth tokenEndpoint.path %q must start with /", *auth.TokenEndpoint.Path))
+	if auth.Path != nil && !strings.HasPrefix(*auth.Path, "/") {
+		errs = append(errs, fmt.Errorf("oauthTokenExchange.path %q must start with /", *auth.Path))
 	}
 	if oauth.GrantType == api.OAuthTokenExchange_JWT_BEARER {
 		if oauth.ActorToken != nil {
@@ -1018,11 +1035,7 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 		errs = append(errs, errors.New("oauth actorToken mayAct Required requires tokenType Jwt"))
 	}
 
-	return &api.BackendAuthPolicy{
-		Kind: &api.BackendAuthPolicy_OauthTokenExchange{
-			OauthTokenExchange: oauth,
-		},
-	}, errors.Join(errs...)
+	return oauth, errors.Join(errs...)
 }
 
 func translateOAuthGrantType(grantType *agentgateway.OAuthGrantType) api.OAuthTokenExchange_GrantType {

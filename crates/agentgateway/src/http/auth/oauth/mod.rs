@@ -16,8 +16,6 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
-#[cfg(test)]
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::types::agent_xds::{
 	Diagnostics, authorization_location, optional_authorization_location,
 	permissive_cel_expression_arc, resolve_simple_reference,
@@ -31,17 +29,10 @@ mod cross_app_access;
 mod transport;
 
 use cache::{InMemoryTokenCache, TokenCacheResult};
-#[cfg(test)]
-use client_auth::RawPrivateKeyJwt;
 use client_auth::sign_client_assertion;
 pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt, SigningAlg};
 pub use cross_app_access::CrossAppAccessAuth;
-#[cfg(test)]
-use cross_app_access::CrossAppAccessEndpoint;
 pub(super) use transport::FetchError;
-
-#[cfg(test)]
-use crate::serdes::FileOrInline;
 
 #[apply(schema!)]
 pub struct OAuthTokenExchangeAuth {
@@ -51,7 +42,7 @@ pub struct OAuthTokenExchangeAuth {
 	target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
-	token_endpoint_path: String,
+	path: String,
 
 	// ----- Grant and incoming tokens -----
 	/// Selects which RFC the request follows; defaults to token exchange (RFC 8693).
@@ -121,7 +112,7 @@ struct ChainedExchange {
 	target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
-	token_endpoint_path: String,
+	path: String,
 	/// Client authentication used when calling the chained token endpoint.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	client_auth: Option<OAuthClientAuth>,
@@ -142,10 +133,10 @@ struct ChainedExchange {
 
 impl ChainedExchange {
 	fn validate_load(&self) -> Result<(), String> {
-		if !self.token_endpoint_path.is_empty() && !self.token_endpoint_path.starts_with('/') {
+		if !self.path.is_empty() && !self.path.starts_with('/') {
 			return Err(format!(
-				"chained_exchange.token_endpoint_path {:?} must start with /",
-				self.token_endpoint_path
+				"chained_exchange.path {:?} must start with /",
+				self.path
 			));
 		}
 		if let Some(client_auth) = &self.client_auth {
@@ -180,11 +171,8 @@ const RESERVED_FORM_PARAMS: &[&str] = &[
 
 impl OAuthTokenExchangeAuth {
 	pub(crate) fn validate_load(&self) -> Result<(), String> {
-		if !self.token_endpoint_path.is_empty() && !self.token_endpoint_path.starts_with('/') {
-			return Err(format!(
-				"token_endpoint_path {:?} must start with /",
-				self.token_endpoint_path
-			));
+		if !self.path.is_empty() && !self.path.starts_with('/') {
+			return Err(format!("path {:?} must start with /", self.path));
 		}
 		if self.grant_type == OAuthGrantType::JwtBearer {
 			if self.requested_token_type.is_some() {
@@ -244,7 +232,7 @@ impl OAuthTokenExchangeAuth {
 		use proto::o_auth_token_exchange::GrantType;
 
 		let target = resolve_simple_reference(t.token_endpoint.as_ref());
-		let token_endpoint_path = t.token_endpoint_path.unwrap_or_default();
+		let path = t.token_endpoint_path.unwrap_or_default();
 
 		let grant_type = match GrantType::try_from(t.grant_type) {
 			Ok(GrantType::Unspecified | GrantType::TokenExchange) => OAuthGrantType::TokenExchange,
@@ -302,7 +290,7 @@ impl OAuthTokenExchangeAuth {
 				// the backend resource carries its own policies there.
 				policies: Vec::new(),
 			},
-			token_endpoint_path,
+			path,
 			grant_type,
 			subject_token,
 			actor_token,

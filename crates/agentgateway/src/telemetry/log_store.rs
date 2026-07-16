@@ -71,6 +71,7 @@ static REQUEST_LOG_STORE: OnceLock<RequestLogStore> = OnceLock::new();
 
 #[apply(schema!)]
 pub struct Config {
+	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
 	pub url: String,
 }
 

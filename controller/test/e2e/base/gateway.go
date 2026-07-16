@@ -18,7 +18,10 @@ import (
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/test/util/retry"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils/portforward"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
@@ -38,10 +41,50 @@ func SetupBaseGateway(ctx context.Context, t test.Failer, installation *e2e.Test
 	baseInstallation = installation
 	baseContext = ctx
 	baseT = t
+	waitForGatewayReady(t, ctx, installation, name)
 	BaseGateway = Gateway{
 		NamespacedName: name,
 		Address:        ResolveGatewayAddress(t, ctx, installation, name),
 	}
+}
+
+func waitForGatewayReady(t test.Failer, ctx context.Context, installation *e2e.TestInstallation, name types.NamespacedName) {
+	t.Helper()
+	waitForGatewayCondition(t, ctx, installation, name, gwv1.GatewayConditionProgrammed, metav1.ConditionTrue)
+	waitForGatewayCondition(t, ctx, installation, name, gwv1.GatewayConditionAccepted, metav1.ConditionTrue)
+}
+
+func waitForGatewayCondition(
+	t test.Failer,
+	ctx context.Context,
+	installation *e2e.TestInstallation,
+	name types.NamespacedName,
+	cond gwv1.GatewayConditionType,
+	expect metav1.ConditionStatus,
+) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		gw := &gwv1.Gateway{}
+		if err := installation.ClusterContext.ControllerClient.Get(ctx, name, gw); err != nil {
+			return fmt.Errorf("getting Gateway %s/%s: %w", name.Namespace, name.Name, err)
+		}
+		condition := meta.FindStatusCondition(gw.Status.Conditions, string(cond))
+		if condition == nil {
+			return fmt.Errorf("Gateway %s/%s missing condition %s", name.Namespace, name.Name, cond)
+		}
+		if condition.Status != expect {
+			return fmt.Errorf(
+				"Gateway %s/%s condition %s=%s, want %s",
+				name.Namespace,
+				name.Name,
+				cond,
+				condition.Status,
+				expect,
+			)
+		}
+
+		return nil
+	})
 }
 
 var (

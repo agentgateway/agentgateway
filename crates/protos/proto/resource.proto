@@ -1707,6 +1707,9 @@ message MCPBackend {
   enum PrefixMode {
     CONDITIONAL = 0;
     ALWAYS = 1;
+    // Never prefix names, even with multiple targets; tool/prompt calls are
+    // routed by looking up which target serves the name.
+    NEVER = 2;
   }
 
   repeated MCPTarget targets = 2;
