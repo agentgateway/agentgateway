@@ -14,21 +14,6 @@ spec:
         name: extproc-svc
         port: 4444
       failureMode: FailOpen
-      requestAttributes:
-        source.address: source.address
-      responseAttributes:
-        response.code: response.code
-      metadataContext:
-        envoy.filters.http.jwt_authn:
-          jwt_payload: request.jwt.payload
-      processingOptions:
-        requestBodyMode: BufferedPartial
-        responseBodyMode: FullDuplexStreamed
-        requestHeaderMode: Skip
-        responseHeaderMode: Send
-        requestTrailerMode: Send
-        responseTrailerMode: Skip
-        allowModeOverride: true
 ---
 apiVersion: v1
 kind: Service
@@ -38,6 +23,7 @@ metadata:
 spec:
   ports:
     - port: 4444
+
 ---
 # Output
 output:
@@ -58,22 +44,6 @@ output:
       traffic:
         extProc:
           failureMode: FAIL_OPEN
-          metadataContext:
-            envoy.filters.http.jwt_authn:
-              context:
-                jwt_payload: request.jwt.payload
-          processingOptions:
-            allowModeOverride: true
-            requestBodyMode: BUFFERED_PARTIAL
-            requestHeaderMode: SKIP
-            requestTrailerMode: SEND
-            responseBodyMode: FULL_DUPLEX_STREAMED
-            responseHeaderMode: SEND
-            responseTrailerMode: SKIP
-          requestAttributes:
-            source.address: source.address
-          responseAttributes:
-            response.code: response.code
           target:
             port: 4444
             service:
