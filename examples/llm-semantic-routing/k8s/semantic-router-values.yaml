@@ -107,8 +107,10 @@ config:
         - paxos
         - linearizability
         - serializability
+        - serializable isolation
         - formal verification
         - model checking
+        - model checker
         - TLA+
         - Alloy
         - Coq
@@ -129,8 +131,10 @@ config:
         - idempotency boundary
         - fencing token
         - fencing tokens
+        - leader election
         - stale writer
         - regional failover
+        - cross-region failover
         - network partition
         - network partitions
         - replicated state
@@ -145,6 +149,11 @@ config:
         - dual writes
         - durable state transition
         - duplicate business effects
+        - transactional outbox
+        - event log compaction
+        - Kafka rebalance
+        - schema migration
+        - saga compensation
         - configuration replicas
         - eventual-consistency
         - leased message
@@ -152,7 +161,8 @@ config:
         case_sensitive: false
       - name: routine_coding_markers
         operator: OR
-        method: bm25
+        # Use literal matching so broad implementation language in an advanced
+        # request cannot outweigh its correctness or distributed-systems cues.
         keywords:
         - implement
         - refactor
@@ -165,7 +175,6 @@ config:
         - simple bug
         - straightforward
         case_sensitive: false
-        bm25_threshold: 0.1
 
       embeddings:
       - name: routine_coding_intent
