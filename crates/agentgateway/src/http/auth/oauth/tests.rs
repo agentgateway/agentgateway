@@ -108,6 +108,7 @@ fn cross_app_access_config(
 		audience: "https://resource-as.example".into(),
 		resources: vec![],
 		scopes: vec!["read".into()],
+		subject_token_source: None,
 		cache: Some(InMemoryTokenCache::default()),
 	}
 }
@@ -812,6 +813,37 @@ fn deserializes_cross_app_access_local_config_shape() {
 }
 
 #[test]
+fn cross_app_access_subject_token_source_override() {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+
+	// Unset: the id_token is read from the Authorization Bearer header.
+	let auth = CrossAppAccessAuth::from(config.clone());
+	let subject_token = &auth.oauth_token_exchange().subject_token;
+	assert!(matches!(
+		&subject_token.source,
+		AuthorizationLocation::Header { name, .. } if name == ::http::header::AUTHORIZATION
+	));
+	assert_eq!(subject_token.token_type, OAuthTokenType::IdToken);
+
+	// Overridden source; the exchange still declares an id_token subject.
+	config.subject_token_source =
+		Some(serde_json::from_str(r#"{"expression": "jwt.the_id_token"}"#).unwrap());
+	let auth = CrossAppAccessAuth::from(config);
+	let subject_token = &auth.oauth_token_exchange().subject_token;
+	let AuthorizationLocation::Expression(expr) = &subject_token.source else {
+		panic!(
+			"expected an expression source, got {:?}",
+			subject_token.source
+		);
+	};
+	assert_eq!(expr.original_expression, "jwt.the_id_token");
+	assert_eq!(subject_token.token_type, OAuthTokenType::IdToken);
+}
+
+#[test]
 fn serializes_cross_app_access_local_config_shape() {
 	let serialized = serde_json::to_value(cross_app_access_local_config()).unwrap();
 	assert!(serialized.get("identityProvider").is_some());
@@ -833,6 +865,32 @@ fn serializes_cross_app_access_local_config_shape() {
 	);
 	assert!(serialized.get("oauthTokenExchange").is_none());
 	assert!(serialized.get("cache").is_none());
+}
+
+#[test]
+fn serializes_cross_app_access_subject_token_source() {
+	let backend = || {
+		Arc::new(SimpleBackendReference::InlineBackend(Target::Hostname(
+			crate::strng::new("idp.example.com"),
+			443,
+		)))
+	};
+	let mut config = cross_app_access_config(backend(), backend());
+
+	// The derived exchange cannot tell an omitted source from an explicit default, so the
+	// default is spelled out on the way back to config, as `oauthTokenExchange` already does
+	// for `subjectToken.source`.
+	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config.clone())).unwrap();
+	assert!(serialized["subjectTokenSource"]["header"].is_object());
+
+	// A configured source is preserved on the way back to config.
+	config.subject_token_source =
+		Some(serde_json::from_str(r#"{"expression": "jwt.the_id_token"}"#).unwrap());
+	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
+	assert_eq!(
+		serialized["subjectTokenSource"],
+		json!({ "expression": "jwt.the_id_token" })
+	);
 }
 
 #[test]

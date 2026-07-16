@@ -58,6 +58,11 @@ pub(super) struct CrossAppAccessAuthConfig {
 	/// `scope` values for the requested token, sent space-delimited.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub(super) scopes: Vec<String>,
+	/// Overrides where the exchanged `id_token` is read from; defaults to the Authorization
+	/// Bearer header. Set to a CEL `expression` to extract it from a claim of the validated
+	/// inbound token (e.g. `{ expression: "jwt.the_id_token" }`).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub(super) subject_token_source: Option<AuthorizationLocation>,
 	/// Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s
 	/// TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.
 	#[serde(
@@ -79,6 +84,7 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			audience,
 			resources,
 			scopes,
+			subject_token_source,
 			cache,
 		} = config;
 		let CrossAppAccessEndpoint {
@@ -92,7 +98,7 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			path,
 			grant_type: OAuthGrantType::TokenExchange,
 			subject_token: TokenSpec {
-				source: AuthorizationLocation::default(),
+				source: subject_token_source.unwrap_or_default(),
 				token_type: OAuthTokenType::IdToken,
 			},
 			actor_token: None,
@@ -174,6 +180,8 @@ impl CrossAppAccessAuth {
 			audience,
 			resources: self.oauth.resources.clone(),
 			scopes: self.oauth.scopes.clone(),
+			// Emitted explicitly, including when it holds the default Bearer-header source.
+			subject_token_source: Some(self.oauth.subject_token.source.clone()),
 			cache: self.oauth.cache.clone(),
 		})
 	}
@@ -208,6 +216,7 @@ impl CrossAppAccessAuth {
 			audience: t.audience,
 			resources: t.resources,
 			scopes: t.scopes,
+			subject_token_source: None,
 			cache: token_cache_from_proto(t.cache)?,
 		};
 		let auth = Self::from(config);

@@ -3910,6 +3910,17 @@
             "type": "string"
           }
         },
+        "subjectTokenSource": {
+          "description": "Overrides where the exchanged `id_token` is read from; defaults to the Authorization\nBearer header. Set to a CEL `expression` to extract it from a claim of the validated\ninbound token (e.g. `{ expression: \"jwt.the_id_token\" }`).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthorizationLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "cache": {
           "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.",
           "anyOf": [
