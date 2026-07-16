@@ -3957,34 +3957,13 @@
         },
         "connectTimeout": {
           "description": "Maximum time allowed to establish a backend TCP connection.",
-          "$ref": "#/$defs/Duration"
+          "type": "string"
         }
       },
       "additionalProperties": false,
       "required": [
         "keepalives",
         "connectTimeout"
-      ]
-    },
-    "Duration": {
-      "type": "object",
-      "properties": {
-        "secs": {
-          "description": "Whole-seconds component of the duration.",
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "nanos": {
-          "description": "Sub-second component of the duration, in nanoseconds.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "secs",
-        "nanos"
       ]
     },
     "Tunnel": {
@@ -6781,7 +6760,7 @@
           "minimum": 0
         },
         "failureMode": {
-          "description": "Behavior when the body exceeds maxBytes: FailClosed (reject) or FailOpen (continue).",
+          "description": "Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).",
           "$ref": "#/$defs/FailureMode2",
           "default": "failClosed"
         }
