@@ -453,8 +453,6 @@ fn okta_authorize_redirect(
 ) -> Result<Response, ProxyError> {
 	let issuer = auth.issuer.trim_end_matches('/');
 
-	let has_scope = existing_query.split('&').any(|p| p.starts_with("scope="));
-
 	// Inject audience only when configured — sending audience= (empty) causes Okta to reject
 	// the request; absence of the param is preferable to an invalid value.
 	let mut query = auth
@@ -462,12 +460,6 @@ fn okta_authorize_redirect(
 		.first()
 		.map(|aud| format!("audience={aud}"))
 		.unwrap_or_default();
-	if !has_scope {
-		if !query.is_empty() {
-			query.push('&');
-		}
-		query.push_str("scope=openid");
-	}
 	if !existing_query.is_empty() {
 		if !query.is_empty() {
 			query.push('&');
