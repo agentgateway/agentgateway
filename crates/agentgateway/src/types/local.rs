@@ -877,13 +877,10 @@ pub struct LocalLLMParams {
 	#[serde(default)]
 	api_key: Option<SecretFromFile>,
 	/// AWS region to use for the Bedrock provider.
-	// For Bedorkc: The AWS region to use
 	aws_region: Option<Strng>,
 	/// Google Cloud region to use for the Vertex AI provider.
-	// For Vertex: The Google region to use
 	vertex_region: Option<Strng>,
 	/// Google Cloud project ID to use for the Vertex AI provider.
-	// For Vertex: The Google project ID to use
 	vertex_project: Option<Strng>,
 	/// For Azure: the resource name of the deployment
 	azure_resource_name: Option<Strng>,
