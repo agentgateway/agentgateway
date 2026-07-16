@@ -1149,10 +1149,19 @@ fn into_sse_stream(
 						}
 						Some(rpc)
 					},
-					Err(e) => Some(ServerJsonRpcMessage::error(
-						ErrorData::internal_error(e.to_string(), None),
-						Some(request_id.clone()),
-					)),
+					Err(e) => {
+						*errored = true;
+						if *terminal_seen {
+							None
+						} else {
+							let msg = ServerJsonRpcMessage::error(
+								ErrorData::internal_error(e.to_string(), None),
+								Some(request_id.clone()),
+							);
+							*terminal_seen = capture_terminal_mcp_payload(mcp_log.as_ref(), &request_id, &msg);
+							Some(msg)
+						}
+					},
 				};
 				// TODO: is it ok to have no event_id here?
 				msg.map(|message| ServerSseMessage {
@@ -1414,7 +1423,7 @@ fn accepted_response() -> Response {
 
 #[cfg(test)]
 mod tests {
-	use futures_util::stream;
+	use futures_util::{StreamExt, stream};
 	use rmcp::model::{CallToolResult, ListToolsResult};
 	use serde_json::json;
 
@@ -1483,7 +1492,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn messages_to_response_ignores_transport_errors_before_result() {
+	async fn messages_to_response_captures_transport_error_and_ends_stream() {
 		let log = AsyncLog::default();
 		let mut info = MCPInfo::default();
 		info.set_tool("mcp".to_string(), "echo".to_string());
@@ -1498,16 +1507,27 @@ mod tests {
 				RequestId::Number(7),
 			)),
 		]);
-		let response =
-			messages_to_response(RequestId::Number(7), stream, Some(log.clone()), false).unwrap();
-		let _ = crate::http::read_resp_body(response).await.unwrap();
+		let messages = into_sse_stream(RequestId::Number(7), stream, Some(log.clone()), false)
+			.collect::<Vec<_>>()
+			.await;
+		assert_eq!(messages.len(), 1, "the transport error must end the stream");
+		assert!(matches!(
+			messages[0].message.as_ref(),
+			ServerJsonRpcMessage::Error(error) if error.id == Some(RequestId::Number(7))
+		));
 
 		let info = log.take().unwrap();
+		assert!(info.tool.as_ref().unwrap().result.is_none());
 		assert_eq!(
-			info.tool.as_ref().unwrap().result.as_ref().unwrap()["structuredContent"]["status"],
-			"ok"
+			info.tool.as_ref().unwrap().error.as_ref().unwrap()["code"],
+			-32603
 		);
-		assert!(info.tool.as_ref().unwrap().error.is_none());
+		assert!(
+			info.tool.as_ref().unwrap().error.as_ref().unwrap()["message"]
+				.as_str()
+				.unwrap()
+				.contains("boom")
+		);
 	}
 
 	#[tokio::test]
