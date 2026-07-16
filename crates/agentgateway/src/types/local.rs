@@ -29,8 +29,8 @@ use crate::types::agent::{
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
 	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode, McpTarget,
 	McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType,
-	ResourceName, Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch,
-	RouteName, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
+	MethodMatch, ResourceName, Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey,
+	RouteMatch, RouteName, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
 	SimpleBackendReferenceWithPolicies, SimpleBackendWithPolicies, SseTargetSpec,
 	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target, TargetedPolicy,
 	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName, validate_mcp_target_name,
@@ -2019,13 +2019,13 @@ fn mcp_matches() -> Vec<RouteMatch> {
 		RouteMatch {
 			headers: vec![],
 			path: PathMatch::Exact("/authorize".into()),
-			method: None,
+			method: Some(MethodMatch { method: "GET".into() }),
 			query: vec![],
 		},
 		RouteMatch {
 			headers: vec![],
 			path: PathMatch::Exact("/token".into()),
-			method: None,
+			method: Some(MethodMatch { method: "POST".into() }),
 			query: vec![],
 		},
 	]

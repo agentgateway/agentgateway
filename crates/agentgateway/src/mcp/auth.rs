@@ -93,36 +93,46 @@ pub(crate) async fn handle_mcp_request(
 				})
 				.into_response(),
 		)),
-		path if path == "/authorize" => match &auth.provider {
-			Some(McpIDP::Okta {}) => {
-				let existing_query = req.uri().query().unwrap_or("").to_owned();
-				Ok(Some(
-					okta_authorize_redirect(&existing_query, auth)
-						.map_err(|e| {
-							warn!("okta_authorize_redirect error: {}", e);
-							StatusCode::INTERNAL_SERVER_ERROR
-						})
-						.into_response(),
-				))
-			},
-			_ => Ok(None),
+		path if path == "/authorize" => {
+			if req.method() != Method::GET {
+				return Ok(Some(StatusCode::METHOD_NOT_ALLOWED.into_response()));
+			}
+			match &auth.provider {
+				Some(McpIDP::Okta {}) => {
+					let existing_query = req.uri().query().unwrap_or("").to_owned();
+					Ok(Some(
+						okta_authorize_redirect(&existing_query, auth)
+							.map_err(|e| {
+								warn!("okta_authorize_redirect error: {}", e);
+								StatusCode::INTERNAL_SERVER_ERROR
+							})
+							.into_response(),
+					))
+				},
+				_ => Ok(Some(StatusCode::NOT_FOUND.into_response())),
+			}
 		},
-		path if path == "/token" => match &auth.provider {
-			Some(McpIDP::Okta {}) => {
-				let content_type = req.headers().get("content-type").cloned();
-				let authorization = req.headers().get("authorization").cloned();
-				let body = std::mem::take(req.body_mut());
-				Ok(Some(
-					okta_token_proxy(content_type, authorization, body, auth, client.clone())
-						.await
-						.map_err(|e| {
-							warn!("okta_token_proxy error: {}", e);
-							StatusCode::INTERNAL_SERVER_ERROR
-						})
-						.into_response(),
-				))
-			},
-			_ => Ok(None),
+		path if path == "/token" => {
+			if req.method() != Method::POST {
+				return Ok(Some(StatusCode::METHOD_NOT_ALLOWED.into_response()));
+			}
+			match &auth.provider {
+				Some(McpIDP::Okta {}) => {
+					let content_type = req.headers().get("content-type").cloned();
+					let authorization = req.headers().get("authorization").cloned();
+					let body = std::mem::take(req.body_mut());
+					Ok(Some(
+						okta_token_proxy(content_type, authorization, body, auth, client.clone())
+							.await
+							.map_err(|e| {
+								warn!("okta_token_proxy error: {}", e);
+								StatusCode::INTERNAL_SERVER_ERROR
+							})
+							.into_response(),
+					))
+				},
+				_ => Ok(Some(StatusCode::NOT_FOUND.into_response())),
+			}
 		},
 		_ => {
 			// Not handled
@@ -299,17 +309,23 @@ pub(super) async fn authorization_server_metadata(
 			// {issuer}/token) instead of reading metadata fields — agentgateway handles both
 			// paths natively: /authorize redirects to Okta (injecting audience), /token proxies
 			// the token exchange. This eliminates the need for an external nginx issuer-proxy.
-			if let Some(serde_json::Value::String(ae)) =
+			let Some(serde_json::Value::String(ae)) =
 				json::traverse_mut(&mut resp, &["authorization_endpoint"])
-			{
-				*ae = format!("{gateway_base}/authorize");
-			}
+			else {
+				return Err(ProxyError::ProcessingString(
+					"authorization_endpoint missing from Okta AS metadata".to_string(),
+				));
+			};
+			*ae = format!("{gateway_base}/authorize");
 
-			if let Some(serde_json::Value::String(te)) =
+			let Some(serde_json::Value::String(te)) =
 				json::traverse_mut(&mut resp, &["token_endpoint"])
-			{
-				*te = format!("{gateway_base}/token");
-			}
+			else {
+				return Err(ProxyError::ProcessingString(
+					"token_endpoint missing from Okta AS metadata".to_string(),
+				));
+			};
+			*te = format!("{gateway_base}/token");
 
 			// Okta doesn't do CORS for client registrations — proxy via gateway.
 			if let Some(serde_json::Value::String(re)) =
@@ -453,20 +469,20 @@ fn okta_authorize_redirect(
 ) -> Result<Response, ProxyError> {
 	let issuer = auth.issuer.trim_end_matches('/');
 
-	// Inject audience only when configured — sending audience= (empty) causes Okta to reject
-	// the request; absence of the param is preferable to an invalid value.
-	let mut query = auth
-		.audiences
-		.first()
-		.map(|aud| format!("audience={aud}"))
-		.unwrap_or_default();
-	if !existing_query.is_empty() {
-		if !query.is_empty() {
-			query.push('&');
+	// Parse the client's query params so we can merge cleanly and avoid duplicates.
+	let mut params: Vec<(String, String)> =
+		serde_urlencoded::from_str(existing_query).unwrap_or_default();
+
+	// Inject audience only when not already supplied by the client. Sending an empty
+	// audience= causes Okta to reject the request; absence is preferable to an invalid value.
+	if !params.iter().any(|(k, _)| k == "audience") {
+		if let Some(aud) = auth.audiences.first() {
+			params.insert(0, ("audience".to_string(), aud.clone()));
 		}
-		query.push_str(existing_query);
 	}
 
+	let query = serde_urlencoded::to_string(&params)
+		.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
 	let location = format!("{issuer}/v1/authorize?{query}");
 	Ok(Response::builder()
 		.status(StatusCode::FOUND)
