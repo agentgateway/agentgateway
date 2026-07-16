@@ -115,6 +115,49 @@ the routine request and `x-vsr-selected-model: gpt-5.5` for the advanced
 request. The debug header is for verification only and should not be required
 by application traffic.
 
+### Force a Model Tier
+
+The default configuration allows a client to request either configured model
+directly. This bypasses vSR's automatic model selection, while retaining the
+same agentgateway forwarding, cost tracking, and observability path:
+
+```bash
+curl -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.5",
+    "messages": [
+      {"role": "user", "content": "Use the advanced model for this request."}
+    ],
+    "max_tokens": 64
+  }'
+```
+
+The response body `model` field identifies the serving model. vSR response
+headers record the explicit selection when available.
+
+### Require Automatic Routing
+
+To require `model: "auto"` and reject direct model requests, apply the
+optional validation policy:
+
+```bash
+kubectl apply -f examples/llm-semantic-routing/k8s/require-auto.yaml
+```
+
+The policy uses an [agentgateway request-body
+transformation](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/)
+to reject requests whose `model` is missing or is not `auto`. Remove it to
+restore direct model selection:
+
+```bash
+kubectl delete -f examples/llm-semantic-routing/k8s/require-auto.yaml
+```
+
+Keep this optional policy disabled when running an evaluation that includes a
+forced-model baseline, such as the cost-based semantic-routing demo's
+`always_expensive` lane.
+
 Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
 observability source of record. Use isolated evaluation traffic with forced
 lower-cost and always-expensive baselines before adopting the policy broadly.
