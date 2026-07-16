@@ -115,6 +115,49 @@ the routine request and `x-vsr-selected-model: gpt-5.5` for the advanced
 request. The debug header is for verification only and should not be required
 by application traffic.
 
+### Force a Model Tier
+
+The default configuration allows a client to request either configured model
+directly. This bypasses vSR's automatic model selection, while retaining the
+same agentgateway forwarding, cost tracking, and observability path:
+
+```bash
+curl -sS -i "$INGRESS_GW_ADDRESS/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5.5",
+    "messages": [
+      {"role": "user", "content": "Use the advanced model for this request."}
+    ],
+    "max_tokens": 64
+  }'
+```
+
+The response body `model` field identifies the serving model. vSR response
+headers record the explicit selection when available.
+
+### Force Automatic Routing
+
+To require automatic routing regardless of a client-provided model, apply the
+optional override policy:
+
+```bash
+kubectl apply -f examples/llm-semantic-routing/k8s/force-auto.yaml
+```
+
+The policy uses an [agentgateway request-body
+transformation](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/)
+to rewrite the request's `model` field to `auto` before vSR selects a model.
+Remove it to restore direct model selection:
+
+```bash
+kubectl delete -f examples/llm-semantic-routing/k8s/force-auto.yaml
+```
+
+Keep this optional policy disabled when running an evaluation that includes a
+forced-model baseline, such as the cost-based semantic-routing demo's
+`always_expensive` lane.
+
 Agentgateway’s model catalog, metrics, logs, and traces remain the cost and
 observability source of record. Use isolated evaluation traffic with forced
 lower-cost and always-expensive baselines before adopting the policy broadly.
@@ -217,9 +260,9 @@ The gateway authenticates to OpenAI with its configured provider credential and
 records the selected model and cost as it does for other OpenAI-compatible
 clients. Agentgateway can [rewrite client-facing model names with model
 aliases](https://agentgateway.dev/docs/kubernetes/latest/llm/alias/). An
-organization can also [validate and reject unsupported request-body model
-values](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/),
-such as any value other than `auto`. Treat `auto` as the supported client path
+organization can also use a [request-body
+transformation](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/transformations/validate/)
+to rewrite every request to `auto`. Treat `auto` as the supported client path
 when testing this policy.
 
 ## Cleanup

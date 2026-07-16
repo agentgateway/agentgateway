@@ -1618,6 +1618,8 @@ type AwsAuth struct {
 }
 
 // AWS STS AssumeRole settings for backend authentication.
+//
+// +kubebuilder:validation:AtMostOneOf=sessionName;sessionNameExpression
 type AwsAssumeRole struct {
 	// AWS IAM role ARN to assume.
 	//
@@ -1632,6 +1634,14 @@ type AwsAssumeRole struct {
 	// +optional
 	// +kubebuilder:validation:Pattern="^[\\w+=,.@-]{2,64}$"
 	SessionName *string `json:"sessionName,omitempty"`
+
+	// SessionNameExpression is a CEL expression evaluated against each request
+	// to produce the session name (RoleSessionName), for example `jwt.sub` or
+	// `request.headers["x-team"]`. If the expression does not produce a valid
+	// session name at request time, the request is rejected.
+	//
+	// +optional
+	SessionNameExpression *CELExpression `json:"sessionNameExpression,omitempty"`
 
 	// Tags are session tags passed to STS AssumeRole. Once activated as cost
 	// allocation tags, they appear in the AWS Cost & Usage Report for cost

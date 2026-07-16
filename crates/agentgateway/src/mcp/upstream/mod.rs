@@ -25,7 +25,7 @@ use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{FailureMode, mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::McpTargetSpec;
+use crate::types::agent::{McpPrefixMode, McpTargetSpec};
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -266,9 +266,10 @@ pub(crate) struct UpstreamGroup {
 	// target's initialize response so a modern client can see them in discover.
 	extensions: RwLock<HashMap<Strng, ExtensionCapabilities>>,
 
-	// If we have 1 target only, we don't prefix everything with 'target_'.
-	// Else this is empty
+	// If we have one target and prefixMode is not Always, names and URIs pass
+	// through unchanged and all calls route to this target.
 	pub default_target_name: Option<String>,
+	pub prefix_mode: McpPrefixMode,
 	pub is_multiplexing: bool,
 	pub failure_mode: FailureMode,
 }
@@ -279,17 +280,12 @@ impl UpstreamGroup {
 	}
 
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
-		let mut is_multiplexing = false;
-		let default_target_name = if backend.targets.len() != 1 {
-			is_multiplexing = true;
-			None
-		} else if backend.targets[0].always_use_prefix {
-			None
-		} else {
-			Some(backend.targets[0].name.to_string())
-		};
+		let is_multiplexing = backend.targets.len() != 1;
+		let default_target_name = (!is_multiplexing && backend.prefix_mode != McpPrefixMode::Always)
+			.then(|| backend.targets[0].name.to_string());
 		let mut s = Self {
 			failure_mode: backend.failure_mode,
+			prefix_mode: backend.prefix_mode,
 			backend,
 			client,
 			by_name: IndexMap::new(),

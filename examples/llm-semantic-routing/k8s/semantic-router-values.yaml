@@ -107,8 +107,10 @@ config:
         - paxos
         - linearizability
         - serializability
+        - serializable isolation
         - formal verification
         - model checking
+        - model checker
         - TLA+
         - Alloy
         - Coq
@@ -129,8 +131,10 @@ config:
         - idempotency boundary
         - fencing token
         - fencing tokens
+        - leader election
         - stale writer
         - regional failover
+        - cross-region failover
         - network partition
         - network partitions
         - replicated state
@@ -145,14 +149,28 @@ config:
         - dual writes
         - durable state transition
         - duplicate business effects
+        - transactional outbox
+        - event log compaction
+        - Kafka rebalance
+        - schema migration
+        - saga compensation
         - configuration replicas
         - eventual-consistency
         - leased message
         - delayed, duplicated, and reordered
+        - etcd election
+        - version acknowledgement
+        - duplicate side effects
+        - eventually consistent
+        - durable saga
+        - partition ownership
+        - replayed events
+        - zero-downtime
         case_sensitive: false
       - name: routine_coding_markers
         operator: OR
-        method: bm25
+        # Use literal matching so common coding vocabulary does not suppress
+        # an advanced operational-design request.
         keywords:
         - implement
         - refactor
@@ -165,7 +183,6 @@ config:
         - simple bug
         - straightforward
         case_sensitive: false
-        bm25_threshold: 0.1
 
       embeddings:
       - name: routine_coding_intent
@@ -188,6 +205,9 @@ config:
         - Design conflict resolution for replicated state and justify convergence, monotonic growth, and deletion semantics.
         - Compare competing collaboration or consistency approaches and recommend one based on their tradeoffs.
         - Debug a rare production incident involving timing, retries, and consistency.
+        - Design an idempotent workflow resilient to retries, duplicate delivery, leases, and crash recovery.
+        - Design a migration or replay protocol that preserves ordering, consistency, and safe recovery.
+        - Analyze cross-region replication, failover, and reconciliation under partitions.
 
       context:
       - name: long_context
@@ -239,6 +259,8 @@ config:
           - debug a complex distributed production incident
           - synthesize research and produce a technical recommendation
           - analyze consistency, consensus, and failure recovery
+          - design an idempotent workflow with retries, duplicate delivery, and crash recovery
+          - design a migration, replay, or failover protocol that preserves ordering and consistency
         easy:
           candidates:
           - write a small helper function

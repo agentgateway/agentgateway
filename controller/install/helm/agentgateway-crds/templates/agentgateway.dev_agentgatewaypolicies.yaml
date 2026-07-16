@@ -313,6 +313,15 @@ spec:
                                                         Cost & Usage Report attribution. If unset, AWS generates a random name.
                                                       pattern: ^[\w+=,.@-]{2,64}$
                                                       type: string
+                                                    sessionNameExpression:
+                                                      description: |-
+                                                        SessionNameExpression is a CEL expression evaluated against each request
+                                                        to produce the session name (RoleSessionName), for example `jwt.sub` or
+                                                        `request.headers["x-team"]`. If the expression does not produce a valid
+                                                        session name at request time, the request is rejected.
+                                                      maxLength: 16384
+                                                      minLength: 1
+                                                      type: string
                                                     tags:
                                                       description: |-
                                                         Tags are session tags passed to STS AssumeRole. Once activated as cost
@@ -360,6 +369,12 @@ spec:
                                                   required:
                                                   - roleArn
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: at most one of the fields
+                                                      in [sessionName sessionNameExpression]
+                                                      may be set
+                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
+                                                      <= 1'
                                                 secretRef:
                                                   description: |-
                                                     Credential source, defaulting to a Kubernetes
@@ -1588,6 +1603,15 @@ spec:
                                                         Cost & Usage Report attribution. If unset, AWS generates a random name.
                                                       pattern: ^[\w+=,.@-]{2,64}$
                                                       type: string
+                                                    sessionNameExpression:
+                                                      description: |-
+                                                        SessionNameExpression is a CEL expression evaluated against each request
+                                                        to produce the session name (RoleSessionName), for example `jwt.sub` or
+                                                        `request.headers["x-team"]`. If the expression does not produce a valid
+                                                        session name at request time, the request is rejected.
+                                                      maxLength: 16384
+                                                      minLength: 1
+                                                      type: string
                                                     tags:
                                                       description: |-
                                                         Tags are session tags passed to STS AssumeRole. Once activated as cost
@@ -1635,6 +1659,12 @@ spec:
                                                   required:
                                                   - roleArn
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: at most one of the fields
+                                                      in [sessionName sessionNameExpression]
+                                                      may be set
+                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
+                                                      <= 1'
                                                 secretRef:
                                                   description: |-
                                                     Credential source, defaulting to a Kubernetes
@@ -2858,6 +2888,15 @@ spec:
                                                         Cost & Usage Report attribution. If unset, AWS generates a random name.
                                                       pattern: ^[\w+=,.@-]{2,64}$
                                                       type: string
+                                                    sessionNameExpression:
+                                                      description: |-
+                                                        SessionNameExpression is a CEL expression evaluated against each request
+                                                        to produce the session name (RoleSessionName), for example `jwt.sub` or
+                                                        `request.headers["x-team"]`. If the expression does not produce a valid
+                                                        session name at request time, the request is rejected.
+                                                      maxLength: 16384
+                                                      minLength: 1
+                                                      type: string
                                                     tags:
                                                       description: |-
                                                         Tags are session tags passed to STS AssumeRole. Once activated as cost
@@ -2905,6 +2944,12 @@ spec:
                                                   required:
                                                   - roleArn
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: at most one of the fields
+                                                      in [sessionName sessionNameExpression]
+                                                      may be set
+                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
+                                                      <= 1'
                                                 secretRef:
                                                   description: |-
                                                     Credential source, defaulting to a Kubernetes
@@ -4354,6 +4399,15 @@ spec:
                                                         Cost & Usage Report attribution. If unset, AWS generates a random name.
                                                       pattern: ^[\w+=,.@-]{2,64}$
                                                       type: string
+                                                    sessionNameExpression:
+                                                      description: |-
+                                                        SessionNameExpression is a CEL expression evaluated against each request
+                                                        to produce the session name (RoleSessionName), for example `jwt.sub` or
+                                                        `request.headers["x-team"]`. If the expression does not produce a valid
+                                                        session name at request time, the request is rejected.
+                                                      maxLength: 16384
+                                                      minLength: 1
+                                                      type: string
                                                     tags:
                                                       description: |-
                                                         Tags are session tags passed to STS AssumeRole. Once activated as cost
@@ -4401,6 +4455,12 @@ spec:
                                                   required:
                                                   - roleArn
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: at most one of the fields
+                                                      in [sessionName sessionNameExpression]
+                                                      may be set
+                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
+                                                      <= 1'
                                                 secretRef:
                                                   description: |-
                                                     Credential source, defaulting to a Kubernetes
@@ -5629,6 +5689,15 @@ spec:
                                                         Cost & Usage Report attribution. If unset, AWS generates a random name.
                                                       pattern: ^[\w+=,.@-]{2,64}$
                                                       type: string
+                                                    sessionNameExpression:
+                                                      description: |-
+                                                        SessionNameExpression is a CEL expression evaluated against each request
+                                                        to produce the session name (RoleSessionName), for example `jwt.sub` or
+                                                        `request.headers["x-team"]`. If the expression does not produce a valid
+                                                        session name at request time, the request is rejected.
+                                                      maxLength: 16384
+                                                      minLength: 1
+                                                      type: string
                                                     tags:
                                                       description: |-
                                                         Tags are session tags passed to STS AssumeRole. Once activated as cost
@@ -5676,6 +5745,12 @@ spec:
                                                   required:
                                                   - roleArn
                                                   type: object
+                                                  x-kubernetes-validations:
+                                                  - message: at most one of the fields
+                                                      in [sessionName sessionNameExpression]
+                                                      may be set
+                                                    rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
+                                                      <= 1'
                                                 secretRef:
                                                   description: |-
                                                     Credential source, defaulting to a Kubernetes
@@ -7187,6 +7262,15 @@ spec:
                                   Cost & Usage Report attribution. If unset, AWS generates a random name.
                                 pattern: ^[\w+=,.@-]{2,64}$
                                 type: string
+                              sessionNameExpression:
+                                description: |-
+                                  SessionNameExpression is a CEL expression evaluated against each request
+                                  to produce the session name (RoleSessionName), for example `jwt.sub` or
+                                  `request.headers["x-team"]`. If the expression does not produce a valid
+                                  session name at request time, the request is rejected.
+                                maxLength: 16384
+                                minLength: 1
+                                type: string
                               tags:
                                 description: |-
                                   Tags are session tags passed to STS AssumeRole. Once activated as cost
@@ -7230,6 +7314,11 @@ spec:
                             required:
                             - roleArn
                             type: object
+                            x-kubernetes-validations:
+                            - message: at most one of the fields in [sessionName sessionNameExpression]
+                                may be set
+                              rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
+                                <= 1'
                           secretRef:
                             description: |-
                               Credential source, defaulting to a Kubernetes

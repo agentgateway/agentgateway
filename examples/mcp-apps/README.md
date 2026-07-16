@@ -41,6 +41,15 @@ Open http://localhost:8080 and call the `get-system-info` tool. The host reads t
 cargo run -- -f examples/mcp-apps/config-multiplex.yaml
 ```
 
-This config serves two Apps-enabled servers behind one endpoint. Tool names are prefixed with their target (`map_`, `monitor_`) and `ui://` URIs are rewritten to carry the target (`ui://monitor+system-monitor/mcp-app.html`), so both servers' tools list, call, and render correctly.
+This config serves two Apps-enabled servers behind one endpoint. By default,
+multiplexing prefixes tool names with their target (`map_`, `monitor_`),  but a
+rendered app can itself call tools, using tool names hardcoded in the app's
+HTML, which never carry that prefix. The system-monitor app calls
+`poll-system-stats` by its unprefixed name, so with prefixed names the
+dashboard renders but its live updates fail.
 
-The limitation to observe: a rendered app can itself call tools, using tool names hardcoded in the app's HTML. The system-monitor app calls `poll-system-stats` by its unprefixed name, which the gateway cannot route when multiplexing — the dashboard renders, but its live updates fail. The map app makes no app-initiated calls and works fully. If your host relies on app-initiated tool calls, use a single-target backend, or customize the app to call the prefixed name.
+The config sets `prefixMode: never` to workaround this: tool names are exposed
+unprefixed and the gateway routes each call by discovering which target serves
+the name. This comes with some trade-offs:
+* tool names must be unique across targets, duplicates across targets are dropped
+* the gateway make make extra calls to discover the target for each tool name

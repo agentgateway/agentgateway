@@ -6,6 +6,7 @@ use crate::{InputFormat, RouteType, apply};
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "CustomProvider"))]
 pub struct Provider {
+	/// Model ID to send to the provider, overriding the model in the client request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
 	/// Provider identity for cost-catalog lookup and telemetry. Built-in named providers
@@ -13,6 +14,7 @@ pub struct Provider {
 	/// a bare custom provider may set it to match a catalog entry. Falls back to "custom".
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub provider_override: Option<Strng>,
+	/// Supported API payload formats and optional path overrides for this provider.
 	pub formats: Vec<ProviderFormatConfig>,
 }
 

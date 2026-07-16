@@ -452,6 +452,178 @@ async fn apps_rbac_denied_ui_resource_strips_tool_meta() {
 	);
 }
 
+fn never_prefix_proxy(servers: Vec<(&str, SocketAddr, bool)>, stateful: bool) -> TestBind {
+	setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend_prefix_mode(
+			"mcp",
+			servers,
+			stateful,
+			vec![],
+			crate::types::agent::McpPrefixMode::Never,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")))
+}
+
+#[tokio::test]
+async fn multiplex_never_prefix_routes_unprefixed_names() {
+	let apps = mock_apps_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(
+		vec![("a", apps.addr, false), ("b", other.addr, false)],
+		true,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client_with_ui(io).await;
+
+	// Names are exposed unprefixed...
+	let tools = client.list_tools(None).await.unwrap();
+	let names = tools.tools.iter().map(|t| t.name.to_string()).collect_vec();
+	assert!(names.contains(&"show_dashboard".to_string()), "{names:?}");
+	assert!(names.contains(&"echo".to_string()), "{names:?}");
+	assert!(
+		!names
+			.iter()
+			.any(|n| n.starts_with("a_") || n.starts_with("b_")),
+		"{names:?}"
+	);
+
+	// ...but ui:// URIs stay target-encoded even in never mode.
+	let show = tools
+		.tools
+		.iter()
+		.find(|t| t.name == "show_dashboard")
+		.unwrap();
+	let ui_uri = show
+		.meta
+		.as_ref()
+		.and_then(|m| m.0.get("ui"))
+		.and_then(|ui| ui.get("resourceUri"))
+		.and_then(|v| v.as_str())
+		.expect("show_dashboard should carry a ui resourceUri")
+		.to_string();
+	assert!(ui_uri.starts_with("ui://"), "{ui_uri}");
+	assert_ne!(
+		ui_uri,
+		appsmockserver::DASHBOARD_URI,
+		"URI should be target-encoded"
+	);
+
+	// Unprefixed calls route to the one target serving the name.
+	let ctr = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("show_dashboard"))
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, "dashboard data");
+	let ctr = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"{"hi":"world"}"#);
+
+	// Prompts resolve the same way.
+	let prompt = client
+		.get_prompt(
+			rmcp::model::GetPromptRequestParams::new("example_prompt").with_arguments(
+				serde_json::json!({"message": "hello"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+	assert!(!prompt.messages.is_empty());
+
+	// The rewritten app resource resolves through the mux.
+	let read = client
+		.read_resource(rmcp::model::ReadResourceRequestParams::new(ui_uri))
+		.await
+		.unwrap();
+	let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read.contents[0] else {
+		panic!("expected text contents, got {:?}", read.contents);
+	};
+	assert_eq!(text, appsmockserver::DASHBOARD_HTML);
+}
+
+#[tokio::test]
+async fn multiplex_never_prefix_drops_ambiguous_names() {
+	let a = mock_streamable_http_server(true).await;
+	let b = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(vec![("a", a.addr, false), ("b", b.addr, false)], true);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	let tools = client.list_tools(None).await.unwrap();
+	assert!(tools.tools.iter().all(|tool| tool.name != "echo"));
+	let prompts = client.list_prompts(None).await.unwrap();
+	assert!(
+		prompts
+			.prompts
+			.iter()
+			.all(|prompt| prompt.name != "example_prompt")
+	);
+	assert!(
+		client
+			.call_tool(rmcp::model::CallToolRequestParams::new("echo"))
+			.await
+			.is_err()
+	);
+}
+
+#[tokio::test]
+async fn multiplex_never_prefix_resolves_names_on_later_pages() {
+	let paging = mock_paging_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(
+		vec![("a", paging.addr, false), ("b", other.addr, false)],
+		true,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	// paged_echo only appears on page 2 of target a's tools/list; resolution
+	// must follow the cursor to find its owner.
+	let ctr = client
+		.call_tool(rmcp::model::CallToolRequestParams::new("paged_echo"))
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, "paged ok");
+}
+
+#[tokio::test]
+async fn stateless_multiplex_never_prefix_tool_call_resolves_target() {
+	let apps = mock_apps_streamable_http_server().await;
+	let other = mock_streamable_http_server(true).await;
+	let t = never_prefix_proxy(
+		vec![("a", apps.addr, false), ("b", other.addr, false)],
+		false,
+	);
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+
+	let ctr = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(
+				serde_json::json!({"hi": "world"})
+					.as_object()
+					.cloned()
+					.unwrap(),
+			),
+		)
+		.await
+		.unwrap();
+	assert_eq!(&ctr.content[0].as_text().unwrap().text, r#"{"hi":"world"}"#);
+}
+
 #[tokio::test]
 async fn multiplex_advertises_tool_and_resource_subscribe_capabilities() {
 	let mock_a = mock_streamable_http_server(true).await;
@@ -2521,6 +2693,40 @@ async fn mock_streamable_http_server_inner(
 	}
 }
 
+async fn mock_paging_streamable_http_server() -> MockServer {
+	use mockserver::PagingServer;
+	use rmcp::transport::streamable_http_server::StreamableHttpService;
+	use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
+	agent_core::telemetry::testing::setup_test_logging();
+
+	let service = StreamableHttpService::new(
+		|| Ok(PagingServer),
+		LocalSessionManager::default().into(),
+		StreamableHttpServerConfig::default()
+			.with_sse_retry(None)
+			.with_sse_keep_alive(None)
+			.with_stateful_mode(true)
+			.with_json_response(false),
+	);
+
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let router = axum::Router::new().nest_service("/mcp", service);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	MockServer {
+		addr,
+		init_counter: std::sync::Arc::new(tokio::sync::Mutex::new(0)),
+		_cancel: tx,
+	}
+}
+
 async fn mock_apps_streamable_http_server() -> MockServer {
 	mock_apps_streamable_http_server_with_init_capture().await.0
 }
@@ -3051,6 +3257,50 @@ mod mockserver {
 			Ok(self.get_info())
 		}
 	}
+
+	/// Serves one tool per page so tests can exercise cursor-following.
+	#[derive(Clone)]
+	pub struct PagingServer;
+
+	impl ServerHandler for PagingServer {
+		fn get_info(&self) -> ServerInfo {
+			ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+		}
+
+		async fn list_tools(
+			&self,
+			request: Option<PaginatedRequestParams>,
+			_: RequestContext<RoleServer>,
+		) -> Result<ListToolsResult, McpError> {
+			let schema = Arc::new(json!({"type": "object"}).as_object().cloned().unwrap());
+			match request.and_then(|p| p.cursor).as_deref() {
+				None => Ok(ListToolsResult {
+					tools: vec![Tool::new("first_page_tool", "page 1", schema)],
+					next_cursor: Some("page2".to_string()),
+					..Default::default()
+				}),
+				Some("page2") => Ok(ListToolsResult {
+					tools: vec![Tool::new("paged_echo", "page 2", schema)],
+					..Default::default()
+				}),
+				Some(_) => Err(McpError::invalid_params("bad cursor", None)),
+			}
+		}
+
+		async fn call_tool(
+			&self,
+			request: CallToolRequestParams,
+			_: RequestContext<RoleServer>,
+		) -> Result<CallToolResult, McpError> {
+			match request.name.as_ref() {
+				"paged_echo" => Ok(CallToolResult::success(vec![ContentBlock::text(
+					"paged ok",
+				)])),
+				"first_page_tool" => Ok(CallToolResult::success(vec![ContentBlock::text("first")])),
+				_ => Err(McpError::invalid_params("unknown tool", None)),
+			}
+		}
+	}
 }
 
 mod legacymockserver {
@@ -3342,7 +3592,6 @@ async fn test_setup_partial_success_fail_open() {
 				},
 				backend_policies: Default::default(),
 				backend: None,
-				always_use_prefix: false,
 			}),
 			Arc::new(McpTarget {
 				name: "ok".into(),
@@ -3354,7 +3603,6 @@ async fn test_setup_partial_success_fail_open() {
 				},
 				backend_policies: Default::default(),
 				backend: None,
-				always_use_prefix: false,
 			}),
 		],
 		stateful: false,
@@ -3380,7 +3628,6 @@ async fn test_all_targets_fail_open_still_errors() {
 				},
 				backend_policies: Default::default(),
 				backend: None,
-				always_use_prefix: false,
 			}),
 			Arc::new(McpTarget {
 				name: "bad-2".into(),
@@ -3392,7 +3639,6 @@ async fn test_all_targets_fail_open_still_errors() {
 				},
 				backend_policies: Default::default(),
 				backend: None,
-				always_use_prefix: false,
 			}),
 		],
 		stateful: false,
@@ -3418,7 +3664,6 @@ fn fake_streamable_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
 			crate::types::agent::Target::Address(addr),
 		)),
-		always_use_prefix: false,
 	})
 }
 
@@ -3436,7 +3681,6 @@ fn fake_sse_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
 			crate::types::agent::Target::Address(addr),
 		)),
-		always_use_prefix: false,
 	})
 }
 
@@ -3464,7 +3708,6 @@ fn fake_openapi_target(name: &str, addr: SocketAddr) -> Arc<McpTarget> {
 			crate::types::agent::ResourceName::new(strng::format!("backend-{name}"), "".into()),
 			crate::types::agent::Target::Address(addr),
 		)),
-		always_use_prefix: false,
 	})
 }
 
@@ -3479,7 +3722,6 @@ fn fake_stdio_target(name: &str) -> Arc<McpTarget> {
 		},
 		backend_policies: Default::default(),
 		backend: None,
-		always_use_prefix: false,
 	})
 }
 
@@ -3632,7 +3874,7 @@ async fn test_fanout_deletion_fail_open_skips_failed_upstreams() {
 			],
 			stateful: true,
 			failure_mode: FailureMode::FailOpen,
-			session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+			..Default::default()
 		},
 		empty_mcp_policies(),
 		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),

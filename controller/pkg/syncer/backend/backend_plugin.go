@@ -356,6 +356,13 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 	if mcp.FailureMode == agentgateway.FailOpen {
 		failureMode = api.MCPBackend_FAIL_OPEN
 	}
+	prefixMode := api.MCPBackend_CONDITIONAL
+	switch mcp.PrefixMode {
+	case agentgateway.PrefixAlways:
+		prefixMode = api.MCPBackend_ALWAYS
+	case agentgateway.PrefixNever:
+		prefixMode = api.MCPBackend_NEVER
+	}
 	mcpBackend := &api.Backend{
 		Key:  be.Namespace + "/" + be.Name,
 		Name: plugins.ResourceName(be),
@@ -364,6 +371,7 @@ func TranslateMCPBackends(ctx plugins.PolicyCtx, be *agentgateway.AgentgatewayBa
 				Targets:      mcpTargets,
 				StatefulMode: sessionRouting,
 				FailureMode:  failureMode,
+				PrefixMode:   prefixMode,
 			},
 		},
 		InlinePolicies: inlinePolicies,

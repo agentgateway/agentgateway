@@ -33,6 +33,7 @@ http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
 itertools.workspace = true
+mime_guess.workspace = true
 percent-encoding.workspace = true
 pin-project-lite.workspace = true
 rand.workspace = true

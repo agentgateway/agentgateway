@@ -145,8 +145,10 @@ pub struct Remote {
 #[apply(schema!)]
 #[derive(Default)]
 pub struct HeaderFilter {
+	/// Headers to forward; an empty list forwards all headers.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub allowed: Vec<crate::http::HeaderOrPseudo>,
+	/// Headers to drop; takes precedence over the allow list.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub disallowed: Vec<crate::http::HeaderOrPseudo>,
 }

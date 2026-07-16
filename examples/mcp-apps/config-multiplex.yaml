@@ -1,6 +1,9 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
 mcp:
   port: 3000
+  # Apps call tools by names hardcoded in their HTML, which never carry the
+  # gateway's target prefix; `never` exposes unprefixed names and routes by lookup.
+  prefixMode: never
   policies:
     cors:
       allowOrigins:

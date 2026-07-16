@@ -56,6 +56,29 @@ func TestBuildMCP(t *testing.T) {
 			},
 		},
 		{
+			name: "Static MCPBackend backend with prefixMode Never",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "never-prefix-mcp-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					MCP: &agentgateway.MCPBackend{
+						PrefixMode: agentgateway.PrefixNever,
+						Targets: []agentgateway.McpTargetSelector{
+							{
+								Name: "static-target",
+								Static: &agentgateway.McpTarget{
+									Host: shortStringPtr("mcp-server.example.com"),
+									Port: 8080,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Service selector MCPBackend backend - same namespace",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{

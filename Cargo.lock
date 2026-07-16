@@ -145,6 +145,7 @@ dependencies = [
  "http-body-util",
  "insta",
  "itertools 0.15.0",
+ "mime_guess",
  "percent-encoding",
  "pin-project-lite",
  "rand 0.10.2",

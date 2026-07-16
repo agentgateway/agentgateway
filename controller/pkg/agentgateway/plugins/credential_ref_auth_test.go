@@ -110,6 +110,28 @@ func TestAwsAuthPropagatesDynamicSessionTags(t *testing.T) {
 	assert.Equal(t, tags[1].GetExpression(), `request.headers["x-app"]`)
 }
 
+func TestAwsAuthPropagatesDynamicSessionName(t *testing.T) {
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthPropagatesDynamicSessionName"))
+	ctx := simpleAuthPolicyCtx(
+		&AgwCollections{
+			Secrets: secrets,
+		}, kubeutils.NewSecretCredentialResolver(secrets))
+
+	expression := agentgateway.CELExpression(`jwt.sub`)
+	policy, err := buildAwsAuthPolicy(ctx, &agentgateway.AwsAuth{
+		AssumeRole: &agentgateway.AwsAssumeRole{
+			RoleArn:               "arn:aws:iam::111122223333:role/bedrock-caller",
+			SessionNameExpression: &expression,
+		},
+	}, "default")
+	assert.NoError(t, err)
+
+	assumeRole := policy.GetAws().GetAssumeRole()
+	assert.Equal(t, assumeRole != nil, true)
+	assert.Equal(t, assumeRole.GetSessionName(), "")
+	assert.Equal(t, assumeRole.GetSessionNameExpression(), "jwt.sub")
+}
+
 func TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags(t *testing.T) {
 	secrets := krt.NewStaticCollection[*corev1.Secret](nil, nil, krt.WithName("plugins/TestAwsAuthAssumeRoleOmitsUnsetSessionNameAndTags"))
 	ctx := simpleAuthPolicyCtx(

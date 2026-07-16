@@ -1,0 +1,16 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: semantic-router-force-auto
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/name: llm-semantic-routing
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: openai-semantic-routing
+  traffic:
+    transformation:
+      request:
+        body: 'toJson(json(request.body).merge({"model": "auto"}))'

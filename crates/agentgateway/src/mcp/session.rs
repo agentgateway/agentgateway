@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, OnceLock};
@@ -21,7 +22,7 @@ use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::http::Response;
-use crate::mcp::handler::{Relay, RelayInputs};
+use crate::mcp::handler::{Relay, RelayInputs, ResolveKind};
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
@@ -98,11 +99,12 @@ impl Session {
 				ClientJsonRpcMessage::Request(r) => Some(&r.request),
 				_ => None,
 			};
-			// first, determine how widely to send the initialize
 			match request_type {
-				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_)) => {
-					// Single-target methods only hit one backend, so initialize/initialized should be scoped
-					// to that backend rather than fanning out.
+				// Initialize only the target named by a prefixed call. With prefixMode: never,
+				// the list request used to find that target requires every target to be initialized.
+				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_))
+					if !self.relay.needs_resolution() =>
+				{
 					let name = match request_type {
 						Some(ClientRequest::CallToolRequest(ctr)) => ctr.params.name.to_string(),
 						Some(ClientRequest::GetPromptRequest(gpr)) => gpr.params.name.clone(),
@@ -161,15 +163,19 @@ impl Session {
 		self
 	}
 
-	fn authorize_prompt_request<'a, 'b: 'a>(
+	async fn authorize_prompt_request<'a, 'b: 'a>(
 		&'a self,
 		name: &'b str,
 		method: &str,
 		span: &mut SpanWriteOnDrop,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
-	) -> Result<(&'a str, &'b str), UpstreamError> {
-		let (service_name, prompt) = self.relay.parse_resource_name(name)?;
+		ctx: &IncomingRequestContext,
+	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
+		let (service_name, prompt) = self
+			.relay
+			.resolve_resource_name(ResolveKind::Prompt, name, ctx)
+			.await?;
 		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
 			l.set_prompt(service_name.to_string(), prompt.to_string());
@@ -514,7 +520,12 @@ impl Session {
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
-						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
+						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
+							ResolveKind::Tool,
+							&name,
+							&ctx,
+						))
+						.await?;
 						span.rename_span(format!("{method} {service_name}"));
 						let call_arguments = ctr.params.arguments.clone();
 						log.non_atomic_mutate(|l| {
@@ -524,7 +535,7 @@ impl Session {
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
 						Box::pin(self.authorize_with_ctx(
-							service_name,
+							&service_name,
 							mcp::guardrails::methods::TOOLS_CALL,
 							&mut ctr.params,
 							&mut ctx,
@@ -539,20 +550,25 @@ impl Session {
 						Box::pin(
 							self
 								.relay
-								.send_single(r, ctx, service_name, Some(log.clone())),
+								.send_single(r, ctx, &service_name, Some(log.clone())),
 						)
 						.await
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
-						let (service_name, prompt) = self.relay.parse_resource_name(&name)?;
+						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
+							ResolveKind::Prompt,
+							&name,
+							&ctx,
+						))
+						.await?;
 						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
 							l.set_prompt(service_name.to_string(), prompt.to_string());
 						});
 						gpr.params.name = prompt.to_string();
 						Box::pin(self.authorize_with_ctx(
-							service_name,
+							&service_name,
 							mcp::guardrails::methods::PROMPTS_GET,
 							&mut gpr.params,
 							&mut ctx,
@@ -564,7 +580,7 @@ impl Session {
 							&name,
 						))
 						.await?;
-						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+						Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						let uri = rrr.params.uri.clone();
@@ -629,10 +645,12 @@ impl Session {
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {
 							let name = prompt.name.clone();
-							let (service_name, prompt_name) =
-								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
+							let (service_name, prompt_name) = Box::pin(
+								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel, &ctx),
+							)
+							.await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
-							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},
 						Reference::Resource(resource) => {
 							let uri = resource.uri.clone();

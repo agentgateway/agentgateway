@@ -418,7 +418,10 @@ where
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
 pub enum FileOrInline {
-	File { file: PathBuf },
+	File {
+		/// Path to a file on disk to load the value from.
+		file: PathBuf,
+	},
 	Inline(String),
 }
 
