@@ -47,6 +47,7 @@ info:
     "usage": {
       "input_tokens": 17,
       "output_tokens": 23,
+      "cache_read_input_tokens": 0,
       "service_tier": "default"
     }
   },
@@ -56,6 +57,8 @@ info:
     "output_tokens": 23,
     "output_audio_tokens": 0,
     "total_tokens": 40,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
     "service_tier": "default",
     "provider_model": "gpt-3.5-turbo-0125"
   }

@@ -227,6 +227,35 @@ impl LLMInfo {
 	pub fn input_tokens(&self) -> Option<u64> {
 		self.response.input_tokens.or(self.request.input_tokens)
 	}
+
+	/// Returns input tokens using a provider-independent telemetry convention:
+	/// cached input is reported separately and is not included in this value.
+	pub fn telemetry_input_tokens(&self) -> Option<u64> {
+		let input = self.input_tokens()?;
+		Some(match self.request.cache_convention {
+			CacheTokenConvention::InputIncludesCache => {
+				input.saturating_sub(self.response.cached_input_tokens.unwrap_or(0))
+			},
+			CacheTokenConvention::InputExcludesCache => input,
+		})
+	}
+
+	/// Returns total tokens using the same provider-independent convention as
+	/// [`Self::telemetry_input_tokens`].
+	pub fn telemetry_total_tokens(&self) -> Option<u64> {
+		let Some(input) = self.telemetry_input_tokens() else {
+			return self.response.total_tokens;
+		};
+		let Some(output) = self.response.output_tokens else {
+			return self.response.total_tokens;
+		};
+		Some(
+			input
+				.saturating_add(self.response.cached_input_tokens.unwrap_or(0))
+				.saturating_add(self.response.cache_creation_input_tokens.unwrap_or(0))
+				.saturating_add(output),
+		)
+	}
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -300,6 +329,107 @@ impl Default for StreamingUsageGuard {
 		}
 
 		Self::new(Box::new(NoopReporter))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn usage(
+		convention: CacheTokenConvention,
+		input: Option<u64>,
+		cache_read: Option<u64>,
+		cache_write: Option<u64>,
+		output: Option<u64>,
+		total: Option<u64>,
+	) -> LLMInfo {
+		LLMInfo::new(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Messages,
+				cache_convention: convention,
+				request_model: Strng::default(),
+				provider: Strng::default(),
+				streaming: false,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponse {
+				input_tokens: input,
+				cached_input_tokens: cache_read,
+				cache_creation_input_tokens: cache_write,
+				output_tokens: output,
+				total_tokens: total,
+				..Default::default()
+			},
+		)
+	}
+
+	#[test]
+	fn telemetry_usage_normalizes_cache_conventions() {
+		let openai = usage(
+			CacheTokenConvention::InputIncludesCache,
+			Some(82_846),
+			Some(81_408),
+			None,
+			Some(231),
+			Some(83_077),
+		);
+		let anthropic = usage(
+			CacheTokenConvention::InputExcludesCache,
+			Some(1_438),
+			Some(81_408),
+			None,
+			Some(231),
+			Some(1_669),
+		);
+
+		for info in [openai, anthropic] {
+			assert_eq!(info.telemetry_input_tokens(), Some(1_438));
+			assert_eq!(info.telemetry_total_tokens(), Some(83_077));
+		}
+	}
+
+	#[test]
+	fn telemetry_usage_includes_cache_creation_in_total() {
+		let info = usage(
+			CacheTokenConvention::InputExcludesCache,
+			Some(1_000),
+			Some(300),
+			Some(200),
+			Some(500),
+			Some(1_500),
+		);
+
+		assert_eq!(info.telemetry_input_tokens(), Some(1_000));
+		assert_eq!(info.telemetry_total_tokens(), Some(2_000));
+	}
+
+	#[test]
+	fn telemetry_usage_handles_partial_and_invalid_usage() {
+		let partial = usage(
+			CacheTokenConvention::InputIncludesCache,
+			Some(1_000),
+			Some(300),
+			None,
+			None,
+			Some(1_500),
+		);
+		assert_eq!(partial.telemetry_input_tokens(), Some(700));
+		assert_eq!(partial.telemetry_total_tokens(), Some(1_500));
+
+		let invalid = usage(
+			CacheTokenConvention::InputIncludesCache,
+			Some(100),
+			Some(300),
+			None,
+			Some(50),
+			Some(150),
+		);
+		assert_eq!(invalid.telemetry_input_tokens(), Some(0));
+		assert_eq!(invalid.telemetry_total_tokens(), Some(350));
 	}
 }
 

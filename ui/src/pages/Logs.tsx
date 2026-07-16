@@ -1398,7 +1398,7 @@ function LogTimingPanel(props: { entry: LogEntry }) {
         <TokenBar
           input={inputTokens!}
           output={outputTokens!}
-          cache={cacheReadTokens ?? undefined}
+          cache={(cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0)}
         />
       ) : null}
       <div className="log-fact-list">
@@ -1821,6 +1821,7 @@ function TokenSummary(props: { entry: LogEntry }) {
   const input = props.entry.usage.inputTokens;
   const output = props.entry.usage.outputTokens;
   const cache = attributeNumber(props.entry.attributes, [
+    "gen_ai.usage.cache_read.input_tokens",
     "cacheTokens",
     "cachedTokens",
     "cache_tokens",

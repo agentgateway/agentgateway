@@ -50,8 +50,9 @@ info:
     "stop_reason": "end_turn",
     "stop_sequence": null,
     "usage": {
-      "input_tokens": 320,
+      "input_tokens": 308,
       "output_tokens": 180,
+      "cache_read_input_tokens": 12,
       "service_tier": "default"
     }
   },
@@ -61,6 +62,8 @@ info:
     "output_tokens": 180,
     "output_audio_tokens": 90,
     "total_tokens": 500,
+    "reasoning_tokens": 15,
+    "cached_input_tokens": 12,
     "service_tier": "default",
     "provider_model": "gpt-4o-audio-preview"
   }

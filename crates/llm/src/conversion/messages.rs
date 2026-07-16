@@ -796,6 +796,9 @@ pub fn passthrough_stream(
 			},
 			messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
 				log.update(|r| {
+					if let Some(i) = usage.input_tokens {
+						r.response.input_tokens = Some(i as u64);
+					}
 					if let Some(o) = usage.output_tokens {
 						r.response.output_tokens = Some(o as u64);
 					}
@@ -821,4 +824,72 @@ pub fn passthrough_stream(
 			| messages::MessagesStreamEvent::Ping => {},
 		}
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::{Arc, Mutex};
+
+	use agent_core::strng;
+	use http_body_util::BodyExt;
+
+	use super::*;
+	use crate::{
+		CacheTokenConvention, InputFormat, LLMInfo, LLMRequest, LLMResponse, StreamingUsageReporter,
+	};
+
+	struct TestReporter(Arc<Mutex<LLMInfo>>);
+
+	impl StreamingUsageReporter for TestReporter {
+		fn update(&self, f: &mut dyn FnMut(&mut LLMInfo)) {
+			f(&mut self.0.lock().unwrap());
+		}
+
+		fn report_usage(&mut self) {}
+	}
+
+	fn test_usage_guard() -> (StreamingUsageGuard, Arc<Mutex<LLMInfo>>) {
+		let info = Arc::new(Mutex::new(LLMInfo::new(
+			LLMRequest {
+				input_tokens: None,
+				input_format: InputFormat::Messages,
+				cache_convention: CacheTokenConvention::InputExcludesCache,
+				request_model: strng::new("test-model"),
+				provider: strng::new("test-provider"),
+				streaming: true,
+				params: Default::default(),
+				prompt: None,
+				provider_state: None,
+			},
+			LLMResponse::default(),
+		)));
+		(
+			StreamingUsageGuard::new(Box::new(TestReporter(info.clone()))),
+			info,
+		)
+	}
+
+	#[tokio::test]
+	async fn passthrough_stream_uses_final_input_tokens() {
+		let input = r#"event: message_start
+data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"test-model","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":16910,"output_tokens":13,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+"#;
+		let (guard, info) = test_usage_guard();
+		passthrough_stream(Body::from(input), 1024 * 1024, guard, false)
+			.collect()
+			.await
+			.unwrap();
+
+		let response = &info.lock().unwrap().response;
+		assert_eq!(response.input_tokens, Some(16_910));
+		assert_eq!(response.output_tokens, Some(13));
+		assert_eq!(response.total_tokens, Some(16_923));
+	}
 }

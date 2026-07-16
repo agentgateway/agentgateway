@@ -41,6 +41,37 @@ test("core pages render with mocked gateway data", async ({ page }) => {
   }
 });
 
+test("logs display cache tokens as a separate usage bucket", async ({
+  page,
+}) => {
+  await mockGateway(page);
+  await page.goto("/llm/logs");
+
+  const summary = page.locator(".log-call-summary");
+  await expect(summary).toBeVisible();
+  await expect(summary.locator(".token-tooltip")).toContainText(
+    "in: 1,438\nout: 231\ncache: 81,408\ntotal: 83,077",
+  );
+
+  await summary.click();
+  const timing = page.locator(".log-debug-panel", {
+    has: page.getByRole("heading", { name: "Timing and usage" }),
+  });
+  await expect(timing).toContainText("1,438 tokens");
+  await expect(timing).toContainText("81,408 tokens");
+  await expect(timing).toContainText("83,077 tokens");
+
+  const widths = await timing
+    .locator(".token-bar")
+    .evaluate((bar) =>
+      Array.from(bar.children).map((child) =>
+        Number.parseFloat((child as HTMLElement).style.width),
+      ),
+    );
+  expect(widths.reduce((sum, width) => sum + width, 0)).toBeCloseTo(100);
+  expect(widths[2]).toBeGreaterThan(95);
+});
+
 test("onboards all surfaces from a completely empty config", async ({
   page,
 }) => {

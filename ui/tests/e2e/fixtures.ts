@@ -291,9 +291,12 @@ export async function mockGateway(
             responseModel: "claude-haiku-4-5",
           },
           usage: {
-            inputTokens: 12,
-            outputTokens: 18,
-            totalTokens: 30,
+            inputTokens: 1438,
+            outputTokens: 231,
+            totalTokens: 83077,
+          },
+          attributes: {
+            "gen_ai.usage.cache_read.input_tokens": 81408,
           },
           cost: 0.0005,
           hasPayload: true,
@@ -320,9 +323,12 @@ export async function mockGateway(
           responseModel: "claude-haiku-4-5",
         },
         usage: {
-          inputTokens: 12,
-          outputTokens: 18,
-          totalTokens: 30,
+          inputTokens: 1438,
+          outputTokens: 231,
+          totalTokens: 83077,
+        },
+        attributes: {
+          "gen_ai.usage.cache_read.input_tokens": 81408,
         },
         cost: 0.0005,
         hasPayload: true,
