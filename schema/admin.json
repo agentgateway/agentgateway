@@ -742,9 +742,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,

@@ -1392,6 +1392,7 @@ pub struct FullLocalBackend {
 #[apply(schema_de!)]
 #[allow(clippy::large_enum_variant)]
 pub enum FullLocalBackendSpec {
+	/// Hostname or IP address of the upstream to route to.
 	#[serde(rename = "host")]
 	Opaque(Target),
 	/// Route to the in-process admin service instead of a network upstream.
@@ -1453,14 +1454,18 @@ pub enum InternalBackend {
 #[allow(clippy::large_enum_variant)] // Size is not sensitive for local config
 pub enum LocalBackend {
 	// This one is a reference
+	/// Route to a Service defined in the top-level `services` list.
 	Service {
+		/// Name of the target Service, as defined in the top-level `services` list.
 		name: NamespacedHostname,
+		/// Port on the target Service to route to.
 		port: u16,
 	},
 	Backend(BackendKey),
 	// Rest are inlined
+	/// Hostname or IP address of the upstream to route to.
 	#[serde(rename = "host")]
-	Opaque(Target), // Hostname or IP
+	Opaque(Target),
 	/// Route to the in-process admin service instead of a network upstream.
 	Internal(InternalBackend),
 	Dynamic {},
@@ -1855,11 +1860,15 @@ pub enum McpBackendHost {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 enum McpBackendHostSerde {
 	HostUri {
+		/// Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.
 		host: String,
 	},
 	HostParts {
+		/// Hostname or IP address of the MCP server.
 		host: String,
+		/// Port on the MCP server to connect to.
 		port: u16,
+		/// Request path on the MCP server.
 		path: String,
 	},
 	Backend {
@@ -1963,6 +1972,7 @@ impl McpBackendHost {
 
 #[apply(schema_de!)]
 pub enum LocalMcpTargetSpec {
+	/// Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.
 	#[serde(rename = "sse")]
 	Sse {
 		#[serde(flatten)]
@@ -2129,7 +2139,12 @@ pub enum SimpleLocalBackend {
 #[apply(schema_de!)]
 enum SimpleLocalBackendSerde {
 	/// Service reference. Service must be defined in the top level services list.
-	Service { name: NamespacedHostname, port: u16 },
+	Service {
+		/// Name of the target Service, as defined in the top-level `services` list.
+		name: NamespacedHostname,
+		/// Port on the target Service to route to.
+		port: u16,
+	},
 	/// Hostname or IP address
 	#[serde(rename = "host")]
 	Opaque(

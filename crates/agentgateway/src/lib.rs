@@ -622,9 +622,18 @@ pub struct ModelCatalogConfig {
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
 pub enum ModelCatalogSource {
-	File { file: PathBuf },
-	Inline { inline: String },
-	InlineCatalog { inline: llm::cost::Catalog },
+	File {
+		/// Path to a file on disk containing the model cost catalog.
+		file: PathBuf,
+	},
+	Inline {
+		/// Model cost catalog provided inline as a string.
+		inline: String,
+	},
+	InlineCatalog {
+		/// Model cost catalog provided inline as structured data.
+		inline: llm::cost::Catalog,
+	},
 }
 
 #[apply(schema!)]

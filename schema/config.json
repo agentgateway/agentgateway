@@ -464,6 +464,7 @@
           "type": "object",
           "properties": {
             "file": {
+              "description": "Path to a file on disk containing the model cost catalog.",
               "type": "string"
             }
           },
@@ -475,6 +476,7 @@
           "type": "object",
           "properties": {
             "inline": {
+              "description": "Model cost catalog provided inline as a string.",
               "type": "string"
             }
           },
@@ -486,6 +488,7 @@
           "type": "object",
           "properties": {
             "inline": {
+              "description": "Model cost catalog provided inline as structured data.",
               "$ref": "#/$defs/Catalog"
             }
           },
@@ -2101,9 +2104,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -2477,9 +2482,11 @@
                   "type": "object",
                   "properties": {
                     "name": {
+                      "description": "Name of the target Service, as defined in the top-level `services` list.",
                       "$ref": "#/$defs/NamespacedHostname"
                     },
                     "port": {
+                      "description": "Port on the target Service to route to.",
                       "type": "integer",
                       "format": "uint16",
                       "minimum": 0,
@@ -2808,6 +2815,7 @@
           "type": "object",
           "properties": {
             "file": {
+              "description": "Path to a file on disk to load the value from.",
               "type": "string"
             }
           },
@@ -3524,9 +3532,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -3865,9 +3875,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -4157,6 +4169,7 @@
           "type": "object",
           "properties": {
             "file": {
+              "description": "Path to a file on disk to load the value from.",
               "type": "string"
             }
           },
@@ -5192,9 +5205,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -5372,9 +5387,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -5895,9 +5912,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -6199,9 +6218,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -6359,9 +6380,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -6589,9 +6612,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -6872,15 +6897,18 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
+          "description": "Route to a Service defined in the top-level `services` list.",
           "type": "object",
           "properties": {
             "service": {
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -6910,6 +6938,7 @@
           ]
         },
         {
+          "description": "Hostname or IP address of the upstream to route to.",
           "type": "object",
           "properties": {
             "host": {
@@ -7081,6 +7110,7 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
+          "description": "Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.",
           "type": "object",
           "properties": {
             "sse": {
@@ -7091,6 +7121,7 @@
                   "type": "object",
                   "properties": {
                     "host": {
+                      "description": "Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.",
                       "type": "string"
                     }
                   },
@@ -7102,15 +7133,18 @@
                   "type": "object",
                   "properties": {
                     "host": {
+                      "description": "Hostname or IP address of the MCP server.",
                       "type": "string"
                     },
                     "port": {
+                      "description": "Port on the MCP server to connect to.",
                       "type": "integer",
                       "format": "uint16",
                       "minimum": 0,
                       "maximum": 65535
                     },
                     "path": {
+                      "description": "Request path on the MCP server.",
                       "type": "string"
                     }
                   },
@@ -7155,6 +7189,7 @@
                   "type": "object",
                   "properties": {
                     "host": {
+                      "description": "Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.",
                       "type": "string"
                     }
                   },
@@ -7166,15 +7201,18 @@
                   "type": "object",
                   "properties": {
                     "host": {
+                      "description": "Hostname or IP address of the MCP server.",
                       "type": "string"
                     },
                     "port": {
+                      "description": "Port on the MCP server to connect to.",
                       "type": "integer",
                       "format": "uint16",
                       "minimum": 0,
                       "maximum": 65535
                     },
                     "path": {
+                      "description": "Request path on the MCP server.",
                       "type": "string"
                     }
                   },
@@ -7259,6 +7297,7 @@
                   "type": "object",
                   "properties": {
                     "host": {
+                      "description": "Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.",
                       "type": "string"
                     }
                   },
@@ -7270,15 +7309,18 @@
                   "type": "object",
                   "properties": {
                     "host": {
+                      "description": "Hostname or IP address of the MCP server.",
                       "type": "string"
                     },
                     "port": {
+                      "description": "Port on the MCP server to connect to.",
                       "type": "integer",
                       "format": "uint16",
                       "minimum": 0,
                       "maximum": 65535
                     },
                     "path": {
+                      "description": "Request path on the MCP server.",
                       "type": "string"
                     }
                   },
@@ -8331,9 +8373,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -9071,9 +9115,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -9248,9 +9294,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -9598,6 +9646,7 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
+          "description": "Hostname or IP address of the upstream to route to.",
           "type": "object",
           "properties": {
             "host": {
