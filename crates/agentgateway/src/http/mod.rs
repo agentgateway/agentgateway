@@ -250,7 +250,7 @@ use crate::cel::{BackendContext, DestinationContext, LLMContext, RequestTime, So
 use crate::client::PoolKey;
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::stream::TCPConnectionInfo;
-use crate::types::agent::PathMatch;
+use crate::types::agent::{HeaderValueMatch, PathMatch};
 
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -445,6 +445,22 @@ pub fn get_pseudo_or_header_value<'a>(
 		HeaderOrPseudo::Header(v) => req.headers().get(v).map(std::borrow::Cow::Borrowed),
 		_ => get_pseudo_header_value(pseudo, req)
 			.and_then(|v| HeaderValue::try_from(&v).ok().map(std::borrow::Cow::Owned)),
+	}
+}
+
+/// Match repeated header fields independently without splitting commas within a field value.
+pub(crate) fn request_header_matches(
+	name: &HeaderOrPseudo,
+	value: &HeaderValueMatch,
+	req: &Request,
+) -> bool {
+	match name {
+		HeaderOrPseudo::Header(name) => req
+			.headers()
+			.get_all(name)
+			.iter()
+			.any(|have| value.matches(have)),
+		_ => get_pseudo_or_header_value(name, req).is_some_and(|have| value.matches(have.as_ref())),
 	}
 }
 

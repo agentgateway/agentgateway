@@ -1,0 +1,30 @@
+{
+  "model": "gpt-5.6-terra",
+  "max_tokens": 64,
+  "thinking": {
+    "type": "adaptive"
+  },
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Get the weather for a location",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location"
+        ]
+      }
+    }
+  ],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Say hi"
+    }
+  ]
+}

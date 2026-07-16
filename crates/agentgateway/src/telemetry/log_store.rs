@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
-use std::thread;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Instant;
+use std::{env, thread};
 
 use chrono::{DateTime, Duration, Utc};
 use crossbeam::channel::{Receiver, Sender, TryRecvError};
@@ -11,63 +13,11 @@ use tracing::{debug, warn};
 
 use crate::{apply, schema};
 
-const INSERT_LOG_PREFIX: &str = r#"
-INSERT INTO request_logs (
-	id, started_at, completed_at, duration_ms, trace_id, span_id, http_status, error,
-	gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model, gen_ai_response_model,
-	input_tokens, output_tokens, total_tokens, cost, agentgateway_user, agentgateway_group,
-	user_agent_name, has_payload, attributes_json
-) "#;
-
-const INSERT_PAYLOAD_PREFIX: &str = r#"
-INSERT INTO request_log_payloads (log_id, request_prompt_json, response_completion_json) 
-"#;
-
-macro_rules! push_request_log_row {
-	($row:expr, $record:expr) => {{
-		$row
-			.push_bind(&$record.id)
-			.push_bind($record.started_at)
-			.push_bind($record.completed_at)
-			.push_bind($record.duration_ms)
-			.push_bind(&$record.trace_id)
-			.push_bind(&$record.span_id)
-			.push_bind($record.http_status)
-			.push_bind(&$record.error)
-			.push_bind(&$record.gen_ai_operation_name)
-			.push_bind(&$record.gen_ai_provider_name)
-			.push_bind(&$record.gen_ai_request_model)
-			.push_bind(&$record.gen_ai_response_model)
-			.push_bind($record.input_tokens)
-			.push_bind($record.output_tokens)
-			.push_bind($record.total_tokens)
-			.push_bind($record.cost)
-			.push_bind(&$record.agentgateway_user)
-			.push_bind(&$record.agentgateway_group)
-			.push_bind(&$record.user_agent_name)
-			.push_bind($record.has_payload)
-			.push_bind(sqlx::types::Json(&$record.attributes_json));
-	}};
-}
-
-macro_rules! push_request_log_payload_row {
-	($row:expr, $record:expr, $payload:expr) => {{
-		$row
-			.push_bind(&$record.id)
-			.push_bind($payload.request_prompt_json.as_ref().map(sqlx::types::Json))
-			.push_bind(
-				$payload
-					.response_completion_json
-					.as_ref()
-					.map(sqlx::types::Json),
-			);
-	}};
-}
-
 mod postgres;
 mod sqlite;
 
 static REQUEST_LOG_STORE: OnceLock<RequestLogStore> = OnceLock::new();
+static REQUEST_LOG_STORE_BACKLOG: AtomicUsize = AtomicUsize::new(0);
 
 #[apply(schema!)]
 pub struct Config {
@@ -82,7 +32,9 @@ pub struct RequestLogStore {
 
 impl RequestLogStore {
 	pub fn emit(&self, record: StoredRequestLog) {
+		REQUEST_LOG_STORE_BACKLOG.fetch_add(1, Ordering::Relaxed);
 		if let Err(err) = self.tx.send(LogStoreMsg::Record(record)) {
+			REQUEST_LOG_STORE_BACKLOG.fetch_sub(1, Ordering::Relaxed);
 			warn!(target: "request", ?err, "failed to enqueue request log database record");
 		}
 	}
@@ -189,7 +141,9 @@ impl Drop for RequestLogStoreGuard {
 	}
 }
 
-const LOG_STORE_BATCH_SIZE: usize = 64;
+// Testing shows this to achieve a pretty good throughput for both postgres and sqlite
+const DEFAULT_LOG_STORE_BATCH_SIZE: usize = 16384;
+const LOG_STORE_BATCH_SIZE_ENV: &str = "REQUEST_LOG_STORE_BATCH_SIZE";
 
 #[allow(clippy::large_enum_variant)] // The StoredRequestLog, which is used 99.9% of the time, is the large one
 enum LogStoreMsg {
@@ -264,6 +218,13 @@ impl LogStoreWorker {
 	}
 
 	async fn work_async(mut self) {
+		let batch_size = match log_store_batch_size() {
+			Ok(batch_size) => batch_size,
+			Err(err) => {
+				self.notify_ready(Err(err));
+				return;
+			},
+		};
 		let backend = match Backend::connect(&self.cfg).await {
 			Ok(backend) => backend,
 			Err(err) => {
@@ -272,7 +233,7 @@ impl LogStoreWorker {
 			},
 		};
 		self.notify_ready(Ok(()));
-		let mut batch = Vec::with_capacity(LOG_STORE_BATCH_SIZE);
+		let mut batch = Vec::with_capacity(batch_size);
 		loop {
 			match self.receiver.recv() {
 				Ok(msg) => {
@@ -327,6 +288,22 @@ impl LogStoreWorker {
 	}
 }
 
+fn log_store_batch_size() -> anyhow::Result<usize> {
+	let Ok(value) = env::var(LOG_STORE_BATCH_SIZE_ENV) else {
+		return Ok(DEFAULT_LOG_STORE_BATCH_SIZE);
+	};
+	let batch_size = value.parse::<usize>().map_err(|err| {
+		anyhow::anyhow!(
+			"invalid env var {LOG_STORE_BATCH_SIZE_ENV}={value} ({})",
+			err
+		)
+	})?;
+	if batch_size == 0 {
+		anyhow::bail!("invalid env var {LOG_STORE_BATCH_SIZE_ENV}=0 (must be greater than 0)");
+	}
+	Ok(batch_size)
+}
+
 async fn process_log_store_msg(
 	backend: &Backend,
 	batch: &mut Vec<StoredRequestLog>,
@@ -365,9 +342,21 @@ async fn flush_log_store_batch(backend: &Backend, batch: &mut Vec<StoredRequestL
 	if batch.is_empty() {
 		return;
 	}
+	let t0 = Instant::now();
+	let count = batch.len();
 	if let Err(err) = backend.insert_batch(batch).await {
-		warn!(target: "request", ?err, count = batch.len(), "failed to persist request log batch");
+		warn!(target: "request", ?err, count, "failed to persist request log batch");
 	}
+	let backlog = REQUEST_LOG_STORE_BACKLOG.fetch_sub(count, Ordering::Relaxed) - count;
+	let latency = t0.elapsed();
+	let throughput = count as f64 / latency.as_secs_f64();
+	debug!(
+		count,
+		backlog,
+		?latency,
+		throughput,
+		"flushed request log database batch"
+	);
 	batch.clear();
 }
 
@@ -393,7 +382,7 @@ pub struct StoredRequestLog {
 	pub agentgateway_group: Option<String>,
 	pub user_agent_name: Option<String>,
 	pub has_payload: bool,
-	pub attributes_json: Value,
+	pub attributes_json: Box<str>,
 	pub payload: Option<StoredRequestLogPayload>,
 }
 

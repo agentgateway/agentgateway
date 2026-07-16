@@ -1111,6 +1111,20 @@ pub enum HeaderValueMatch {
 	Invalid,
 }
 
+impl HeaderValueMatch {
+	pub(crate) fn matches(&self, have: &HeaderValue) -> bool {
+		match self {
+			HeaderValueMatch::Exact(want) => have == want,
+			HeaderValueMatch::Regex(want) => have
+				.to_str()
+				.ok()
+				.and_then(|have| want.find(have).map(|m| (have, m)))
+				.is_some_and(|(have, m)| m.start() == 0 && m.end() == have.len()),
+			HeaderValueMatch::Invalid => false,
+		}
+	}
+}
+
 #[apply(schema!)]
 pub enum PathMatch {
 	Exact(Strng),

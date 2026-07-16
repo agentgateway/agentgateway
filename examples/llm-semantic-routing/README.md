@@ -169,92 +169,21 @@ section configures Codex to use the gateway's `auto` model name. Codex uses the
 OpenAI Responses API and vSR translates streamed Responses events before the
 gateway forwards the request to the selected model.
 
-### Codex CLI
-
-This configuration was tested with `codex-cli 0.144.4`. The
-[Codex CLI profile documentation](https://learn.chatgpt.com/docs/config-file/config-advanced#profiles)
-describes how `--profile` overlays a named user-level configuration file.
-Create the profile:
-
-```bash
-export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-export AGENTGATEWAY_BASE_URL="http://$(kubectl get gateway agentgateway-proxy \
-  -n agentgateway-system \
-  -o jsonpath='{.status.addresses[0].value}')/v1"
-# For a TLS-enabled corporate gateway, set AGENTGATEWAY_BASE_URL to its https URL.
-mkdir -p "$CODEX_HOME"
-cat > "$CODEX_HOME/agentgateway.config.toml" <<EOF
-model = "auto"
-model_provider = "agentgateway"
-
-[model_providers.agentgateway]
-name = "Corporate agentgateway"
-base_url = "${AGENTGATEWAY_BASE_URL}"
-wire_api = "responses"
-EOF
-```
-
-Start Codex with that profile:
-
-```bash
-codex --profile agentgateway
-```
-
-### Codex in the ChatGPT Desktop App
-
-Codex is available in the ChatGPT desktop app as a Codex environment. This
-configuration was tested with ChatGPT desktop app version `26.707.72221`.
-See the [Codex environment documentation](https://learn.chatgpt.com/docs/environments/modes)
-and [Codex configuration basics](https://learn.chatgpt.com/docs/config-file/config-basic).
-
-For the same gateway configuration, back up and replace the user-level config,
-then restart the ChatGPT desktop app:
-
-```bash
-export AGENTGATEWAY_BASE_URL="http://$(kubectl get gateway agentgateway-proxy \
-  -n agentgateway-system \
-  -o jsonpath='{.status.addresses[0].value}')/v1"
-# For a TLS-enabled corporate gateway, set AGENTGATEWAY_BASE_URL to its https URL.
-cp ~/.codex/config.toml ~/.codex/config.toml.bak
-cat > ~/.codex/config.toml <<EOF
-model = "auto"
-model_provider = "agentgateway"
-
-[model_providers.agentgateway]
-name = "Corporate agentgateway"
-base_url = "${AGENTGATEWAY_BASE_URL}"
-wire_api = "responses"
-EOF
-```
-
-Replacing `~/.codex/config.toml` also replaces other user-level Codex settings.
-To edit that file through the app instead, open **Settings > Configuration >
-Open config.toml** and apply the same configuration.
+For Codex CLI and ChatGPT desktop app setup, see [Use Codex with
+agentgateway](https://agentgateway.dev/docs/kubernetes/latest/integrations/llm-clients/codex/).
 
 ### Verify Codex Routing
 
-After sending a task from Codex CLI or the ChatGPT desktop app, inspect the vSR
-decision and the completed agentgateway request:
+After sending a task through Codex, inspect the vSR decision:
 
 ```bash
 kubectl logs -n agentgateway-system deploy/semantic-router --since=5m \
   | grep -E '"event":"routing_decision"|"event":"router_replay_complete"' \
   | tail -n 4
-
-kubectl logs -n agentgateway-system deploy/agentgateway-proxy --since=5m \
-  | grep 'http.path=/v1/responses' \
-  | tail -n 4
 ```
 
 The vSR output identifies `original_model: auto`, the `selected_model`, and a
-successful `response_status`. The agentgateway output identifies the
-`openai-semantic-routing` route, the selected request and response model,
-catalog-priced token usage, and the realized request cost.
-
-Codex also probes `/v1/models` to discover model metadata. Until [agentgateway
-issue #1462](https://github.com/agentgateway/agentgateway/issues/1462) adds a
-gateway-generated model list, Codex may warn that metadata for `auto` is not
-found. That warning does not prevent `/v1/responses` traffic from routing.
+successful `response_status`.
 
 The gateway authenticates to OpenAI with its configured provider credential and
 records the selected model and cost as it does for other OpenAI-compatible

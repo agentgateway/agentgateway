@@ -353,6 +353,7 @@ dependencies = [
  "typespec_client_core",
  "url",
  "uuid",
+ "value-bag",
  "vector-map",
  "websocket-sans-io",
  "which 8.0.4",

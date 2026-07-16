@@ -30,6 +30,7 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use tracing::{Level, debug, trace};
+use value_bag::visit::Visit;
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
@@ -56,25 +57,83 @@ fn u128_to_i64(value: u128) -> i64 {
 	value.min(i64::MAX as u128) as i64
 }
 
-fn kv_to_json(kv: &[(&str, Option<ValueBag>)]) -> Value {
-	let mut map = serde_json::Map::with_capacity(kv.len());
-	for (key, value) in kv {
-		if let Some(value) = value
-			&& let Ok(value) = serde_json::to_value(value)
-		{
-			map.insert((*key).to_string(), value);
-		}
-	}
-	Value::Object(map)
+struct DatabaseAttributes {
+	json: Box<str>,
+	agentgateway_user: Option<String>,
+	agentgateway_group: Option<String>,
+	user_agent_name: Option<String>,
 }
 
-fn string_attribute(attributes: &Value, key: &str) -> Option<String> {
-	attributes
-		.get(key)
-		.and_then(Value::as_str)
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.map(ToOwned::to_owned)
+fn database_attributes(kv: &[(&str, Option<ValueBag>)]) -> DatabaseAttributes {
+	let mut agentgateway_user = None;
+	let mut agentgateway_group = None;
+	let mut user_agent_name = None;
+	for (key, value) in kv {
+		let Some(value) = value else {
+			continue;
+		};
+		match *key {
+			"agentgateway.user" => {
+				agentgateway_user = string_attribute(value);
+			},
+			"agentgateway.group" => {
+				agentgateway_group = string_attribute(value);
+			},
+			"user_agent.name" => {
+				user_agent_name = string_attribute(value);
+			},
+			_ => {},
+		}
+	}
+	let json = serde_json::to_string(&DatabaseAttributeMap(kv))
+		.unwrap_or_else(|_| "{}".to_string())
+		.into_boxed_str();
+	DatabaseAttributes {
+		json,
+		agentgateway_user,
+		agentgateway_group,
+		user_agent_name,
+	}
+}
+
+struct DatabaseAttributeMap<'a>(&'a [(&'a str, Option<ValueBag<'a>>)]);
+
+impl Serialize for DatabaseAttributeMap<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let len = self.0.iter().filter(|(_, value)| value.is_some()).count();
+		let mut map = serializer.serialize_map(Some(len))?;
+		for (key, value) in self.0 {
+			if let Some(value) = value {
+				map.serialize_entry(key, value)?;
+			}
+		}
+		map.end()
+	}
+}
+
+fn string_attribute(value: &ValueBag) -> Option<String> {
+	struct StringVisitor(Option<String>);
+
+	impl<'v> Visit<'v> for StringVisitor {
+		fn visit_any(&mut self, _value: ValueBag) -> Result<(), value_bag::Error> {
+			Ok(())
+		}
+
+		fn visit_str(&mut self, value: &str) -> Result<(), value_bag::Error> {
+			let value = value.trim();
+			if !value.is_empty() {
+				self.0 = Some(value.to_string());
+			}
+			Ok(())
+		}
+	}
+
+	let mut visitor = StringVisitor(None);
+	let _ = value.visit(&mut visitor);
+	visitor.0
 }
 
 fn user_agent_name(req: Option<&cel::RequestSnapshot>) -> Option<String> {
@@ -1608,10 +1667,7 @@ impl Drop for DropOnLog {
 							db_kv.push((*k, eval));
 						}
 					}
-					let attributes_json = kv_to_json(&db_kv);
-					let agentgateway_user = string_attribute(&attributes_json, "agentgateway.user");
-					let agentgateway_group = string_attribute(&attributes_json, "agentgateway.group");
-					let user_agent_name = string_attribute(&attributes_json, "user_agent.name");
+					let attributes = database_attributes(&db_kv);
 					let payload = llm_response.as_ref().and_then(|info| {
 						let request_prompt_json = info
 							.prompt
@@ -1635,7 +1691,7 @@ impl Drop for DropOnLog {
 							.or_else(|| Some(llm.input_tokens? + llm.output_tokens?))
 					});
 					log_store::emit(log_store::StoredRequestLog {
-						id: uuid::Uuid::new_v4().to_string(),
+						id: uuid::Uuid::now_v7().to_string(),
 						started_at: log.start.as_datetime().with_timezone(&chrono::Utc),
 						completed_at: end_time.as_datetime().with_timezone(&chrono::Utc),
 						duration_ms: u128_to_i64(duration.as_millis()),
@@ -1665,11 +1721,11 @@ impl Drop for DropOnLog {
 						output_tokens: u64_to_i64(llm_response.as_ref().and_then(|llm| llm.output_tokens)),
 						total_tokens: u64_to_i64(total_tokens),
 						cost: cost.and_then(|cost| cost.total().to_f64()),
-						agentgateway_user,
-						agentgateway_group,
-						user_agent_name,
+						agentgateway_user: attributes.agentgateway_user,
+						agentgateway_group: attributes.agentgateway_group,
+						user_agent_name: attributes.user_agent_name,
 						has_payload,
-						attributes_json,
+						attributes_json: attributes.json,
 						payload,
 					});
 				}

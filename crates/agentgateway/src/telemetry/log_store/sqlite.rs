@@ -4,14 +4,14 @@ use anyhow::Context;
 use serde_json::Value;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::types::Json;
-use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
+use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool, query_builder};
 
 use super::{
 	AnalyticsGroup, AnalyticsSummaryRequest, AnalyticsSummaryResponse, AnalyticsTimeBucket,
-	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, INSERT_LOG_PREFIX,
-	INSERT_PAYLOAD_PREFIX, LogEntry, LogFilters, PayloadEntry, SearchRequest, SearchResponse,
-	StoredRequestLog, TailRequest, TailResponse, TimeRange, UsageEntry, analytics_window,
-	attr_filter_values, decode_cursor, encode_cursor, limit, promoted_attribute_column,
+	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry, LogFilters, PayloadEntry,
+	SearchRequest, SearchResponse, StoredRequestLog, StoredRequestLogPayload, TailRequest,
+	TailResponse, TimeRange, UsageEntry, analytics_window, attr_filter_values, decode_cursor,
+	encode_cursor, limit, promoted_attribute_column,
 };
 
 pub struct SqliteLogStore {
@@ -19,6 +19,60 @@ pub struct SqliteLogStore {
 }
 
 const ANALYTICS_FILTER_OPTION_LIMIT: i64 = 500;
+// Leave room below SQLite's 32,766-parameter limit for two more log fields or one payload field.
+const LOG_INSERT_CHUNK_SIZE: usize = 1_400;
+const PAYLOAD_INSERT_CHUNK_SIZE: usize = 8_000;
+const INSERT_LOG_PREFIX: &str = r#"
+INSERT INTO request_logs (
+	id, started_at, completed_at, duration_ms, trace_id, span_id, http_status, error,
+	gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model, gen_ai_response_model,
+	input_tokens, output_tokens, total_tokens, cost, agentgateway_user, agentgateway_group,
+	user_agent_name, has_payload, attributes_json
+) 
+"#;
+
+const INSERT_PAYLOAD_PREFIX: &str = r#"
+INSERT INTO request_log_payloads (log_id, request_prompt_json, response_completion_json)
+"#;
+
+fn push_request_log_row(
+	row: &mut query_builder::Separated<'_, Sqlite, &'static str>,
+	record: &StoredRequestLog,
+) {
+	row
+		.push_bind(&record.id)
+		.push_bind(record.started_at)
+		.push_bind(record.completed_at)
+		.push_bind(record.duration_ms)
+		.push_bind(&record.trace_id)
+		.push_bind(&record.span_id)
+		.push_bind(record.http_status)
+		.push_bind(&record.error)
+		.push_bind(&record.gen_ai_operation_name)
+		.push_bind(&record.gen_ai_provider_name)
+		.push_bind(&record.gen_ai_request_model)
+		.push_bind(&record.gen_ai_response_model)
+		.push_bind(record.input_tokens)
+		.push_bind(record.output_tokens)
+		.push_bind(record.total_tokens)
+		.push_bind(record.cost)
+		.push_bind(&record.agentgateway_user)
+		.push_bind(&record.agentgateway_group)
+		.push_bind(&record.user_agent_name)
+		.push_bind(record.has_payload)
+		.push_bind(record.attributes_json.as_ref());
+}
+
+fn push_request_log_payload_row(
+	row: &mut query_builder::Separated<'_, Sqlite, &'static str>,
+	record: &StoredRequestLog,
+	payload: &StoredRequestLogPayload,
+) {
+	row
+		.push_bind(&record.id)
+		.push_bind(payload.request_prompt_json.as_ref().map(Json))
+		.push_bind(payload.response_completion_json.as_ref().map(Json));
+}
 
 impl SqliteLogStore {
 	pub async fn connect(url: &str) -> anyhow::Result<Self> {
@@ -43,22 +97,23 @@ impl SqliteLogStore {
 			return Ok(());
 		}
 		let mut tx = self.pool.begin().await?;
-		let mut logs = QueryBuilder::<Sqlite>::new(INSERT_LOG_PREFIX);
-		logs.push_values(records, |mut row, record| {
-			push_request_log_row!(row, record);
-		});
-		logs.build().execute(&mut *tx).await?;
+		for chunk in records.chunks(LOG_INSERT_CHUNK_SIZE) {
+			let mut logs = QueryBuilder::<Sqlite>::new(INSERT_LOG_PREFIX);
+			logs.push_values(chunk, |mut row, record| {
+				push_request_log_row(&mut row, record);
+			});
+			logs.build().execute(&mut *tx).await?;
+		}
 
-		if records.iter().any(|record| record.payload.is_some()) {
+		let payload_records = records
+			.iter()
+			.filter_map(|record| record.payload.as_ref().map(|payload| (record, payload)))
+			.collect::<Vec<_>>();
+		for chunk in payload_records.chunks(PAYLOAD_INSERT_CHUNK_SIZE) {
 			let mut payloads = QueryBuilder::<Sqlite>::new(INSERT_PAYLOAD_PREFIX);
-			payloads.push_values(
-				records
-					.iter()
-					.filter_map(|record| record.payload.as_ref().map(|payload| (record, payload))),
-				|mut row, (record, payload)| {
-					push_request_log_payload_row!(row, record, payload);
-				},
-			);
+			payloads.push_values(chunk, |mut row, (record, payload)| {
+				push_request_log_payload_row(&mut row, record, payload);
+			});
 			payloads.build().execute(&mut *tx).await?;
 		}
 		tx.commit().await?;
@@ -552,13 +607,13 @@ CREATE TABLE IF NOT EXISTS request_logs (
 	agentgateway_group TEXT,
 	user_agent_name TEXT,
 	has_payload INTEGER NOT NULL,
-	attributes_json TEXT NOT NULL CHECK (json_valid(attributes_json))
+	attributes_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS request_log_payloads (
 	log_id TEXT PRIMARY KEY REFERENCES request_logs(id) ON DELETE CASCADE,
-	request_prompt_json TEXT CHECK (request_prompt_json IS NULL OR json_valid(request_prompt_json)),
-	response_completion_json TEXT CHECK (response_completion_json IS NULL OR json_valid(response_completion_json))
+	request_prompt_json TEXT,
+	response_completion_json TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_request_logs_completed_at ON request_logs(completed_at DESC, id DESC);
