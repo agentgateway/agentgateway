@@ -241,6 +241,10 @@ pub(super) async fn authorization_server_metadata(
 	let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
 		.await
 		.map_err(ProxyError::Body)?;
+
+	// Pre-compute once — reused in the universal issuer rewrite below.
+	let gateway_base = issuer_from_metadata_uri(request_uri_for_oauth_metadata(req).to_string());
+
 	match &auth.provider {
 		Some(McpIDP::Auth0 {}) => {
 			// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
@@ -309,6 +313,13 @@ pub(super) async fn authorization_server_metadata(
 			*re = format!("{current_uri}/client-registration");
 		},
 		_ => {},
+	}
+
+	// RFC 8414 §3.3: the issuer in AS metadata MUST match the URL from which it was fetched.
+	// Applied universally across all providers — strict clients (Claude Desktop, ChatGPT, Codex)
+	// validate this and abort if issuer ≠ gateway URL.
+	if let Some(serde_json::Value::String(issuer_val)) = json::traverse_mut(&mut resp, &["issuer"]) {
+		*issuer_val = gateway_base;
 	}
 
 	let response = ::http::Response::builder()
@@ -394,6 +405,20 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
+}
+
+/// Derives the gateway issuer from an AS metadata URI, satisfying RFC 8414 §3.3.
+///
+/// Removes the `/.well-known/oauth-authorization-server` segment while preserving any
+/// path suffix that follows it, as required by the RFC §3.1 path-based issuer form:
+///   `https://example.com/.well-known/oauth-authorization-server/issuer1`
+///   → `https://example.com/issuer1`
+fn issuer_from_metadata_uri(mut uri: String) -> String {
+	const WELL_KNOWN: &str = "/.well-known/oauth-authorization-server";
+	if let Some(idx) = uri.find(WELL_KNOWN) {
+		uri.replace_range(idx..idx + WELL_KNOWN.len(), "");
+	}
+	uri
 }
 
 const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
@@ -669,5 +694,50 @@ mod tests {
 		assert_eq!(json["client_id"], "operator-id");
 		assert!(json.is_object());
 		assert_eq!(json["redirect_uris"], serde_json::json!([]));
+	}
+
+	#[test]
+	fn issuer_strips_well_known_suffix_from_root_gateway() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/.well-known/oauth-authorization-server".to_string()
+			),
+			"https://gateway.example.com"
+		);
+	}
+
+	#[test]
+	fn issuer_strips_well_known_suffix_from_path_prefixed_gateway() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/base/path/.well-known/oauth-authorization-server"
+					.to_string()
+			),
+			"https://gateway.example.com/base/path"
+		);
+	}
+
+	// RFC 8414 §3.1 path-based issuer form:
+	// issuer = https://example.com/issuer1
+	// metadata URL = https://example.com/.well-known/oauth-authorization-server/issuer1
+	// The /.well-known/oauth-authorization-server segment must be removed while the
+	// trailing /issuer1 path is preserved.
+	#[test]
+	fn issuer_preserves_path_suffix_after_well_known_segment() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/.well-known/oauth-authorization-server/issuer1"
+					.to_string()
+			),
+			"https://gateway.example.com/issuer1"
+		);
+	}
+
+	#[test]
+	fn issuer_returns_uri_unchanged_when_no_well_known_present() {
+		assert_eq!(
+			issuer_from_metadata_uri("https://gateway.example.com".to_string()),
+			"https://gateway.example.com"
+		);
 	}
 }
