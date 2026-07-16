@@ -890,6 +890,162 @@ async fn old_client_multiplex_mixed_servers_uses_legacy_session_flow() {
 	assert!(names.contains(&"new_echo"));
 }
 
+fn mrtr_meta() -> serde_json::Value {
+	serde_json::json!({
+		"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+		"io.modelcontextprotocol/clientInfo": {"name": "mrtr-client", "version": "0"},
+		"io.modelcontextprotocol/clientCapabilities": {"elicitation": {}}
+	})
+}
+
+async fn mrtr_tool_call_body(io: SocketAddr, id: i64, params: serde_json::Value) -> String {
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let name = params["name"].as_str().unwrap().to_string();
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": id,
+		"method": "tools/call",
+		"params": params
+	});
+	let resp = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/call")
+		.header("mcp-name", name)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+	resp.text().await.unwrap()
+}
+
+async fn mrtr_tool_call(io: SocketAddr, id: i64, params: serde_json::Value) -> serde_json::Value {
+	let text = mrtr_tool_call_body(io, id, params).await;
+	terminal_result(&text, id)
+}
+
+fn terminal_message(text: &str, id: i64) -> serde_json::Value {
+	let messages: Vec<serde_json::Value> = if text.trim_start().starts_with('{') {
+		vec![serde_json::from_str(text).unwrap()]
+	} else {
+		text
+			.lines()
+			.filter_map(|l| l.strip_prefix("data: "))
+			.map(|d| {
+				serde_json::from_str(d)
+					.unwrap_or_else(|e| panic!("invalid JSON in SSE data frame {d:?}: {e}"))
+			})
+			.collect()
+	};
+	messages
+		.into_iter()
+		.find(|m| m["id"] == serde_json::json!(id))
+		.unwrap_or_else(|| panic!("no message for id {id} in: {text}"))
+}
+
+fn terminal_result(text: &str, id: i64) -> serde_json::Value {
+	let message = terminal_message(text, id);
+	message
+		.get("result")
+		.cloned()
+		.unwrap_or_else(|| panic!("no result for id {id} in: {message}"))
+}
+
+#[tokio::test]
+async fn mrtr_elicitation_round_trip() {
+	let (mock, _) = mock_mrtr_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, false, false).await;
+
+	let result = mrtr_tool_call(
+		io,
+		1,
+		serde_json::json!({"_meta": mrtr_meta(), "name": "guarded_echo", "arguments": {}}),
+	)
+	.await;
+	assert_eq!(result["resultType"], "input_required");
+	assert_eq!(result["requestState"], "mrtr-state-1");
+	assert_eq!(
+		result["inputRequests"]["pin"]["method"],
+		"elicitation/create"
+	);
+
+	let result = mrtr_tool_call(
+		io,
+		2,
+		serde_json::json!({
+			"_meta": mrtr_meta(),
+			"name": "guarded_echo",
+			"arguments": {},
+			"inputResponses": {"pin": {"action": "accept", "content": {"pin": "9999"}}},
+			"requestState": result["requestState"]
+		}),
+	)
+	.await;
+	assert_eq!(result["resultType"], "complete");
+	assert_eq!(result["content"][0]["text"], "state:mrtr-state-1 pin:9999");
+}
+
+#[tokio::test]
+async fn mrtr_direct_server_request_fails_modern_call_cleanly() {
+	let (mock, _capture) = mock_mrtr_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, false, false).await;
+	let text = mrtr_tool_call_body(
+		io,
+		1,
+		serde_json::json!({"_meta": mrtr_meta(), "name": "direct_elicit", "arguments": {}}),
+	)
+	.await;
+	let message = terminal_message(&text, 1);
+	let error_message = message["error"]["message"]
+		.as_str()
+		.unwrap_or_else(|| panic!("expected a JSON-RPC error, got {message}"));
+	assert!(
+		error_message.contains("input_required"),
+		"error should steer servers to MRTR, got {error_message}"
+	);
+	// The late upstream result would be a second terminal message for this request.
+	assert!(
+		!text.contains("too-late"),
+		"late upstream result must not reach the client, got {text}"
+	);
+}
+
+#[tokio::test]
+async fn legacy_meta_client_capabilities_are_stripped() {
+	let (mock, capture) = mock_mrtr_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, false, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/call",
+		"params": {
+			"_meta": {"io.modelcontextprotocol/clientCapabilities": {"elicitation": {}}},
+			"name": "guarded_echo",
+			"arguments": {}
+		}
+	});
+	let resp = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+
+	let seen = capture.lock().unwrap();
+	let call = seen
+		.iter()
+		.find(|b| b["method"] == "tools/call")
+		.expect("upstream should see the tools/call");
+	let caps = &call["params"]["_meta"]["io.modelcontextprotocol/clientCapabilities"];
+	assert!(
+		caps.get("elicitation").is_none(),
+		"legacy requests must still have elicitation stripped, got {call}"
+	);
+}
+
 #[tokio::test]
 async fn streamable_http_validates_protocol_version_header() {
 	let mock = mock_streamable_http_server(true).await;
@@ -2136,6 +2292,149 @@ async fn mock_modern_streamable_http_server() -> MockServer {
 		init_counter,
 		_cancel: tx,
 	}
+}
+
+type BodyCapture = std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>;
+
+async fn mock_mrtr_streamable_http_server() -> (MockServer, BodyCapture) {
+	agent_core::telemetry::testing::setup_test_logging();
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let capture: BodyCapture = Default::default();
+	let capture_clone = capture.clone();
+	let router = axum::Router::new().route(
+		"/mcp",
+		axum::routing::post(move |body: axum::Json<serde_json::Value>| {
+			use axum::response::IntoResponse;
+			let capture = capture_clone.clone();
+			async move {
+				capture.lock().unwrap().push(body.0.clone());
+				let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
+				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
+				let params = body.get("params").cloned().unwrap_or(serde_json::json!({}));
+				if method.starts_with("notifications/") {
+					return http::StatusCode::ACCEPTED.into_response();
+				}
+				let result = match method {
+					"server/discover" => serde_json::json!({
+						"resultType": "complete",
+						"supportedVersions": ["2026-07-28"],
+						"capabilities": {"tools": {}},
+						"serverInfo": {"name": "mrtr-mock", "version": "0.0.1"}
+					}),
+					"initialize" => serde_json::json!({
+						"protocolVersion": "2025-06-18",
+						"capabilities": {"tools": {}},
+						"serverInfo": {"name": "mrtr-mock", "version": "0.0.1"}
+					}),
+					"tools/list" => serde_json::json!({
+						"resultType": "complete",
+						"tools": [
+							{"name": "guarded_echo", "description": "Echo after eliciting a pin", "inputSchema": {"type": "object"}}
+						]
+					}),
+					"tools/call" => {
+						let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+						let has_elicitation = params
+							.pointer("/_meta/io.modelcontextprotocol~1clientCapabilities/elicitation")
+							.is_some();
+						if name == "direct_elicit" {
+							let frame = serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": "srv-req-1",
+								"method": "elicitation/create",
+								"params": {
+									"mode": "form",
+									"message": "Enter the pin",
+									"requestedSchema": {"type": "object", "properties": {"pin": {"type": "string"}}, "required": ["pin"]}
+								}
+							});
+							let late_result = serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"result": {
+									"resultType": "complete",
+									"content": [{"type": "text", "text": "too-late"}],
+									"isError": false
+								}
+							});
+							return (
+								[(http::header::CONTENT_TYPE.as_str(), "text/event-stream")],
+								format!("data: {frame}\n\ndata: {late_result}\n\n"),
+							)
+								.into_response();
+						}
+						if let Some(state) = params.get("requestState").and_then(|s| s.as_str()) {
+							let pin = params
+								.pointer("/inputResponses/pin/content/pin")
+								.and_then(|p| p.as_str())
+								.unwrap_or("<missing>");
+							serde_json::json!({
+								"resultType": "complete",
+								"content": [{"type": "text", "text": format!("state:{state} pin:{pin}")}],
+								"isError": false
+							})
+						} else if name == "guarded_echo" && has_elicitation {
+							serde_json::json!({
+								"resultType": "input_required",
+								"inputRequests": {
+									"pin": {
+										"method": "elicitation/create",
+										"params": {
+											"mode": "form",
+											"message": "Enter the pin",
+											"requestedSchema": {
+												"type": "object",
+												"properties": {"pin": {"type": "string"}},
+												"required": ["pin"]
+											}
+										}
+									}
+								},
+								"requestState": "mrtr-state-1"
+							})
+						} else {
+							serde_json::json!({
+								"resultType": "complete",
+								"content": [{"type": "text", "text": "no-elicitation-capability"}],
+								"isError": false
+							})
+						}
+					},
+					_ => {
+						return axum::Json(serde_json::json!({
+							"jsonrpc": "2.0",
+							"id": id,
+							"error": {"code": -32601, "message": method}
+						}))
+						.into_response();
+					},
+				};
+				axum::Json(serde_json::json!({
+					"jsonrpc": "2.0",
+					"id": id,
+					"result": result
+				}))
+				.into_response()
+			}
+		}),
+	);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	(
+		MockServer {
+			addr,
+			init_counter: std::sync::Arc::new(tokio::sync::Mutex::new(0)),
+			_cancel: tx,
+		},
+		capture,
+	)
 }
 
 type HeaderCapture = std::sync::Arc<std::sync::Mutex<Vec<http::HeaderMap>>>;

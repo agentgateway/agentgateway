@@ -416,7 +416,9 @@ impl Session {
 					l.method_name = Some(method.clone());
 					l.session_id = Some(session_id);
 				});
-				self.strip_unsupported_client_capabilities_from_meta(&mut r.request);
+				if !mcp::handler::ctx_downstream_modern(&ctx) {
+					self.strip_unsupported_client_capabilities_from_meta(&mut r.request);
+				}
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
 						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
@@ -668,7 +670,9 @@ impl Session {
 					l.method_name = Some(method.to_string());
 					l.session_id = Some(session_id);
 				});
-				self.strip_unsupported_client_capabilities_from_meta(&mut r.notification);
+				if !mcp::handler::ctx_downstream_modern(&ctx) {
+					self.strip_unsupported_client_capabilities_from_meta(&mut r.notification);
+				}
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
 				Box::pin(self.relay.send_notification(r, ctx)).await
@@ -684,9 +688,7 @@ impl Session {
 		&self,
 		capabilities: &mut rmcp::model::ClientCapabilities,
 	) {
-		// Until server-to-client request routing is implemented, do not advertise
-		// capabilities that require the proxy to route upstream requests back to
-		// the downstream client and route the client's JSON-RPC response upstream.
+		// Legacy clients require reverse JSON-RPC routing for these capabilities.
 		capabilities.roots = None;
 		capabilities.sampling = None;
 		capabilities.elicitation = None;
