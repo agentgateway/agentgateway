@@ -138,36 +138,6 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	}
 }
 
-// Avoid materializing the entire request body as JSON.
-#[derive(serde::Deserialize)]
-struct MetaPeek {
-	params: Option<ParamsPeek>,
-}
-#[derive(serde::Deserialize)]
-struct ParamsPeek {
-	#[serde(rename = "_meta")]
-	meta: Option<TraceparentPeek>,
-}
-#[derive(serde::Deserialize)]
-struct TraceparentPeek {
-	traceparent: Option<String>,
-}
-
-impl MetaPeek {
-	fn traceparent(self) -> Option<String> {
-		self.params?.meta?.traceparent
-	}
-}
-
-// SEP-414: read trace context from an MCP body's `_meta` (body restored for downstream parsing).
-async fn mcp_meta_traceparent(req: &mut Request) -> Option<trc::TraceParent> {
-	let body = crate::http::inspect_body(req).await.ok()?;
-	let raw = serde_json::from_slice::<MetaPeek>(&body)
-		.ok()
-		.and_then(MetaPeek::traceparent)?;
-	trc::TraceParent::try_from(raw.as_str()).ok()
-}
-
 async fn apply_request_policies(
 	pol: &store::RoutePolicies,
 	c: &PolicyClient,
@@ -1189,9 +1159,8 @@ impl HTTPProxy {
 				});
 		}
 
-		let tracing = frontend_policies.tracing.as_deref();
 		let mut sampler = TraceSampler::default();
-		if let Some(tp) = tracing {
+		if let Some(tp) = frontend_policies.tracing.as_deref() {
 			// Apply sampling overrides if present
 			if let Some(rs) = &tp.config.random_sampling {
 				sampler.random_sampling = Some(rs.clone());
@@ -1208,21 +1177,12 @@ impl HTTPProxy {
 		}
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
-		let mut trace_parent = trc::TraceParent::from_request(req);
-		// SEP-414: MCP clients may carry trace context only in the body `_meta`. This peeks the body
-		// pre-authz, so gate it on a tracer existing to consume the parent.
-		if trace_parent.is_none()
-			&& tracing.is_some()
-			&& req
-				.headers()
-				.contains_key(rmcp::transport::common::http_header::HEADER_MCP_PROTOCOL_VERSION)
-		{
-			trace_parent = mcp_meta_traceparent(req).await;
-		}
+		let trace_parent = trc::TraceParent::from_request(req);
 		let trace_sampled = sampler.trace_sampled(req, trace_parent.as_ref());
 
+		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
 		if trace_sampled {
-			log.tracer = if let Some(tp) = tracing {
+			log.tracer = if let Some(tp) = frontend_policies.tracing.as_deref() {
 				debug!(
 					resources_count=%tp.config.resources.len(),
 					attrs_count=%tp.config.attributes.len(),
@@ -3090,7 +3050,7 @@ mod tests {
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers, mcp_meta_traceparent,
+		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
 		resolved_workload_target_hostname, select_service_target_port,
 	};
 	use crate::http::filters::AutoHostname;
@@ -3174,55 +3134,6 @@ mod tests {
 		)
 		.await
 		.expect("LLM request policies should apply")
-	}
-
-	#[tokio::test]
-	async fn mcp_meta_traceparent_extracts_and_restores_body() {
-		let tp = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
-		let body = json!({
-			"jsonrpc": "2.0",
-			"id": 1,
-			"method": "tools/call",
-			"params": {"name": "echo", "_meta": {"traceparent": tp}},
-		});
-		let mut req = ::http::Request::builder()
-			.method(Method::POST)
-			.body(http::Body::from(serde_json::to_vec(&body).unwrap()))
-			.unwrap();
-
-		let parent = mcp_meta_traceparent(&mut req).await.expect("traceparent");
-		assert_eq!(format!("{parent:?}"), tp);
-
-		// Body must remain readable for downstream MCP parsing.
-		let restored = http::inspect_body(&mut req).await.unwrap();
-		let reparsed: serde_json::Value = serde_json::from_slice(&restored).unwrap();
-		assert_eq!(reparsed["params"]["name"], "echo");
-	}
-
-	#[tokio::test]
-	async fn mcp_meta_traceparent_absent_returns_none() {
-		let body = json!({"method": "tools/call", "params": {"name": "echo"}});
-		let mut req = ::http::Request::builder()
-			.method(Method::POST)
-			.body(http::Body::from(serde_json::to_vec(&body).unwrap()))
-			.unwrap();
-		assert!(mcp_meta_traceparent(&mut req).await.is_none());
-	}
-
-	#[tokio::test]
-	async fn mcp_meta_traceparent_tolerates_bad_input() {
-		// Malformed traceparent (parser edge cases are covered in trc.rs) and non-JSON bodies.
-		let bad_meta = json!({"params": {"_meta": {"traceparent": "not-a-traceparent"}}});
-		for body in [
-			http::Body::from(serde_json::to_vec(&bad_meta).unwrap()),
-			http::Body::from(b"not json".to_vec()),
-		] {
-			let mut req = ::http::Request::builder()
-				.method(Method::POST)
-				.body(body)
-				.unwrap();
-			assert!(mcp_meta_traceparent(&mut req).await.is_none());
-		}
 	}
 
 	#[tokio::test]
