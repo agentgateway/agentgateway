@@ -743,6 +743,10 @@ impl Store {
 		let route_key = Self::model_router_route_key(listener);
 		let backend_name = Self::model_router_backend_name(listener);
 		let backend_key = Self::model_router_backend_key(listener);
+		let previous_created = self.backend(&backend_key).and_then(|backend| match &backend.backend {
+			Backend::LLMRouter(_, router) => Some(router.created()),
+			_ => None,
+		});
 		self.remove_http_route(&route_key);
 		self.remove_backend(backend_key.clone());
 
@@ -764,10 +768,12 @@ impl Store {
 			return;
 		}
 
-		let created = SystemTime::now()
-			.duration_since(UNIX_EPOCH)
-			.map(|d| d.as_secs())
-			.unwrap_or_default();
+		let created = previous_created.unwrap_or_else(|| {
+			SystemTime::now()
+				.duration_since(UNIX_EPOCH)
+				.map(|d| d.as_secs())
+				.unwrap_or_default()
+		});
 		self.insert_backend(
 			backend_key.clone(),
 			BackendWithPolicies {
@@ -2260,6 +2266,8 @@ mod tests {
 
 	#[test]
 	fn xds_model_route_builds_listener_llm_router() {
+		use std::time::Duration;
+
 		use crate::types::proto::agent::backend_reference;
 		use crate::types::proto::agent::model_route::concrete_model::ModelVisibility;
 		use crate::types::proto::agent::model_route::{ConcreteModel, Kind};
@@ -2276,7 +2284,7 @@ mod tests {
 				backend: Some(crate::types::proto::agent::BackendReference {
 					port: 0,
 					kind: Some(backend_reference::Kind::Backend(
-						"/default/openai".to_string(),
+						"default/openai".to_string(),
 					)),
 				}),
 				backend_policies: vec![],
@@ -2305,11 +2313,57 @@ mod tests {
 			.backends
 			.get(&backend_key)
 			.expect("model route should synthesize router backend");
-		assert!(matches!(backend.backend, Backend::LLMRouter(_, _)));
+		let Backend::LLMRouter(_, router) = &backend.backend else {
+			panic!("expected model route to synthesize router backend");
+		};
+		let created = router.created();
+		drop(store);
+
+		std::thread::sleep(Duration::from_secs(1));
+		let second_model_route = crate::types::proto::agent::ModelRoute {
+			key: "default/claude-haiku".to_string(),
+			listener_key: listener_key.to_string(),
+			name: "claude-haiku".to_string(),
+			kind: Some(Kind::ConcreteModel(ConcreteModel {
+				model_visibility: ModelVisibility::Public as i32,
+				backend: Some(crate::types::proto::agent::BackendReference {
+					port: 0,
+					kind: Some(backend_reference::Kind::Backend(
+						"default/anthropic".to_string(),
+					)),
+				}),
+				backend_policies: vec![],
+			})),
+		};
+		let mut second_update = vec![XdsUpdate::Update(XdsResource {
+			name: strng::literal!("model/default/claude-haiku"),
+			resource: ADPResource {
+				kind: Some(XdsKind::ModelRoute(second_model_route)),
+			},
+		})]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut second_update))
+			.expect("second model route accepted");
+		let store = updater.read();
+		let backend = store
+			.backends
+			.get(&backend_key)
+			.expect("model route should keep synthetic router backend");
+		let Backend::LLMRouter(_, router) = &backend.backend else {
+			panic!("expected model route to keep synthetic router backend");
+		};
+		assert_eq!(
+			router.created(),
+			created,
+			"model router rebuilds should preserve model list creation timestamps"
+		);
 		drop(store);
 
 		let mut removals = vec![XdsUpdate::<ADPResource>::Remove(strng::literal!(
 			"model/default/gpt-5-mini"
+		)), XdsUpdate::<ADPResource>::Remove(strng::literal!(
+			"model/default/claude-haiku"
 		))]
 		.into_iter();
 		updater

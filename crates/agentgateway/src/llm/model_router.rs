@@ -152,6 +152,10 @@ impl ModelRouter {
 		}
 	}
 
+	pub fn created(&self) -> u64 {
+		self.created
+	}
+
 	pub async fn resolve(&self, req: &mut Request) -> ResolveResult {
 		if is_model_list_request(req) {
 			return ResolveResult::DirectResponse(self.model_list_response(req));

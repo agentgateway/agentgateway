@@ -4385,7 +4385,7 @@ mod tests {
 				backend: Some(proto::agent::BackendReference {
 					port: 0,
 					kind: Some(backend_reference::Kind::Backend(
-						"/default/openai".to_string(),
+						"default/openai".to_string(),
 					)),
 				}),
 				backend_policies: vec![],
@@ -4414,7 +4414,7 @@ mod tests {
 		assert_eq!(model.backend.weight, 1);
 		match model.backend.target {
 			RouteBackendTarget::Backend(key) => {
-				assert_eq!(key.as_str(), "/default/openai");
+				assert_eq!(key.as_str(), "default/openai");
 			},
 			other => panic!("expected backend target, got {other:?}"),
 		}
