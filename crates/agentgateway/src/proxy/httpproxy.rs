@@ -182,6 +182,14 @@ async fn apply_request_policies(
 		.authorization
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
+	pol
+		.substrate_egress
+		.apply_without_response("substrate egress", c, l, req, rp.headers())
+		.await?;
+	pol
+		.substrate_ingress
+		.apply_without_response("substrate ingress", c, l, req, rp.headers())
+		.await?;
 
 	rp.llm_request_policies.local_rate_limit = pol
 		.local_rate_limit
@@ -679,7 +687,15 @@ impl HTTPProxy {
 		});
 
 		sensitive_headers(&mut req);
-		normalize_uri(log.tls_info.as_ref(), &mut req)
+		// TLS metadata may describe an outer CONNECT transport rather than the
+		// request currently being routed. In particular, a CONNECT tunnel that
+		// re-enters a plaintext HTTP bind retains the outer mTLS identity for
+		// authorization. Use the selected inner listener to determine the URI
+		// scheme so that dynamic backends do not incorrectly default to port 443.
+		let request_is_tls = selected_listener
+			.as_ref()
+			.is_some_and(|listener| matches!(listener.protocol, ListenerProtocol::HTTPS(_)));
+		normalize_uri(request_is_tls, &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
 		let connect_upgrade = if req.method() == ::http::Method::CONNECT {
@@ -845,6 +861,7 @@ impl HTTPProxy {
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
 		let mut route_retry = route_policies.retry.select("retry", &req);
+		let explicit_route_retry = route_retry.is_some();
 		log.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
 		// Evaluate the retry precondition (if any) against the request before it is consumed.
 		if let Some(retry) = route_retry.as_ref()
@@ -876,6 +893,12 @@ impl HTTPProxy {
 		.await
 		.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "route policies", &req);
+		// With no explicit retry policy, Substrate only retries stale actor assignments.
+		let substrate_default_retry = !explicit_route_retry
+			&& req
+				.extensions()
+				.get::<http::substrate::SubstrateRequestState>()
+				.is_some();
 
 		let selected_backend_ref = selected_route_chain
 			.backend
@@ -957,7 +980,11 @@ impl HTTPProxy {
 		let llm_request_policies = Arc::new(llm_request_policies);
 
 		// attempts is the total number of attempts, not the retries
-		let attempts = retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1);
+		let attempts = if substrate_default_retry {
+			3
+		} else {
+			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
+		};
 		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
 		let request_timeout = response_policies
 			.timeout
@@ -973,13 +1000,17 @@ impl HTTPProxy {
 		} else {
 			Err(body)
 		};
+		let substrate_state = head
+			.extensions
+			.get::<http::substrate::SubstrateRequestState>()
+			.cloned();
 		let mut next = match body {
 			Ok(retry) => Some(retry),
 			Err(body) => {
 				trace!("no retries");
 				// no retries at all, just send the request as normal
 				let req = Request::from_parts(head, http::Body::new(body));
-				return self
+				let response = self
 					.attempt_upstream(
 						log,
 						&mut req_upgrade,
@@ -991,6 +1022,14 @@ impl HTTPProxy {
 						req,
 					)
 					.await;
+				// The body cannot be retried, but future requests must not reuse this assignment.
+				if response
+					.as_ref()
+					.is_ok_and(http::substrate::is_stale_assignment)
+				{
+					substrate_state.as_ref().inspect(|state| state.evict());
+				}
+				return response;
 			},
 		};
 		let mut last_res: Option<Result<Response, SnapshottedProxyResponse>> = None;
@@ -1028,12 +1067,22 @@ impl HTTPProxy {
 					req,
 				)
 				.await;
-			if last
-				|| !should_retry(
-					&res,
-					retries.as_ref().unwrap(),
-					log.request_snapshot.as_deref(),
-				) {
+			let stale_assignment = res.as_ref().is_ok_and(http::substrate::is_stale_assignment);
+			if stale_assignment {
+				// Clear the request-local assignment and evict the same generation from the shared cache.
+				substrate_state.as_ref().inspect(|state| state.evict());
+			}
+			let retryable = !last
+				&& if substrate_default_retry {
+					stale_assignment
+				} else {
+					should_retry(
+						&res,
+						retries.as_ref().unwrap(),
+						log.request_snapshot.as_deref(),
+					)
+				};
+			if !retryable {
 				if !last {
 					debug!("response not retry-able");
 				}
@@ -1776,7 +1825,13 @@ impl DerefMut for MustSnapshot<'_> {
 	}
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct DynamicBackendOverride(pub Target);
+
 fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
+	if let Some(target) = req.extensions().get::<DynamicBackendOverride>() {
+		return Ok(target.0.clone());
+	}
 	let host = http::get_host(req)?;
 	let port = req
 		.uri()
@@ -1985,6 +2040,7 @@ async fn make_backend_call(
 		},
 		_ => (backend, base_policies),
 	};
+	handle_substrate_backend_selection(&mut req, backend).await?;
 
 	log.add(|l| {
 		l.backend_info = Some(backend.backend_info());
@@ -2591,6 +2647,37 @@ async fn make_backend_call(
 	let response_body_limit = crate::http::response_buffer_limit(&resp);
 	let resp = resp.map(|b| dtrace::TracingBody::maybe_wrap("response", b, response_body_limit));
 	Ok(resp)
+}
+
+/// Resolves a Substrate actor assignment into the generic override used by dynamic backends.
+async fn handle_substrate_backend_selection(
+	req: &mut MustSnapshot<'_>,
+	backend: &Backend,
+) -> Result<(), ProxyResponse> {
+	if let Some(state) = req
+		.extensions()
+		.get::<http::substrate::SubstrateRequestState>()
+		.cloned()
+	{
+		if !matches!(backend, Backend::Dynamic(_, _)) {
+			return Err(
+				ProxyError::ProcessingString(
+					"substrateIngress requires a dynamic route backend".to_owned(),
+				)
+				.into(),
+			);
+		}
+		let target = Box::pin(state.resolve_target()).await?;
+		req.extensions_mut().insert(DynamicBackendOverride(target));
+	} else if req.extensions().get::<DynamicBackendOverride>().is_some()
+		&& !matches!(backend, Backend::Dynamic(_, _))
+	{
+		return Err(
+			ProxyError::ProcessingString("substrateIngress requires a dynamic route backend".to_owned())
+				.into(),
+		);
+	}
+	Ok(())
 }
 
 fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog>) {
@@ -3661,7 +3748,7 @@ fn sensitive_headers(req: &mut Request) {
 
 // The http library will not put the authority into req.uri().authority for HTTP/1. Normalize so
 // the rest of the code doesn't need to worry about it
-fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::Result<()> {
+fn normalize_uri(tls: bool, req: &mut Request) -> anyhow::Result<()> {
 	debug!("request before normalization: {req:?}");
 	if let ::http::Version::HTTP_10 | ::http::Version::HTTP_11 = req.version() {
 		let host = req.headers_mut().remove(http::header::HOST);
@@ -3675,7 +3762,7 @@ fn normalize_uri(tls: Option<&TLSConnectionInfo>, req: &mut Request) -> anyhow::
 			parts.authority = Some(host);
 			if parts.path_and_query.is_some() {
 				// TODO: or always do this?
-				if tls.is_some() {
+				if tls {
 					parts.scheme = Some(Scheme::HTTPS);
 				} else {
 					parts.scheme = Some(Scheme::HTTP);

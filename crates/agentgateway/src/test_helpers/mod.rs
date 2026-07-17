@@ -1,3 +1,4 @@
+pub mod ateapimock;
 pub mod extauthmock;
 pub mod extmcpmock;
 pub mod extprocmock;
@@ -8,6 +9,8 @@ mod policy;
 pub mod proxymock;
 pub mod ratelimitmock;
 pub use common::MockInstance;
+#[cfg(test)]
+pub(crate) use common::spawn_service;
 #[cfg(any(test, feature = "internal_benches"))]
 pub use policy::{policy_client, test_policy};
 

@@ -10,5 +10,6 @@ mod llm;
 mod llm_providers;
 mod policy;
 mod smoke;
+mod substrate;
 mod tls;
 mod waypoint;

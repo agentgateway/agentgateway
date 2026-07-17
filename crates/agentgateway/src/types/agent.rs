@@ -2649,6 +2649,8 @@ pub enum TrafficPolicy {
 	LocalRateLimit(RequestPolicy<Vec<crate::http::localratelimit::RateLimit>>),
 	RemoteRateLimit(RequestPolicy<remoteratelimit::RemoteRateLimit>),
 	ExtAuthz(RequestPolicy<ext_authz::ExtAuthz>),
+	SubstrateEgress(RequestPolicy<crate::http::substrate::SubstrateEgress>),
+	SubstrateIngress(RequestPolicy<crate::http::substrate::SubstrateIngress>),
 	ExtProc(RequestPolicy<ext_proc::ExtProc>),
 	JwtAuth(RequestPolicy<JwtAuthentication>),
 	Oidc(RequestPolicy<crate::http::oidc::OidcPolicy>),

@@ -8,6 +8,7 @@ fn main() -> Result<(), anyhow::Error> {
 		"proto/ext_mcp.proto",
 		"proto/ext_proc.proto",
 		"proto/rls.proto",
+		"proto/ateapi.proto",
 		"proto/workload.proto",
 		"proto/resource.proto",
 	]
