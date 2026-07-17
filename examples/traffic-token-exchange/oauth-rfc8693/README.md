@@ -59,6 +59,9 @@ curl -s http://localhost:3000/exchange -H "authorization: Bearer $SUBJECT_TOKEN"
 The gateway POSTs to Keycloak's token endpoint as the confidential client
 `requester-client` (`clientSecretBasic`), exchanging the user's token for one
 scoped to `audience=target-client`, and forwards *that* token upstream.
+For RFC 8693 token exchange, the gateway sends
+`requested_token_type=urn:ietf:params:oauth:token-type:access_token` unless you
+configure a different `requestedTokenType`.
 
 Decoded result (inbound vs forwarded):
 

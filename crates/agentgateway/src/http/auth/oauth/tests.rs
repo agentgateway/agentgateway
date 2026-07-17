@@ -303,7 +303,8 @@ async fn sends_form_params() {
 	assert_eq!(pairs["subject_token"], "subj-jwt");
 	assert_eq!(pairs["subject_token_type"], TOKEN_TYPE_ACCESS);
 	assert_eq!(pairs["audience"], "https://upstream.example");
-	for k in ["scope", "resource", "requested_token_type", "client_id"] {
+	assert_eq!(pairs["requested_token_type"], TOKEN_TYPE_ACCESS);
+	for k in ["scope", "resource", "client_id"] {
 		assert!(!pairs.contains_key(k), "unset param {k} must not be sent");
 	}
 }
@@ -360,6 +361,7 @@ async fn sends_custom_subject_token_type() {
 	.unwrap();
 	let pairs = sent_form_params(&mock).await;
 	assert_eq!(pairs["subject_token_type"], "urn:company:domain:human");
+	assert_eq!(pairs["requested_token_type"], TOKEN_TYPE_ACCESS);
 }
 
 #[tokio::test]

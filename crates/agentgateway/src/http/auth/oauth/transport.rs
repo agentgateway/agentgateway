@@ -176,7 +176,7 @@ impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
 			audiences: &auth.audiences,
 			scopes: &auth.scopes,
 			resources: &auth.resources,
-			requested_token_type: auth.requested_token_type.clone(),
+			requested_token_type: auth.requested_token_type_param(),
 			expected_issued_token_type: auth.expected_issued_token_type(),
 		}
 	}

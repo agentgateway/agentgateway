@@ -8331,11 +8331,13 @@ type OAuthTokenExchange struct {
 	// ----- Token request parameters -----
 	// Properties sent only when non-empty.
 	Audiences []string `protobuf:"bytes,2,rep,name=audiences,proto3" json:"audiences,omitempty"`
-	Scopes    []string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"` // joined with spaces into a single `scope` param
+	// OAuth scope-token values joined with spaces into a single `scope` param.
+	// Each entry must already be a single scope token, not a space-delimited list.
+	Scopes    []string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
 	Resources []string `protobuf:"bytes,4,rep,name=resources,proto3" json:"resources,omitempty"`
 	// requested_token_type parameter sent under TOKEN_EXCHANGE only. Rejected
-	// under JWT_BEARER. When unset, no requested_token_type is sent; if the token
-	// endpoint returns issued_token_type, the gateway expects access_token.
+	// under JWT_BEARER. When unset under TOKEN_EXCHANGE, the gateway sends
+	// access_token because this backend auth policy forwards bearer access tokens.
 	RequestedTokenType *string `protobuf:"bytes,5,opt,name=requested_token_type,json=requestedTokenType,proto3,oneof" json:"requested_token_type,omitempty"`
 	// Arbitrary extra string form fields appended to the token exchange request.
 	// Values are CEL expressions evaluated against the incoming request.

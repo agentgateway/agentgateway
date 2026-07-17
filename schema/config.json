@@ -3501,7 +3501,7 @@
           }
         },
         "requestedTokenType": {
-          "description": "`requested_token_type` parameter. When unset, the form field is omitted\nand a declared response type is expected to be access_token.",
+          "description": "`requested_token_type` parameter. Under token exchange, unset defaults to\naccess_token because this policy forwards bearer access tokens.",
           "type": [
             "string",
             "null"

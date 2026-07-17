@@ -66,8 +66,8 @@ pub struct OAuthTokenExchangeAuth {
 	/// `resource` parameters with the target service URIs.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	resources: Vec<String>,
-	/// `requested_token_type` parameter. When unset, the form field is omitted
-	/// and a declared response type is expected to be access_token.
+	/// `requested_token_type` parameter. Under token exchange, unset defaults to
+	/// access_token because this policy forwards bearer access tokens.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	requested_token_type: Option<OAuthTokenType>,
@@ -142,6 +142,8 @@ impl ChainedExchange {
 		if let Some(client_auth) = &self.client_auth {
 			client_auth.validate_load()?;
 		}
+		warn_on_invalid_resources("chained oauth token exchange", &self.resources);
+		warn_on_invalid_scopes("chained oauth token exchange scopes", &self.scopes);
 		validate_additional_params(&self.additional_params)?;
 		Ok(())
 	}
@@ -194,6 +196,8 @@ impl OAuthTokenExchangeAuth {
 			));
 		}
 
+		warn_on_invalid_resources("oauth token exchange", &self.resources);
+		warn_on_invalid_scopes("oauth token exchange scopes", &self.scopes);
 		validate_additional_params(&self.additional_params)?;
 
 		if let Some(chained_exchange) = &self.chained_exchange {
@@ -226,6 +230,14 @@ impl OAuthTokenExchangeAuth {
 			AuthorizationLocation::Expression { .. }
 		) {
 			return Err("expression auth location is only supported for credential extraction".into());
+		}
+		if matches!(
+			self.authorization_location,
+			AuthorizationLocation::QueryParameter { .. }
+		) {
+			warn!(
+				"oauth token exchange is configured to forward the exchanged bearer token in a URI query parameter; OAuth 2.1 omits this bearer-token usage and future versions may reject it"
+			);
 		}
 		Ok(())
 	}
@@ -314,11 +326,17 @@ impl OAuthTokenExchangeAuth {
 		Ok(auth)
 	}
 
-	fn expected_issued_token_type(&self) -> Option<OAuthTokenType> {
+	fn requested_token_type_param(&self) -> Option<OAuthTokenType> {
 		match self.grant_type {
 			OAuthGrantType::TokenExchange => Some(self.requested_token_type.clone().unwrap_or_default()),
 			OAuthGrantType::JwtBearer => None,
 		}
+	}
+
+	// We expect the authorization server to issue exactly the token type we
+	// requested, so the expected issued type mirrors the requested param.
+	fn expected_issued_token_type(&self) -> Option<OAuthTokenType> {
+		self.requested_token_type_param()
 	}
 
 	/// Evaluate the configured `additional_params` CEL expressions against the
@@ -626,12 +644,41 @@ fn validate_additional_params(
 	Ok(())
 }
 
+fn warn_on_invalid_resources(context: &str, resources: &[String]) {
+	for resource in resources {
+		if !is_oauth_absolute_uri(resource) {
+			warn!(
+				resource,
+				"{context} resource is not an absolute URI without a fragment; future OAuth 2.1 compliance enforcement may reject it"
+			);
+		}
+	}
+}
+
 // RFC 8707 resource identifiers and RFC 8693 token type identifiers must both be
 // absolute URIs without a fragment.
 fn is_oauth_absolute_uri(value: &str) -> bool {
 	url::Url::parse(value)
 		.map(|url| url.fragment().is_none())
 		.unwrap_or(false)
+}
+
+fn warn_on_invalid_scopes(context: &str, scopes: &[String]) {
+	for scope in scopes {
+		if !is_valid_scope_token(scope) {
+			warn!(
+				scope,
+				"{context} contains an invalid OAuth scope-token; scopes must be non-empty and free of spaces, quotes, backslashes, control characters, and non-ASCII characters; future OAuth 2.1 compliance enforcement may reject it"
+			);
+		}
+	}
+}
+
+fn is_valid_scope_token(scope: &str) -> bool {
+	!scope.is_empty()
+		&& scope
+			.bytes()
+			.all(|b| b == 0x21 || (0x23..=0x5b).contains(&b) || (0x5d..=0x7e).contains(&b))
 }
 
 fn evaluate_additional_params(

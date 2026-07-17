@@ -1869,11 +1869,13 @@ message OAuthTokenExchange {
   // ----- Token request parameters -----
   // Properties sent only when non-empty.
   repeated string audiences = 2;
-  repeated string scopes = 3; // joined with spaces into a single `scope` param
+  // OAuth scope-token values joined with spaces into a single `scope` param.
+  // Each entry must already be a single scope token, not a space-delimited list.
+  repeated string scopes = 3;
   repeated string resources = 4;
   // requested_token_type parameter sent under TOKEN_EXCHANGE only. Rejected
-  // under JWT_BEARER. When unset, no requested_token_type is sent; if the token
-  // endpoint returns issued_token_type, the gateway expects access_token.
+  // under JWT_BEARER. When unset under TOKEN_EXCHANGE, the gateway sends
+  // access_token because this backend auth policy forwards bearer access tokens.
   optional string requested_token_type = 5;
   // Arbitrary extra string form fields appended to the token exchange request.
   // Values are CEL expressions evaluated against the incoming request.

@@ -518,7 +518,7 @@ func TestOAuthTokenExchangeCustomSubjectTokenTypeTranslation(t *testing.T) {
 		BackendRef: oauthTokenEndpointRef(),
 		Path:       &path,
 		SubjectToken: &agentgateway.OAuthTokenSpec{
-			TokenType: ptr.Of(customTokenType),
+			TokenType: new(customTokenType),
 		},
 	}, "default")
 	if err != nil {
@@ -544,7 +544,7 @@ func TestOAuthTokenExchangeRejectsInvalidCustomTokenTypes(t *testing.T) {
 				return &agentgateway.OAuthTokenExchange{
 					BackendRef: oauthTokenEndpointRef(),
 					SubjectToken: &agentgateway.OAuthTokenSpec{
-						TokenType: ptr.Of(tokenType),
+						TokenType: new(tokenType),
 					},
 				}
 			},
@@ -557,7 +557,7 @@ func TestOAuthTokenExchangeRejectsInvalidCustomTokenTypes(t *testing.T) {
 				return &agentgateway.OAuthTokenExchange{
 					BackendRef: oauthTokenEndpointRef(),
 					SubjectToken: &agentgateway.OAuthTokenSpec{
-						TokenType: ptr.Of(tokenType),
+						TokenType: new(tokenType),
 					},
 				}
 			},
@@ -575,7 +575,7 @@ func TestOAuthTokenExchangeRejectsInvalidCustomTokenTypes(t *testing.T) {
 								Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Actor-Token"},
 							},
 						},
-						TokenType: ptr.Of(tokenType),
+						TokenType: new(tokenType),
 					},
 				}
 			},
@@ -593,7 +593,7 @@ func TestOAuthTokenExchangeRejectsInvalidCustomTokenTypes(t *testing.T) {
 								Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Actor-Token"},
 							},
 						},
-						TokenType: ptr.Of(tokenType),
+						TokenType: new(tokenType),
 					},
 				}
 			},
