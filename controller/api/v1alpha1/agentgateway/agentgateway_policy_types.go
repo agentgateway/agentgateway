@@ -1189,7 +1189,7 @@ const (
 	APIKeyAuthenticationModePermissive APIKeyAuthenticationMode = "Permissive"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector
+// +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector;configMapSelector
 type APIKeyAuthentication struct {
 	// Validation mode for API key authentication.
 	// +kubebuilder:default=Strict
@@ -1197,8 +1197,9 @@ type APIKeyAuthentication struct {
 	Mode APIKeyAuthenticationMode `json:"mode,omitempty"`
 
 	// Credential source, defaulting to a Kubernetes
-	// `Secret`, storing a set of API keys. If there are many Secret-backed
-	// keys, `secretSelector` can be used instead.
+	// `Secret`, storing a set of API keys. if many keys are needed then
+	// keys, `secretSelector` or `configMapSelector` can be used.
+	// Note that configMap-backed API keys only support hashes.
 	//
 	// Each entry in the credential data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
@@ -1270,6 +1271,39 @@ type APIKeyAuthentication struct {
 	// +optional
 	SecretSelector *SecretSelector `json:"secretSelector,omitempty"`
 
+	// Selects multiple Kubernetes `ConfigMap` resources
+	// containing API keys. It is ConfigMap-only; use `secretRef` or
+	// `secretSelector` for Secret-backed credentials. If the same key is
+	// defined in multiple ConfigMaps, the behavior is undefined.
+	//
+	// Because ConfigMaps are not confidential, every entry sourced from a
+	// ConfigMap must use `keyHash`; a raw `key` value is rejected.
+	//
+	// Each entry in the `ConfigMap` data represents one API key. The key is
+	// an arbitrary identifier. The value must be a JSON object with
+	// `keyHash`, plus optional `metadata`. `keyHash` contains a hashed API
+	// key in `sha256:<hex>` format. `metadata` contains arbitrary JSON
+	// metadata associated with the key, which may be used by other
+	// policies. For example, you may write an authorization policy allowing
+	// `apiKey.group == 'sales'`.
+	//
+	// Example:
+	//
+	//	apiVersion: v1
+	//	kind: ConfigMap
+	//	metadata:
+	//	  name: api-key
+	//	data:
+	//	  client1: |
+	//	    {
+	//	      "keyHash": "sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad",
+	//	      "metadata": {
+	//	        "group": "sales"
+	//	      }
+	//	    }
+	// +optional
+	ConfigMapSelector *ConfigMapSelector `json:"configMapSelector,omitempty"`
+
 	// Where API keys are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
@@ -1299,6 +1333,12 @@ type Buffer struct {
 
 type SecretSelector struct {
 	// Labels that must be present on each selected Secret.
+	// +required
+	MatchLabels map[string]string `json:"matchLabels"`
+}
+
+type ConfigMapSelector struct {
+	// Labels that must be present on each selected ConfigMap.
 	// +required
 	MatchLabels map[string]string `json:"matchLabels"`
 }

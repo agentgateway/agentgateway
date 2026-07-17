@@ -10590,6 +10590,35 @@ spec:
                       Authenticates users based on a configured API
                       key.
                     properties:
+                      configMapSelector:
+                        description: "Selects multiple Kubernetes `ConfigMap` resources\ncontaining
+                          API keys. It is ConfigMap-only; use `secretRef` or\n`secretSelector`
+                          for Secret-backed credentials. If the same key is\ndefined
+                          in multiple ConfigMaps, the behavior is undefined.\n\nBecause
+                          ConfigMaps are not confidential, every entry sourced from
+                          a\nConfigMap must use `keyHash`; a raw `key` value is rejected.\n\nEach
+                          entry in the `ConfigMap` data represents one API key. The
+                          key is\nan arbitrary identifier. The value must be a JSON
+                          object with\n`keyHash`, plus optional `metadata`. `keyHash`
+                          contains a hashed API\nkey in `sha256:<hex>` format. `metadata`
+                          contains arbitrary JSON\nmetadata associated with the key,
+                          which may be used by other\npolicies. For example, you may
+                          write an authorization policy allowing\n`apiKey.group ==
+                          'sales'`.\n\nExample:\n\n\tapiVersion: v1\n\tkind: ConfigMap\n\tmetadata:\n\t
+                          \ name: api-key\n\tdata:\n\t  client1: |\n\t    {\n\t      \"keyHash\":
+                          \"sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad\",\n\t
+                          \     \"metadata\": {\n\t        \"group\": \"sales\"\n\t
+                          \     }\n\t    }"
+                        properties:
+                          matchLabels:
+                            additionalProperties:
+                              type: string
+                            description: Labels that must be present on each selected
+                              ConfigMap.
+                            type: object
+                        required:
+                        - matchLabels
+                        type: object
                       location:
                         description: |-
                           Where API keys are read from.
@@ -10663,12 +10692,13 @@ spec:
                       secretRef:
                         description: "Credential source, defaulting to a Kubernetes\n`Secret`,
                           storing a set of API keys. If there are many Secret-backed\nkeys,
-                          `secretSelector` can be used instead.\n\nEach entry in the
-                          credential data represents one API key. The key is an\narbitrary
-                          identifier. The value can either be:\n* A string representing
-                          the API key.\n* A JSON object with `key` or `keyHash`, plus
-                          optional `metadata`.\n  `key` contains the API key. `keyHash`
-                          contains a hashed API key in\n  `sha256:<hex>` format. `metadata`
+                          `secretSelector` can be used instead. For ConfigMap-backed
+                          keys,\nuse `configMapSelector`.\n\nEach entry in the credential
+                          data represents one API key. The key is an\narbitrary identifier.
+                          The value can either be:\n* A string representing the API
+                          key.\n* A JSON object with `key` or `keyHash`, plus optional
+                          `metadata`.\n  `key` contains the API key. `keyHash` contains
+                          a hashed API key in\n  `sha256:<hex>` format. `metadata`
                           contains arbitrary JSON metadata\n  associated with the
                           key, which may be used by other policies. For\n  example,
                           you may write an authorization policy allowing\n  `apiKey.group
@@ -10736,9 +10766,9 @@ spec:
                         type: object
                     type: object
                     x-kubernetes-validations:
-                    - message: exactly one of the fields in [secretRef secretSelector]
-                        must be set
-                      rule: '[has(self.secretRef),has(self.secretSelector)].filter(x,x==true).size()
+                    - message: exactly one of the fields in [secretRef secretSelector
+                        configMapSelector] must be set
+                      rule: '[has(self.secretRef),has(self.secretSelector),has(self.configMapSelector)].filter(x,x==true).size()
                         == 1'
                   authorization:
                     description: |-

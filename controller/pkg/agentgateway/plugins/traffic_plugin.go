@@ -903,6 +903,7 @@ func processAPIKeyAuthenticationPolicy(
 	}
 
 	type apiKeyData struct {
+		kind string
 		name string
 		data map[string][]byte
 	}
@@ -916,7 +917,7 @@ func processAPIKeyAuthenticationPolicy(
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			dataSets = []apiKeyData{{name: string(s.Name), data: data}}
+			dataSets = []apiKeyData{{kind: "secret", name: string(s.Name), data: data}}
 		}
 	}
 	if s := ak.SecretSelector; s != nil {
@@ -924,14 +925,25 @@ func processAPIKeyAuthenticationPolicy(
 		// Preserve existing precedence: secretSelector replaces secretRef, and
 		// remains Secret-only. CredentialRef resolution is handled by secretRef.
 		for _, secret := range krt.Fetch(ctx.Krt, ctx.Collections.Secrets, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.SecretsByNamespace, policy.Namespace)) {
-			dataSets = append(dataSets, apiKeyData{name: secret.Name, data: secret.Data})
+			dataSets = append(dataSets, apiKeyData{kind: "secret", name: secret.Name, data: secret.Data})
+		}
+	}
+	if s := ak.ConfigMapSelector; s != nil {
+		dataSets = nil
+		// Note that its intentional that we only allow keyHash as its already dangerous to store in a secret and even more so in configmap
+		for _, cm := range krt.Fetch(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.ConfigMapsByNamespace, policy.Namespace)) {
+			data := make(map[string][]byte, len(cm.Data))
+			for k, v := range cm.Data {
+				data[k] = []byte(v)
+			}
+			dataSets = append(dataSets, apiKeyData{kind: "configMap", name: cm.Name, data: data})
 		}
 	}
 	for _, s := range dataSets {
 		for k, v := range s.data {
 			trimmed := bytes.TrimSpace(v)
 			if len(trimmed) == 0 {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: empty value", s.name, k))
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: empty value", s.kind, s.name, k))
 				continue
 			}
 			var ke APIKeyEntry
@@ -943,23 +955,27 @@ func processAPIKeyAuthenticationPolicy(
 					Metadata: nil,
 				}
 			} else if err := json.Unmarshal(trimmed, &ke); err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: %w", s.kind, s.name, k, err))
 				continue
 			}
 			if (ke.Key == "") == (ke.KeyHash == "") {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: exactly one of key or keyHash must be set", s.name, k))
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: exactly one of key or keyHash must be set", s.kind, s.name, k))
+				continue
+			}
+			if s.kind == "configMap" && ke.Key != "" {
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: keys sourced from a ConfigMap must use keyHash, not a raw key, since ConfigMaps are not confidential", s.kind, s.name, k))
 				continue
 			}
 			if ke.KeyHash != "" {
 				if err := validateAPIKeyHash(ke.KeyHash); err != nil {
-					errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
+					errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: %w", s.kind, s.name, k, err))
 					continue
 				}
 			}
 
 			pbs, err := toStruct(ke.Metadata)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: %w", s.kind, s.name, k, err))
 				continue
 			}
 			p.ApiKeys = append(p.ApiKeys, &api.TrafficPolicySpec_APIKey_User{

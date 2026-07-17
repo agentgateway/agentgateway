@@ -1,51 +1,51 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: route-secure-gw
+  name: route-secure-cm
   namespace: agentgateway-base
 spec:
   parentRefs:
-  - name: gateway
+    - name: gateway
   hostnames:
-  - "securegateways.com"
+    - "secureroutecm.com"
   rules:
-  - backendRefs:
-    - name: backend
-      port: 80
+    - backendRefs:
+        - name: backend
+          port: 80
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: gw-policy
+  name: route-policy-configmap
   namespace: agentgateway-base
 spec:
   targetRefs:
   - group: gateway.networking.k8s.io
-    kind: Gateway
-    name: gateway
+    kind: HTTPRoute
+    name: route-secure-cm
   traffic:
     apiKeyAuthentication:
       mode: Strict
       configMapSelector:
         matchLabels:
-          app: gw-apikey-auth
+          app: route-apikey-auth-cm
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: gw-apikey-auth
+  name: route-apikey-auth-cm
   namespace: agentgateway-base
   labels:
-    app: gw-apikey-auth
+    app: route-apikey-auth-cm
 data:
   client1: |
     {
-      "keyHash": "sha256:3605a9e4358da4302f8acea41f0f52cef85d0e3f727c7b020fc7305aec8d56b4",
+      "keyHash": "sha256:34cd6524029b16aa34f7dca2444d0bc166724933264897305b9061dea0c9cd29",
       "metadata": {
         "group": "sales"
       }
     }
   client2: |
     {
-      "keyHash": "sha256:efe96124b410574ffd343d0c9f342ce51d5aee47046ca355f85a50e23db3c37c"
+      "keyHash": "sha256:e5d8cff1e9af4767b50a079389f1bad6992e7e3e8e91d5fca1e76e5d898cb7a0"
     }

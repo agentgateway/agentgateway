@@ -35,15 +35,16 @@ type AgwCollections struct {
 	GatewaysForDeployer krt.Collection[collections.GatewayForDeployer]
 
 	// Core Kubernetes resources
-	Namespaces          krt.Collection[*corev1.Namespace]
-	Nodes               krt.Collection[*corev1.Node]
-	Pods                krt.Collection[*corev1.Pod]
-	Services            krt.Collection[*corev1.Service]
-	ServicesByNamespace krt.Index[string, *corev1.Service]
-	Secrets             krt.Collection[*corev1.Secret]
-	SecretsByNamespace  krt.Index[string, *corev1.Secret]
-	ConfigMaps          krt.Collection[*corev1.ConfigMap]
-	EndpointSlices      krt.Collection[*discovery.EndpointSlice]
+	Namespaces            krt.Collection[*corev1.Namespace]
+	Nodes                 krt.Collection[*corev1.Node]
+	Pods                  krt.Collection[*corev1.Pod]
+	Services              krt.Collection[*corev1.Service]
+	ServicesByNamespace   krt.Index[string, *corev1.Service]
+	Secrets               krt.Collection[*corev1.Secret]
+	SecretsByNamespace    krt.Index[string, *corev1.Secret]
+	ConfigMaps            krt.Collection[*corev1.ConfigMap]
+	ConfigMapsByNamespace krt.Index[string, *corev1.ConfigMap]
+	EndpointSlices        krt.Collection[*discovery.EndpointSlice]
 
 	// Istio resources for ambient mesh
 	WorkloadEntries krt.Collection[*networkingclient.WorkloadEntry]
@@ -222,6 +223,7 @@ func NewAgwCollections(
 
 func (c *AgwCollections) SetupIndexes() {
 	c.SecretsByNamespace = krt.NewNamespaceIndex(c.Secrets)
+	c.ConfigMapsByNamespace = krt.NewNamespaceIndex(c.ConfigMaps)
 	c.ServicesByNamespace = krt.NewNamespaceIndex(c.Services)
 	c.GatewaysByNamespace = krt.NewNamespaceIndex(c.Gateways)
 	c.HTTPRoutesByNamespace = krt.NewNamespaceIndex(c.HTTPRoutes)
