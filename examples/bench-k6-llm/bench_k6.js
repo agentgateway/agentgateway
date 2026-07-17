@@ -16,7 +16,7 @@ import exec from 'k6/execution';      // Scenario and iteration context
 // Target server URL — base path for the API endpoint
 const server_url = __ENV.SERVER_BENCH_URL
     ? __ENV.SERVER_BENCH_URL
-    : 'http://localhost:8080/api_vllm/rs/v1';
+    : 'http://localhost:8080/v1';
 
 // Model name to target in requests
 const model = __ENV.SERVER_BENCH_MODEL_ALIAS
@@ -26,7 +26,7 @@ const model = __ENV.SERVER_BENCH_MODEL_ALIAS
 // Path to JSON dataset of prompts to send
 const dataset_path = __ENV.SERVER_BENCH_DATASET
     ? __ENV.SERVER_BENCH_DATASET
-    : '/home/imfo9020/bench-k6-llm/datasets/prompts_length_128.json';
+    : '/agentgateway/examples/bench-k6-llm/datasets/prompts_length_128.json';
 
 // Maximum number of tokens the model should generate
 const max_tokens = __ENV.SERVER_BENCH_MAX_TOKENS
