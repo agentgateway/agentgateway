@@ -1,0 +1,72 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: apikey-configmap-selector-raw-key-rejected
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      configMapSelector:
+        matchLabels:
+          app: apikey-configmap-selector-raw-key-rejected
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apikey-configmap-raw-key
+  namespace: default
+  labels:
+    app: apikey-configmap-selector-raw-key-rejected
+data:
+  key1: |
+    {
+      "key": "cm-bad-key"
+    }
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/apikey-configmap-selector-raw-key-rejected:apikeyauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: apikey-configmap-selector-raw-key-rejected
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        apiKeyAuth: {}
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: apikey-configmap-selector-raw-key-rejected
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: 'configMap apikey-configmap-raw-key contains invalid key key1: keys
+          sourced from a ConfigMap must use keyHash, not a raw key, since ConfigMaps
+          are not confidential'
+        reason: PartiallyValid
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway

@@ -1197,9 +1197,9 @@ type APIKeyAuthentication struct {
 	Mode APIKeyAuthenticationMode `json:"mode,omitempty"`
 
 	// Credential source, defaulting to a Kubernetes
-	// `Secret`, storing a set of API keys. if many keys are needed then
-	// keys, `secretSelector` or `configMapSelector` can be used.
-	// Note that configMap-backed API keys only support hashes.
+	// `Secret`, storing a set of API keys. If many keys are needed,
+	// `secretSelector` or `configMapSelector` can be used instead.
+	// Note that ConfigMap-backed API keys only support `keyHash`.
 	//
 	// Each entry in the credential data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:

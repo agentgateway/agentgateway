@@ -1,0 +1,97 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: apikey-configmap-selector
+  namespace: default
+spec:
+  targetRefs:
+  - kind: Gateway
+    name: test
+    group: gateway.networking.k8s.io
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      configMapSelector:
+        matchLabels:
+          app: apikey-configmap-selector
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apikey-configmap-selector-a
+  namespace: default
+  labels:
+    app: apikey-configmap-selector
+data:
+  key1: |
+    {
+      "keyHash": "sha256:f9b0b883bdc4f107b3f04d33ec731936053abf3db171f13657518d138f87899f",
+      "metadata": {
+        "team": "platform"
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apikey-configmap-selector-b
+  namespace: default
+  labels:
+    app: apikey-configmap-selector
+data:
+  key2: |
+    {
+      "keyHash": "sha256:3954068de680bd7283c0e50b1df832a8bbc5bf189420617ae013437cd702c5b9"
+    }
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/apikey-configmap-selector:apikeyauth:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: apikey-configmap-selector
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        apiKeyAuth:
+          apiKeys:
+          - keyHash: sha256:3954068de680bd7283c0e50b1df832a8bbc5bf189420617ae013437cd702c5b9
+            metadata: {}
+          - keyHash: sha256:f9b0b883bdc4f107b3f04d33ec731936053abf3db171f13657518d138f87899f
+            metadata:
+              team: platform
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: apikey-configmap-selector
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
