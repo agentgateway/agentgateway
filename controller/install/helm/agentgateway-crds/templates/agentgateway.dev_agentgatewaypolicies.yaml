@@ -11947,8 +11947,10 @@ spec:
                                 failureMode:
                                   description: |-
                                     Behavior when the external processor is unavailable or returns an error.
-                                    "FailOpen" allows the request to continue.
-                                    "FailClosed" (default) rejects the request.
+                                    "FailOpen" allows the request to continue, as long as the request body has not
+                                    been sent (or started streaming) to the ext_proc. Once the request body has
+                                    started streaming to the ext_proc, the request will fail closed on error.
+                                    "FailClosed" (default) rejects the request on any failure.
                                   enum:
                                   - FailClosed
                                   - FailOpen
@@ -12085,8 +12087,10 @@ spec:
                       failureMode:
                         description: |-
                           Behavior when the external processor is unavailable or returns an error.
-                          "FailOpen" allows the request to continue.
-                          "FailClosed" (default) rejects the request.
+                          "FailOpen" allows the request to continue, as long as the request body has not
+                          been sent (or started streaming) to the ext_proc. Once the request body has
+                          started streaming to the ext_proc, the request will fail closed on error.
+                          "FailClosed" (default) rejects the request on any failure.
                         enum:
                         - FailClosed
                         - FailOpen
