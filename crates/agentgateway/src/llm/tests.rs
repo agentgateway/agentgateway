@@ -2019,13 +2019,18 @@ mod context_compression {
 
 		let req = messages_request_with_headers(
 			simple_body(),
-			&[("anthropic-beta", "prompt-caching-2024"), ("authorization", "Bearer secret")],
+			&[
+				("anthropic-beta", "prompt-caching-2024"),
+				("cache-control", "no-cache"),
+				("authorization", "Bearer secret"),
+			],
 		);
 		process(&policy, req, false).await.unwrap();
 
 		let headers = callout_headers(&mock).await;
-		// Curated default is forwarded...
+		// Curated defaults are forwarded...
 		assert_eq!(headers.get("anthropic-beta").unwrap(), "prompt-caching-2024");
+		assert_eq!(headers.get("cache-control").unwrap(), "no-cache");
 		// ...but credentials never are.
 		assert!(headers.get("authorization").is_none());
 	}

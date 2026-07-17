@@ -462,9 +462,10 @@ type ContextCompressionConfig struct {
 
 	// Incoming request headers to forward to the compression service.
 	//
-	// When empty, a curated set of non-sensitive cache/context headers (such as
-	// `anthropic-beta`) is forwarded by default, so engines that decide compressibility
-	// from headers behave correctly out of the box. Setting any value here replaces that
+	// When empty, a curated set of non-sensitive cache/context headers is forwarded by
+	// default (`anthropic-version`, `anthropic-beta`, `openai-beta`, `cache-control`), so
+	// engines that decide compressibility from headers behave correctly out of the box.
+	// Credentials are never part of the default. Setting any value here replaces that
 	// default entirely; it is not additive, so include the cache headers yourself if you
 	// still need them, or compression may bust prompt caches. To forward nothing, supply a
 	// matcher that matches no header.

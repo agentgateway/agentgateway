@@ -37,23 +37,36 @@ pub fn default_compress_path() -> String {
 /// Headers forwarded to the compression engine when `forward_header_matches` is left empty.
 ///
 /// Compression engines (Headroom, litellm, ...) inspect these to decide what is *safe* to
-/// compress — chiefly which prefixes are prompt-cached, so they don't rewrite a cached prefix
-/// and bust the cache (which would raise cost, the opposite of the point). We forward a curated
-/// set of non-sensitive cache/context headers by default so the common case is correct out of
-/// the box. Credentials (`authorization`, `x-api-key`, ...) are deliberately never included.
+/// compress and how much context they are compressing toward. (Anthropic's in-body
+/// `cache_control` markers — the main prompt-cache signal — are not headers; they always
+/// survive because raw messages are forwarded verbatim.)
+///
+/// - `anthropic-version`: API version, i.e. the message schema the engine must parse and emit.
+/// - `anthropic-beta` / `openai-beta`: active betas (prompt caching, extended context windows)
+///   that change cache behavior and the token budget.
+/// - `cache-control`: client cache directives; engines with their own cache layer honor
+///   `no-cache`/`no-store`.
+///
+/// Credentials (`authorization`, `x-api-key`, `cookie`) are deliberately never included, and
+/// inbound trace context is not echoed — the gateway's outbound tracing owns that.
 ///
 /// This is a default, not a floor: setting `forward_header_matches` to any non-empty value
 /// *replaces* this list entirely (see [`ContextCompression::forward_header_matches`]).
 static DEFAULT_FORWARD_HEADERS: LazyLock<Vec<HeaderMatch>> = LazyLock::new(|| {
 	// `.*` + get_webhook_forward_headers' full-span check == "forward if present, any value".
 	let any = || HeaderValueMatch::Regex(::regex::Regex::new(".*").expect("static regex"));
-	["anthropic-beta", "anthropic-version"]
-		.into_iter()
-		.map(|h| HeaderMatch {
-			name: crate::http::HeaderOrPseudo::Header(::http::HeaderName::from_static(h)),
-			value: any(),
-		})
-		.collect()
+	[
+		"anthropic-version",
+		"anthropic-beta",
+		"openai-beta",
+		"cache-control",
+	]
+	.into_iter()
+	.map(|h| HeaderMatch {
+		name: crate::http::HeaderOrPseudo::Header(::http::HeaderName::from_static(h)),
+		value: any(),
+	})
+	.collect()
 });
 
 /// Context compression shrinks request messages through an external compression service before
@@ -69,10 +82,11 @@ pub struct ContextCompression {
 	/// Incoming request headers to forward to the compression service.
 	///
 	/// When empty, a curated set of non-sensitive cache/context headers is forwarded by default
-	/// (e.g. `anthropic-beta`), so engines that decide compressibility from headers behave
-	/// correctly out of the box. Setting any value here *replaces* that default entirely — it is
-	/// not additive, so include the cache headers yourself if you still need them, or compression
-	/// may bust prompt caches. To forward nothing, supply a matcher that matches no header.
+	/// (`anthropic-version`, `anthropic-beta`, `openai-beta`, `cache-control`), so engines that
+	/// decide compressibility from headers behave correctly out of the box. Credentials are never
+	/// part of the default. Setting any value here *replaces* that default entirely — it is not
+	/// additive, so include the cache headers yourself if you still need them, or compression may
+	/// bust prompt caches. To forward nothing, supply a matcher that matches no header.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub forward_header_matches: Vec<HeaderMatch>,
 	/// Behavior when the service is unreachable, errors, or returns unusable messages.

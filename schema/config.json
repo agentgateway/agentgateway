@@ -4850,7 +4850,7 @@
           "default": "/v1/compress"
         },
         "forwardHeaderMatches": {
-          "description": "Incoming request headers to forward to the compression service.\n\nWhen empty, a curated set of non-sensitive cache/context headers is forwarded by default\n(e.g. `anthropic-beta`), so engines that decide compressibility from headers behave\ncorrectly out of the box. Setting any value here *replaces* that default entirely — it is\nnot additive, so include the cache headers yourself if you still need them, or compression\nmay bust prompt caches. To forward nothing, supply a matcher that matches no header.",
+          "description": "Incoming request headers to forward to the compression service.\n\nWhen empty, a curated set of non-sensitive cache/context headers is forwarded by default\n(`anthropic-version`, `anthropic-beta`, `openai-beta`, `cache-control`), so engines that\ndecide compressibility from headers behave correctly out of the box. Credentials are never\npart of the default. Setting any value here *replaces* that default entirely — it is not\nadditive, so include the cache headers yourself if you still need them, or compression may\nbust prompt caches. To forward nothing, supply a matcher that matches no header.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderMatch"
