@@ -576,10 +576,12 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 				t.Helper()
 				assert.Contains(t, outputYaml, "MODEL_CATALOG_PATHS",
 					"deployment should set MODEL_CATALOG_PATHS to the mounted ConfigMap file path")
-				assert.Contains(t, outputYaml, "/etc/agentgateway/model-catalog/my-model-costs.json",
+				assert.Contains(t, outputYaml, "/etc/agentgateway/model-catalog/my-model-costs/my-model-costs.json",
 					"MODEL_CATALOG_PATHS should point to the ConfigMap mount path")
-				assert.Contains(t, outputYaml, "mountPath: /etc/agentgateway/model-catalog/my-model-costs.json",
-					"deployment should have a volume mount for the model catalog ConfigMap")
+				assert.Contains(t, outputYaml, "mountPath: /etc/agentgateway/model-catalog/my-model-costs",
+					"deployment should have a directory volume mount for the model catalog ConfigMap so kubelet's atomic symlink swap on update is visible")
+				assert.NotContains(t, outputYaml, "subPath: my-model-costs.json",
+					"model catalog ConfigMap must not be mounted via subPath, since subPath mounts never receive ConfigMap updates")
 				assert.Contains(t, outputYaml, "name: my-model-costs",
 					"deployment volumes should reference the model catalog ConfigMap by name")
 			},

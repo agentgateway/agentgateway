@@ -5,6 +5,7 @@ package e2e_test
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,8 +20,9 @@ import (
 )
 
 var (
-	modelCatalogSetupManifest = manifest("modelcatalog", "setup.yaml")
-	modelCatalogAltManifest   = manifest("modelcatalog", "alt-catalog.yaml")
+	modelCatalogSetupManifest   = manifest("modelcatalog", "setup.yaml")
+	modelCatalogAltManifest     = manifest("modelcatalog", "alt-catalog.yaml")
+	modelCatalogUpdatedManifest = manifest("modelcatalog", "updated-catalog.yaml")
 )
 
 const (
@@ -34,6 +36,19 @@ const (
 
 // costTotalRe extracts agw.ai.usage.cost.total, tolerant of logfmt, quoted, and JSON renderings.
 var costTotalRe = regexp.MustCompile(`agw\.ai\.usage\.cost\.total[^0-9-]*([0-9]+(?:\.[0-9]+)?)`)
+
+// maxLoggedCost returns the highest agw.ai.usage.cost.total value found in logs, or -1 if none is present.
+func maxLoggedCost(logs string) float64 {
+	maxCost := -1.0
+	for line := range strings.SplitSeq(logs, "\n") {
+		if m := costTotalRe.FindStringSubmatch(line); m != nil {
+			if cost, err := strconv.ParseFloat(m[1], 64); err == nil && cost > maxCost {
+				maxCost = cost
+			}
+		}
+	}
+	return maxCost
+}
 
 func TestModelCatalogCost(tt *testing.T) {
 	t := New(tt, base.WithMinGwApiVersion(base.GwApiRequireRouteNames))
@@ -60,14 +75,7 @@ func TestModelCatalogCost(tt *testing.T) {
 			if err != nil {
 				return err
 			}
-			maxCost := -1.0
-			for line := range strings.SplitSeq(logs, "\n") {
-				if m := costTotalRe.FindStringSubmatch(line); m != nil {
-					if cost, err := strconv.ParseFloat(m[1], 64); err == nil && cost > maxCost {
-						maxCost = cost
-					}
-				}
-			}
+			maxCost := maxLoggedCost(logs)
 			if maxCost < 0 {
 				return fmt.Errorf("no agw.ai.usage.cost.total in gateway logs (catalog ConfigMap not loaded?)")
 			}
@@ -76,6 +84,54 @@ func TestModelCatalogCost(tt *testing.T) {
 			}
 			return nil
 		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
+	})
+
+	t.Run("ConfigMapUpdatePropagatesWithoutRestart", func(t base.Test) {
+		gwName := types.NamespacedName{Name: modelCatalogGatewayName, Namespace: modelCatalogNamespace}
+		gw := base.Gateway{
+			NamespacedName: gwName,
+			Address:        base.ResolveGatewayAddress(t, t.Ctx, t.TestInstallation, gwName),
+		}
+
+		g := gomega.NewWithT(t)
+
+		podsBefore, err := gatewayPodNames(t, modelCatalogNamespace, modelCatalogGatewayName)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+
+		baseline, err := gatewayAccessLogs(t, modelCatalogNamespace, modelCatalogGatewayName)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		baselineLen := len(baseline)
+
+		t.Apply(modelCatalogUpdatedManifest)
+		g.Eventually(func() error {
+			gw.Send(
+				t,
+				base.ExpectBody(gomega.ContainSubstring("The name of this project is agentgateway")),
+				curl.WithPath("/v1/chat/completions"),
+				curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
+				curl.WithHeader("Content-Type", "application/json"),
+			)
+			logs, err := gatewayAccessLogs(t, modelCatalogNamespace, modelCatalogGatewayName)
+			if err != nil {
+				return err
+			}
+			if len(logs) <= baselineLen {
+				return fmt.Errorf("no new gateway logs since ConfigMap patch")
+			}
+			maxCost := maxLoggedCost(logs[baselineLen:])
+			if maxCost < 0 {
+				return fmt.Errorf("no agw.ai.usage.cost.total in gateway logs since ConfigMap patch")
+			}
+			if maxCost >= minSentinelCost {
+				return fmt.Errorf("logged cost %v >= ceiling %v (ConfigMap update not yet reflected by running pod)", maxCost, minSentinelCost)
+			}
+			return nil
+		}).WithTimeout(45 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
+
+		podsAfter, err := gatewayPodNames(t, modelCatalogNamespace, modelCatalogGatewayName)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Expect(podsAfter).To(gomega.Equal(podsBefore),
+			"gateway pod must not have restarted for the ConfigMap update to take effect")
 	})
 
 	t.Run("AlternativeCatalog", func(t base.Test) {
@@ -99,14 +155,7 @@ func TestModelCatalogCost(tt *testing.T) {
 			if err != nil {
 				return err
 			}
-			maxCost := -1.0
-			for line := range strings.SplitSeq(logs, "\n") {
-				if m := costTotalRe.FindStringSubmatch(line); m != nil {
-					if cost, err := strconv.ParseFloat(m[1], 64); err == nil && cost > maxCost {
-						maxCost = cost
-					}
-				}
-			}
+			maxCost := maxLoggedCost(logs)
 			if maxCost < 0 {
 				return fmt.Errorf("no agw.ai.usage.cost.total in gateway logs (catalog ConfigMap not loaded?)")
 			}
@@ -116,6 +165,24 @@ func TestModelCatalogCost(tt *testing.T) {
 			return nil
 		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
 	})
+}
+
+// gatewayPodNames returns the sorted names of the running gateway pods, so callers
+// can assert that a ConfigMap update took effect without a pod restart/rollout.
+func gatewayPodNames(t base.Test, ns, gatewayName string) ([]string, error) {
+	cluster := t.TestInstallation.ClusterContext
+	pods, err := cluster.Client.Kube().CoreV1().Pods(ns).List(t.Ctx, metav1.ListOptions{
+		LabelSelector: "gateway.networking.k8s.io/gateway-name=" + gatewayName,
+	})
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(pods.Items))
+	for _, pod := range pods.Items {
+		names = append(names, string(pod.UID))
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func gatewayAccessLogs(t base.Test, ns, gatewayName string) (string, error) {
