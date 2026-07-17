@@ -47,7 +47,7 @@ func (o RemoteJwksOwner) Equals(other RemoteJwksOwner) bool {
 }
 
 func OwnersFromPolicy(policy *agentgateway.AgentgatewayPolicy) []RemoteJwksOwner {
-	if len(policy.Spec.TargetRefs) == 0 {
+	if len(policy.Spec.TargetRefs) == 0 && len(policy.Spec.TargetSelectors) == 0 {
 		return nil
 	}
 

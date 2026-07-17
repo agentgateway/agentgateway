@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Bot, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   invalidProviderApiKey,
@@ -9,7 +9,9 @@ import {
   removeLlmProvider,
   upsertLlmProvider,
 } from "../config";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import {
+  ConfirmDialog,
   Drawer,
   EmptyState,
   Field,
@@ -24,7 +26,12 @@ import { ProviderIcon } from "../components/ProviderIcon";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import { cleanEmpty } from "../policies/policyUtils";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
-import type { LlmModel, LlmProvider, ProviderName } from "../types";
+import type {
+  GatewayConfig,
+  LlmModel,
+  LlmProvider,
+  ProviderName,
+} from "../types";
 import { ProviderConfigEditor } from "./models/ProviderConfigEditor";
 
 export function ProvidersPage() {
@@ -40,6 +47,7 @@ export function ProvidersPage() {
     previousName?: string;
     provider: LlmProvider;
   } | null>(null);
+  const [deletingProvider, setDeletingProvider] = useState<string | null>(null);
   const [providerDrawer, setProviderDrawer] = useStickyQueryParam("provider");
   const linkedProvider =
     providerDrawer && providerDrawer !== "new"
@@ -187,13 +195,8 @@ export function ProvidersPage() {
                             className="icon-button danger"
                             aria-label="Delete provider"
                             type="button"
-                            disabled={usage.length > 0}
-                            onClick={() => {
-                              if (confirmDeleteProvider(provider.name))
-                                update.mutate((next) =>
-                                  removeLlmProvider(next, provider.name),
-                                );
-                            }}
+                            disabled={usage.length > 0 || update.isPending}
+                            onClick={() => setDeletingProvider(provider.name)}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -212,6 +215,7 @@ export function ProvidersPage() {
         <ProviderEditor
           key={activeEditing.previousName ?? "new"}
           initial={activeEditing.provider}
+          config={config.data}
           previousName={activeEditing.previousName}
           help={help}
           saving={update.isPending}
@@ -226,12 +230,31 @@ export function ProvidersPage() {
           }
         />
       ) : null}
+      {deletingProvider ? (
+        <ConfirmDialog
+          title="Delete provider?"
+          destructive
+          confirmLabel="Delete provider"
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeletingProvider(null)}
+          onConfirm={() =>
+            update.mutate((next) => removeLlmProvider(next, deletingProvider), {
+              onSuccess: () => setDeletingProvider(null),
+            })
+          }
+        >
+          <p>
+            Delete <strong>{deletingProvider}</strong>? This cannot be undone.
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
 
 function ProviderEditor(props: {
   initial: LlmProvider;
+  config?: GatewayConfig;
   previousName?: string;
   help: SchemaHelp;
   saving: boolean;
@@ -239,6 +262,7 @@ function ProviderEditor(props: {
   onSave: (provider: LlmProvider, previousName?: string) => void;
 }) {
   const [provider, setProvider] = useState<LlmProvider>(props.initial);
+  const [initialDraft] = useState(() => JSON.stringify(props.initial));
   const [saveAttempted, setSaveAttempted] = useState(false);
   const preview = cleanEmpty(provider) as LlmProvider | undefined;
   const invalidApiKey = invalidProviderApiKey(provider.params?.apiKey);
@@ -251,26 +275,34 @@ function ProviderEditor(props: {
     props.onSave(preview ?? provider, props.previousName);
   }
 
+  function validateBeforeDiff() {
+    setSaveAttempted(true);
+    if (!provider.name.trim()) return false;
+    if (invalidApiKey) return false;
+    return true;
+  }
+
   return (
     <Drawer
       title={props.previousName ? "Edit provider" : "Add provider"}
       onClose={props.onCancel}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving || !provider.name.trim()}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save provider
-          </button>
-        </div>
-      }
+      dirty={JSON.stringify(provider) !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Provider config diff"
+          saveLabel="Save provider"
+          saving={props.saving}
+          saveDisabled={!provider.name.trim()}
+          onCancel={requestClose}
+          onSave={save}
+          beforeDiff={validateBeforeDiff}
+          applyDiff={(next) =>
+            upsertLlmProvider(next, preview ?? provider, props.previousName)
+          }
+        />
+      )}
     >
       <div className="form-grid">
         <Field
@@ -351,8 +383,4 @@ function providerUsage(providerName: string, models: LlmModel[]) {
       "reference" in model.provider &&
       model.provider.reference === providerName,
   );
-}
-
-function confirmDeleteProvider(name: string) {
-  return window.confirm(`Delete provider "${name}"? This cannot be undone.`);
 }

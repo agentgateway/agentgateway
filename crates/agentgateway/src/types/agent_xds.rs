@@ -491,6 +491,7 @@ fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
 		x if x == McpIdp::Keycloak as i32 => Some(McpIDP::Keycloak {}),
 		x if x == McpIdp::Okta as i32 => Some(McpIDP::Okta {}),
 		x if x == McpIdp::Descope as i32 => Some(McpIDP::Descope {}),
+		x if x == McpIdp::Authentik as i32 => Some(McpIDP::Authentik {}),
 		_ => None,
 	}
 }
@@ -625,8 +626,10 @@ fn convert_mcp_guardrails(
 			),
 		};
 		Ok(crate::mcp::guardrails::Remote {
-			target,
-			policies: Vec::new(),
+			target: SimpleBackendReferenceWithPolicies {
+				target,
+				policies: Vec::new(),
+			},
 			failure_mode,
 			metadata,
 			request_headers,
@@ -997,17 +1000,73 @@ fn backend_auth_from_proto(
 			} else {
 				Some(a.service_name.clone())
 			};
-			let assume_role = a.assume_role.map(|assume_role| auth::AwsAssumeRole {
-				role_arn: assume_role.role_arn,
-				session_name: if assume_role.session_name.is_empty() {
-					None
-				} else {
-					Some(assume_role.session_name)
-				},
-				tags: auth::aws::sorted_session_tags(
-					assume_role.tags.into_iter().map(|tag| (tag.key, tag.value)),
-				),
-			});
+			let assume_role = a
+				.assume_role
+				.map(|assume_role| -> Result<_, ProtoError> {
+					let tags = assume_role
+						.tags
+						.into_iter()
+						.map(|tag| -> Result<_, ProtoError> {
+							// A tag is dynamic iff expression is set; an unset proto value is
+							// indistinguishable from an empty one, and STS allows empty values.
+							if tag.expression.is_empty() {
+								return Ok(auth::aws::AwsSessionTag {
+									key: tag.key,
+									value: Some(tag.value),
+									expression: None,
+								});
+							}
+							if !tag.value.is_empty() {
+								return Err(ProtoError::Generic(format!(
+									"session tag {:?} sets both value and expression",
+									tag.key
+								)));
+							}
+							// Permissive: a bad expression fails requests that hit this tag
+							// (fail closed) instead of rejecting the whole policy update.
+							let expression = permissive_cel_expression_arc(
+								diagnostics,
+								format!("AWS session tag {:?}", tag.key),
+								tag.expression,
+							);
+							Ok(auth::aws::AwsSessionTag {
+								key: tag.key,
+								value: None,
+								expression: Some(expression),
+							})
+						})
+						.collect::<Result<Vec<_>, _>>()?;
+					// An unset proto string is indistinguishable from an empty one; treat
+					// empty as unset for both session name forms.
+					let session_name = match (
+						assume_role.session_name.is_empty(),
+						assume_role.session_name_expression.is_empty(),
+					) {
+						(true, true) => None,
+						(false, true) => Some(auth::aws::AwsSessionName::Static(assume_role.session_name)),
+						// Permissive: a bad expression fails requests that hit this policy
+						// (fail closed) instead of rejecting the whole policy update.
+						(true, false) => Some(auth::aws::AwsSessionName::Dynamic {
+							expression: permissive_cel_expression_arc(
+								diagnostics,
+								"AWS session name",
+								assume_role.session_name_expression,
+							),
+						}),
+						(false, false) => {
+							return Err(ProtoError::Generic(
+								"assumeRole sets both sessionName and sessionNameExpression".to_string(),
+							));
+						},
+					};
+					Ok(auth::AwsAssumeRole {
+						role_arn: assume_role.role_arn,
+						session_name,
+						tags: auth::aws::AwsSessionTags::try_new(tags)
+							.map_err(|e| ProtoError::Generic(e.to_string()))?,
+					})
+				})
+				.transpose()?;
 			let aws_auth = match a.kind {
 				Some(proto::agent::aws::Kind::ExplicitConfig(config)) => {
 					if assume_role.is_some() {
@@ -1358,13 +1417,11 @@ pub(crate) fn backend_with_policies_from_proto(
 							})
 						},
 						Some(provider::Provider::Bedrock(bedrock)) => {
-							AIProvider::Bedrock(llm::bedrock::Provider {
+							AIProvider::bedrock(llm::bedrock::Provider {
 								model: bedrock.model.as_deref().map(strng::new),
 								region: strng::new(&bedrock.region),
 								guardrail_identifier: bedrock.guardrail_identifier.as_deref().map(strng::new),
 								guardrail_version: bedrock.guardrail_version.as_deref().map(strng::new),
-								source_credentials_cache: Default::default(),
-								assume_role_cache: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azure(azure)) => {
@@ -1374,13 +1431,12 @@ pub(crate) fn backend_with_policies_from_proto(
 								},
 								_ => llm::azure::AzureResourceType::OpenAI,
 							};
-							AIProvider::Azure(llm::azure::Provider {
+							AIProvider::azure(llm::azure::Provider {
 								model: azure.model.as_deref().map(strng::new),
 								resource_name: strng::new(&azure.resource_name),
 								resource_type,
 								api_version: azure.api_version.as_deref().map(strng::new),
 								project_name: azure.project_name.as_deref().map(strng::new),
-								cached_cred: Default::default(),
 							})
 						},
 						Some(provider::Provider::Azureopenai(_)) => {
@@ -1473,9 +1529,10 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::StatefulMode::Stateful => true,
 					proto::agent::mcp_backend::StatefulMode::Stateless => false,
 				},
-				always_use_prefix: match m.prefix_mode() {
-					proto::agent::mcp_backend::PrefixMode::Always => true,
-					proto::agent::mcp_backend::PrefixMode::Conditional => false,
+				prefix_mode: match m.prefix_mode() {
+					proto::agent::mcp_backend::PrefixMode::Always => McpPrefixMode::Always,
+					proto::agent::mcp_backend::PrefixMode::Conditional => McpPrefixMode::Conditional,
+					proto::agent::mcp_backend::PrefixMode::Never => McpPrefixMode::Never,
 				},
 				failure_mode: match m.failure_mode() {
 					proto::agent::mcp_backend::FailureMode::FailOpen => FailureMode::FailOpen,
@@ -2105,9 +2162,11 @@ fn traffic_policy_from_proto(
 			TrafficPolicy::RemoteRateLimit(RequestPolicy::single(
 				http::remoteratelimit::RemoteRateLimit {
 					domain: rrl.domain.clone(),
-					target: Arc::new(target),
-					// Not supported inline from xDS
-					policies: Vec::new(),
+					target: SimpleBackendReferenceWithPolicies {
+						target: Arc::new(target),
+						// Not supported inline from xDS
+						policies: Vec::new(),
+					},
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
 					failure_mode,
 				},
@@ -2162,9 +2221,11 @@ fn traffic_policy_from_proto(
 				}
 			}
 			TrafficPolicy::ExtProc(RequestPolicy::single(http::ext_proc::ExtProc {
-				target: Arc::new(target),
-				// Not supported inline from xDS
-				policies: Vec::new(),
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(target),
+					// Not supported inline from xDS
+					policies: Vec::new(),
+				},
 				failure_mode,
 				request_attributes: to_cel_attrs(
 					diagnostics,
@@ -2549,8 +2610,10 @@ fn external_auth_from_proto(
 		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
 	Ok(http::ext_authz::ExtAuthz {
 		protocol,
-		target: Arc::new(target),
-		policies: Vec::new(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: Arc::new(target),
+			policies: Vec::new(),
+		},
 		failure_mode,
 		include_request_headers: ea
 			.include_request_headers
@@ -2833,12 +2896,14 @@ fn frontend_policy_from_proto(
 						})
 						.transpose()?;
 					Ok(frontend::OtlpLoggingConfig {
-						provider_backend,
+						target: SimpleBackendReferenceWithPolicies {
+							target: Arc::new(provider_backend),
+							policies,
+						},
 						filter: oal.filter.as_ref().map(|expr| {
 							permissive_cel_expression_arc(diagnostics, "frontend.logging.otlp.filter", expr)
 						}),
 						fields,
-						policies,
 						protocol,
 						path,
 					})
@@ -2962,9 +3027,11 @@ fn tracing_config_from_proto(
 		};
 
 	types::agent::TracingConfig {
-		provider_backend,
-		// Not supported inline from xDS
-		policies: Vec::new(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: Arc::new(provider_backend),
+			// Not supported inline from xDS
+			policies: Vec::new(),
+		},
 		attributes,
 		resources,
 		remove: t.remove.clone(),

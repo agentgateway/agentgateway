@@ -447,14 +447,25 @@ message AwsAssumeRole {
   // tags, they surface as columns in the AWS Cost & Usage Report for per-tenant
   // cost attribution.
   repeated AwsSessionTag tags = 3;
+  // CEL expression evaluated against each request to produce the session name
+  // (RoleSessionName), for example `jwt.sub` or `request.headers["x-team"]`. If
+  // the expression does not produce a valid session name at request time, the
+  // request is rejected. At most one of session_name and session_name_expression
+  // may be set.
+  string session_name_expression = 4;
 }
 
-// AWS STS session tag, a key/value pair passed to AssumeRole for cost attribution.
+// AWS STS session tag passed to AssumeRole for cost attribution.
+// Exactly one of value and expression may be set.
 message AwsSessionTag {
   // Tag key.
   string key = 1;
-  // Tag value.
+  // Static tag value.
   string value = 2;
+  // CEL expression evaluated against each request to produce the tag value,
+  // for example `jwt.sub` or `request.headers["x-app"]`. If the expression does
+  // not produce a valid tag value at request time, the request is rejected.
+  string expression = 3;
 }
 
 // Explicit Azure credentials configuration
@@ -1474,6 +1485,7 @@ message BackendPolicySpec {
       KEYCLOAK = 2;
       OKTA = 3;
       DESCOPE = 4;
+      AUTHENTIK = 5;
     }
 
     // Validation mode for JWT authentication
@@ -1702,6 +1714,9 @@ message MCPBackend {
   enum PrefixMode {
     CONDITIONAL = 0;
     ALWAYS = 1;
+    // Never prefix names, even with multiple targets; tool/prompt calls are
+    // routed by looking up which target serves the name.
+    NEVER = 2;
   }
 
   repeated MCPTarget targets = 2;
@@ -1751,25 +1766,52 @@ message Alpn {
   repeated string protocols = 1;
 }
 
-// Token exchange for the OAuth family (RFC 8693 / RFC 7523).
-message OAuthTokenExchange {
-  message ClientAuth {
-    enum Method {
-        UNSPECIFIED         = 0; // defaults to CLIENT_SECRET_BASIC
-        CLIENT_SECRET_BASIC = 1; // id:secret in the Authorization: Basic header
-        CLIENT_SECRET_POST  = 2; // client_id/client_secret in the form body
-    }
-
-    // Required and non-empty when client_auth is set.
-    string client_id = 1;
-    // When omitted, client_id is sent without a secret; only valid with
-    // CLIENT_SECRET_POST. For no client authentication fields at all, leave
-    // client_auth unset. An explicitly empty secret is rejected.
-    optional string client_secret = 2;
-    // RFC 6749 §2.3 client authentication method.
-    Method method = 3;
+// Reusable OAuth client authentication (client_secret_basic /
+// client_secret_post / private_key_jwt). Shared by OAuthTokenExchange and
+// (soon) MCP authentication so both reference one client-auth shape.
+message OAuthClientAuth {
+  enum Method {
+      UNSPECIFIED         = 0; // defaults to CLIENT_SECRET_BASIC
+      CLIENT_SECRET_BASIC = 1; // id:secret in the Authorization: Basic header
+      CLIENT_SECRET_POST  = 2; // client_id/client_secret in the form body
+      PRIVATE_KEY_JWT     = 3; // private_key_jwt client assertion (RFC 7523)
   }
 
+  message PrivateKeyJwt {
+    enum SigningAlg {
+      SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
+      RS256                   = 1;
+      RS384                   = 2;
+      RS512                   = 3;
+      ES256                   = 4;
+      ES384                   = 5;
+    }
+
+    // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
+    // EC keys are used with ES* algorithms.
+    string signing_key = 1;
+    // JWS signing algorithm. Defaults to RS256.
+    SigningAlg alg = 2;
+    // Optional JWS key ID header.
+    optional string kid = 3;
+    // Audience for the client assertion, typically the token endpoint URL.
+    string assertion_audience = 4;
+  }
+
+  // Required and non-empty when client_auth is set.
+  string client_id = 1;
+  // When omitted, client_id is sent without a secret; only valid with
+  // CLIENT_SECRET_POST. For no client authentication fields at all, leave
+  // client_auth unset. An explicitly empty secret is rejected.
+  optional string client_secret = 2;
+  // RFC 6749 §2.3 client authentication method.
+  Method method = 3;
+  // Required when method is PRIVATE_KEY_JWT.
+  PrivateKeyJwt private_key_jwt = 4;
+}
+
+// Token exchange for the OAuth family (RFC 8693 / RFC 7523).
+message OAuthTokenExchange {
   message TokenSpec {
     // Where to extract the token from the incoming request. The `expression`
     // (CEL) variant is permitted here. A Header/Authorization source also reads
@@ -1839,7 +1881,7 @@ message OAuthTokenExchange {
   // ----- Authorization server client authentication -----
   // When unset, no client authentication fields are sent; this supports
   // public-client exchanges such as Google STS.
-  ClientAuth client_auth = 6;
+  OAuthClientAuth client_auth = 6;
 
   // ----- Output and runtime behavior -----
   // Where to forward the exchanged token to the upstream. The expression

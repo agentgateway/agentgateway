@@ -13,6 +13,7 @@ import {
   type EnumSelectorOption,
 } from "../components/EnumSelector";
 import {
+  ConfirmDialog,
   Drawer,
   Field,
   FieldGroup,
@@ -21,12 +22,13 @@ import {
   StatusBanner,
   YamlBlock,
 } from "../components/Primitives";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { getLlmGuardrails, setLlmGuardrails } from "../config";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
 import { cleanEmpty } from "../policies/policyUtils";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
-import type { LlmGuardrail } from "../types";
+import type { GatewayConfig, LlmGuardrail } from "../types";
 import type {
   AnalyzeTextConfig,
   AzureContentSafety,
@@ -196,6 +198,7 @@ export function GuardrailsPage() {
     () => getLlmGuardrails(config.data),
     [config.data],
   );
+  const [removeAllOpen, setRemoveAllOpen] = useState(false);
 
   return (
     <div className="page-stack">
@@ -207,9 +210,8 @@ export function GuardrailsPage() {
             <button
               className="button danger"
               type="button"
-              onClick={() =>
-                update.mutate((next) => setLlmGuardrails(next, null))
-              }
+              disabled={update.isPending}
+              onClick={() => setRemoveAllOpen(true)}
             >
               <Trash2 size={16} />
               Remove
@@ -235,7 +237,9 @@ export function GuardrailsPage() {
           <GuardrailsEditor
             key={JSON.stringify(guardrails ?? emptyGuardrails())}
             initial={guardrails ?? emptyGuardrails()}
+            config={config.data}
             help={help}
+            saving={update.isPending}
             saveError={update.isError ? update.error.message : null}
             onSave={(nextGuardrails) =>
               update.mutate((next) => setLlmGuardrails(next, nextGuardrails))
@@ -243,30 +247,66 @@ export function GuardrailsPage() {
           />
         )}
       </Panel>
+      {removeAllOpen ? (
+        <ConfirmDialog
+          title="Remove all LLM guardrails?"
+          destructive
+          confirmLabel="Remove guardrails"
+          confirmDisabled={update.isPending}
+          onCancel={() => setRemoveAllOpen(false)}
+          onConfirm={() =>
+            update.mutate((next) => setLlmGuardrails(next, null), {
+              onSuccess: () => setRemoveAllOpen(false),
+            })
+          }
+        >
+          <p>
+            Remove all request and response guardrails? LLM traffic will no
+            longer be checked by these rules.
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
 
 function GuardrailsEditor(props: {
   initial: LlmGuardrail;
+  config?: GatewayConfig | null;
   help: SchemaHelp;
+  saving: boolean;
   saveError?: string | null;
   onSave: (guardrails: LlmGuardrail) => void;
 }) {
-  const [draft, setDraft] = useState<GuardrailDraft>(() =>
-    draftFromGuardrails(props.initial),
+  const initialDraft = useMemo(
+    () => draftFromGuardrails(props.initial),
+    [props.initial],
   );
+  const [draft, setDraft] = useState<GuardrailDraft>(() => initialDraft);
   const [error, setError] = useState<string | null>(null);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(initialDraft);
 
-  function applyDraft(nextDraft: GuardrailDraft) {
+  function validateAndBuild(nextDraft: GuardrailDraft) {
     setDraft(nextDraft);
     const validationError = validateDraft(nextDraft);
     if (validationError) {
       setError(validationError);
-      return;
+      return null;
     }
     setError(null);
-    props.onSave(buildGuardrails(nextDraft));
+    return buildGuardrails(nextDraft);
+  }
+
+  function applyDraft(nextDraft: GuardrailDraft) {
+    setDraft(nextDraft);
+    const validationError = validateDraft(nextDraft);
+    setError(validationError);
+  }
+
+  function save() {
+    const guardrails = validateAndBuild(draft);
+    if (!guardrails) return;
+    props.onSave(guardrails);
   }
 
   return (
@@ -293,6 +333,20 @@ function GuardrailsEditor(props: {
         guards={draft.response}
         onChange={(response) => applyDraft({ ...draft, response })}
       />
+      {dirty ? (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Guardrails config diff"
+          saveLabel="Save guardrails"
+          saving={props.saving}
+          onSave={save}
+          beforeDiff={() => Boolean(validateAndBuild(draft))}
+          applyDiff={(next) => {
+            const guardrails = buildGuardrails(draft);
+            setLlmGuardrails(next, guardrails);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -311,6 +365,7 @@ function GuardrailSection(props: {
   onChange: (guards: GuardDraft[]) => void;
 }) {
   const [guardDrawer, setGuardDrawer] = useStickyQueryParam("guard");
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
   const title =
     props.phase === "request" ? "Request guards" : "Response guards";
   const description =
@@ -358,11 +413,7 @@ function GuardrailSection(props: {
             guard={guard}
             index={index}
             onEdit={() => setGuardDrawer(`${props.phase}:${index}`)}
-            onRemove={() =>
-              props.onChange(
-                props.guards.filter((_, guardIndex) => guardIndex !== index),
-              )
-            }
+            onRemove={() => setDeletingIndex(index)}
           />
         ))}
         <AddGuardButton onOpen={() => setGuardDrawer(`${props.phase}:new`)} />
@@ -388,6 +439,30 @@ function GuardrailSection(props: {
               closeGuardDrawer();
             }}
           />
+        ) : null}
+        {deletingIndex != null && props.guards[deletingIndex] ? (
+          <ConfirmDialog
+            title="Remove guardrail?"
+            destructive
+            confirmLabel="Remove guardrail"
+            onCancel={() => setDeletingIndex(null)}
+            onConfirm={() => {
+              props.onChange(
+                props.guards.filter(
+                  (_, guardIndex) => guardIndex !== deletingIndex,
+                ),
+              );
+              setDeletingIndex(null);
+            }}
+          >
+            <p>
+              Remove the{" "}
+              <strong>
+                {guardKindLabel(props.guards[deletingIndex].kind)}
+              </strong>{" "}
+              guard? This takes effect immediately.
+            </p>
+          </ConfirmDialog>
         ) : null}
       </div>
     </section>
@@ -424,9 +499,10 @@ function AddGuardModal(props: {
     <Drawer
       title={`Add ${props.phase} guard`}
       onClose={props.onClose}
-      footer={
+      dirty={guard != null}
+      footer={(requestClose) => (
         <div className="button-row">
-          <button className="button" type="button" onClick={props.onClose}>
+          <button className="button" type="button" onClick={requestClose}>
             Cancel
           </button>
           <button
@@ -439,7 +515,7 @@ function AddGuardModal(props: {
             Add guard
           </button>
         </div>
-      }
+      )}
     >
       <FieldGroup
         label="Guard type"
@@ -526,9 +602,10 @@ function EditGuardDrawer(props: {
     <Drawer
       title={`Edit ${props.phase} guard`}
       onClose={props.onClose}
-      footer={
+      dirty={JSON.stringify(draft) !== JSON.stringify(props.guard)}
+      footer={(requestClose) => (
         <div className="button-row">
-          <button className="button" type="button" onClick={props.onClose}>
+          <button className="button" type="button" onClick={requestClose}>
             Cancel
           </button>
           <button
@@ -540,7 +617,7 @@ function EditGuardDrawer(props: {
             Apply changes
           </button>
         </div>
-      }
+      )}
     >
       {draft.kind === "unsupported" ? (
         <>

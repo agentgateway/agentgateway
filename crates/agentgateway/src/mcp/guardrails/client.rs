@@ -255,11 +255,7 @@ fn eval_to_value(
 }
 
 fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcReferenceChannel> {
-	ExtMcpClient::new(GrpcReferenceChannel {
-		target: remote.target.clone(),
-		client,
-		policies: Arc::new(remote.policies.clone()),
-	})
+	ExtMcpClient::new(remote.target.grpc_channel(client))
 }
 
 // Snapshot the incoming request headers for the policy server, applying the

@@ -24,6 +24,8 @@ import type {
   LocalTransformationConfig,
   LocalSimpleMcpConfig,
   LocalBind,
+  LocalGateway,
+  LocalGatewayListener,
   LocalListener,
   LocalRoute,
   LocalRouteBackend,
@@ -69,6 +71,8 @@ export type ExtAuthzPolicy = ExtAuthz;
 export type ExtProcPolicy = ExtProc;
 export type OidcPolicy = Partial<LocalOidcConfig>;
 export type TrafficBind = LocalBind;
+export type TrafficGateway = LocalGateway;
+export type TrafficGatewayListener = LocalGatewayListener;
 export type TrafficListener = LocalListener;
 export type TrafficRoute = LocalRoute;
 export type TrafficRouteBackend = LocalRouteBackend;

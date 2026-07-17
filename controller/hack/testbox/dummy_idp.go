@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -70,6 +72,7 @@ func startDummyIDP() (shutdownFunc, error) {
 	mux.HandleFunc("/register", handleRegister)
 	mux.HandleFunc("/authorize", handleAuthorize)
 	mux.HandleFunc("/token", handleToken)
+	mux.HandleFunc("/token-exchange", handleOAuthTokenExchange)
 	// Handle .well-known paths - register each path explicitly
 	mux.HandleFunc("/.well-known/jwks.json", handleJWKS)
 	mux.HandleFunc("/.well-known/oauth-authorization-server", handleDiscovery)
@@ -111,6 +114,13 @@ const (
 	hardcodedClientSecret = "secret_2nGx_bjvo9z72Aw3-hKTWMusEo2-yTfH"
 	hardcodedRefreshToken = "fixed_refresh_token_123"
 	redirectURI           = "http://localhost:8081/callback"
+)
+
+const (
+	oauthGrantTypeTokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange" // #nosec G101
+	oauthGrantTypeJWTBearer     = "urn:ietf:params:oauth:grant-type:jwt-bearer"     // #nosec G101
+	oauthTokenTypeAccessToken   = "urn:ietf:params:oauth:token-type:access_token"   // #nosec G101
+	oauthTokenTypeJWT           = "urn:ietf:params:oauth:token-type:jwt"            // #nosec G101
 )
 
 // sendJSONResponse sends a JSON response with CORS headers
@@ -234,6 +244,95 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 	default:
 		sendJSONResponse(w, r, map[string]string{"error": "unsupported_grant_type"}, http.StatusBadRequest)
 	}
+}
+
+func handleOAuthTokenExchange(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeOAuthTokenExchangeError(w, r, http.StatusMethodNotAllowed, "method_not_allowed")
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	switch r.FormValue("grant_type") {
+	case oauthGrantTypeTokenExchange:
+		handleTokenExchangeGrant(w, r, r.Form)
+	case oauthGrantTypeJWTBearer:
+		handleJWTBearerGrant(w, r, r.Form)
+	default:
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "unsupported_grant_type")
+	}
+}
+
+func handleTokenExchangeGrant(w http.ResponseWriter, r *http.Request, form url.Values) {
+	required := map[string][]string{
+		"subject_token":        {"subject-token"},
+		"subject_token_type":   {oauthTokenTypeAccessToken},
+		"actor_token":          {"actor-token"},
+		"actor_token_type":     {oauthTokenTypeJWT},
+		"audience":             {"api://echo"},
+		"resource":             {"https://echo.example.com"},
+		"scope":                {"echo.read"},
+		"requested_token_type": {oauthTokenTypeAccessToken},
+		"client_id":            {"oauth-e2e-client"},
+		"tenant":               {"tenant-a"},
+	}
+	if !formContainsValues(form, required) {
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	writeOAuthTokenExchangeResponse(w, r, "token-exchange-access")
+}
+
+func handleJWTBearerGrant(w http.ResponseWriter, r *http.Request, form url.Values) {
+	required := map[string][]string{
+		"assertion": {"jwt-assertion"},
+		"client_id": {"oauth-e2e-jwt-client"},
+	}
+	if !formContainsValues(form, required) {
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	if form.Has("subject_token") || form.Has("actor_token") || form.Has("requested_token_type") {
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	writeOAuthTokenExchangeResponse(w, r, "jwt-bearer-access")
+}
+
+func formContainsValues(form url.Values, required map[string][]string) bool {
+	for key, wantValues := range required {
+		gotValues := form[key]
+		if len(gotValues) != len(wantValues) {
+			return false
+		}
+		for _, want := range wantValues {
+			if !slices.Contains(gotValues, want) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func writeOAuthTokenExchangeResponse(w http.ResponseWriter, r *http.Request, accessToken string) {
+	sendJSONResponse(w, r, map[string]any{
+		"access_token":      accessToken,
+		"token_type":        "Bearer",
+		"issued_token_type": oauthTokenTypeAccessToken,
+		"expires_in":        60,
+	}, http.StatusOK)
+}
+
+func writeOAuthTokenExchangeError(w http.ResponseWriter, r *http.Request, status int, err string) {
+	sendJSONResponse(w, r, map[string]string{
+		"error": err,
+	}, status)
 }
 
 // handleJWKS handles JWKS endpoint using orgOneJwks

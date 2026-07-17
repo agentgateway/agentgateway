@@ -60,7 +60,7 @@ pub enum BackendAuth {
 	#[serde(rename = "copilot")]
 	Copilot,
 	/// Use OAuth token exchange flows to obtain a backend access token.
-	#[serde(rename = "oauth")]
+	#[serde(rename = "oauthTokenExchange")]
 	OAuthTokenExchange(Box<OAuthTokenExchangeAuth>),
 	/// Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.
 	#[serde(rename = "crossAppAccess")]

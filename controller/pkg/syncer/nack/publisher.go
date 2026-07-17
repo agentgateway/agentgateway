@@ -6,7 +6,6 @@ import (
 	"istio.io/istio/pkg/config/schema/gvr"
 	"istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -35,10 +34,9 @@ type NackEvent struct {
 
 // Publisher converts NACK events from the agentgateway xDS server into Kubernetes Events.
 type Publisher struct {
-	eventRecorder    record.EventRecorder
-	gatewayClient    kclient.Client[*gwv1.Gateway]
-	deploymentClient kclient.Client[*appsv1.Deployment]
-	HasSynced        func() bool
+	eventRecorder record.EventRecorder
+	gatewayClient kclient.Client[*gwv1.Gateway]
+	HasSynced     func() bool
 }
 
 // NewPublisher creates a new NACK event publisher that will publish k8s events
@@ -54,50 +52,29 @@ func NewPublisher(client kube.Client) *Publisher {
 
 	filter := kclient.Filter{ObjectFilter: client.ObjectFilter()}
 	gatewayClient := kclient.NewFilteredDelayed[*gwv1.Gateway](client, gvr.KubernetesGateway, filter)
-	deploymentClient := kclient.NewFiltered[*appsv1.Deployment](client, filter)
 	return &Publisher{
-		eventRecorder:    eventRecorder,
-		gatewayClient:    gatewayClient,
-		deploymentClient: deploymentClient,
-		HasSynced: func() bool {
-			return gatewayClient.HasSynced() && deploymentClient.HasSynced()
-		},
+		eventRecorder: eventRecorder,
+		gatewayClient: gatewayClient,
+		HasSynced:     gatewayClient.HasSynced,
 	}
 }
 
 // PublishNack publishes a NACK event as a k8s event.
 func (p *Publisher) PublishNack(event *NackEvent) {
-	var gatewayUID, deployUID types.UID
 	gw := p.gatewayClient.Get(event.Gateway.Name, event.Gateway.Namespace)
 	if gw == nil {
 		log.Error("failed to get gateway from cache")
 		return
 	}
-	gatewayUID = gw.GetUID()
-	dep := p.deploymentClient.Get(event.Gateway.Name, event.Gateway.Namespace)
-	if dep == nil {
-		log.Error("failed to get deployment from cache")
-		return
-	}
-	deployUID = dep.GetUID()
 
 	gatewayRef := &corev1.ObjectReference{
 		Kind:       wellknown.GatewayKind,
 		APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
 		Name:       event.Gateway.Name,
 		Namespace:  event.Gateway.Namespace,
-		UID:        gatewayUID,
+		UID:        gw.GetUID(),
 	}
-	deploymentRef := &corev1.ObjectReference{
-		Kind:       wellknown.DeploymentGVK.Kind,
-		APIVersion: wellknown.DeploymentGVK.GroupVersion().String(),
-		Name:       event.Gateway.Name,
-		Namespace:  event.Gateway.Namespace,
-		UID:        deployUID,
-	}
-
 	p.eventRecorder.Event(gatewayRef, corev1.EventTypeWarning, ReasonNack, event.ErrorMsg)
-	p.eventRecorder.Event(deploymentRef, corev1.EventTypeWarning, ReasonNack, event.ErrorMsg)
 
 	log.Debug("published NACK event for Gateway", "gateway", event.Gateway, "type_url", event.TypeUrl)
 }

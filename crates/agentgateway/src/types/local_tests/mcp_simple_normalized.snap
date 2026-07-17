@@ -49,7 +49,7 @@ backends:
                 args:
                   - "@modelcontextprotocol/server-everything"
           stateful: true
-          alwaysUsePrefix: false
+          prefixMode: conditional
           failureMode: failClosed
           sessionIdleTtl: 45m0s
 route_groups: []

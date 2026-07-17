@@ -155,7 +155,7 @@ impl TokenResponse {
 pub(super) struct TokenRequestSpec<'a> {
 	target: &'a SimpleBackendReference,
 	policies: &'a [BackendTrafficPolicy],
-	token_endpoint_path: &'a str,
+	path: &'a str,
 	grant_type: OAuthGrantType,
 	client_auth: Option<&'a OAuthClientAuth>,
 	audiences: &'a [String],
@@ -168,9 +168,9 @@ pub(super) struct TokenRequestSpec<'a> {
 impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
 	fn from(auth: &'a OAuthTokenExchangeAuth) -> Self {
 		Self {
-			target: auth.target.as_ref(),
-			policies: &auth.policies,
-			token_endpoint_path: &auth.token_endpoint_path,
+			target: auth.target.target.as_ref(),
+			policies: &auth.target.policies,
+			path: &auth.path,
 			grant_type: auth.grant_type,
 			client_auth: auth.client_auth.as_ref(),
 			audiences: &auth.audiences,
@@ -185,9 +185,9 @@ impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
 impl<'a> From<&'a ChainedExchange> for TokenRequestSpec<'a> {
 	fn from(auth: &'a ChainedExchange) -> Self {
 		Self {
-			target: auth.target.as_ref(),
-			policies: &auth.policies,
-			token_endpoint_path: &auth.token_endpoint_path,
+			target: auth.target.target.as_ref(),
+			policies: &auth.target.policies,
+			path: &auth.path,
 			grant_type: OAuthGrantType::JwtBearer,
 			client_auth: auth.client_auth.as_ref(),
 			audiences: &auth.audiences,
@@ -251,20 +251,19 @@ fn build_token_request(
 	req: &ExchangeRequest,
 ) -> Result<::http::Request<Body>, FetchError> {
 	let form = build_token_request_form(spec, req)?;
-	let path = if spec.token_endpoint_path.is_empty() {
-		"/"
-	} else {
-		spec.token_endpoint_path
-	};
-	let mut builder = ::http::Request::builder()
+
+	let builder = ::http::Request::builder()
 		.method(::http::Method::POST)
-		.uri(path)
+		.uri(if spec.path.is_empty() { "/" } else { spec.path })
 		.header(CONTENT_TYPE, "application/x-www-form-urlencoded")
 		.header(ACCEPT, "application/json");
-	if let Some(basic) = &form.basic_auth {
-		builder = builder.header(AUTHORIZATION, format!("Basic {basic}"));
-	}
-	builder
+
+	form
+		.basic_auth
+		.iter()
+		.fold(builder, |builder, basic| {
+			builder.header(AUTHORIZATION, format!("Basic {basic}"))
+		})
 		.body(Body::from(form.body.into_bytes()))
 		.map_err(|e| FetchError::Upstream(e.into()))
 }

@@ -9,13 +9,16 @@ use url::form_urlencoded;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use super::client_auth::RawPrivateKeyJwt;
+use super::cross_app_access::CrossAppAccessEndpoint;
 use super::*;
 use crate::http::Body;
 use crate::http::oauth::{
 	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE,
 	TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
 };
-use crate::types::agent::Target;
+use crate::serdes::FileOrInline;
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 
 fn policy_client() -> PolicyClient {
 	PolicyClient::new(
@@ -52,9 +55,11 @@ fn endpoint(mock: &MockServer) -> Arc<SimpleBackendReference> {
 
 fn base_auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 	OAuthTokenExchangeAuth {
-		target: endpoint,
-		policies: vec![],
-		token_endpoint_path: "/token".into(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: endpoint,
+			policies: vec![],
+		},
+		path: "/token".into(),
 		grant_type: OAuthGrantType::TokenExchange,
 		subject_token: TokenSpec::default(),
 		actor_token: None,
@@ -79,9 +84,11 @@ fn auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 
 fn cross_app_access_endpoint(endpoint: Arc<SimpleBackendReference>) -> CrossAppAccessEndpoint {
 	CrossAppAccessEndpoint {
-		target: endpoint,
-		policies: vec![],
-		token_endpoint_path: "/token".into(),
+		target: SimpleBackendReferenceWithPolicies {
+			target: endpoint,
+			policies: vec![],
+		},
+		path: "/token".into(),
 		client_auth: OAuthClientAuth {
 			client_id: "gateway-client".into(),
 			method: OAuthClientAuthMethod::ClientSecretPost {
@@ -198,12 +205,13 @@ fn assert_proto_err_contains(proto: proto::OAuthTokenExchange, expected: &str) {
 
 #[test]
 fn deserializes_minimal_config() {
-	let a: OAuthTokenExchangeAuth = serde_json::from_str(r#"{"host": "localhost:8089"}"#).unwrap();
+	let a: OAuthTokenExchangeAuth =
+		serde_json::from_str(r#"{"host": "localhost:8089", "path": "/oauth2/token"}"#).unwrap();
 	assert!(matches!(
-		a.target.as_ref(),
+		a.target.target.as_ref(),
 		SimpleBackendReference::InlineBackend(_)
 	));
-	assert!(a.token_endpoint_path.is_empty());
+	assert_eq!(a.path, "/oauth2/token");
 	assert!(a.cache.is_some());
 }
 
@@ -257,13 +265,11 @@ async fn fails_closed_on_slow_endpoint() {
 			.set_delay(Duration::from_secs(2)),
 	)
 	.await;
-	let a = OAuthTokenExchangeAuth {
-		policies: vec![BackendTrafficPolicy::HTTP(crate::types::backend::HTTP {
-			request_timeout: Some(Duration::from_millis(50)),
-			..Default::default()
-		})],
-		..base_auth(endpoint(&mock))
-	};
+	let mut a = base_auth(endpoint(&mock));
+	a.target.policies = vec![BackendTrafficPolicy::HTTP(crate::types::backend::HTTP {
+		request_timeout: Some(Duration::from_millis(50)),
+		..Default::default()
+	})];
 
 	let err = fetch_token(
 		&policy_client(),
@@ -740,7 +746,7 @@ fn cross_app_access_local_config() -> CrossAppAccessAuth {
 		r#"{
 				"identityProvider": {
 					"host": "idp.example.com:443",
-					"tokenEndpointPath": "/oauth2/token",
+					"path": "/oauth2/token",
 					"clientAuth": {
 						"clientId": "gateway-at-idp",
 						"method": "clientSecretBasic",
@@ -749,7 +755,7 @@ fn cross_app_access_local_config() -> CrossAppAccessAuth {
 				},
 				"resourceAuthorizationServer": {
 					"host": "chat.example.com:443",
-					"tokenEndpointPath": "/oauth2/token",
+					"path": "/oauth2/token",
 					"clientAuth": {
 						"clientId": "gateway-at-chat",
 						"method": "clientSecretBasic",
@@ -1003,7 +1009,7 @@ fn assert_load_err(auth: OAuthTokenExchangeAuth, expected: &str) {
 #[rstest]
 #[case::token_endpoint_path(
 	OAuthTokenExchangeAuth {
-		token_endpoint_path: "token".into(),
+		path: "token".into(),
 		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"must start with /"
@@ -1121,6 +1127,36 @@ fn accepts_supported_requested_token_types_from_proto() {
 	}
 }
 
+#[test]
+fn private_key_jwt_client_auth_from_proto() {
+	let auth = OAuthClientAuth::try_from(proto::OAuthClientAuth {
+		client_id: "gateway-client".to_string(),
+		method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+		private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
+			signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+			alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+			kid: Some("kid-1".to_string()),
+			assertion_audience: "https://issuer.example/token".to_string(),
+		}),
+		..Default::default()
+	})
+	.unwrap();
+
+	assert_eq!(auth.client_id, "gateway-client");
+	match auth.method {
+		OAuthClientAuthMethod::PrivateKeyJwt(private_key) => {
+			let serialized = serde_json::to_value(private_key).unwrap();
+			assert_eq!(serialized["alg"].as_str(), Some("ES256"));
+			assert_eq!(serialized["kid"].as_str(), Some("kid-1"));
+			assert_eq!(
+				serialized["assertionAudience"].as_str(),
+				Some("https://issuer.example/token")
+			);
+		},
+		other => panic!("expected privateKeyJwt client auth, got {other:?}"),
+	}
+}
+
 #[rstest]
 #[case::unsupported_requested_token_type(
 	proto::OAuthTokenExchange {
@@ -1155,10 +1191,11 @@ fn accepts_supported_requested_token_types_from_proto() {
 )]
 #[case::empty_client_id(
 	proto::OAuthTokenExchange {
-		client_auth: Some(proto::o_auth_token_exchange::ClientAuth {
+		client_auth: Some(proto::OAuthClientAuth {
 			client_id: String::new(),
 			client_secret: Some("s".to_string()),
-			method: proto::o_auth_token_exchange::client_auth::Method::ClientSecretPost as i32,
+			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+			..Default::default()
 		}),
 		..Default::default()
 	},
@@ -1166,14 +1203,60 @@ fn accepts_supported_requested_token_types_from_proto() {
 )]
 #[case::empty_client_secret(
 	proto::OAuthTokenExchange {
-		client_auth: Some(proto::o_auth_token_exchange::ClientAuth {
+		client_auth: Some(proto::OAuthClientAuth {
 			client_id: "gateway-client".to_string(),
 			client_secret: Some(String::new()),
-			method: proto::o_auth_token_exchange::client_auth::Method::ClientSecretPost as i32,
+			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+			..Default::default()
 		}),
 		..Default::default()
 	},
 	"client_secret"
+)]
+#[case::private_key_jwt_missing_settings(
+	proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".to_string(),
+			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+			..Default::default()
+		}),
+		..Default::default()
+	},
+	"private_key_jwt settings are required"
+)]
+#[case::private_key_jwt_with_client_secret(
+	proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".to_string(),
+			client_secret: Some("secret".to_string()),
+			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
+				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				assertion_audience: "https://issuer.example/token".to_string(),
+				..Default::default()
+			}),
+		}),
+		..Default::default()
+	},
+	"must not set client_secret"
+)]
+#[case::private_key_jwt_settings_with_secret_method(
+	proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".to_string(),
+			client_secret: Some("secret".to_string()),
+			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
+				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				assertion_audience: "https://issuer.example/token".to_string(),
+				..Default::default()
+			}),
+		}),
+		..Default::default()
+	},
+	"requires the PRIVATE_KEY_JWT method"
 )]
 #[case::jwt_bearer_actor_token(
 	proto::OAuthTokenExchange {

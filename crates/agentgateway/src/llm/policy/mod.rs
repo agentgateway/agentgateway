@@ -12,9 +12,7 @@ use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction}
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
-use crate::types::agent::{
-	BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference,
-};
+use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
 use crate::*;
 
 fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
@@ -204,41 +202,7 @@ impl ModelAliasPattern {
 	}
 }
 
-#[apply(schema!)]
-#[serde(default)]
-pub struct PromptCachingConfig {
-	/// Add cache markers to system prompts when supported by the provider.
-	#[serde(rename = "cacheSystem")]
-	pub cache_system: bool,
-
-	/// Add cache markers to chat messages when supported by the provider.
-	#[serde(rename = "cacheMessages")]
-	pub cache_messages: bool,
-
-	/// Add cache markers to tool definitions when supported by the provider.
-	#[serde(rename = "cacheTools")]
-	pub cache_tools: bool,
-
-	/// Minimum prompt size required before cache markers are added.
-	#[serde(rename = "minTokens")]
-	pub min_tokens: Option<usize>,
-
-	/// Message offset used when choosing where to place cache markers.
-	#[serde(rename = "cacheMessageOffset")]
-	pub cache_message_offset: usize,
-}
-
-impl Default for PromptCachingConfig {
-	fn default() -> Self {
-		Self {
-			cache_system: true,
-			cache_messages: true,
-			cache_tools: false,
-			min_tokens: Some(1024),
-			cache_message_offset: 0,
-		}
-	}
-}
+pub use agent_llm::PromptCachingConfig;
 
 #[apply(schema!)]
 pub struct PromptEnrichment {
@@ -1131,8 +1095,7 @@ impl Policy {
 				let MaskActionBody::ResponseChoices(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
-				let msgs = body.choices;
-				resp.set_webhook_choices(msgs)?;
+				resp.set_webhook_choices(body.choices)?;
 				Ok(GuardrailOutcome::Masked)
 			},
 			ResponseAction::Reject(rej) => {
@@ -1171,31 +1134,13 @@ impl Policy {
 				crate::http::HeaderOrPseudo::Header(h) => h,
 				_ => continue, // Skip pseudo headers
 			};
-			let Some(have) = http_headers.get(header_name.as_str()) else {
+			let values = http_headers.get_all(header_name.as_str());
+			if !values.iter().any(|have| value.matches(have)) {
 				continue;
-			};
-			match value {
-				HeaderValueMatch::Exact(want) => {
-					if have != want {
-						continue;
-					}
-				},
-				HeaderValueMatch::Regex(want) => {
-					// Must be a valid string to do regex match
-					let Some(have_str) = have.to_str().ok() else {
-						continue;
-					};
-					let Some(m) = want.find(have_str) else {
-						continue;
-					};
-					// Make sure we matched the entire thing
-					if !(m.start() == 0 && m.end() == have_str.len()) {
-						continue;
-					}
-				},
-				HeaderValueMatch::Invalid => continue,
 			}
-			headers.insert(header_name, have.clone());
+			for have in values {
+				headers.append(header_name.clone(), have.clone());
+			}
 		}
 		headers
 	}

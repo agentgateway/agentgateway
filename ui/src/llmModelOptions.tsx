@@ -14,6 +14,7 @@ export type LlmModelOption = {
   kind: "model" | "virtual";
   name: string;
   label: ReactNode;
+  description?: ReactNode;
   icon: ReactNode;
   searchText: string;
   model?: LlmModel;
@@ -33,14 +34,8 @@ export function llmModelOptions(
       return {
         kind: "model" as const,
         name: model.name,
-        label: reference ? (
-          <span className="select-option-copy">
-            <strong>{model.name}</strong>
-            <small>{reference}</small>
-          </span>
-        ) : (
-          model.name
-        ),
+        label: model.name,
+        description: reference ?? undefined,
         icon: <ProviderIcon provider={provider as ProviderName} />,
         searchText: `${model.name} ${provider} ${reference ?? ""} provider-backed`,
         model,
@@ -49,12 +44,8 @@ export function llmModelOptions(
     ...virtualModels.map((model) => ({
       kind: "virtual" as const,
       name: model.name,
-      label: (
-        <span className="select-option-copy">
-          <strong>{model.name}</strong>
-          <small>Virtual model</small>
-        </span>
-      ),
+      label: model.name,
+      description: "Virtual model",
       icon: <GitBranch size={16} />,
       searchText: `${model.name} virtual model`,
       virtualModel: model,

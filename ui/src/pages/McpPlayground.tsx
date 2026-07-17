@@ -3,7 +3,7 @@ import type { KeyboardEvent } from "react";
 import { Braces, Cable, Play, RotateCcw } from "lucide-react";
 import { sendMcpJsonRpc } from "../api/playgroundApi";
 import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
-import { gatewayEndpoint } from "../gatewayUrls";
+import { mcpPlaygroundEndpoint } from "../gatewayUrls";
 import {
   useGatewayConfig,
   useStoredStringState,
@@ -51,10 +51,8 @@ export function McpPlaygroundPage() {
   const config = useGatewayConfig();
   const updateConfig = useUpdateConfig();
   const targets = useMemo(() => config.data?.mcp?.targets ?? [], [config.data]);
-  const derivedBaseUrl = gatewayEndpoint(
-    config.data?.mcp?.port ?? 3000,
-    "/mcp",
-  );
+  const mcpEndpoint = mcpPlaygroundEndpoint(config.data);
+  const derivedBaseUrl = mcpEndpoint.baseUrl;
   const baseUrl = derivedBaseUrl;
   const [initialized, setInitialized] = useState(false);
   const [sessionId, setSessionId] = useState("");
@@ -70,9 +68,10 @@ export function McpPlaygroundPage() {
   const [loading, setLoading] = useState<"initialize" | "call" | null>(null);
 
   const selectedTool = tools.find((tool) => tool.name === toolName);
-  const needsCors = config.data
-    ? corsNeedsUpdate(config.data.mcp?.policies?.cors, "mcp")
-    : false;
+  const needsCors =
+    config.data && !mcpEndpoint.sameOrigin
+      ? corsNeedsUpdate(config.data.mcp?.policies?.cors, "mcp")
+      : false;
 
   useEffect(() => {
     localStorage.removeItem("mcpPlaygroundArgs");
@@ -252,7 +251,7 @@ export function McpPlaygroundPage() {
             <Field label="Bearer token">
               <input
                 value={bearerToken}
-                type="password"
+                type="text"
                 className="masked-secret-input"
                 autoComplete="off"
                 autoCorrect="off"

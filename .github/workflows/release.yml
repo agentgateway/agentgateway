@@ -38,7 +38,8 @@ on:
 env:
   CARGO_TERM_COLOR: always
   CI: true
-  RUST_VERSION: "1.96.1"
+  RUST_VERSION: "1.97.0"
+  CARGO_BUILD_WARNINGS: deny
   GO_VERSION: "1.26.4"
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
@@ -598,7 +599,7 @@ jobs:
           target/${{ matrix.target }}/release/agentgateway.exe
 
   build-agctl:
-    if: ${{ github.event_name != 'workflow_call' && (github.event_name == 'push' || ! github.event.inputs.skip_gh_release) }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_call' || ! github.event.inputs.skip_gh_release }}
     needs:
       - setup
     runs-on: ubuntu-24.04

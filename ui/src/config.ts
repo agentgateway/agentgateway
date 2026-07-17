@@ -161,6 +161,46 @@ export function ensureMcp(config: GatewayConfig): McpConfig {
   return config.mcp;
 }
 
+export function startupLlmConfig(
+  config: GatewayConfig,
+  port: number,
+): LlmConfig {
+  const gateways = config.ui?.gateways;
+  if (gateways) {
+    return {
+      gateways,
+      models: [],
+      providers: [],
+      virtualModels: [],
+    };
+  }
+  return {
+    port,
+    models: [],
+    providers: [],
+    virtualModels: [],
+  };
+}
+
+export function startupMcpConfig(
+  config: GatewayConfig,
+  port: number,
+): McpConfig {
+  const gateways = config.ui?.gateways;
+  if (gateways) {
+    return {
+      gateways,
+      targets: [],
+    };
+  }
+  return { port, targets: [] };
+}
+
+export function usesUiGateways(config: GatewayConfig | undefined) {
+  const gateways = config?.ui?.gateways;
+  return Array.isArray(gateways) ? gateways.length > 0 : Boolean(gateways);
+}
+
 export function upsertModel(
   config: GatewayConfig,
   model: LlmModel,
@@ -425,7 +465,6 @@ export function configWarnings(config: GatewayConfig): string[] {
   const warnings: string[] = [];
   const models = config.llm?.models ?? [];
   const mcpTargets = config.mcp?.targets ?? [];
-  if (!config.llm) warnings.push("LLM config is not initialized.");
   const duplicateNames = models
     .map((model) => model.name)
     .filter((name, index, names) => names.indexOf(name) !== index);

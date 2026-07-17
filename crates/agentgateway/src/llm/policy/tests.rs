@@ -1,6 +1,7 @@
 use ::http::{HeaderName, HeaderValue};
 
 use super::*;
+use crate::types::agent::HeaderValueMatch;
 
 /// When a webhook guard fails open, exactly one metric must be emitted (`FailOpen`); the caller
 /// must not additionally record `Allow`.
@@ -57,7 +58,8 @@ async fn webhook_fail_open_emits_single_metric() {
 #[test]
 fn test_get_webhook_forward_headers() {
 	let mut headers = HeaderMap::new();
-	headers.insert("x-test-header", HeaderValue::from_static("test-value"));
+	headers.append("x-test-header", HeaderValue::from_static("first-value"));
+	headers.append("x-test-header", HeaderValue::from_static("test-value"));
 	headers.insert(
 		"x-another-header",
 		HeaderValue::from_static("another-value"),
@@ -65,6 +67,10 @@ fn test_get_webhook_forward_headers() {
 	headers.insert(
 		"x-regex-header",
 		HeaderValue::from_static("regex-match-123"),
+	);
+	headers.insert(
+		"x-comma-header",
+		HeaderValue::from_static("first-value,test-value"),
 	);
 
 	let header_matches = vec![
@@ -84,19 +90,31 @@ fn test_get_webhook_forward_headers() {
 			name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static("x-missing-header")),
 			value: HeaderValueMatch::Exact(HeaderValue::from_static("some-value")),
 		},
+		HeaderMatch {
+			name: crate::http::HeaderOrPseudo::Header(HeaderName::from_static("x-comma-header")),
+			value: HeaderValueMatch::Exact(HeaderValue::from_static("test-value")),
+		},
 	];
 
 	let result = Policy::get_webhook_forward_headers(&headers, &header_matches);
 
-	assert_eq!(result.len(), 2);
+	assert_eq!(result.len(), 3);
 	assert_eq!(
-		result.get("x-test-header").unwrap(),
-		&HeaderValue::from_static("test-value")
+		result
+			.get_all("x-test-header")
+			.iter()
+			.cloned()
+			.collect::<Vec<_>>(),
+		vec![
+			HeaderValue::from_static("first-value"),
+			HeaderValue::from_static("test-value"),
+		]
 	);
 	assert_eq!(
 		result.get("x-regex-header").unwrap(),
 		&HeaderValue::from_static("regex-match-123")
 	);
+	assert!(!result.contains_key("x-comma-header"));
 }
 
 #[test]

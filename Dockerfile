@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/app/npm/cache npm install
 
 RUN --mount=type=cache,target=/app/npm/cache npm run build
 
-FROM docker.io/library/rust:1.96.1-trixie AS musl-builder
+FROM docker.io/library/rust:1.97.0-trixie AS musl-builder
 
 ARG TARGETARCH
 
@@ -34,7 +34,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.96.1-trixie AS base-builder
+FROM docker.io/library/rust:1.97.0-trixie AS base-builder
 
 ARG TARGETARCH
 

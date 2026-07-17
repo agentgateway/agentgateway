@@ -17,7 +17,8 @@ use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
-	BackendTargetRef, McpBackend, McpTargetSpec, ResourceName, SimpleBackend, SimpleBackendReference,
+	BackendTargetRef, McpBackend, McpPrefixMode, McpTargetSpec, ResourceName, SimpleBackend,
+	SimpleBackendReference,
 };
 use crate::{ProxyInputs, cel, mcp};
 
@@ -91,7 +92,6 @@ impl App {
 						spec: t.spec.clone(),
 						backend: be.map(|b| b.backend),
 						backend_policies,
-						always_use_prefix: backend.always_use_prefix,
 					}))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
@@ -99,6 +99,7 @@ impl App {
 			McpBackendGroup {
 				targets: nt,
 				stateful: backend.stateful,
+				prefix_mode: backend.prefix_mode,
 				failure_mode: backend.failure_mode,
 				session_idle_ttl: backend.session_idle_ttl,
 			}
@@ -217,6 +218,7 @@ impl App {
 pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
+	pub prefix_mode: McpPrefixMode,
 	pub failure_mode: FailureMode,
 	pub session_idle_ttl: Duration,
 }
@@ -226,6 +228,7 @@ impl Default for McpBackendGroup {
 		Self {
 			targets: vec![],
 			stateful: true,
+			prefix_mode: McpPrefixMode::default(),
 			failure_mode: crate::mcp::FailureMode::default(),
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
 		}
@@ -238,5 +241,4 @@ pub struct McpTarget {
 	pub spec: crate::types::agent::McpTargetSpec,
 	pub backend_policies: BackendPolicies,
 	pub backend: Option<SimpleBackend>,
-	pub always_use_prefix: bool,
 }

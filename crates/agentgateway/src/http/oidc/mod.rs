@@ -347,7 +347,7 @@ pub(crate) fn build_redirect_response(
 		.map_err(|e| Error::Config(format!("failed to finalize redirect response: {e}")))
 }
 
-pub(crate) fn now_unix() -> u64 {
+pub fn now_unix() -> u64 {
 	SystemTime::now()
 		.duration_since(UNIX_EPOCH)
 		.unwrap_or(Duration::ZERO)

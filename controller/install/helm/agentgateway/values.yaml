@@ -129,6 +129,8 @@ controller:
   #         name: agentgateway-secrets
   #         key: apiToken
   extraEnv: {}
+  # -- Add extra sidecar containers to the controller pod.
+  extraContainers: []
   # -- Add extra volume mounts to the controller container.
   extraVolumeMounts: []
   # -- Add extra volumes to the controller pod.

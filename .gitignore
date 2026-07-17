@@ -21,6 +21,7 @@ node_modules/
 ui2/out/
 ui2/dist/
 ui2/.vite/
+ui/out/
 ui/public/*-schema.json
 ui/src/cel.d.ts
 ui/src/gateway-admin.d.ts

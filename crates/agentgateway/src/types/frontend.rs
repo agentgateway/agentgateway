@@ -4,6 +4,7 @@ use frozen_collections::{FzHashSet, Len};
 use serde::{Deserialize, Serialize};
 
 use crate::telemetry::log::OrderedStringMap;
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::{apply, defaults, *};
 
 fn empty_string_set(set: &Arc<FzHashSet<String>>) -> bool {
@@ -319,23 +320,15 @@ impl LoggingPolicy {
 
 #[apply(schema!)]
 pub struct OtlpLoggingConfig {
-	/// Backend that receives OTLP logs.
+	/// Backend that receives OTLP logs and policies used when connecting to it.
 	#[serde(flatten)]
-	pub provider_backend: super::agent::SimpleBackendReference,
+	pub(super) target: SimpleBackendReferenceWithPolicies,
 	/// CEL expression that decides whether a request is exported over OTLP.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub filter: Option<Arc<cel::Expression>>,
 	/// OTLP-specific access log fields. If unset, the parent access log fields are used.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub fields: Option<AccessLogFields>,
-	/// Backend policies used when exporting OTLP logs.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<super::agent::BackendTrafficPolicy>,
 	/// OTLP protocol used to export logs.
 	#[serde(default)]
 	pub protocol: super::agent::TracingProtocol,

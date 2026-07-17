@@ -1,0 +1,29 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/openai/gemini-embeddings.json
+info:
+  object: list
+  data:
+    - object: embedding
+      embedding:
+        - -0.024183841422200203
+        - -0.005930421873927116
+  model: gemini-embedding-001
+---
+{
+  "response": {
+    "object": "list",
+    "model": "gemini-embedding-001",
+    "usage": null,
+    "data": [
+      {
+        "object": "embedding",
+        "embedding": [
+          -0.024183841422200203,
+          -0.005930421873927116
+        ]
+      }
+    ]
+  },
+  "parsed": {}
+}

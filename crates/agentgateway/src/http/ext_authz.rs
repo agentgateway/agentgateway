@@ -18,7 +18,6 @@ use crate::http::ext_authz::proto::check_response::HttpResponse;
 use crate::http::ext_authz::proto::{
 	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, Metadata, OkHttpResponse,
 };
-use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::{
 	HeaderName, HeaderOrPseudo, PolicyResponse, Request, RequestOrResponse, Response,
@@ -30,7 +29,7 @@ use crate::proxy::{ProxyError, ProxyResponse, dtrace};
 use crate::telemetry::log::RequestLog;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::*;
 
 const TRACE_POLICY_KIND: &str = "ext_auth";
@@ -173,17 +172,9 @@ where
 
 #[apply(schema!)]
 pub struct ExtAuthz {
-	/// Backend that receives authorization checks.
+	/// Backend that receives authorization checks and policies used when connecting to it.
 	#[serde(flatten)]
-	pub target: Arc<SimpleBackendReference>,
-	/// Backend policies used when connecting to the authorization service.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<BackendTrafficPolicy>,
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.
 	#[serde(default)]
 	pub protocol: Protocol,
@@ -370,11 +361,11 @@ impl ExtAuthz {
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
 		if matches!(self.protocol, Protocol::Http { .. }) {
-			trace!(protocol = "http", "connecting to {:?}", self.target);
+			trace!(protocol = "http", "connecting to {:?}", self.target.target);
 			return self.check_http(client, req).await;
 		}
 		let start = dtrace::timed_start();
-		trace!(protocol = "grpc", "connecting to {:?}", self.target);
+		trace!(protocol = "grpc", "connecting to {:?}", self.target.target);
 
 		let Protocol::Grpc { context, metadata } = &self.protocol else {
 			unreachable!();
@@ -385,11 +376,9 @@ impl ExtAuthz {
 			return cached_response.apply(req);
 		}
 		pol_event!(Severity::Info, "{}", cache_lookup);
-		let chan = GrpcReferenceChannel {
-			target: self.target.clone(),
-			policies: Arc::new(self.policies.clone()),
-			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz),
-		};
+		let chan = self
+			.target
+			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz));
 		let mut grpc_client = AuthorizationClient::new(chan);
 		// Get connection info with proper error handling
 		// Clone the fields we need to avoid borrow checker issues
@@ -848,7 +837,11 @@ impl ExtAuthz {
 		let scope = dtrace::start_scope("ext_authz");
 		let resp = client
 			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz)
-			.call_reference(check_req, &self.target)
+			.call_reference_with_policies(
+				check_req,
+				&self.target.target,
+				self.target.policies.as_slice(),
+			)
 			.await;
 		let mut resp = match resp {
 			Ok(r) => r,

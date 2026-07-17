@@ -235,6 +235,11 @@ fn default_config_contents(dir: &std::path::Path) -> String {
 config:
 {}  database:
     url: sqlite://{}
+gateways:
+  default:
+    port: 4000
+ui:
+  gateways: default
 "#,
 		admin,
 		db.display()

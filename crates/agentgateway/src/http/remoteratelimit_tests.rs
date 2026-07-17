@@ -4,13 +4,16 @@ use super::*;
 use crate::cel;
 use crate::http::jwt;
 use crate::http::localratelimit::RateLimitType;
+use crate::types::agent::{SimpleBackendReference, SimpleBackendReferenceWithPolicies};
 
 /// Helper: build a `RemoteRateLimit` with the given descriptor entries.
 fn make_rate_limit(descriptor_entries: Vec<DescriptorEntry>) -> RemoteRateLimit {
 	RemoteRateLimit {
 		domain: "test-domain".to_string(),
-		policies: Default::default(),
-		target: Arc::new(SimpleBackendReference::Invalid),
+		target: SimpleBackendReferenceWithPolicies {
+			target: Arc::new(SimpleBackendReference::Invalid),
+			policies: Default::default(),
+		},
 		descriptors: Arc::new(DescriptorSet(descriptor_entries)),
 		failure_mode: FailureMode::default(),
 	}

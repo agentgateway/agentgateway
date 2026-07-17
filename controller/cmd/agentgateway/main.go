@@ -13,8 +13,9 @@ import (
 func main() {
 	var agentgatewayVersion bool
 	cmd := &cobra.Command{
-		Use:   "agentgateway",
-		Short: "Runs the agentgateway controller",
+		Use:          "agentgateway",
+		Short:        "Runs the agentgateway controller",
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if agentgatewayVersion {
 				fmt.Println(version.String())

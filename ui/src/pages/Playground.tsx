@@ -17,7 +17,7 @@ import { claudeSubscriptionWarning } from "../claudeSubscription";
 import { providerLabel } from "../config";
 import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
 import { hasKeyValue, keyLabel } from "../credentialDisplay";
-import { gatewayEndpoint, gatewayOrigin } from "../gatewayUrls";
+import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from "../gatewayUrls";
 import {
   useGatewayConfig,
   useStoredStringState,
@@ -162,7 +162,8 @@ export function PlaygroundPage() {
     "",
   );
   const [model, setModel] = useState(() => queryModel() ?? storedModel);
-  const llmBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
+  const llmEndpoint = llmPlaygroundEndpoint(config.data);
+  const llmBaseUrl = llmEndpoint.baseUrl;
   const [specificModel, setSpecificModel] = useStoredStringState(
     storageKeys.specificModel,
     "",
@@ -182,10 +183,8 @@ export function PlaygroundPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [runSteps, setRunSteps] = useState<RunStep[]>([]);
-  const derivedMcpBaseUrl = gatewayEndpoint(
-    config.data?.mcp?.port ?? 3000,
-    "/mcp",
-  );
+  const mcpEndpoint = mcpPlaygroundEndpoint(config.data);
+  const derivedMcpBaseUrl = mcpEndpoint.baseUrl;
   const [mcpEnabled, setMcpEnabled] = useState(false);
   const [mcpSessionId, setMcpSessionId] = useState("");
   const [mcpTools, setMcpTools] = useState<PlaygroundTool[]>([]);
@@ -242,11 +241,12 @@ export function PlaygroundPage() {
     "";
   const selectedKeyValue =
     apiKeyMode === "saved" && rawVirtualKeys.length > 0 ? savedKey : apiKey;
-  const needsCors = config.data
-    ? corsNeedsUpdate(config.data.llm?.policies?.cors, "llm")
-    : false;
+  const needsCors =
+    config.data && !llmEndpoint.sameOrigin
+      ? corsNeedsUpdate(config.data.llm?.policies?.cors, "llm")
+      : false;
   const needsMcpCors =
-    mcpEnabled && config.data
+    mcpEnabled && config.data && !mcpEndpoint.sameOrigin
       ? corsNeedsUpdate(config.data.mcp?.policies?.cors, "mcp")
       : false;
   const sendBlockers = sendReadinessBlockers({
@@ -590,15 +590,9 @@ export function PlaygroundPage() {
                   searchable
                   options={modelOptions.map((item) => ({
                     value: item.name,
-                    label:
-                      item.kind === "virtual" ? (
-                        <span className="select-option-copy">
-                          <strong>{item.name}</strong>
-                          <small>Virtual model</small>
-                        </span>
-                      ) : (
-                        item.name
-                      ),
+                    label: item.name,
+                    description:
+                      item.kind === "virtual" ? "Virtual model" : undefined,
                     icon: item.icon,
                     searchText: item.searchText,
                   }))}

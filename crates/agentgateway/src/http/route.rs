@@ -11,7 +11,7 @@ use crate::http::Request;
 use crate::proxy::dtrace;
 use crate::types::agent;
 use crate::types::agent::{
-	BackendReference, HeaderMatch, HeaderValueMatch, Listener, PathMatch, QueryValueMatch, Route,
+	BackendReference, HeaderMatch, Listener, PathMatch, QueryValueMatch, Route,
 	RouteBackendReference, RouteMatch, RouteName, RouteSet,
 };
 use crate::*;
@@ -54,27 +54,8 @@ fn matches_request(m: &RouteMatch, request: &Request) -> bool {
 		return false;
 	}
 	for HeaderMatch { name, value } in &m.headers {
-		let Some(have) = http::get_pseudo_or_header_value(name, request) else {
+		if !http::request_header_matches(name, value, request) {
 			return false;
-		};
-		match value {
-			HeaderValueMatch::Exact(want) => {
-				if have.as_ref() != *want {
-					return false;
-				}
-			},
-			HeaderValueMatch::Regex(want) => {
-				let Some(have_str) = have.to_str().ok() else {
-					return false;
-				};
-				let Some(m) = want.find(have_str) else {
-					return false;
-				};
-				if !(m.start() == 0 && m.end() == have_str.len()) {
-					return false;
-				}
-			},
-			HeaderValueMatch::Invalid => return false,
 		}
 	}
 	// TODO: this re-parses the query string on every call; hoist to caller if this becomes a hot path.

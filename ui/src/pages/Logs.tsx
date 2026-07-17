@@ -14,7 +14,6 @@ import {
   Download,
   RefreshCw,
   Route,
-  Save,
   Settings,
   User,
 } from "lucide-react";
@@ -37,6 +36,7 @@ import {
 import { EnumSelector } from "../components/EnumSelector";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { MultiCheckboxDropdown } from "../components/MultiCheckboxDropdown";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import {
   promptCompletionLoggingEnabled,
   setPromptCompletionLogging,
@@ -79,6 +79,7 @@ import {
 import type {
   AnalyticsGroup,
   AnalyticsTimeBucket,
+  GatewayConfig,
   LogEntry,
   SearchLogsResponse,
   TimeRange,
@@ -129,7 +130,6 @@ export function LogsPage() {
       response.logs.some((entry) => entry.id === expandedId)
     )
       return response.logs;
-    if (!isLlmLogEntry(expanded)) return response.logs;
     return [expanded, ...response.logs];
   }, [expanded, expandedId, response.logs]);
 
@@ -145,7 +145,7 @@ export function LogsPage() {
         includeAttributes: true,
       });
       if (loadSeq !== loadSeqRef.current) return;
-      setResponse(llmLogsResponse(logs));
+      setResponse(logs);
     } catch (err) {
       if (loadSeq !== loadSeqRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load logs");
@@ -202,7 +202,6 @@ export function LogsPage() {
           { limit: 100, filters },
           controller.signal,
         )) {
-          if (!isLlmLogEntry(event.entry)) continue;
           setResponse((current) => ({
             ...current,
             logs: [event.entry, ...current.logs].slice(0, 200),
@@ -261,7 +260,7 @@ export function LogsPage() {
       const detail = await getLog(logId);
       if (detailSeq !== detailSeqRef.current) return;
       const nextLog = detail.log ?? fallback ?? null;
-      setExpanded(nextLog && isLlmLogEntry(nextLog) ? nextLog : null);
+      setExpanded(nextLog);
     } catch (err) {
       if (detailSeq !== detailSeqRef.current) return;
       setError(
@@ -441,6 +440,7 @@ export function LogsPage() {
 
       {settings === "logs" ? (
         <LogsSettingsDrawer
+          config={config.data}
           enabled={promptLoggingEnabled}
           attributes={uiLogAttributeExpressions(config.data)}
           saving={updateConfig.isPending}
@@ -464,6 +464,7 @@ export function LogsPage() {
 }
 
 function LogsSettingsDrawer(props: {
+  config?: GatewayConfig | null;
   enabled: boolean;
   attributes: { user: string; group: string };
   saving: boolean;
@@ -479,36 +480,39 @@ function LogsSettingsDrawer(props: {
   const [groupExpression, setGroupExpression] = useState(
     props.attributes.group,
   );
+  const dirty =
+    enabled !== props.enabled ||
+    userExpression !== props.attributes.user ||
+    groupExpression !== props.attributes.group;
   useEffect(() => setEnabled(props.enabled), [props.enabled]);
   useEffect(() => {
     setUserExpression(props.attributes.user);
     setGroupExpression(props.attributes.group);
   }, [props.attributes.group, props.attributes.user]);
+  const values = {
+    enabled,
+    attributes: { user: userExpression, group: groupExpression },
+  };
   return (
     <Drawer
       title="Log settings"
       onClose={props.onClose}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onClose}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={() =>
-              props.onSave({
-                enabled,
-                attributes: { user: userExpression, group: groupExpression },
-              })
-            }
-          >
-            <Save size={16} />
-            Save settings
-          </button>
-        </div>
-      }
+      dirty={dirty}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Log settings config diff"
+          saveLabel="Save settings"
+          saving={props.saving}
+          onCancel={requestClose}
+          onSave={() => props.onSave(values)}
+          applyDiff={(next) => {
+            setPromptCompletionLogging(next, values.enabled);
+            setUiLogAttributeExpressions(next, values.attributes);
+          }}
+        />
+      )}
     >
       <label className="config-option-row">
         <input
@@ -571,17 +575,6 @@ function LogsSettingsDrawer(props: {
       ) : null}
     </Drawer>
   );
-}
-
-function isLlmLogEntry(entry: LogEntry | null | undefined) {
-  return Boolean(entry?.genAi?.providerName);
-}
-
-function llmLogsResponse(response: SearchLogsResponse): SearchLogsResponse {
-  return {
-    ...response,
-    logs: response.logs.filter(isLlmLogEntry),
-  };
 }
 
 function hasAnalyticsFilters(filters: Record<AnalyticsDimension, string[]>) {

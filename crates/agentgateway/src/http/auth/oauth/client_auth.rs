@@ -108,6 +108,7 @@ enum RawOAuthClientAuth {
 struct RawDefaultClientSecretBasicAuth {
 	/// `client_id` parameter identifying the gateway at the authorization server.
 	client_id: String,
+	/// OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.
 	#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
 	#[serde(
 		rename = "clientSecret",
@@ -313,20 +314,49 @@ impl OAuthClientAuth {
 	}
 }
 
-impl TryFrom<proto::o_auth_token_exchange::ClientAuth> for OAuthClientAuth {
+impl TryFrom<proto::OAuthClientAuth> for OAuthClientAuth {
 	type Error = ProtoError;
 
-	fn try_from(c: proto::o_auth_token_exchange::ClientAuth) -> Result<Self, Self::Error> {
-		use proto::o_auth_token_exchange::client_auth::Method;
+	fn try_from(c: proto::OAuthClientAuth) -> Result<Self, Self::Error> {
+		use proto::o_auth_client_auth::Method;
 
 		let method = match Method::try_from(c.method) {
 			Ok(Method::Unspecified | Method::ClientSecretBasic) => {
+				if c.private_key_jwt.is_some() {
+					return Err(ProtoError::Generic(
+						"oauth private_key_jwt requires the PRIVATE_KEY_JWT method".into(),
+					));
+				}
 				OAuthClientAuthMethod::ClientSecretBasic {
 					client_secret: c.client_secret.map(Into::into).unwrap_or_else(|| "".into()),
 				}
 			},
-			Ok(Method::ClientSecretPost) => OAuthClientAuthMethod::ClientSecretPost {
-				client_secret: c.client_secret.map(Into::into),
+			Ok(Method::ClientSecretPost) => {
+				if c.private_key_jwt.is_some() {
+					return Err(ProtoError::Generic(
+						"oauth private_key_jwt requires the PRIVATE_KEY_JWT method".into(),
+					));
+				}
+				OAuthClientAuthMethod::ClientSecretPost {
+					client_secret: c.client_secret.map(Into::into),
+				}
+			},
+			Ok(Method::PrivateKeyJwt) => {
+				if c.client_secret.is_some() {
+					return Err(ProtoError::Generic(
+						"oauth private_key_jwt must not set client_secret".into(),
+					));
+				}
+				OAuthClientAuthMethod::PrivateKeyJwt(
+					c.private_key_jwt
+						.ok_or_else(|| {
+							ProtoError::Generic(
+								"oauth private_key_jwt settings are required with the PRIVATE_KEY_JWT method"
+									.into(),
+							)
+						})?
+						.try_into()?,
+				)
 			},
 			Err(_) => {
 				return Err(ProtoError::EnumParse(
@@ -340,6 +370,22 @@ impl TryFrom<proto::o_auth_token_exchange::ClientAuth> for OAuthClientAuth {
 		};
 		auth.validate_load().map_err(ProtoError::Generic)?;
 		Ok(auth)
+	}
+}
+
+impl TryFrom<proto::o_auth_client_auth::PrivateKeyJwt> for PrivateKeyJwt {
+	type Error = ProtoError;
+
+	fn try_from(
+		private_key_jwt: proto::o_auth_client_auth::PrivateKeyJwt,
+	) -> Result<Self, Self::Error> {
+		Self::try_from(RawPrivateKeyJwt {
+			signing_key: FileOrInline::Inline(private_key_jwt.signing_key),
+			alg: signing_alg_from_proto(private_key_jwt.alg)?,
+			kid: private_key_jwt.kid,
+			assertion_audience: private_key_jwt.assertion_audience,
+		})
+		.map_err(ProtoError::Generic)
 	}
 }
 
@@ -379,6 +425,22 @@ impl SigningAlg {
 				EncodingKey::from_ec_pem(pem).context("failed to load EC signing key")
 			},
 		}
+	}
+}
+
+fn signing_alg_from_proto(alg: i32) -> Result<SigningAlg, ProtoError> {
+	use proto::o_auth_client_auth::private_key_jwt::SigningAlg as ProtoSigningAlg;
+
+	match ProtoSigningAlg::try_from(alg) {
+		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),
+		Ok(ProtoSigningAlg::Rs256) => Ok(SigningAlg::Rs256),
+		Ok(ProtoSigningAlg::Rs384) => Ok(SigningAlg::Rs384),
+		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
+		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
+		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
+		Err(_) => Err(ProtoError::EnumParse(
+			"unknown oauth private_key_jwt signing alg".into(),
+		)),
 	}
 }
 

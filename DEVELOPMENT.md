@@ -59,6 +59,16 @@ Requirements (in addition to the above):
 >default `cross` image for `aarch64-unknown-linux-gnu` does not publish a `linux/arm64` manifest.
 >This still produces the Linux arm64 dataplane binary used by Kind.
 
+On Apple Silicon Macs, install the Linux x86_64 variant of the repo's active Rust
+toolchain so `cross` can run Rust inside that container:
+
+```bash
+rust_version=$(awk -F'"' '/^channel =/ {print $2}' rust-toolchain.toml)
+rustup toolchain install "${rust_version}-x86_64-unknown-linux-gnu" \
+   --profile minimal \
+   --force-non-host
+```
+
 Create the local Kind cluster and registry if they do not already exist:
 
 ```bash

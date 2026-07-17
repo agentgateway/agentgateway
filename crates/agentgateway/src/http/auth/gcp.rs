@@ -14,7 +14,7 @@ use tracing::trace;
 
 use crate::serdes::{FileOrInline, schema};
 use crate::types::agent::Target;
-use crate::{ConstString, apply, const_string, ser_redact};
+use crate::{apply, const_string, ser_redact};
 
 const_string!(IdToken = "idToken");
 const_string!(AccessToken = "accessToken");

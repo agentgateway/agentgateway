@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 #[cfg(feature = "schema")]
 use super::TokenCacheConfig;
@@ -9,7 +8,7 @@ use super::{
 	TokenSpec, default_token_cache, deserialize_token_cache,
 };
 use crate::http::auth::AuthorizationLocation;
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::{apply, schema};
 
 #[apply(schema!)]
@@ -61,8 +60,7 @@ impl CrossAppAccessAuth {
 	pub(crate) fn apply_local_defaults(&mut self) -> Result<(), String> {
 		self.oauth = Some(OAuthTokenExchangeAuth {
 			target: self.identity_provider.target.clone(),
-			policies: self.identity_provider.policies.clone(),
-			token_endpoint_path: self.identity_provider.token_endpoint_path.clone(),
+			path: self.identity_provider.path.clone(),
 			grant_type: OAuthGrantType::TokenExchange,
 			subject_token: TokenSpec {
 				source: AuthorizationLocation::default(),
@@ -99,35 +97,20 @@ impl CrossAppAccessAuth {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub(super) struct CrossAppAccessEndpoint {
-	/// Token endpoint backend.
+	/// Token endpoint backend and policies used when connecting to it.
 	#[serde(flatten)]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "crate::types::local::SimpleLocalBackend")
-	)]
-	pub(super) target: Arc<SimpleBackendReference>,
-	/// Backend policies (TLS, request timeout, ...) used when connecting to the token endpoint.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub(super) policies: Vec<BackendTrafficPolicy>,
+	pub(super) target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
-	pub(super) token_endpoint_path: String,
+	pub(super) path: String,
 	/// Client authentication used when calling the token endpoint.
 	pub(super) client_auth: OAuthClientAuth,
 }
 
 impl CrossAppAccessEndpoint {
 	fn validate_load(&self, prefix: &str) -> Result<(), String> {
-		if !self.token_endpoint_path.is_empty() && !self.token_endpoint_path.starts_with('/') {
-			return Err(format!(
-				"{prefix}.token_endpoint_path {:?} must start with /",
-				self.token_endpoint_path
-			));
+		if !self.path.is_empty() && !self.path.starts_with('/') {
+			return Err(format!("{prefix}.path {:?} must start with /", self.path));
 		}
 		self.client_auth.validate_load()
 	}
@@ -140,8 +123,7 @@ impl CrossAppAccessEndpoint {
 	fn as_chained_exchange(&self, scopes: &[String]) -> ChainedExchange {
 		ChainedExchange {
 			target: self.target.clone(),
-			policies: self.policies.clone(),
-			token_endpoint_path: self.token_endpoint_path.clone(),
+			path: self.path.clone(),
 			client_auth: Some(self.client_auth.clone()),
 			audiences: Vec::new(),
 			scopes: scopes.to_vec(),

@@ -10,11 +10,13 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [mcp-authentication](mcp-authentication/README.md): authenticate MCP clients and protect MCP traffic.
 * [mcp-tls](mcp-tls/README.md): terminate TLS connections.
 * [mcp-openapi](mcp-openapi/README.md): serve an OpenAPI specification as MCP tools.
+* [mcp-apps](mcp-apps/README.md): proxy MCP Apps (interactive tool UIs) across multiplexed targets.
 * [mcp-telemetry](mcp-telemetry/README.md): visualize traces and metrics for MCP calls.
 
 ### LLM
 
 * [llm-basic](llm-basic/README.md): proxy LLM requests to OpenAI and Anthropic with provider-specific model prefixes.
+* [llm-ollama-postgres](llm-ollama-postgres/README.md): proxy local Ollama models and store request logs in Postgres.
 * [llm-prompt-enrichment](llm-prompt-enrichment/README.md): append or prepend prompts to agentgateway AI requests.
 * [llm-prompt-guard](llm-prompt-guard/README.md): configure prompt guards for LLM requests and responses.
 * [llm-standalone-epp](llm-standalone-epp/README.md): run agentgateway as the sidecar proxy next to a standalone EPP deployment on Kubernetes.
@@ -25,10 +27,11 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [traffic-http](traffic-http/README.md): use agentgateway as a standard HTTP proxy.
 * [traffic-a2a](traffic-a2a/README.md): proxy [A2A](https://a2aproject.github.io/A2A/) traffic.
 * [traffic-aws-agentcore](traffic-aws-agentcore/README.md): proxy AWS AgentCore traffic with JWT auth and user-id header forwarding.
-* [traffic-backend-oauth](traffic-backend-oauth/README.md): use `extAuthz` to acquire Keycloak tokens for upstream requests using token exchange or client credentials.
-* [traffic-identity-assertion](traffic-identity-assertion/README.md): use Cross App Access over the OAuth Identity Assertion Authorization Grant to exchange an authenticated user's identity for a backend-scoped access token.
+* [traffic-token-exchange](traffic-token-exchange/README.md): exchange inbound user credentials for per-upstream tokens — via `extAuthz` + CEL, the `backendAuth.oauth` RFC 8693 token-exchange grant, or the RFC 7523 JWT bearer grant.
+* [traffic-cross-app-access](traffic-cross-app-access/README.md): use Cross App Access (OAuth Identity Assertion Authorization Grant / ID-JAG) to exchange an authenticated user's identity for a backend-scoped access token — with local Keycloak, xaa.dev, or Okta+Auth0 demos.
 * [traffic-oidc](traffic-oidc/README.md): use the built-in `oidc` browser auth flow with a local Keycloak issuer.
 * [traffic-oauth2-proxy](traffic-oauth2-proxy/README.md): integrate with an external `oauth2-proxy` deployment.
 * [traffic-ratelimiting-local](traffic-ratelimiting-local/README.md): apply local rate limiting to HTTP traffic.
 * [traffic-ratelimiting-global](traffic-ratelimiting-global/README.md): apply global rate limiting with Envoy's ratelimit service.
 * [traffic-tailscale-auth](traffic-tailscale-auth/README.md): authenticate HTTP requests with Tailscale identity headers.
+* [traffic-unified-gateway](traffic-unified-gateway/README.md): expose LLM, MCP, and the UI on one shared gateway listener.

@@ -43,10 +43,14 @@ func translateAwsSessionTags(tags []agentgateway.AwsSessionTag) []*api.AwsSessio
 		return nil
 	}
 	return slices.Map(tags, func(t agentgateway.AwsSessionTag) *api.AwsSessionTag {
-		return &api.AwsSessionTag{
-			Key:   t.Key,
-			Value: t.Value,
+		out := &api.AwsSessionTag{Key: t.Key}
+		if t.Value != nil {
+			out.Value = *t.Value
 		}
+		if t.Expression != nil {
+			out.Expression = string(*t.Expression)
+		}
+		return out
 	})
 }
 
@@ -685,6 +689,9 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	if *provider == agentgateway.Descope {
 		return api.BackendPolicySpec_McpAuthentication_DESCOPE
 	}
+	if *provider == agentgateway.Authentik {
+		return api.BackendPolicySpec_McpAuthentication_AUTHENTIK
+	}
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }
 
@@ -844,8 +851,8 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			},
 		}
 	} else if auth.SecretRef != nil {
-		// Resolve secret and extract Authorization value
-		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, policy.Namespace)
+		// Resolve secret and extract the authorization value
+		data, key, err := ctx.ResolveCredentialKeyRef(*auth.SecretRef, policy.Namespace, wellknown.Authorization)
 		if err != nil {
 			errs = append(errs, err)
 			translatedAuth = &api.BackendAuthPolicy{
@@ -856,7 +863,14 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 				},
 			}
 		} else {
-			if authKey, ok := kubeutils.GetSecretDataAuth(data); ok {
+			var authKey string
+			var ok bool
+			if key == wellknown.Authorization {
+				authKey, ok = kubeutils.GetSecretDataAuth(data)
+			} else {
+				authKey, ok = kubeutils.GetSecretDataValue(data, key)
+			}
+			if ok && authKey != "" {
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
 						Key: &api.Key{
@@ -866,7 +880,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 					},
 				}
 			} else {
-				errs = append(errs, fmt.Errorf("secret %s/%s missing Authorization value", policy.Namespace, auth.SecretRef.Name))
+				errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", policy.Namespace, auth.SecretRef.Name, key))
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
 						Key: &api.Key{
@@ -894,6 +908,12 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		if err != nil {
 			errs = append(errs, err)
 		}
+	} else if auth.OAuthTokenExchange != nil {
+		oauthAuth, err := buildOAuthTokenExchangePolicy(ctx, auth.OAuthTokenExchange, policy.Namespace)
+		translatedAuth = oauthAuth
+		if err != nil {
+			errs = append(errs, err)
+		}
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Passthrough{
@@ -902,6 +922,9 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 				},
 			},
 		}
+	}
+	if translatedAuth == nil {
+		return nil, errors.Join(append(errs, kindErrs...)...)
 	}
 
 	authPolicy := &api.Policy{
@@ -920,6 +943,312 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		"agentgateway_policy", authPolicy.Name)
 
 	return authPolicy, errors.Join(append(errs, kindErrs...)...)
+}
+
+var oauthReservedAdditionalParams = []string{
+	"grant_type",
+	"subject_token",
+	"subject_token_type",
+	"actor_token",
+	"actor_token_type",
+	"assertion",
+	"audience",
+	"resource",
+	"scope",
+	"requested_token_type",
+	"client_id",
+	"client_secret",
+	"client_assertion",
+	"client_assertion_type",
+}
+
+func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string) (*api.BackendAuthPolicy, error) {
+	oauth, err := BuildOAuthTokenExchange(ctx, auth, namespace, nil)
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_OauthTokenExchange{
+			OauthTokenExchange: oauth,
+		},
+	}, err
+}
+
+// BuildOAuthTokenExchange lowers an OAuth token exchange policy into its xDS representation.
+func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
+	if auth == nil {
+		return nil, errors.New("oauthTokenExchange must not be nil")
+	}
+
+	var errs []error
+
+	if tokenEndpoint == nil {
+		var err error
+		tokenEndpoint, err = BuildBackendRef(ctx, auth.BackendRef, namespace)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	additionalParams := castCELMap(auth.AdditionalParams, func(key string, expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("oauth additionalParams %q is not a valid CEL expression: %s", key, expr))
+	})
+	for key := range auth.AdditionalParams {
+		if isOAuthReservedAdditionalParam(key) {
+			errs = append(errs, fmt.Errorf("oauth additionalParams %q overrides a reserved OAuth parameter", key))
+		}
+	}
+
+	clientAuth, err := buildOAuthClientAuth(ctx, auth.ClientAuth, namespace)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	if auth.SubjectToken != nil {
+		if err := validateExtractionAuthorizationLocation(auth.SubjectToken.Source, "oauth subjectToken source"); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if auth.ActorToken != nil {
+		if err := validateExtractionAuthorizationLocation(&auth.ActorToken.Source, "oauth actorToken source"); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	oauth := &api.OAuthTokenExchange{
+		TokenEndpoint:         tokenEndpoint,
+		TokenEndpointPath:     auth.Path,
+		GrantType:             translateOAuthGrantType(auth.GrantType),
+		SubjectToken:          translateOAuthTokenSpec(auth.SubjectToken),
+		ActorToken:            translateOAuthActorToken(auth.ActorToken),
+		Audiences:             auth.Audiences,
+		Scopes:                auth.Scopes,
+		Resources:             auth.Resources,
+		RequestedTokenType:    translateOAuthTokenTypePtr(auth.RequestedTokenType),
+		AdditionalParams:      additionalParams,
+		ClientAuth:            clientAuth,
+		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+		Cache:                 translateOAuthTokenCache(auth.Cache),
+	}
+	if auth.Path != nil && !strings.HasPrefix(*auth.Path, "/") {
+		errs = append(errs, fmt.Errorf("oauthTokenExchange.path %q must start with /", *auth.Path))
+	}
+	if oauth.GrantType == api.OAuthTokenExchange_JWT_BEARER {
+		if oauth.ActorToken != nil {
+			errs = append(errs, errors.New("oauth actorToken is only valid with TokenExchange grantType"))
+		}
+		if oauth.RequestedTokenType != nil {
+			errs = append(errs, errors.New("oauth requestedTokenType is only valid with TokenExchange grantType"))
+		}
+	}
+	if auth.RequestedTokenType != nil && *auth.RequestedTokenType == agentgateway.OAuthTokenTypeIDJAG {
+		errs = append(errs, errors.New("oauth requestedTokenType IdJag is only supported by crossAppAccess"))
+	}
+	if auth.ActorToken != nil && ptr.OrDefault(auth.ActorToken.MayAct, "") == agentgateway.OAuthMayActValidationModeRequired && ptr.OrDefault(auth.ActorToken.TokenType, "") != agentgateway.OAuthTokenTypeJWT {
+		errs = append(errs, errors.New("oauth actorToken mayAct Required requires tokenType Jwt"))
+	}
+
+	return oauth, errors.Join(errs...)
+}
+
+func translateOAuthGrantType(grantType *agentgateway.OAuthGrantType) api.OAuthTokenExchange_GrantType {
+	if grantType == nil {
+		return api.OAuthTokenExchange_UNSPECIFIED
+	}
+	switch *grantType {
+	case agentgateway.OAuthGrantTypeJwtBearer:
+		return api.OAuthTokenExchange_JWT_BEARER
+	case agentgateway.OAuthGrantTypeTokenExchange:
+		return api.OAuthTokenExchange_TOKEN_EXCHANGE
+	default:
+		return api.OAuthTokenExchange_UNSPECIFIED
+	}
+}
+
+func translateOAuthTokenSpec(spec *agentgateway.OAuthTokenSpec) *api.OAuthTokenExchange_TokenSpec {
+	if spec == nil {
+		return nil
+	}
+	res := &api.OAuthTokenExchange_TokenSpec{
+		Source: translateAuthorizationExtractionLocation(spec.Source),
+	}
+	if spec.TokenType != nil {
+		res.TokenType = translateOAuthTokenType(*spec.TokenType)
+	}
+	return res
+}
+
+func translateOAuthActorToken(actor *agentgateway.OAuthActorToken) *api.OAuthTokenExchange_ActorToken {
+	if actor == nil {
+		return nil
+	}
+	res := &api.OAuthTokenExchange_ActorToken{
+		Source:        translateAuthorizationExtractionLocation(&actor.Source),
+		EnforceMayAct: ptr.OrDefault(actor.MayAct, "") == agentgateway.OAuthMayActValidationModeRequired,
+	}
+	if actor.TokenType != nil {
+		res.TokenType = translateOAuthTokenType(*actor.TokenType)
+	}
+	return res
+}
+
+func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, namespace string) (*api.OAuthClientAuth, error) {
+	if auth == nil {
+		return nil, nil
+	}
+
+	var errs []error
+	res := &api.OAuthClientAuth{
+		ClientId: auth.ClientID,
+		Method:   translateOAuthClientAuthMethod(auth.Method),
+	}
+	if auth.ClientID == "" {
+		errs = append(errs, errors.New("oauth clientAuth clientId must not be empty"))
+	}
+
+	if auth.SecretRef != nil && auth.PrivateKeyJWT != nil {
+		errs = append(errs, errors.New("oauth clientAuth secretRef is not valid with privateKeyJwt"))
+	}
+
+	if auth.PrivateKeyJWT != nil {
+		if auth.Method == nil || *auth.Method != agentgateway.OAuthClientAuthMethodPrivateKeyJWT {
+			errs = append(errs, errors.New("oauth clientAuth privateKeyJwt requires method PrivateKeyJwt"))
+		}
+		privateKeyJWT, err := buildOAuthPrivateKeyJWT(ctx, auth.PrivateKeyJWT, namespace)
+		res.PrivateKeyJwt = privateKeyJWT
+		if err != nil {
+			errs = append(errs, err)
+		}
+	} else if auth.Method != nil && *auth.Method == agentgateway.OAuthClientAuthMethodPrivateKeyJWT {
+		errs = append(errs, errors.New("oauth clientAuth method PrivateKeyJwt requires privateKeyJwt settings"))
+	}
+
+	if auth.SecretRef != nil && auth.PrivateKeyJWT == nil {
+		data, key, err := ctx.ResolveCredentialKeyRef(*auth.SecretRef, namespace, wellknown.ClientSecret)
+		if err != nil {
+			clientSecret := ""
+			res.ClientSecret = &clientSecret
+			errs = append(errs, err)
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+			clientSecret := ""
+			res.ClientSecret = &clientSecret
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, key))
+		} else {
+			res.ClientSecret = &value
+		}
+	} else if auth.PrivateKeyJWT == nil && (auth.Method == nil || *auth.Method != agentgateway.OAuthClientAuthMethodClientSecretPost) {
+		errs = append(errs, errors.New("oauth clientAuth without secretRef requires method ClientSecretPost or PrivateKeyJwt"))
+	}
+
+	return res, errors.Join(errs...)
+}
+
+func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJWT, namespace string) (*api.OAuthClientAuth_PrivateKeyJwt, error) {
+	if auth == nil {
+		return nil, nil
+	}
+
+	var errs []error
+	res := &api.OAuthClientAuth_PrivateKeyJwt{
+		Alg:               translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
+		Kid:               auth.KeyID,
+		AssertionAudience: auth.AssertionAudience,
+	}
+
+	if auth.AssertionAudience == "" {
+		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt assertionAudience must not be empty"))
+	}
+
+	data, key, err := ctx.ResolveCredentialKeyRef(auth.SigningKeyRef, namespace, wellknown.SigningKey)
+	if err != nil {
+		errs = append(errs, err)
+	} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, key))
+	} else {
+		res.SigningKey = value
+	}
+
+	return res, errors.Join(errs...)
+}
+
+func translateOAuthTokenTypePtr(tokenType *agentgateway.OAuthTokenType) *string {
+	if tokenType == nil {
+		return nil
+	}
+	return new(translateOAuthTokenType(*tokenType))
+}
+
+func translateOAuthTokenType(tokenType agentgateway.OAuthTokenType) string {
+	switch tokenType {
+	case agentgateway.OAuthTokenTypeAccessToken:
+		return "urn:ietf:params:oauth:token-type:access_token"
+	case agentgateway.OAuthTokenTypeJWT:
+		return "urn:ietf:params:oauth:token-type:jwt"
+	case agentgateway.OAuthTokenTypeIDToken:
+		return "urn:ietf:params:oauth:token-type:id_token"
+	case agentgateway.OAuthTokenTypeIDJAG:
+		return "urn:ietf:params:oauth:token-type:id-jag"
+	default:
+		return string(tokenType)
+	}
+}
+
+func translateOAuthClientAuthMethod(method *agentgateway.OAuthClientAuthMethod) api.OAuthClientAuth_Method {
+	if method == nil {
+		return api.OAuthClientAuth_UNSPECIFIED
+	}
+	switch *method {
+	case agentgateway.OAuthClientAuthMethodClientSecretPost:
+		return api.OAuthClientAuth_CLIENT_SECRET_POST
+	case agentgateway.OAuthClientAuthMethodClientSecretBasic:
+		return api.OAuthClientAuth_CLIENT_SECRET_BASIC
+	case agentgateway.OAuthClientAuthMethodPrivateKeyJWT:
+		return api.OAuthClientAuth_PRIVATE_KEY_JWT
+	default:
+		return api.OAuthClientAuth_UNSPECIFIED
+	}
+}
+
+func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.OAuthClientAuth_PrivateKeyJwt_SigningAlg {
+	if alg == nil {
+		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+	}
+	switch *alg {
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
+		return api.OAuthClientAuth_PrivateKeyJwt_RS256
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
+		return api.OAuthClientAuth_PrivateKeyJwt_RS384
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
+		return api.OAuthClientAuth_PrivateKeyJwt_RS512
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
+		return api.OAuthClientAuth_PrivateKeyJwt_ES256
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
+		return api.OAuthClientAuth_PrivateKeyJwt_ES384
+	default:
+		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+	}
+}
+
+func translateOAuthTokenCache(cache *agentgateway.OAuthTokenCache) *api.OAuthTokenExchange_TokenCache {
+	if cache == nil {
+		return nil
+	}
+	res := &api.OAuthTokenExchange_TokenCache{}
+	if cache.InMemory != nil {
+		res.InMemory = &api.OAuthTokenExchange_TokenCache_InMemory{
+			MaxEntries: cache.InMemory.MaxEntries,
+		}
+		if cache.InMemory.DefaultTTL != nil {
+			res.InMemory.DefaultTtl = durationpb.New(cache.InMemory.DefaultTTL.Duration)
+		}
+	}
+	return res
+}
+
+func isOAuthReservedAdditionalParam(key string) bool {
+	for _, reserved := range oauthReservedAdditionalParams {
+		if strings.EqualFold(reserved, key) {
+			return true
+		}
+	}
+	return false
 }
 
 // translateRouteType converts RouteType to agentgateway proto RouteType
@@ -968,6 +1297,9 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 		}
 		if auth.AssumeRole.SessionName != nil {
 			assumeRole.SessionName = *auth.AssumeRole.SessionName
+		}
+		if auth.AssumeRole.SessionNameExpression != nil {
+			assumeRole.SessionNameExpression = string(*auth.AssumeRole.SessionNameExpression)
 		}
 	}
 
@@ -1147,11 +1479,11 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 		// missing or malformed. An explicit empty credential fails in the proxy
 		// instead of falling back to ambient GCP credentials.
 		credential = new("")
-		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
+		data, key, err := ctx.ResolveCredentialKeyRef(*auth.SecretRef, namespace, wellknown.GCPCredentialsJSON)
 		if err != nil {
 			errs = append(errs, err)
-		} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.GCPCredentialsJSON); !exists {
-			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, wellknown.GCPCredentialsJSON))
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, key))
 		} else {
 			credential = &value
 		}

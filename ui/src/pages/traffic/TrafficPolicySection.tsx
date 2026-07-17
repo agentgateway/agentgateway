@@ -45,6 +45,7 @@ import { useSchemaHelp } from "../../schemaHelp";
 
 type TrafficPolicySchemaRoot =
   | "LocalGatewayPolicy"
+  | "LocalUIPolicy"
   | "FilterOrPolicy"
   | "TCPFilterOrPolicy"
   | "LocalBackendPolicies"

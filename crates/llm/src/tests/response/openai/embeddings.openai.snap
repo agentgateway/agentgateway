@@ -1,0 +1,42 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/openai/embeddings.json
+info:
+  object: list
+  data:
+    - object: embedding
+      index: 0
+      embedding:
+        - -0.029852388
+        - 0.00078823726
+        - -0.08126111
+  model: text-embedding-3-small
+  usage:
+    prompt_tokens: 8
+    total_tokens: 8
+---
+{
+  "response": {
+    "object": "list",
+    "model": "text-embedding-3-small",
+    "usage": {
+      "prompt_tokens": 8,
+      "total_tokens": 8
+    },
+    "data": [
+      {
+        "object": "embedding",
+        "index": 0,
+        "embedding": [
+          -0.029852388,
+          0.00078823726,
+          -0.08126111
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_tokens": 8,
+    "total_tokens": 8
+  }
+}

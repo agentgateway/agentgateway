@@ -2,7 +2,6 @@ use ::http::{HeaderMap, StatusCode};
 use itertools::Itertools;
 
 use crate::cel::{Executor, Expression};
-use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::localratelimit::RateLimitType;
 use crate::http::remoteratelimit::proto::rate_limit_descriptor::Entry;
 use crate::http::remoteratelimit::proto::rate_limit_service_client::RateLimitServiceClient;
@@ -11,7 +10,7 @@ use crate::http::{PolicyResponse, Request, envoy_proto_common};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::*;
 
 #[cfg(test)]
@@ -53,17 +52,9 @@ pub enum FailureMode {
 pub struct RemoteRateLimit {
 	/// Rate limit domain sent to the remote rate limit service.
 	pub domain: String,
-	/// Backend that receives rate limit checks.
+	/// Backend that receives rate limit checks and policies used when connecting to it.
 	#[serde(flatten)]
-	pub target: Arc<SimpleBackendReference>,
-	/// Backend policies used when connecting to the remote rate limit service.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<BackendTrafficPolicy>,
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Descriptors sent to the remote rate limit service.
 	pub descriptors: Arc<DescriptorSet>,
 	/// Behavior when the remote rate limit service is unavailable or returns an error.
@@ -400,7 +391,7 @@ impl RemoteRateLimit {
 		client: PolicyClient,
 		request: proto::RateLimitRequest,
 	) -> Result<proto::RateLimitResponse, ProxyError> {
-		trace!("connecting to {:?}", self.target);
+		trace!("connecting to {:?}", self.target.target);
 		trace!(
 			"ratelimit request summary (domain: {}): descriptors={} {}",
 			request.domain,
@@ -418,11 +409,9 @@ impl RemoteRateLimit {
 				})
 				.join(" | ")
 		);
-		let chan = GrpcReferenceChannel {
-			target: self.target.clone(),
-			policies: Arc::new(self.policies.clone()),
-			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::RateLimit),
-		};
+		let chan = self
+			.target
+			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::RateLimit));
 		let mut client = RateLimitServiceClient::new(chan);
 		let resp = client.should_rate_limit(request).await;
 		trace!("check response: {:?}", resp);

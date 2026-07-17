@@ -1,0 +1,393 @@
+# Helm deployment settings for the local classification and embedding models.
+router:
+  skipProcessing:
+    enabled: true
+
+# The model runtime is configured below. Do not inherit the chart's qwen3
+# embedding override, which conflicts with the configured mmbert model.
+env: []
+
+args:
+- --secure=false
+
+persistence:
+  enabled: true
+  storageClassName: standard
+  size: 10Gi
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 3Gi
+  limits:
+    cpu: "2"
+    memory: 7Gi
+
+config:
+  version: v0.3
+
+  # Models selected by the coding policy below.
+  providers:
+    defaults:
+      default_model: gpt-5.4-nano
+      # Preserve OpenAI's top-level reasoning_effort request parameter when
+      # vSR rewrites model:auto to either configured model.
+      reasoning_families:
+        gpt:
+          type: reasoning_effort
+          parameter: reasoning_effort
+    models:
+    - name: gpt-5.4-nano
+      reasoning_family: gpt
+      provider_model_id: gpt-5.4-nano
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.20
+        cached_input_per_1m: 0.02
+        completion_per_1m: 1.25
+      external_model_ids:
+        openai: gpt-5.4-nano
+      backend_refs:
+      - name: agentgateway-openai
+        base_url: https://api.openai.com/v1
+        provider: openai
+        weight: 100
+    - name: gpt-5.5
+      reasoning_family: gpt
+      provider_model_id: gpt-5.5
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 5.00
+        cached_input_per_1m: 0.50
+        completion_per_1m: 30.00
+      external_model_ids:
+        openai: gpt-5.5
+      backend_refs:
+      - name: agentgateway-openai
+        base_url: https://api.openai.com/v1
+        provider: openai
+        weight: 100
+
+  routing:
+    # Model metadata and signals tuned for coding prompts.
+    modelCards:
+    - name: gpt-5.4-nano
+      context_window_size: 1000000
+      description: Low-cost nano model for routine coding and implementation work.
+      capabilities: [chat, coding, reasoning, tools]
+      quality_score: 0.72
+      modality: ar
+      tags: [low-cost, nano, coding, cost-efficient]
+    - name: gpt-5.5
+      context_window_size: 1000000
+      description: Expensive model for advanced distributed systems, formal methods, hard debugging, and research synthesis.
+      capabilities: [chat, coding, reasoning, long-context, research]
+      quality_score: 0.95
+      modality: ar
+      tags: [premium, expensive, deep-reasoning]
+
+    signals:
+      # This coding policy does not use domain signals. Set an empty list to
+      # avoid inheriting the chart's general-purpose domain defaults.
+      domains: []
+      keywords:
+      - name: advanced_markers
+        operator: OR
+        # Leave method unset to use literal, word-boundary-aware matching.
+        # BM25 topic matching over-escalates routine coding follow-ups that
+        # merely resemble advanced work. The phrases below are deliberate,
+        # high-specificity escalation cues.
+        keywords:
+        - distributed systems
+        - distributed rate limiter
+        - consensus
+        - raft
+        - paxos
+        - linearizability
+        - serializability
+        - serializable isolation
+        - formal verification
+        - model checking
+        - model checker
+        - TLA+
+        - Alloy
+        - Coq
+        - Lean
+        - safety invariant
+        - liveness invariant
+        - proof obligation
+        - counterexample
+        - convergence
+        - monotonicity
+        - temporal logic
+        - root cause
+        - heisenbug
+        - deadlock
+        - race condition
+        - memory ordering
+        - durable idempotency
+        - idempotency boundary
+        - fencing token
+        - fencing tokens
+        - leader election
+        - stale writer
+        - regional failover
+        - cross-region failover
+        - network partition
+        - network partitions
+        - replicated state
+        - exactly-once
+        - at-least-once
+        - bounded staleness
+        - research synthesis
+        - literature review
+        - operational transform
+        - conflict resolution
+        - compare tradeoffs
+        - dual writes
+        - durable state transition
+        - duplicate business effects
+        - transactional outbox
+        - event log compaction
+        - Kafka rebalance
+        - schema migration
+        - saga compensation
+        - configuration replicas
+        - eventual-consistency
+        - leased message
+        - delayed, duplicated, and reordered
+        - etcd election
+        - version acknowledgement
+        - duplicate side effects
+        - eventually consistent
+        - durable saga
+        - partition ownership
+        - replayed events
+        - zero-downtime
+        case_sensitive: false
+      - name: routine_coding_markers
+        operator: OR
+        # Use literal matching so common coding vocabulary does not suppress
+        # an advanced operational-design request.
+        keywords:
+        - implement
+        - refactor
+        - unit test
+        - fix lint
+        - add a flag
+        - update README
+        - write a function
+        - explain this error
+        - simple bug
+        - straightforward
+        case_sensitive: false
+
+      embeddings:
+      - name: routine_coding_intent
+        threshold: 0.68
+        aggregation_method: max
+        candidates:
+        - Add a straightforward API endpoint and tests.
+        - Refactor this function for readability without changing behavior.
+        - Write unit tests for a small helper.
+        - Explain a compiler error and suggest the obvious fix.
+        - Implement a common data transformation.
+      - name: advanced_reasoning_intent
+        threshold: 0.68
+        aggregation_method: max
+        candidates:
+        - Design a fault-tolerant distributed system and analyze tradeoffs.
+        - Find the root cause of a subtle concurrency bug from incomplete logs.
+        - Write or review a formal specification with safety and liveness invariants.
+        - Synthesize research papers into an implementation strategy.
+        - Design conflict resolution for replicated state and justify convergence, monotonic growth, and deletion semantics.
+        - Compare competing collaboration or consistency approaches and recommend one based on their tradeoffs.
+        - Debug a rare production incident involving timing, retries, and consistency.
+        - Design an idempotent workflow resilient to retries, duplicate delivery, leases, and crash recovery.
+        - Design a migration or replay protocol that preserves ordering, consistency, and safe recovery.
+        - Analyze cross-region replication, failover, and reconciliation under partitions.
+
+      context:
+      - name: long_context
+        min_tokens: 8K
+        max_tokens: 1M
+        description: Requests with enough context to increase analysis risk.
+
+      structure:
+      - name: many_questions
+        description: Prompts with several explicit questions.
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?]'
+        predicate:
+          gte: 4
+      - name: constraint_dense
+        description: Prompts with dense constraints or requirements.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            case_sensitive: false
+            keywords:
+            - must
+            - should
+            - guarantee
+            - invariant
+            - prove
+            - convergence
+            - monotonicity
+            - synthesize
+            - recommend
+            - tradeoff
+            - compare
+            - failure mode
+        predicate:
+          gt: 0.06
+
+      complexity:
+      - name: needs_advanced_reasoning
+        threshold: 0.70
+        description: Distinguish routine implementation from deep technical reasoning.
+        hard:
+          candidates:
+          - compare multiple architecture tradeoffs under failure
+          - reason about invariants, proofs, and counterexamples
+          - debug a complex distributed production incident
+          - synthesize research and produce a technical recommendation
+          - analyze consistency, consensus, and failure recovery
+          - design an idempotent workflow with retries, duplicate delivery, and crash recovery
+          - design a migration, replay, or failover protocol that preserves ordering and consistency
+        easy:
+          candidates:
+          - write a small helper function
+          - make a simple refactor
+          - add unit tests
+          - explain an error message briefly
+          - update a configuration example
+
+    projections:
+      scores:
+      - name: advanced_need_score
+        method: weighted_sum
+        inputs:
+        - type: keyword
+          name: advanced_markers
+          weight: 0.45
+          value_source: confidence
+        - type: embedding
+          name: advanced_reasoning_intent
+          weight: 0.35
+          value_source: confidence
+        - type: complexity
+          name: needs_advanced_reasoning:hard
+          weight: 0.35
+        - type: context
+          name: long_context
+          weight: 0.16
+        - type: structure
+          name: constraint_dense
+          weight: 0.08
+        - type: structure
+          name: many_questions
+          weight: 0.05
+        - type: keyword
+          name: routine_coding_markers
+          weight: -0.10
+          value_source: confidence
+        - type: embedding
+          name: routine_coding_intent
+          weight: -0.10
+          value_source: confidence
+        - type: complexity
+          name: needs_advanced_reasoning:easy
+          weight: -0.15
+      mappings:
+      - name: advanced_need_band
+        source: advanced_need_score
+        method: threshold_bands
+        calibration:
+          method: sigmoid_distance
+          slope: 10.0
+        outputs:
+        - name: low_cost_lane
+          lt: 0.35
+        - name: expensive_lane
+          gte: 0.35
+
+    decisions:
+    - name: route_to_expensive
+      description: Escalate advanced distributed systems, formal verification, hard debugging, and research synthesis.
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: expensive_lane
+      modelRefs:
+      - model: gpt-5.5
+        use_reasoning: false
+    - name: route_to_low_cost
+      description: Default route for routine coding and implementation work.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+        - type: projection
+          name: low_cost_lane
+      modelRefs:
+      - model: gpt-5.4-nano
+        use_reasoning: false
+
+  # Only non-default runtime settings required by this example.
+  global:
+    router:
+      config_source: file
+      auto_model_name: auto
+      strategy: priority
+      streamed_body:
+        enabled: true
+        # Explicit guardrails for accumulated full-duplex request bodies; these
+        # values are not vSR defaults.
+        max_bytes: 10485760
+        timeout_sec: 30
+      skip_processing:
+        enabled: true
+    services:
+      observability:
+        metrics:
+          enabled: true
+    # Embedding and complexity settings used by the semantic coding signals.
+    model_catalog:
+      embeddings:
+        semantic:
+          mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+          use_cpu: true
+          embedding_config:
+            backend: candle
+            model_type: mmbert
+            preload_embeddings: true
+            target_dimension: 768
+            target_layer: 22
+            enable_soft_matching: true
+            top_k: 2
+            min_score_threshold: 0.35
+            prototype_scoring:
+              enabled: true
+              cluster_similarity_threshold: 0.9
+              max_prototypes: 8
+              best_weight: 0.75
+              top_m: 2
+              margin_threshold: 0.0
+      modules:
+        complexity:
+          prototype_scoring:
+            enabled: true
+            cluster_similarity_threshold: 0.9
+            max_prototypes: 6
+            best_weight: 0.75
+            top_m: 2
+            margin_threshold: 0.0

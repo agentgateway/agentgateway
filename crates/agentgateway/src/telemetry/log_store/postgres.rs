@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use anyhow::Context;
 use serde_json::Value;
 use sqlx::postgres::PgPoolOptions;
@@ -6,10 +8,10 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 
 use super::{
 	AnalyticsGroup, AnalyticsSummaryRequest, AnalyticsSummaryResponse, AnalyticsTimeBucket,
-	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, INSERT_LOG_PREFIX,
-	INSERT_PAYLOAD_PREFIX, LogEntry, LogFilters, PayloadEntry, SearchRequest, SearchResponse,
-	StoredRequestLog, TailRequest, TailResponse, TimeRange, UsageEntry, analytics_window,
-	attr_filter_values, decode_cursor, encode_cursor, limit, promoted_attribute_column,
+	GenAiEntry, GetRequest, GetResponse, GroupBy, GroupByField, LogEntry, LogFilters, PayloadEntry,
+	SearchRequest, SearchResponse, StoredRequestLog, StoredRequestLogPayload, TailRequest,
+	TailResponse, TimeRange, UsageEntry, analytics_window, attr_filter_values, decode_cursor,
+	encode_cursor, limit, promoted_attribute_column,
 };
 
 pub struct PostgresLogStore {
@@ -34,23 +36,24 @@ impl PostgresLogStore {
 			return Ok(());
 		}
 		let mut tx = self.pool.begin().await?;
-		let mut logs = QueryBuilder::<Postgres>::new(INSERT_LOG_PREFIX);
-		logs.push_values(records, |mut row, record| {
-			push_request_log_row!(row, record);
-		});
-		logs.build().execute(&mut *tx).await?;
+		let mut logs = String::new();
+		for record in records {
+			push_request_log_copy_row(&mut logs, record)?;
+		}
+		let mut copy = tx.copy_in_raw(COPY_REQUEST_LOGS).await?;
+		copy.send(logs.as_bytes()).await?;
+		copy.finish().await?;
 
 		if records.iter().any(|record| record.payload.is_some()) {
-			let mut payloads = QueryBuilder::<Postgres>::new(INSERT_PAYLOAD_PREFIX);
-			payloads.push_values(
-				records
-					.iter()
-					.filter_map(|record| record.payload.as_ref().map(|payload| (record, payload))),
-				|mut row, (record, payload)| {
-					push_request_log_payload_row!(row, record, payload);
-				},
-			);
-			payloads.build().execute(&mut *tx).await?;
+			let mut payloads = String::new();
+			for record in records {
+				if let Some(payload) = &record.payload {
+					push_request_log_payload_copy_row(&mut payloads, &record.id, payload)?;
+				}
+			}
+			let mut copy = tx.copy_in_raw(COPY_REQUEST_LOG_PAYLOADS).await?;
+			copy.send(payloads.as_bytes()).await?;
+			copy.finish().await?;
 		}
 		tx.commit().await?;
 		Ok(())
@@ -250,6 +253,97 @@ impl PostgresLogStore {
 			.last()
 			.map(|log| encode_cursor(log.completed_at, &log.id));
 		Ok(TailResponse { logs, next_cursor })
+	}
+}
+
+fn push_request_log_copy_row(buf: &mut String, record: &StoredRequestLog) -> anyhow::Result<()> {
+	let mut first = true;
+	push_copy_text_column(buf, &mut first, Some(&record.id));
+	push_copy_text_column(buf, &mut first, Some(&record.started_at.to_rfc3339()));
+	push_copy_text_column(buf, &mut first, Some(&record.completed_at.to_rfc3339()));
+	push_copy_display_column(buf, &mut first, Some(record.duration_ms));
+	push_copy_text_column(buf, &mut first, record.trace_id.as_deref());
+	push_copy_text_column(buf, &mut first, record.span_id.as_deref());
+	push_copy_display_column(buf, &mut first, record.http_status);
+	push_copy_text_column(buf, &mut first, record.error.as_deref());
+	push_copy_text_column(buf, &mut first, record.gen_ai_operation_name.as_deref());
+	push_copy_text_column(buf, &mut first, record.gen_ai_provider_name.as_deref());
+	push_copy_text_column(buf, &mut first, record.gen_ai_request_model.as_deref());
+	push_copy_text_column(buf, &mut first, record.gen_ai_response_model.as_deref());
+	push_copy_display_column(buf, &mut first, record.input_tokens);
+	push_copy_display_column(buf, &mut first, record.output_tokens);
+	push_copy_display_column(buf, &mut first, record.total_tokens);
+	push_copy_display_column(buf, &mut first, record.cost);
+	push_copy_text_column(buf, &mut first, record.agentgateway_user.as_deref());
+	push_copy_text_column(buf, &mut first, record.agentgateway_group.as_deref());
+	push_copy_text_column(buf, &mut first, record.user_agent_name.as_deref());
+	push_copy_display_column(buf, &mut first, Some(record.has_payload));
+	push_copy_text_column(buf, &mut first, Some(record.attributes_json.as_ref()));
+	buf.push('\n');
+	Ok(())
+}
+
+fn push_request_log_payload_copy_row(
+	buf: &mut String,
+	log_id: &str,
+	payload: &StoredRequestLogPayload,
+) -> anyhow::Result<()> {
+	let mut first = true;
+	push_copy_text_column(buf, &mut first, Some(log_id));
+	push_copy_json_column(buf, &mut first, payload.request_prompt_json.as_ref())?;
+	push_copy_json_column(buf, &mut first, payload.response_completion_json.as_ref())?;
+	buf.push('\n');
+	Ok(())
+}
+
+fn push_copy_text_column(buf: &mut String, first: &mut bool, value: Option<&str>) {
+	push_copy_column_separator(buf, first);
+	let Some(value) = value else {
+		buf.push_str(r"\N");
+		return;
+	};
+	push_copy_escaped(buf, value);
+}
+
+fn push_copy_display_column<T: Display>(buf: &mut String, first: &mut bool, value: Option<T>) {
+	push_copy_column_separator(buf, first);
+	match value {
+		Some(value) => buf.push_str(&value.to_string()),
+		None => buf.push_str(r"\N"),
+	}
+}
+
+fn push_copy_json_column(
+	buf: &mut String,
+	first: &mut bool,
+	value: Option<&Value>,
+) -> anyhow::Result<()> {
+	push_copy_column_separator(buf, first);
+	let Some(value) = value else {
+		buf.push_str(r"\N");
+		return Ok(());
+	};
+	push_copy_escaped(buf, &serde_json::to_string(value)?);
+	Ok(())
+}
+
+fn push_copy_column_separator(buf: &mut String, first: &mut bool) {
+	if *first {
+		*first = false;
+	} else {
+		buf.push('\t');
+	}
+}
+
+fn push_copy_escaped(buf: &mut String, value: &str) {
+	for ch in value.chars() {
+		match ch {
+			'\\' => buf.push_str(r"\\"),
+			'\n' => buf.push_str(r"\n"),
+			'\r' => buf.push_str(r"\r"),
+			'\t' => buf.push_str(r"\t"),
+			_ => buf.push(ch),
+		}
 	}
 }
 
@@ -474,6 +568,19 @@ fn group_key(group: &GroupBy) -> String {
 			.unwrap_or_else(|| "attributes".to_string()),
 	}
 }
+
+const COPY_REQUEST_LOGS: &str = r#"
+COPY request_logs (
+	id, started_at, completed_at, duration_ms, trace_id, span_id, http_status, error,
+	gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model, gen_ai_response_model,
+	input_tokens, output_tokens, total_tokens, cost, agentgateway_user, agentgateway_group,
+	user_agent_name, has_payload, attributes_json
+) FROM STDIN
+"#;
+
+const COPY_REQUEST_LOG_PAYLOADS: &str = r#"
+COPY request_log_payloads (log_id, request_prompt_json, response_completion_json) FROM STDIN
+"#;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS request_logs (

@@ -44,3 +44,6 @@ assigning_clones = "allow"
 # This doesn't understand `strng` which we use everywhere
 borrow_interior_mutable_const = "allow"
 declare_interior_mutable_const = "allow"
+
+[lints.rust]
+linker_messages = "allow"

@@ -1810,6 +1810,28 @@ func (this *Alpn) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for OAuthClientAuth
+func (this *OAuthClientAuth) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for OAuthClientAuth
+func (this *OAuthClientAuth) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for OAuthClientAuth_PrivateKeyJwt
+func (this *OAuthClientAuth_PrivateKeyJwt) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for OAuthClientAuth_PrivateKeyJwt
+func (this *OAuthClientAuth_PrivateKeyJwt) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for OAuthTokenExchange
 func (this *OAuthTokenExchange) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1818,17 +1840,6 @@ func (this *OAuthTokenExchange) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for OAuthTokenExchange
 func (this *OAuthTokenExchange) UnmarshalJSON(b []byte) error {
-	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
-}
-
-// MarshalJSON is a custom marshaler for OAuthTokenExchange_ClientAuth
-func (this *OAuthTokenExchange_ClientAuth) MarshalJSON() ([]byte, error) {
-	str, err := ResourceMarshaler.MarshalToString(this)
-	return []byte(str), err
-}
-
-// UnmarshalJSON is a custom unmarshaler for OAuthTokenExchange_ClientAuth
-func (this *OAuthTokenExchange_ClientAuth) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
