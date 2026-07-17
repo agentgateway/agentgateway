@@ -114,6 +114,7 @@ impl RequestType for Request {
 
 pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
 	if path.ends_with(":streamRawPredict")
+		|| path.ends_with(":streamGenerateContent")
 		|| path.ends_with("/invoke-with-response-stream")
 		|| path.ends_with("/converse-stream")
 	{
@@ -125,9 +126,14 @@ pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
 }
 
 pub fn extract_model_from_path(path: &str) -> Option<Strng> {
-	let model = if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
+	let model = if path.ends_with(":streamRawPredict")
+		|| path.ends_with(":rawPredict")
+		|| path.ends_with(":streamGenerateContent")
+		|| path.ends_with(":generateContent")
+	{
 		path
-			.split_once("/publishers/anthropic/models/")
+			.split_once("/publishers/")
+			.and_then(|(_, rest)| rest.split_once("/models/"))
 			.and_then(|(_, rest)| rest.split_once(':').map(|(model, _)| model))
 	} else if path.ends_with("/invoke-with-response-stream")
 		|| path.ends_with("/invoke")
@@ -247,6 +253,57 @@ mod tests {
 		assert_eq!(llm_info.request_model, "vertex-detect");
 		assert!(llm_info.streaming);
 	}
+
+	#[test]
+	fn amend_request_info_extracts_vertex_gemini_generate_content_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/projects/hello-world-project/locations/global/publishers/google/models/gemini-2.5-flash:generateContent",
+		);
+
+		assert_eq!(llm_info.request_model, "gemini-2.5-flash");
+		assert!(!llm_info.streaming);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_vertex_gemini_stream_generate_content_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/projects/hello-world-project/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent",
+		);
+
+		assert_eq!(llm_info.request_model, "gemini-2.5-flash");
+		assert!(llm_info.streaming);
+	}
+
+	#[test]
+	fn to_llm_response_extracts_gemini_native_usage() {
+		let resp = Response::Json(serde_json::json!({
+			"candidates": [{
+				"content": {
+					"role": "model",
+					"parts": [{"text": "Hello!"}]
+				},
+				"finishReason": "STOP"
+			}],
+			"usageMetadata": {
+				"promptTokenCount": 8,
+				"candidatesTokenCount": 14,
+				"totalTokenCount": 22
+			},
+			"modelVersion": "gemini-2.5-flash"
+		}));
+
+		let llm_response = resp.to_llm_response(false);
+
+		assert_eq!(llm_response.input_tokens, Some(8));
+		assert_eq!(llm_response.output_tokens, Some(14));
+		assert_eq!(llm_response.total_tokens, Some(22));
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -281,7 +338,7 @@ mod lookups {
 	pub const MAX_TOKENS: [&[&str]; 2] = [&["max_completion_tokens"], &["max_tokens"]];
 	pub const ENCODING_FORMAT: [&[&str]; 1] = [&["encoding_format"]];
 	pub const DIMENSIONS: [&[&str]; 1] = [&["dimensions"]];
-	pub const USAGE_INPUT_TOKENS: [&[&str]; 5] = [
+	pub const USAGE_INPUT_TOKENS: [&[&str]; 6] = [
 		&["usage", "input_tokens"],
 		// Responses streaming
 		&["response", "usage", "input_tokens"],
@@ -290,8 +347,10 @@ mod lookups {
 		&["usage", "inputTokens"],
 		// Bedrock invoke
 		&["metadata", "usage", "inputTokens"],
+		// Gemini generateContent
+		&["usageMetadata", "promptTokenCount"],
 	];
-	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 5] = [
+	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 6] = [
 		&["usage", "output_tokens"],
 		// Responses streaming
 		&["response", "usage", "output_tokens"],
@@ -300,9 +359,16 @@ mod lookups {
 		&["usage", "outputTokens"],
 		// Bedrock invoke
 		&["metadata", "usage", "outputTokens"],
+		// Gemini generateContent
+		&["usageMetadata", "candidatesTokenCount"],
 	];
-	pub const USAGE_TOTAL_TOKENS: [&[&str]; 2] =
-		[&["usage", "total_tokens"], &["usage", "totalTokens"]];
+	pub const USAGE_TOTAL_TOKENS: [&[&str]; 3] = [
+		&["usage", "total_tokens"],
+		// Bedrock converse
+		&["usage", "totalTokens"],
+		// Gemini generateContent
+		&["usageMetadata", "totalTokenCount"],
+	];
 	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "image_tokens"]];
 	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "text_tokens"]];
 	pub const INPUT_AUDIO_TOKENS: [&[&str]; 1] =
