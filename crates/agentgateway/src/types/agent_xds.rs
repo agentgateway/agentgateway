@@ -4423,8 +4423,7 @@ mod tests {
 
 	#[test]
 	fn test_virtual_model_route_from_xds() -> Result<(), ProtoError> {
-		use proto::agent::model_route::virtual_model::weighted;
-		use proto::agent::model_route::virtual_model::{Routing, Weighted};
+		use proto::agent::model_route::virtual_model::{Routing, Weighted, weighted};
 		use proto::agent::model_route::{Kind, VirtualModel};
 
 		let proto_route = proto::agent::ModelRoute {
@@ -4467,8 +4466,7 @@ mod tests {
 
 	#[test]
 	fn test_conditional_model_route_from_xds() -> Result<(), ProtoError> {
-		use proto::agent::model_route::virtual_model::conditional;
-		use proto::agent::model_route::virtual_model::{Conditional, Routing};
+		use proto::agent::model_route::virtual_model::{Conditional, Routing, conditional};
 		use proto::agent::model_route::{Kind, VirtualModel};
 
 		let proto_route = proto::agent::ModelRoute {
@@ -4509,8 +4507,7 @@ mod tests {
 
 	#[test]
 	fn test_conditional_model_route_rejects_fallback_before_last() {
-		use proto::agent::model_route::virtual_model::conditional;
-		use proto::agent::model_route::virtual_model::{Conditional, Routing};
+		use proto::agent::model_route::virtual_model::{Conditional, Routing, conditional};
 		use proto::agent::model_route::{Kind, VirtualModel};
 
 		let proto_route = proto::agent::ModelRoute {

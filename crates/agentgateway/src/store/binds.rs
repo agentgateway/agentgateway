@@ -743,10 +743,12 @@ impl Store {
 		let route_key = Self::model_router_route_key(listener);
 		let backend_name = Self::model_router_backend_name(listener);
 		let backend_key = Self::model_router_backend_key(listener);
-		let previous_created = self.backend(&backend_key).and_then(|backend| match &backend.backend {
-			Backend::LLMRouter(_, router) => Some(router.created()),
-			_ => None,
-		});
+		let previous_created = self
+			.backend(&backend_key)
+			.and_then(|backend| match &backend.backend {
+				Backend::LLMRouter(_, router) => Some(router.created()),
+				_ => None,
+			});
 		self.remove_http_route(&route_key);
 		self.remove_backend(backend_key.clone());
 
@@ -2268,10 +2270,11 @@ mod tests {
 	fn xds_model_route_builds_listener_llm_router() {
 		use std::time::Duration;
 
+		use agent_xds::{Handler, XdsResource};
+
 		use crate::types::proto::agent::backend_reference;
 		use crate::types::proto::agent::model_route::concrete_model::ModelVisibility;
 		use crate::types::proto::agent::model_route::{ConcreteModel, Kind};
-		use agent_xds::{Handler, XdsResource};
 
 		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
 		let listener_key = strng::literal!("default/gw.http");
@@ -2360,11 +2363,10 @@ mod tests {
 		);
 		drop(store);
 
-		let mut removals = vec![XdsUpdate::<ADPResource>::Remove(strng::literal!(
-			"model/default/gpt-5-mini"
-		)), XdsUpdate::<ADPResource>::Remove(strng::literal!(
-			"model/default/claude-haiku"
-		))]
+		let mut removals = vec![
+			XdsUpdate::<ADPResource>::Remove(strng::literal!("model/default/gpt-5-mini")),
+			XdsUpdate::<ADPResource>::Remove(strng::literal!("model/default/claude-haiku")),
+		]
 		.into_iter();
 		updater
 			.handle(Box::new(&mut removals))
@@ -2382,10 +2384,11 @@ mod tests {
 
 	#[test]
 	fn xds_model_route_rebuilds_listener_scoped_routers() {
+		use agent_xds::{Handler, XdsResource};
+
 		use crate::types::proto::agent::backend_reference;
 		use crate::types::proto::agent::model_route::concrete_model::ModelVisibility;
 		use crate::types::proto::agent::model_route::{ConcreteModel, Kind};
-		use agent_xds::{Handler, XdsResource};
 
 		fn model_route(
 			key: &str,

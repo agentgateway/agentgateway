@@ -88,6 +88,7 @@ rules:
   - agentgateway.dev
   resources:
   - agentgatewaybackends
+  - agentgatewaymodels
   - agentgatewayparameters
   - agentgatewaypolicies
   verbs:
@@ -98,6 +99,7 @@ rules:
   - agentgateway.dev
   resources:
   - agentgatewaybackends/status
+  - agentgatewaymodels/status
   - agentgatewayparameters/status
   - agentgatewaypolicies/status
   verbs:

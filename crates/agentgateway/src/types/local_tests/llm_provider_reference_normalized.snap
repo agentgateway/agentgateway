@@ -86,7 +86,9 @@ backends:
             - name: anthropic/*
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:anthropic/*:0"
+              backend:
+                backend: "/llm:model:anthropic/*:0"
+                weight: 1
               policies:
                 llm:
                   routes:

@@ -3,7 +3,7 @@ package translator
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,7 +11,6 @@ import (
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
-	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -287,15 +286,15 @@ func modelFailoverBackend(ctx RouteContext, model *agentgateway.AgentgatewayMode
 		groups[target.Priority] = append(groups[target.Priority], provider)
 	}
 
-	priorities := make([]int, 0, len(groups))
+	priorities := make([]int32, 0, len(groups))
 	for p := range groups {
-		priorities = append(priorities, int(p))
+		priorities = append(priorities, p)
 	}
-	sort.Ints(priorities)
+	slices.Sort(priorities)
 
 	backend := &api.AIBackend{}
 	for _, priority := range priorities {
-		providers := groups[int32(priority)]
+		providers := groups[priority]
 		slices.SortFunc(providers, func(a, b *api.AIBackend_Provider) int {
 			return strings.Compare(a.GetName(), b.GetName())
 		})

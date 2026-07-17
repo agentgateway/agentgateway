@@ -140,7 +140,9 @@ backends:
             - name: openai/gpt-5-mini
               visibility: internal
               headerMatches: []
-              backendKey: "llm:model:openai/gpt-5-mini:0"
+              backend:
+                backend: "/llm:model:openai/gpt-5-mini:0"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -162,7 +164,9 @@ backends:
             - name: anthropic/*
               visibility: internal
               headerMatches: []
-              backendKey: "llm:model:anthropic/*:1"
+              backend:
+                backend: "/llm:model:anthropic/*:1"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -184,7 +188,9 @@ backends:
             - name: "*"
               visibility: internal
               headerMatches: []
-              backendKey: "llm:model:*:2"
+              backend:
+                backend: "/llm:model:*:2"
+                weight: 1
               policies:
                 llm:
                   routes:

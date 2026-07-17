@@ -107,7 +107,9 @@ backends:
             - name: openai/gpt-5-mini
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:openai/gpt-5-mini:0"
+              backend:
+                backend: "/llm:model:openai/gpt-5-mini:0"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -129,7 +131,9 @@ backends:
             - name: foo/*
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:foo/*:1"
+              backend:
+                backend: "/llm:model:foo/*:1"
+                weight: 1
               policies:
                 llm:
                   routes:
