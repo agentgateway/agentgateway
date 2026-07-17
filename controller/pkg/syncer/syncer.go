@@ -469,12 +469,16 @@ func (s *Syncer) buildAgwResources(
 		ServiceEntries:      s.agwCollections.ServiceEntries,
 		InferencePools:      s.agwCollections.InferencePools,
 		Backends:            s.agwCollections.Backends,
+		Models:              s.agwCollections.Models,
+		ModelsByNamespace:   s.agwCollections.ModelsByNamespace,
 		References:          referenceTypes,
 		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 	}
 
 	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
-	routeCollections := []krt.Collection[agwir.AgwResource]{baseAgwRoutes}
+	modelResources, modelAttachments := translator.AgwModelCollection(s.statusCollections, s.agwCollections.Models, routeInputs, krtopts)
+	routeAttachments = krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{routeAttachments, modelAttachments}, krtopts.ToOptions("translator/RouteAttachmentsWithModels")...)
+	routeCollections := []krt.Collection[agwir.AgwResource]{baseAgwRoutes, modelResources}
 	if s.agwPlugins.AddResourceExtension != nil {
 		if s.agwPlugins.AddResourceExtension.Routes != nil {
 			routeCollections = append(routeCollections, s.agwPlugins.AddResourceExtension.Routes)

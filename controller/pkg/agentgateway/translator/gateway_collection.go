@@ -49,6 +49,8 @@ func ToAgwResource(t any) *api.Resource {
 		return &api.Resource{Kind: &api.Resource_TcpRoute{TcpRoute: tt.TCPRoute}}
 	case AgwPolicy:
 		return &api.Resource{Kind: &api.Resource_Policy{Policy: tt.Policy}}
+	case *api.ModelRoute:
+		return &api.Resource{Kind: &api.Resource_ModelRoute{ModelRoute: tt}}
 	case *api.Resource:
 		return tt
 	}

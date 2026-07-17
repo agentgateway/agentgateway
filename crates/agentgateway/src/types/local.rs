@@ -4016,49 +4016,19 @@ impl ResolvedLLMModelRegistry {
 fn llm_route_types(
 	passthrough: Option<&LocalLLMPassthrough>,
 ) -> Vec<(Strng, crate::llm::RouteType)> {
+	let mut routes = crate::llm::model_router::default_route_types()
+		.routes
+		.iter()
+		.map(|(path, route_type)| (path.clone(), *route_type))
+		.collect::<Vec<_>>();
 	if let Some(passthrough) = passthrough {
-		return vec![(strng::new("*"), passthrough.route_type())];
+		if let Some((_, route_type)) = routes.iter_mut().find(|(path, _)| path.as_str() == "*") {
+			*route_type = passthrough.route_type();
+		} else {
+			routes.push((strng::new("*"), passthrough.route_type()));
+		}
 	}
-	vec![
-		(
-			strng::new("/v1/chat/completions"),
-			crate::llm::RouteType::Completions,
-		),
-		(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
-		// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
-		(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
-		(
-			strng::new(":streamRawPredict"),
-			crate::llm::RouteType::Messages,
-		),
-		(
-			strng::new("/v1/responses"),
-			crate::llm::RouteType::Responses,
-		),
-		(
-			strng::new("/v1/images/generations"),
-			crate::llm::RouteType::Detect,
-		),
-		(
-			strng::new("/v1/images/edits"),
-			crate::llm::RouteType::Detect,
-		),
-		(
-			strng::new("/v1/images/variations"),
-			crate::llm::RouteType::Detect,
-		),
-		(
-			strng::new("/v1/responses/compact"),
-			crate::llm::RouteType::Detect,
-		),
-		(
-			strng::new("/v1/embeddings"),
-			crate::llm::RouteType::Embeddings,
-		),
-		(strng::new("/v1/rerank"), crate::llm::RouteType::Rerank),
-		(strng::new("/v2/rerank"), crate::llm::RouteType::Rerank),
-		(strng::new("*"), crate::llm::RouteType::Passthrough),
-	]
+	routes
 }
 
 fn ensure_ai_provider_model(provider: &mut AIProvider, model: &str) {
@@ -4476,7 +4446,11 @@ async fn convert_llm_config(
 				.iter()
 				.map(|m| m.headers.clone())
 				.collect(),
-			backend_key,
+			backend: RouteBackendReference {
+				weight: 1,
+				target: BackendReference::Backend(strng::format!("/{backend_key}")).into(),
+				inline_policies: vec![],
+			},
 			policies: llm::model_router::ModelRoutePolicies {
 				llm: Arc::new(crate::llm::Policy {
 					routes: llm_routes.into_iter().collect(),
@@ -4558,7 +4532,13 @@ async fn convert_llm_config(
 					),
 					inline_policies: vec![],
 				});
-				llm::model_router::VirtualModelRouting::Failover { backend_key }
+				llm::model_router::VirtualModelRouting::Failover {
+					backend: RouteBackendReference {
+						weight: 1,
+						target: BackendReference::Backend(strng::format!("/{backend_key}")).into(),
+						inline_policies: vec![],
+					},
+				}
 			},
 		};
 		router_virtual_models.push(llm::model_router::VirtualModelRoute {
