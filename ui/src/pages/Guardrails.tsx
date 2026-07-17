@@ -12,6 +12,7 @@ import {
   EnumSelector,
   type EnumSelectorOption,
 } from "../components/EnumSelector";
+import { CloudRegionCombobox } from "../components/CloudRegionCombobox";
 import {
   ConfirmDialog,
   Drawer,
@@ -1011,11 +1012,13 @@ function BedrockGuardFields(props: {
           "region",
         )}
       >
-        <input
+        <CloudRegionCombobox
+          cloud="aws"
+          ariaLabel="AWS region"
           value={props.guard.region}
-          onChange={(event) =>
+          onChange={(value) =>
             props.onChange({
-              region: event.target.value,
+              region: value,
             } as Partial<SupportedGuardDraft>)
           }
           placeholder="us-west-2"
@@ -1072,11 +1075,13 @@ function GoogleModelArmorFields(props: {
         )}
         hint="Optional. Defaults to us-central1."
       >
-        <input
+        <CloudRegionCombobox
+          cloud="google"
+          ariaLabel="Location"
           value={props.guard.location}
-          onChange={(event) =>
+          onChange={(value) =>
             props.onChange({
-              location: event.target.value,
+              location: value,
             } as Partial<SupportedGuardDraft>)
           }
           placeholder="us-central1"

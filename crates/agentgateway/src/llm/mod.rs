@@ -669,11 +669,18 @@ pub enum RequestResult {
 		upstream_route_type: RouteType,
 	},
 	Rejected(Response),
+	GuardrailRejected {
+		response: Response,
+		guardrail: &'static str,
+	},
 }
 
 enum PreparedRequest {
 	Ready(LLMRequest),
-	Rejected(Response),
+	GuardrailRejected {
+		response: Response,
+		guardrail: &'static str,
+	},
 }
 
 struct BufferedResponse {
@@ -1599,14 +1606,17 @@ impl AIProvider {
 			if original_format.supports_prompt_guard() {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
-				if let Some(dr) = p
+				if let Some((response, guardrail)) = p
 					.apply_prompt_guard(backend_info, req, http_headers, claims)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
 						AIError::PromptWebhookError
 					})? {
-					return Ok(PreparedRequest::Rejected(dr));
+					return Ok(PreparedRequest::GuardrailRejected {
+						response,
+						guardrail,
+					});
 				}
 			}
 		}
@@ -1664,7 +1674,15 @@ impl AIProvider {
 			.await?;
 		let mut llm_info = match prepared {
 			PreparedRequest::Ready(llm_info) => llm_info,
-			PreparedRequest::Rejected(resp) => return Ok(RequestResult::Rejected(resp)),
+			PreparedRequest::GuardrailRejected {
+				response,
+				guardrail,
+			} => {
+				return Ok(RequestResult::GuardrailRejected {
+					response,
+					guardrail,
+				});
+			},
 		};
 
 		let rendered = chat_translation.render_request(
@@ -1733,7 +1751,15 @@ impl AIProvider {
 			.await?;
 		let llm_info = match prepared {
 			PreparedRequest::Ready(llm_info) => llm_info,
-			PreparedRequest::Rejected(resp) => return Ok(RequestResult::Rejected(resp)),
+			PreparedRequest::GuardrailRejected {
+				response,
+				guardrail,
+			} => {
+				return Ok(RequestResult::GuardrailRejected {
+					response,
+					guardrail,
+				});
+			},
 		};
 		let request_model = llm_info.request_model.as_str();
 		let body = render(self, &req, &parts, request_model)?;

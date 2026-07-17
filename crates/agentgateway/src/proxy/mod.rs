@@ -78,6 +78,7 @@ impl ProxyResponse {
 			ProxyError::RateLimitFailed | ProxyError::RateLimitExceeded { .. } => {
 				ProxyResponseReason::RateLimit
 			},
+			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
 		}
 	}
 	pub fn downcast(self) -> ProxyError {
@@ -120,6 +121,8 @@ pub enum ProxyResponseReason {
 	ExtProc,
 	/// Rate limit exceeded
 	RateLimit,
+	/// An LLM guardrail rejected the request
+	Guardrail,
 	/// MCP
 	MCP,
 	/// The upstream request failed
@@ -206,6 +209,11 @@ pub enum ProxyError {
 	},
 	#[error("rate limit failed")]
 	RateLimitFailed,
+	#[error("request rejected by {guardrail} guardrail")]
+	GuardrailRejected {
+		guardrail: &'static str,
+		response: Box<http::SendDirectResponse>,
+	},
 	#[error("invalid request")]
 	InvalidRequest,
 	#[error("method not allowed")]
@@ -289,6 +297,7 @@ impl ProxyError {
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).
 			ProxyError::RateLimitFailed => StatusCode::INTERNAL_SERVER_ERROR,
+			ProxyError::GuardrailRejected { response, .. } => return response.0.map(http::Body::from),
 
 			// Shouldn't happen on this path
 			ProxyError::UpstreamTCPCallFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,

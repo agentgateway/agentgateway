@@ -2311,6 +2311,21 @@ async fn make_backend_call(
 							upstream_route_type,
 						} => (request, llm_request, upstream_route_type),
 						RequestResult::Rejected(dr) => return Err(ProxyResponse::DirectResponse(Box::new(dr))),
+						RequestResult::GuardrailRejected {
+							response,
+							guardrail,
+						} => {
+							let response = http::SendDirectResponse::new(response)
+								.await
+								.map_err(ProxyError::Body)?;
+							return Err(
+								ProxyError::GuardrailRejected {
+									guardrail,
+									response: Box::new(response),
+								}
+								.into(),
+							);
+						},
 					};
 					dtrace::trace(|trace| {
 						trace.llm_request_detected(

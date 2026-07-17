@@ -666,7 +666,7 @@ impl Policy {
 		req: &mut dyn RequestType,
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
-	) -> anyhow::Result<Option<Response>> {
+	) -> anyhow::Result<Option<(Response, &'static str)>> {
 		let client = PolicyClient::new(backend_info.inputs.clone());
 		for g in self
 			.prompt_guard
@@ -681,7 +681,7 @@ impl Policy {
 						crate::telemetry::metrics::GuardrailPhase::Request,
 						crate::telemetry::metrics::GuardrailAction::Reject,
 					);
-					return Ok(Some(res));
+					return Ok(Some((res, g.kind.name())));
 				},
 				GuardrailOutcome::Masked => {
 					Self::record_guardrail_trip(
@@ -1356,6 +1356,19 @@ pub enum RequestGuardKind {
 	GoogleModelArmor(GoogleModelArmor),
 	/// Use Azure Content Safety to evaluate the prompt.
 	AzureContentSafety(AzureContentSafety),
+}
+
+impl RequestGuardKind {
+	fn name(&self) -> &'static str {
+		match self {
+			RequestGuardKind::Regex(_) => "regex",
+			RequestGuardKind::Webhook(_) => "webhook",
+			RequestGuardKind::OpenAIModeration(_) => "openAIModeration",
+			RequestGuardKind::BedrockGuardrails(_) => "bedrockGuardrails",
+			RequestGuardKind::GoogleModelArmor(_) => "googleModelArmor",
+			RequestGuardKind::AzureContentSafety(_) => "azureContentSafety",
+		}
+	}
 }
 
 #[apply(schema!)]
