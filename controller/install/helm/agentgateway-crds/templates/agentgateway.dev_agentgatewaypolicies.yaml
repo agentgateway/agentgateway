@@ -10691,23 +10691,24 @@ spec:
                         type: string
                       secretRef:
                         description: "Credential source, defaulting to a Kubernetes\n`Secret`,
-                          storing a set of API keys. If there are many Secret-backed\nkeys,
-                          `secretSelector` can be used instead. For ConfigMap-backed
-                          keys,\nuse `configMapSelector`.\n\nEach entry in the credential
-                          data represents one API key. The key is an\narbitrary identifier.
-                          The value can either be:\n* A string representing the API
-                          key.\n* A JSON object with `key` or `keyHash`, plus optional
-                          `metadata`.\n  `key` contains the API key. `keyHash` contains
-                          a hashed API key in\n  `sha256:<hex>` format. `metadata`
-                          contains arbitrary JSON metadata\n  associated with the
-                          key, which may be used by other policies. For\n  example,
-                          you may write an authorization policy allowing\n  `apiKey.group
-                          == 'sales'`.\n\nExample:\n\n\tapiVersion: v1\n\tkind: Secret\n\tmetadata:\n\t
-                          \ name: api-key\n\tstringData:\n\t  client1: |\n\t    {\n\t
-                          \     \"key\": \"k-123\",\n\t      \"metadata\": {\n\t        \"group\":
-                          \"sales\",\n\t        \"created_at\": \"2024-10-01T12:00:00Z\"\n\t
-                          \     }\n\t    }\n\t  client2: \"k-456\"\n\t  client3: |\n\t
-                          \   {\n\t      \"keyHash\": \"sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad\",\n\t
+                          storing a set of API keys. if many keys are needed then\nkeys,
+                          `secretSelector` or `configMapSelector` can be used.\nNote
+                          that configMap-backed API keys only support hashes.\n\nEach
+                          entry in the credential data represents one API key. The
+                          key is an\narbitrary identifier. The value can either be:\n*
+                          A string representing the API key.\n* A JSON object with
+                          `key` or `keyHash`, plus optional `metadata`.\n  `key` contains
+                          the API key. `keyHash` contains a hashed API key in\n  `sha256:<hex>`
+                          format. `metadata` contains arbitrary JSON metadata\n  associated
+                          with the key, which may be used by other policies. For\n
+                          \ example, you may write an authorization policy allowing\n
+                          \ `apiKey.group == 'sales'`.\n\nExample:\n\n\tapiVersion:
+                          v1\n\tkind: Secret\n\tmetadata:\n\t  name: api-key\n\tstringData:\n\t
+                          \ client1: |\n\t    {\n\t      \"key\": \"k-123\",\n\t      \"metadata\":
+                          {\n\t        \"group\": \"sales\",\n\t        \"created_at\":
+                          \"2024-10-01T12:00:00Z\"\n\t      }\n\t    }\n\t  client2:
+                          \"k-456\"\n\t  client3: |\n\t    {\n\t      \"keyHash\":
+                          \"sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad\",\n\t
                           \     \"metadata\": {\n\t        \"group\": \"engineering\"\n\t
                           \     }\n\t    }"
                         properties:
