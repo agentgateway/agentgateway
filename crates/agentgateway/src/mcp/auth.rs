@@ -17,8 +17,13 @@ use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{McpAuthentication, McpIDP};
 
 pub(crate) fn is_well_known_endpoint(path: &str) -> bool {
+	// /authorize and /token are public OAuth endpoints — they must bypass JWT validation by
+	// definition. For non-Okta providers, handle_mcp_request returns 404 for these paths
+	// rather than Ok(None), so requests never reach the MCP backend unauthenticated.
 	path.starts_with("/.well-known/oauth-protected-resource")
 		|| path.starts_with("/.well-known/oauth-authorization-server")
+		|| path == "/authorize"
+		|| path == "/token"
 }
 
 pub(super) async fn apply_token_validation(
@@ -91,6 +96,47 @@ pub(crate) async fn handle_mcp_request(
 				})
 				.into_response(),
 		)),
+		path if path == "/authorize" => {
+			if req.method() != Method::GET {
+				return Ok(Some(StatusCode::METHOD_NOT_ALLOWED.into_response()));
+			}
+			match &auth.provider {
+				Some(McpIDP::Okta {}) => {
+					let existing_query = req.uri().query().unwrap_or("").to_owned();
+					Ok(Some(
+						okta_authorize_redirect(&existing_query, auth)
+							.map_err(|e| {
+								warn!("okta_authorize_redirect error: {}", e);
+								StatusCode::INTERNAL_SERVER_ERROR
+							})
+							.into_response(),
+					))
+				},
+				_ => Ok(Some(StatusCode::NOT_FOUND.into_response())),
+			}
+		},
+		path if path == "/token" => {
+			if req.method() != Method::POST {
+				return Ok(Some(StatusCode::METHOD_NOT_ALLOWED.into_response()));
+			}
+			match &auth.provider {
+				Some(McpIDP::Okta {}) => {
+					let content_type = req.headers().get("content-type").cloned();
+					let authorization = req.headers().get("authorization").cloned();
+					let body = std::mem::take(req.body_mut());
+					Ok(Some(
+						okta_token_proxy(content_type, authorization, body, auth, client.clone())
+							.await
+							.map_err(|e| {
+								warn!("okta_token_proxy error: {}", e);
+								StatusCode::INTERNAL_SERVER_ERROR
+							})
+							.into_response(),
+					))
+				},
+				_ => Ok(Some(StatusCode::NOT_FOUND.into_response())),
+			}
+		},
 		_ => {
 			// Not handled
 			Ok(None)
@@ -242,6 +288,10 @@ pub(super) async fn authorization_server_metadata(
 	let mut resp: serde_json::Value = from_body_with_limit(upstream.into_body(), limit)
 		.await
 		.map_err(ProxyError::Body)?;
+
+	// Pre-compute once — reused in the universal issuer rewrite below.
+	let gateway_base = issuer_from_metadata_uri(&request_uri_for_oauth_metadata(req).to_string());
+
 	match &auth.provider {
 		Some(McpIDP::Auth0 {}) => {
 			// Auth0 does not support RFC 8707. We can workaround this by prepending an audience
@@ -258,24 +308,34 @@ pub(super) async fn authorization_server_metadata(
 			}
 		},
 		Some(McpIDP::Okta {}) => {
-			// Okta does not support RFC 8707. Workaround by appending audience as a query param.
+			// Rewrite authorization_endpoint and token_endpoint to gateway-local paths.
+			// Claude Desktop and claude.ai derive these from issuer ({issuer}/authorize,
+			// {issuer}/token) instead of reading metadata fields — agentgateway handles both
+			// paths natively: /authorize redirects to Okta (injecting audience), /token proxies
+			// the token exchange. This eliminates the need for an external nginx issuer-proxy.
 			let Some(serde_json::Value::String(ae)) =
 				json::traverse_mut(&mut resp, &["authorization_endpoint"])
 			else {
 				return Err(ProxyError::ProcessingString(
-					"authorization_endpoint missing".to_string(),
+					"authorization_endpoint missing from Okta AS metadata".to_string(),
 				));
 			};
-			if let Some(aud) = auth.audiences.first() {
-				ae.push_str(&format!("?audience={}", aud));
-			}
+			*ae = format!("{gateway_base}/authorize");
 
-			// Okta doesn't do CORS for client registrations — proxy it (same pattern as Keycloak)
-			let current_uri = request_uri_for_oauth_metadata(req);
+			let Some(serde_json::Value::String(te)) =
+				json::traverse_mut(&mut resp, &["token_endpoint"])
+			else {
+				return Err(ProxyError::ProcessingString(
+					"token_endpoint missing from Okta AS metadata".to_string(),
+				));
+			};
+			*te = format!("{gateway_base}/token");
+
+			// Okta doesn't do CORS for client registrations — proxy via gateway.
 			if let Some(serde_json::Value::String(re)) =
 				json::traverse_mut(&mut resp, &["registration_endpoint"])
 			{
-				*re = format!("{current_uri}/client-registration");
+				*re = format!("{gateway_base}/.well-known/oauth-authorization-server/client-registration");
 			}
 		},
 		Some(McpIDP::Descope {}) => {
@@ -328,6 +388,13 @@ pub(super) async fn authorization_server_metadata(
 			}
 		},
 		_ => {},
+	}
+
+	// RFC 8414 §3.3: the `issuer` in AS metadata MUST match the issuer identifier implied by the
+	// metadata URL (RFC 8414 §3.1). For well-known metadata requests, that is the request URI with
+	// `/.well-known/oauth-authorization-server` removed.
+	if let Some(serde_json::Value::String(issuer_val)) = json::traverse_mut(&mut resp, &["issuer"]) {
+		*issuer_val = gateway_base;
 	}
 
 	let response = ::http::Response::builder()
@@ -421,6 +488,95 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
+}
+
+/// Redirects /authorize to Okta's actual authorize endpoint, injecting `audience` (RFC 8707
+/// workaround — Okta does not support resource indicators natively) and a default `scope=openid`
+/// when the client omits scope entirely.
+fn okta_authorize_redirect(
+	existing_query: &str,
+	auth: &McpAuthentication,
+) -> Result<Response, ProxyError> {
+	let issuer = auth.issuer.trim_end_matches('/');
+
+	// Parse the client's query params so we can merge cleanly and avoid duplicates.
+	let mut params: Vec<(String, String)> =
+		serde_urlencoded::from_str(existing_query).unwrap_or_default();
+
+	// Inject audience only when not already supplied by the client. Sending an empty
+	// audience= causes Okta to reject the request; absence is preferable to an invalid value.
+	if !params.iter().any(|(k, _)| k == "audience") {
+		if let Some(aud) = auth.audiences.first() {
+			params.insert(0, ("audience".to_string(), aud.clone()));
+		}
+	}
+
+	let query = serde_urlencoded::to_string(&params)
+		.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
+	let location = format!("{issuer}/v1/authorize?{query}");
+	Ok(Response::builder()
+		.status(StatusCode::FOUND)
+		.header("location", location)
+		.body(axum::body::Body::empty())?)
+}
+
+/// Proxies POST /token to Okta's token endpoint.
+///
+/// OAuth clients must not follow redirects for token exchange (RFC 6749), so a 302 is not
+/// viable here — we proxy the request directly to Okta and return its response verbatim.
+async fn okta_token_proxy(
+	content_type: Option<http::HeaderValue>,
+	authorization: Option<http::HeaderValue>,
+	body: Body,
+	auth: &McpAuthentication,
+	client: PolicyClient,
+) -> Result<Response, ProxyError> {
+	let issuer = auth.issuer.trim_end_matches('/');
+	let token_uri = format!("{issuer}/v1/token");
+
+	let mut builder = ::http::Request::builder()
+		.uri(token_uri)
+		.method(Method::POST);
+	if let Some(ct) = content_type {
+		builder = builder.header("content-type", ct);
+	}
+	if let Some(auth_hdr) = authorization {
+		builder = builder.header("authorization", auth_hdr);
+	}
+
+	let ureq = builder.body(body)?;
+	let upstream = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
+		.simple_call(ureq)
+		.await?;
+
+	Ok(upstream)
+}
+
+/// Derives the gateway issuer from an AS metadata URI, satisfying RFC 8414 §3.3.
+///
+/// Removes the `/.well-known/oauth-authorization-server` segment from the URL path while
+/// preserving any path suffix that follows it, as required by the RFC §3.1 path-based
+/// issuer form:
+///   `https://example.com/.well-known/oauth-authorization-server/issuer1`
+///   → `https://example.com/issuer1`
+///
+/// Operates on the parsed URL path — not the raw string — so query parameters and fragments
+/// are stripped and cannot be mistaken for part of the issuer.
+fn issuer_from_metadata_uri(uri: &str) -> String {
+	const WELL_KNOWN: &str = "/.well-known/oauth-authorization-server";
+	let Ok(mut parsed) = url::Url::parse(uri) else {
+		return uri.to_owned();
+	};
+	let path = parsed.path().to_owned();
+	if let Some(idx) = path.find(WELL_KNOWN) {
+		let new_path = format!("{}{}", &path[..idx], &path[idx + WELL_KNOWN.len()..]);
+		parsed.set_path(if new_path.is_empty() { "/" } else { &new_path });
+	}
+	parsed.set_query(None);
+	parsed.set_fragment(None);
+	// url::Url always appends `/` for root paths; strip it so the issuer has no trailing slash.
+	parsed.to_string().trim_end_matches('/').to_owned()
 }
 
 const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
@@ -696,5 +852,58 @@ mod tests {
 		assert_eq!(json["client_id"], "operator-id");
 		assert!(json.is_object());
 		assert_eq!(json["redirect_uris"], serde_json::json!([]));
+	}
+
+	#[test]
+	fn issuer_strips_well_known_suffix_from_root_gateway() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/.well-known/oauth-authorization-server"
+			),
+			"https://gateway.example.com"
+		);
+	}
+
+	#[test]
+	fn issuer_strips_well_known_suffix_from_path_prefixed_gateway() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/base/path/.well-known/oauth-authorization-server"
+			),
+			"https://gateway.example.com/base/path"
+		);
+	}
+
+	// RFC 8414 §3.1 path-based issuer form:
+	// issuer = https://example.com/issuer1
+	// metadata URL = https://example.com/.well-known/oauth-authorization-server/issuer1
+	// The /.well-known/oauth-authorization-server segment must be removed while the
+	// trailing /issuer1 path is preserved.
+	#[test]
+	fn issuer_preserves_path_suffix_after_well_known_segment() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/.well-known/oauth-authorization-server/issuer1"
+			),
+			"https://gateway.example.com/issuer1"
+		);
+	}
+
+	#[test]
+	fn issuer_returns_uri_unchanged_when_no_well_known_present() {
+		assert_eq!(
+			issuer_from_metadata_uri("https://gateway.example.com"),
+			"https://gateway.example.com"
+		);
+	}
+
+	#[test]
+	fn issuer_ignores_query_and_fragment_in_metadata_uri() {
+		assert_eq!(
+			issuer_from_metadata_uri(
+				"https://gateway.example.com/.well-known/oauth-authorization-server?foo=bar#frag"
+			),
+			"https://gateway.example.com"
+		);
 	}
 }
