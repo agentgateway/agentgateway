@@ -348,6 +348,9 @@ pub enum MessageType {
 		kind: String,
 		details: PolicyEventDetails,
 	},
+	TraceSampling {
+		decision: String,
+	},
 	AuthorizationResult {
 		rules: Vec<AuthorizationRuleResult>,
 		result: AuthorizationResult,
@@ -399,7 +402,8 @@ impl MessageType {
 			| MessageType::LlmRequestDetected { .. }
 			| MessageType::LlmStreamingTranslation { .. }
 			| MessageType::Policy { .. }
-			| MessageType::PolicyEvent { .. } => Severity::Info,
+			| MessageType::PolicyEvent { .. }
+			| MessageType::TraceSampling { .. } => Severity::Info,
 
 			MessageType::AuthorizationResult {
 				result: AuthorizationResult::Allow,
@@ -712,6 +716,11 @@ impl DebugTracer {
 				details: details.into(),
 			},
 		)
+	}
+	pub fn trace_sampling(&self, decision: &str) {
+		self.send(MessageType::TraceSampling {
+			decision: decision.to_owned(),
+		})
 	}
 	pub fn authorization_result(
 		&self,

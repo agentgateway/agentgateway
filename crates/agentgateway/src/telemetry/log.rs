@@ -384,26 +384,31 @@ pub struct TraceSampler {
 }
 
 impl TraceSampler {
-	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> bool {
+	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> (bool, &'static str) {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
 		} = &self;
-		let expr = if tp.is_some() {
+		let (expr, client) = if tp.is_some() {
 			let Some(cs) = client_sampling else {
 				// If client_sampling is not set, default to include it
-				return true;
+				return (true, "sample (client)");
 			};
-			cs
+			(cs, true)
 		} else {
 			let Some(rs) = random_sampling else {
 				// If random_sampling is not set, default to NOT include it
-				return false;
+				return (false, "not sampled (random)");
 			};
-			rs
+			(rs, false)
 		};
 		let exec = cel::Executor::new_request(req);
-		exec.eval_rng(expr.as_ref())
+		match (exec.eval_rng(expr.as_ref()), client) {
+			(true, true) => (true, "sample (client)"),
+			(true, false) => (true, "sample (random)"),
+			(false, true) => (false, "not sampled (client)"),
+			(false, false) => (false, "not sampled (random)"),
+		}
 	}
 }
 
