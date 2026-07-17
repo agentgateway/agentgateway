@@ -20,6 +20,7 @@ message Resource {
     // Service represents a service - a group of workloads that can be accessed together.
     istio.workload.Service service = 8;
     RouteGroup route_group = 9;
+    ModelRoute model_route = 10;
   }
 }
 
@@ -1891,4 +1892,82 @@ message OAuthTokenExchange {
   }
   // Response cache configuration. When unset uses InMemory cache with defaults
   TokenCache cache = 14;
+}
+
+message ModelRoute {
+  message VirtualModel {
+    message Weighted {
+      message Target {
+        // Concrete model name selected by this virtual model target.
+        //
+        // This is not a ModelRoute resource key. The data plane rewrites the
+        // incoming request model to this value, then resolves it against the
+        // concrete ModelRoute.name values/patterns in the same listener's model
+        // table. For Kubernetes AgentgatewayModel ModelTargetReference, the
+        // control plane sets this to target.model when specified; otherwise it
+        // uses the referenced model's effective modelMatch, defaulting to the
+        // referenced resource name when modelMatch is omitted.
+        string model = 1;
+        uint32 weight = 2;
+      }
+      repeated Target targets = 1;
+    }
+
+    message Conditional {
+      message Target {
+        // Concrete model name selected by this virtual model target.
+        //
+        // This has the same contract as Weighted.Target.model: it is the model
+        // name used for request rewriting and concrete model-pattern resolution,
+        // not a ModelRoute resource key.
+        string model = 1;
+        optional string when = 2;
+      }
+      repeated Target targets = 1;
+    }
+
+    message Failover {
+      // Backend containing the pre-lowered failover provider groups for this
+      // virtual model. Failover routing is resolved by the control plane into an
+      // AI backend because the runtime failover path selects provider groups
+      // directly rather than recursively resolving concrete model names.
+      BackendReference backend = 1;
+    }
+
+    oneof routing {
+      Weighted weighted = 1;
+      Conditional conditional = 2;
+      Failover failover = 3;
+    }
+  }
+
+  message ConcreteModel {
+    enum ModelVisibility {
+      PUBLIC = 0;
+      INTERNAL = 1;
+    }
+    // Whether this model is accessible directly through its listener
+    // vs. just an internal building block for a virtual model
+    ModelVisibility model_visibility = 1;
+    BackendReference backend = 2;
+    repeated BackendPolicySpec backend_policies = 3;
+  }
+  // Unique resource key for this model route. This is used for xDS resource
+  // identity/update/delete, not for virtual model target selection.
+  string key = 1;
+
+  // Key for the listener this model is part of.
+  string listener_key = 2;
+
+  // User-facing model name or wildcard pattern for this model route.
+  //
+  // Concrete routes use this for direct request matching and virtual target
+  // resolution. Virtual routes use this as the exact client-requested virtual
+  // model name.
+  string name = 3;
+
+  oneof kind {
+    VirtualModel virtual_model = 4;
+    ConcreteModel concrete_model = 5;
+  }
 }

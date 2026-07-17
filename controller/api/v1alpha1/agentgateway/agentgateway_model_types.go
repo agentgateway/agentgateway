@@ -43,6 +43,7 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.providerModel)",message="providerModel requires provider"
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
+// +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 type AgentgatewayModelSpec struct {
 	// Gateways and listeners to which this model attaches.
 	// +kubebuilder:validation:MinItems=1

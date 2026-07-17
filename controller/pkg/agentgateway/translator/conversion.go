@@ -30,6 +30,7 @@ import (
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
@@ -1630,6 +1631,8 @@ func GetCommonRouteInfo(spec any) ([]gwv1.ParentReference, []gwv1.Hostname, sche
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.HTTPRouteGVK
 	case *gwv1.GRPCRoute:
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.GRPCRouteGVK
+	case *agentgateway.AgentgatewayModel:
+		return t.Spec.ParentRefs, nil, wellknown.AgentgatewayModelGVK
 	default:
 		log.Fatalf("unknown type %T", t)
 		return nil, nil, schema.GroupVersionKind{}

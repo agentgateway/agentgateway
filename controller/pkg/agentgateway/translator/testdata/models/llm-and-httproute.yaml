@@ -57,6 +57,21 @@ output:
     Name: mixed
     Namespace: default
   resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai:
+              model: gpt-5-mini
+      key: default/gpt-5-mini/backend.http
+      name:
+        name: gpt-5-mini
+        namespace: default
+- gateway:
+    Name: mixed
+    Namespace: default
+  resource:
     bind:
       key: 80/default/mixed
       port: 80
@@ -72,6 +87,17 @@ output:
         gatewayNamespace: default
         listenerName: http
       protocol: HTTP
+- gateway:
+    Name: mixed
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/gpt-5-mini/backend.http
+      key: default/gpt-5-mini.http
+      listenerKey: default/mixed.http
+      name: gpt-5-mini
 - gateway:
     Name: mixed
     Namespace: default
@@ -94,6 +120,32 @@ output:
         name: health
         namespace: default
 status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: gpt-5-mini
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: mixed
+        namespace: default
+        sectionName: http
 - apiVersion: gateway.networking.k8s.io/v1
   kind: Gateway
   metadata:
@@ -114,7 +166,7 @@ status:
       status: "True"
       type: Programmed
     listeners:
-    - attachedRoutes: 1
+    - attachedRoutes: 2
       conditions:
       - lastTransitionTime: fake
         message: No errors found

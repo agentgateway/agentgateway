@@ -1320,6 +1320,131 @@ impl Route {
 	}
 }
 
+impl ModelRoute {
+	pub fn from_xds(
+		s: &proto::agent::ModelRoute,
+		diagnostics: &mut Diagnostics,
+	) -> Result<(Self, ListenerKey), ProtoError> {
+		use proto::agent::model_route;
+		use proto::agent::model_route::virtual_model;
+
+		let name = strng::new(&s.name);
+		let kind = match &s.kind {
+			Some(model_route::Kind::ConcreteModel(concrete)) => {
+				let visibility = match concrete.model_visibility() {
+					model_route::concrete_model::ModelVisibility::Public => {
+						llm::model_router::ModelVisibility::Public
+					},
+					model_route::concrete_model::ModelVisibility::Internal => {
+						llm::model_router::ModelVisibility::Internal
+					},
+				};
+				let backend = RouteBackendReference {
+					weight: 1,
+					target: resolve_reference(concrete.backend.as_ref()).into(),
+					inline_policies: concrete
+						.backend_policies
+						.iter()
+						.map(|policy| backend_policy_from_proto(policy, diagnostics))
+						.collect::<Result<Vec<_>, _>>()?,
+				};
+				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
+					name: s.name.clone(),
+					visibility,
+					header_matches: vec![],
+					backend,
+					policies: llm::model_router::ModelRoutePolicies {
+						llm: llm::model_router::default_route_types(),
+						authorization: None,
+					},
+					backend_policies: vec![],
+				})
+			},
+			Some(model_route::Kind::VirtualModel(virtual_model)) => {
+				let routing = match &virtual_model.routing {
+					Some(virtual_model::Routing::Weighted(weighted)) => {
+						if weighted.targets.is_empty() {
+							return Err(ProtoError::Generic(
+								"model route weighted virtual model must have at least one target".to_string(),
+							));
+						}
+						llm::model_router::VirtualModelRouting::Weighted(
+							weighted
+								.targets
+								.iter()
+								.map(|target| llm::model_router::WeightedTarget {
+									model: target.model.clone(),
+									weight: target.weight as usize,
+								})
+								.collect(),
+						)
+					},
+					Some(virtual_model::Routing::Conditional(conditional)) => {
+						if conditional.targets.is_empty() {
+							return Err(ProtoError::Generic(
+								"model route conditional virtual model must have at least one target".to_string(),
+							));
+						}
+						let mut targets = Vec::with_capacity(conditional.targets.len());
+						for (idx, target) in conditional.targets.iter().enumerate() {
+							let when = target.when.as_ref().filter(|when| !when.is_empty());
+							if when.is_none() && idx + 1 != conditional.targets.len() {
+								return Err(ProtoError::Generic(
+									"model route conditional fallback target must be last".to_string(),
+								));
+							}
+							targets.push(llm::model_router::ConditionalTarget {
+								model: target.model.clone(),
+								when: when.map(|expr| {
+									permissive_cel_expression_arc(
+										diagnostics,
+										format!("modelRoute.{}.conditional.when", s.name),
+										expr.clone(),
+									)
+								}),
+							});
+						}
+						llm::model_router::VirtualModelRouting::Conditional(targets)
+					},
+					Some(virtual_model::Routing::Failover(failover)) => {
+						llm::model_router::VirtualModelRouting::Failover {
+							backend: RouteBackendReference {
+								weight: 1,
+								target: resolve_reference(failover.backend.as_ref()).into(),
+								inline_policies: vec![],
+							},
+						}
+					},
+					None => {
+						return Err(ProtoError::Generic(
+							"model route virtual model must specify routing".to_string(),
+						));
+					},
+				};
+				ModelRouteKind::Virtual(llm::model_router::VirtualModelRoute {
+					name: s.name.clone(),
+					llm_policy: llm::model_router::default_route_types(),
+					routing,
+				})
+			},
+			None => {
+				return Err(ProtoError::Generic(
+					"model route kind is required".to_string(),
+				));
+			},
+		};
+
+		Ok((
+			ModelRoute {
+				key: strng::new(&s.key),
+				name,
+				kind,
+			},
+			strng::new(&s.listener_key),
+		))
+	}
+}
+
 pub(crate) fn backend_with_policies_from_proto(
 	s: &proto::agent::Backend,
 	diagnostics: &mut Diagnostics,
@@ -4089,6 +4214,219 @@ mod tests {
 			panic!("Expected Transformation policy variant");
 		};
 		assert_eq!(transformation.expressions().count(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_concrete_model_route_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::backend_reference;
+		use proto::agent::model_route::concrete_model::ModelVisibility;
+		use proto::agent::model_route::{ConcreteModel, Kind};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/gpt-5-mini".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			name: "gpt-5-mini".to_string(),
+			kind: Some(Kind::ConcreteModel(ConcreteModel {
+				model_visibility: ModelVisibility::Internal as i32,
+				backend: Some(proto::agent::BackendReference {
+					port: 0,
+					kind: Some(backend_reference::Kind::Backend(
+						"/default/openai".to_string(),
+					)),
+				}),
+				backend_policies: vec![],
+			})),
+		};
+
+		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		assert_eq!(listener.as_str(), "default/gw.http");
+		assert_eq!(route.key.as_str(), "default/gpt-5-mini");
+		assert_eq!(route.name.as_str(), "gpt-5-mini");
+		let ModelRouteKind::Concrete(model) = route.kind else {
+			panic!("expected concrete model route");
+		};
+		assert_eq!(model.name, "gpt-5-mini");
+		assert_eq!(
+			model.visibility,
+			llm::model_router::ModelVisibility::Internal
+		);
+		assert!(
+			model
+				.policies
+				.llm
+				.routes
+				.contains_key("/v1/chat/completions")
+		);
+		assert_eq!(model.backend.weight, 1);
+		match model.backend.target {
+			RouteBackendTarget::Backend(key) => {
+				assert_eq!(key.as_str(), "/default/openai");
+			},
+			other => panic!("expected backend target, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn test_virtual_model_route_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::model_route::virtual_model::weighted;
+		use proto::agent::model_route::virtual_model::{Routing, Weighted};
+		use proto::agent::model_route::{Kind, VirtualModel};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/fast".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			name: "fast".to_string(),
+			kind: Some(Kind::VirtualModel(VirtualModel {
+				routing: Some(Routing::Weighted(Weighted {
+					targets: vec![
+						weighted::Target {
+							model: "openai/gpt-5-mini".to_string(),
+							weight: 40,
+						},
+						weighted::Target {
+							model: "anthropic/claude-haiku-4-5".to_string(),
+							weight: 60,
+						},
+					],
+				})),
+			})),
+		};
+
+		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		assert_eq!(listener.as_str(), "default/gw.http");
+		let ModelRouteKind::Virtual(model) = route.kind else {
+			panic!("expected virtual model route");
+		};
+		assert_eq!(model.name, "fast");
+		assert!(model.llm_policy.routes.contains_key("/v1/chat/completions"));
+		let llm::model_router::VirtualModelRouting::Weighted(targets) = model.routing else {
+			panic!("expected weighted routing");
+		};
+		assert_eq!(targets.len(), 2);
+		assert_eq!(targets[0].model, "openai/gpt-5-mini");
+		assert_eq!(targets[0].weight, 40);
+		assert_eq!(targets[1].model, "anthropic/claude-haiku-4-5");
+		assert_eq!(targets[1].weight, 60);
+		Ok(())
+	}
+
+	#[test]
+	fn test_conditional_model_route_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::model_route::virtual_model::conditional;
+		use proto::agent::model_route::virtual_model::{Conditional, Routing};
+		use proto::agent::model_route::{Kind, VirtualModel};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/smart".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			name: "smart".to_string(),
+			kind: Some(Kind::VirtualModel(VirtualModel {
+				routing: Some(Routing::Conditional(Conditional {
+					targets: vec![
+						conditional::Target {
+							model: "gpt-5-large".to_string(),
+							when: Some(r#"request.headers["x-tier"] == "premium""#.to_string()),
+						},
+						conditional::Target {
+							model: "gpt-5-mini".to_string(),
+							when: None,
+						},
+					],
+				})),
+			})),
+		};
+
+		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		assert_eq!(listener.as_str(), "default/gw.http");
+		let ModelRouteKind::Virtual(model) = route.kind else {
+			panic!("expected virtual model route");
+		};
+		let llm::model_router::VirtualModelRouting::Conditional(targets) = model.routing else {
+			panic!("expected conditional routing");
+		};
+		assert_eq!(targets.len(), 2);
+		assert_eq!(targets[0].model, "gpt-5-large");
+		assert!(targets[0].when.is_some());
+		assert_eq!(targets[1].model, "gpt-5-mini");
+		assert!(targets[1].when.is_none());
+		Ok(())
+	}
+
+	#[test]
+	fn test_conditional_model_route_rejects_fallback_before_last() {
+		use proto::agent::model_route::virtual_model::conditional;
+		use proto::agent::model_route::virtual_model::{Conditional, Routing};
+		use proto::agent::model_route::{Kind, VirtualModel};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/smart".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			name: "smart".to_string(),
+			kind: Some(Kind::VirtualModel(VirtualModel {
+				routing: Some(Routing::Conditional(Conditional {
+					targets: vec![
+						conditional::Target {
+							model: "gpt-5-mini".to_string(),
+							when: None,
+						},
+						conditional::Target {
+							model: "gpt-5-large".to_string(),
+							when: Some("true".to_string()),
+						},
+					],
+				})),
+			})),
+		};
+
+		let err = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())
+			.expect_err("fallback before last should be rejected");
+		assert!(
+			err
+				.to_string()
+				.contains("model route conditional fallback target must be last"),
+			"{err}"
+		);
+	}
+
+	#[test]
+	fn test_failover_model_route_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::backend_reference;
+		use proto::agent::model_route::virtual_model::{Failover, Routing};
+		use proto::agent::model_route::{Kind, VirtualModel};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/resilient".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			name: "resilient".to_string(),
+			kind: Some(Kind::VirtualModel(VirtualModel {
+				routing: Some(Routing::Failover(Failover {
+					backend: Some(proto::agent::BackendReference {
+						port: 0,
+						kind: Some(backend_reference::Kind::Backend(
+							"default/resilient/failover.http".to_string(),
+						)),
+					}),
+				})),
+			})),
+		};
+
+		let (route, _) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		let ModelRouteKind::Virtual(model) = route.kind else {
+			panic!("expected virtual model route");
+		};
+		let llm::model_router::VirtualModelRouting::Failover { backend } = model.routing else {
+			panic!("expected failover routing");
+		};
+		assert_eq!(backend.weight, 1);
+		assert!(backend.inline_policies.is_empty());
+		match backend.target {
+			RouteBackendTarget::Backend(key) => {
+				assert_eq!(key.as_str(), "default/resilient/failover.http");
+			},
+			other => panic!("expected backend target, got {other:?}"),
+		}
 		Ok(())
 	}
 

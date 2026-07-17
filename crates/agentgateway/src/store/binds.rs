@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ::http::HeaderValue;
 use agent_xds::{RejectedConfig, XdsUpdate};
@@ -25,15 +26,16 @@ use crate::store::{BackendPolicy, HasExpressions, PolicyExpressions, RequestPoli
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendTargetRef, BackendTrafficPolicy, BackendWithPolicies,
 	Bind, BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
-	McpAuthentication, PolicyInheritance, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey,
-	RouteName, RouteSet, TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
+	McpAuthentication, PolicyInheritance, PolicyKey, PolicyTarget, Route, RouteBackendReference,
+	RouteGroupKey, RouteKey, RouteMatch, RouteName, RouteSet, TCPRoute, TCPRouteSet, TargetedPolicy,
+	TrafficPolicy,
 };
 use crate::types::agent_xds::Diagnostics;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
-	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Policy as XdsPolicy,
-	Resource as ADPResource, Route as XdsRoute, TcpRoute as XdsTcpRoute,
+	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, ModelRoute as XdsModelRoute,
+	Policy as XdsPolicy, Resource as ADPResource, Route as XdsRoute, TcpRoute as XdsTcpRoute,
 };
 use crate::types::{agent, frontend};
 use crate::*;
@@ -44,6 +46,7 @@ enum ResourceKind {
 	Bind(BindKey),
 	Route(RouteKey),
 	TcpRoute(RouteKey),
+	ModelRoute(RouteKey),
 	Listener(ListenerKey),
 	Backend(ListenerKey),
 }
@@ -96,6 +99,7 @@ pub struct Store {
 	policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
 
 	backends: HashMap<BackendKey, Arc<BackendWithPolicies>>,
+	model_routes: HashMap<RouteKey, (ListenerKey, agent::ModelRoute)>,
 
 	// Listeners we got before a Bind arrived
 	pending_listeners: HashMap<BindKey, HashMap<ListenerKey, Listener>>,
@@ -627,6 +631,7 @@ impl Store {
 			policies_by_key: Default::default(),
 			policies_by_target: Default::default(),
 			backends: Default::default(),
+			model_routes: Default::default(),
 			pending_listeners: Default::default(),
 			http_routes: Default::default(),
 			tcp_routes: Default::default(),
@@ -711,6 +716,91 @@ impl Store {
 			.entry(target)
 			.or_insert_with(|| Arc::new(RouteSet::default()));
 		Arc::make_mut(routes).insert(route);
+	}
+
+	fn model_router_backend_name(listener: &ListenerKey) -> Strng {
+		strng::format!("llm:router:{listener}")
+	}
+
+	fn model_router_backend_key(listener: &ListenerKey) -> BackendKey {
+		strng::format!("/{}", Self::model_router_backend_name(listener))
+	}
+
+	fn model_router_route_key(listener: &ListenerKey) -> RouteKey {
+		strng::format!("llm:request:{listener}")
+	}
+
+	fn rebuild_model_router(&mut self, listener: &ListenerKey) {
+		let route_key = Self::model_router_route_key(listener);
+		let backend_name = Self::model_router_backend_name(listener);
+		let backend_key = Self::model_router_backend_key(listener);
+		self.remove_http_route(&route_key);
+		self.remove_backend(backend_key.clone());
+
+		let mut models = Vec::new();
+		let mut virtual_models = Vec::new();
+		for (_, model_route) in self
+			.model_routes
+			.values()
+			.filter(|(model_listener, _)| model_listener == listener)
+			.sorted_by_key(|(_, model_route)| model_route.key.clone())
+		{
+			match &model_route.kind {
+				agent::ModelRouteKind::Concrete(model) => models.push(model.clone()),
+				agent::ModelRouteKind::Virtual(model) => virtual_models.push(model.clone()),
+			}
+		}
+
+		if models.is_empty() && virtual_models.is_empty() {
+			return;
+		}
+
+		let created = SystemTime::now()
+			.duration_since(UNIX_EPOCH)
+			.map(|d| d.as_secs())
+			.unwrap_or_default();
+		self.insert_backend(
+			backend_key.clone(),
+			BackendWithPolicies {
+				backend: Backend::LLMRouter(
+					agent::ResourceName::new(backend_name, strng::EMPTY),
+					Arc::new(crate::llm::model_router::ModelRouter::new(
+						models,
+						virtual_models,
+						created,
+					)),
+				),
+				inline_policies: vec![],
+			},
+		);
+		self.insert_http_route_target(
+			RouteTarget::Listener(listener.clone()),
+			Route {
+				key: route_key,
+				service_key: None,
+				service_port: 0,
+				name: RouteName {
+					name: strng::new("llm:request"),
+					namespace: strng::new("internal"),
+					rule_name: None,
+					kind: None,
+				},
+				hostnames: vec![],
+				matches: vec![RouteMatch {
+					path: agent::PathMatch::PathPrefix(strng::new("/")),
+					method: None,
+					headers: vec![],
+					query: vec![],
+				}],
+				backends: vec![RouteBackendReference {
+					weight: 1,
+					target: agent::BackendReference::Backend(backend_key).into(),
+					inline_policies: vec![],
+				}],
+				llm_router: None,
+				inline_policies: vec![],
+			},
+		);
 	}
 
 	fn insert_tcp_route_target(&mut self, target: RouteTarget, route: TCPRoute) {
@@ -1512,6 +1602,19 @@ impl Store {
 
 	#[instrument(
         level = Level::INFO,
+        name="remove_model_route",
+        skip_all,
+        fields(model_route),
+    )]
+	pub fn remove_model_route(&mut self, model_route: RouteKey) {
+		let Some((listener, _)) = self.model_routes.remove(&model_route) else {
+			return;
+		};
+		self.rebuild_model_router(&listener);
+	}
+
+	#[instrument(
+        level = Level::INFO,
         name="insert_bind",
         skip_all,
         fields(bind=%bind.key),
@@ -1573,6 +1676,20 @@ impl Store {
 		self.insert_http_route_target(RouteTarget::Listener(ln), r);
 	}
 
+	pub fn insert_model_route(&mut self, r: agent::ModelRoute, ln: ListenerKey) {
+		debug!(listener=%ln, model_route=%r.key, "insert model route");
+		let old_listener = self
+			.model_routes
+			.insert(r.key.clone(), (ln.clone(), r))
+			.map(|(old_listener, _)| old_listener);
+		if let Some(old_listener) = old_listener
+			&& old_listener != ln
+		{
+			self.rebuild_model_router(&old_listener);
+		}
+		self.rebuild_model_router(&ln);
+	}
+
 	pub fn insert_tcp_route(&mut self, r: TCPRoute, ln: ListenerKey) {
 		debug!(listener=%ln,route=%r.key, "insert tcp route");
 		self.insert_tcp_route_target(RouteTarget::Listener(ln), r);
@@ -1610,6 +1727,7 @@ impl Store {
 			ResourceKind::Bind(n) => self.remove_bind(n),
 			ResourceKind::Route(n) => self.remove_route(n),
 			ResourceKind::TcpRoute(n) => self.remove_tcp_route(n),
+			ResourceKind::ModelRoute(n) => self.remove_model_route(n),
 			ResourceKind::Listener(n) => self.remove_listener(n),
 			ResourceKind::Backend(n) => self.remove_backend(n),
 		}
@@ -1646,6 +1764,12 @@ impl Store {
 					.resources
 					.insert(name, ResourceKind::TcpRoute(strng::new(&w.key)));
 				self.insert_xds_tcp_route(w, diagnostics)
+			},
+			Some(XdsKind::ModelRoute(w)) => {
+				self
+					.resources
+					.insert(name, ResourceKind::ModelRoute(strng::new(&w.key)));
+				self.insert_xds_model_route(w, diagnostics)
 			},
 			Some(XdsKind::Backend(w)) => {
 				self
@@ -1713,6 +1837,15 @@ impl Store {
 			self.insert_tcp_route(route, listener_name);
 			Ok(())
 		}
+	}
+	fn insert_xds_model_route(
+		&mut self,
+		raw: XdsModelRoute,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let (route, listener_name) = agent::ModelRoute::from_xds(&raw, diagnostics)?;
+		self.insert_model_route(route, listener_name);
+		Ok(())
 	}
 	fn insert_xds_backend(
 		&mut self,
@@ -2109,6 +2242,220 @@ mod tests {
 				vec![],
 			)),
 		))
+	}
+
+	#[test]
+	fn xds_model_route_builds_listener_llm_router() {
+		use crate::types::proto::agent::backend_reference;
+		use crate::types::proto::agent::model_route::concrete_model::ModelVisibility;
+		use crate::types::proto::agent::model_route::{ConcreteModel, Kind};
+		use agent_xds::{Handler, XdsResource};
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+		let listener_key = strng::literal!("default/gw.http");
+		let model_route = crate::types::proto::agent::ModelRoute {
+			key: "default/gpt-5-mini".to_string(),
+			listener_key: listener_key.to_string(),
+			name: "gpt-5-mini".to_string(),
+			kind: Some(Kind::ConcreteModel(ConcreteModel {
+				model_visibility: ModelVisibility::Public as i32,
+				backend: Some(crate::types::proto::agent::BackendReference {
+					port: 0,
+					kind: Some(backend_reference::Kind::Backend(
+						"/default/openai".to_string(),
+					)),
+				}),
+				backend_policies: vec![],
+			})),
+		};
+
+		let mut updates = vec![XdsUpdate::Update(XdsResource {
+			name: strng::literal!("model/default/gpt-5-mini"),
+			resource: ADPResource {
+				kind: Some(XdsKind::ModelRoute(model_route)),
+			},
+		})]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut updates))
+			.expect("model route accepted");
+
+		let store = updater.read();
+		let route_key = Store::model_router_route_key(&listener_key);
+		let backend_key = Store::model_router_backend_key(&listener_key);
+		let routes = store
+			.get_listener_routes(&listener_key)
+			.expect("listener should have model router route");
+		assert!(routes.contains(&route_key));
+		let backend = store
+			.backends
+			.get(&backend_key)
+			.expect("model route should synthesize router backend");
+		assert!(matches!(backend.backend, Backend::LLMRouter(_, _)));
+		drop(store);
+
+		let mut removals = vec![XdsUpdate::<ADPResource>::Remove(strng::literal!(
+			"model/default/gpt-5-mini"
+		))]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut removals))
+			.expect("model route removal accepted");
+		let store = updater.read();
+		assert!(
+			store.get_listener_routes(&listener_key).is_none(),
+			"last model route removal should remove synthetic route"
+		);
+		assert!(
+			!store.backends.contains_key(&backend_key),
+			"last model route removal should remove synthetic backend"
+		);
+	}
+
+	#[test]
+	fn xds_model_route_rebuilds_listener_scoped_routers() {
+		use crate::types::proto::agent::backend_reference;
+		use crate::types::proto::agent::model_route::concrete_model::ModelVisibility;
+		use crate::types::proto::agent::model_route::{ConcreteModel, Kind};
+		use agent_xds::{Handler, XdsResource};
+
+		fn model_route(
+			key: &str,
+			listener_key: &str,
+			name: &str,
+		) -> crate::types::proto::agent::ModelRoute {
+			crate::types::proto::agent::ModelRoute {
+				key: key.to_string(),
+				listener_key: listener_key.to_string(),
+				name: name.to_string(),
+				kind: Some(Kind::ConcreteModel(ConcreteModel {
+					model_visibility: ModelVisibility::Public as i32,
+					backend: Some(crate::types::proto::agent::BackendReference {
+						port: 0,
+						kind: Some(backend_reference::Kind::Backend(format!("/default/{name}"))),
+					}),
+					backend_policies: vec![],
+				})),
+			}
+		}
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+		let listener_a = strng::literal!("default/gw.a");
+		let listener_b = strng::literal!("default/gw.b");
+
+		let mut updates = vec![
+			XdsUpdate::Update(XdsResource {
+				name: strng::literal!("model/default/a"),
+				resource: ADPResource {
+					kind: Some(XdsKind::ModelRoute(model_route(
+						"default/a",
+						&listener_a,
+						"a",
+					))),
+				},
+			}),
+			XdsUpdate::Update(XdsResource {
+				name: strng::literal!("model/default/b"),
+				resource: ADPResource {
+					kind: Some(XdsKind::ModelRoute(model_route(
+						"default/b",
+						&listener_b,
+						"b",
+					))),
+				},
+			}),
+			XdsUpdate::Update(XdsResource {
+				name: strng::literal!("model/default/c"),
+				resource: ADPResource {
+					kind: Some(XdsKind::ModelRoute(model_route(
+						"default/c",
+						&listener_a,
+						"c",
+					))),
+				},
+			}),
+		]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut updates))
+			.expect("model routes accepted");
+
+		let store = updater.read();
+		let route_a = Store::model_router_route_key(&listener_a);
+		let route_b = Store::model_router_route_key(&listener_b);
+		let backend_a = Store::model_router_backend_key(&listener_a);
+		let backend_b = Store::model_router_backend_key(&listener_b);
+		assert!(
+			store
+				.get_listener_routes(&listener_a)
+				.expect("listener A should have router route")
+				.contains(&route_a)
+		);
+		assert!(
+			store
+				.get_listener_routes(&listener_b)
+				.expect("listener B should have router route")
+				.contains(&route_b)
+		);
+		let route = store
+			.get_listener_routes(&listener_a)
+			.expect("listener A route set exists")
+			.get_by_name(&RouteName {
+				name: strng::new("llm:request"),
+				namespace: strng::new("internal"),
+				rule_name: None,
+				kind: None,
+			})
+			.expect("listener A route exists");
+		assert_eq!(route.key, route_a);
+		assert!(
+			matches!(&route.backends[0].target, agent::RouteBackendTarget::Backend(key) if *key == backend_a),
+			"synthetic route should point at listener-scoped router backend"
+		);
+		assert!(store.backends.contains_key(&backend_a));
+		assert!(store.backends.contains_key(&backend_b));
+		drop(store);
+
+		let mut removals = vec![XdsUpdate::<ADPResource>::Remove(strng::literal!(
+			"model/default/a"
+		))]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut removals))
+			.expect("model route removal accepted");
+		let store = updater.read();
+		assert!(
+			store.get_listener_routes(&listener_a).is_some(),
+			"listener A router should remain while another model route is attached"
+		);
+		assert!(store.backends.contains_key(&backend_a));
+		assert!(store.backends.contains_key(&backend_b));
+		drop(store);
+
+		let mut removals = vec![XdsUpdate::<ADPResource>::Remove(strng::literal!(
+			"model/default/c"
+		))]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut removals))
+			.expect("last listener A model route removal accepted");
+		let store = updater.read();
+		assert!(
+			store.get_listener_routes(&listener_a).is_none(),
+			"listener A router should be removed after last model route"
+		);
+		assert!(
+			!store.backends.contains_key(&backend_a),
+			"listener A backend should be removed after last model route"
+		);
+		assert!(
+			store.get_listener_routes(&listener_b).is_some(),
+			"listener B router should be unaffected"
+		);
+		assert!(
+			store.backends.contains_key(&backend_b),
+			"listener B backend should be unaffected"
+		);
 	}
 
 	#[test]

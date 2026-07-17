@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
 use futures_util::stream;
@@ -11,8 +10,7 @@ use serde_json::Value;
 use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, Response};
 use crate::types::agent::{
-	Authorization, BackendReference, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch,
-	RouteBackendReference,
+	Authorization, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, RouteBackendReference,
 };
 use crate::{apply, cel, llm, schema_enum};
 
@@ -22,7 +20,7 @@ pub struct ModelRoute {
 	pub name: String,
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,
-	pub backend_key: Strng,
+	pub backend: RouteBackendReference,
 	pub policies: ModelRoutePolicies,
 	pub backend_policies: Vec<BackendTrafficPolicy>,
 }
@@ -50,6 +48,32 @@ impl ModelVisibility {
 	}
 }
 
+pub fn default_route_types() -> Arc<llm::Policy> {
+	Arc::new(llm::Policy {
+		routes: [
+			(
+				strng::new("/v1/chat/completions"),
+				llm::RouteType::Completions,
+			),
+			(strng::new("/v1/messages"), llm::RouteType::Messages),
+			(strng::new(":rawPredict"), llm::RouteType::Messages),
+			(strng::new(":streamRawPredict"), llm::RouteType::Messages),
+			(strng::new("/v1/responses"), llm::RouteType::Responses),
+			(strng::new("/v1/images/generations"), llm::RouteType::Detect),
+			(strng::new("/v1/images/edits"), llm::RouteType::Detect),
+			(strng::new("/v1/images/variations"), llm::RouteType::Detect),
+			(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
+			(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
+			(strng::new("/v1/rerank"), llm::RouteType::Rerank),
+			(strng::new("/v2/rerank"), llm::RouteType::Rerank),
+			(strng::new("*"), llm::RouteType::Passthrough),
+		]
+		.into_iter()
+		.collect(),
+		..Default::default()
+	})
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VirtualModelRoute {
@@ -62,7 +86,7 @@ pub struct VirtualModelRoute {
 #[serde(rename_all = "camelCase")]
 pub enum VirtualModelRouting {
 	Weighted(Vec<WeightedTarget>),
-	Failover { backend_key: Strng },
+	Failover { backend: RouteBackendReference },
 	Conditional(Vec<ConditionalTarget>),
 }
 
@@ -208,13 +232,9 @@ impl ModelRouter {
 					},
 				}
 			},
-			VirtualModelRouting::Failover { backend_key } => {
+			VirtualModelRouting::Failover { backend } => {
 				return ResolveResult::Backend(ResolvedBackend {
-					backend: RouteBackendReference {
-						weight: 1,
-						target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
-						inline_policies: vec![],
-					},
+					backend: backend.clone(),
 					llm_policy: virtual_model.llm_policy.clone(),
 				});
 			},
@@ -277,11 +297,7 @@ impl ModelRouter {
 				&& header_matches(&model.header_matches, req)
 		})?;
 		Some(ResolvedBackend {
-			backend: RouteBackendReference {
-				weight: 1,
-				target: BackendReference::Backend(strng::format!("/{}", model.backend_key)).into(),
-				inline_policies: model.backend_policies.clone(),
-			},
+			backend: model.backend.clone(),
 			llm_policy: model.policies.llm.clone(),
 		})
 	}
