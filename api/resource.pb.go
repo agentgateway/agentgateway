@@ -2282,6 +2282,9 @@ type MCPBackend_PrefixMode int32
 const (
 	MCPBackend_CONDITIONAL MCPBackend_PrefixMode = 0
 	MCPBackend_ALWAYS      MCPBackend_PrefixMode = 1
+	// Never prefix names, even with multiple targets; tool/prompt calls are
+	// routed by looking up which target serves the name.
+	MCPBackend_NEVER MCPBackend_PrefixMode = 2
 )
 
 // Enum value maps for MCPBackend_PrefixMode.
@@ -2289,10 +2292,12 @@ var (
 	MCPBackend_PrefixMode_name = map[int32]string{
 		0: "CONDITIONAL",
 		1: "ALWAYS",
+		2: "NEVER",
 	}
 	MCPBackend_PrefixMode_value = map[string]int32{
 		"CONDITIONAL": 0,
 		"ALWAYS":      1,
+		"NEVER":       2,
 	}
 )
 
@@ -5044,9 +5049,15 @@ type AwsAssumeRole struct {
 	// Session tags passed to STS AssumeRole. Once activated as cost allocation
 	// tags, they surface as columns in the AWS Cost & Usage Report for per-tenant
 	// cost attribution.
-	Tags          []*AwsSessionTag `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Tags []*AwsSessionTag `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`
+	// CEL expression evaluated against each request to produce the session name
+	// (RoleSessionName), for example `jwt.sub` or `request.headers["x-team"]`. If
+	// the expression does not produce a valid session name at request time, the
+	// request is rejected. At most one of session_name and session_name_expression
+	// may be set.
+	SessionNameExpression string `protobuf:"bytes,4,opt,name=session_name_expression,json=sessionNameExpression,proto3" json:"session_name_expression,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *AwsAssumeRole) Reset() {
@@ -5098,6 +5109,13 @@ func (x *AwsAssumeRole) GetTags() []*AwsSessionTag {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *AwsAssumeRole) GetSessionNameExpression() string {
+	if x != nil {
+		return x.SessionNameExpression
+	}
+	return ""
 }
 
 // AWS STS session tag passed to AssumeRole for cost attribution.
@@ -15740,11 +15758,12 @@ const file_resource_proto_rawDesc = "" +
 	"\x06region\x18\x03 \x01(\tR\x06region\x12(\n" +
 	"\rsession_token\x18\x04 \x01(\tH\x00R\fsessionToken\x88\x01\x01B\x10\n" +
 	"\x0e_session_token\"\r\n" +
-	"\vAwsImplicit\"\x8b\x01\n" +
+	"\vAwsImplicit\"\xc3\x01\n" +
 	"\rAwsAssumeRole\x12\x19\n" +
 	"\brole_arn\x18\x01 \x01(\tR\aroleArn\x12!\n" +
 	"\fsession_name\x18\x02 \x01(\tR\vsessionName\x12<\n" +
-	"\x04tags\x18\x03 \x03(\v2(.agentgateway.dev.resource.AwsSessionTagR\x04tags\"W\n" +
+	"\x04tags\x18\x03 \x03(\v2(.agentgateway.dev.resource.AwsSessionTagR\x04tags\x126\n" +
+	"\x17session_name_expression\x18\x04 \x01(\tR\x15sessionNameExpression\"W\n" +
 	"\rAwsSessionTag\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\x12\x1e\n" +
@@ -16665,7 +16684,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x15ANTHROPIC_TOKEN_COUNT\x10\x05\x12\f\n" +
 	"\bREALTIME\x10\x06\x12\n" +
 	"\n" +
-	"\x06RERANK\x10\a\"\xd5\x03\n" +
+	"\x06RERANK\x10\a\"\xe0\x03\n" +
 	"\n" +
 	"MCPBackend\x12>\n" +
 	"\atargets\x18\x02 \x03(\v2$.agentgateway.dev.resource.MCPTargetR\atargets\x12W\n" +
@@ -16675,12 +16694,13 @@ const file_resource_proto_rawDesc = "" +
 	"\ffailure_mode\x18\x05 \x01(\x0e21.agentgateway.dev.resource.MCPBackend.FailureModeR\vfailureMode\"+\n" +
 	"\fStatefulMode\x12\f\n" +
 	"\bSTATEFUL\x10\x00\x12\r\n" +
-	"\tSTATELESS\x10\x01\")\n" +
+	"\tSTATELESS\x10\x01\"4\n" +
 	"\n" +
 	"PrefixMode\x12\x0f\n" +
 	"\vCONDITIONAL\x10\x00\x12\n" +
 	"\n" +
-	"\x06ALWAYS\x10\x01\"-\n" +
+	"\x06ALWAYS\x10\x01\x12\t\n" +
+	"\x05NEVER\x10\x02\"-\n" +
 	"\vFailureMode\x12\x0f\n" +
 	"\vFAIL_CLOSED\x10\x00\x12\r\n" +
 	"\tFAIL_OPEN\x10\x01\"\xfe\x01\n" +

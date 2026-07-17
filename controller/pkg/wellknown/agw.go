@@ -42,6 +42,10 @@ func GVKToGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) 
 
 	// Try agentgateway types
 	switch gvk {
+	case DeploymentGVK:
+		return DeploymentGVK.GroupVersion().WithResource("deployments"), nil
+	case DaemonSetGVK:
+		return DaemonSetGVK.GroupVersion().WithResource("daemonsets"), nil
 	case AgentgatewayParametersGVK:
 		return AgentgatewayParametersGVR, nil
 	case AgentgatewayPolicyGVK:

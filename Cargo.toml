@@ -170,6 +170,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 rstest = "0.26"
 rust_decimal = { version = "1", default-features = false }
 mimalloc = { version = "0.1", features = ["v3", "no_thp"] }
+mime_guess = "2.0"
 rustc_version = "0.4"
 rustls = { version = "0.23", default-features = false, features = ["tls12", "std", "logging"] }
 rustls-native-certs = "0.8"
@@ -232,7 +233,7 @@ tracing-subscriber = { version = "0.3", features = [
     "json",
 ] }
 url = "2.5"
-uuid = { version = "1.23", features = ["v4"] }
+uuid = { version = "1.23", features = ["v4", "v7"] }
 wiremock = { version = "0.6", features = ["tls"] }
 x509-parser = { version = "0.18", default-features = false, features = ["verify-aws"] }
 which = "8.0"

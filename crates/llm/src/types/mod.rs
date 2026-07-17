@@ -50,7 +50,9 @@ pub trait RequestType: Send + Sync {
 #[apply(schema!)]
 #[derive(Eq, PartialEq, cel::DynamicType)]
 pub struct SimpleChatCompletionMessage {
+	/// Message role, such as "system", "user", or "assistant".
 	pub role: Strng,
+	/// Message text content.
 	pub content: Strng,
 }
 

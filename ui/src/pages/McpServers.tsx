@@ -431,6 +431,12 @@ function McpSettings(props: {
                   description:
                     "Prefix only when needed to avoid tool-name conflicts.",
                 },
+                {
+                  value: "never",
+                  label: "Never",
+                  description:
+                    "Never prefix; calls are routed by tool name, which must be unique across targets.",
+                },
               ]}
               schema={props.help.node([
                 "$defs",

@@ -131,10 +131,11 @@ pub struct AwsAssumeRole {
 	/// AWS IAM role ARN to assume.
 	pub role_arn: String,
 	/// Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report
-	/// attribution. Max 64 chars, matching `[\w+=,.@-]`. If unset, the AWS SDK
-	/// generates a random session name.
+	/// attribution. Either a static string or `{expression: ...}` with a CEL
+	/// expression evaluated against each request. Max 64 chars, matching
+	/// `[\w+=,.@-]`. If unset, the AWS SDK generates a random session name.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub session_name: Option<String>,
+	pub session_name: Option<AwsSessionName>,
 	/// Session tags passed to STS AssumeRole for cost attribution. Once activated as
 	/// cost allocation tags, each tag surfaces in the AWS Cost & Usage Report under
 	/// `resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL
@@ -163,6 +164,119 @@ pub struct AwsSessionTag {
 	/// produce a valid tag value at request time, the request is rejected.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub expression: Option<Arc<cel::Expression>>,
+}
+
+/// Session name (RoleSessionName) in configuration form: a static string, or a
+/// CEL expression evaluated against each request. Untagged, so a plain string
+/// keeps its existing meaning.
+#[apply(schema!)]
+#[serde(
+	untagged,
+	expecting = "a session name string, or `{expression: ...}` with a valid CEL expression"
+)]
+pub enum AwsSessionName {
+	/// Static session name.
+	Static(String),
+	/// CEL expression evaluated against each request to produce the session
+	/// name, for example `jwt.sub` or `request.headers["x-team"]`. If the
+	/// expression does not produce a valid session name at request time, the
+	/// request is rejected.
+	Dynamic { expression: Arc<cel::Expression> },
+}
+
+impl AwsSessionName {
+	fn static_name(&self) -> Option<&str> {
+		match self {
+			Self::Static(name) => Some(name),
+			Self::Dynamic { .. } => None,
+		}
+	}
+
+	fn expression(&self) -> Option<&Arc<cel::Expression>> {
+		match self {
+			Self::Static(_) => None,
+			Self::Dynamic { expression } => Some(expression),
+		}
+	}
+
+	/// Evaluates a dynamic session name against the request. Fails closed: an
+	/// expression that cannot produce a valid session name is an error. Static
+	/// names resolve to themselves unvalidated, unchanged from before; STS
+	/// rejects an invalid static name loudly on first use.
+	fn resolve(&self, req: &http::Request) -> anyhow::Result<String> {
+		match self {
+			Self::Static(name) => Ok(name.clone()),
+			Self::Dynamic { expression } => {
+				let exec = cel::Executor::new_request(req);
+				exec
+					.eval(expression)
+					.map_err(anyhow::Error::from)
+					.and_then(cel_value_to_string)
+					.and_then(|name| {
+						validate_session_name(&name)?;
+						Ok(name)
+					})
+					.map_err(|e| {
+						anyhow::anyhow!(
+							"session name (expression {:?}): {e}",
+							expression.original_expression
+						)
+					})
+			},
+		}
+	}
+}
+
+// Dynamic session names cannot derive equality; compare by source expression,
+// which is exactly what determines their behavior (same as AwsSessionTags).
+impl PartialEq for AwsSessionName {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(Self::Static(a), Self::Static(b)) => a == b,
+			(Self::Dynamic { expression: a }, Self::Dynamic { expression: b }) => {
+				a.original_expression == b.original_expression
+			},
+			_ => false,
+		}
+	}
+}
+
+impl Eq for AwsSessionName {}
+
+impl std::hash::Hash for AwsSessionName {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		match self {
+			Self::Static(name) => {
+				0u8.hash(state);
+				name.hash(state);
+			},
+			Self::Dynamic { expression } => {
+				1u8.hash(state);
+				expression.original_expression.hash(state);
+			},
+		}
+	}
+}
+
+// STS RoleSessionName limits: https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+const MIN_SESSION_NAME_LEN: usize = 2;
+const MAX_SESSION_NAME_LEN: usize = 64;
+
+/// The characters STS accepts in a RoleSessionName.
+static SESSION_NAME_CHARSET: LazyLock<Regex> =
+	LazyLock::new(|| Regex::new(r"^[\w+=,.@-]*$").expect("static regex compiles"));
+
+fn validate_session_name(name: &str) -> anyhow::Result<()> {
+	let len = name.chars().count();
+	if !(MIN_SESSION_NAME_LEN..=MAX_SESSION_NAME_LEN).contains(&len) {
+		anyhow::bail!(
+			"session name must be {MIN_SESSION_NAME_LEN}-{MAX_SESSION_NAME_LEN} characters, got {len}"
+		);
+	}
+	if !SESSION_NAME_CHARSET.is_match(name) {
+		anyhow::bail!("session name {name:?} contains characters STS does not accept");
+	}
+	Ok(())
 }
 
 // STS session tag limits: https://docs.aws.amazon.com/STS/latest/APIReference/API_Tag.html
@@ -263,7 +377,7 @@ impl AwsSessionTags {
 			let value = exec
 				.eval(expr)
 				.map_err(anyhow::Error::from)
-				.and_then(session_tag_value)
+				.and_then(cel_value_to_string)
 				.and_then(|value| {
 					if value.is_empty() {
 						anyhow::bail!("expression produced an empty value");
@@ -331,10 +445,11 @@ fn validate_session_tag_value(key: &str, value: &str) -> anyhow::Result<()> {
 	Ok(())
 }
 
-/// Coerces a CEL evaluation result into a tag value. Strings, numbers, and
-/// booleans (common JWT claim types) stringify via [`cel::Value::as_string`];
-/// anything else (null, lists, maps) is an error so misattribution fails closed.
-fn session_tag_value(v: cel::Value) -> anyhow::Result<String> {
+/// Coerces a CEL evaluation result into a tag value or session name. Strings,
+/// numbers, and booleans (common JWT claim types) stringify via
+/// [`cel::Value::as_string`]; anything else (null, lists, maps) is an error so
+/// misattribution fails closed.
+fn cel_value_to_string(v: cel::Value) -> anyhow::Result<String> {
 	// Materialize Dynamic so nested lookups (e.g. JWT claims) are concrete values.
 	v.always_materialize_owned()
 		.as_string()
@@ -395,12 +510,17 @@ impl AwsAuth {
 	}
 
 	/// CEL expressions this auth config evaluates per request (dynamic session
-	/// tags), for registration with the CEL context builder.
+	/// tags and session name), for registration with the CEL context builder.
 	pub fn cel_expressions(&self) -> impl Iterator<Item = &cel::Expression> {
-		self
-			.assume_role()
-			.into_iter()
-			.flat_map(|assume_role| assume_role.tags.expressions())
+		self.assume_role().into_iter().flat_map(|assume_role| {
+			assume_role.tags.expressions().chain(
+				assume_role
+					.session_name
+					.as_ref()
+					.and_then(|name| name.expression())
+					.map(|e| e.as_ref()),
+			)
+		})
 	}
 
 	fn source_credentials_cache(&self) -> Option<&AwsCredentialsCache> {
@@ -430,12 +550,17 @@ pub(super) async fn sign_request(
 	req: &mut http::Request,
 	aws_auth: &AwsAuth,
 ) -> anyhow::Result<()> {
-	// Resolve any dynamic (CEL) session tags first, while the request is intact.
-	// The CEL context reads headers and extensions (JWT claims, etc.), which the
-	// proxy keeps on the request until after late backend auth. Fails closed: an
-	// expression that cannot produce a valid tag value rejects the request.
+	// Resolve any dynamic (CEL) session tags and session name first, while the
+	// request is intact. The CEL context reads headers and extensions (JWT
+	// claims, etc.), which the proxy keeps on the request until after late
+	// backend auth. Fails closed: an expression that cannot produce a valid
+	// value rejects the request.
 	let resolved_tags = match aws_auth.assume_role() {
 		Some(assume_role) if assume_role.tags.has_dynamic() => Some(assume_role.tags.resolve(req)?),
+		_ => None,
+	};
+	let resolved_session_name = match aws_auth.assume_role().and_then(|a| a.session_name.as_ref()) {
+		Some(name @ AwsSessionName::Dynamic { .. }) => Some(name.resolve(req)?),
 		_ => None,
 	};
 	let lim = crate::http::buffer_limit(req);
@@ -459,9 +584,14 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
-	let creds = Box::pin(load_credentials(aws_auth, region, resolved_tags))
-		.await?
-		.into();
+	let creds = Box::pin(load_credentials(
+		aws_auth,
+		region,
+		resolved_tags,
+		resolved_session_name,
+	))
+	.await?
+	.into();
 
 	let service = signing_service_name(req, aws_auth);
 	trace!("AWS signing with region: {}, service: {}", region, service);
@@ -525,9 +655,17 @@ async fn load_credentials(
 	aws_auth: &AwsAuth,
 	signing_region: &str,
 	resolved_tags: Option<Arc<[(String, String)]>>,
+	resolved_session_name: Option<String>,
 ) -> anyhow::Result<Credentials> {
 	if let (Some(assume_role), Some(cache)) = (aws_auth.assume_role(), aws_auth.assume_role_cache()) {
-		load_assumed_credentials(assume_role, cache, signing_region, resolved_tags).await
+		load_assumed_credentials(
+			assume_role,
+			cache,
+			signing_region,
+			resolved_tags,
+			resolved_session_name,
+		)
+		.await
 	} else {
 		load_source_credentials(aws_auth).await
 	}
@@ -594,6 +732,20 @@ struct AssumeRoleCacheKey {
 	tags: Arc<[(String, String)]>,
 }
 
+/// The session name for the STS call: the per-request resolved name when the
+/// configured name is dynamic, otherwise the configured static name.
+fn effective_session_name(
+	assume_role: &AwsAssumeRole,
+	resolved_session_name: Option<String>,
+) -> Option<String> {
+	resolved_session_name.or_else(|| {
+		assume_role
+			.session_name
+			.as_ref()
+			.and_then(|name| name.static_name().map(String::from))
+	})
+}
+
 const ASSUMED_CREDENTIAL_REFRESH_BUFFER: Duration = Duration::from_secs(60);
 
 async fn load_assumed_credentials(
@@ -601,15 +753,18 @@ async fn load_assumed_credentials(
 	cache: &AwsAssumeRoleCache,
 	signing_region: &str,
 	resolved_tags: Option<Arc<[(String, String)]>>,
+	resolved_session_name: Option<String>,
 ) -> anyhow::Result<Credentials> {
 	let sts_region = resolve_sts_region(assume_role, signing_region).await?;
-	// resolved_tags is Some iff dynamic tags are configured (see sign_request);
-	// static-only configs use the pre-sorted static set via a cheap Arc clone.
+	// resolved_tags and resolved_session_name are Some iff the corresponding
+	// dynamic config is set (see sign_request); static-only configs use the
+	// configured values directly.
 	let tags = resolved_tags.unwrap_or_else(|| assume_role.tags.static_tags());
+	let session_name = effective_session_name(assume_role, resolved_session_name);
 	let key = AssumeRoleCacheKey {
 		role_arn: assume_role.role_arn.clone(),
 		resolved_sts_region: sts_region.clone(),
-		session_name: assume_role.session_name.clone(),
+		session_name,
 		tags,
 	};
 
@@ -620,8 +775,8 @@ async fn load_assumed_credentials(
 				.configure(config)
 				.region(Region::new(sts_region));
 
-			if let Some(session_name) = &assume_role.session_name {
-				builder = builder.session_name(session_name);
+			if let Some(session_name) = &key.session_name {
+				builder = builder.session_name(session_name.clone());
 			}
 
 			if !key.tags.is_empty() {
@@ -676,7 +831,10 @@ mod cache_key_tests {
 		AssumeRoleCacheKey {
 			role_arn: assume_role.role_arn.clone(),
 			resolved_sts_region: region.to_string(),
-			session_name: assume_role.session_name.clone(),
+			session_name: assume_role
+				.session_name
+				.as_ref()
+				.and_then(|name| name.static_name().map(String::from)),
 			tags: assume_role.tags.static_tags(),
 		}
 	}
@@ -685,14 +843,55 @@ mod cache_key_tests {
 	fn different_session_names_produce_different_keys() {
 		let base = AwsAssumeRole {
 			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
-			session_name: Some("team-a".to_string()),
+			session_name: Some(AwsSessionName::Static("team-a".to_string())),
 			tags: tags(&[]),
 		};
 		let other = AwsAssumeRole {
-			session_name: Some("team-b".to_string()),
+			session_name: Some(AwsSessionName::Static("team-b".to_string())),
 			..base.clone()
 		};
 		assert_ne!(key_for(&base, "us-east-1"), key_for(&other, "us-east-1"));
+	}
+
+	#[test]
+	fn effective_session_name_prefers_resolved_over_static() {
+		let static_config = AwsAssumeRole {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			session_name: Some(AwsSessionName::Static("static-name".to_string())),
+			tags: tags(&[]),
+		};
+		// Static config, nothing resolved: the configured name is used.
+		assert_eq!(
+			effective_session_name(&static_config, None),
+			Some("static-name".to_string())
+		);
+		// A resolved name always wins; it only exists when the config is dynamic.
+		assert_eq!(
+			effective_session_name(&static_config, Some("resolved-name".to_string())),
+			Some("resolved-name".to_string())
+		);
+		let unset = AwsAssumeRole {
+			session_name: None,
+			..static_config
+		};
+		assert_eq!(effective_session_name(&unset, None), None);
+	}
+
+	#[test]
+	fn dynamic_session_name_resolving_to_static_value_produces_equal_key() {
+		// A dynamic session name that evaluates to X keys the cache identically to
+		// a static session name X: only the resolved value matters.
+		let static_key = AssumeRoleCacheKey {
+			role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+			resolved_sts_region: "us-east-1".to_string(),
+			session_name: Some("team-a-invoicer".to_string()),
+			tags: tags(&[]).static_tags(),
+		};
+		let resolved_key = AssumeRoleCacheKey {
+			session_name: Some("team-a-invoicer".to_string()),
+			..static_key.clone()
+		};
+		assert_eq!(static_key, resolved_key);
 	}
 
 	#[test]
@@ -911,6 +1110,132 @@ mod resolve_tags_tests {
 		assert!(
 			err.to_string().contains("App"),
 			"error names the tag: {err}"
+		);
+	}
+}
+
+#[cfg(test)]
+mod resolve_session_name_tests {
+	use secrecy::SecretString;
+
+	use super::*;
+	use crate::http::jwt::Claims;
+
+	fn dynamic(expression: &str) -> AwsSessionName {
+		AwsSessionName::Dynamic {
+			expression: Arc::new(
+				cel::Expression::new_strict(expression).expect("expression should compile"),
+			),
+		}
+	}
+
+	fn request(headers: &[(&str, &str)], claims: Option<serde_json::Value>) -> http::Request {
+		let mut builder = ::http::Request::builder().uri("http://example.com/");
+		for (k, v) in headers {
+			builder = builder.header(*k, *v);
+		}
+		let mut req = builder.body(crate::http::Body::empty()).expect("request");
+		if let Some(serde_json::Value::Object(claims)) = claims {
+			req.extensions_mut().insert(Claims {
+				inner: claims,
+				jwt: SecretString::new("header.payload.signature".into()),
+			});
+		}
+		req
+	}
+
+	#[test]
+	fn resolves_from_header_and_jwt() {
+		let name = dynamic(r#"request.headers["x-team"] + "-" + jwt.sub"#);
+		let req = request(
+			&[("x-team", "acme")],
+			Some(serde_json::json!({"sub": "user@example.com"})),
+		);
+		assert_eq!(
+			name.resolve(&req).expect("should resolve"),
+			"acme-user@example.com"
+		);
+	}
+
+	#[test]
+	fn stringifies_numeric_claim() {
+		let name = dynamic("jwt.org_id");
+		let req = request(&[], Some(serde_json::json!({"org_id": 42})));
+		assert_eq!(name.resolve(&req).expect("should resolve"), "42");
+	}
+
+	#[test]
+	fn static_name_resolves_to_itself() {
+		let name = AwsSessionName::Static("team-a".to_string());
+		assert_eq!(
+			name.resolve(&request(&[], None)).expect("resolves"),
+			"team-a"
+		);
+	}
+
+	#[test]
+	fn missing_header_fails_closed() {
+		let name = dynamic(r#"request.headers["x-team"]"#);
+		let err = name.resolve(&request(&[], None)).expect_err("should fail");
+		assert!(
+			err.to_string().contains("session name"),
+			"error names the session name: {err}"
+		);
+	}
+
+	#[test]
+	fn too_short_fails_closed() {
+		let name = dynamic(r#"request.headers["x-team"]"#);
+		let err = name
+			.resolve(&request(&[("x-team", "a")], None))
+			.expect_err("should fail");
+		assert!(err.to_string().contains("2-64"), "got: {err}");
+	}
+
+	#[test]
+	fn too_long_fails_closed() {
+		let name = dynamic(r#"request.headers["x-team"]"#);
+		let long = "a".repeat(MAX_SESSION_NAME_LEN + 1);
+		let err = name
+			.resolve(&request(&[("x-team", long.as_str())], None))
+			.expect_err("should fail");
+		assert!(err.to_string().contains("2-64"), "got: {err}");
+	}
+
+	#[test]
+	fn invalid_charset_fails_closed() {
+		// RoleSessionName is stricter than session tag values: spaces and colons
+		// are accepted in tags but not in the session name.
+		let name = dynamic(r#"request.headers["x-team"]"#);
+		let err = name
+			.resolve(&request(&[("x-team", "team a")], None))
+			.expect_err("should fail");
+		assert!(
+			err.to_string().contains("STS does not accept"),
+			"got: {err}"
+		);
+	}
+
+	#[tokio::test]
+	async fn sign_request_fails_closed_when_session_name_cannot_resolve() {
+		let auth = AwsAuth::Implicit {
+			service_name: None,
+			assume_role: Some(AwsAssumeRole {
+				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
+				session_name: Some(dynamic(r#"request.headers["x-team"]"#)),
+				tags: Default::default(),
+			}),
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
+		};
+		// No x-team header: resolution fails before any credential loading or STS call.
+		let mut req = request(&[], None);
+		let err = sign_request(&mut req, &auth)
+			.await
+			.expect_err("must reject the request rather than sign it misattributed");
+		assert!(
+			err.to_string().contains("session name"),
+			"error names the session name: {err}"
 		);
 	}
 }

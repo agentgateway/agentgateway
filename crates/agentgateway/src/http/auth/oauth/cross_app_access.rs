@@ -60,7 +60,7 @@ impl CrossAppAccessAuth {
 	pub(crate) fn apply_local_defaults(&mut self) -> Result<(), String> {
 		self.oauth = Some(OAuthTokenExchangeAuth {
 			target: self.identity_provider.target.clone(),
-			token_endpoint_path: self.identity_provider.token_endpoint_path.clone(),
+			path: self.identity_provider.path.clone(),
 			grant_type: OAuthGrantType::TokenExchange,
 			subject_token: TokenSpec {
 				source: AuthorizationLocation::default(),
@@ -102,18 +102,15 @@ pub(super) struct CrossAppAccessEndpoint {
 	pub(super) target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
-	pub(super) token_endpoint_path: String,
+	pub(super) path: String,
 	/// Client authentication used when calling the token endpoint.
 	pub(super) client_auth: OAuthClientAuth,
 }
 
 impl CrossAppAccessEndpoint {
 	fn validate_load(&self, prefix: &str) -> Result<(), String> {
-		if !self.token_endpoint_path.is_empty() && !self.token_endpoint_path.starts_with('/') {
-			return Err(format!(
-				"{prefix}.token_endpoint_path {:?} must start with /",
-				self.token_endpoint_path
-			));
+		if !self.path.is_empty() && !self.path.starts_with('/') {
+			return Err(format!("{prefix}.path {:?} must start with /", self.path));
 		}
 		self.client_auth.validate_load()
 	}
@@ -126,7 +123,7 @@ impl CrossAppAccessEndpoint {
 	fn as_chained_exchange(&self, scopes: &[String]) -> ChainedExchange {
 		ChainedExchange {
 			target: self.target.clone(),
-			token_endpoint_path: self.token_endpoint_path.clone(),
+			path: self.path.clone(),
 			client_auth: Some(self.client_auth.clone()),
 			audiences: Vec::new(),
 			scopes: scopes.to_vec(),

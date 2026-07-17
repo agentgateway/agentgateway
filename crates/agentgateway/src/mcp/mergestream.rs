@@ -23,6 +23,10 @@ impl Messages {
 		Messages(futures::stream::empty().boxed())
 	}
 
+	pub fn then_pending(self) -> Self {
+		Messages(self.0.chain(futures::stream::pending()).boxed())
+	}
+
 	pub fn from_result<T: Into<ServerResult>>(id: RequestId, result: T) -> Self {
 		Self::from(ServerJsonRpcMessage::response(result.into(), id))
 	}
@@ -40,6 +44,36 @@ impl Messages {
 				})
 				.boxed(),
 		)
+	}
+
+	/// One-pass filter+rewrite+tag where the mapping fn may drop a message (`None`)
+	/// or turn an `Ok` message into an `Err`.
+	pub fn filter_map_messages_result(
+		self,
+		mut f: impl FnMut(ServerJsonRpcMessage) -> Option<Result<ServerJsonRpcMessage, ClientError>>
+		+ Send
+		+ 'static,
+	) -> Self {
+		Messages(
+			self
+				.0
+				.filter_map(move |message| {
+					let mapped = match message {
+						Ok(message) => f(message),
+						Err(err) => Some(Err(err)),
+					};
+					async move { mapped }
+				})
+				.boxed(),
+		)
+	}
+}
+
+#[cfg(test)]
+impl Messages {
+	/// Build a `Messages` from a fixed list of results, for driving pipeline tests.
+	pub(crate) fn from_results(items: Vec<Result<ServerJsonRpcMessage, ClientError>>) -> Self {
+		Messages(futures::stream::iter(items).boxed())
 	}
 }
 
@@ -230,7 +264,7 @@ impl Stream for MergeStream {
 					}
 				},
 				Poll::Ready(None) => {
-					// Stream ended without terminal message (shouldn't happen in this design)
+					// Long-lived streams can end without a terminal response.
 					if self.failure_mode == FailureMode::FailOpen {
 						warn!("upstream stream ended unexpectedly, skipping (failure_mode=FailOpen)");
 						drop = true;

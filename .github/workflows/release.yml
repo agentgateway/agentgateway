@@ -599,7 +599,7 @@ jobs:
           target/${{ matrix.target }}/release/agentgateway.exe
 
   build-agctl:
-    if: ${{ github.event_name != 'workflow_call' && (github.event_name == 'push' || ! github.event.inputs.skip_gh_release) }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_call' || ! github.event.inputs.skip_gh_release }}
     needs:
       - setup
     runs-on: ubuntu-24.04

@@ -9,13 +9,16 @@ use url::form_urlencoded;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+use super::client_auth::RawPrivateKeyJwt;
+use super::cross_app_access::CrossAppAccessEndpoint;
 use super::*;
 use crate::http::Body;
 use crate::http::oauth::{
 	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE,
 	TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
 };
-use crate::types::agent::Target;
+use crate::serdes::FileOrInline;
+use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 
 fn policy_client() -> PolicyClient {
 	PolicyClient::new(
@@ -56,7 +59,7 @@ fn base_auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 			target: endpoint,
 			policies: vec![],
 		},
-		token_endpoint_path: "/token".into(),
+		path: "/token".into(),
 		grant_type: OAuthGrantType::TokenExchange,
 		subject_token: TokenSpec::default(),
 		actor_token: None,
@@ -85,7 +88,7 @@ fn cross_app_access_endpoint(endpoint: Arc<SimpleBackendReference>) -> CrossAppA
 			target: endpoint,
 			policies: vec![],
 		},
-		token_endpoint_path: "/token".into(),
+		path: "/token".into(),
 		client_auth: OAuthClientAuth {
 			client_id: "gateway-client".into(),
 			method: OAuthClientAuthMethod::ClientSecretPost {
@@ -202,12 +205,13 @@ fn assert_proto_err_contains(proto: proto::OAuthTokenExchange, expected: &str) {
 
 #[test]
 fn deserializes_minimal_config() {
-	let a: OAuthTokenExchangeAuth = serde_json::from_str(r#"{"host": "localhost:8089"}"#).unwrap();
+	let a: OAuthTokenExchangeAuth =
+		serde_json::from_str(r#"{"host": "localhost:8089", "path": "/oauth2/token"}"#).unwrap();
 	assert!(matches!(
 		a.target.target.as_ref(),
 		SimpleBackendReference::InlineBackend(_)
 	));
-	assert!(a.token_endpoint_path.is_empty());
+	assert_eq!(a.path, "/oauth2/token");
 	assert!(a.cache.is_some());
 }
 
@@ -742,7 +746,7 @@ fn cross_app_access_local_config() -> CrossAppAccessAuth {
 		r#"{
 				"identityProvider": {
 					"host": "idp.example.com:443",
-					"tokenEndpointPath": "/oauth2/token",
+					"path": "/oauth2/token",
 					"clientAuth": {
 						"clientId": "gateway-at-idp",
 						"method": "clientSecretBasic",
@@ -751,7 +755,7 @@ fn cross_app_access_local_config() -> CrossAppAccessAuth {
 				},
 				"resourceAuthorizationServer": {
 					"host": "chat.example.com:443",
-					"tokenEndpointPath": "/oauth2/token",
+					"path": "/oauth2/token",
 					"clientAuth": {
 						"clientId": "gateway-at-chat",
 						"method": "clientSecretBasic",
@@ -1005,7 +1009,7 @@ fn assert_load_err(auth: OAuthTokenExchangeAuth, expected: &str) {
 #[rstest]
 #[case::token_endpoint_path(
 	OAuthTokenExchangeAuth {
-		token_endpoint_path: "token".into(),
+		path: "token".into(),
 		..base_auth(Arc::new(SimpleBackendReference::Invalid))
 	},
 	"must start with /"

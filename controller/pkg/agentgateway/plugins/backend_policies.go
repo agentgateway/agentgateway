@@ -848,8 +848,8 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			},
 		}
 	} else if auth.SecretRef != nil {
-		// Resolve secret and extract Authorization value
-		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, policy.Namespace)
+		// Resolve secret and extract the authorization value
+		data, key, err := ctx.ResolveCredentialKeyRef(*auth.SecretRef, policy.Namespace, wellknown.Authorization)
 		if err != nil {
 			errs = append(errs, err)
 			translatedAuth = &api.BackendAuthPolicy{
@@ -860,7 +860,14 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 				},
 			}
 		} else {
-			if authKey, ok := kubeutils.GetSecretDataAuth(data); ok {
+			var authKey string
+			var ok bool
+			if key == wellknown.Authorization {
+				authKey, ok = kubeutils.GetSecretDataAuth(data)
+			} else {
+				authKey, ok = kubeutils.GetSecretDataValue(data, key)
+			}
+			if ok && authKey != "" {
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
 						Key: &api.Key{
@@ -870,7 +877,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 					},
 				}
 			} else {
-				errs = append(errs, fmt.Errorf("secret %s/%s missing Authorization value", policy.Namespace, auth.SecretRef.Name))
+				errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", policy.Namespace, auth.SecretRef.Name, key))
 				translatedAuth = &api.BackendAuthPolicy{
 					Kind: &api.BackendAuthPolicy_Key{
 						Key: &api.Key{
@@ -953,11 +960,28 @@ var oauthReservedAdditionalParams = []string{
 }
 
 func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string) (*api.BackendAuthPolicy, error) {
+	oauth, err := BuildOAuthTokenExchange(ctx, auth, namespace, nil)
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_OauthTokenExchange{
+			OauthTokenExchange: oauth,
+		},
+	}, err
+}
+
+// BuildOAuthTokenExchange lowers an OAuth token exchange policy into its xDS representation.
+func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchange, namespace string, tokenEndpoint *api.BackendReference) (*api.OAuthTokenExchange, error) {
+	if auth == nil {
+		return nil, errors.New("oauthTokenExchange must not be nil")
+	}
+
 	var errs []error
 
-	tokenEndpoint, err := BuildBackendRef(ctx, auth.TokenEndpoint.BackendObjectReference, namespace)
-	if err != nil {
-		errs = append(errs, err)
+	if tokenEndpoint == nil {
+		var err error
+		tokenEndpoint, err = BuildBackendRef(ctx, auth.BackendRef, namespace)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	additionalParams := castCELMap(auth.AdditionalParams, func(key string, expr agentgateway.CELExpression) {
@@ -987,7 +1011,7 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 
 	oauth := &api.OAuthTokenExchange{
 		TokenEndpoint:         tokenEndpoint,
-		TokenEndpointPath:     auth.TokenEndpoint.Path,
+		TokenEndpointPath:     auth.Path,
 		GrantType:             translateOAuthGrantType(auth.GrantType),
 		SubjectToken:          translateOAuthTokenSpec(auth.SubjectToken),
 		ActorToken:            translateOAuthActorToken(auth.ActorToken),
@@ -1000,8 +1024,8 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
 		Cache:                 translateOAuthTokenCache(auth.Cache),
 	}
-	if auth.TokenEndpoint.Path != nil && !strings.HasPrefix(*auth.TokenEndpoint.Path, "/") {
-		errs = append(errs, fmt.Errorf("oauth tokenEndpoint.path %q must start with /", *auth.TokenEndpoint.Path))
+	if auth.Path != nil && !strings.HasPrefix(*auth.Path, "/") {
+		errs = append(errs, fmt.Errorf("oauthTokenExchange.path %q must start with /", *auth.Path))
 	}
 	if oauth.GrantType == api.OAuthTokenExchange_JWT_BEARER {
 		if oauth.ActorToken != nil {
@@ -1018,11 +1042,7 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 		errs = append(errs, errors.New("oauth actorToken mayAct Required requires tokenType Jwt"))
 	}
 
-	return &api.BackendAuthPolicy{
-		Kind: &api.BackendAuthPolicy_OauthTokenExchange{
-			OauthTokenExchange: oauth,
-		},
-	}, errors.Join(errs...)
+	return oauth, errors.Join(errs...)
 }
 
 func translateOAuthGrantType(grantType *agentgateway.OAuthGrantType) api.OAuthTokenExchange_GrantType {
@@ -1098,15 +1118,15 @@ func buildOAuthClientAuth(ctx PolicyCtx, auth *agentgateway.OAuthClientAuth, nam
 	}
 
 	if auth.SecretRef != nil && auth.PrivateKeyJWT == nil {
-		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
+		data, key, err := ctx.ResolveCredentialKeyRef(*auth.SecretRef, namespace, wellknown.ClientSecret)
 		if err != nil {
 			clientSecret := ""
 			res.ClientSecret = &clientSecret
 			errs = append(errs, err)
-		} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.ClientSecret); !exists || value == "" {
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
 			clientSecret := ""
 			res.ClientSecret = &clientSecret
-			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, wellknown.ClientSecret))
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, key))
 		} else {
 			res.ClientSecret = &value
 		}
@@ -1133,11 +1153,11 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt assertionAudience must not be empty"))
 	}
 
-	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)
+	data, key, err := ctx.ResolveCredentialKeyRef(auth.SigningKeyRef, namespace, wellknown.SigningKey)
 	if err != nil {
 		errs = append(errs, err)
-	} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SigningKey); !exists || value == "" {
-		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, wellknown.SigningKey))
+	} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, key))
 	} else {
 		res.SigningKey = value
 	}
@@ -1274,6 +1294,9 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 		}
 		if auth.AssumeRole.SessionName != nil {
 			assumeRole.SessionName = *auth.AssumeRole.SessionName
+		}
+		if auth.AssumeRole.SessionNameExpression != nil {
+			assumeRole.SessionNameExpression = string(*auth.AssumeRole.SessionNameExpression)
 		}
 	}
 
@@ -1453,11 +1476,11 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 		// missing or malformed. An explicit empty credential fails in the proxy
 		// instead of falling back to ambient GCP credentials.
 		credential = new("")
-		data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
+		data, key, err := ctx.ResolveCredentialKeyRef(*auth.SecretRef, namespace, wellknown.GCPCredentialsJSON)
 		if err != nil {
 			errs = append(errs, err)
-		} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.GCPCredentialsJSON); !exists {
-			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, wellknown.GCPCredentialsJSON))
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SecretRef.Name, key))
 		} else {
 			credential = &value
 		}

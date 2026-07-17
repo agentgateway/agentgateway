@@ -143,6 +143,7 @@ database:
   postgres:
     url: ""
 
+extraContainers: []
 extraEnv: []
 extraVolumes: []
 extraVolumeMounts: []

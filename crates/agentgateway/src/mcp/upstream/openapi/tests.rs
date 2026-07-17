@@ -171,6 +171,39 @@ async fn setup() -> (MockServer, Handler) {
 }
 
 #[tokio::test]
+async fn listen_emits_empty_ack_and_keeps_the_stream_open() {
+	use futures_util::StreamExt;
+	use rmcp::model::*;
+
+	let (_, handler) = setup().await;
+	let request = JsonRpcRequest {
+		jsonrpc: JsonRpcVersion2_0,
+		id: RequestId::Number(7),
+		request: ClientRequest::SubscriptionsListenRequest(SubscriptionsListenRequest::new(
+			SubscriptionsListenRequestParams::new(SubscriptionFilter::new()),
+		)),
+	};
+	let mut stream = handler
+		.send_message(request, &IncomingRequestContext::empty())
+		.await
+		.unwrap();
+	let first = stream.next().await.unwrap().unwrap();
+	assert_eq!(
+		serde_json::to_value(first).unwrap(),
+		json!({
+			"jsonrpc": "2.0",
+			"method": "notifications/subscriptions/acknowledged",
+			"params": {"notifications": {}}
+		})
+	);
+	assert!(
+		tokio::time::timeout(std::time::Duration::from_millis(10), stream.next())
+			.await
+			.is_err()
+	);
+}
+
+#[tokio::test]
 async fn test_call_tool_full_url_server_prefix() {
 	// When OpenAPI spec has servers: [{ url: "https://api.example.com/" }],
 	// get_server_prefix returns "" so the request goes to /users/{id} (no double host).

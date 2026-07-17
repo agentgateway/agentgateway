@@ -43,6 +43,18 @@ We want to create the intersection of supported versions from all servers.
 If a server returns an error, we also return that error: this tells the clients "we don't support `2026-07-28`" and they will retry
 with `initialize`; `initialize` will do similar negotiation.
 
+`subscriptions/listen` requires Streamable HTTP upstreams. Stdio and SSE use legacy protocol
+negotiation, so modern clients fall back before a listen request is forwarded.
+
+For multiplexed `subscriptions/listen`, Agentgateway waits for selected upstream ACKs before
+emitting one downstream ACK. The ACK includes only accepted filters; resource URIs keep the
+client's `service+` form. Later notifications are limited to the filters accepted by their source
+upstream.
+Like other MCP fanout requests, setup waits for every selected upstream before the gateway can
+construct its response.
+Listen setup has no separate timeout; when configured, the route request-timeout policy bounds it
+before the downstream response begins.
+
 ---
 
 With this approach, we should fully support new clients. And, when the client _and_ server are new, we get the optimal

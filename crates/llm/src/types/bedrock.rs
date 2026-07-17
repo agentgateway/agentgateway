@@ -16,6 +16,7 @@ pub enum Role {
 pub enum ContentBlock {
 	Text(String),
 	Image(ImageBlock),
+	Document(DocumentBlock),
 	ToolResult(ToolResultBlock),
 	ToolUse(ToolUseBlock),
 	ReasoningContent(ReasoningContentBlock),
@@ -32,6 +33,20 @@ pub struct ImageBlock {
 #[derive(Clone, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageSource {
+	pub bytes: String,
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentBlock {
+	pub format: String,
+	pub name: String,
+	pub source: DocumentSource,
+}
+
+#[derive(Clone, Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentSource {
 	pub bytes: String,
 }
 

@@ -10,11 +10,13 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [mcp-authentication](mcp-authentication/README.md): authenticate MCP clients and protect MCP traffic.
 * [mcp-tls](mcp-tls/README.md): terminate TLS connections.
 * [mcp-openapi](mcp-openapi/README.md): serve an OpenAPI specification as MCP tools.
+* [mcp-apps](mcp-apps/README.md): proxy MCP Apps (interactive tool UIs) across multiplexed targets.
 * [mcp-telemetry](mcp-telemetry/README.md): visualize traces and metrics for MCP calls.
 
 ### LLM
 
 * [llm-basic](llm-basic/README.md): proxy LLM requests to OpenAI and Anthropic with provider-specific model prefixes.
+* [llm-ollama-postgres](llm-ollama-postgres/README.md): proxy local Ollama models and store request logs in Postgres.
 * [llm-prompt-enrichment](llm-prompt-enrichment/README.md): append or prepend prompts to agentgateway AI requests.
 * [llm-prompt-guard](llm-prompt-guard/README.md): configure prompt guards for LLM requests and responses.
 * [llm-standalone-epp](llm-standalone-epp/README.md): run agentgateway as the sidecar proxy next to a standalone EPP deployment on Kubernetes.

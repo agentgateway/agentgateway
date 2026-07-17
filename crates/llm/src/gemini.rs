@@ -6,6 +6,7 @@ use crate::{RouteType, apply};
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "GeminiProvider"))]
 pub struct Provider {
+	/// Model ID to send to Gemini, overriding the model in the client request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
 }

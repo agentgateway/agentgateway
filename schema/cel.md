@@ -66,8 +66,8 @@
 |`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
 |`llm.countTokens`|integer|The number of tokens in the request, when using the token counting endpoint<br>These are not counted as 'input tokens' since they do not consume input tokens.|
 |`llm.prompt`|[]object|The prompt sent to the LLM. Warning: accessing this has some performance impacts for large prompts.|
-|`llm.prompt[].role`|string||
-|`llm.prompt[].content`|string||
+|`llm.prompt[].role`|string|Message role, such as "system", "user", or "assistant".|
+|`llm.prompt[].content`|string|Message text content.|
 |`llm.completion`|[]string|The completion from the LLM. Warning: accessing this has some performance impacts for large responses.|
 |`llm.params`|object|The parameters for the LLM request.|
 |`llm.params.temperature`|number||

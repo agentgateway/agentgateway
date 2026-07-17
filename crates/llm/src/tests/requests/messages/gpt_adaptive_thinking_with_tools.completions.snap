@@ -1,0 +1,59 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/gpt_adaptive_thinking_with_tools.json
+info:
+  model: gpt-5.6-terra
+  max_tokens: 64
+  thinking:
+    type: adaptive
+  tools:
+    - name: get_weather
+      description: Get the weather for a location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+  messages:
+    - role: user
+      content: Say hi
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Say hi"
+        }
+      ]
+    }
+  ],
+  "model": "gpt-5.6-terra",
+  "reasoning_effort": "none",
+  "max_completion_tokens": 64,
+  "stream": false,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get the weather for a location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ]
+        }
+      }
+    }
+  ]
+}
