@@ -126,7 +126,7 @@ Also in `examples/mcp-authentication/config.yaml`:
 ### Scenario C: Adapting a vendor Authorization Server (e.g., Keycloak)
 
 When your Authorization Server doesn’t implement the spec as-is, agentgateway can fill in the gaps.
-Currently, four providers are supported: Keycloak, Auth0, Okta, and Descope.
+Currently, five providers are supported: Keycloak, Auth0, Okta, Descope, and authentik.
 
 Excerpt from `examples/mcp-authentication/config.yaml`:
 
@@ -175,6 +175,7 @@ What setting a provider does (high level):
   - Keycloak → `<issuer>/protocol/openid-connect/certs`
   - Okta → `<issuer>/.well-known/jwks.json`
   - Descope → `https://api.descope.com/{project-id}/.well-known/jwks.json` (derived from agentic issuer path)
+  - authentik → `<issuer>/jwks/`
 
 Auth0-specific notes:
 - Gateway appends `?audience=...` to the authorization endpoint it exposes.
@@ -188,6 +189,12 @@ Okta-specific notes:
 - No RFC 8707 support; gateway appends `?audience=...` to the authorization endpoint (same workaround as Auth0).
 - Client registration is proxied by the gateway at `.../client-registration` to forward to Okta’s `oauth2/v1/clients`.
 - Okta DCR requires an SSWS API token; the gateway proxies the request and the MCP client must provide the token.
+
+authentik-specific notes:
+- Uses OIDC discovery (`{issuer}/.well-known/openid-configuration`), not RFC 8414. The issuer is per-application: `https://<host>/application/o/<app-slug>/`.
+- No RFC 8707 support, and no audience query parameter workaround. authentik sets `aud` to the OAuth client ID, so configure `audiences` with the pre-registered client ID.
+- No Dynamic Client Registration support ([goauthentik/authentik#8751](https://github.com/goauthentik/authentik/issues/8751)). **Setting `clientId` is required**: the gateway injects a `registration_endpoint` into the AS metadata it exposes and answers registration requests itself with the pre-registered client.
+- The pre-registered authentik client must be a **public** client (the mock registration response advertises `token_endpoint_auth_method: none`) with PKCE, and its redirect URIs must cover your MCP clients (authentik supports regex redirect URIs).
 
 Descope-specific notes:
 - Uses OIDC discovery (`{issuer}/.well-known/openid-configuration`), not RFC 8414.

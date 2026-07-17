@@ -223,11 +223,12 @@ pub(super) async fn authorization_server_metadata(
 	// RFC 8414 URL for standard AS metadata. Keycloak does not implement RFC 8414; it only
 	// exposes OpenID Provider Metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
 	let metadata_uri = match &auth.provider {
-		// Keycloak, Okta, and Descope do not support the RFC 8414 path-based issuer format;
-		// they serve metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
-		Some(McpIDP::Keycloak { .. }) | Some(McpIDP::Okta {}) | Some(McpIDP::Descope {}) => {
-			openid_configuration_metadata_url(&auth.issuer)
-		},
+		// Keycloak, Okta, Descope, and authentik do not support the RFC 8414 path-based issuer
+		// format; they serve metadata at {issuer}/.well-known/openid-configuration (OIDC Discovery).
+		Some(McpIDP::Keycloak { .. })
+		| Some(McpIDP::Okta {})
+		| Some(McpIDP::Descope {})
+		| Some(McpIDP::Authentik {}) => openid_configuration_metadata_url(&auth.issuer),
 		_ => authorization_server_metadata_url(&auth.issuer),
 	};
 	let ureq = ::http::Request::builder()
@@ -308,6 +309,24 @@ pub(super) async fn authorization_server_metadata(
 			};
 			*re = format!("{current_uri}/client-registration");
 		},
+		Some(McpIDP::Authentik {}) => {
+			// authentik does not support RFC 8707, and has no audience query parameter workaround.
+			// Tokens carry the OAuth client ID in `aud`, so users must configure `audiences`
+			// with the pre-registered client ID.
+
+			// authentik does not implement Dynamic Client Registration (RFC 7591), so its
+			// discovery metadata has no registration_endpoint at all:
+			// https://github.com/goauthentik/authentik/issues/8751
+			// Inject one pointing at the gateway so MCP clients can complete DCR against
+			// the pre-registered client configured via `clientId`.
+			let current_uri = request_uri_for_oauth_metadata(req);
+			if let Some(obj) = resp.as_object_mut() {
+				obj.insert(
+					"registration_endpoint".to_string(),
+					serde_json::Value::String(format!("{current_uri}/client-registration")),
+				);
+			}
+		},
 		_ => {},
 	}
 
@@ -367,6 +386,14 @@ pub(super) async fn client_registration(
 					"Descope DCR requires an agentic issuer URL".to_string(),
 				));
 			}
+		},
+		Some(McpIDP::Authentik {}) => {
+			// authentik has no DCR endpoint to proxy to (RFC 7591 is unimplemented:
+			// https://github.com/goauthentik/authentik/issues/8751). The only supported flow
+			// is a pre-registered client via `clientId`, which is handled above.
+			return Err(ProxyError::ProcessingString(
+				"authentik does not support Dynamic Client Registration; set clientId to a pre-registered public client".to_string(),
+			));
 		},
 		// Keycloak and default
 		_ => format!("{issuer}/clients-registrations/openid-connect"),

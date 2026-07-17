@@ -1921,6 +1921,7 @@ const (
 	BackendPolicySpec_McpAuthentication_KEYCLOAK    BackendPolicySpec_McpAuthentication_McpIDP = 2
 	BackendPolicySpec_McpAuthentication_OKTA        BackendPolicySpec_McpAuthentication_McpIDP = 3
 	BackendPolicySpec_McpAuthentication_DESCOPE     BackendPolicySpec_McpAuthentication_McpIDP = 4
+	BackendPolicySpec_McpAuthentication_AUTHENTIK   BackendPolicySpec_McpAuthentication_McpIDP = 5
 )
 
 // Enum value maps for BackendPolicySpec_McpAuthentication_McpIDP.
@@ -1931,6 +1932,7 @@ var (
 		2: "KEYCLOAK",
 		3: "OKTA",
 		4: "DESCOPE",
+		5: "AUTHENTIK",
 	}
 	BackendPolicySpec_McpAuthentication_McpIDP_value = map[string]int32{
 		"UNSPECIFIED": 0,
@@ -1938,6 +1940,7 @@ var (
 		"KEYCLOAK":    2,
 		"OKTA":        3,
 		"DESCOPE":     4,
+		"AUTHENTIK":   5,
 	}
 )
 
@@ -16286,7 +16289,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xe3X\n" +
+	"\x04kind\"\xf2X\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -16515,7 +16518,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x10McpAuthorization\x12\x14\n" +
 	"\x05allow\x18\x01 \x03(\tR\x05allow\x12\x12\n" +
 	"\x04deny\x18\x02 \x03(\tR\x04deny\x12\x18\n" +
-	"\arequire\x18\x03 \x03(\tR\arequire\x1a\xfa\a\n" +
+	"\arequire\x18\x03 \x03(\tR\arequire\x1a\x89\b\n" +
 	"\x11McpAuthentication\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1c\n" +
 	"\taudiences\x18\x02 \x03(\tR\taudiences\x12\x1f\n" +
@@ -16532,13 +16535,14 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"ExtraEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12,\n" +
-	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value:\x028\x01\"I\n" +
+	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value:\x028\x01\"X\n" +
 	"\x06McpIDP\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\t\n" +
 	"\x05AUTH0\x10\x01\x12\f\n" +
 	"\bKEYCLOAK\x10\x02\x12\b\n" +
 	"\x04OKTA\x10\x03\x12\v\n" +
-	"\aDESCOPE\x10\x04\"0\n" +
+	"\aDESCOPE\x10\x04\x12\r\n" +
+	"\tAUTHENTIK\x10\x05\"0\n" +
 	"\x04Mode\x12\f\n" +
 	"\bOPTIONAL\x10\x00\x12\n" +
 	"\n" +

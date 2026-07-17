@@ -4069,8 +4069,15 @@
           "$ref": "#/$defs/ResourceMetadata"
         },
         "jwks": {
-          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
-          "$ref": "#/$defs/FileInlineOrRemote"
+          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.\nIf omitted, the JWKS URL is derived from the issuer and provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "mode": {
           "description": "Controls whether MCP requests must include a valid JWT.",
@@ -4103,8 +4110,7 @@
       "required": [
         "issuer",
         "audiences",
-        "resourceMetadata",
-        "jwks"
+        "resourceMetadata"
       ]
     },
     "McpIDP": {
@@ -4158,6 +4164,19 @@
           },
           "required": [
             "descope"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "authentik": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "authentik"
           ],
           "additionalProperties": false
         }

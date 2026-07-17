@@ -21049,6 +21049,7 @@ spec:
                             description: Identity provider to use for authentication.
                             enum:
                             - Auth0
+                            - Authentik
                             - Descope
                             - Keycloak
                             - Okta

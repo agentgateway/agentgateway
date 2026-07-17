@@ -1485,6 +1485,7 @@ message BackendPolicySpec {
       KEYCLOAK = 2;
       OKTA = 3;
       DESCOPE = 4;
+      AUTHENTIK = 5;
     }
 
     // Validation mode for JWT authentication

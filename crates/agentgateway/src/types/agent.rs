@@ -2843,7 +2843,9 @@ pub struct LocalMcpAuthentication {
 	/// Protected resource metadata returned to MCP clients.
 	pub resource_metadata: ResourceMetadata,
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
-	pub jwks: FileInlineOrRemote,
+	/// If omitted, the JWKS URL is derived from the issuer and provider.
+	#[serde(default)]
+	pub jwks: Option<FileInlineOrRemote>,
 	/// Controls whether MCP requests must include a valid JWT.
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
@@ -2858,45 +2860,60 @@ pub struct LocalMcpAuthentication {
 }
 
 impl LocalMcpAuthentication {
+	/// Derive the JWKS URL from the issuer and provider, for configs that do not set `jwks`.
+	fn derived_jwks_url(&self) -> anyhow::Result<::http::Uri> {
+		Ok(match &self.provider {
+			None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
+				format!("{}/.well-known/jwks.json", self.issuer).parse()?
+			},
+			Some(McpIDP::Descope {}) => {
+				// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
+				// JWKS lives at the project level: https://api.descope.com/{project-id}/.well-known/jwks.json
+				let parsed: url::Url = self.issuer.parse()?;
+				let segments: Vec<&str> = parsed.path().trim_start_matches('/').split('/').collect();
+				if segments.len() >= 5
+					&& segments[0] == "v1"
+					&& segments[1] == "apps"
+					&& segments[2] == "agentic"
+				{
+					let project_id = segments[3];
+					let base = format!(
+						"{}://{}/{}",
+						parsed.scheme(),
+						parsed.host_str().unwrap_or_default(),
+						project_id
+					);
+					format!("{base}/.well-known/jwks.json").parse()?
+				} else {
+					format!("{}/.well-known/jwks.json", self.issuer).parse()?
+				}
+			},
+			Some(McpIDP::Keycloak { .. }) => {
+				format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
+			},
+			Some(McpIDP::Authentik {}) => {
+				// authentik issuers look like https://<host>/application/o/<app-slug>/
+				// (note the trailing slash) and serve JWKS at {issuer}/jwks/.
+				format!("{}/jwks/", self.issuer.trim_end_matches('/')).parse()?
+			},
+		})
+	}
+
 	pub fn as_jwt(&self) -> anyhow::Result<http::jwt::LocalJwtConfig> {
 		let jwks = match &self.jwks {
-			FileInlineOrRemote::Remote { url } => FileInlineOrRemote::Remote {
+			None => FileInlineOrRemote::Remote {
+				url: self.derived_jwks_url()?,
+			},
+			Some(FileInlineOrRemote::Remote { url }) => FileInlineOrRemote::Remote {
 				url: if !url.to_string().is_empty() {
 					url.clone()
 				} else {
-					match &self.provider {
-						None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
-							format!("{}/.well-known/jwks.json", self.issuer).parse()?
-						},
-						Some(McpIDP::Descope {}) => {
-							// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
-							// JWKS lives at the project level: https://api.descope.com/{project-id}/.well-known/jwks.json
-							let parsed: url::Url = self.issuer.parse()?;
-							let segments: Vec<&str> = parsed.path().trim_start_matches('/').split('/').collect();
-							if segments.len() >= 5
-								&& segments[0] == "v1"
-								&& segments[1] == "apps"
-								&& segments[2] == "agentic"
-							{
-								let project_id = segments[3];
-								let base = format!(
-									"{}://{}/{}",
-									parsed.scheme(),
-									parsed.host_str().unwrap_or_default(),
-									project_id
-								);
-								format!("{base}/.well-known/jwks.json").parse()?
-							} else {
-								format!("{}/.well-known/jwks.json", self.issuer).parse()?
-							}
-						},
-						Some(McpIDP::Keycloak { .. }) => {
-							format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
-						},
-					}
+					self.derived_jwks_url()?
 				},
 			},
-			FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. } => self.jwks.clone(),
+			Some(jwks @ (FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. })) => {
+				jwks.clone()
+			},
 		};
 
 		Ok(http::jwt::LocalJwtConfig::Single {
@@ -2934,6 +2951,7 @@ pub enum McpIDP {
 	Keycloak {},
 	Okta {},
 	Descope {},
+	Authentik {},
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -3534,6 +3552,31 @@ jwtValidationOptions:
 					jwt_validation_options.required_claims.is_empty(),
 					"jwt_validation_options should be propagated to LocalJwtConfig"
 				);
+			},
+			_ => panic!("Expected LocalJwtConfig::Single"),
+		}
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_authentik_jwks_derivation() {
+		let auth: LocalMcpAuthentication = serde_json::from_value(serde_json::json!({
+			"issuer": "https://authentik.example.com/application/o/mcp/",
+			"audiences": ["my-client-id"],
+			"provider": {"authentik": {}},
+			"resourceMetadata": {},
+		}))
+		.unwrap();
+		let jwt_config = auth.as_jwt().unwrap();
+
+		match jwt_config {
+			http::jwt::LocalJwtConfig::Single { jwks, .. } => match jwks {
+				FileInlineOrRemote::Remote { url } => {
+					assert_eq!(
+						url.to_string(),
+						"https://authentik.example.com/application/o/mcp/jwks/"
+					);
+				},
+				other => panic!("expected remote JWKS, got {other:?}"),
 			},
 			_ => panic!("Expected LocalJwtConfig::Single"),
 		}

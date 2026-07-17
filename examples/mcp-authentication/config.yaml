@@ -263,5 +263,50 @@ binds:
             #         - header
             #         resourceDocumentation: http://localhost:3000/descope/docs
             #         resourcePolicyUri: http://localhost:3000/descope/policies
+            # Example configuration for authentik:
+            # - backends:
+            #   - mcp:
+            #       targets:
+            #       - name: everything
+            #         stdio:
+            #           args:
+            #           - '@modelcontextprotocol/server-everything'
+            #           cmd: npx
+            #   matches:
+            #   - path:
+            #       exact: /authentik/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-protected-resource/authentik/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/authentik/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-authorization-server/authentik/mcp/client-registration
+            #   policies:
+            #     cors:
+            #       allowHeaders:
+            #       - mcp-protocol-version
+            #       - content-type
+            #       allowOrigins:
+            #       - '*'
+            #     mcpAuthentication:
+            #       issuer: https://authentik.example.com/application/o/<app-slug>/
+            #       audiences:
+            #       # authentik sets `aud` to the OAuth client ID
+            #       - <pre-registered-client-id>
+            #       provider:
+            #         authentik: {}
+            #       # clientId is required — authentik does not support DCR, so the gateway
+            #       # answers registration requests with this pre-registered public client
+            #       clientId: <pre-registered-client-id>
+            #       resourceMetadata:
+            #         resource: http://localhost:3000/authentik/mcp
+            #         scopesSupported:
+            #         - openid
+            #         - profile
+            #         - offline_access
+            #         bearerMethodsSupported:
+            #         - header
+            #         resourceDocumentation: http://localhost:3000/authentik/docs
+            #         resourcePolicyUri: http://localhost:3000/authentik/policies
   # Public port to listen on
   port: 3000

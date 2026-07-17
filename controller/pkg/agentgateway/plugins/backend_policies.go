@@ -689,6 +689,9 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	if *provider == agentgateway.Descope {
 		return api.BackendPolicySpec_McpAuthentication_DESCOPE
 	}
+	if *provider == agentgateway.Authentik {
+		return api.BackendPolicySpec_McpAuthentication_AUTHENTIK
+	}
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }
 
