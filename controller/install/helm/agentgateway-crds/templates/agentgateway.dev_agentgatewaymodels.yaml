@@ -772,6 +772,8 @@ spec:
               rule: has(self.provider) || !has(self.providerModel)
             - message: transformations require provider
               rule: has(self.provider) || !has(self.transformations)
+            - message: virtual models must be public
+              rule: '!has(self.virtualModel) || self.visibility != ''Internal'''
             - message: exactly one of the fields in [provider virtualModel] must be
                 set
               rule: '[has(self.provider),has(self.virtualModel)].filter(x,x==true).size()
