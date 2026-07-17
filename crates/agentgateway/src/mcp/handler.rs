@@ -13,9 +13,9 @@ use rmcp::ErrorData;
 use rmcp::model::{
 	CacheScope, ClientNotification, ClientRequest, ConstString, DiscoverResult,
 	ExtensionCapabilities, Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
-	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, Meta, PaginatedRequestParams,
+	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
 	ProtocolVersion, RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
-	ServerNotification, ServerRequest, ServerResult, SubscriptionsListenResult,
+	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
 };
 use tracing::{debug, info, warn};
 
@@ -110,7 +110,7 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 	}
 }
 
-fn rewrite_resource_messages(
+pub(super) fn rewrite_resource_messages(
 	default_target_name: Option<&String>,
 	target: &str,
 	mut message: ServerJsonRpcMessage,
@@ -137,21 +137,6 @@ fn rewrite_resource_messages(
 				_ => {},
 			}
 		}
-	}
-	message
-}
-
-fn set_subscription_ack_id(
-	mut message: ServerJsonRpcMessage,
-	subscription_id: &RequestId,
-) -> ServerJsonRpcMessage {
-	if let ServerJsonRpcMessage::Notification(notification) = &mut message
-		&& let ServerNotification::SubscriptionsAcknowledgedNotification(ack) =
-			&mut notification.notification
-	{
-		let mut meta = ack.params.meta.take().unwrap_or_else(Meta::new);
-		meta.set_subscription_id(subscription_id.clone());
-		ack.params.meta = Some(meta);
 	}
 	message
 }
@@ -723,6 +708,9 @@ impl Relay {
 		let resource_subscribe = self.upstreams.stateful();
 		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
+			// Single server: forward the upstream's advertised versions untouched. The gateway
+			// does no version translation, so an old-only upstream must surface as-is and let
+			// the client fall back to `initialize`. Multiplexed: advertise the intersection.
 			if !multiplexing {
 				let res = s.into_iter().next().and_then(|(_, r)| match r {
 					ServerResult::DiscoverResult(dr) => Some(dr),
@@ -733,9 +721,8 @@ impl Relay {
 					// Gateway routing/backend config can change without client invalidation.
 					return Ok(dr.with_cache(0, CacheScope::Private).into());
 				}
-
-				// If we got here in FailOpen mode, it means the only target failed.
-				// Return a default discovery response so clients can continue negotiation.
+				// In FailOpen, a default discovery response lets the client continue negotiation
+				// when no upstream discovery response is available.
 				// Include the recorded extensions from initialize responses.
 				return Ok(
 					Self::get_discovery(
@@ -912,8 +899,194 @@ impl Relay {
 		Box::new(move |_, _cel| Ok(rmcp::model::ServerResult::empty(())))
 	}
 
-	pub fn merge_subscriptions_listen(&self, subscription_id: RequestId) -> Box<MergeFn> {
-		Box::new(move |_, _cel| Ok(SubscriptionsListenResult::new(subscription_id).into()))
+	/// Opens the upstream streams shared by `subscriptions/listen` and request fanout.
+	/// The request-phase mcpGuardrails hook runs once over the shared context before
+	/// any upstream is contacted.
+	async fn fanout_open_streams(
+		&self,
+		r: &JsonRpcRequest<ClientRequest>,
+		ctx: &mut IncomingRequestContext,
+		target_names: Option<Vec<String>>,
+		request_for_target: impl Fn(&str, &JsonRpcRequest<ClientRequest>) -> JsonRpcRequest<ClientRequest>,
+	) -> Result<(Vec<(Strng, Messages)>, Option<Vec<String>>), UpstreamError> {
+		let selected_upstreams = self
+			.upstreams
+			.iter_named()
+			.filter(|(name, _)| {
+				target_names
+					.as_ref()
+					.is_none_or(|targets| targets.iter().any(|target| target == name.as_str()))
+			})
+			.collect::<Vec<_>>();
+		if selected_upstreams.is_empty() {
+			return Err(UpstreamError::Unavailable(
+				"no upstreams available".to_string(),
+			));
+		}
+
+		// The fanout-wide mcpGuardrails hook receives every selected backend.
+		let service_names = self.mcp_guardrails.as_ref().map(|_| {
+			selected_upstreams
+				.iter()
+				.map(|(n, _)| n.to_string())
+				.collect::<Vec<_>>()
+		});
+
+		// params is None because fanout has no single request body to rewrite.
+		if let Some(ext) = self.mcp_guardrails.as_ref() {
+			let outcome = Box::pin(
+				crate::mcp::guardrails::run_call_request::<serde_json::Value>(
+					ext,
+					&mut crate::mcp::guardrails::CallRequestCtx {
+						backends: service_names.as_deref().unwrap_or_default(),
+						method: r.request.method(),
+						params: None,
+					},
+					ctx,
+					&self.policy_client,
+				)
+				.assert_size::<{ 4 * 1024 }>(),
+			)
+			.await;
+			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
+				return Err(UpstreamError::McpGuardrails(rej));
+			}
+		}
+
+		let futs: Vec<_> = selected_upstreams
+			.into_iter()
+			.map(|(name, con)| {
+				let r = request_for_target(name.as_str(), r);
+				let ctx = &*ctx;
+				async move { (name, con.generic_stream(r, ctx).await) }
+			})
+			.collect();
+		let fut_results = futures::future::join_all(futs).await;
+
+		let mut streams = Vec::new();
+		let mut last_error = None;
+		for (name, result) in fut_results {
+			match result {
+				Ok(s) => streams.push((name, s)),
+				Err(e) => {
+					// FailOpen skips pre-stream failures. FailClosed fails before any frame streams.
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
+						last_error = Some(e);
+					} else {
+						return Err(e);
+					}
+				},
+			}
+		}
+		if streams.is_empty() {
+			// Request fanout has no transport fallback or generic synthetic success.
+			return Err(
+				last_error
+					.unwrap_or_else(|| UpstreamError::Unavailable("no upstreams available".to_string())),
+			);
+		}
+		Ok((streams, service_names))
+	}
+
+	/// Handles `subscriptions/listen` with an ACK derived from every selected upstream.
+	///
+	/// `client_filter` keeps service+ URIs for the downstream ACK. `upstream_filter` has rewritten
+	/// upstream URIs for request routing and matching `ResourceUpdated` notifications.
+	pub async fn send_subscriptions_listen(
+		&self,
+		r: JsonRpcRequest<ClientRequest>,
+		mut ctx: IncomingRequestContext,
+		client_filter: SubscriptionFilter,
+		upstream_filter: SubscriptionFilter,
+		resource_target: Option<String>,
+	) -> Result<Response, UpstreamError> {
+		use futures_util::StreamExt;
+
+		use super::subscriptions::{
+			client_filter_from_accepted, filter_and_tag_listen_notification, prepare_listen_streams,
+			synthesize_listen_ack,
+		};
+		let id = r.id.clone();
+		let has_global_filter = upstream_filter.tools_list_changed == Some(true)
+			|| upstream_filter.prompts_list_changed == Some(true)
+			|| upstream_filter.resources_list_changed == Some(true);
+		let targets = resource_target
+			.as_ref()
+			.filter(|_| !has_global_filter)
+			.map(|target| vec![target.clone()]);
+		let (streams, service_names) = self
+			.fanout_open_streams(&r, &mut ctx, targets, |target, r| {
+				let mut r = r.clone();
+				if let ClientRequest::SubscriptionsListenRequest(slr) = &mut r.request {
+					slr.params.notifications =
+						listen_filter_for_target(&upstream_filter, resource_target.as_deref(), target);
+				}
+				r
+			})
+			.await?;
+
+		let prepared_inputs = streams
+			.into_iter()
+			.map(|(name, stream)| {
+				let filter =
+					listen_filter_for_target(&upstream_filter, resource_target.as_deref(), name.as_str());
+				(name, stream, filter)
+			})
+			.collect();
+		let (prepared, accepted_filter) =
+			match prepare_listen_streams(prepared_inputs, self.upstreams.failure_mode).await {
+				Ok(prepared) => prepared,
+				Err(error) => {
+					let error_id = id.clone();
+					return respond_with_guardrails(
+						id,
+						futures::stream::once(async move { error.into_downstream_message(error_id) }),
+						service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
+						None,
+						&ctx,
+					);
+				},
+			};
+
+		let ack_filter =
+			client_filter_from_accepted(&client_filter, &upstream_filter, &accepted_filter);
+		let ack = synthesize_listen_ack(id.clone(), ack_filter);
+		let pipelines = prepared
+			.into_iter()
+			.map(|prepared| {
+				let name = prepared.target;
+				let stream = prepared.stream;
+				let filter = prepared.accepted_filter;
+				let target = name.to_string();
+				let sub_id = id.clone();
+				let default_target_name = self.upstreams.default_target_name.clone();
+				(
+					name,
+					stream.filter_map_messages_result(move |msg| {
+						filter_and_tag_listen_notification(
+							msg,
+							default_target_name.as_ref(),
+							&target,
+							&filter,
+							&sub_id,
+						)
+					}),
+				)
+			})
+			.collect::<Vec<_>>();
+
+		let merged =
+			mergestream::MergeStream::new_without_merge(pipelines, self.upstreams.failure_mode);
+		let body = futures::stream::once(async move { Ok(ack) }).chain(merged);
+
+		respond_with_guardrails(
+			id,
+			body,
+			service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
+			None,
+			&ctx,
+		)
 	}
 	pub async fn send_single(
 		&self,
@@ -936,15 +1109,7 @@ impl Relay {
 			cel,
 		);
 
-		match guardrails {
-			Some(guardrails) => messages_to_response(
-				id,
-				wrap_with_guardrails(stream, guardrails),
-				mcp_log,
-				ctx_downstream_modern(&ctx),
-			),
-			None => messages_to_response(id, stream, mcp_log, ctx_downstream_modern(&ctx)),
-		}
+		respond_with_guardrails(id, stream, guardrails, mcp_log, &ctx)
 	}
 	pub async fn send_fanout_deletion(
 		&self,
@@ -1066,119 +1231,30 @@ impl Relay {
 		target_names: Option<Vec<String>>,
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
-		let subscription_id = if matches!(&r.request, ClientRequest::SubscriptionsListenRequest(_)) {
-			Some(id.clone())
-		} else {
-			None
-		};
-		let mut streams = Vec::new();
-		let method = r.request.method().to_string();
-		let method = method.as_str();
-		let selected_upstreams = self
-			.upstreams
-			.iter_named()
-			.filter(|(name, _)| {
-				target_names
-					.as_ref()
-					.is_none_or(|targets| targets.iter().any(|target| target == name.as_str()))
-			})
-			.collect::<Vec<_>>();
-		if selected_upstreams.is_empty() {
-			return Err(UpstreamError::InvalidRequest(
-				"no upstreams available".to_string(),
-			));
-		}
-		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
-		// fans out to (just the one name when there is a single backend).
-		let service_names = self.mcp_guardrails.as_ref().map(|_| {
-			selected_upstreams
-				.iter()
-				.map(|(n, _)| n.to_string())
-				.collect::<Vec<_>>()
-		});
-
-		// Request-phase hook runs once for the whole client call. params is None for
-		// fanout (no body to rewrite); header/metadata side effects apply to the single
-		// shared ctx forwarded to every upstream. A reject fails the whole call.
-		if let Some(ext) = self.mcp_guardrails.as_ref() {
-			// params is None, so mutations are discarded unparsed and the params
-			// type is never used.
-			let outcome = Box::pin(
-				crate::mcp::guardrails::run_call_request::<serde_json::Value>(
-					ext,
-					&mut crate::mcp::guardrails::CallRequestCtx {
-						backends: service_names.as_deref().unwrap_or_default(),
-						method,
-						params: None,
-					},
-					&mut ctx,
-					&self.policy_client,
-				)
-				.assert_size::<{ 4 * 1024 }>(),
-			)
-			.await;
-			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
-				return Err(UpstreamError::McpGuardrails(rej));
-			}
-		}
-
-		let futs: Vec<_> = selected_upstreams
-			.into_iter()
-			.map(|(name, con)| {
-				let r = r.clone();
-				let ctx = &ctx;
-				async move { (name, con.generic_stream(r, ctx).await) }
-			})
-			.collect();
-
-		let fut_results = futures::future::join_all(futs).await;
+		let (streams, service_names) = self
+			.fanout_open_streams(&r, &mut ctx, target_names, |_, r| r.clone())
+			.await?;
 
 		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
-		for (name, result) in fut_results {
-			match result {
-				Ok(s) => {
-					let mut s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
-					if let Some(subscription_id) = subscription_id.clone() {
-						s = s.map_server_messages(move |message| {
-							set_subscription_ack_id(message, &subscription_id)
-						});
-					}
-					streams.push((name, s));
-				},
-				Err(e) => {
-					if self.upstreams.failure_mode == FailureMode::FailOpen {
-						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
-					} else {
-						return Err(e);
-					}
-				},
-			}
-		}
-
-		if streams.is_empty() {
-			// Unlike GET fanout, ordinary request fanout does not have a transport-level
-			// "stay connected" fallback, and most MCP methods do not have a safe generic
-			// synthetic success response. By the time we get here, every initialized
-			// upstream has failed this request, so we surface that as an error even in
-			// FailOpen rather than inventing a method-specific response.
-			return Err(UpstreamError::InvalidRequest(
-				"no upstreams available".to_string(),
-			));
-		}
+		let streams = streams
+			.into_iter()
+			.map(|(name, s)| {
+				let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
+				(name, s)
+			})
+			.collect::<Vec<_>>();
 
 		let ms =
 			mergestream::MergeStream::new(streams, id.clone(), merge, cel, self.upstreams.failure_mode);
 
 		// Response-phase hook runs once on the merged (muxed) result.
-		match service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)) {
-			Some(guardrails) => messages_to_response(
-				id,
-				wrap_with_guardrails(ms, guardrails),
-				None,
-				ctx_downstream_modern(&ctx),
-			),
-			None => messages_to_response(id, ms, None, ctx_downstream_modern(&ctx)),
-		}
+		respond_with_guardrails(
+			id,
+			ms,
+			service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
+			None,
+			&ctx,
+		)
 	}
 	pub async fn send_notification(
 		&self,
@@ -1321,7 +1397,7 @@ pub(crate) struct GuardrailsCtx {
 	pub req_ctx: Arc<IncomingRequestContext>,
 }
 
-fn messages_to_response(
+pub(super) fn messages_to_response(
 	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
@@ -1333,12 +1409,41 @@ fn messages_to_response(
 	))
 }
 
+fn respond_with_guardrails(
+	id: RequestId,
+	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+	guardrails: Option<GuardrailsCtx>,
+	mcp_log: Option<AsyncLog<MCPInfo>>,
+	ctx: &IncomingRequestContext,
+) -> Result<Response, UpstreamError> {
+	match guardrails {
+		Some(guardrails) => messages_to_response(
+			id,
+			wrap_with_guardrails(stream, guardrails),
+			mcp_log,
+			ctx_downstream_modern(ctx),
+		),
+		None => messages_to_response(id, stream, mcp_log, ctx_downstream_modern(ctx)),
+	}
+}
+
 pub(crate) fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
 	ctx
-		.as_request()
 		.extensions()
 		.get::<RequestProtocol>()
 		.is_some_and(RequestProtocol::is_modern)
+}
+
+fn listen_filter_for_target(
+	upstream_filter: &SubscriptionFilter,
+	resource_target: Option<&str>,
+	target: &str,
+) -> SubscriptionFilter {
+	let mut filter = upstream_filter.clone();
+	if resource_target.is_some_and(|resource_target| resource_target != target) {
+		filter.resource_subscriptions = None;
+	}
+	filter
 }
 
 fn wrap_with_guardrails(
@@ -1661,7 +1766,7 @@ fn accepted_response() -> Response {
 #[cfg(test)]
 mod tests {
 	use futures_util::{StreamExt, stream};
-	use rmcp::model::{CallToolResult, ListToolsResult};
+	use rmcp::model::{CallToolResult, ListResourcesResult, ListToolsResult};
 	use serde_json::json;
 
 	use super::*;
@@ -1685,6 +1790,20 @@ mod tests {
 
 		let legacy = serde_json::to_value(normalize_outbound_for_protocol(response, false)).unwrap();
 		assert!(legacy["result"].get("resultType").is_none());
+		assert!(legacy["result"].get("ttlMs").is_none());
+		assert!(legacy["result"].get("cacheScope").is_none());
+
+		// Gateway cache hints make unstamped results stale and private for modern clients.
+		// Legacy normalization omits those fields.
+		let stamped = with_gateway_cache_policy(ServerJsonRpcMessage::response(
+			ServerResult::ListResourcesResult(ListResourcesResult::default()),
+			RequestId::Number(2),
+		));
+		let modern =
+			serde_json::to_value(normalize_outbound_for_protocol(stamped.clone(), true)).unwrap();
+		assert_eq!(modern["result"]["ttlMs"], 0);
+		assert_eq!(modern["result"]["cacheScope"], "private");
+		let legacy = serde_json::to_value(normalize_outbound_for_protocol(stamped, false)).unwrap();
 		assert!(legacy["result"].get("ttlMs").is_none());
 		assert!(legacy["result"].get("cacheScope").is_none());
 	}

@@ -190,7 +190,7 @@ func TestOAuthTokenExchangeClientAuthMissingSecretKeyPreservesExplicitSecretInte
 		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "gateway",
-			SecretRef: &agentgateway.LocalSecretObjectRef{
+			SecretRef: &agentgateway.LocalSecretKeyRef{
 				Name: "oauth-client",
 			},
 		},
@@ -225,7 +225,7 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 			ClientID: "gateway",
 			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
 			PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
-				SigningKeyRef: agentgateway.LocalSecretObjectRef{
+				SigningKeyRef: agentgateway.LocalSecretKeyRef{
 					Name: "oauth-signing-key",
 				},
 				Alg:               ptr.Of(agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256),
@@ -359,7 +359,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 				ClientAuth: &agentgateway.OAuthClientAuth{
 					ClientID: "gateway",
 					PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
-						SigningKeyRef: agentgateway.LocalSecretObjectRef{
+						SigningKeyRef: agentgateway.LocalSecretKeyRef{
 							Name: "missing",
 						},
 						AssertionAudience: "https://issuer.example.com/oauth/token",
@@ -440,7 +440,7 @@ func TestOAuthTokenExchangeEnumDefaulting(t *testing.T) {
 		BackendRef: oauthTokenEndpointRef(),
 		ClientAuth: &agentgateway.OAuthClientAuth{
 			ClientID: "gateway",
-			SecretRef: &agentgateway.LocalSecretObjectRef{
+			SecretRef: &agentgateway.LocalSecretKeyRef{
 				Name: "oauth-client",
 			},
 		},

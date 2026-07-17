@@ -57,6 +57,7 @@ type gatewayReconciler struct {
 	nsClient         kclient.Client[*corev1.Namespace]
 	svcClient        kclient.Client[*corev1.Service]
 	deploymentClient kclient.Client[*appsv1.Deployment]
+	daemonSetClient  kclient.Client[*appsv1.DaemonSet]
 	svcAccountClient kclient.Client[*corev1.ServiceAccount]
 	configMapClient  kclient.Client[*corev1.ConfigMap]
 	secretClient     kclient.Client[*corev1.Secret]
@@ -85,6 +86,7 @@ func NewGatewayReconciler(
 		nsClient:         kclient.NewFiltered[*corev1.Namespace](cfg.Client, filter),
 		svcClient:        kclient.NewFiltered[*corev1.Service](cfg.Client, filter),
 		deploymentClient: kclient.NewFiltered[*appsv1.Deployment](cfg.Client, filter),
+		daemonSetClient:  kclient.NewFiltered[*appsv1.DaemonSet](cfg.Client, filter),
 		svcAccountClient: kclient.NewFiltered[*corev1.ServiceAccount](cfg.Client, filter),
 		configMapClient:  kclient.NewFiltered[*corev1.ConfigMap](cfg.Client, filter),
 		secretClient: kclient.NewFiltered[*corev1.Secret](cfg.Client, kclient.Filter{
@@ -198,9 +200,10 @@ func NewGatewayReconciler(
 		r.agwParamClient.AddEventHandler(agwParamEventHandler)
 	}
 
-	// Add a handler to reconcile the parent Gateway when child objects (Deployment, Service, etc.)
+	// Add a handler to reconcile the parent Gateway when child objects (Deployment, DaemonSet, Service, etc.)
 	parentHandler := controllers.ObjectHandler(controllers.EnqueueForParentHandler(r.queue, gvk.KubernetesGateway))
 	r.deploymentClient.AddEventHandler(parentHandler)
+	r.daemonSetClient.AddEventHandler(parentHandler)
 	r.svcAccountClient.AddEventHandler(parentHandler)
 	r.svcClient.AddEventHandler(parentHandler)
 	r.configMapClient.AddEventHandler(parentHandler)
@@ -240,6 +243,7 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 		r.gwClassClient.HasSynced,
 		r.nsClient.HasSynced,
 		r.deploymentClient.HasSynced,
+		r.daemonSetClient.HasSynced,
 		r.svcAccountClient.HasSynced,
 		r.svcClient.HasSynced,
 		r.configMapClient.HasSynced,
@@ -261,6 +265,7 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 		r.gwClassClient,
 		r.nsClient,
 		r.deploymentClient,
+		r.daemonSetClient,
 		r.svcAccountClient,
 		r.svcClient,
 		r.configMapClient,

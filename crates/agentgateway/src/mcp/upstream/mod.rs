@@ -60,6 +60,9 @@ impl IncomingRequestContext {
 	pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
 		&mut self.headers
 	}
+	pub fn extensions(&self) -> &::http::Extensions {
+		&self.ext
+	}
 	pub fn extensions_mut(&mut self) -> &mut ::http::Extensions {
 		&mut self.ext
 	}
@@ -122,6 +125,10 @@ pub enum UpstreamError {
 	McpGuardrails(rmcp::ErrorData),
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
+	/// A server-side availability/capability gap. Distinct from `InvalidRequest`,
+	/// so client-visible errors do not blame the request for a backend condition.
+	#[error("{0}")]
+	Unavailable(String),
 	#[error("unsupported method: {0}")]
 	InvalidMethod(String),
 	#[error("stdio upstream error: {0}")]
@@ -209,6 +216,18 @@ impl Upstream {
 		request: JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
+		// stdio/SSE route server-initiated notifications through `get_event_stream`,
+		// which `subscriptions/listen` never merges. Reject them before sending
+		// an ack over a silent stream. OpenAPI has no notifications to lose.
+		if matches!(&self, Upstream::McpStdio(_) | Upstream::McpSSE(_))
+			&& matches!(
+				&request.request,
+				ClientRequest::SubscriptionsListenRequest(_)
+			) {
+			return Err(UpstreamError::Unavailable(
+				"subscriptions/listen is not supported for stdio/SSE upstreams".to_string(),
+			));
+		}
 		match &self {
 			Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
 				Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?,
@@ -346,6 +365,15 @@ impl UpstreamGroup {
 
 	pub(crate) fn stateful(&self) -> bool {
 		self.backend.stateful
+	}
+
+	/// True when some target's `delete` does teardown work even without an upstream
+	/// session id: stdio processes and SSE streams hold per-connection state.
+	pub(crate) fn has_connection_teardown(&self) -> bool {
+		self
+			.by_name
+			.values()
+			.any(|u| matches!(u.as_ref(), Upstream::McpStdio(_) | Upstream::McpSSE(_)))
 	}
 
 	pub(crate) fn record_extensions(&self, target: &str, extensions: Option<&ExtensionCapabilities>) {

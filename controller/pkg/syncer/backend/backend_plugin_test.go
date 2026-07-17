@@ -584,7 +584,7 @@ func TestBuildAIBackend(t *testing.T) {
 				Spec: agentgateway.AgentgatewayBackendSpec{
 					Policies: &agentgateway.BackendFull{
 						BackendSimple: agentgateway.BackendSimple{
-							Auth: &agentgateway.BackendAuth{SecretRef: &agentgateway.LocalSecretObjectRef{
+							Auth: &agentgateway.BackendAuth{SecretRef: &agentgateway.LocalSecretKeyRef{
 								Name: "openai-secret",
 							}},
 						},

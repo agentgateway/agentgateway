@@ -496,10 +496,17 @@ fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 
 fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
-		let (prefix, rest) = path.split_once("/publishers/anthropic/models/")?;
-		let (_, suffix) = rest.split_once(':')?;
+		// Vertex: .../publishers/{publisher}/models/{model}:{rawPredict|streamRawPredict}
+		// Preserve the publisher from the path; only rewrite the model id. Matching only
+		// `publishers/anthropic` incorrectly dropped virtual-model rewrites for other publishers.
+		let (prefix, rest) = path.split_once("/publishers/")?;
+		let (publisher, after_publisher) = rest.split_once("/models/")?;
+		if publisher.is_empty() {
+			return None;
+		}
+		let (_, suffix) = after_publisher.split_once(':')?;
 		return Some(format!(
-			"{prefix}/publishers/anthropic/models/{}:{suffix}",
+			"{prefix}/publishers/{publisher}/models/{}:{suffix}",
 			encode_model_path_segment(target)
 		));
 	}
@@ -634,6 +641,26 @@ mod tests {
 			)
 			.as_deref(),
 			Some("/v1/projects/p/locations/us/publishers/anthropic/models/claude-sonnet:rawPredict")
+		);
+	}
+
+	#[test]
+	fn rewrite_path_model_rewrites_vertex_raw_predict_for_non_anthropic_publishers() {
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/us/publishers/google/models/virtual:rawPredict",
+				"gemini-2.0-flash",
+			)
+			.as_deref(),
+			Some("/v1/projects/p/locations/us/publishers/google/models/gemini-2.0-flash:rawPredict")
+		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/us/publishers/meta/models/virtual:streamRawPredict",
+				"llama-3.1-70b",
+			)
+			.as_deref(),
+			Some("/v1/projects/p/locations/us/publishers/meta/models/llama-3.1-70b:streamRawPredict")
 		);
 	}
 

@@ -1148,8 +1148,9 @@ type BasicAuthentication struct {
 
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, storing the `.htaccess` file. When using the default Secret
-	// resolver, the `Secret` must have a key named `.htaccess`, and should
-	// contain the complete `.htaccess` file.
+	// resolver, the `Secret` must have a key named `.htaccess` by default;
+	// override via `secretRef.key`. The value should contain the complete
+	// `.htaccess` file.
 	//
 	// Note: passwords should be the hash of the password, not the raw password. Use the `htpasswd` or similar commands
 	// to generate a hash. MD5, bcrypt, crypt, and SHA-1 are supported.
@@ -1165,7 +1166,7 @@ type BasicAuthentication struct {
 	//	    alice:$apr1$3zSE0Abt$IuETi4l5yO87MuOrbSE4V.
 	//	    bob:$apr1$Ukb5LgRD$EPY2lIfY.A54jzLELNIId/
 	// +optional
-	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
 	// Where Basic credentials are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Basic ` prefix.
@@ -1323,9 +1324,11 @@ type BackendAuth struct {
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, storing the key to use as the authorization value. When using
 	// the default Secret resolver, this must be stored in the `Authorization`
+	// key by default; override via `secretRef.key`. A `Bearer ` prefix on the
+	// stored value is stripped only when reading the default `Authorization`
 	// key.
 	// +optional
-	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
 	// Passes through an existing token that has been sent by the
 	// client and validated. Other policies, like JWT and API key
@@ -1500,10 +1503,11 @@ type OAuthClientAuth struct {
 	// +required
 	ClientID string `json:"clientId"`
 
-	// Secret providing the `clientSecret` key. When omitted, client_id is sent
-	// without a secret, which is only valid with ClientSecretPost.
+	// Secret providing the `clientSecret` key by default; override via
+	// `secretRef.key`. When omitted, client_id is sent without a secret, which
+	// is only valid with ClientSecretPost.
 	// +optional
-	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
 	// privateKeyJwt client assertion settings. Required when method is PrivateKeyJwt.
 	// +optional
@@ -1516,9 +1520,10 @@ type OAuthClientAuth struct {
 
 // OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
 type OAuthPrivateKeyJWT struct {
-	// Secret providing the `signingKey` key with a PEM-encoded RSA or EC private key.
+	// Secret providing the `signingKey` key by default with a PEM-encoded RSA
+	// or EC private key; override the key name via `signingKeyRef.key`.
 	// +required
-	SigningKeyRef LocalSecretObjectRef `json:"signingKeyRef"`
+	SigningKeyRef LocalSecretKeyRef `json:"signingKeyRef"`
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
@@ -1580,10 +1585,11 @@ type GcpAuth struct {
 	// Credential source, defaulting to a Kubernetes
 	// `Secret`, containing ADC-compatible Google credential JSON. When using
 	// the default Secret resolver, this must be stored in the `credentials.json`
-	// key. When omitted, ambient credentials are used.
+	// key by default; override via `secretRef.key`. When omitted, ambient
+	// credentials are used.
 	//
 	// +optional
-	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 	// Explicit `aud` value for the ID token. Only
 	// valid with `IdToken` type. If not set, the `aud` is automatically
 	// derived from the backend hostname.

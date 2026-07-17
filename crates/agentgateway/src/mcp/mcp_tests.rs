@@ -19,7 +19,7 @@ use crate::mcp::{FailureMode, McpAuthorization, guardrails};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::test_helpers::extauthmock::{ExtAuthMock, deny_response};
 use crate::test_helpers::proxymock::{
-	BIND_KEY, TestBind, basic_named_route, basic_route, setup_proxy_test, simple_bind,
+	BIND_KEY, TestBind, basic_named_route, basic_route, is_json_subset, setup_proxy_test, simple_bind,
 };
 use crate::test_helpers::ratelimitmock::{RateLimitMock, over_limit_response};
 use crate::types::agent::{BackendTrafficPolicy, FrontendPolicy, PolicyTarget, TargetedPolicy};
@@ -795,6 +795,7 @@ async fn stateless_multiplex_delete_session_skips_uninitialized_targets() {
 				.into(),
 				RequestId::Number(1),
 			),
+			true,
 		)
 		.await
 		.unwrap();
@@ -867,9 +868,7 @@ async fn modern_stateful_streamable_http_does_not_use_sessions() {
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
 	let client = reqwest::Client::new();
 	let url = format!("http://{io}/mcp");
-	let meta = serde_json::json!({
-		"io.modelcontextprotocol/protocolVersion": "2026-07-28"
-	});
+	let meta = modern_meta();
 
 	let discover_body = serde_json::json!({
 		"jsonrpc": "2.0",
@@ -978,7 +977,9 @@ async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize()
 		"method": "server/discover",
 		"params": {
 			"_meta": {
-				"io.modelcontextprotocol/protocolVersion": "2026-07-28"
+				"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+				"io.modelcontextprotocol/clientInfo": {"name": "fallback-client", "version": "0.0.1"},
+				"io.modelcontextprotocol/clientCapabilities": {}
 			}
 		}
 	});
@@ -1242,6 +1243,73 @@ async fn legacy_meta_client_capabilities_are_stripped() {
 }
 
 #[tokio::test]
+async fn legacy_multiplex_invalid_target_keeps_internal_error() {
+	let first = mock_streamable_http_server(true).await;
+	let second = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("first", first.addr, false), ("second", second.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	});
+	let initialize = mcp_json_post(&client, &url, &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(initialize.status(), reqwest::StatusCode::OK);
+	let session_id = initialize
+		.headers()
+		.get("mcp-session-id")
+		.expect("legacy initialize should create a session")
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	let call = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/call",
+		"params": {"name": "nosuchsvc+echo", "arguments": {}}
+	});
+	let response = mcp_json_post(&client, &url, &call)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		response.status(),
+		reqwest::StatusCode::INTERNAL_SERVER_ERROR
+	);
+	let json: serde_json::Value = response.json().await.unwrap();
+	assert!(
+		is_json_subset(
+			&serde_json::json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32603}}),
+			&json
+		),
+		"unexpected body: {json}"
+	);
+}
+
+#[tokio::test]
 async fn streamable_http_validates_protocol_version_header() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -1267,6 +1335,12 @@ async fn streamable_http_validates_protocol_version_header() {
 		.await
 		.unwrap();
 	assert_eq!(unsupported.status(), reqwest::StatusCode::BAD_REQUEST);
+	let unsupported_body = unsupported.json::<serde_json::Value>().await.unwrap();
+	assert_eq!(unsupported_body["id"], 1);
+	assert!(
+		unsupported_body["error"].get("data").is_none(),
+		"legacy initialize errors must not include modern version-negotiation data"
+	);
 
 	let mismatch = mcp_json_post(&client, &url, &init_body)
 		.header("mcp-protocol-version", "2025-11-25")
@@ -1288,27 +1362,24 @@ async fn streamable_http_validates_protocol_version_header() {
 			}
 		}
 	});
-	let unsupported_initialize = mcp_json_post(&client, &url, &modern_init_body)
+	let removed_initialize = mcp_json_post(&client, &url, &modern_init_body)
 		.header("mcp-protocol-version", "2026-07-28")
 		.send()
 		.await
 		.unwrap();
-	assert_eq!(
-		unsupported_initialize.status(),
-		reqwest::StatusCode::BAD_REQUEST
-	);
-	let unsupported_initialize_body = unsupported_initialize
+	assert_eq!(removed_initialize.status(), reqwest::StatusCode::NOT_FOUND);
+	let removed_initialize_body = removed_initialize
 		.json::<serde_json::Value>()
 		.await
 		.unwrap();
 	assert_eq!(
-		unsupported_initialize_body,
+		removed_initialize_body,
 		serde_json::json!({
 			"jsonrpc": "2.0",
 			"id": 3,
 			"error": {
-				"code": -32022,
-				"message": "unsupported MCP protocol version for initialize: 2026-07-28"
+				"code": -32601,
+				"message": "method not found: initialize"
 			}
 		})
 	);
@@ -1366,6 +1437,514 @@ fn mcp_json_post<'a>(
 		)
 		.header(http::header::CONTENT_TYPE.as_str(), "application/json")
 		.json(body)
+}
+
+// Forwarded modern responses may come back as a single JSON object or as an SSE stream.
+// Validation-layer errors are always plain JSON.
+async fn read_response_message(response: reqwest::Response) -> serde_json::Value {
+	let is_sse = response
+		.headers()
+		.get(reqwest::header::CONTENT_TYPE)
+		.and_then(|v| v.to_str().ok())
+		.is_some_and(|ct| ct.starts_with("text/event-stream"));
+	let text = response.text().await.unwrap();
+	if !is_sse {
+		return serde_json::from_str(&text)
+			.unwrap_or_else(|e| panic!("invalid json body: {e}: {text}"));
+	}
+	text
+		.lines()
+		.filter_map(|line| line.strip_prefix("data:"))
+		.filter_map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).ok())
+		.next_back()
+		.unwrap_or_else(|| panic!("SSE stream had no parseable data event: {text}"))
+}
+
+// Standard modern `_meta` block (SEP-2575): every modern request must carry these three
+// members instead of the legacy one-time `initialize` handshake.
+fn modern_meta() -> serde_json::Value {
+	serde_json::json!({
+		"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+		"io.modelcontextprotocol/clientInfo": {"name": "test-client", "version": "0.0.1"},
+		"io.modelcontextprotocol/clientCapabilities": {}
+	})
+}
+
+#[tokio::test]
+async fn modern_removed_and_unknown_methods_return_404() {
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	// Removed and unknown methods 404 in transport validation; `tasks/list` is known but
+	// unimplemented and 404s via the InvalidMethod remap in session dispatch.
+	for (i, method) in super::REMOVED_METHODS_2026_07_28
+		.iter()
+		.copied()
+		.chain(["unknown/method", "tasks/list"])
+		.enumerate()
+	{
+		let id = i as i64 + 1;
+		let body = serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": id,
+			"method": method,
+			"params": {
+				"_meta": modern_meta()
+			}
+		});
+		let response = mcp_json_post(&client, &url, &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", method)
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(
+			response.status(),
+			reqwest::StatusCode::NOT_FOUND,
+			"method {method} should 404"
+		);
+		let json: serde_json::Value = response.json().await.unwrap();
+		assert!(
+			is_json_subset(
+				&serde_json::json!({"jsonrpc": "2.0", "id": id, "error": {"code": -32601}}),
+				&json
+			),
+			"unexpected body for {method}: {json}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn modern_unknown_method_without_meta_returns_404() {
+	// Unknown methods 404 even without the modern `_meta` block: method existence is checked
+	// before `_meta` validation, so probes get method-not-found rather than -32602.
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "unknown/method",
+		"params": {}
+	});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "unknown/method")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+	let json: serde_json::Value = response.json().await.unwrap();
+	assert!(
+		is_json_subset(
+			&serde_json::json!({"jsonrpc": "2.0", "id": 1, "error": {"code": -32601}}),
+			&json
+		),
+		"unexpected body: {json}"
+	);
+}
+
+#[tokio::test]
+async fn modern_body_only_removed_method_is_invalid_protocol_not_404() {
+	// Removed-method rejection uses the header version only, while completeness checks use
+	// the header or body version. A removed method with modern `_meta` but no protocol
+	// header is an incomplete modern request, not method-not-found.
+	// `resources/subscribe` preserves `_meta`; `ping` drops params before `_meta` is visible.
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "resources/subscribe",
+		"params": {
+			"uri": "file:///x",
+			"_meta": modern_meta()
+		}
+	});
+	let response = mcp_json_post(&client, &url, &body).send().await.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn legacy_session_keeps_ping_and_unknown_methods_do_not_return_404() {
+	// Legacy (2025-06-18) sessions keep pre-SEP-2575 behavior: `ping` is removed only for
+	// modern requests, and unknown methods must not 404 because streamable HTTP clients
+	// treat 404-with-session-id as session-expired and would tear down a live session.
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let init_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	});
+	let init = mcp_json_post(&client, &url, &init_body)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(init.status(), reqwest::StatusCode::OK);
+	let session_id = init
+		.headers()
+		.get("mcp-session-id")
+		.expect("legacy initialize should create a session")
+		.to_str()
+		.unwrap()
+		.to_string();
+
+	let ping_body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "ping"
+	});
+	let ping = mcp_json_post(&client, &url, &ping_body)
+		.header("mcp-session-id", session_id.clone())
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(ping.status(), reqwest::StatusCode::OK);
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 3,
+		"method": "unknown/method",
+		"params": {}
+	});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-session-id", session_id)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		response.status(),
+		reqwest::StatusCode::INTERNAL_SERVER_ERROR
+	);
+}
+
+#[tokio::test]
+async fn modern_malformed_known_method_envelope_is_not_method_not_found() {
+	// Typed-parse failures on the modern path go through the `unknown_method_error` fallback;
+	// it must not re-classify a known method (or a non-2.0 envelope) as a 404.
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.1",
+		"id": 1,
+		"method": "tools/list",
+		"params": {
+			"_meta": modern_meta()
+		}
+	});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/list")
+		.send()
+		.await
+		.unwrap();
+
+	assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn modern_malformed_known_method_params_are_not_method_not_found() {
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/call",
+		"params": {
+			"_meta": modern_meta()
+		}
+	});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/call")
+		.send()
+		.await
+		.unwrap();
+
+	assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+	let json: serde_json::Value = response.json().await.unwrap();
+	assert!(
+		is_json_subset(
+			&serde_json::json!({"jsonrpc": "2.0", "id": 1, "error": {"code": -32602}}),
+			&json
+		),
+		"unexpected body for malformed tools/call: {json}"
+	);
+}
+
+#[tokio::test]
+async fn modern_request_missing_gateway_protocol_version_returns_invalid_params() {
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let cases: Vec<(&str, serde_json::Value)> = vec![
+		("meta absent", serde_json::json!({})),
+		("protocolVersion missing", {
+			let mut meta = modern_meta();
+			meta
+				.as_object_mut()
+				.unwrap()
+				.remove("io.modelcontextprotocol/protocolVersion");
+			serde_json::json!({ "_meta": meta })
+		}),
+	];
+
+	for (i, (label, params)) in cases.into_iter().enumerate() {
+		let id = i as i64 + 1;
+		let body = serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": id,
+			"method": "tools/list",
+			"params": params
+		});
+		let response = mcp_json_post(&client, &url, &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(
+			response.status(),
+			reqwest::StatusCode::BAD_REQUEST,
+			"case {label} should be rejected"
+		);
+		let json: serde_json::Value = response.json().await.unwrap();
+		assert!(
+			is_json_subset(
+				&serde_json::json!({"jsonrpc": "2.0", "id": id, "error": {"code": -32602}}),
+				&json
+			),
+			"unexpected body for {label}: {json}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn modern_request_forwards_non_routing_metadata() {
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	for (label, key, value) in [
+		(
+			"clientInfo missing",
+			"io.modelcontextprotocol/clientInfo",
+			None,
+		),
+		(
+			"clientInfo malformed",
+			"io.modelcontextprotocol/clientInfo",
+			Some(serde_json::json!(false)),
+		),
+		(
+			"clientCapabilities missing",
+			"io.modelcontextprotocol/clientCapabilities",
+			None,
+		),
+		(
+			"clientCapabilities malformed",
+			"io.modelcontextprotocol/clientCapabilities",
+			Some(serde_json::json!(false)),
+		),
+	] {
+		let mut meta = modern_meta();
+		let meta = meta.as_object_mut().unwrap();
+		match value {
+			Some(value) => {
+				meta.insert(key.to_string(), value);
+			},
+			None => {
+				meta.remove(key);
+			},
+		}
+		let body = serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "tools/list",
+			"params": { "_meta": meta }
+		});
+		let response = mcp_json_post(&client, &url, &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", "tools/list")
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::OK, "case {label}");
+	}
+}
+
+#[tokio::test]
+async fn modern_request_with_valid_meta_still_forwards() {
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/list",
+		"params": {
+			"_meta": modern_meta()
+		}
+	});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "tools/list")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let json = read_response_message(response).await;
+	assert!(json.get("error").is_none(), "unexpected error: {json}");
+}
+
+#[tokio::test]
+async fn unsupported_protocol_version_error_includes_supported_and_requested() {
+	let mock = mock_modern_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "tools/list",
+		"params": {}
+	});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "1900-01-01")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+	let json: serde_json::Value = response.json().await.unwrap();
+	assert!(
+		is_json_subset(
+			&serde_json::json!({
+				"jsonrpc": "2.0",
+				"id": 1,
+				"error": {"data": {"requested": "1900-01-01"}}
+			}),
+			&json
+		),
+		"unexpected body: {json}"
+	);
+	let supported = json["error"]["data"]["supported"]
+		.as_array()
+		.expect("supported should be an array");
+	// Pin the versions the gateway must advertise instead of comparing against
+	// KNOWN_VERSIONS, which is the same constant production serializes.
+	for expected in ["2025-06-18", "2026-07-28"] {
+		assert!(
+			supported.iter().any(|v| v == expected),
+			"supported must include {expected}: {json}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn server_discover_forwards_upstream_supported_versions() {
+	let upstream_versions = ["2024-11-05", "1900-01-01"];
+	for stateful_mode in [true, false] {
+		let mock = mock_modern_streamable_http_server_with_versions(&upstream_versions).await;
+		let (_bind, io) = setup_proxy(&mock, stateful_mode, false).await;
+		let client = reqwest::Client::new();
+		let url = format!("http://{io}/mcp");
+
+		let body = serde_json::json!({
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "server/discover",
+			"params": {
+				"_meta": modern_meta()
+			}
+		});
+		let response = mcp_json_post(&client, &url, &body)
+			.header("mcp-protocol-version", "2026-07-28")
+			.header("mcp-method", "server/discover")
+			.send()
+			.await
+			.unwrap();
+		assert_eq!(response.status(), reqwest::StatusCode::OK);
+		let json = read_response_message(response).await;
+
+		assert_eq!(
+			json["result"]["supportedVersions"],
+			serde_json::json!(upstream_versions),
+			"single-server discover must forward the upstream version set"
+		);
+		assert_eq!(
+			mock.init_count().await,
+			0,
+			"modern discover must not initialize upstream with statefulMode={stateful_mode}"
+		);
+	}
+}
+
+#[tokio::test]
+async fn multiplex_server_discover_advertises_intersection() {
+	let a = mock_modern_streamable_http_server_with_versions(&["2025-11-25", "2026-07-28"]).await;
+	let b = mock_modern_streamable_http_server_with_versions(&["2026-07-28"]).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", a.addr, false), ("b", b.addr, false)],
+			false,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "server/discover",
+		"params": { "_meta": modern_meta() }
+	});
+	let response = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "server/discover")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let json = read_response_message(response).await;
+
+	assert_eq!(
+		json["result"]["supportedVersions"],
+		serde_json::json!(["2026-07-28"])
+	);
 }
 
 #[tokio::test]
@@ -1749,6 +2328,108 @@ async fn authorization_deny_specific_tool_filters_only_that_tool() {
 		"Expected at least 5 tools after denying 1, got {}: {:?}",
 		tool_names.len(),
 		tool_names
+	);
+}
+
+#[tokio::test]
+async fn resource_scoped_listen_preserves_global_filters_for_other_backends() {
+	use wiremock::{Mock, ResponseTemplate};
+
+	let owner = wiremock::MockServer::start().await;
+	let other = wiremock::MockServer::start().await;
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(ResponseTemplate::new(200).set_body_raw(
+			"data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/subscriptions/acknowledged\",\"params\":{\"notifications\":{\"resourceSubscriptions\":[\"https://example.com/a\"],\"toolsListChanged\":true}}}\n\n",
+			"text/event-stream",
+		))
+		.mount(&owner)
+		.await;
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(ResponseTemplate::new(200).set_body_raw(
+			"data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/subscriptions/acknowledged\",\"params\":{\"notifications\":{\"toolsListChanged\":true}}}\n\n",
+			"text/event-stream",
+		))
+		.mount(&other)
+		.await;
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![
+				("owner", *owner.address(), false),
+				("other", *other.address(), false),
+			],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let listen = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "subscriptions/listen",
+		"params": {
+			"_meta": modern_meta(),
+			"notifications": {
+				"resourceSubscriptions": ["owner+https://example.com/a"],
+				"toolsListChanged": true
+			}
+		}
+	});
+	let response = mcp_json_post(&client, &url, &listen)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "subscriptions/listen")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let frames = response
+		.text()
+		.await
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data:"))
+		.map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).unwrap())
+		.collect::<Vec<_>>();
+	assert_eq!(
+		frames[0]["method"],
+		"notifications/subscriptions/acknowledged"
+	);
+	assert_eq!(
+		frames[0]["params"]["notifications"],
+		serde_json::json!({
+			"resourceSubscriptions": ["owner+https://example.com/a"],
+			"toolsListChanged": true
+		})
+	);
+	assert!(frames[1].get("error").is_some());
+
+	let owner_requests = owner.received_requests().await.unwrap();
+	let owner_listen = owner_requests
+		.iter()
+		.map(|request| serde_json::from_slice::<serde_json::Value>(&request.body).unwrap())
+		.find(|request| request["method"] == "subscriptions/listen")
+		.expect("resource owner should receive the listen request");
+	assert_eq!(
+		owner_listen["params"]["notifications"],
+		serde_json::json!({
+			"resourceSubscriptions": ["https://example.com/a"],
+			"toolsListChanged": true
+		})
+	);
+
+	let other_requests = other.received_requests().await.unwrap();
+	let other_listen = other_requests
+		.iter()
+		.map(|request| serde_json::from_slice::<serde_json::Value>(&request.body).unwrap())
+		.find(|request| request["method"] == "subscriptions/listen")
+		.expect("global filters should fan out to non-resource backends");
+	assert_eq!(
+		other_listen["params"]["notifications"],
+		serde_json::json!({"toolsListChanged": true})
 	);
 }
 
@@ -2408,21 +3089,29 @@ async fn mock_streamable_http_server(stateful: bool) -> MockServer {
 }
 
 async fn mock_modern_streamable_http_server() -> MockServer {
+	mock_modern_streamable_http_server_with_versions(&["2025-06-18", "2026-07-28"]).await
+}
+
+// Variant of `mock_modern_streamable_http_server` for tests that need custom upstream
+// `server/discover` versions.
+async fn mock_modern_streamable_http_server_with_versions(versions: &[&str]) -> MockServer {
 	agent_core::telemetry::testing::setup_test_logging();
 	let (tx, rx) = tokio::sync::oneshot::channel();
 	let init_counter = std::sync::Arc::new(tokio::sync::Mutex::new(0_i32));
 	let init_counter_clone = init_counter.clone();
+	let versions: Vec<String> = versions.iter().map(|v| v.to_string()).collect();
 	let router = axum::Router::new().route(
 		"/mcp",
 		axum::routing::post(move |body: axum::Json<serde_json::Value>| {
 			let init_counter = init_counter_clone.clone();
+			let versions = versions.clone();
 			async move {
 				let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
 				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
 				let result = match method {
 					"server/discover" => serde_json::json!({
 						"resultType": "complete",
-						"supportedVersions": ["2025-06-18", "2026-07-28"],
+						"supportedVersions": versions,
 						"capabilities": {
 							"tools": {}
 						},

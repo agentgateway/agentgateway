@@ -671,33 +671,26 @@ impl Handler {
 				id,
 				ListPromptsResult {
 					..Default::default()
-				}
-				.with_ttl_ms(0)
-				.with_cache_scope(CacheScope::Private),
+				},
 			),
 			ClientRequest::ListResourcesRequest(_) => Messages::from_result(
 				id,
 				ListResourcesResult {
 					..Default::default()
-				}
-				.with_ttl_ms(0)
-				.with_cache_scope(CacheScope::Private),
+				},
 			),
 			ClientRequest::ListResourceTemplatesRequest(_) => Messages::from_result(
 				id,
 				ListResourceTemplatesResult {
 					..Default::default()
-				}
-				.with_ttl_ms(0)
-				.with_cache_scope(CacheScope::Private),
+				},
 			),
 			ClientRequest::DiscoverRequest(_) => Messages::from_result(
 				id,
 				DiscoverResult::new(
 					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
 					ServerCapabilities::builder().enable_tools().build(),
-				)
-				.with_cache(0, CacheScope::Private),
+				),
 			),
 			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
 			ClientRequest::GetTaskRequest(_) => {
@@ -712,8 +705,14 @@ impl Handler {
 			},
 			ClientRequest::PingRequest(_) => Messages::from_result(id, ServerResult::empty(())),
 			ClientRequest::SubscriptionsListenRequest(_) => {
-				let subscription_id = id.clone();
-				Messages::from_result(id, SubscriptionsListenResult::new(subscription_id))
+				Messages::from(ServerJsonRpcMessage::notification(
+					ServerNotification::SubscriptionsAcknowledgedNotification(
+						SubscriptionsAcknowledgedNotification::new(
+							SubscriptionsAcknowledgedNotificationParams::new(SubscriptionFilter::new()),
+						),
+					),
+				))
+				.then_pending()
 			},
 			ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
@@ -743,9 +742,7 @@ impl Handler {
 				ListToolsResult {
 					tools: self.tools(),
 					..Default::default()
-				}
-				.with_ttl_ms(0)
-				.with_cache_scope(CacheScope::Private),
+				},
 			),
 		};
 		Ok(res)

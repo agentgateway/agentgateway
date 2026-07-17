@@ -3,6 +3,7 @@ package plugins
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"istio.io/istio/pkg/kube/krt"
@@ -203,17 +204,18 @@ func TestBasicAuthCanUseInjectedCredentialResolver(t *testing.T) {
 			Name:      "basic-auth",
 		},
 		Data: map[string]string{
-			".htaccess": "alice:hash",
+			"users": "alice:hash",
 		},
 	}
 	configMaps := krt.NewStaticCollection[*corev1.ConfigMap](nil, []*corev1.ConfigMap{configMap}, krt.WithName("plugins/TestBasicAuthCanUseInjectedCredentialResolver"), krt.WithStop(stop))
 	ctx := simpleAuthPolicyCtx(nil, configMapCredentialResolver{configMaps: configMaps})
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &agentgateway.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
 			Name:  "basic-auth",
 			Group: "example.agentgateway.dev",
 			Kind:  "ConfigMapCredential",
+			Key:   new("users"),
 		},
 	}, nil, "base", types.NamespacedName{Namespace: "default", Name: "policy"})
 	if err != nil {
@@ -247,7 +249,7 @@ func TestBasicAuthFallsBackToSecretResolverWithInjectedCredentialResolver(t *tes
 	)
 
 	policy, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &agentgateway.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
 			Name: "basic-auth",
 			Kind: "Secret",
 		},
@@ -277,13 +279,53 @@ func TestBasicAuthCustomResolverDoesNotImplicitlyFallbackToSecret(t *testing.T) 
 	}, configMapCredentialResolver{})
 
 	_, err := processBasicAuthenticationPolicy(ctx, &agentgateway.BasicAuthentication{
-		SecretRef: &agentgateway.LocalSecretObjectRef{
+		SecretRef: &agentgateway.LocalSecretKeyRef{
 			Name: "basic-auth",
 			Kind: "Secret",
 		},
 	}, nil, "base", types.NamespacedName{Namespace: "default", Name: "policy"})
 	if !errors.Is(err, kubeutils.ErrUnsupportedCredentialKind) {
 		t.Fatalf("processBasicAuthenticationPolicy() error = %v, want ErrUnsupportedCredentialKind", err)
+	}
+}
+
+func TestBackendAuthCustomKeyRejectsEmptyValue(t *testing.T) {
+	stop := test.NewStop(t)
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "backend-auth",
+		},
+		Data: map[string][]byte{
+			"token": []byte("  "),
+		},
+	}
+	secrets := krt.NewStaticCollection[*corev1.Secret](nil, []*corev1.Secret{secret}, krt.WithName("plugins/TestBackendAuthCustomKeyRejectsEmptyValue"), krt.WithStop(stop))
+	ctx := simpleAuthPolicyCtx(&AgwCollections{
+		Secrets: secrets,
+	}, kubeutils.NewSecretCredentialResolver(secrets))
+	policy := &agentgateway.AgentgatewayPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "backend-auth",
+		},
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Backend: &agentgateway.BackendFull{
+				BackendSimple: agentgateway.BackendSimple{
+					Auth: &agentgateway.BackendAuth{
+						SecretRef: &agentgateway.LocalSecretKeyRef{
+							Name: "backend-auth",
+							Key:  new("token"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := translateBackendAuth(ctx, policy, "default/backend-auth")
+	if err == nil || !strings.Contains(err.Error(), "missing token value") {
+		t.Fatalf("translateBackendAuth() error = %v, want missing token error", err)
 	}
 }
 

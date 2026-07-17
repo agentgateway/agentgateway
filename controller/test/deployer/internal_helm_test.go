@@ -80,6 +80,10 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway",
 			Validate: func(t *testing.T, outputYaml string) {
 				t.Helper()
+				assert.Contains(t, outputYaml, "kind: Deployment",
+					"default workload should render a Deployment")
+				assert.NotContains(t, outputYaml, "kind: DaemonSet",
+					"default workload should not render a DaemonSet")
 				assert.Contains(t, outputYaml, "name: SESSION_KEY",
 					"deployment should inject the managed session key via env")
 				assert.Contains(t, outputYaml, "secretKeyRef:",
@@ -414,6 +418,36 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 					"HPA should have CPU utilization target from overlay spec")
 			},
 		},
+		{
+			Name:      "agentgateway with GatewayClass DaemonSet workload",
+			InputFile: "agentgateway-daemonset-gwc",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "kind: DaemonSet",
+					"DaemonSet workload should render a DaemonSet")
+				assert.NotContains(t, outputYaml, "kind: Deployment",
+					"DaemonSet workload should not render a Deployment")
+				assert.NotContains(t, outputYaml, "replicas:",
+					"DaemonSet workload should not render replicas")
+				assert.Contains(t, outputYaml, "daemonset-label: from-overlay",
+					"DaemonSet overlay metadata should be applied")
+				assert.Contains(t, outputYaml, "operator: Exists",
+					"DaemonSet overlay spec should be applied")
+				assert.Contains(t, outputYaml, "kind: PodDisruptionBudget",
+					"DaemonSet workload should support PDB generation")
+			},
+		},
+		{
+			Name:      "agentgateway Gateway parameters override DaemonSet class workload",
+			InputFile: "agentgateway-daemonset-gw-override",
+			Validate: func(t *testing.T, outputYaml string) {
+				t.Helper()
+				assert.Contains(t, outputYaml, "kind: Deployment",
+					"Gateway-level workload.kind should override the GatewayClass setting")
+				assert.NotContains(t, outputYaml, "kind: DaemonSet",
+					"Gateway-level Deployment override should not render a DaemonSet")
+			},
+		},
 
 		// Cookbook recipe test cases - these validate the documented overlay examples
 		{
@@ -542,10 +576,12 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 				t.Helper()
 				assert.Contains(t, outputYaml, "MODEL_CATALOG_PATHS",
 					"deployment should set MODEL_CATALOG_PATHS to the mounted ConfigMap file path")
-				assert.Contains(t, outputYaml, "/etc/agentgateway/model-catalog/my-model-costs.json",
+				assert.Contains(t, outputYaml, "/etc/agentgateway/model-catalog/my-model-costs/my-model-costs.json",
 					"MODEL_CATALOG_PATHS should point to the ConfigMap mount path")
-				assert.Contains(t, outputYaml, "mountPath: /etc/agentgateway/model-catalog/my-model-costs.json",
-					"deployment should have a volume mount for the model catalog ConfigMap")
+				assert.Contains(t, outputYaml, "mountPath: /etc/agentgateway/model-catalog/my-model-costs",
+					"deployment should have a directory volume mount for the model catalog ConfigMap so kubelet's atomic symlink swap on update is visible")
+				assert.NotContains(t, outputYaml, "subPath: my-model-costs.json",
+					"model catalog ConfigMap must not be mounted via subPath, since subPath mounts never receive ConfigMap updates")
 				assert.Contains(t, outputYaml, "name: my-model-costs",
 					"deployment volumes should reference the model catalog ConfigMap by name")
 			},
