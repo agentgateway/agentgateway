@@ -18,7 +18,6 @@ use crate::llm::policy::webhook::ProcessorOutcome;
 use crate::llm::policy::{FailureMode, Policy, webhook};
 use crate::llm::types::RequestType;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::metrics::OutboundCallSubtype;
 use crate::types::agent::{HeaderMatch, HeaderValueMatch, SimpleBackendReference};
 use crate::*;
 
@@ -150,7 +149,6 @@ impl ContextCompression {
 			&self.target,
 			&self.path,
 			&headers,
-			OutboundCallSubtype::Compression,
 			webhook::WireFormat::Compress,
 			&original,
 			model.as_deref(),

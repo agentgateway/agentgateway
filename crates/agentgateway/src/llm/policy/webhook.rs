@@ -217,6 +217,15 @@ pub enum WireFormat {
 	Compress,
 }
 
+// Serialize straight from the borrowed slice: no clone of the (potentially large) message
+// array into an intermediate `Value`, and no owned `model` string.
+#[derive(Serialize)]
+struct CalloutRequest<'a> {
+	messages: &'a [serde_json::Value],
+	#[serde(skip_serializing_if = "Option::is_none")]
+	model: Option<&'a str>,
+}
+
 /// Call a message-processor endpoint and parse the response into a [`ProcessorOutcome`]. The
 /// transport (backend resolution, buffering, status handling) is shared; `wire` selects the
 /// request body and response parser. `messages` are sent verbatim, so callers control fidelity.
@@ -226,20 +235,11 @@ pub async fn call_processor(
 	target: &SimpleBackendReference,
 	path: &str,
 	http_headers: &HeaderMap,
-	subtype: OutboundCallSubtype,
 	wire: WireFormat,
 	messages: &[serde_json::Value],
 	model: Option<&str>,
 	buffer_limit: Option<crate::transport::BufferLimit>,
 ) -> anyhow::Result<ProcessorOutcome> {
-	// Serialize straight from the borrowed slice: no clone of the (potentially large) message
-	// array into an intermediate `Value`, and no owned `model` string.
-	#[derive(Serialize)]
-	struct CalloutRequest<'a> {
-		messages: &'a [serde_json::Value],
-		#[serde(skip_serializing_if = "Option::is_none")]
-		model: Option<&'a str>,
-	}
 	let body = CalloutRequest { messages, model };
 	// build_request prepends "/", so normalize whether callers pass "request" or "/v1/compress".
 	let path = path.trim_start_matches('/');
@@ -248,12 +248,14 @@ pub async fn call_processor(
 	if let Some(lim) = buffer_limit {
 		req.extensions_mut().insert(lim);
 	}
-	let res = Box::pin(
-		client
-			.with_outbound(OutboundCallKind::Policy, subtype)
-			.call_reference(req, target),
-	)
-	.await?;
+	let subtype = match wire {
+		WireFormat::Guardrail => OutboundCallSubtype::Guardrail,
+		WireFormat::Compress => OutboundCallSubtype::Compression,
+	};
+	let res = client
+		.with_outbound(OutboundCallKind::Policy, subtype)
+		.call_reference(req, target)
+		.await?;
 
 	let status = res.status();
 	let lim = http::response_buffer_limit(&res);
@@ -277,8 +279,7 @@ struct CompressResponse {
 /// Parse a flat compress response. Headroom always returns the (possibly rewritten) message
 /// array, so this is always a `Replace`.
 fn parse_compress_response(raw: &[u8]) -> anyhow::Result<ProcessorOutcome> {
-	let resp: CompressResponse =
-		serde_json::from_slice(raw).context("invalid compress response")?;
+	let resp: CompressResponse = serde_json::from_slice(raw).context("invalid compress response")?;
 	// Surface the engine's self-reported savings rather than discarding it. This is an estimate
 	// from the compressor; the authoritative token counts are recomputed from the returned
 	// messages downstream.
@@ -316,12 +317,14 @@ fn parse_processor_action(raw: &[u8]) -> anyhow::Result<ProcessorOutcome> {
 			body: text,
 			status_code: action
 				.status_code
-				.unwrap_or_else(|| ::http::StatusCode::FORBIDDEN.as_u16()),
+				.unwrap_or(::http::StatusCode::FORBIDDEN.as_u16()),
 		},
 		// Move the array out of the owned body instead of cloning it.
-		serde_json::Value::Object(mut map) => match map.get_mut("messages").map(serde_json::Value::take) {
-			Some(serde_json::Value::Array(messages)) => ProcessorOutcome::Replace(messages),
-			_ => ProcessorOutcome::Pass,
+		serde_json::Value::Object(mut map) => {
+			match map.get_mut("messages").map(serde_json::Value::take) {
+				Some(serde_json::Value::Array(messages)) => ProcessorOutcome::Replace(messages),
+				_ => ProcessorOutcome::Pass,
+			}
 		},
 		_ => ProcessorOutcome::Pass,
 	})
@@ -454,34 +457,43 @@ mod processor_tests {
 		assert_eq!(pairing_violations(&unpaired).len(), 1);
 	}
 
+	fn bytes(v: serde_json::Value) -> Vec<u8> {
+		serde_json::to_vec(&v).unwrap()
+	}
+
 	#[test]
 	fn parse_action_replace_mask_body() {
-		let v = json!({"action": {"body": {"messages": [{"role": "user", "content": "x"}]}}});
-		assert!(matches!(parse_processor_action(v), ProcessorOutcome::Replace(m) if m.len() == 1));
+		let v = bytes(json!({"action": {"body": {"messages": [{"role": "user", "content": "x"}]}}}));
+		assert!(
+			matches!(parse_processor_action(&v).unwrap(), ProcessorOutcome::Replace(m) if m.len() == 1)
+		);
 	}
 
 	#[test]
 	fn parse_action_reject_and_pass() {
-		let reject = json!({"action": {"body": "no", "status_code": 403}});
+		let reject = bytes(json!({"action": {"body": "no", "status_code": 403}}));
 		assert!(matches!(
-			parse_processor_action(reject),
+			parse_processor_action(&reject).unwrap(),
 			ProcessorOutcome::Reject {
 				status_code: 403,
 				..
 			}
 		));
-		let pass = json!({"action": {"reason": "ok"}});
-		assert!(matches!(parse_processor_action(pass), ProcessorOutcome::Pass));
+		let pass = bytes(json!({"action": {"reason": "ok"}}));
+		assert!(matches!(
+			parse_processor_action(&pass).unwrap(),
+			ProcessorOutcome::Pass
+		));
 	}
 
 	#[test]
 	fn parse_compress_flat_messages() {
 		// Headroom returns messages + telemetry at the top level; always a Replace.
-		let v = json!({"messages": [{"role": "user", "content": "x"}], "tokens_saved": 42});
+		let v = bytes(json!({"messages": [{"role": "user", "content": "x"}], "tokens_saved": 42}));
 		assert!(
-			matches!(parse_compress_response(v), Ok(ProcessorOutcome::Replace(m)) if m.len() == 1)
+			matches!(parse_compress_response(&v), Ok(ProcessorOutcome::Replace(m)) if m.len() == 1)
 		);
 		// Missing messages array is an error (failure handled by the caller).
-		assert!(parse_compress_response(json!({"tokens_saved": 0})).is_err());
+		assert!(parse_compress_response(&bytes(json!({"tokens_saved": 0}))).is_err());
 	}
 }

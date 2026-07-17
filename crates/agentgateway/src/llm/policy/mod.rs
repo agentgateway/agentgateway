@@ -1092,7 +1092,6 @@ impl Policy {
 			&webhook.target,
 			webhook::REQUEST_PATH,
 			&headers,
-			crate::telemetry::metrics::OutboundCallSubtype::Guardrail,
 			webhook::WireFormat::Guardrail,
 			&original,
 			None,
