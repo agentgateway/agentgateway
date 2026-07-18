@@ -4851,7 +4851,7 @@ type JwtSign struct {
 	// Optional JWS key ID header.
 	Kid *string `protobuf:"bytes,3,opt,name=kid,proto3,oneof" json:"kid,omitempty"`
 	// Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
-	// nbf are always set by the signer and cannot be overridden here.
+	// nbf are reserved for the signer and cannot be overridden here.
 	Claims map[string]*structpb.Value `protobuf:"bytes,4,rep,name=claims,proto3" json:"claims,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	// Token lifetime used for exp. Defaults to 300s.
 	Ttl *durationpb.Duration `protobuf:"bytes,5,opt,name=ttl,proto3,oneof" json:"ttl,omitempty"`

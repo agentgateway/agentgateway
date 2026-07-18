@@ -92,6 +92,19 @@ impl BackendAuth {
 			credentials: Vec::new(),
 		}
 	}
+
+	/// Resolves deferred file-based resources through the resource manager so
+	/// they are watched for changes. Must be called when converting local
+	/// config; XDS-delivered config carries material inline and is a no-op.
+	pub async fn resolve(
+		&mut self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<()> {
+		match &mut self.kind {
+			Some(BackendAuthKind::JwtSign(cfg)) => cfg.resolve(resources).await,
+			_ => Ok(()),
+		}
+	}
 }
 
 /// An additional credential to inject on the backend request.

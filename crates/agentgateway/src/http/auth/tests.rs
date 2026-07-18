@@ -1249,9 +1249,12 @@ async fn test_backend_auth_jwt_sign() {
 	assert_eq!(payload["sub"], "ACCT.USER");
 	let iat = payload["iat"].as_u64().expect("iat must be set");
 	let exp = payload["exp"].as_u64().expect("exp must be set");
-	let nbf = payload["nbf"].as_u64().expect("nbf must be set");
-	assert_eq!(exp - iat, 600);
-	assert_eq!(nbf, iat);
+	// iat is backdated and exp extended by the 10s clock-skew fudge.
+	assert_eq!(exp - iat, 600 + 20);
+	assert!(
+		payload.get("nbf").is_none(),
+		"nbf must not be emitted; iat already conveys the issue time"
+	);
 
 	let ext = req
 		.extensions()
@@ -1302,12 +1305,12 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 	let (header, payload) = decode_jwt_parts(header_value.to_str().unwrap());
 	assert_eq!(header["alg"], "ES256");
 	assert!(header.get("kid").is_none_or(|kid| kid.is_null()));
-	// Default 300s lifetime applies when ttl is unset.
+	// Default 300s lifetime applies when ttl is unset, plus the 10s
+	// clock-skew fudge on both iat and exp.
 	let iat = payload["iat"].as_u64().unwrap();
 	let exp = payload["exp"].as_u64().unwrap();
-	let nbf = payload["nbf"].as_u64().unwrap();
-	assert_eq!(exp - iat, 300);
-	assert_eq!(nbf, iat);
+	assert_eq!(exp - iat, 300 + 20);
+	assert!(payload.get("nbf").is_none());
 
 	assert!(
 		req.headers().get(http::header::AUTHORIZATION).is_none(),
@@ -1445,8 +1448,8 @@ async fn test_backend_auth_jwt_sign_rounds_up_sub_second_ttl() {
 	let exp = payload["exp"].as_u64().expect("exp must be set");
 	assert_eq!(
 		exp - iat,
-		2,
-		"a 1500ms ttl must round up to 2s, not truncate to 1s"
+		2 + 20,
+		"a 1500ms ttl must round up to 2s (plus the clock-skew fudge on both ends), not truncate to 1s"
 	);
 }
 
@@ -1552,6 +1555,40 @@ async fn test_backend_auth_jwt_sign_rejects_ttl_that_overflows_exp() {
 		err.to_string().contains("overflows"),
 		"unexpected error: {err}"
 	);
+}
+
+#[tokio::test]
+async fn test_jwt_sign_file_key_defers_to_resolve() {
+	let dir = tempfile::tempdir().unwrap();
+	let key_path = dir.path().join("signing.pem");
+	std::fs::write(&key_path, TEST_JWT_SIGN_EC_KEY).unwrap();
+
+	let auth: BackendAuthKind = serde_json::from_value(serde_json::json!({
+		"jwtSign": {
+			"signingKey": {"file": key_path},
+			"alg": "ES256",
+			"claims": {"iss": "acct.user"}
+		}
+	}))
+	.expect("file-based jwtSign auth should deserialize without reading the file");
+	let BackendAuthKind::JwtSign(mut cfg) = auth else {
+		panic!("expected jwtSign variant");
+	};
+
+	let err = cfg
+		.sign()
+		.expect_err("signing must fail before the file key is resolved");
+	assert!(
+		err.to_string().contains("resolved"),
+		"unexpected error: {err}"
+	);
+
+	let resources = crate::resource_manager::ResourceFetcher::files_only();
+	cfg
+		.resolve(&resources)
+		.await
+		.expect("resolve should load and parse the file key");
+	cfg.sign().expect("signing must work after resolve");
 }
 
 #[test]
