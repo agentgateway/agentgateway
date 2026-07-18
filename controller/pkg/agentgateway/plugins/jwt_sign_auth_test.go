@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -25,7 +26,7 @@ func TestJwtSignRejectsUnsupportedSigningAlg(t *testing.T) {
 						JwtSign: &agentgateway.JwtSignAuth{
 							SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
 							Alg:           &badAlg,
-							Claims:        map[string]string{"iss": "acct.user"},
+							Claims:        map[string]apiextensionsv1.JSON{"iss": {Raw: []byte(`"acct.user"`)}},
 						},
 					},
 				},

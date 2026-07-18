@@ -3330,9 +3330,9 @@ func (in *JwtSignAuth) DeepCopyInto(out *JwtSignAuth) {
 	}
 	if in.Claims != nil {
 		in, out := &in.Claims, &out.Claims
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]apiextensionsv1.JSON, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 	if in.TTL != nil {

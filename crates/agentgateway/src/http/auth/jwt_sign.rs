@@ -40,7 +40,7 @@ pub struct JwtSignAuth {
 	alg: SigningAlg,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	kid: Option<String>,
-	claims: BTreeMap<String, String>,
+	claims: BTreeMap<String, serde_json::Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	ttl: Option<Duration>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -93,10 +93,11 @@ struct RawJwtSignAuth {
 	/// Optional JWS key ID header.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	kid: Option<String>,
-	/// Static claims added to every token (e.g. iss, sub, aud). `iat`, `exp`,
+	/// Static claims added to every token (e.g. iss, sub, aud). Values may be
+	/// any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,
 	/// and `nbf` are always set by the signer and cannot be configured here.
 	#[cfg_attr(feature = "schema", schemars(extend("minProperties" = 1)))]
-	claims: BTreeMap<String, String>,
+	claims: BTreeMap<String, serde_json::Value>,
 	/// Token lifetime used for `exp`. Defaults to 300s.
 	#[serde(
 		default,
@@ -136,7 +137,7 @@ impl JwtSignAuth {
 		signing_key_pem: &str,
 		alg: SigningAlg,
 		kid: Option<String>,
-		claims: BTreeMap<String, String>,
+		claims: BTreeMap<String, serde_json::Value>,
 		ttl: Option<Duration>,
 		location: Option<AuthorizationLocation>,
 	) -> Result<Self, String> {
@@ -177,7 +178,7 @@ impl JwtSignAuth {
 
 		let mut claims = serde_json::Map::with_capacity(self.claims.len() + RESERVED_CLAIMS.len());
 		for (key, value) in &self.claims {
-			claims.insert(key.clone(), serde_json::Value::String(value.clone()));
+			claims.insert(key.clone(), value.clone());
 		}
 		let exp = now
 			.checked_add(ttl_secs_ceil(ttl))
