@@ -534,6 +534,15 @@ impl AwsAuth {
 	}
 }
 
+/// Service used when neither the auth config nor the backend names one.
+///
+/// Retained for backwards compatibility: Bedrock LLM backends do not set
+/// [`DefaultAwsServiceName`], so they reach signing with no service name at all.
+const DEFAULT_SIGNING_SERVICE: &str = "bedrock";
+
+/// Guards the warning below so a misconfigured backend does not log per request.
+static WARNED_DEFAULT_SIGNING_SERVICE: std::sync::Once = std::sync::Once::new();
+
 fn signing_service_name<'a>(req: &'a http::Request, aws_auth: &'a AwsAuth) -> &'a str {
 	aws_auth
 		.service_name()
@@ -543,7 +552,23 @@ fn signing_service_name<'a>(req: &'a http::Request, aws_auth: &'a AwsAuth) -> &'
 				.get::<DefaultAwsServiceName>()
 				.map(|default| default.0.as_str())
 		})
-		.unwrap_or("bedrock")
+		.unwrap_or_else(|| {
+			// Falling back here is a guess, not a decision, and a wrong guess is invisible
+			// until AWS rejects the signature at request time. Say so once, so the 403 is
+			// traceable back to config rather than to the gateway.
+			WARNED_DEFAULT_SIGNING_SERVICE.call_once(|| {
+				warn!(
+					"no AWS SigV4 signing service configured for backend {:?}; defaulting to {:?}. \
+					 If this backend is not Bedrock, AWS will reject requests with a 403 \
+					 (\"Credential should be scoped to correct service\"). Set \
+					 backendAuth.aws.serviceName (e.g. \"bedrock-agentcore\"), or use a typed \
+					 backend such as aws.agentCore which sets the service name for you.",
+					req.uri().host().unwrap_or("<unknown>"),
+					DEFAULT_SIGNING_SERVICE,
+				)
+			});
+			DEFAULT_SIGNING_SERVICE
+		})
 }
 
 pub(super) async fn sign_request(
@@ -816,6 +841,83 @@ fn credentials_valid(creds: &Credentials) -> bool {
 			.duration_since(SystemTime::now())
 			.is_ok_and(|ttl| ttl > ASSUMED_CREDENTIAL_REFRESH_BUFFER),
 		None => true,
+	}
+}
+
+#[cfg(test)]
+mod signing_service_name_tests {
+	use super::*;
+
+	fn implicit(service_name: Option<&str>) -> AwsAuth {
+		AwsAuth::Implicit {
+			service_name: service_name.map(str::to_string),
+			assume_role: None,
+			source_credentials_cache: Default::default(),
+			assume_role_cache: Default::default(),
+		}
+	}
+
+	fn request(default_service: Option<&str>) -> http::Request {
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/")
+			.body(crate::http::Body::empty())
+			.expect("request");
+		if let Some(svc) = default_service {
+			req
+				.extensions_mut()
+				.insert(DefaultAwsServiceName(svc.to_string()));
+		}
+		req
+	}
+
+	#[test]
+	fn explicit_service_name_is_used() {
+		let req = request(None);
+		assert_eq!(
+			signing_service_name(&req, &implicit(Some("bedrock-agentcore"))),
+			"bedrock-agentcore"
+		);
+	}
+
+	#[test]
+	fn backend_default_is_used_when_auth_does_not_specify() {
+		// An `aws.agentCore` backend supplies the service name via request extension;
+		// `backendAuth: {aws: {}}` must not discard it. Regression test for #2087.
+		let req = request(Some("bedrock-agentcore"));
+		assert_eq!(
+			signing_service_name(&req, &implicit(None)),
+			"bedrock-agentcore"
+		);
+	}
+
+	#[test]
+	fn explicit_service_name_overrides_backend_default() {
+		let req = request(Some("bedrock-agentcore"));
+		assert_eq!(
+			signing_service_name(&req, &implicit(Some("execute-api"))),
+			"execute-api"
+		);
+	}
+
+	#[test]
+	fn falls_back_to_bedrock_when_nothing_specifies_a_service() {
+		// Bedrock LLM backends rely on this default; it is why the fallback cannot
+		// simply be removed. See DEFAULT_SIGNING_SERVICE.
+		let req = request(None);
+		assert_eq!(signing_service_name(&req, &implicit(None)), "bedrock");
+	}
+
+	#[test]
+	fn explicit_config_service_name_is_used() {
+		let req = request(None);
+		let auth = AwsAuth::ExplicitConfig {
+			access_key_id: SecretString::from("AKID"),
+			secret_access_key: SecretString::from("SECRET"),
+			region: Some("us-east-1".to_string()),
+			session_token: None,
+			service_name: Some("bedrock-agentcore".to_string()),
+		};
+		assert_eq!(signing_service_name(&req, &auth), "bedrock-agentcore");
 	}
 }
 
