@@ -1175,8 +1175,8 @@ fn jwt_sign_auth(
 	location: Option<AuthorizationLocation>,
 ) -> BackendAuth {
 	let claims = [
-		("iss".to_string(), "ACCT.USER.SHA256:fp".to_string()),
-		("sub".to_string(), "ACCT.USER".to_string()),
+		("iss".to_string(), "ACCT.USER.SHA256:fp".into()),
+		("sub".to_string(), "ACCT.USER".into()),
 	]
 	.into_iter()
 	.collect();
@@ -1327,9 +1327,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 		TEST_JWT_SIGN_EC_KEY,
 		oauth::SigningAlg::Es256,
 		None,
-		[("exp".to_string(), "123".to_string())]
-			.into_iter()
-			.collect(),
+		[("exp".to_string(), "123".into())].into_iter().collect(),
 		None,
 		None,
 	);
@@ -1342,9 +1340,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 		TEST_JWT_SIGN_EC_KEY,
 		oauth::SigningAlg::Es256,
 		None,
-		[("nbf".to_string(), "123".to_string())]
-			.into_iter()
-			.collect(),
+		[("nbf".to_string(), "123".into())].into_iter().collect(),
 		None,
 		None,
 	);
@@ -1357,9 +1353,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 		TEST_JWT_SIGN_EC_KEY,
 		oauth::SigningAlg::Es256,
 		None,
-		[("iat".to_string(), "123".to_string())]
-			.into_iter()
-			.collect(),
+		[("iat".to_string(), "123".into())].into_iter().collect(),
 		None,
 		None,
 	);
@@ -1381,9 +1375,8 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 
 #[test]
 fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
-	let claims: std::collections::BTreeMap<_, _> = [("iss".to_string(), "me".to_string())]
-		.into_iter()
-		.collect();
+	let claims: std::collections::BTreeMap<String, serde_json::Value> =
+		[("iss".to_string(), "me".into())].into_iter().collect();
 
 	let zero_ttl = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
@@ -1499,19 +1492,23 @@ async fn test_backend_auth_jwt_sign_rsa() {
 		inputs,
 	};
 
-	let auth = BackendAuth::JwtSign(Box::new(
+	let auth = BackendAuth::new(BackendAuthKind::JwtSign(Box::new(
 		JwtSignAuth::try_new(
 			TEST_JWT_SIGN_RSA_KEY,
 			oauth::SigningAlg::Rs256,
 			None,
-			[("iss".to_string(), "acct.user".to_string())]
-				.into_iter()
-				.collect(),
+			[
+				("iss".to_string(), "acct.user".into()),
+				("aud".to_string(), serde_json::json!(["svc-a", "svc-b"])),
+				("lifetime".to_string(), serde_json::json!(3600)),
+			]
+			.into_iter()
+			.collect(),
 			None,
 			None,
 		)
 		.expect("rsa jwt sign auth should build"),
-	));
+	)));
 	apply_backend_auth(&backend_info, &auth, &mut req)
 		.await
 		.expect("apply backend auth");
@@ -1527,6 +1524,8 @@ async fn test_backend_auth_jwt_sign_rsa() {
 	let (header, payload) = decode_jwt_parts(token);
 	assert_eq!(header["alg"], "RS256");
 	assert_eq!(payload["iss"], "acct.user");
+	assert_eq!(payload["aud"], serde_json::json!(["svc-a", "svc-b"]));
+	assert_eq!(payload["lifetime"], 3600);
 }
 
 #[tokio::test]
@@ -1557,7 +1556,7 @@ async fn test_backend_auth_jwt_sign_rejects_ttl_that_overflows_exp() {
 
 #[test]
 fn test_jwt_sign_rejects_unknown_field() {
-	let result: Result<BackendAuth, _> = serde_json::from_value(serde_json::json!({
+	let result: Result<BackendAuthKind, _> = serde_json::from_value(serde_json::json!({
 		"jwtSign": {
 			"signingKey": TEST_JWT_SIGN_EC_KEY,
 			"claims": {"iss": "acct.user"},

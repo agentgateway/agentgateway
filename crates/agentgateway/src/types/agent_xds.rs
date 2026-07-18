@@ -1188,13 +1188,21 @@ fn backend_auth_kind_from_proto(
 		},
 		Some(proto::agent::backend_auth_policy::Kind::JwtSign(j)) => {
 			let location = optional_authorization_location(j.authorization_location.as_ref())?;
+			let claims = j
+				.claims
+				.into_iter()
+				.map(|(key, value)| {
+					let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+					(key, value)
+				})
+				.collect();
 			BackendAuthKind::JwtSign(Box::new(
 				auth::jwt_sign::JwtSignAuth::try_new(
 					j.signing_key.trim(),
 					jwt_sign_alg_from_proto(j.alg)?,
 					j.kid,
-					j.claims.into_iter().collect(),
-					j.ttl.map(std::time::Duration::from_secs),
+					claims,
+					j.ttl.map(convert_duration),
 					location,
 				)
 				.map_err(ProtoError::Generic)?,

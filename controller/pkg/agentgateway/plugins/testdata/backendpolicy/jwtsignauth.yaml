@@ -18,6 +18,10 @@ spec:
         claims:
           iss: acct.user
           sub: acct.user
+          aud:
+            - svc-a
+            - svc-b
+          lifetime: 3600
         ttl: 300s
 ---
 apiVersion: v1
@@ -99,7 +103,7 @@ output:
             claims:
               iss: acct.user
             signingKey: pem-value
-            ttl: "2"
+            ttl: 1.500s
       key: backend/default/jwt-sign-sub-second-ttl:backend-auth:default/test
       name:
         kind: AgentgatewayPolicy
@@ -120,11 +124,15 @@ output:
           jwtSign:
             alg: RS256
             claims:
+              aud:
+              - svc-a
+              - svc-b
               iss: acct.user
+              lifetime: 3600
               sub: acct.user
             kid: key-1
             signingKey: pem-value
-            ttl: "300"
+            ttl: 300s
       key: backend/default/jwt-sign:backend-auth:default/test
       name:
         kind: AgentgatewayPolicy

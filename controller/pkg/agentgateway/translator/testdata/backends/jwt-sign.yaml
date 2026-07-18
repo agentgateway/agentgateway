@@ -44,7 +44,7 @@ output:
               sub: acct.user
             kid: key-1
             signingKey: pem-value
-            ttl: "300"
+            ttl: 300s
       key: default/static-backend
       name:
         name: static-backend

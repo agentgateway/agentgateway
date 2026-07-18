@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -641,7 +640,7 @@ func translateMCPAuthenticationSpec(
 		errs = append(errs, err)
 	}
 
-	extraResourceMetadata, metadataErr := translateMCPResourceMetadata(authnPolicy.ResourceMetadata)
+	extraResourceMetadata, metadataErr := translateJSONValueMap(authnPolicy.ResourceMetadata)
 	if metadataErr != nil {
 		errs = append(errs, metadataErr)
 	}
@@ -673,7 +672,7 @@ func translateMCPAuthenticationSpec(
 }
 
 func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySpec_JWT_MCP, error) {
-	extraResourceMetadata, err := translateMCPResourceMetadata(mcp.ResourceMetadata)
+	extraResourceMetadata, err := translateJSONValueMap(mcp.ResourceMetadata)
 	if err != nil {
 		return nil, err
 	}
@@ -712,25 +711,25 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }
 
-func translateMCPResourceMetadata(resourceMetadata map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
+func translateJSONValueMap(values map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
 	var errs []error
-	var extraResourceMetadata map[string]*structpb.Value
-	for k, v := range resourceMetadata {
-		if extraResourceMetadata == nil {
-			extraResourceMetadata = make(map[string]*structpb.Value)
+	var translated map[string]*structpb.Value
+	for k, v := range values {
+		if translated == nil {
+			translated = make(map[string]*structpb.Value)
 		}
 
 		proto := &structpb.Value{}
 		err := jsonpb.Unmarshal(v.Raw, proto)
 		if err != nil {
-			logger.Error("error converting resource metadata", "key", k, "error", err)
+			logger.Error("error converting json value", "key", k, "error", err)
 			errs = append(errs, err)
 			continue
 		}
 
-		extraResourceMetadata[k] = proto
+		translated[k] = proto
 	}
-	return extraResourceMetadata, errors.Join(errs...)
+	return translated, errors.Join(errs...)
 }
 
 // translateBackendAI processes AI configuration and creates corresponding Agw policies
@@ -1703,19 +1702,19 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 		return nil, err
 	}
 	var errs []error
+	claims, err := translateJSONValueMap(auth.Claims)
+	if err != nil {
+		errs = append(errs, err)
+	}
 	jwtSign := &api.JwtSign{
 		Alg:                   alg,
 		Kid:                   auth.KeyID,
-		Claims:                auth.Claims,
+		Claims:                claims,
 		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
 	}
 
 	if auth.TTL != nil {
-		// Round up to the next whole second so a sub-second component (e.g.
-		// "1500ms") doesn't silently shorten the configured token lifetime.
-		// kubebuilder enforces ttl >= 1s, so this is always positive and non-zero.
-		ttl := uint64((auth.TTL.Duration + time.Second - 1) / time.Second) //nolint:gosec // G115: kubebuilder enforces ttl >= 1s
-		jwtSign.Ttl = &ttl
+		jwtSign.Ttl = durationpb.New(auth.TTL.Duration)
 	}
 
 	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)

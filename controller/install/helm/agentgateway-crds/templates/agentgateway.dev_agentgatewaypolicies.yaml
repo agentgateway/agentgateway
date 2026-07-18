@@ -3917,12 +3917,18 @@ spec:
                             type: string
                           claims:
                             additionalProperties:
-                              type: string
+                              x-kubernetes-preserve-unknown-fields: true
                             description: |-
-                              Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
+                              Static claims added to every token (e.g. iss, sub, aud). Values may be
+                              any JSON value (e.g. a string, number, bool, or array). iat, exp, and
                               nbf are always set by the signer and cannot be configured here.
                             minProperties: 1
                             type: object
+                            x-kubernetes-validations:
+                            - message: claims iat, exp, and nbf are set by the signer
+                                and cannot be configured
+                              rule: '!(''iat'' in self) && !(''exp'' in self) && !(''nbf''
+                                in self)'
                           kid:
                             description: Optional JWS key ID header.
                             type: string

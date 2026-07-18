@@ -1879,11 +1879,13 @@ type JwtSignAuth struct {
 	// +optional
 	KeyID *string `json:"kid,omitempty"`
 
-	// Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
+	// Static claims added to every token (e.g. iss, sub, aud). Values may be
+	// any JSON value (e.g. a string, number, bool, or array). iat, exp, and
 	// nbf are always set by the signer and cannot be configured here.
 	// +kubebuilder:validation:MinProperties=1
+	// +kubebuilder:validation:XValidation:rule="!('iat' in self) && !('exp' in self) && !('nbf' in self)",message="claims iat, exp, and nbf are set by the signer and cannot be configured"
 	// +required
-	Claims map[string]string `json:"claims"`
+	Claims map[string]apiextensionsv1.JSON `json:"claims"`
 
 	// Token lifetime used for exp. Defaults to 300s.
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
