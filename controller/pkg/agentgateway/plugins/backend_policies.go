@@ -1702,6 +1702,13 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 		return nil, err
 	}
 	var errs []error
+	// CEL admission validation cannot inspect map[string]JSON fields, so the
+	// signer-reserved claims are enforced here instead.
+	for _, reserved := range []string{"iat", "exp", "nbf"} {
+		if _, ok := auth.Claims[reserved]; ok {
+			return nil, fmt.Errorf("jwtSign claim %q is reserved for the signer and cannot be configured", reserved)
+		}
+	}
 	claims, err := translateJSONValueMap(auth.Claims)
 	if err != nil {
 		errs = append(errs, err)
