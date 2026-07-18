@@ -206,15 +206,19 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 	)
 	.await
 	.expect("local config normalizes");
-	t.pi.stores.binds.sync_local(
-		normalized.binds,
-		normalized.listener_routes,
-		normalized.listener_tcp_routes,
-		normalized.policies,
-		normalized.backends,
-		normalized.route_groups,
-		Default::default(),
-	);
+	t.pi
+		.stores
+		.binds
+		.sync_local(
+			normalized.binds,
+			normalized.listener_routes,
+			normalized.listener_tcp_routes,
+			normalized.policies,
+			normalized.backends,
+			normalized.route_groups,
+			Default::default(),
+		)
+		.expect("sync local binds");
 	t
 }
 

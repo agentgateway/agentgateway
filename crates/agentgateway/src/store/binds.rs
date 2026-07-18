@@ -724,7 +724,7 @@ impl Store {
 		Arc::make_mut(routes).insert(route);
 	}
 
-	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) {
+	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) -> anyhow::Result<()> {
 		debug!(bind=%bind.key, "insert bind");
 		let old_bind = self.binds.get(&key).cloned();
 
@@ -738,6 +738,10 @@ impl Store {
 			bind.listeners.insert(listener);
 		}
 
+		// Capture (rather than swallow) any OS bind failure so callers can decide whether it
+		// is fatal. The bind is still recorded below so routing lookups (find_bind, etc.)
+		// remain consistent regardless of the caller's error handling.
+		let mut bind_error = None;
 		let listeners = if self.binds.contains_key(&key) {
 			None
 		} else if bind.mode == agent::BindMode::Internal {
@@ -759,7 +763,7 @@ impl Store {
 					Some(listeners)
 				},
 				Err(err) => {
-					warn!(bind=%key, address=%bind.address, error=%err, "failed to start bind listener");
+					bind_error = Some(err);
 					None
 				},
 			}
@@ -773,6 +777,10 @@ impl Store {
 		if let Some(listeners) = listeners {
 			let _ = self.tx.send(BindEvent::Add(bind, listeners));
 		}
+		if let Some(err) = bind_error {
+			return Err(err.context(format!("bind {key}")));
+		}
+		Ok(())
 	}
 
 	pub fn subscribe(&mut self) -> impl Stream<Item = BindEvent> + use<> {
@@ -1455,7 +1463,11 @@ impl Store {
 		};
 		let mut bind = Arc::unwrap_or_clone(bind);
 		bind.listeners.remove(&listener);
-		self.upsert_bind(bind_key, bind);
+		// Removing a listener never opens a new socket (the bind already exists), so this
+		// cannot fail on bind; log defensively rather than propagate.
+		if let Err(err) = self.upsert_bind(bind_key, bind) {
+			warn!(error=%err, "failed to update bind after listener removal");
+		}
 	}
 
 	pub fn remove_route_group(&mut self, rg: RouteGroupKey) {
@@ -1521,7 +1533,12 @@ impl Store {
     )]
 	pub fn insert_bind(&mut self, bind: Bind) {
 		let key = bind.key.clone();
-		self.upsert_bind(key, bind);
+		// XDS-delivered binds must not crash the proxy on a bind failure: a bad dynamic config
+		// should be rejected/logged, not fatal. Static local config uses `sync_local`, which
+		// surfaces the error so startup can exit(1) (see issue #87).
+		if let Err(err) = self.upsert_bind(key.clone(), bind) {
+			warn!(bind=%key, error=%err, "failed to start bind listener");
+		}
 	}
 
 	pub fn insert_backend(&mut self, key: BackendKey, b: BackendWithPolicies) {
@@ -1555,7 +1572,9 @@ impl Store {
 			let mut bind = Arc::unwrap_or_clone(b.clone());
 			bind.listeners.remove(&lis.key);
 			bind.listeners.insert(lis);
-			self.upsert_bind(bind_name, bind);
+			if let Err(err) = self.upsert_bind(bind_name.clone(), bind) {
+				warn!(bind=%bind_name, error=%err, "failed to start bind listener");
+			}
 		} else {
 			debug!("no bind found, keeping listener pending");
 			self
@@ -1868,7 +1887,7 @@ impl StoreUpdater {
 		backends: Vec<BackendWithPolicies>,
 		route_groups: Vec<(RouteGroupKey, Vec<Route>)>,
 		prev: PreviousState,
-	) -> PreviousState {
+	) -> anyhow::Result<PreviousState> {
 		let mut s = self.state.write().expect("mutex acquired");
 		let mut old_binds = prev.binds;
 		let mut old_routes = prev.routes;
@@ -1884,10 +1903,17 @@ impl StoreUpdater {
 			backends: Default::default(),
 			route_groups: Default::default(),
 		};
+		// Unlike XDS (which must tolerate a bad dynamic config), a static local config that
+		// cannot bind a listener is a fatal misconfiguration. Collect any bind failures and
+		// surface them so startup exits(1) rather than silently serving nothing (issue #87).
+		let mut bind_errors = Vec::new();
 		for b in binds {
 			old_binds.remove(&b.key);
 			next_state.binds.insert(b.key.clone());
-			s.insert_bind(b);
+			let key = b.key.clone();
+			if let Err(err) = s.upsert_bind(key, b) {
+				bind_errors.push(format!("{err:#}"));
+			}
 		}
 		for b in backends {
 			// Here we use the 'name' as the key. This is appropriate for local case only
@@ -1939,7 +1965,13 @@ impl StoreUpdater {
 		for remaining_rg in old_route_groups {
 			s.remove_route_group(remaining_rg);
 		}
-		next_state
+		if !bind_errors.is_empty() {
+			anyhow::bail!(
+				"failed to start bind listener(s): {}",
+				bind_errors.join("; ")
+			);
+		}
+		Ok(next_state)
 	}
 }
 
@@ -2170,6 +2202,69 @@ mod tests {
 				.as_ref()
 				.is_some_and(|routes| routes.contains(&strng::literal!("route")))
 		);
+	}
+
+	fn standard_bind(address: std::net::SocketAddr) -> Bind {
+		Bind {
+			key: strng::literal!("bind"),
+			address,
+			protocol: BindProtocol::http,
+			tunnel_protocol: TunnelProtocol::Direct,
+			mode: agent::BindMode::Standard,
+			listeners: ListenerSet::from_list([Listener {
+				key: strng::literal!("listener"),
+				name: ListenerName {
+					gateway_name: strng::literal!("gw"),
+					gateway_namespace: strng::literal!("ns"),
+					listener_name: strng::literal!("listener"),
+					listener_set: None,
+				},
+				hostname: strng::literal!("example.com"),
+				protocol: ListenerProtocol::HTTP,
+			}]),
+		}
+	}
+
+	// Regression for issue #87: a static local config that cannot open its listener socket
+	// must fail loudly (so startup can exit(1)) rather than silently binding nothing.
+	#[test]
+	fn sync_local_bind_failure_is_fatal() {
+		// Hold an active listener so the same address cannot be bound again.
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let err = updater
+			.sync_local(
+				vec![standard_bind(addr)],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect_err("bind on an occupied port must fail");
+		assert!(
+			err.to_string().contains("failed to start bind listener"),
+			"unexpected error: {err:#}"
+		);
+	}
+
+	#[test]
+	fn sync_local_bind_success_returns_ok() {
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		updater
+			.sync_local(
+				vec![standard_bind("127.0.0.1:0".parse().unwrap())],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect("bind on an ephemeral port should succeed");
 	}
 
 	#[test]
