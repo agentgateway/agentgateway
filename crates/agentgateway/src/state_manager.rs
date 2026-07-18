@@ -260,7 +260,7 @@ impl LocalClient {
 			config.backends,
 			config.route_groups,
 			prev.binds,
-		);
+		)?;
 		let next_discovery =
 			self
 				.stores
