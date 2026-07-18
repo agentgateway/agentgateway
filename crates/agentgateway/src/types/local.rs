@@ -2526,7 +2526,8 @@ impl LocalBackendPolicies {
 				p.try_into(resources).await?,
 			))
 		}
-		if let Some(p) = backend_auth {
+		if let Some(mut p) = backend_auth {
+			p.resolve(resources).await?;
 			pols.push(BackendTrafficPolicy::BackendAuth(p))
 		}
 		if let Some(p) = ext_authz {
@@ -4178,7 +4179,8 @@ async fn convert_llm_config(
 				p.try_into(resources).await?,
 			));
 		}
-		if let Some(p) = model_config.auth.clone() {
+		if let Some(mut p) = model_config.auth.clone() {
+			p.resolve(resources).await?;
 			pols.push(BackendTrafficPolicy::BackendAuth(p));
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
@@ -5011,7 +5013,8 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = backend_tunnel {
 		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
-	if let Some(p) = backend_auth {
+	if let Some(mut p) = backend_auth {
+		p.resolve(resources).await?;
 		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
 	}
 

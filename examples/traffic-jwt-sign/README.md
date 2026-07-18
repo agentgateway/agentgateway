@@ -47,13 +47,17 @@ The payload is base64url-encoded (RFC 7515): unlike standard base64, it uses
 up first.
 
 Every request gets a new token: `iat`/`exp` are set by the signer (`ttl`
-controls the lifetime, 300s by default) and cannot be configured as claims.
+controls the lifetime, 300s by default) and cannot be configured as claims,
+nor can `nbf`. To tolerate clock skew between the gateway and the upstream,
+`iat` is backdated and `exp` extended by 10 seconds, mirroring Google's auth
+library.
 
 ### Notes
 
 * The config inlines a throwaway demo key. For real use, generate your own key
   and reference it as a file (see the comment in `config.yaml`); the upstream
-  is registered with the corresponding public key.
+  is registered with the corresponding public key. File-based keys are watched,
+  so rotating the key on disk reloads it without a restart.
 * RSA (`RS256`/`RS384`/`RS512`) and EC (`ES256`/`ES384`) keys are supported.
 * Static companion headers some upstreams expect next to the JWT (like
   Snowflake's `X-Snowflake-Authorization-Token-Type: KEYPAIR_JWT`) are plain
