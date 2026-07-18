@@ -42,3 +42,37 @@ func TestJwtSignRejectsUnsupportedSigningAlg(t *testing.T) {
 		t.Fatalf("translateBackendAuth() policy = %v, want nil policy on unsupported alg", p)
 	}
 }
+
+// CEL admission validation cannot inspect map[string]JSON fields, so the
+// controller must reject signer-reserved claims during translation instead.
+func TestJwtSignRejectsReservedClaims(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	for _, reserved := range []string{"iat", "exp", "nbf"} {
+		policy := &agentgateway.AgentgatewayPolicy{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
+			Spec: agentgateway.AgentgatewayPolicySpec{
+				Backend: &agentgateway.BackendFull{
+					BackendSimple: agentgateway.BackendSimple{
+						Auth: &agentgateway.BackendAuth{
+							JwtSign: &agentgateway.JwtSignAuth{
+								SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
+								Claims: map[string]apiextensionsv1.JSON{
+									"iss":    {Raw: []byte(`"acct.user"`)},
+									reserved: {Raw: []byte(`123`)},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
+		if err == nil || !strings.Contains(err.Error(), "reserved for the signer") {
+			t.Fatalf("translateBackendAuth() error = %v, want reserved claim error for %q", err, reserved)
+		}
+		if p != nil {
+			t.Fatalf("translateBackendAuth() policy = %v, want nil policy on reserved claim %q", p, reserved)
+		}
+	}
+}
