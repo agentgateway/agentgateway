@@ -2686,6 +2686,14 @@
           },
           "default": []
         },
+        "replace": {
+          "description": "CEL expression that computes the full set of headers, replacing all existing headers.\nThe expression must evaluate to a map of header name to value (a string, or a list of\nstrings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;\nset those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,\nso those still operate on top of the replaced headers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "body": {
           "description": "CEL expression that computes a replacement body.",
           "type": [

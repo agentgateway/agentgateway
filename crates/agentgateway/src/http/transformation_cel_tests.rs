@@ -226,6 +226,122 @@ fn test_transformation_host_header_lifts_to_authority() {
 }
 
 #[test]
+fn test_transformation_replace_headers() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.header("x-remove-me", "gone")
+		.header("x-keep-src", "kept-value")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			replace: Some(r#"{"x-kept": request.headers["x-keep-src"], "x-static": "hi"}"#.into()),
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	// Headers not present in the replacement map are dropped.
+	assert!(req.headers().get("x-remove-me").is_none());
+	assert_eq!(req.headers().get("x-kept").unwrap(), "kept-value");
+	assert_eq!(req.headers().get("x-static").unwrap(), "hi");
+}
+
+#[test]
+fn test_transformation_replace_then_set_overrides() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.header("x-old", "1")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			replace: Some(r#"{"x-a": "from-replace", "x-b": "b"}"#.into()),
+			set: vec![("x-a".into(), r#""from-set""#.into())],
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	// replace runs first; set then overrides on top of the replaced headers.
+	assert_eq!(req.headers().get("x-a").unwrap(), "from-set");
+	assert_eq!(req.headers().get("x-b").unwrap(), "b");
+	assert!(req.headers().get("x-old").is_none());
+}
+
+#[test]
+fn test_transformation_replace_repeated_header() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			replace: Some(r#"{"x-multi": ["a", "b"]}"#.into()),
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	let values: Vec<_> = req
+		.headers()
+		.get_all("x-multi")
+		.iter()
+		.map(|v| v.to_str().unwrap().to_string())
+		.collect();
+	assert_eq!(values, vec!["a".to_string(), "b".to_string()]);
+}
+
+#[test]
+fn test_transformation_replace_ignores_pseudo_headers() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			replace: Some(r#"{":method": "POST", "x-real": "y"}"#.into()),
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	// Pseudo-header keys are ignored; the method is unchanged and no `:method` header exists.
+	assert_eq!(req.method().as_str(), "GET");
+	assert_eq!(req.headers().get("x-real").unwrap(), "y");
+	assert!(req.headers().get(":method").is_none());
+}
+
+#[test]
+fn test_transformation_replace_non_map_leaves_headers() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.header("x-orig", "keep")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			replace: Some(r#""not a map""#.into()),
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	// A non-map result must not wipe the existing headers.
+	assert_eq!(req.headers().get("x-orig").unwrap(), "keep");
+}
+
+#[test]
 fn test_transformation_metadata() {
 	let mut req = ::http::Request::builder()
 		.method("GET")

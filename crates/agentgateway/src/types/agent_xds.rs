@@ -1723,6 +1723,9 @@ fn transformation_from_proto(
 			add,
 			set,
 			remove,
+			// `replace` is only available via local file config today; the XDS proto does not
+			// carry it yet, so dynamic configs leave it unset.
+			replace: None,
 			body,
 			metadata,
 		}
