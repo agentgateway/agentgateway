@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import {
@@ -27,36 +28,60 @@ type SendMode = "send" | "skip";
 const bodyModes: Array<EnumSelectorOption<BodyMode>> = [
   {
     value: "fullDuplexStreamed",
-    label: "Full duplex streamed",
-    description: "Stream the full body through the external processor.",
+    get label() {
+      return tr("copy.fullDuplexStreamed");
+    },
+    get description() {
+      return tr("copy.streamTheFullBodyThroughTheExternalProcessor");
+    },
   },
   {
     value: "buffered",
-    label: "Buffered",
-    description: "Buffer the full body before sending it to the processor.",
+    get label() {
+      return tr("copy.buffered");
+    },
+    get description() {
+      return tr("copy.bufferTheFullBodyBeforeSendingItToTheProcessor");
+    },
   },
   {
     value: "bufferedPartial",
-    label: "Buffered partial",
-    description: "Send a bounded body buffer and allow truncation.",
+    get label() {
+      return tr("copy.bufferedPartial");
+    },
+    get description() {
+      return tr("copy.sendABoundedBodyBufferAndAllowTruncation");
+    },
   },
   {
     value: "none",
-    label: "None",
-    description: "Do not send the body to the processor.",
+    get label() {
+      return tr("copy.none_deku7v");
+    },
+    get description() {
+      return tr("copy.doNotSendTheBodyToTheProcessor");
+    },
   },
 ];
 
 const sendModes: Array<EnumSelectorOption<SendMode>> = [
   {
     value: "send",
-    label: "Send",
-    description: "Send this phase to the external processor.",
+    get label() {
+      return tr("copy.send");
+    },
+    get description() {
+      return tr("copy.sendThisPhaseToTheExternalProcessor");
+    },
   },
   {
     value: "skip",
-    label: "Skip",
-    description: "Do not send this phase to the external processor.",
+    get label() {
+      return tr("copy.skip");
+    },
+    get description() {
+      return tr("copy.doNotSendThisPhaseToTheExternalProcessor");
+    },
   },
 ];
 
@@ -109,13 +134,14 @@ export function ExtProcPolicyEditor(props: {
   if (unsupportedTarget) {
     return (
       <UnsupportedYamlFallback
-        title="Unsupported target type"
+        title={tr("copy.unsupportedTargetType")}
         value={props.extProc ?? {}}
         schema={props.help.node(["$defs", "ExtProc"])}
         help={props.help}
       >
-        This policy uses a {unsupportedTargetLabel(props.extProc)} target. The
-        visual editor currently supports host targets only.
+        {tr("copy.thisPolicyUsesA")}
+        {unsupportedTargetLabel(props.extProc)}
+        {tr("copy.targetTheVisualEditorCurrentlySupportsHostTargetsOnly")}
       </UnsupportedYamlFallback>
     );
   }
@@ -175,19 +201,21 @@ export function ExtProcPolicyEditor(props: {
       />
       <PolicySection
         icon={<SlidersHorizontal size={17} />}
-        title="Processing behavior"
-        description="Choose failure behavior and which request/response phases are sent."
+        title={tr("copy.processingBehavior")}
+        description={tr(
+          "copy.chooseFailureBehaviorAndWhichRequestResponsePhasesAreSent",
+        )}
       >
         <FieldGroup
-          label="Failure mode"
+          label={tr("copy.failureMode")}
           tooltip={props.help.field<ExtProc>("ExtProc", "failureMode")}
         >
           <EnumSelector
             ariaLabel="Failure mode"
             value={failureMode}
             options={[
-              { value: "failClosed", label: "Fail closed" },
-              { value: "failOpen", label: "Fail open" },
+              { value: "failClosed", label: tr("copy.failClosed") },
+              { value: "failOpen", label: tr("copy.failOpen") },
             ]}
             schema={props.help.node(["$defs", "FailureMode5"])}
             onChange={setFailureMode}
@@ -195,7 +223,7 @@ export function ExtProcPolicyEditor(props: {
         </FieldGroup>
         <div className="form-grid">
           <ModeSelect
-            label="Request body"
+            label={tr("copy.requestBody")}
             tooltip={props.help.field<ProcessingOptions>(
               "ProcessingOptions",
               "requestBodyMode",
@@ -205,7 +233,7 @@ export function ExtProcPolicyEditor(props: {
             onChange={setRequestBodyMode}
           />
           <ModeSelect
-            label="Response body"
+            label={tr("copy.responseBody")}
             tooltip={props.help.field<ProcessingOptions>(
               "ProcessingOptions",
               "responseBodyMode",
@@ -215,7 +243,7 @@ export function ExtProcPolicyEditor(props: {
             onChange={setResponseBodyMode}
           />
           <ModeSelect
-            label="Request headers"
+            label={tr("copy.requestHeaders")}
             tooltip={props.help.field<ProcessingOptions>(
               "ProcessingOptions",
               "requestHeaderMode",
@@ -225,7 +253,7 @@ export function ExtProcPolicyEditor(props: {
             onChange={setRequestHeaderMode}
           />
           <ModeSelect
-            label="Response headers"
+            label={tr("copy.responseHeaders")}
             tooltip={props.help.field<ProcessingOptions>(
               "ProcessingOptions",
               "responseHeaderMode",
@@ -235,7 +263,7 @@ export function ExtProcPolicyEditor(props: {
             onChange={setResponseHeaderMode}
           />
           <ModeSelect
-            label="Request trailers"
+            label={tr("copy.requestTrailers")}
             tooltip={props.help.field<ProcessingOptions>(
               "ProcessingOptions",
               "requestTrailerMode",
@@ -245,7 +273,7 @@ export function ExtProcPolicyEditor(props: {
             onChange={setRequestTrailerMode}
           />
           <ModeSelect
-            label="Response trailers"
+            label={tr("copy.responseTrailers")}
             tooltip={props.help.field<ProcessingOptions>(
               "ProcessingOptions",
               "responseTrailerMode",
@@ -262,7 +290,7 @@ export function ExtProcPolicyEditor(props: {
             onChange={(event) => setAllowModeOverride(event.target.checked)}
           />
           <span>
-            <strong>Allow mode override</strong>
+            <strong>{tr("copy.allowModeOverride")}</strong>
             <small>
               {props.help.field<ProcessingOptions>(
                 "ProcessingOptions",
@@ -274,11 +302,11 @@ export function ExtProcPolicyEditor(props: {
       </PolicySection>
       <PolicySection
         icon={<SlidersHorizontal size={17} />}
-        title="Attributes"
-        description="CEL expressions sent as attributes to the processor."
+        title={tr("copy.attributes")}
+        description={tr("copy.celExpressionsSentAsAttributesToTheProcessor")}
       >
         <KeyValueEditor
-          label="Request attributes"
+          label={tr("copy.requestAttributes")}
           tooltip={props.help.field<ExtProc>("ExtProc", "requestAttributes")}
           values={requestAttributes}
           keyPlaceholder="key"
@@ -287,7 +315,7 @@ export function ExtProcPolicyEditor(props: {
           onChange={setRequestAttributes}
         />
         <KeyValueEditor
-          label="Response attributes"
+          label={tr("copy.responseAttributes")}
           tooltip={props.help.field<ExtProc>("ExtProc", "responseAttributes")}
           values={responseAttributes}
           keyPlaceholder="key"
@@ -296,7 +324,7 @@ export function ExtProcPolicyEditor(props: {
           onChange={setResponseAttributes}
         />
         <FieldGroup
-          label="Metadata context YAML"
+          label={tr("copy.metadataContextYaml")}
           tooltip={props.help.field<ExtProc>("ExtProc", "metadataContext")}
           className={metadataError ? "invalid" : undefined}
           hint={metadataError ?? undefined}
@@ -305,7 +333,7 @@ export function ExtProcPolicyEditor(props: {
             language="yaml"
             value={metadataText}
             onChange={setMetadataText}
-            placeholder={"namespace:\n  key: CEL expression"}
+            placeholder={tr("copy.namespaceKeyCelExpression")}
           />
         </FieldGroup>
       </PolicySection>

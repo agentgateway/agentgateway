@@ -1,3 +1,4 @@
+import { tr } from "../../i18n";
 import { Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Tooltip } from "../../components/Primitives";
 import { CollapsiblePolicySection } from "../../policies/PolicyLayout";
@@ -26,8 +27,10 @@ export function ModelMatchesEditor(props: {
   return (
     <CollapsiblePolicySection
       icon={<SlidersHorizontal size={17} />}
-      title="Matches"
-      description="At least one match group must match. Within a group, every header condition must match."
+      title={tr("copy.matches")}
+      description={tr(
+        "copy.atLeastOneMatchGroupMustMatchWithinAGroupEveryHeaderConditionMustMatch",
+      )}
       defaultOpen={matches.length > 0}
     >
       {matches.length ? (
@@ -43,7 +46,9 @@ export function ModelMatchesEditor(props: {
           ))}
         </div>
       ) : (
-        <div className="empty-inline">No additional match conditions.</div>
+        <div className="empty-inline">
+          {tr("copy.noAdditionalMatchConditions")}
+        </div>
       )}
       <div className="button-row">
         <button
@@ -57,7 +62,7 @@ export function ModelMatchesEditor(props: {
           }
         >
           <Plus size={16} />
-          Add match
+          {tr("copy.addMatch")}
         </button>
       </div>
     </CollapsiblePolicySection>
@@ -108,7 +113,7 @@ function MatchCard(props: {
           <button
             className="icon-button danger"
             type="button"
-            aria-label={`Remove match ${props.index + 1}`}
+            aria-label={tr("copy.removeMatchValue")}
             onClick={props.onRemove}
           >
             <Trash2 size={15} />
@@ -128,7 +133,7 @@ function MatchCard(props: {
             ))}
           </div>
         ) : (
-          <div className="empty-inline">No header conditions.</div>
+          <div className="empty-inline">{tr("copy.noHeaderConditions")}</div>
         )}
         <button
           className="button small"
@@ -141,7 +146,7 @@ function MatchCard(props: {
           }
         >
           <Plus size={16} />
-          Add header
+          {tr("copy.addHeader")}
         </button>
       </div>
     </section>
@@ -178,15 +183,15 @@ function HeaderMatchRow(props: {
   return (
     <div className="header-match-row">
       <input
-        aria-label="Header name"
+        aria-label={tr("copy.headerName_8vzq77")}
         value={props.header.name}
         onChange={(event) =>
           props.onChange({ ...props.header, name: event.target.value })
         }
-        placeholder="Header name"
+        placeholder={tr("copy.headerName_8vzq77")}
       />
       <input
-        aria-label="Header value"
+        aria-label={tr("copy.headerValue")}
         value={text}
         onChange={(event) => setText(event.target.value)}
         placeholder={mode === "regex" ? "Regex value" : "Exact value"}
@@ -199,13 +204,13 @@ function HeaderMatchRow(props: {
           checked={mode === "regex"}
           onChange={(event) => setMode(event.target.checked)}
         />
-        Regex
+        {tr("copy.regex")}
       </label>
       <Tooltip content="Remove header condition">
         <button
           className="icon-button danger"
           type="button"
-          aria-label="Remove header condition"
+          aria-label={tr("copy.removeHeaderCondition")}
           onClick={props.onRemove}
         >
           <Trash2 size={15} />

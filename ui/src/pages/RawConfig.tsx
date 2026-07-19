@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useNavigate } from "@tanstack/react-router";
 import { Clipboard, Download, FileText, Save, RotateCcw } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -25,7 +26,10 @@ export function RawConfigPage() {
   if (mode.isLoading) {
     return (
       <div className="page-stack">
-        <StatusBanner state="loading" title="Detecting configuration mode" />
+        <StatusBanner
+          state="loading"
+          title={tr("copy.detectingConfigurationMode")}
+        />
       </div>
     );
   }
@@ -71,7 +75,7 @@ function RawConfigEditorPage() {
     try {
       const parsed = parseYamlText(text);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("Configuration must be a YAML object.");
+        throw new Error(tr("copy.configurationMustBeAYamlObject"));
       }
       await validateGatewayConfig(parsed as GatewayConfig);
       await update.mutateAsync(() => parsed as GatewayConfig);
@@ -86,8 +90,8 @@ function RawConfigEditorPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Raw Configuration"
-        description="Edit the full gateway YAML."
+        title={tr("copy.rawConfiguration")}
+        description={tr("copy.editTheFullGatewayYaml")}
         actions={
           <div className="button-row">
             <button
@@ -97,7 +101,7 @@ function RawConfigEditorPage() {
               onClick={() => void copyConfig(text)}
             >
               <Clipboard size={16} />
-              Copy
+              {tr("copy.copy")}
             </button>
             <button
               className="button"
@@ -106,7 +110,7 @@ function RawConfigEditorPage() {
               onClick={() => downloadConfig(text)}
             >
               <Download size={16} />
-              Download
+              {tr("copy.download")}
             </button>
             <button
               className="button"
@@ -115,7 +119,7 @@ function RawConfigEditorPage() {
               onClick={() => updateText(initialText)}
             >
               <RotateCcw size={16} />
-              Reset
+              {tr("copy.reset")}
             </button>
             <button
               className="button"
@@ -124,7 +128,7 @@ function RawConfigEditorPage() {
               onClick={() => setDiffOpen(true)}
             >
               <FileText size={16} />
-              View diff
+              {tr("copy.viewDiff")}
             </button>
             <button
               className="button primary"
@@ -133,31 +137,34 @@ function RawConfigEditorPage() {
               onClick={() => void save()}
             >
               <Save size={16} />
-              Save
+              {tr("copy.save")}
             </button>
           </div>
         }
       />
 
       {config.isError ? (
-        <StatusBanner state="bad" title="Configuration API unavailable">
+        <StatusBanner
+          state="bad"
+          title={tr("copy.configurationApiUnavailable")}
+        >
           {config.error.message}
         </StatusBanner>
       ) : null}
       {error ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {error}
         </StatusBanner>
       ) : null}
       {showSaved ? (
-        <StatusBanner state="ok" title="Configuration saved" />
+        <StatusBanner state="ok" title={tr("copy.configurationSaved")} />
       ) : null}
 
       <Panel>
         <Suspense
           fallback={
             <div className="editor-wrap raw-config-editor loading-panel">
-              Loading editor...
+              {tr("copy.loadingEditor")}
             </div>
           }
         >
@@ -171,7 +178,7 @@ function RawConfigEditorPage() {
       </Panel>
       {diffOpen ? (
         <ConfigDiffDrawer
-          title="Raw configuration diff"
+          title={tr("copy.rawConfigurationDiff")}
           original={initialText}
           modified={text}
           saving={update.isPending}

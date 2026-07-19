@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { GitBranch, Network, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -96,8 +97,10 @@ export function TrafficGatewaysPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Traffic Gateways"
-        description="Configure named gateway listeners that LLM, MCP, UI, and routes can attach to."
+        title={tr("copy.trafficGateways")}
+        description={tr(
+          "copy.configureNamedGatewayListenersThatLlmMcpUiAndRoutesCanAttachTo",
+        )}
         actions={
           <button
             className="button primary"
@@ -105,23 +108,23 @@ export function TrafficGatewaysPage() {
             onClick={() => setDrawer("new")}
           >
             <Plus size={16} />
-            Add gateway
+            {tr("copy.addGateway")}
           </button>
         }
       />
 
       {update.isError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {update.error.message}
         </StatusBanner>
       ) : null}
       {update.isSuccess ? (
-        <StatusBanner state="ok" title="Configuration saved" />
+        <StatusBanner state="ok" title={tr("copy.configurationSaved")} />
       ) : null}
       {showLegacyBindsWarning ? (
         <StatusBanner
           state="warn"
-          title="Detected legacy binds config"
+          title={tr("copy.detectedLegacyBindsConfig")}
           action={
             migration ? (
               <button
@@ -130,28 +133,34 @@ export function TrafficGatewaysPage() {
                 onClick={() => setMigrationOpen(true)}
               >
                 <GitBranch size={16} />
-                Review migration
+                {tr("copy.reviewMigration")}
               </button>
             ) : null
           }
         >
-          This configuration uses legacy <code>binds</code> and has no{" "}
-          <code>gateways</code>. Consider moving listener ownership to{" "}
-          <code>gateways</code>.
+          {tr("copy.thisConfigurationUsesLegacy")}
+          <code>binds</code>
+          {tr("copy.andHasNo")} <code>gateways</code>
+          {tr("copy.considerMovingListenerOwnershipTo")} <code>gateways</code>.
         </StatusBanner>
       ) : null}
 
       <Panel>
         {config.isLoading ? (
-          <StatusBanner state="loading" title="Loading gateways" />
+          <StatusBanner state="loading" title={tr("copy.loadingGateways")} />
         ) : config.isError ? (
-          <StatusBanner state="bad" title="Configuration API unavailable">
+          <StatusBanner
+            state="bad"
+            title={tr("copy.configurationApiUnavailable")}
+          >
             {config.error.message}
           </StatusBanner>
         ) : gateways.length === 0 ? (
           <EmptyState
-            title="No gateways configured"
-            description="Add a named gateway before attaching LLM, MCP, UI, or routes."
+            title={tr("copy.noGatewaysConfigured")}
+            description={tr(
+              "copy.addANamedGatewayBeforeAttachingLlmMcpUiOrRoutes",
+            )}
             action={
               <button
                 className="button primary"
@@ -159,7 +168,7 @@ export function TrafficGatewaysPage() {
                 onClick={() => setDrawer("new")}
               >
                 <Network size={16} />
-                Add gateway
+                {tr("copy.addGateway")}
               </button>
             }
           />
@@ -171,11 +180,13 @@ export function TrafficGatewaysPage() {
                   <div>
                     <h3>{name}</h3>
                     <p>
-                      Port {gatewayPortLabel(gateway)}
+                      {tr("copy.port")}
+                      {gatewayPortLabel(gateway)}
                       {gateway.listeners?.length
                         ? `, ${gateway.listeners.length} named listeners`
                         : ""}
-                      , {gatewayPolicyCount(gateway)} policies
+                      , {gatewayPolicyCount(gateway)}
+                      {tr("copy.policies")}
                     </p>
                   </div>
                   <div className="button-row">
@@ -192,7 +203,7 @@ export function TrafficGatewaysPage() {
                         <button
                           className="icon-button"
                           type="button"
-                          aria-label="Add listener"
+                          aria-label={tr("copy.addListener")}
                           onClick={() => setDrawer(`listener:new:${name}`)}
                         >
                           <Plus size={16} />
@@ -203,7 +214,7 @@ export function TrafficGatewaysPage() {
                       <button
                         className="icon-button"
                         type="button"
-                        aria-label="Edit gateway"
+                        aria-label={tr("copy.editGateway")}
                         onClick={() => setDrawer(name)}
                       >
                         <Pencil size={16} />
@@ -213,7 +224,7 @@ export function TrafficGatewaysPage() {
                       <button
                         className="icon-button danger"
                         type="button"
-                        aria-label="Delete gateway"
+                        aria-label={tr("copy.deleteGateway")}
                         onClick={() =>
                           update.mutate((next) => {
                             if (!next.gateways) return;
@@ -234,11 +245,11 @@ export function TrafficGatewaysPage() {
                     <table>
                       <thead>
                         <tr>
-                          <th>Name</th>
-                          <th>Hostname</th>
-                          <th>Protocol</th>
+                          <th>{tr("copy.name")}</th>
+                          <th>{tr("copy.hostname")}</th>
+                          <th>{tr("copy.protocol")}</th>
                           <th>TLS</th>
-                          <th>Policies</th>
+                          <th>{tr("copy.policies_raqot3")}</th>
                           <th />
                         </tr>
                       </thead>
@@ -263,7 +274,7 @@ export function TrafficGatewaysPage() {
                                 <button
                                   className="icon-button"
                                   type="button"
-                                  aria-label="Edit listener"
+                                  aria-label={tr("copy.editListener")}
                                   onClick={() =>
                                     setDrawer(
                                       `listener:edit:${name}:${listenerIndex}`,
@@ -277,7 +288,7 @@ export function TrafficGatewaysPage() {
                                 <button
                                   className="icon-button danger"
                                   type="button"
-                                  aria-label="Delete listener"
+                                  aria-label={tr("copy.deleteListener")}
                                   onClick={() =>
                                     update.mutate((next) => {
                                       const target = next.gateways?.[name];
@@ -359,7 +370,7 @@ export function TrafficGatewaysPage() {
 
       {migrationOpen && config.data && migration ? (
         <ConfigDiffDrawer
-          title="Migrate binds to gateways"
+          title={tr("copy.migrateBindsToGateways")}
           {...configDiffText(config.data, migration.config)}
           saving={update.isPending}
           onClose={() => setMigrationOpen(false)}
@@ -449,8 +460,8 @@ function GatewayEditor(props: {
     >
       <div className="form-grid">
         <Field
-          label="Name"
-          tooltip="Features and routes reference this gateway by name."
+          label={tr("copy.name")}
+          tooltip={tr("copy.featuresAndRoutesReferenceThisGatewayByName")}
         >
           <input
             value={name}
@@ -459,7 +470,7 @@ function GatewayEditor(props: {
           />
         </Field>
         <Field
-          label="Port"
+          label={tr("copy.port")}
           tooltip={props.help.field<TrafficGateway>("LocalGateway", "port")}
         >
           <input
@@ -475,7 +486,7 @@ function GatewayEditor(props: {
         </Field>
         {!multipleListeners ? (
           <Field
-            label="Protocol"
+            label={tr("copy.protocol")}
             tooltip={props.help.field<TrafficGateway>(
               "LocalGateway",
               "protocol",
@@ -531,7 +542,7 @@ function GatewayEditor(props: {
             }}
           />
           <span>
-            <strong>Multiple listeners</strong>
+            <strong>{tr("copy.multipleListeners")}</strong>
             <small>
               {!multipleListeners && !canEnableMultipleListeners
                 ? "Unavailable while gateway TLS or policies are configured."
@@ -555,7 +566,7 @@ function GatewayEditor(props: {
 
       {!multipleListeners ? (
         <TrafficPolicySection
-          title="Gateway policies"
+          title={tr("copy.gatewayPolicies")}
           schemaRoot="LocalGatewayPolicy"
           policies={gatewayPolicies(gateway)}
           onChange={(policies) =>
@@ -565,7 +576,7 @@ function GatewayEditor(props: {
       ) : null}
 
       <details open>
-        <summary>Resulting YAML</summary>
+        <summary>{tr("copy.resultingYaml")}</summary>
         <YamlBlock value={{ [name.trim() || "gateway"]: preview }} />
       </details>
     </Drawer>
@@ -584,7 +595,7 @@ function GatewayTLSFields(props: {
       <summary>TLS</summary>
       <div className="form-grid">
         <Field
-          label="Certificate"
+          label={tr("copy.certificate")}
           tooltip={props.help.field<LocalTLSServerConfig>(
             "LocalTLSServerConfig",
             "cert",
@@ -597,7 +608,7 @@ function GatewayTLSFields(props: {
           />
         </Field>
         <Field
-          label="Key"
+          label={tr("copy.key")}
           tooltip={props.help.field<LocalTLSServerConfig>(
             "LocalTLSServerConfig",
             "key",
@@ -678,7 +689,7 @@ function GatewayListenerEditor(props: {
     >
       <div className="form-grid">
         <Field
-          label="Name"
+          label={tr("copy.name")}
           tooltip={props.help.field<TrafficGatewayListener>(
             "LocalGatewayListener",
             "name",
@@ -693,7 +704,7 @@ function GatewayListenerEditor(props: {
           />
         </Field>
         <Field
-          label="Protocol"
+          label={tr("copy.protocol")}
           tooltip={props.help.field<TrafficGatewayListener>(
             "LocalGatewayListener",
             "protocol",
@@ -721,7 +732,7 @@ function GatewayListenerEditor(props: {
           />
         </Field>
         <Field
-          label="Hostname"
+          label={tr("copy.hostname")}
           tooltip={props.help.field<TrafficGatewayListener>(
             "LocalGatewayListener",
             "hostname",
@@ -747,7 +758,7 @@ function GatewayListenerEditor(props: {
         />
       ) : null}
       <TrafficPolicySection
-        title="Listener policies"
+        title={tr("copy.listenerPolicies")}
         schemaRoot="LocalGatewayPolicy"
         policies={gatewayListenerPolicies(listener)}
         onChange={(policies) =>
@@ -758,7 +769,7 @@ function GatewayListenerEditor(props: {
         }
       />
       <details open>
-        <summary>Resulting YAML</summary>
+        <summary>{tr("copy.resultingYaml")}</summary>
         <YamlBlock value={preview} />
       </details>
     </Drawer>

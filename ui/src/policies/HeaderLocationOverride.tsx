@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { SlidersHorizontal, X } from "lucide-react";
 import { Field, FieldGroup } from "../components/Primitives";
 
@@ -49,17 +50,20 @@ export function HeaderLocationOverride(props: {
         onClick={() => props.onEnabledChange(true)}
       >
         <SlidersHorizontal size={15} />
-        Custom header location
+        {tr("copy.customHeaderLocation")}
       </button>
     );
   }
 
   return (
-    <FieldGroup label="Header location" tooltip={props.tooltip}>
+    <FieldGroup label={tr("copy.headerLocation")} tooltip={props.tooltip}>
       {props.enabled ? (
         <div className="location-override-panel">
           <div className="form-grid">
-            <Field label="Header name" tooltip={props.headerNameTooltip}>
+            <Field
+              label={tr("copy.headerName_8vzq77")}
+              tooltip={props.headerNameTooltip}
+            >
               <input
                 value={props.headerName}
                 onChange={(event) =>
@@ -68,7 +72,10 @@ export function HeaderLocationOverride(props: {
                 placeholder="authorization"
               />
             </Field>
-            <Field label="Header prefix" tooltip={props.headerPrefixTooltip}>
+            <Field
+              label={tr("copy.headerPrefix")}
+              tooltip={props.headerPrefixTooltip}
+            >
               <input
                 value={props.headerPrefix}
                 onChange={(event) =>
@@ -85,7 +92,7 @@ export function HeaderLocationOverride(props: {
               onClick={() => props.onEnabledChange(false)}
             >
               <X size={15} />
-              Use default location
+              {tr("copy.useDefaultLocation")}
             </button>
           )}
         </div>
@@ -96,7 +103,7 @@ export function HeaderLocationOverride(props: {
           onClick={() => props.onEnabledChange(true)}
         >
           <SlidersHorizontal size={15} />
-          Custom header location
+          {tr("copy.customHeaderLocation")}
         </button>
       )}
     </FieldGroup>

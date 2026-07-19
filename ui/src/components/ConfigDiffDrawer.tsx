@@ -2,6 +2,7 @@ import "../monacoWorkers";
 import { DiffEditor } from "@monaco-editor/react";
 import { FileText, Save } from "lucide-react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { configureConfigYamlMonaco } from "../configMonaco";
 import { cloneConfig } from "../config";
 import { toYamlText } from "../policies/policyUtils";
@@ -32,6 +33,7 @@ export function ConfigDiffDrawer(props: {
   onClose: () => void;
   onSave?: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Drawer
       title={props.title}
@@ -40,7 +42,7 @@ export function ConfigDiffDrawer(props: {
       footer={
         <div className="button-row">
           <button className="button" type="button" onClick={props.onClose}>
-            Close
+            {t("common.close")}
           </button>
           {props.onSave ? (
             <button
@@ -50,7 +52,7 @@ export function ConfigDiffDrawer(props: {
               onClick={props.onSave}
             >
               <Save size={16} />
-              Save
+              {t("common.save")}
             </button>
           ) : null}
         </div>
@@ -105,6 +107,7 @@ export function ConfigDiffSaveActions(props: {
   beforeDiff?: () => boolean;
   applyDiff: (config: GatewayConfig) => void;
 }) {
+  const { t } = useTranslation();
   const [diff, setDiff] = useState<{
     original: string;
     modified: string;
@@ -123,7 +126,7 @@ export function ConfigDiffSaveActions(props: {
       <div className="button-row">
         {props.onCancel ? (
           <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
+            {t("common.cancel")}
           </button>
         ) : null}
         <button
@@ -138,7 +141,7 @@ export function ConfigDiffSaveActions(props: {
           onClick={viewDiff}
         >
           <FileText size={16} />
-          View diff
+          {t("common.viewDiff")}
         </button>
         <button
           className="button primary"

@@ -1,3 +1,4 @@
+import { tr } from "../../i18n";
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -10,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatNumber } from "../../components/Primitives";
+import { currentLanguage } from "../../i18n";
 import type {
   AnalyticsGroup,
   AnalyticsTimeBucket,
@@ -30,11 +32,51 @@ export const ANALYTICS_DIMENSIONS: Array<{
   label: string;
   filterLabel: string;
 }> = [
-  { value: "model", label: "Model", filterLabel: "Models" },
-  { value: "user", label: "User", filterLabel: "Users" },
-  { value: "group", label: "Group", filterLabel: "Groups" },
-  { value: "provider", label: "Provider", filterLabel: "Providers" },
-  { value: "userAgent", label: "User agent", filterLabel: "User agents" },
+  {
+    value: "model",
+    get label() {
+      return tr("copy.model");
+    },
+    get filterLabel() {
+      return tr("copy.models");
+    },
+  },
+  {
+    value: "user",
+    get label() {
+      return tr("copy.user");
+    },
+    get filterLabel() {
+      return tr("copy.users");
+    },
+  },
+  {
+    value: "group",
+    get label() {
+      return tr("copy.group");
+    },
+    get filterLabel() {
+      return tr("copy.groups");
+    },
+  },
+  {
+    value: "provider",
+    get label() {
+      return tr("copy.provider");
+    },
+    get filterLabel() {
+      return tr("copy.providers");
+    },
+  },
+  {
+    value: "userAgent",
+    get label() {
+      return tr("copy.userAgent");
+    },
+    get filterLabel() {
+      return tr("copy.userAgents");
+    },
+  },
 ];
 
 export function AnalyticsTimelineChart(props: {
@@ -47,7 +89,7 @@ export function AnalyticsTimelineChart(props: {
     <div className="analytics-chart-frame">
       {props.data.length ? null : (
         <div className="activity-empty">
-          No analytics in the selected window.
+          {tr("copy.noAnalyticsInTheSelectedWindow")}
         </div>
       )}
       <ResponsiveContainer width="100%" height="100%">
@@ -126,7 +168,7 @@ export function AnalyticsBreakdownChart(props: {
     <div className="analytics-chart-frame compact horizontal breakdown">
       {props.data.length ? null : (
         <div className="activity-empty">
-          No analytics in the selected window.
+          {tr("copy.noAnalyticsInTheSelectedWindow")}
         </div>
       )}
       <div
@@ -272,11 +314,13 @@ function AnalyticsBreakdownTooltip(props: {
       </span>
       <span>
         <i style={{ background: "#64748b" }} />
-        Tokens<code>{formatNumber(item.tokens ?? 0)}</code>
+        {tr("copy.tokens")}
+        <code>{formatNumber(item.tokens ?? 0)}</code>
       </span>
       <span>
         <i style={{ background: "#64748b" }} />
-        Calls<code>{formatNumber(item.requests ?? 0)}</code>
+        {tr("copy.calls")}
+        <code>{formatNumber(item.requests ?? 0)}</code>
       </span>
     </div>
   );
@@ -488,7 +532,7 @@ export function analyticsTimelineData(
   const bucketCount = Math.max(1, Math.ceil(rangeMs / bucketMs));
   const dayMs = 24 * 60 * 60 * 1000;
   const axisFormatter = new Intl.DateTimeFormat(
-    undefined,
+    currentLanguage(),
     bucketMs >= dayMs
       ? { month: "short", day: "numeric" }
       : rangeMs > 48 * 60 * 60 * 1000
@@ -499,7 +543,7 @@ export function analyticsTimelineData(
           },
   );
   const tooltipFormatter = new Intl.DateTimeFormat(
-    undefined,
+    currentLanguage(),
     bucketMs >= dayMs
       ? { month: "short", day: "numeric" }
       : rangeMs > 48 * 60 * 60 * 1000
@@ -697,7 +741,7 @@ function analyticsGroupValue(
 function analyticsDisplayName(
   values: Partial<Record<AnalyticsDimension, string>>,
 ) {
-  if (!Object.values(values).some(Boolean)) return "Total";
+  if (!Object.values(values).some(Boolean)) return tr("copy.total");
   const model = values.model || "";
   const provider = values.provider || "";
   const user = values.user || "";

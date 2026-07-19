@@ -1,4 +1,7 @@
 import { YamlTextBlock } from "./Primitives";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
+import i18n, { translateText } from "../i18n";
 import type { SchemaHelp } from "../schemaHelp";
 
 export function SchemaHelpPanel(props: {
@@ -7,8 +10,9 @@ export function SchemaHelpPanel(props: {
   summary?: string;
   showDescription?: boolean;
 }) {
+  const { t } = useTranslation();
   const description = schemaTopLevelDescription(props.schema, props.help);
-  const yaml = schemaHelpYaml(props.schema, props.help);
+  const yaml = schemaHelpYaml(props.schema, props.help, t);
   return (
     <>
       {props.showDescription !== false && description ? (
@@ -16,7 +20,7 @@ export function SchemaHelpPanel(props: {
       ) : null}
       {yaml ? (
         <details className="schema-details policy-schema-help">
-          <summary>{props.summary ?? "Help"}</summary>
+          <summary>{props.summary ?? t("schema.help")}</summary>
           <YamlTextBlock className="policy-schema-shape" value={yaml} />
         </details>
       ) : null}
@@ -39,39 +43,46 @@ type SchemaNode = {
   type?: string | string[];
 };
 
-export function schemaHelpYaml(schema: unknown, help: SchemaHelp) {
+export function schemaHelpYaml(
+  schema: unknown,
+  help: SchemaHelp,
+  t: TFunction = i18n.t.bind(i18n),
+) {
   const raw = asSchemaNode(schema);
   if (!raw) return "";
   const resolved = resolveDisplayNode(raw, help);
-  return schemaNodeLines(resolved, help, 0, { maxDepth: 4 }).join("\n").trim();
+  return schemaNodeLines(resolved, help, t, 0, { maxDepth: 4 })
+    .join("\n")
+    .trim();
 }
 
 export function schemaTopLevelDescription(schema: unknown, help: SchemaHelp) {
   const raw = asSchemaNode(schema);
   if (!raw) return "";
   const resolved = resolveDisplayNode(raw, help);
-  return cleanDescription(raw.description ?? resolved.description);
+  return localizeDescription(raw.description ?? resolved.description);
 }
 
 function schemaNodeLines(
   schema: SchemaNode,
   help: SchemaHelp,
+  t: TFunction,
   indent: number,
   options: { maxDepth: number },
 ): string[] {
   const resolved = resolveDisplayNode(schema, help);
   const variantNodes = displayVariants(resolved, help);
   if (variantNodes.length === 1 && !resolved.properties) {
-    return schemaNodeLines(variantNodes[0], help, indent, options);
+    return schemaNodeLines(variantNodes[0], help, t, indent, options);
   }
   if (variantNodes.length > 1 && !resolved.properties) {
     const lines: string[] = [];
-    pushComment(lines, "One of:", indent);
+    pushComment(lines, t("schema.oneOf"), indent);
     for (const variant of variantNodes.slice(0, 4)) {
-      const label = schemaTypeLabel(variant);
+      const label = schemaTypeLabel(variant, t);
       pushComment(
         lines,
-        `- ${label}${variant.description ? `: ${cleanDescription(variant.description)}` : ""}`,
+        `- ${label}${variant.description ? `: ${localizeDescription(variant.description)}` : ""}`,
         indent,
       );
     }
@@ -80,7 +91,7 @@ function schemaNodeLines(
     );
     if (firstObject)
       lines.push(
-        ...schemaNodeLines(firstObject, help, indent, {
+        ...schemaNodeLines(firstObject, help, t, indent, {
           maxDepth: options.maxDepth - 1,
         }),
       );
@@ -96,13 +107,13 @@ function schemaNodeLines(
   const lines: string[] = [];
   for (const [key, child] of entries) {
     const childResolved = resolveDisplayNode(child, help);
-    const childDescription = cleanDescription(
+    const childDescription = localizeDescription(
       child.description ?? childResolved.description,
     );
     if (childDescription) pushComment(lines, childDescription, indent);
     const meta = [
-      schemaTypeLabel(childResolved),
-      required.has(key) ? "required" : "",
+      schemaTypeLabel(childResolved, t),
+      required.has(key) ? t("schema.required") : "",
     ]
       .filter(Boolean)
       .join(", ");
@@ -118,7 +129,7 @@ function schemaNodeLines(
     if (objectNode.properties && options.maxDepth > 1) {
       lines.push(`${spaces(indent)}${key}:`);
       lines.push(
-        ...schemaNodeLines(objectNode, help, indent + 2, {
+        ...schemaNodeLines(objectNode, help, t, indent + 2, {
           maxDepth: options.maxDepth - 1,
         }),
       );
@@ -144,20 +155,20 @@ function displayVariants(node: SchemaNode, help: SchemaHelp) {
     .filter((variant) => !schemaTypeValues(variant).includes("null"));
 }
 
-function schemaTypeLabel(node: SchemaNode) {
+function schemaTypeLabel(node: SchemaNode, t: TFunction) {
   if (node.const !== undefined) return JSON.stringify(node.const);
   if (node.enum?.length)
     return node.enum.map((value) => JSON.stringify(value)).join(" | ");
-  const variants = displayVariantLabels(node);
+  const variants = displayVariantLabels(node, t);
   if (variants.length) return variants.join(" | ");
   const types = schemaTypeValues(node).filter((type) => type !== "null");
   if (types.length) return types.join(" | ");
-  if (node.properties) return "object";
-  if (node.items) return "array";
-  return "value";
+  if (node.properties) return t("schema.object");
+  if (node.items) return t("schema.array");
+  return t("schema.value");
 }
 
-function displayVariantLabels(node: SchemaNode) {
+function displayVariantLabels(node: SchemaNode, t: TFunction) {
   const variants = node.oneOf ?? node.anyOf ?? [];
   return variants
     .filter((variant) => !schemaTypeValues(variant).includes("null"))
@@ -166,9 +177,16 @@ function displayVariantLabels(node: SchemaNode) {
         ? JSON.stringify(variant.const)
         : schemaTypeValues(variant)
             .filter((type) => type !== "null")
+            .map((type) => translateSchemaType(type, t))
             .join(" | "),
     )
     .filter(Boolean);
+}
+
+function translateSchemaType(type: string, t: TFunction) {
+  if (type === "object") return t("schema.object");
+  if (type === "array") return t("schema.array");
+  return type;
 }
 
 function schemaTypeValues(node: SchemaNode) {
@@ -193,6 +211,11 @@ function pushComment(lines: string[], text: string, indent: number) {
 
 function cleanDescription(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function localizeDescription(value: unknown) {
+  const description = cleanDescription(value);
+  return description ? translateText(description) : "";
 }
 
 function spaces(count: number) {

@@ -1,3 +1,4 @@
+import { tr, translateText } from "../i18n";
 import { Link } from "@tanstack/react-router";
 import { Bot, Network, Server, Settings } from "lucide-react";
 import type { ReactNode } from "react";
@@ -114,7 +115,10 @@ export function HomePage() {
   if (mode.isLoading || (!dumpMode && config.isLoading)) {
     return (
       <div className="page-stack">
-        <StatusBanner state="loading" title="Loading gateway configuration" />
+        <StatusBanner
+          state="loading"
+          title={tr("copy.loadingGatewayConfiguration")}
+        />
       </div>
     );
   }
@@ -122,7 +126,7 @@ export function HomePage() {
   if (dumpMode) {
     return (
       <div className="page-stack">
-        <PageHeader title="Gateway Overview" />
+        <PageHeader title={tr("copy.gatewayOverview")} />
         <ReadonlyModeBanner />
         <TrafficDumpOverview dump={mode.data?.dump} />
       </div>
@@ -140,26 +144,32 @@ export function HomePage() {
           onClick={(event) => event.stopPropagation()}
         >
           <div className="startup-copy">
-            <h2 id="startup-title">Welcome to Agentgateway</h2>
+            <h2 id="startup-title">{tr("copy.welcomeToAgentgateway")}</h2>
             <p>
-              Agentgateway is a gateway that can route, secure, and observe LLM,
-              MCP, and traditional API traffic. Select one or more capabilities
-              to enable, then continue.
+              {tr(
+                "copy.agentgatewayIsAGatewayThatCanRouteSecureAndObserveLlmMcpAndTraditionalApiTraffic_sbsjep",
+              )}
             </p>
           </div>
 
           {config.isError ? (
-            <StatusBanner state="bad" title="Configuration API unavailable">
+            <StatusBanner
+              state="bad"
+              title={tr("copy.configurationApiUnavailable")}
+            >
               {config.error.message}
             </StatusBanner>
           ) : null}
           {update.isError ? (
-            <StatusBanner state="bad" title="Save failed">
+            <StatusBanner state="bad" title={tr("copy.saveFailed")}>
               {update.error.message}
             </StatusBanner>
           ) : null}
           {costRefreshError ? (
-            <StatusBanner state="warn" title="Cost catalog refresh failed">
+            <StatusBanner
+              state="warn"
+              title={tr("copy.costCatalogRefreshFailed")}
+            >
               {costRefreshError}
             </StatusBanner>
           ) : null}
@@ -167,7 +177,7 @@ export function HomePage() {
           <div className="startup-chip-grid">
             <StartupChip
               label="LLM"
-              description="Models, keys, policies, and chat testing."
+              description={tr("copy.modelsKeysPoliciesAndChatTesting")}
               enabled={hasLlm || locallyEnabled.has("llm")}
               disabled={update.isPending}
               icon={<Bot size={24} />}
@@ -175,15 +185,17 @@ export function HomePage() {
             />
             <StartupChip
               label="MCP"
-              description="Servers, tools, and MCP playground flows."
+              description={tr("copy.serversToolsAndMcpPlaygroundFlows")}
               enabled={hasMcp || locallyEnabled.has("mcp")}
               disabled={update.isPending}
               icon={<Server size={24} />}
               onClick={() => void enableSurface("mcp")}
             />
             <StartupChip
-              label="APIs"
-              description="HTTP and TCP listeners, routes, and policy controls."
+              label={tr("copy.apis")}
+              description={tr(
+                "copy.httpAndTcpListenersRoutesAndPolicyControls",
+              )}
               enabled={hasTraffic || locallyEnabled.has("apis")}
               disabled={update.isPending}
               icon={<Network size={24} />}
@@ -193,13 +205,13 @@ export function HomePage() {
 
           {selectedSurfaces > 0 ? (
             <div className="startup-actions">
-              <span>{selectedSurfaces} of 3 enabled</span>
+              <span>{tr("copy.valueOf3Enabled", [selectedSurfaces])}</span>
               <button
                 className="button primary"
                 type="button"
                 onClick={() => setStartupFlow(false)}
               >
-                Continue
+                {tr("copy.continue")}
               </button>
             </div>
           ) : (
@@ -209,7 +221,7 @@ export function HomePage() {
                 type="button"
                 onClick={() => setStartupFlow(false)}
               >
-                Skip setup
+                {tr("copy.skipSetup")}
               </button>
             </div>
           )}
@@ -220,30 +232,36 @@ export function HomePage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Gateway Overview" />
+      <PageHeader title={tr("copy.gatewayOverview")} />
 
       {config.isLoading ? (
-        <StatusBanner state="loading" title="Loading gateway configuration" />
+        <StatusBanner
+          state="loading"
+          title={tr("copy.loadingGatewayConfiguration")}
+        />
       ) : config.isError ? (
-        <StatusBanner state="bad" title="Configuration API unavailable">
+        <StatusBanner
+          state="bad"
+          title={tr("copy.configurationApiUnavailable")}
+        >
           {config.error.message}
         </StatusBanner>
       ) : costRefreshError ? (
-        <StatusBanner state="warn" title="Cost catalog refresh failed">
+        <StatusBanner state="warn" title={tr("copy.costCatalogRefreshFailed")}>
           {costRefreshError}
         </StatusBanner>
       ) : !hasLlm && !hasMcp && !hasTraffic ? (
-        <StatusBanner state="warn" title="No gateway surfaces enabled yet">
-          Enable the capabilities you want to operate from the setup path.
-        </StatusBanner>
-      ) : warnings.length ? (
         <StatusBanner
           state="warn"
-          title={`${warnings.length} warning${warnings.length === 1 ? "" : "s"}`}
+          title={tr("copy.noGatewaySurfacesEnabledYet")}
         >
+          {tr("copy.enableTheCapabilitiesYouWantToOperateFromTheSetupPath")}
+        </StatusBanner>
+      ) : warnings.length ? (
+        <StatusBanner state="warn" title={tr("copy.valueWarningValue")}>
           <ul className="banner-warning-list">
             {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>{configWarningLabel(warning)}</li>
             ))}
           </ul>
         </StatusBanner>
@@ -251,19 +269,23 @@ export function HomePage() {
       {uiGatewayNeedsAuthWarning ? (
         <StatusBanner
           state="warn"
-          title="UI is exposed without authentication"
+          title={tr("copy.uiIsExposedWithoutAuthentication")}
           action={
             <Link className="button" to="/settings">
-              Configure UI policies
+              {tr("copy.configureUiPolicies")}
             </Link>
           }
         >
-          Unauthenticated users can access the UI; consider adding
-          authentication or authorization policies to secure the UI.
+          {tr(
+            "copy.unauthenticatedUsersCanAccessTheUiConsiderAddingAuthenticationOrAuthorizationPol_qnhsta",
+          )}
         </StatusBanner>
       ) : null}
 
-      <section className="surface-overview-list" aria-label="Gateway surfaces">
+      <section
+        className="surface-overview-list"
+        aria-label={tr("copy.gatewaySurfaces")}
+      >
         <SurfaceRow
           title="LLM"
           icon={<Bot size={18} />}
@@ -276,9 +298,12 @@ export function HomePage() {
           setupHash="add=model"
           setupLabel="Set up models"
           overview={[
-            `${models.length} ${models.length === 1 ? "model" : "models"}`,
-            `${virtualModels.length} virtual ${virtualModels.length === 1 ? "model" : "models"}`,
-            `${config.data?.llm?.providers?.length ?? 0} shared ${config.data?.llm?.providers?.length === 1 ? "provider" : "providers"}`,
+            tr("copy.valueModels", models.length),
+            tr("copy.valueVirtualModels", virtualModels.length),
+            tr(
+              "copy.valueSharedProviders",
+              config.data?.llm?.providers?.length ?? 0,
+            ),
             surfaceEndpointLabel(
               config.data?.llm?.gateways,
               config.data?.llm?.port ?? 4000,
@@ -292,7 +317,7 @@ export function HomePage() {
               onClick={() => setLlmSettingsOpen(true)}
             >
               <Settings size={16} />
-              Settings
+              {tr("copy.settings")}
             </button>
           }
         />
@@ -307,7 +332,7 @@ export function HomePage() {
           setupTo="/mcp/servers"
           setupLabel="Set up servers"
           overview={[
-            `${mcpServers.length} configured ${mcpServers.length === 1 ? "server" : "servers"}`,
+            tr("copy.valueConfiguredServers", mcpServers.length),
             surfaceEndpointLabel(
               config.data?.mcp?.gateways,
               config.data?.mcp?.port ?? 3000,
@@ -321,12 +346,12 @@ export function HomePage() {
               onClick={() => setMcpSettingsOpen(true)}
             >
               <Settings size={16} />
-              Settings
+              {tr("copy.settings")}
             </button>
           }
         />
         <SurfaceRow
-          title="Traffic"
+          title={tr("copy.traffic")}
           icon={<Network size={18} />}
           enabled={hasTraffic}
           disabled={update.isPending}
@@ -344,13 +369,16 @@ export function HomePage() {
           overview={
             hasBinds
               ? [
-                  `${traffic.binds} ${traffic.binds === 1 ? "bind" : "binds"}`,
-                  `${traffic.listeners} ${traffic.listeners === 1 ? "listener" : "listeners"}`,
-                  `${traffic.httpRoutes + traffic.tcpRoutes} ${traffic.httpRoutes + traffic.tcpRoutes === 1 ? "route" : "routes"}`,
+                  tr("copy.valueBinds", traffic.binds),
+                  tr("copy.valueListeners", traffic.listeners),
+                  tr(
+                    "copy.valueRoutes",
+                    traffic.httpRoutes + traffic.tcpRoutes,
+                  ),
                 ]
               : [
-                  `${traffic.gateways} ${traffic.gateways === 1 ? "gateway" : "gateways"}`,
-                  `${traffic.httpRoutes} ${traffic.httpRoutes === 1 ? "route" : "routes"}`,
+                  tr("copy.valueGateways", traffic.gateways),
+                  tr("copy.valueRoutes", traffic.httpRoutes),
                 ]
           }
         />
@@ -403,8 +431,27 @@ function surfaceEndpointLabel(
   gateways: string | string[] | undefined,
   port: number,
 ) {
-  if (!gateways) return `Port ${port}`;
-  return `Gateway ${Array.isArray(gateways) ? gateways.join(", ") : gateways}`;
+  if (!gateways) return tr("copy.portValue", port);
+  return tr(
+    "copy.gatewayValue",
+    Array.isArray(gateways) ? gateways.join(", ") : gateways,
+  );
+}
+
+function configWarningLabel(warning: string) {
+  const virtualKeyMode = warning.match(
+    /^Virtual API key mode is ([^;]+); unauthenticated requests may be accepted\.$/,
+  );
+  if (virtualKeyMode) {
+    return tr(
+      "copy.virtualApiKeyModeIsValueUnauthenticatedRequestsMayBeAccepted",
+      translateText(virtualKeyMode[1]),
+    );
+  }
+  const modelWarning = warning.match(/^([^:]+): (.+)$/);
+  if (modelWarning)
+    return `${modelWarning[1]}：${translateText(modelWarning[2])}`;
+  return translateText(warning);
 }
 
 function uiExposedWithoutAuth(config: GatewayConfig | null | undefined) {
@@ -452,7 +499,9 @@ function StartupChip(props: {
     >
       {props.icon}
       <strong>
-        {props.enabled ? `${props.label} enabled` : `Enable ${props.label}`}
+        {props.enabled
+          ? tr("copy.valueEnabled", [props.label])
+          : tr("copy.enableValue", [props.label])}
       </strong>
       <span>{props.description}</span>
     </button>
@@ -480,7 +529,7 @@ function SurfaceRow(props: {
         <div className="surface-row-title">
           {props.icon}
           <strong>{props.title}</strong>
-          <span>Not enabled</span>
+          <span>{tr("copy.notEnabled")}</span>
         </div>
         <button
           className="button"
@@ -488,7 +537,7 @@ function SurfaceRow(props: {
           disabled={props.disabled}
           onClick={props.onEnable}
         >
-          Enable {props.title}
+          {tr("copy.enableValue", [props.title])}
         </button>
       </div>
     );
@@ -502,10 +551,10 @@ function SurfaceRow(props: {
         <div className="surface-row-title">
           {props.icon}
           <strong>{props.title}</strong>
-          <span>Enabled</span>
+          <span>{tr("copy.enabled_17fi4vy")}</span>
         </div>
         {props.setupNeeded ? (
-          <p>{props.setupText}</p>
+          <p>{translateText(props.setupText)}</p>
         ) : (
           <div className="surface-metrics">
             {props.overview.map((item) => (
@@ -519,7 +568,7 @@ function SurfaceRow(props: {
           ? (props.actions ??
             props.links?.map((link) => (
               <Link key={link.to} className="button" to={link.to}>
-                {link.label}
+                {translateText(link.label)}
               </Link>
             )))
           : null}
@@ -528,7 +577,7 @@ function SurfaceRow(props: {
           to={props.setupTo}
           hash={props.setupHash}
         >
-          {props.setupLabel}
+          {translateText(props.setupLabel)}
         </Link>
       </div>
     </div>

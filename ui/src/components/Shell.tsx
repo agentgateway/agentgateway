@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import {
   Link,
   Outlet,
@@ -16,6 +17,7 @@ import {
   Globe,
   Home,
   KeyRound,
+  Languages,
   Menu,
   MessageSquarePlus,
   Network,
@@ -31,8 +33,11 @@ import {
   Sun,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Tooltip, useDismissiblePopover } from "./Primitives";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
+import { Dropdown, Tooltip, useDismissiblePopover } from "./Primitives";
 import { useConfigDumpMode, useGatewayConfig } from "../hooks";
+import { currentLanguage, setLanguage, type AppLanguage } from "../i18n";
 import logoDark from "../assets/agw-dark.svg";
 import logoLight from "../assets/agw-light.svg";
 
@@ -45,25 +50,8 @@ type NavItemConfig = {
   exact?: boolean;
 };
 
-const projectLinks = [
-  {
-    label: "GitHub",
-    href: "https://github.com/agentgateway/agentgateway",
-    icon: Github,
-  },
-  {
-    label: "Documentation",
-    href: "https://agentgateway.dev/docs/standalone/latest/",
-    icon: Globe,
-  },
-  {
-    label: "Feedback",
-    href: "https://github.com/agentgateway/agentgateway/issues/new?title=UI%20feedback%3A%20&body=Thanks%20for%20trying%20the%20agentgateway%20UI.%0A%0AWhat%20happened%3F%0A%0AWhat%20did%20you%20expect%20instead%3F%0A%0AAny%20screenshots%2C%20logs%2C%20or%20config%20that%20would%20help%3F",
-    icon: MessageSquarePlus,
-  },
-] as const;
-
 export function Shell() {
+  const { t } = useTranslation();
   const router = useRouterState();
   const mode = useConfigDumpMode();
   const dumpMode = mode.data?.mode === "dump";
@@ -100,7 +88,25 @@ export function Shell() {
     : config.data
       ? Boolean(config.data.binds?.length)
       : false;
-  const navGroups = navigationGroups({
+  const language = currentLanguage();
+  const projectLinks = [
+    {
+      label: "GitHub",
+      href: "https://github.com/agentgateway/agentgateway",
+      icon: Github,
+    },
+    {
+      label: t("shell.documentation"),
+      href: "https://agentgateway.dev/docs/standalone/latest/",
+      icon: Globe,
+    },
+    {
+      label: t("shell.feedback"),
+      href: "https://github.com/agentgateway/agentgateway/issues/new?title=UI%20feedback%3A%20&body=Thanks%20for%20trying%20the%20agentgateway%20UI.%0A%0AWhat%20happened%3F%0A%0AWhat%20did%20you%20expect%20instead%3F%0A%0AAny%20screenshots%2C%20logs%2C%20or%20config%20that%20would%20help%3F",
+      icon: MessageSquarePlus,
+    },
+  ] as const;
+  const navGroups = navigationGroups(t, {
     hasLlm,
     hasMcp,
     hasTraffic,
@@ -120,25 +126,29 @@ export function Shell() {
   }, [theme]);
 
   useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
+  useEffect(() => {
     setMobileNavOpen(false);
   }, [router.location.pathname]);
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <Link to="/" className="brand" aria-label="agentgateway home">
+        <Link to="/" className="brand" aria-label={t("nav.home")}>
           <img
             className="brand-logo brand-logo-light"
             src={logoLight}
-            alt="agentgateway"
+            alt={tr("copy.agentgateway")}
           />
           <img
             className="brand-logo brand-logo-dark"
             src={logoDark}
-            alt="agentgateway"
+            alt={tr("copy.agentgateway")}
           />
         </Link>
-        <nav className="nav-list" aria-label="Primary">
+        <nav className="nav-list" aria-label={t("shell.primaryNavigation")}>
           {navGroups.map((group) => (
             <NavSection
               key={group.title}
@@ -148,7 +158,7 @@ export function Shell() {
             />
           ))}
         </nav>
-        <div className="sidebar-links" aria-label="Project links">
+        <div className="sidebar-links" aria-label={t("shell.projectLinks")}>
           {projectLinks.map((link) => {
             const Icon = link.icon;
             return (
@@ -185,7 +195,7 @@ export function Shell() {
               {mobileNavOpen ? (
                 <nav
                   className="mobile-nav-menu"
-                  aria-label="Primary"
+                  aria-label={t("shell.primaryNavigation")}
                   role="menu"
                 >
                   {navGroups.map((group) => (
@@ -200,15 +210,31 @@ export function Shell() {
               ) : null}
             </div>
             <span className="eyebrow">
-              {eyebrowForPath(router.location.pathname)}
+              {eyebrowForPath(router.location.pathname, t)}
             </span>
           </div>
           <div className="topbar-controls">
-            <Tooltip content="Toggle theme">
+            <Dropdown
+              className="language-select"
+              ariaLabel={t("language.select")}
+              value={language}
+              triggerIcon={<Languages size={16} aria-hidden="true" />}
+              options={[
+                { value: "en", label: t("language.english") },
+                {
+                  value: "zh-CN",
+                  label: t("language.simplifiedChinese"),
+                },
+              ]}
+              onChange={(value) => {
+                void setLanguage(value as AppLanguage);
+              }}
+            />
+            <Tooltip content={t("shell.toggleTheme")}>
               <button
                 className="icon-button"
                 type="button"
-                aria-label="Toggle theme"
+                aria-label={t("shell.toggleTheme")}
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               >
                 {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
@@ -224,74 +250,89 @@ export function Shell() {
   );
 }
 
-function navigationGroups(options: {
-  hasBinds: boolean;
-  hasLlm: boolean;
-  hasMcp: boolean;
-  hasTraffic: boolean;
-  dumpMode: boolean;
-}): ReadonlyArray<{ title: string; items: readonly NavItemConfig[] }> {
+function navigationGroups(
+  t: TFunction,
+  options: {
+    hasBinds: boolean;
+    hasLlm: boolean;
+    hasMcp: boolean;
+    hasTraffic: boolean;
+    dumpMode: boolean;
+  },
+): ReadonlyArray<{ title: string; items: readonly NavItemConfig[] }> {
   const groups: Array<{ title: string; items: readonly NavItemConfig[] }> = [
     {
-      title: "Gateway",
-      items: [{ to: "/", label: "Home", icon: Home }],
+      title: t("nav.gateway"),
+      items: [{ to: "/", label: t("nav.home"), icon: Home }],
     },
   ];
   if (!options.dumpMode) {
     groups.push({
-      title: "LLM",
+      title: t("nav.llm"),
       items: options.hasLlm
         ? [
-            { to: "/llm/models", label: "Models", icon: Bot },
-            { to: "/llm/providers", label: "Providers", icon: Boxes },
+            { to: "/llm/models", label: t("nav.models"), icon: Bot },
+            { to: "/llm/providers", label: t("nav.providers"), icon: Boxes },
 
             {
               to: "/llm/policies",
-              label: "Policies",
+              label: t("nav.policies"),
               icon: Bolt,
               groupStart: true,
             },
-            { to: "/llm/guardrails", label: "Guardrails", icon: Shield },
-            { to: "/llm/keys", label: "Virtual API Keys", icon: KeyRound },
-            { to: "/llm/costs", label: "Costs", icon: Coins },
+            { to: "/llm/guardrails", label: t("nav.guardrails"), icon: Shield },
+            { to: "/llm/keys", label: t("nav.keys"), icon: KeyRound },
+            { to: "/llm/costs", label: t("nav.costs"), icon: Coins },
 
             {
               to: "/llm/analytics",
-              label: "Analytics",
+              label: t("nav.analytics"),
               icon: BarChart3,
               groupStart: true,
             },
-            { to: "/llm/logs", label: "Logs", icon: ScrollText },
+            { to: "/llm/logs", label: t("nav.logs"), icon: ScrollText },
 
             {
               to: "/llm/client-setup",
-              label: "Client Setup",
+              label: t("nav.clientSetup"),
               icon: Cable,
               groupStart: true,
             },
-            { to: "/llm/playground", label: "Chat Playground", icon: Play },
+            {
+              to: "/llm/playground",
+              label: t("nav.chatPlayground"),
+              icon: Play,
+            },
           ]
         : [
             {
               to: "/llm/get-started",
-              label: "Get started",
+              label: t("nav.getStarted"),
               icon: Bot,
               placeholder: true,
             },
           ],
     });
     groups.push({
-      title: "MCP",
+      title: t("nav.mcp"),
       items: options.hasMcp
         ? [
-            { to: "/mcp/servers", label: "Servers", icon: Server },
-            { to: "/mcp/policies", label: "Policies", icon: ShieldCheck },
-            { to: "/mcp/playground", label: "Tool Playground", icon: Play },
+            { to: "/mcp/servers", label: t("nav.servers"), icon: Server },
+            {
+              to: "/mcp/policies",
+              label: t("nav.policies"),
+              icon: ShieldCheck,
+            },
+            {
+              to: "/mcp/playground",
+              label: t("nav.toolPlayground"),
+              icon: Play,
+            },
           ]
         : [
             {
               to: "/mcp/get-started",
-              label: "Get started",
+              label: t("nav.getStarted"),
               icon: Server,
               placeholder: true,
             },
@@ -299,51 +340,63 @@ function navigationGroups(options: {
     });
   }
   groups.push({
-    title: "Traffic",
+    title: t("nav.traffic"),
     items: options.dumpMode
       ? [
-          { to: "/traffic/listeners", label: "Listeners", icon: Network },
-          { to: "/traffic/routes", label: "Routes", icon: Route },
-          { to: "/traffic/policies", label: "Policies", icon: ShieldCheck },
+          {
+            to: "/traffic/listeners",
+            label: t("nav.listeners"),
+            icon: Network,
+          },
+          { to: "/traffic/routes", label: t("nav.routes"), icon: Route },
+          {
+            to: "/traffic/policies",
+            label: t("nav.policies"),
+            icon: ShieldCheck,
+          },
         ]
       : options.hasTraffic
         ? [
-            { to: "/traffic/gateways", label: "Gateways", icon: Network },
+            {
+              to: "/traffic/gateways",
+              label: t("nav.gateways"),
+              icon: Network,
+            },
             ...(options.hasBinds
               ? [
                   {
                     to: "/traffic/listeners",
-                    label: "Listeners",
+                    label: t("nav.listeners"),
                     icon: Network,
                   },
                 ]
               : []),
-            { to: "/traffic/routes", label: "Routes", icon: Route },
+            { to: "/traffic/routes", label: t("nav.routes"), icon: Route },
           ]
         : [
             {
               to: "/traffic/get-started",
-              label: "Get started",
+              label: t("nav.getStarted"),
               icon: Network,
               placeholder: true,
             },
           ],
   });
   groups.push({
-    title: "Tools",
+    title: t("nav.tools"),
     items: options.dumpMode
-      ? [{ to: "/cel", label: "CEL Playground", icon: Braces }]
+      ? [{ to: "/cel", label: t("nav.celPlayground"), icon: Braces }]
       : [
-          { to: "/cel", label: "CEL Playground", icon: Braces },
+          { to: "/cel", label: t("nav.celPlayground"), icon: Braces },
           {
             to: "/raw-config",
-            label: "Raw Configuration",
+            label: t("nav.rawConfiguration"),
             icon: FileCode2,
             exact: true,
           },
           {
             to: "/settings",
-            label: "Settings",
+            label: t("nav.settings"),
             icon: SlidersHorizontal,
           },
         ],
@@ -428,17 +481,17 @@ function MobileNavItem(props: {
   );
 }
 
-function eyebrowForPath(path: string) {
-  if (path === "/") return "Gateway overview";
-  if (path.startsWith("/mcp")) return "MCP configuration";
-  if (path.startsWith("/traffic")) return "Traffic configuration";
+function eyebrowForPath(path: string, t: TFunction) {
+  if (path === "/") return t("shell.gatewayOverview");
+  if (path.startsWith("/mcp")) return t("shell.mcpConfiguration");
+  if (path.startsWith("/traffic")) return t("shell.trafficConfiguration");
   if (
     path.startsWith("/cel") ||
     path.startsWith("/raw-config") ||
     path.startsWith("/settings")
   )
-    return "Policy tools";
-  return "LLM configuration";
+    return t("shell.policyTools");
+  return t("shell.llmConfiguration");
 }
 
 function NavItem(props: {

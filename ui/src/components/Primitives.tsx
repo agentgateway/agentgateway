@@ -9,6 +9,7 @@ import {
   XCircle,
 } from "lucide-react";
 import yaml from "js-yaml";
+import { useTranslation } from "react-i18next";
 import {
   useEffect,
   useId,
@@ -17,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import i18n, { currentLanguage } from "../i18n";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -94,7 +96,9 @@ export function Dropdown(props: {
   allowEmpty?: boolean;
   disabled?: boolean;
   showSelectedDescription?: boolean;
+  triggerIcon?: ReactNode;
 }) {
+  const { t } = useTranslation();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -293,9 +297,12 @@ export function Dropdown(props: {
           <DropdownOptionContent
             option={selected}
             showDescription={props.showSelectedDescription}
+            leadingIcon={props.triggerIcon}
           />
         ) : (
-          <span className="muted">{props.placeholder ?? "No options"}</span>
+          <span className="muted">
+            {props.placeholder ?? t("common.noOptions")}
+          </span>
         )}
         <ChevronDown size={16} />
       </button>
@@ -314,11 +321,13 @@ export function Dropdown(props: {
               aria-expanded={open}
               aria-controls={`${id}-listbox`}
               aria-activedescendant={activeOptionId}
-              aria-label={`Search ${props.ariaLabel}`}
+              aria-label={t("common.search", { label: props.ariaLabel })}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={onComboboxKeyDown}
-              placeholder={`Search ${props.ariaLabel.toLowerCase()}...`}
+              placeholder={t("common.searchPlaceholder", {
+                label: props.ariaLabel.toLowerCase(),
+              })}
             />
           ) : null}
           {filteredOptions.map((option, index) => (
@@ -346,7 +355,7 @@ export function Dropdown(props: {
             </div>
           ))}
           {filteredOptions.length === 0 ? (
-            <div className="custom-select-empty">No matches</div>
+            <div className="custom-select-empty">{t("common.noMatches")}</div>
           ) : null}
         </div>
       ) : null}
@@ -357,10 +366,11 @@ export function Dropdown(props: {
 function DropdownOptionContent(props: {
   option: { label: ReactNode; description?: ReactNode; icon?: ReactNode };
   showDescription?: boolean;
+  leadingIcon?: ReactNode;
 }) {
   return (
     <span className="custom-select-value">
-      {props.option.icon}
+      {props.leadingIcon ?? props.option.icon}
       <span className="custom-select-copy">
         <span>{props.option.label}</span>
         {props.showDescription && props.option.description ? (
@@ -578,6 +588,7 @@ export function Drawer(props: {
   dirty?: boolean;
   saving?: boolean;
 }) {
+  const { t } = useTranslation();
   const drawerRef = useRef<HTMLElement>(null);
   const drawerId = useRef(Symbol("drawer"));
   const [formChanged, setFormChanged] = useState(false);
@@ -707,11 +718,11 @@ export function Drawer(props: {
             <h3 id="drawer-title">{props.title}</h3>
             <div className="drawer-header-actions">
               {props.headerActions}
-              <Tooltip content="Close">
+              <Tooltip content={t("common.close")}>
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label="Close"
+                  aria-label={t("common.close")}
                   onClick={requestClose}
                 >
                   <X size={17} />
@@ -731,16 +742,16 @@ export function Drawer(props: {
       </div>
       {confirmClose ? (
         <ConfirmDialog
-          title="Discard unsaved changes?"
+          title={t("drawer.discardUnsavedChanges")}
           destructive
-          confirmLabel="Discard changes"
+          confirmLabel={t("common.discardChanges")}
           onCancel={() => setConfirmClose(false)}
           onConfirm={() => {
             setConfirmClose(false);
             props.onClose();
           }}
         >
-          <p>Your changes have not been saved and will be lost.</p>
+          <p>{t("drawer.unsavedChangesMessage")}</p>
         </ConfirmDialog>
       ) : null}
     </>
@@ -757,6 +768,7 @@ export function ConfirmDialog(props: {
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -823,7 +835,7 @@ export function ConfirmDialog(props: {
         ) : null}
         <div className="confirm-dialog-footer">
           <button className="button" type="button" onClick={props.onCancel}>
-            {props.cancelLabel ?? "Cancel"}
+            {props.cancelLabel ?? t("common.cancel")}
           </button>
           <button
             className={props.destructive ? "button danger" : "button primary"}
@@ -831,7 +843,7 @@ export function ConfirmDialog(props: {
             disabled={props.confirmDisabled}
             onClick={props.onConfirm}
           >
-            {props.confirmLabel ?? "Confirm"}
+            {props.confirmLabel ?? t("common.confirm")}
           </button>
         </div>
       </div>
@@ -985,13 +997,13 @@ function highlightYamlLine(line: string) {
 
 export function formatNumber(value: number | null | undefined) {
   return typeof value === "number"
-    ? new Intl.NumberFormat().format(value)
-    : "n/a";
+    ? new Intl.NumberFormat(currentLanguage()).format(value)
+    : i18n.t("common.notAvailable");
 }
 
 export function formatDate(value: string | null | undefined) {
-  if (!value) return "n/a";
-  return new Intl.DateTimeFormat(undefined, {
+  if (!value) return i18n.t("common.notAvailable");
+  return new Intl.DateTimeFormat(currentLanguage(), {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -1001,10 +1013,12 @@ export function formatDate(value: string | null | undefined) {
 }
 
 export function formatRelativeTime(value: string | null | undefined) {
-  if (!value) return "n/a";
+  if (!value) return i18n.t("common.notAvailable");
   const deltaMs = new Date(value).getTime() - Date.now();
   const abs = Math.abs(deltaMs);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const rtf = new Intl.RelativeTimeFormat(currentLanguage(), {
+    numeric: "auto",
+  });
   if (abs < 60_000) return rtf.format(Math.round(deltaMs / 1_000), "second");
   if (abs < 3_600_000)
     return rtf.format(Math.round(deltaMs / 60_000), "minute");

@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -302,8 +303,8 @@ export function LogsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Logs"
-        description="Inspect recent LLM calls and request/response payloads."
+        title={tr("copy.logs")}
+        description={tr("copy.inspectRecentLlmCallsAndRequestResponsePayloads")}
         actions={
           <div className="button-row">
             <button
@@ -312,7 +313,7 @@ export function LogsPage() {
               onClick={() => setSettings("logs")}
             >
               <Settings size={16} />
-              Settings
+              {tr("copy.settings")}
             </button>
             <button
               className="button"
@@ -321,18 +322,18 @@ export function LogsPage() {
               onClick={load}
             >
               <RefreshCw size={16} />
-              Refresh
+              {tr("copy.refresh")}
             </button>
           </div>
         }
       />
       {error ? (
-        <StatusBanner state="bad" title="Logs API error">
+        <StatusBanner state="bad" title={tr("copy.logsApiError")}>
           {error}
         </StatusBanner>
       ) : null}
       {updateConfig.isError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {updateConfig.error.message}
         </StatusBanner>
       ) : null}
@@ -350,8 +351,8 @@ export function LogsPage() {
                   label: value,
                 }))}
                 values={logFilters[dimension]}
-                placeholder={`All ${meta.filterLabel.toLowerCase()}`}
-                allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+                placeholder={tr("copy.allValue", meta.filterLabel)}
+                allLabel={tr("copy.allValue", meta.filterLabel)}
                 onChange={(values) =>
                   setLogFilters((current) => ({
                     ...current,
@@ -363,19 +364,19 @@ export function LogsPage() {
           })}
           <MultiCheckboxDropdown
             kind="filter"
-            label="HTTP status"
+            label={tr("copy.httpStatus")}
             options={[
-              { value: "200", label: "200 OK" },
-              { value: "400", label: "400 Bad request" },
-              { value: "401", label: "401 Unauthorized" },
-              { value: "403", label: "403 Forbidden" },
-              { value: "404", label: "404 Not found" },
-              { value: "429", label: "429 Rate limited" },
-              { value: "500", label: "500 Server error" },
+              { value: "200", label: tr("copy.text200Ok") },
+              { value: "400", label: tr("copy.text400BadRequest") },
+              { value: "401", label: tr("copy.text401Unauthorized") },
+              { value: "403", label: tr("copy.text403Forbidden") },
+              { value: "404", label: tr("copy.text404NotFound") },
+              { value: "429", label: tr("copy.text429RateLimited") },
+              { value: "500", label: tr("copy.text500ServerError") },
             ]}
             values={status ? [status] : []}
-            placeholder="Any status"
-            allLabel="Any status"
+            placeholder={tr("copy.anyStatus")}
+            allLabel={tr("copy.anyStatus")}
             onChange={(values) => setStatus(values.at(-1) ?? "")}
           />
           <label className="toggle-row logs-stream-toggle">
@@ -384,7 +385,7 @@ export function LogsPage() {
               checked={stream}
               onChange={(event) => setStream(event.target.checked)}
             />
-            Stream
+            {tr("copy.stream")}
           </label>
           {hasAnalyticsFilters(logFilters) || status ? (
             <button
@@ -395,7 +396,7 @@ export function LogsPage() {
                 setStatus("");
               }}
             >
-              Clear filters
+              {tr("copy.clearFilters")}
             </button>
           ) : null}
         </div>
@@ -404,23 +405,25 @@ export function LogsPage() {
       <Panel className="logs-results-panel">
         <div className="logs-section-header">
           <div>
-            <h3>Recent calls</h3>
+            <h3>{tr("copy.recentCalls")}</h3>
             <p>
               {loading
-                ? "Refreshing..."
-                : `${formatNumber(visibleLogs.length)} rows`}
+                ? tr("copy.refreshing")
+                : tr("copy.valueRows", formatNumber(visibleLogs.length))}
             </p>
           </div>
-          {stream ? <span className="badge ok">streaming</span> : null}
+          {stream ? (
+            <span className="badge ok">{tr("copy.streaming")}</span>
+          ) : null}
         </div>
         <div className="log-call-list">
           {visibleLogs.length === 0 ? (
             <EmptyState
-              title={loading ? "Loading logs" : "No log entries"}
+              title={tr(loading ? "copy.loadingLogs" : "copy.noLogEntries")}
               description={
                 loading
-                  ? "Fetching recent LLM calls."
-                  : "No LLM calls match the current filters."
+                  ? tr("copy.fetchingRecentLlmCalls")
+                  : tr("copy.noLlmCallsMatchTheCurrentFilters")
               }
             />
           ) : null}
@@ -495,7 +498,7 @@ function LogsSettingsDrawer(props: {
   };
   return (
     <Drawer
-      title="Log settings"
+      title={tr("copy.logSettings_12oqjpq")}
       onClose={props.onClose}
       dirty={dirty}
       saving={props.saving}
@@ -521,10 +524,9 @@ function LogsSettingsDrawer(props: {
           onChange={(event) => setEnabled(event.target.checked)}
         />
         <span>
-          <strong>Include prompts and completions in logs</strong>
+          <strong>{tr("copy.includePromptsAndCompletionsInLogs")}</strong>
           <small>
-            Adds `gen_ai.prompt` and `gen_ai.completion` attributes to access
-            logs.
+            {tr("copy.addsGenAiPromptAndGenAiCompletionAttributesToAccessLogs")}
           </small>
         </span>
       </label>
@@ -534,17 +536,20 @@ function LogsSettingsDrawer(props: {
             <User size={16} />
           </span>
           <div>
-            <h4>Request log identity</h4>
+            <h4>{tr("copy.requestLogIdentity")}</h4>
             <p>
-              Optional CEL expressions for populating user and group attributes
-              in database logs. If not set a default will be used.
+              {tr(
+                "copy.optionalCelExpressionsForPopulatingUserAndGroupAttributesInDatabaseLogsIfNotSetA_1qxb9rt",
+              )}
             </p>
           </div>
         </div>
         <div className="policy-form-section-body">
           <FieldGroup
-            label="User attribute"
-            tooltip="CEL expression used to populate the agentgateway.user request log attribute."
+            label={tr("copy.userAttribute")}
+            tooltip={tr(
+              "copy.celExpressionUsedToPopulateTheAgentgatewayUserRequestLogAttribute_r3ojz7",
+            )}
           >
             <MiniMonacoEditor
               className="micro"
@@ -555,8 +560,10 @@ function LogsSettingsDrawer(props: {
             />
           </FieldGroup>
           <FieldGroup
-            label="Group attribute"
-            tooltip="CEL expression used to populate the agentgateway.group request log attribute."
+            label={tr("copy.groupAttribute")}
+            tooltip={tr(
+              "copy.celExpressionUsedToPopulateTheAgentgatewayGroupRequestLogAttribute_n5btzx",
+            )}
           >
             <MiniMonacoEditor
               className="micro"
@@ -569,7 +576,7 @@ function LogsSettingsDrawer(props: {
         </div>
       </section>
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}
@@ -832,8 +839,8 @@ export function AnalyticsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Analytics"
-        description="Analyze LLM traffic by model, user, and provider."
+        title={tr("copy.analytics")}
+        description={tr("copy.analyzeLlmTrafficByModelUserAndProvider")}
         actions={
           <div className="button-row">
             <AnalyticsExportDropdown
@@ -846,7 +853,7 @@ export function AnalyticsPage() {
         }
       />
       {error ? (
-        <StatusBanner state="bad" title="Analytics API error">
+        <StatusBanner state="bad" title={tr("copy.analyticsApiError")}>
           {error}
         </StatusBanner>
       ) : null}
@@ -855,14 +862,14 @@ export function AnalyticsPage() {
           <div className="analytics-controls-left">
             <MultiCheckboxDropdown
               kind="group"
-              label="Group by"
+              label={tr("copy.groupBy")}
               options={ANALYTICS_DIMENSIONS.map((dimension) => ({
                 value: dimension.value,
                 label: dimension.label,
               }))}
               values={selectedGroupBy}
-              placeholder="Total"
-              allLabel="Total"
+              placeholder={tr("copy.total")}
+              allLabel={tr("copy.total")}
               onChange={updateGroupBy}
             />
             {ANALYTICS_DIMENSIONS.map((meta) => {
@@ -877,22 +884,22 @@ export function AnalyticsPage() {
                     label: value,
                   }))}
                   values={filters[dimension]}
-                  placeholder={`All ${meta.filterLabel.toLowerCase()}`}
-                  allLabel={`All ${meta.filterLabel.toLowerCase()}`}
+                  placeholder={tr("copy.allValue", meta.filterLabel)}
+                  allLabel={tr("copy.allValue", meta.filterLabel)}
                   onChange={(values) => updateFilter(dimension, values)}
                 />
               );
             })}
           </div>
           <div className="analytics-controls-right">
-            <FieldGroup label="Measure">
+            <FieldGroup label={tr("copy.measure")}>
               <EnumSelector
                 ariaLabel="Measure"
                 value={metric}
                 options={[
-                  { value: "tokens", label: "Tokens" },
-                  { value: "cost", label: "Cost" },
-                  { value: "requests", label: "Requests" },
+                  { value: "tokens", label: tr("copy.tokens") },
+                  { value: "cost", label: tr("copy.cost") },
+                  { value: "requests", label: tr("copy.requests") },
                 ]}
                 onChange={setMetric}
               />
@@ -903,11 +910,14 @@ export function AnalyticsPage() {
       <Panel className="monitoring-activity-card">
         <div className="monitoring-card-header">
           <div>
-            <h3>Traffic over time</h3>
+            <h3>{tr("copy.trafficOverTime")}</h3>
             <p>
               {loading
-                ? "Loading analytics..."
-                : `${formatCost(totalCost)} / ${formatNumber(totalTokens)} tokens / ${formatNumber(totalRequests)} calls`}
+                ? tr("copy.loadingAnalytics")
+                : `${formatCost(totalCost)} / ${tr(
+                    "copy.valueTokensValueCalls",
+                    [formatNumber(totalTokens), formatNumber(totalRequests)],
+                  )}`}
             </p>
           </div>
           <span className="muted-copy">{logTimeRangeLabel(timeRange)}</span>
@@ -921,11 +931,21 @@ export function AnalyticsPage() {
       <Panel className="monitoring-activity-card">
         <div className="monitoring-card-header">
           <div>
-            <h3>Breakdown</h3>
+            <h3>{tr("copy.breakdown")}</h3>
             <p>
               {selectedGroupBy.length
-                ? `${analyticsMetricLabel(metric)} by ${selectedGroupBy.map((dimension) => ANALYTICS_DIMENSIONS.find((item) => item.value === dimension)?.label.toLowerCase()).join(", ")}`
-                : `${analyticsMetricLabel(metric)} total`}
+                ? tr("copy.valueByValue", [
+                    analyticsMetricLabel(metric),
+                    selectedGroupBy
+                      .map(
+                        (dimension) =>
+                          ANALYTICS_DIMENSIONS.find(
+                            (item) => item.value === dimension,
+                          )?.label,
+                      )
+                      .join(", "),
+                  ])
+                : tr("copy.valueTotal", analyticsMetricLabel(metric))}
             </p>
           </div>
         </div>
@@ -959,7 +979,7 @@ function AnalyticsExportDropdown(props: {
         onClick={() => setOpen((current) => !current)}
       >
         <Download size={16} />
-        Export
+        {tr("copy.export")}
         <ChevronDown size={15} />
       </button>
       {open ? (
@@ -972,7 +992,7 @@ function AnalyticsExportDropdown(props: {
               setOpen(false);
             }}
           >
-            CSV
+            {tr("copy.csv")}
           </button>
         </div>
       ) : null}
@@ -1032,9 +1052,9 @@ function csvCell(value: unknown) {
 }
 
 function analyticsMetricLabel(metric: AnalyticsMetric) {
-  if (metric === "requests") return "Requests";
-  if (metric === "cost") return "Cost";
-  return "Tokens";
+  if (metric === "requests") return tr("copy.requests");
+  if (metric === "cost") return tr("copy.cost");
+  return tr("copy.tokens");
 }
 
 function formatCost(value: number) {
@@ -1189,20 +1209,28 @@ function LogCallRow(props: {
               ) : null}
             </span>
             <span className="log-identity-chip">
-              provider: {props.entry.genAi.providerName ?? "unknown provider"}
+              {tr("copy.provider_1k5qy2a")}
+              {props.entry.genAi.providerName ?? "unknown provider"}
             </span>
             {identity.user ? (
-              <span className="log-identity-chip">user: {identity.user}</span>
+              <span className="log-identity-chip">
+                {tr("copy.user_19x0vko")}
+                {identity.user}
+              </span>
             ) : null}
             {identity.group ? (
-              <span className="log-identity-chip">group: {identity.group}</span>
+              <span className="log-identity-chip">
+                {tr("copy.group_sf1daa")}
+                {identity.group}
+              </span>
             ) : null}
           </span>
         </span>
         <span className="log-call-metrics">
           <span>
             <Clock3 size={14} />
-            {formatNumber(props.entry.durationMs)} ms
+            {formatNumber(props.entry.durationMs)}
+            {tr("copy.ms")}
           </span>
           <TokenSummary entry={props.entry} />
           <CostSummary entry={props.entry} />
@@ -1213,7 +1241,7 @@ function LogCallRow(props: {
         <div className="expanded-log">
           <div className="editor-title">
             <div>
-              <h3>Request detail</h3>
+              <h3>{tr("copy.requestDetail")}</h3>
             </div>
             <button
               className="button"
@@ -1225,7 +1253,10 @@ function LogCallRow(props: {
             </button>
           </div>
           {props.loading ? (
-            <StatusBanner state="loading" title="Loading log payload" />
+            <StatusBanner
+              state="loading"
+              title={tr("copy.loadingLogPayload")}
+            />
           ) : null}
           <LogDetailView
             entry={props.detail}
@@ -1249,7 +1280,7 @@ function LogDetailView(props: {
       </div>
 
       {props.entry.error ? (
-        <StatusBanner state="bad" title="Gateway error">
+        <StatusBanner state="bad" title={tr("copy.gatewayError")}>
           {props.entry.error}
         </StatusBanner>
       ) : null}
@@ -1257,7 +1288,7 @@ function LogDetailView(props: {
       {messages.length ? (
         <section className="log-conversation">
           <div className="section-heading compact">
-            <h3>Conversation</h3>
+            <h3>{tr("copy.conversation")}</h3>
           </div>
           <div className="mini-chat log-mini-chat">
             {messages.map((message, index) => (
@@ -1269,25 +1300,25 @@ function LogDetailView(props: {
           </div>
         </section>
       ) : (
-        <StatusBanner state="info" title="Prompt logging is off">
-          Enable "Include prompts and completions in logs" in{" "}
+        <StatusBanner state="info" title={tr("copy.promptLoggingIsOff")}>
+          {tr("copy.enableIncludePromptsAndCompletionsInLogsIn")}{" "}
           {props.onOpenSettings ? (
             <button
               className="link-button"
               type="button"
               onClick={props.onOpenSettings}
             >
-              log settings
+              {tr("copy.logSettings")}
             </button>
           ) : (
             "log settings"
           )}{" "}
-          to capture request and response payloads.
+          {tr("copy.toCaptureRequestAndResponsePayloads")}
         </StatusBanner>
       )}
 
       <details className="log-raw-details">
-        <summary>Raw log JSON</summary>
+        <summary>{tr("copy.rawLogJson")}</summary>
         <JsonBlock value={props.entry} />
       </details>
     </div>
@@ -1306,15 +1337,21 @@ function LogModelFlow(props: { entry: LogEntry }) {
     <section className="log-debug-panel model-flow">
       <div className="log-debug-panel-title">
         <Route size={15} />
-        <h3>Model{hasRouting ? " flow" : ""}</h3>
+        <h3>
+          {tr("copy.model")}
+          {hasRouting ? " flow" : ""}
+        </h3>
       </div>
       {hasRouting ? (
         <div className="model-flow-steps">
-          <ModelFlowStep label="Client requested" value={original ?? request} />
+          <ModelFlowStep
+            label={tr("copy.clientRequested")}
+            value={original ?? request}
+          />
           <ArrowRight size={15} />
-          <ModelFlowStep label="Gateway sent" value={request} />
+          <ModelFlowStep label={tr("copy.gatewaySent")} value={request} />
           <ArrowRight size={15} />
-          <ModelFlowStep label="Provider returned" value={response} />
+          <ModelFlowStep label={tr("copy.providerReturned")} value={response} />
         </div>
       ) : (
         <div className="model-flow-simple">
@@ -1329,8 +1366,18 @@ function LogModelFlow(props: { entry: LogEntry }) {
       <div className="log-debug-note">
         <span>{props.entry.genAi.providerName ?? "unknown provider"}</span>
         <span>{props.entry.genAi.operationName ?? "unknown operation"}</span>
-        {identity.user ? <span>user: {identity.user}</span> : null}
-        {identity.group ? <span>group: {identity.group}</span> : null}
+        {identity.user ? (
+          <span>
+            {tr("copy.user_19x0vko")}
+            {identity.user}
+          </span>
+        ) : null}
+        {identity.group ? (
+          <span>
+            {tr("copy.group_sf1daa")}
+            {identity.group}
+          </span>
+        ) : null}
       </div>
     </section>
   );
@@ -1392,7 +1439,7 @@ function LogTimingPanel(props: { entry: LogEntry }) {
     <section className="log-debug-panel">
       <div className="log-debug-panel-title">
         <Clock3 size={15} />
-        <h3>Timing and usage</h3>
+        <h3>{tr("copy.timingAndUsage")}</h3>
       </div>
       {showBar ? (
         <TokenBar
@@ -1403,48 +1450,56 @@ function LogTimingPanel(props: { entry: LogEntry }) {
       ) : null}
       <div className="log-fact-list">
         <LogFact
-          label="Duration"
+          label={tr("copy.duration")}
           value={`${formatNumber(props.entry.durationMs)} ms`}
         />
-        <UsageFact label="Input" tokens={inputTokens} cost={inputCost} />
-        <UsageFact label="Output" tokens={outputTokens} cost={outputCost} />
+        <UsageFact
+          label={tr("copy.input")}
+          tokens={inputTokens}
+          cost={inputCost}
+        />
+        <UsageFact
+          label={tr("copy.output")}
+          tokens={outputTokens}
+          cost={outputCost}
+        />
         {cacheReadTokens || cacheReadCost ? (
           <UsageFact
-            label="Cache read"
+            label={tr("copy.cacheRead")}
             tokens={cacheReadTokens}
             cost={cacheReadCost}
           />
         ) : null}
         {cacheWriteTokens || cacheWriteCost ? (
           <UsageFact
-            label="Cache write"
+            label={tr("copy.cacheWrite")}
             tokens={cacheWriteTokens}
             cost={cacheWriteCost}
           />
         ) : null}
         {reasoningTokens || reasoningCost ? (
           <UsageFact
-            label="Reasoning"
+            label={tr("copy.reasoning")}
             tokens={reasoningTokens}
             cost={reasoningCost}
           />
         ) : null}
         {inputAudioTokens || inputAudioCost ? (
           <UsageFact
-            label="Audio in"
+            label={tr("copy.audioIn")}
             tokens={inputAudioTokens}
             cost={inputAudioCost}
           />
         ) : null}
         {outputAudioTokens || outputAudioCost ? (
           <UsageFact
-            label="Audio out"
+            label={tr("copy.audioOut")}
             tokens={outputAudioTokens}
             cost={outputAudioCost}
           />
         ) : null}
         <UsageFact
-          label="Total"
+          label={tr("copy.total")}
           tokens={totalTokens}
           cost={totalCost}
           alwaysShow
@@ -1563,7 +1618,7 @@ function ToolCallRow(props: { call: { name: string; arguments?: unknown } }) {
     summary !== "{}";
   return (
     <div className="tool-call-row">
-      <span className="tool-pill">Tool call</span>
+      <span className="tool-pill">{tr("copy.toolCall")}</span>
       <strong>{props.call.name}</strong>
       {hasArgs ? (
         <div className="tool-call-args">
@@ -1583,7 +1638,7 @@ function ToolCallRow(props: { call: { name: string; arguments?: unknown } }) {
           </button>
         </div>
       ) : (
-        <small className="tool-call-args-summary">no args</small>
+        <small className="tool-call-args-summary">{tr("copy.noArgs")}</small>
       )}
     </div>
   );
@@ -1601,7 +1656,7 @@ function ToolResultRow(props: { name?: string; content: string }) {
   })();
   return (
     <div className="tool-call-row">
-      <span className="tool-pill">Tool result</span>
+      <span className="tool-pill">{tr("copy.toolResult")}</span>
       <strong>{props.name || "unknown"}</strong>
       <div className="tool-call-args">
         {expanded ? (
@@ -1882,7 +1937,7 @@ function CopyButton(props: { value: string }) {
     <button
       className={`copy-button${copied ? " copied" : ""}`}
       type="button"
-      aria-label="Copy to clipboard"
+      aria-label={tr("copy.copyToClipboard")}
       onClick={handleCopy}
     >
       {copied ? <Check size={11} /> : <Copy size={11} />}

@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
@@ -83,13 +84,14 @@ export function ExtAuthzPolicyEditor(props: {
   if (unsupportedTarget) {
     return (
       <UnsupportedYamlFallback
-        title="Unsupported target type"
+        title={tr("copy.unsupportedTargetType")}
         value={props.extAuthz ?? {}}
         schema={props.help.node(["$defs", "ExtAuthz"])}
         help={props.help}
       >
-        This policy uses a {unsupportedTargetLabel(props.extAuthz)} target. The
-        visual editor currently supports host targets only.
+        {tr("copy.thisPolicyUsesA")}
+        {unsupportedTargetLabel(props.extAuthz)}
+        {tr("copy.targetTheVisualEditorCurrentlySupportsHostTargetsOnly")}
       </UnsupportedYamlFallback>
     );
   }
@@ -146,12 +148,12 @@ export function ExtAuthzPolicyEditor(props: {
       />
       <PolicySection
         icon={<ShieldCheck size={17} />}
-        title="Authorization behavior"
-        description="Choose protocol and fail-open/fail-closed behavior."
+        title={tr("copy.authorizationBehavior")}
+        description={tr("copy.chooseProtocolAndFailOpenFailClosedBehavior")}
       >
         <div className="form-grid">
           <FieldGroup
-            label="Protocol"
+            label={tr("copy.protocol")}
             tooltip={props.help.field<ExtAuthz>("ExtAuthz", "protocol")}
           >
             <EnumSelector
@@ -161,28 +163,28 @@ export function ExtAuthzPolicyEditor(props: {
                 {
                   value: "grpc",
                   label: "gRPC",
-                  description: "Use Envoy external authorization over gRPC.",
+                  description: tr("copy.useEnvoyExternalAuthorizationOverGRpc"),
                 },
                 {
                   value: "http",
                   label: "HTTP",
-                  description: "Call an HTTP authorization service.",
+                  description: tr("copy.callAnHttpAuthorizationService"),
                 },
               ]}
               onChange={setProtocolMode}
             />
           </FieldGroup>
           <FieldGroup
-            label="Failure mode"
+            label={tr("copy.failureMode")}
             tooltip={props.help.field<ExtAuthz>("ExtAuthz", "failureMode")}
           >
             <EnumSelector
               ariaLabel="Failure mode"
               value={failureMode}
               options={[
-                { value: "deny", label: "Deny" },
-                { value: "allow", label: "Allow" },
-                { value: "denyWithStatus", label: "Deny with status" },
+                { value: "deny", label: tr("copy.deny") },
+                { value: "allow", label: tr("copy.allow") },
+                { value: "denyWithStatus", label: tr("copy.denyWithStatus") },
               ]}
               schema={props.help.node(["$defs", "FailureMode4"])}
               onChange={setFailureMode}
@@ -191,7 +193,7 @@ export function ExtAuthzPolicyEditor(props: {
         </div>
         {failureMode === "denyWithStatus" ? (
           <Field
-            label="Deny status"
+            label={tr("copy.denyStatus")}
             tooltip={props.help.field<ExtAuthz>(
               "ExtAuthz",
               "failureMode.denyWithStatus",
@@ -205,7 +207,7 @@ export function ExtAuthzPolicyEditor(props: {
           </Field>
         ) : null}
         <ListEditor
-          label="Include request headers"
+          label={tr("copy.includeRequestHeaders")}
           tooltip={props.help.field<ExtAuthz>(
             "ExtAuthz",
             "includeRequestHeaders",
@@ -221,7 +223,7 @@ export function ExtAuthzPolicyEditor(props: {
             onChange={(event) => setIncludeBody(event.target.checked)}
           />
           <span>
-            <strong>Include request body</strong>
+            <strong>{tr("copy.includeRequestBody")}</strong>
             <small>
               {props.help.field<ExtAuthz>("ExtAuthz", "includeRequestBody")}
             </small>
@@ -230,7 +232,7 @@ export function ExtAuthzPolicyEditor(props: {
         {includeBody ? (
           <div className="form-grid">
             <Field
-              label="Max request bytes"
+              label={tr("copy.maxRequestBytes")}
               tooltip={props.help.field<BodyOptions>(
                 "BodyOptions",
                 "maxRequestBytes",
@@ -248,7 +250,7 @@ export function ExtAuthzPolicyEditor(props: {
               />
             </Field>
             <FieldGroup
-              label="Body options"
+              label={tr("copy.bodyOptions")}
               tooltip={props.help.field<ExtAuthz>(
                 "ExtAuthz",
                 "includeRequestBody",
@@ -263,7 +265,7 @@ export function ExtAuthzPolicyEditor(props: {
                   }
                 />
                 <span>
-                  <strong>Allow partial message</strong>
+                  <strong>{tr("copy.allowPartialMessage")}</strong>
                   <small>
                     {props.help.field<BodyOptions>(
                       "BodyOptions",
@@ -279,7 +281,7 @@ export function ExtAuthzPolicyEditor(props: {
                   onChange={(event) => setPackAsBytes(event.target.checked)}
                 />
                 <span>
-                  <strong>Pack as bytes</strong>
+                  <strong>{tr("copy.packAsBytes")}</strong>
                   <small>
                     {props.help.field<BodyOptions>(
                       "BodyOptions",
@@ -296,11 +298,13 @@ export function ExtAuthzPolicyEditor(props: {
       {protocolMode === "grpc" ? (
         <PolicySection
           icon={<ShieldCheck size={17} />}
-          title="gRPC details"
-          description="Context extensions are static values; metadata values are CEL expressions."
+          title={tr("copy.gRpcDetails")}
+          description={tr(
+            "copy.contextExtensionsAreStaticValuesMetadataValuesAreCelExpressions",
+          )}
         >
           <KeyValueEditor
-            label="Context"
+            label={tr("copy.context")}
             tooltip={props.help.field<ExtAuthz>(
               "ExtAuthz",
               "protocol.grpc.context",
@@ -311,7 +315,7 @@ export function ExtAuthzPolicyEditor(props: {
             onChange={setGrpcContext}
           />
           <KeyValueEditor
-            label="Metadata"
+            label={tr("copy.metadata")}
             tooltip={props.help.field<ExtAuthz>(
               "ExtAuthz",
               "protocol.grpc.metadata",
@@ -326,11 +330,13 @@ export function ExtAuthzPolicyEditor(props: {
       ) : (
         <PolicySection
           icon={<ShieldCheck size={17} />}
-          title="HTTP details"
-          description="Configure the authorization request and response metadata extraction."
+          title={tr("copy.httpDetails")}
+          description={tr(
+            "copy.configureTheAuthorizationRequestAndResponseMetadataExtraction",
+          )}
         >
           <FieldGroup
-            label="Path expression"
+            label={tr("copy.pathExpression")}
             tooltip={props.help.field<ExtAuthz>(
               "ExtAuthz",
               "protocol.http.path",
@@ -341,11 +347,11 @@ export function ExtAuthzPolicyEditor(props: {
               language="cel"
               value={httpPath}
               onChange={setHttpPath}
-              placeholder={'"/oauth2/auth"'}
+              placeholder={tr("copy.oauth2Auth")}
             />
           </FieldGroup>
           <FieldGroup
-            label="Redirect expression"
+            label={tr("copy.redirectExpression")}
             tooltip={props.help.field<ExtAuthz>(
               "ExtAuthz",
               "protocol.http.redirect",
@@ -360,7 +366,7 @@ export function ExtAuthzPolicyEditor(props: {
             />
           </FieldGroup>
           <ListEditor
-            label="Include response headers"
+            label={tr("copy.includeResponseHeaders")}
             tooltip={props.help.field<ExtAuthz>(
               "ExtAuthz",
               "protocol.http.includeResponseHeaders",
@@ -370,7 +376,7 @@ export function ExtAuthzPolicyEditor(props: {
             onChange={setIncludeResponseHeaders}
           />
           <KeyValueEditor
-            label="Add request headers"
+            label={tr("copy.addRequestHeaders")}
             tooltip={props.help.field<ExtAuthz>(
               "ExtAuthz",
               "protocol.http.addRequestHeaders",
@@ -382,7 +388,7 @@ export function ExtAuthzPolicyEditor(props: {
             onChange={setAddRequestHeaders}
           />
           <KeyValueEditor
-            label="Metadata"
+            label={tr("copy.metadata")}
             tooltip={props.help.field<ExtAuthz>(
               "ExtAuthz",
               "protocol.http.metadata",

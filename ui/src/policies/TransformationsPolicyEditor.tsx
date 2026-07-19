@@ -1,3 +1,4 @@
+import { tr, translateText } from "../i18n";
 import { Save } from "lucide-react";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { FieldGroup } from "../components/Primitives";
@@ -42,16 +43,16 @@ export function TransformationsPolicyEditor(props: {
     >
       <TransformSection
         key={`request-${hasTransformContent(request)}`}
-        title="Request transformations"
-        label="request"
+        title={tr("copy.requestTransformations")}
+        kind="request"
         value={request}
         help={props.help}
         onChange={setRequest}
       />
       <TransformSection
         key={`response-${hasTransformContent(response)}`}
-        title="Response transformations"
-        label="response"
+        title={tr("copy.responseTransformations")}
+        kind="response"
         value={response}
         help={props.help}
         onChange={setResponse}
@@ -63,12 +64,12 @@ export function TransformationsPolicyEditor(props: {
 
 function TransformSection(props: {
   title: string;
-  label: "request" | "response";
+  kind: "request" | "response";
   value: TransformDraft;
   help: SchemaHelp;
   onChange: (value: TransformDraft) => void;
 }) {
-  const summary = transformSummary(props.value, props.label);
+  const summary = transformSummary(props.value, props.kind);
 
   return (
     <CollapsiblePolicySection
@@ -78,7 +79,7 @@ function TransformSection(props: {
       defaultOpen={hasTransformContent(props.value)}
     >
       <KeyValueEditor
-        label="Add headers"
+        label={tr("copy.addHeaders")}
         tooltip={props.help.field<LocalTransform>("LocalTransform", "add")}
         values={props.value.add ?? {}}
         keyPlaceholder="header name"
@@ -87,7 +88,7 @@ function TransformSection(props: {
         onChange={(add) => props.onChange({ ...props.value, add })}
       />
       <KeyValueEditor
-        label="Set headers"
+        label={tr("copy.setHeaders")}
         tooltip={props.help.field<LocalTransform>("LocalTransform", "set")}
         values={props.value.set ?? {}}
         keyPlaceholder="header name"
@@ -96,25 +97,25 @@ function TransformSection(props: {
         onChange={(set) => props.onChange({ ...props.value, set })}
       />
       <ListEditor
-        label="Remove headers"
+        label={tr("copy.removeHeaders")}
         tooltip={props.help.field<LocalTransform>("LocalTransform", "remove")}
         values={props.value.remove ?? []}
-        placeholder="header name"
+        placeholder={tr("copy.headerName")}
         onChange={(remove) => props.onChange({ ...props.value, remove })}
       />
       <FieldGroup
-        label="Body expression"
+        label={tr("copy.bodyExpression")}
         tooltip={props.help.field<LocalTransform>("LocalTransform", "body")}
       >
         <MiniMonacoEditor
           language="cel"
           value={props.value.body ?? ""}
           onChange={(body) => props.onChange({ ...props.value, body })}
-          placeholder="CEL expression"
+          placeholder={tr("copy.celExpression")}
         />
       </FieldGroup>
       <KeyValueEditor
-        label="Metadata"
+        label={tr("copy.metadata")}
         tooltip={props.help.field<LocalTransform>("LocalTransform", "metadata")}
         values={props.value.metadata ?? {}}
         keyPlaceholder="metadata key"
@@ -135,8 +136,12 @@ function transformSummary(
   label: "request" | "response",
 ) {
   const count = countTransformOperations(value);
-  if (count === 0) return `No ${label} transformations configured.`;
-  return `${count} ${count === 1 ? "operation" : "operations"} configured.`;
+  if (count === 0)
+    return tr("copy.noValueTransformationsConfigured", [translateText(label)]);
+  return tr("copy.valueValueConfigured", [
+    count,
+    translateText(count === 1 ? "operation" : "operations"),
+  ]);
 }
 
 function countTransformOperations(value: TransformDraft) {

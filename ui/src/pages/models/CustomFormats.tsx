@@ -1,3 +1,4 @@
+import { tr } from "../../i18n";
 import type { Dispatch, SetStateAction } from "react";
 import type { SchemaHelp } from "../../schemaHelp";
 import type {
@@ -94,7 +95,7 @@ export function CustomFormats(props: {
               <span>{formatLabels[type]}</span>
             </label>
             <input
-              aria-label={`${formatLabels[type]} path override`}
+              aria-label={tr("copy.valuePathOverride")}
               disabled={!selected}
               value={selected?.path ?? ""}
               placeholder={props.help.field<ProviderFormatConfig>(

@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { Pencil, Plus, Server, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -93,8 +94,8 @@ export function McpServersPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="MCP Servers"
-        description="Configure MCP targets served by the gateway."
+        title={tr("copy.mcpServers")}
+        description={tr("copy.configureMcpTargetsServedByTheGateway")}
         actions={
           <div className="button-row">
             <button
@@ -103,7 +104,7 @@ export function McpServersPage() {
               onClick={() => setServerDrawer("settings")}
             >
               <SlidersHorizontal size={16} />
-              Settings
+              {tr("copy.settings")}
             </button>
             <button
               className="button primary"
@@ -111,32 +112,35 @@ export function McpServersPage() {
               onClick={openNewServer}
             >
               <Plus size={16} />
-              Add server
+              {tr("copy.addServer")}
             </button>
           </div>
         }
       />
 
       {update.isError && !activeEditing && !settingsOpen ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {update.error.message}
         </StatusBanner>
       ) : null}
       {update.isSuccess ? (
-        <StatusBanner state="ok" title="Configuration saved" />
+        <StatusBanner state="ok" title={tr("copy.configurationSaved")} />
       ) : null}
 
       <Panel>
         {config.isLoading ? (
-          <StatusBanner state="loading" title="Loading MCP servers" />
+          <StatusBanner state="loading" title={tr("copy.loadingMcpServers")} />
         ) : config.isError ? (
-          <StatusBanner state="bad" title="Configuration API unavailable">
+          <StatusBanner
+            state="bad"
+            title={tr("copy.configurationApiUnavailable")}
+          >
             {config.error.message}
           </StatusBanner>
         ) : targets.length === 0 ? (
           <EmptyState
-            title="No MCP servers configured"
-            description="Add a target so the gateway can expose MCP traffic."
+            title={tr("copy.noMcpServersConfigured")}
+            description={tr("copy.addATargetSoTheGatewayCanExposeMcpTraffic")}
             action={
               <button
                 className="button primary"
@@ -144,7 +148,7 @@ export function McpServersPage() {
                 onClick={openNewServer}
               >
                 <Server size={16} />
-                Add server
+                {tr("copy.addServer")}
               </button>
             }
           />
@@ -153,10 +157,10 @@ export function McpServersPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Endpoint</th>
-                  <th>State</th>
+                  <th>{tr("copy.name")}</th>
+                  <th>{tr("copy.type")}</th>
+                  <th>{tr("copy.endpoint")}</th>
+                  <th>{tr("copy.state")}</th>
                   <th />
                 </tr>
               </thead>
@@ -176,17 +180,18 @@ export function McpServersPage() {
                       <td>
                         {warnings.length ? (
                           <span className="badge warn">
-                            {warnings.length} warnings
+                            {warnings.length}
+                            {tr("copy.warnings")}
                           </span>
                         ) : (
-                          <span className="badge ok">ready</span>
+                          <span className="badge ok">{tr("copy.ready")}</span>
                         )}
                       </td>
                       <td className="row-actions">
                         <Tooltip content="Edit server">
                           <button
                             className="icon-button"
-                            aria-label="Edit server"
+                            aria-label={tr("copy.editServer")}
                             type="button"
                             onClick={() => openEditServer(target)}
                           >
@@ -196,7 +201,7 @@ export function McpServersPage() {
                         <Tooltip content="Delete server">
                           <button
                             className="icon-button danger"
-                            aria-label="Delete server"
+                            aria-label={tr("copy.deleteServer")}
                             type="button"
                             disabled={update.isPending}
                             onClick={() => setDeletingServer(target.name)}
@@ -256,9 +261,9 @@ export function McpServersPage() {
       ) : null}
       {deletingServer ? (
         <ConfirmDialog
-          title="Delete MCP server?"
+          title={tr("copy.deleteMcpServer")}
           destructive
-          confirmLabel="Delete server"
+          confirmLabel={tr("copy.deleteServer")}
           confirmDisabled={update.isPending}
           onCancel={() => setDeletingServer(null)}
           onConfirm={() =>
@@ -268,8 +273,9 @@ export function McpServersPage() {
           }
         >
           <p>
-            Delete <strong>{deletingServer}</strong>? Traffic can no longer be
-            sent to this target.
+            {tr("copy.delete")}
+            <strong>{deletingServer}</strong>
+            {tr("copy.trafficCanNoLongerBeSentToThisTarget")}
           </p>
         </ConfirmDialog>
       ) : null}
@@ -287,7 +293,7 @@ export function McpSettingsDrawer(props: {
   onSave: (settings: McpSettingsPatch) => void;
 }) {
   return (
-    <Drawer title="Settings" onClose={props.onClose}>
+    <Drawer title={tr("copy.settings")} onClose={props.onClose}>
       <McpSettings
         config={props.config}
         mcp={props.mcp}
@@ -296,7 +302,7 @@ export function McpSettingsDrawer(props: {
         onSave={props.onSave}
       />
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}
@@ -342,8 +348,8 @@ function McpSettings(props: {
     >
       <PolicySection
         icon={<Server size={17} />}
-        title="Gateway binding"
-        description="Choose how MCP is exposed."
+        title={tr("copy.gatewayBinding")}
+        description={tr("copy.chooseHowMcpIsExposed")}
       >
         <div className="form-grid">
           <GatewayBindingEditor
@@ -363,12 +369,12 @@ function McpSettings(props: {
       </PolicySection>
       <PolicySection
         icon={<SlidersHorizontal size={17} />}
-        title="MCP behavior"
-        description="Choose session, tool-prefix, and failure behavior."
+        title={tr("copy.mcpBehavior")}
+        description={tr("copy.chooseSessionToolPrefixAndFailureBehavior")}
       >
         <div className="form-grid">
           <FieldGroup
-            label="State mode"
+            label={tr("copy.stateMode")}
             tooltip={props.help.field<McpConfig>(
               "LocalSimpleMcpConfig",
               "statefulMode",
@@ -381,15 +387,17 @@ function McpSettings(props: {
               options={[
                 {
                   value: "stateless",
-                  label: "Stateless",
-                  description:
-                    "Do not preserve MCP session state between requests.",
+                  label: tr("copy.stateless"),
+                  description: tr(
+                    "copy.doNotPreserveMcpSessionStateBetweenRequests",
+                  ),
                 },
                 {
                   value: "stateful",
-                  label: "Stateful",
-                  description:
-                    "Preserve MCP sessions so targets can keep per-session context.",
+                  label: tr("copy.stateful"),
+                  description: tr(
+                    "copy.preserveMcpSessionsSoTargetsCanKeepPerSessionContext",
+                  ),
                 },
               ]}
               schema={props.help.node([
@@ -402,7 +410,7 @@ function McpSettings(props: {
             />
           </FieldGroup>
           <FieldGroup
-            label="Prefix mode"
+            label={tr("copy.prefixMode")}
             tooltip={props.help.field<McpConfig>(
               "LocalSimpleMcpConfig",
               "prefixMode",
@@ -415,27 +423,31 @@ function McpSettings(props: {
               options={[
                 {
                   value: "none",
-                  label: "None",
-                  description:
-                    "Expose tool names without adding the target name.",
+                  label: tr("copy.none_deku7v"),
+                  description: tr(
+                    "copy.exposeToolNamesWithoutAddingTheTargetName",
+                  ),
                 },
                 {
                   value: "always",
-                  label: "Always",
-                  description:
-                    "Always prefix exposed tool names with the target name.",
+                  label: tr("copy.always"),
+                  description: tr(
+                    "copy.alwaysPrefixExposedToolNamesWithTheTargetName",
+                  ),
                 },
                 {
                   value: "conditional",
-                  label: "Conditional",
-                  description:
-                    "Prefix only when needed to avoid tool-name conflicts.",
+                  label: tr("copy.conditional"),
+                  description: tr(
+                    "copy.prefixOnlyWhenNeededToAvoidToolNameConflicts",
+                  ),
                 },
                 {
                   value: "never",
-                  label: "Never",
-                  description:
-                    "Never prefix; calls are routed by tool name, which must be unique across targets.",
+                  label: tr("copy.never"),
+                  description: tr(
+                    "copy.neverPrefixCallsAreRoutedByToolNameWhichMustBeUniqueAcrossTargets",
+                  ),
                 },
               ]}
               schema={props.help.node([
@@ -448,7 +460,7 @@ function McpSettings(props: {
             />
           </FieldGroup>
           <FieldGroup
-            label="Failure mode"
+            label={tr("copy.failureMode")}
             tooltip={props.help.field<McpConfig>(
               "LocalSimpleMcpConfig",
               "failureMode",
@@ -458,8 +470,8 @@ function McpSettings(props: {
               ariaLabel="Failure mode"
               value={failureMode}
               options={[
-                { value: "failClosed", label: "Fail closed" },
-                { value: "failOpen", label: "Fail open" },
+                { value: "failClosed", label: tr("copy.failClosed") },
+                { value: "failOpen", label: tr("copy.failOpen") },
               ]}
               schema={props.help.node(["$defs", "McpBackendFailureMode"])}
               onChange={setFailureMode}
@@ -586,7 +598,7 @@ function McpServerEditor(props: {
     >
       <div className="form-grid">
         <Field
-          label="Server name"
+          label={tr("copy.serverName")}
           tooltip={props.help.field<McpTarget>(
             "LocalMcpTarget",
             "name",
@@ -601,8 +613,8 @@ function McpServerEditor(props: {
         </Field>
       </div>
       <FieldGroup
-        label="Transport"
-        tooltip="How the gateway connects to this MCP target."
+        label={tr("copy.transport")}
+        tooltip={tr("copy.howTheGatewayConnectsToThisMcpTarget")}
       >
         <SegmentedControl
           ariaLabel="Transport"
@@ -627,7 +639,7 @@ function McpServerEditor(props: {
       {kind === "stdio" ? (
         <>
           <Field
-            label="Command"
+            label={tr("copy.command")}
             tooltip={props.help.field<McpTarget>(
               "LocalMcpTarget1",
               "stdio.cmd",
@@ -641,7 +653,7 @@ function McpServerEditor(props: {
             />
           </Field>
           <Field
-            label="Arguments"
+            label={tr("copy.arguments")}
             tooltip={props.help.field<McpTarget>(
               "LocalMcpTarget1",
               "stdio.args",
@@ -651,11 +663,11 @@ function McpServerEditor(props: {
             <input
               value={args}
               onChange={(event) => setArgs(event.target.value)}
-              placeholder="-y @modelcontextprotocol/server-filesystem /tmp"
+              placeholder={tr("copy.yModelcontextprotocolServerFilesystemTmp")}
             />
           </Field>
           <FieldGroup
-            label="Environment YAML"
+            label={tr("copy.environmentYaml")}
             tooltip={props.help.field<McpTarget>(
               "LocalMcpTarget1",
               "stdio.env",
@@ -674,12 +686,12 @@ function McpServerEditor(props: {
               checked={clearEnv}
               onChange={(event) => setClearEnv(event.target.checked)}
             />
-            Clear environment
+            {tr("copy.clearEnvironment")}
           </label>
         </>
       ) : (
         <Field
-          label="URL"
+          label={tr("copy.url")}
           tooltip={
             kind === "sse"
               ? props.help.field<McpTarget>(
@@ -706,12 +718,12 @@ function McpServerEditor(props: {
         </Field>
       )}
       {error ? (
-        <StatusBanner state="bad" title="Invalid server">
+        <StatusBanner state="bad" title={tr("copy.invalidServer")}>
           {error}
         </StatusBanner>
       ) : null}
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}
@@ -773,7 +785,7 @@ function splitArgs(value: string) {
 function parseEnvYaml(value: string) {
   const parsed = parseYamlText(value);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Environment must be a YAML mapping.");
+    throw new Error(tr("copy.environmentMustBeAYamlMapping"));
   }
   return Object.fromEntries(
     Object.entries(parsed).map(([key, item]) => [key, String(item)]),

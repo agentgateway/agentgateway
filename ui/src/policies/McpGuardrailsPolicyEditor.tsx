@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useState } from "react";
 import { Plus, Server, Trash2 } from "lucide-react";
 import type { SchemaHelp } from "../schemaHelp";
@@ -27,36 +28,60 @@ type ProcessorDraft = {
 const phaseOptions = [
   {
     value: "off",
-    label: "Off",
-    description: "Do not run this processor for matching methods.",
+    get label() {
+      return tr("copy.off");
+    },
+    get description() {
+      return tr("copy.doNotRunThisProcessorForMatchingMethods");
+    },
   },
   {
     value: "request",
-    label: "Request",
-    description: "Run before forwarding the MCP request.",
+    get label() {
+      return tr("copy.request_1058hua");
+    },
+    get description() {
+      return tr("copy.runBeforeForwardingTheMcpRequest");
+    },
   },
   {
     value: "response",
-    label: "Response",
-    description: "Run after the MCP response is available.",
+    get label() {
+      return tr("copy.response_nrnldq");
+    },
+    get description() {
+      return tr("copy.runAfterTheMcpResponseIsAvailable");
+    },
   },
   {
     value: "full",
-    label: "Full",
-    description: "Run with request and response context.",
+    get label() {
+      return tr("copy.full");
+    },
+    get description() {
+      return tr("copy.runWithRequestAndResponseContext");
+    },
   },
 ];
 
 const failureOptions = [
   {
     value: "failClosed",
-    label: "Fail closed",
-    description: "Reject when the processor is unavailable.",
+    get label() {
+      return tr("copy.failClosed");
+    },
+    get description() {
+      return tr("copy.rejectWhenTheProcessorIsUnavailable");
+    },
   },
   {
     value: "failOpen",
-    label: "Fail open",
-    description: "Allow traffic when the processor is unavailable.",
+    get label() {
+      return tr("copy.failOpen");
+    },
+    get description() {
+      return tr("copy.allowTrafficWhenTheProcessorIsUnavailable");
+    },
   },
 ];
 
@@ -114,7 +139,7 @@ export function McpGuardrailsPolicyEditor(props: {
     });
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
-      setError("Fix the highlighted processors before saving.");
+      setError(tr("copy.fixTheHighlightedProcessorsBeforeSaving"));
       return;
     }
     setError(null);
@@ -137,19 +162,21 @@ export function McpGuardrailsPolicyEditor(props: {
             {processors.length === 1 ? "processor" : "processors"}
           </strong>
           <small>
-            Processors run in order; the first rejection stops the request.
+            {tr("copy.processorsRunInOrderTheFirstRejectionStopsTheRequest")}
           </small>
         </div>
         <button className="button" type="button" onClick={addProcessor}>
           <Plus size={16} />
-          Add processor
+          {tr("copy.addProcessor")}
         </button>
       </div>
 
       {processors.length === 0 ? (
         <EmptyState
-          title="No MCP guardrail processors"
-          description="Add a remote policy processor to inspect MCP requests and responses."
+          title={tr("copy.noMcpGuardrailProcessors")}
+          description={tr(
+            "copy.addARemotePolicyProcessorToInspectMcpRequestsAndResponses",
+          )}
           action={
             <button
               className="button primary"
@@ -157,7 +184,7 @@ export function McpGuardrailsPolicyEditor(props: {
               onClick={addProcessor}
             >
               <Plus size={16} />
-              Add processor
+              {tr("copy.addProcessor")}
             </button>
           }
         />
@@ -177,7 +204,10 @@ export function McpGuardrailsPolicyEditor(props: {
                   <Server size={16} />
                 </span>
                 <div className="mcp-processor-title">
-                  <strong>Processor {index + 1}</strong>
+                  <strong>
+                    {tr("copy.processor")}
+                    {index + 1}
+                  </strong>
                   <code>{processor.host || "No host configured"}</code>
                 </div>
                 <span
@@ -197,13 +227,13 @@ export function McpGuardrailsPolicyEditor(props: {
                   onClick={() => removeProcessor(index)}
                 >
                   <Trash2 size={14} />
-                  Delete
+                  {tr("copy.delete")}
                 </button>
               </div>
 
               <div className="mcp-processor-controls">
                 <Field
-                  label="Host"
+                  label={tr("copy.host")}
                   tooltip={props.help.field<Processor>("Processor", "host")}
                 >
                   <input
@@ -215,7 +245,7 @@ export function McpGuardrailsPolicyEditor(props: {
                   />
                 </Field>
                 <FieldGroup
-                  label="Failure mode"
+                  label={tr("copy.failureMode")}
                   tooltip={props.help.field<Processor>(
                     "Processor",
                     "failureMode",
@@ -241,7 +271,7 @@ export function McpGuardrailsPolicyEditor(props: {
               />
 
               <KeyValueEditor
-                label="Metadata"
+                label={tr("copy.metadata")}
                 tooltip={props.help.field<Processor>("Processor", "metadata")}
                 values={processor.metadata}
                 keyPlaceholder="metadata key"
@@ -260,7 +290,7 @@ export function McpGuardrailsPolicyEditor(props: {
 
       <ResultingYaml value={preview} />
       {error ? (
-        <StatusBanner state="bad" title="Invalid MCP guardrails policy">
+        <StatusBanner state="bad" title={tr("copy.invalidMcpGuardrailsPolicy")}>
           {error}
         </StatusBanner>
       ) : null}
@@ -286,7 +316,7 @@ function MethodPhaseEditor(props: {
 
   return (
     <FieldGroup
-      label="Method phases"
+      label={tr("copy.methodPhases")}
       tooltip={props.help.field<Processor>("Processor", "methods")}
     >
       <div className="mcp-method-editor">
@@ -307,19 +337,21 @@ function MethodPhaseEditor(props: {
                     props.onChange(next);
                   }}
                 >
-                  Remove
+                  {tr("copy.remove")}
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <div className="empty-inline">No MCP methods configured.</div>
+          <div className="empty-inline">
+            {tr("copy.noMcpMethodsConfigured")}
+          </div>
         )}
         <div className="mcp-method-add-row">
           <input
             value={method}
             onChange={(event) => setMethod(event.target.value)}
-            placeholder="tools/call, prompts/*, or *"
+            placeholder={tr("copy.toolsCallPromptsOr")}
           />
           <EnumSelector
             ariaLabel="Phase"
@@ -328,7 +360,7 @@ function MethodPhaseEditor(props: {
             onChange={(value) => setPhase(value as Phase)}
           />
           <button className="button" type="button" onClick={add}>
-            Add
+            {tr("copy.add")}
           </button>
         </div>
       </div>

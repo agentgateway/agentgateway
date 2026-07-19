@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Bot, Network, Server } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -31,27 +32,42 @@ const surfaceConfig: Record<
   }
 > = {
   llm: {
-    title: "Enable LLM",
-    description:
-      "Create the LLM configuration section so models, providers, keys, guardrails, logs, and playground tools can be configured.",
+    get title() {
+      return tr("copy.enableLlm");
+    },
+    get description() {
+      return tr(
+        "copy.createTheLlmConfigurationSectionSoModelsProvidersKeysGuardrailsLogsAndPlayground_197f4qj",
+      );
+    },
     icon: Bot,
     enabled: (config) => Boolean(config?.llm),
     destination: "/llm/models",
     destinationLabel: "Continue to models",
   },
   mcp: {
-    title: "Enable MCP",
-    description:
-      "Create the MCP configuration section so servers and MCP playground tools can be configured.",
+    get title() {
+      return tr("copy.enableMcp");
+    },
+    get description() {
+      return tr(
+        "copy.createTheMcpConfigurationSectionSoServersAndMcpPlaygroundToolsCanBeConfigured",
+      );
+    },
     icon: Server,
     enabled: (config) => Boolean(config?.mcp),
     destination: "/mcp/servers",
     destinationLabel: "Continue to servers",
   },
   traffic: {
-    title: "Enable Traffic",
-    description:
-      "Create the traffic configuration section so HTTP gateways, routes, backends, and policies can be configured.",
+    get title() {
+      return tr("copy.enableTraffic");
+    },
+    get description() {
+      return tr(
+        "copy.createTheTrafficConfigurationSectionSoHttpGatewaysRoutesBackendsAndPoliciesCanBeConfigured",
+      );
+    },
     icon: Network,
     enabled: (config) =>
       Boolean(
@@ -136,10 +152,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
   if (!config.isLoading && !config.isError && enabled) {
     return (
       <div className="page-stack">
-        <StatusBanner
-          state="loading"
-          title={`Opening ${surface.destinationLabel.toLowerCase()}`}
-        />
+        <StatusBanner state="loading" title={tr("copy.openingValue")} />
       </div>
     );
   }
@@ -149,15 +162,21 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
       <PageHeader title={surface.title} description={surface.description} />
 
       {config.isLoading ? (
-        <StatusBanner state="loading" title="Loading gateway configuration" />
+        <StatusBanner
+          state="loading"
+          title={tr("copy.loadingGatewayConfiguration")}
+        />
       ) : null}
       {config.isError ? (
-        <StatusBanner state="bad" title="Configuration API unavailable">
+        <StatusBanner
+          state="bad"
+          title={tr("copy.configurationApiUnavailable")}
+        >
           {config.error.message}
         </StatusBanner>
       ) : null}
       {update.isError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {update.error.message}
         </StatusBanner>
       ) : null}
@@ -185,8 +204,8 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
         !useGateways &&
         (props.surface === "llm" || props.surface === "mcp") ? (
           <details className="schema-details">
-            <summary>Advanced</summary>
-            <Field label="Port">
+            <summary>{tr("copy.advanced")}</summary>
+            <Field label={tr("copy.port")}>
               <input
                 value={port}
                 inputMode="numeric"
@@ -209,11 +228,11 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
               disabled={config.isLoading || update.isPending}
               onClick={() => void enable()}
             >
-              Enable
+              {tr("copy.enable")}
             </button>
           )}
           <Link className="button" to="/">
-            Back to home
+            {tr("copy.backToHome")}
           </Link>
         </div>
       </Panel>

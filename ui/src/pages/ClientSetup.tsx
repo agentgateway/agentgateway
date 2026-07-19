@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -166,21 +167,29 @@ export function ClientSetupPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Client Setup"
-        description="Generate connection settings and snippets for OpenAI-compatible LLM clients."
+        title={tr("copy.clientSetup")}
+        description={tr(
+          "copy.generateConnectionSettingsAndSnippetsForOpenAiCompatibleLlmClients",
+        )}
       />
       {config.isError ? (
-        <StatusBanner state="bad" title="Configuration API unavailable">
+        <StatusBanner
+          state="bad"
+          title={tr("copy.configurationApiUnavailable")}
+        >
           {config.error.message}
         </StatusBanner>
       ) : null}
       {modelOptions.length === 0 && !config.isLoading ? (
-        <StatusBanner state="warn" title="No models configured">
-          Create an LLM model before wiring clients to the gateway.
+        <StatusBanner state="warn" title={tr("copy.noModelsConfigured")}>
+          {tr("copy.createAnLlmModelBeforeWiringClientsToTheGateway")}
         </StatusBanner>
       ) : null}
       {claudeSubscriptionWarning(selectedModelConfig, providers) ? (
-        <StatusBanner state="warn" title="Claude subscription key detected">
+        <StatusBanner
+          state="warn"
+          title={tr("copy.claudeSubscriptionKeyDetected")}
+        >
           {claudeSubscriptionWarning(selectedModelConfig, providers)}
         </StatusBanner>
       ) : null}
@@ -188,11 +197,11 @@ export function ClientSetupPage() {
       <section className="client-setup-layout">
         <Panel className="client-setup-controls">
           <div className="section-heading">
-            <h3>Connection</h3>
+            <h3>{tr("copy.connection")}</h3>
           </div>
           <Field
-            label="Gateway base URL"
-            hint="SDK snippets use this URL with /v1 appended."
+            label={tr("copy.gatewayBaseUrl")}
+            hint={tr("copy.sdkSnippetsUseThisUrlWithV1Appended")}
           >
             <input
               value={effectiveBaseUrl}
@@ -203,11 +212,11 @@ export function ClientSetupPage() {
               placeholder={derivedBaseUrl}
             />
           </Field>
-          <FieldGroup label="Model">
+          <FieldGroup label={tr("copy.model")}>
             <Dropdown
               ariaLabel="Model"
               value={selectedModel}
-              placeholder="No models"
+              placeholder={tr("copy.noModels")}
               searchable
               options={modelOptions.map((item) => ({
                 value: item.name,
@@ -223,8 +232,8 @@ export function ClientSetupPage() {
           {selectedModelConfig &&
           isWildcardModelName(selectedModelConfig.name) ? (
             <Field
-              label="Specific model"
-              hint="Model uses a wildcard; specify the specific model."
+              label={tr("copy.specificModel")}
+              hint={tr("copy.modelUsesAWildcardSpecifyTheSpecificModel")}
             >
               <div className="target-resolved-composite">
                 {wildcardPrefix ? (
@@ -237,12 +246,12 @@ export function ClientSetupPage() {
                   onChange={(value) =>
                     setSpecificModel(`${wildcardPrefix}${value}`)
                   }
-                  placeholder="Select or type a model"
+                  placeholder={tr("copy.selectOrTypeAModel")}
                 />
               </div>
             </Field>
           ) : null}
-          <FieldGroup label="Virtual API key">
+          <FieldGroup label={tr("copy.virtualApiKey")}>
             <Dropdown
               ariaLabel="Virtual API key"
               value={
@@ -258,7 +267,7 @@ export function ClientSetupPage() {
                 })),
                 {
                   value: "__raw__",
-                  label: "Raw value",
+                  label: tr("copy.rawValue"),
                   icon: <Code2 size={16} />,
                 },
               ]}
@@ -273,7 +282,7 @@ export function ClientSetupPage() {
             />
           </FieldGroup>
           {apiKeyMode === "raw" || rawVirtualKeys.length === 0 ? (
-            <Field label="Raw API key">
+            <Field label={tr("copy.rawApiKey")}>
               <input
                 value={rawKey}
                 onChange={(event) => setRawKey(event.target.value)}
@@ -283,15 +292,15 @@ export function ClientSetupPage() {
           ) : null}
           <div className="client-setup-summary">
             <div>
-              <span>Base URL</span>
+              <span>{tr("copy.baseUrl")}</span>
               <code>{effectiveBaseUrl.replace(/\/$/, "")}/v1</code>
             </div>
             <div>
-              <span>Model</span>
+              <span>{tr("copy.model")}</span>
               <code>{requestModel || "No model selected"}</code>
             </div>
             <div>
-              <span>Auth</span>
+              <span>{tr("copy.auth")}</span>
               <code>
                 Authorization: Bearer {apiKey ? maskKey(apiKey) : "..."}
               </code>
@@ -346,7 +355,7 @@ function ClientRecipeCard(props: {
   return (
     <Panel className="client-recipe-card">
       <div className="client-recipe-toolbar">
-        <FieldGroup label="Integration">
+        <FieldGroup label={tr("copy.integration")}>
           <Dropdown
             ariaLabel="Integration"
             className="client-recipe-select"
@@ -398,7 +407,7 @@ function CopyButton(props: { value: string }) {
       }}
     >
       {copied ? <Check size={16} /> : <Clipboard size={16} />}
-      {copied ? "Copied" : "Copy"}
+      {tr(copied ? "common.copied" : "copy.copy")}
     </button>
   );
 }
@@ -415,8 +424,9 @@ function clientRecipes(args: {
     {
       id: "curl",
       title: "curl",
-      description:
-        "Minimal raw HTTP request for debugging client connectivity.",
+      description: tr(
+        "copy.minimalRawHttpRequestForDebuggingClientConnectivity",
+      ),
       icon: "curl",
       language: "bash",
       code: `curl ${JSON.stringify(completions)} \\
@@ -431,9 +441,10 @@ function clientRecipes(args: {
     },
     {
       id: "claude-code",
-      title: "Claude Code",
-      description:
-        "Use the gateway URL and key with Claude-compatible model routes when configured.",
+      title: tr("copy.claudeCode"),
+      description: tr(
+        "copy.useTheGatewayUrlAndKeyWithClaudeCompatibleModelRoutesWhenConfigured",
+      ),
       icon: "claude",
       language: "bash",
       code: `export ANTHROPIC_AUTH_TOKEN="${args.apiKey}"
@@ -443,28 +454,33 @@ claude --model "${args.model}"`,
     },
     {
       id: "claude-desktop",
-      title: "Claude Desktop",
-      description:
-        "Route Claude Desktop third-party inference through the gateway.",
+      title: tr("copy.claudeDesktop"),
+      description: tr(
+        "copy.routeClaudeDesktopThirdPartyInferenceThroughTheGateway",
+      ),
       icon: "claude",
       steps: [
         <>
-          Open Claude Desktop and enable developer mode: <strong>Help</strong>{" "}
-          &gt; <strong>Troubleshooting</strong> &gt;{" "}
-          <strong>Enable Developer Mode</strong>.
+          {tr("copy.openClaudeDesktopAndEnableDeveloperMode")}
+          <strong>{tr("copy.help")}</strong> &gt;{" "}
+          <strong>{tr("copy.troubleshooting")}</strong> &gt;{" "}
+          <strong>{tr("copy.enableDeveloperMode")}</strong>.
         </>,
         <>
-          Fully quit and relaunch Claude Desktop. A new{" "}
-          <strong>Developer</strong> menu appears in the menu bar.
+          {tr("copy.fullyQuitAndRelaunchClaudeDesktopANew")}{" "}
+          <strong>{tr("copy.developer")}</strong>
+          {tr("copy.menuAppearsInTheMenuBar")}
         </>,
         <>
-          Open <strong>Developer</strong> &gt;{" "}
-          <strong>Configure Third-Party Inference</strong> &gt;{" "}
-          <strong>Gateway</strong>.
+          {tr("copy.open")}
+          <strong>{tr("copy.developer")}</strong> &gt;{" "}
+          <strong>{tr("copy.configureThirdPartyInference")}</strong> &gt;{" "}
+          <strong>{tr("copy.gateway")}</strong>.
         </>,
         <>
-          Enter the gateway URL and virtual API key, save, then restart Claude
-          Desktop.
+          {tr(
+            "copy.enterTheGatewayUrlAndVirtualApiKeySaveThenRestartClaudeDesktop",
+          )}
         </>,
       ],
       language: "text",
@@ -473,9 +489,10 @@ API Key: ${args.apiKey}`,
     },
     {
       id: "codex",
-      title: "Codex CLI",
-      description:
-        "Use OpenAI-compatible environment variables when running Codex against the gateway.",
+      title: tr("copy.codexCli"),
+      description: tr(
+        "copy.useOpenAiCompatibleEnvironmentVariablesWhenRunningCodexAgainstTheGateway",
+      ),
       icon: "codex",
       language: "bash",
       code: `export OPENAI_API_KEY='${args.apiKey}'
@@ -492,15 +509,20 @@ codex --model "${args.model}" \\
     {
       id: "opencode",
       title: "OpenCode",
-      description:
-        "Configure OpenCode with an OpenAI-compatible gateway provider.",
+      description: tr(
+        "copy.configureOpenCodeWithAnOpenAiCompatibleGatewayProvider",
+      ),
       icon: "opencode",
       steps: [
         <>
-          Create this <code>opencode.json</code> in your project root.
+          {tr("copy.createThis")}
+          <code>opencode.json</code>
+          {tr("copy.inYourProjectRoot")}
         </>,
         <>
-          Run <code>opencode</code> from the same directory.
+          {tr("copy.run")}
+          <code>opencode</code>
+          {tr("copy.fromTheSameDirectory")}
         </>,
       ],
       language: "bash",
@@ -533,20 +555,27 @@ opencode`,
     {
       id: "cursor",
       title: "Cursor",
-      description:
-        "Use Cursor's OpenAI base URL override with a gateway model.",
+      description: tr("copy.useCursorSOpenAiBaseUrlOverrideWithAGatewayModel"),
       icon: "cursor",
       steps: [
         <>
-          Open <strong>Cursor Settings</strong> &gt; <strong>Models</strong>.
+          {tr("copy.open")}
+          <strong>{tr("copy.cursorSettings")}</strong> &gt;{" "}
+          <strong>{tr("copy.models")}</strong>.
         </>,
         <>
-          Enable <strong>Override OpenAI Base URL</strong> and set it to{" "}
-          <code>{base}</code>.
+          {tr("copy.enable")}
+          <strong>{tr("copy.overrideOpenAiBaseUrl")}</strong>
+          {tr("copy.andSetItTo")} <code>{base}</code>.
         </>,
         <>
-          Add <code>{args.model}</code> as a custom model, then test from{" "}
-          <strong>Ask</strong> or <strong>Plan</strong> mode.
+          {tr("copy.add")}
+          <code>{args.model}</code>
+          {tr("copy.asACustomModelThenTestFrom")}{" "}
+          <strong>{tr("copy.ask")}</strong>
+          {tr("copy.or")}
+          <strong>{tr("copy.plan")}</strong>
+          {tr("copy.mode")}
         </>,
       ],
       language: "text",
@@ -556,19 +585,23 @@ Custom model: ${args.model}`,
     },
     {
       id: "github-copilot",
-      title: "GitHub Copilot",
-      description:
-        "Configure VS Code Copilot Business or Enterprise to use the gateway proxy.",
+      title: tr("copy.gitHubCopilot"),
+      description: tr(
+        "copy.configureVsCodeCopilotBusinessOrEnterpriseToUseTheGatewayProxy",
+      ),
       icon: "copilot",
       steps: [
         <>
-          Open <strong>VS Code Settings</strong> and search for{" "}
-          <code>github.copilot</code>.
+          {tr("copy.open")}
+          <strong>{tr("copy.vsCodeSettings")}</strong>
+          {tr("copy.andSearchFor")} <code>github.copilot</code>.
         </>,
         <>
-          Edit <code>settings.json</code> and set the advanced proxy URL.
+          {tr("copy.edit")}
+          <code>settings.json</code>
+          {tr("copy.andSetTheAdvancedProxyUrl")}
         </>,
-        <>Reload VS Code and test Copilot suggestions or chat.</>,
+        <>{tr("copy.reloadVsCodeAndTestCopilotSuggestionsOrChat")}</>,
       ],
       language: "json",
       code: `{
@@ -580,18 +613,23 @@ Custom model: ${args.model}`,
     {
       id: "windsurf",
       title: "Windsurf",
-      description:
-        "Route Windsurf traffic through the gateway HTTP proxy setting.",
+      description: tr(
+        "copy.routeWindsurfTrafficThroughTheGatewayHttpProxySetting",
+      ),
       icon: "windsurf",
       steps: [
         <>
-          Open <strong>Windsurf Settings</strong>.
+          {tr("copy.open")}
+          <strong>{tr("copy.windsurfSettings")}</strong>.
         </>,
         <>
-          Search for <strong>Http: Proxy</strong>.
+          {tr("copy.searchFor")}
+          <strong>{tr("copy.httpProxy")}</strong>.
         </>,
         <>
-          Set the proxy URL to <code>{base}</code> and save.
+          {tr("copy.setTheProxyUrlTo")}
+          <code>{base}</code>
+          {tr("copy.andSave")}
         </>,
       ],
       language: "text",
@@ -599,9 +637,10 @@ Custom model: ${args.model}`,
     },
     {
       id: "openai-js",
-      title: "OpenAI JavaScript SDK",
-      description:
-        "Use the gateway as an OpenAI-compatible chat completions endpoint.",
+      title: tr("copy.openAiJavaScriptSdk"),
+      description: tr(
+        "copy.useTheGatewayAsAnOpenAiCompatibleChatCompletionsEndpoint",
+      ),
       icon: "codex",
       provider: "openai",
       language: "ts",
@@ -621,8 +660,8 @@ console.log(response.choices[0]?.message?.content);`,
     },
     {
       id: "openai-python",
-      title: "OpenAI Python SDK",
-      description: "Point the Python SDK at the gateway listener.",
+      title: tr("copy.openAiPythonSdk"),
+      description: tr("copy.pointThePythonSdkAtTheGatewayListener"),
       icon: "codex",
       provider: "openai",
       language: "python",

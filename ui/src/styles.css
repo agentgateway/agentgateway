@@ -303,6 +303,41 @@ a {
   gap: 8px;
 }
 
+.language-select {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.language-select .custom-select-trigger {
+  width: auto;
+  min-width: 112px;
+  min-height: 36px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.language-select .custom-select-menu {
+  right: 0;
+  left: auto;
+  min-width: 100%;
+  width: max-content;
+}
+
+.language-select .custom-select-option {
+  min-width: 112px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .export-dropdown {
   position: relative;
   display: inline-flex;

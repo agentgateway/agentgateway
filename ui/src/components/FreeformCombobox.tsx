@@ -1,5 +1,6 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useDismissiblePopover } from "./Primitives";
 
@@ -11,6 +12,7 @@ export function FreeformCombobox(props: {
   placeholder?: string;
   emptyText?: string;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [browseAll, setBrowseAll] = useState(false);
@@ -113,7 +115,7 @@ export function FreeformCombobox(props: {
         <button
           className="freeform-combobox-trigger"
           type="button"
-          aria-label={`Show ${props.ariaLabel} options`}
+          aria-label={t("common.showOptions", { label: props.ariaLabel })}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             suppressNextFocusOpenRef.current = true;
@@ -156,7 +158,7 @@ export function FreeformCombobox(props: {
           ))}
           {filteredOptions.length === 0 ? (
             <div className="freeform-combobox-empty">
-              {props.emptyText ?? "No matches. Custom values are allowed."}
+              {props.emptyText ?? t("common.noMatchesCustomValues")}
             </div>
           ) : null}
         </div>
