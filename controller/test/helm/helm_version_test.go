@@ -349,6 +349,29 @@ func TestHelmChartTemplate(t *testing.T) {
     enabled: false
 `,
 		},
+		{
+			name: "monitoring-custom-gateway-class-names",
+			valuesYAML: `monitoring:
+  enabled: true
+  proxy:
+    gatewayClassNames:
+    - agentgateway
+    - custom-class
+  grafanaDashboard:
+    enabled: false
+`,
+		},
+		{
+			name: "monitoring-no-pod-monitor",
+			valuesYAML: `monitoring:
+  enabled: true
+  proxy:
+    podMonitor:
+      enabled: false
+  grafanaDashboard:
+    enabled: false
+`,
+		},
 	}
 
 	for _, chart := range charts {
