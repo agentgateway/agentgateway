@@ -192,6 +192,8 @@ struct LiteLlmConfig {
 	general_settings: Map<String, Value>,
 	#[serde(default)]
 	environment_variables: Map<String, Value>,
+	#[serde(flatten)]
+	other: Map<String, Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -199,6 +201,10 @@ struct LiteLlmModel {
 	model_name: String,
 	#[serde(default)]
 	litellm_params: Map<String, Value>,
+	#[serde(default)]
+	model_info: Map<String, Value>,
+	#[serde(flatten)]
+	other: Map<String, Value>,
 }
 
 impl ConfigImporter for LiteLlmImporter {
@@ -214,6 +220,11 @@ impl ConfigImporter for LiteLlmImporter {
 		}
 
 		let mut plan = ImportPlan::default();
+		let use_rpm_weights = match config.router_settings.get("routing_strategy") {
+			None => true,
+			Some(Value::String(strategy)) => strategy == "simple-shuffle",
+			Some(_) => false,
+		};
 		let mut counts = HashMap::<String, usize>::new();
 		for (index, model) in config.model_list.into_iter().enumerate() {
 			let source_path = format!("model_list[{index}]");
@@ -224,6 +235,7 @@ impl ConfigImporter for LiteLlmImporter {
 				internal_name.clone(),
 				model,
 				&source_path,
+				use_rpm_weights,
 				&mut plan.findings,
 			) else {
 				continue;
@@ -240,18 +252,39 @@ impl ConfigImporter for LiteLlmImporter {
 		let fallbacks = config
 			.router_settings
 			.get("fallbacks")
-			.or_else(|| config.litellm_settings.get("fallbacks"));
-		if let Some(fallbacks) = fallbacks {
-			apply_fallbacks(fallbacks, &mut plan);
+			.map(|fallbacks| ("router_settings.fallbacks", fallbacks))
+			.or_else(|| {
+				config
+					.litellm_settings
+					.get("fallbacks")
+					.map(|fallbacks| ("litellm_settings.fallbacks", fallbacks))
+			});
+		if let Some((source_path, fallbacks)) = fallbacks {
+			apply_fallbacks(fallbacks, source_path, &mut plan);
 		}
 
 		if let Some(strategy) = config.router_settings.get("routing_strategy") {
+			let (status, message) = match strategy.as_str() {
+				Some("simple-shuffle") => (
+					ImportStatus::Approximate,
+					"Approximated LiteLLM simple-shuffle with generated agentgateway routing; RPM is used only by weighted routes"
+						.to_string(),
+				),
+				Some(strategy) => (
+					ImportStatus::Unsupported,
+					format!(
+						"LiteLLM routing strategy {strategy:?} is not preserved; generated routes use equal weights or priority failover"
+					),
+				),
+				None => (
+					ImportStatus::Manual,
+					"Routing strategy must be a string and was not preserved".to_string(),
+				),
+			};
 			plan.findings.push(ImportFinding {
 				source_path: "router_settings.routing_strategy".to_string(),
-				status: ImportStatus::Approximate,
-				message: format!(
-					"LiteLLM routing strategy {strategy} is represented with agentgateway weighted or health-aware routing"
-				),
+				status,
+				message,
 			});
 		}
 		for setting in config.router_settings.keys() {
@@ -268,13 +301,13 @@ impl ConfigImporter for LiteLlmImporter {
 			("general_settings", &config.general_settings),
 			("environment_variables", &config.environment_variables),
 		] {
-			if !values.is_empty() {
-				plan.findings.push(ImportFinding {
-					source_path: section.to_string(),
-					status: ImportStatus::Manual,
-					message: format!("{section} requires manual review and was not emitted"),
-				});
-			}
+			report_unmapped_fields(
+				&mut plan.findings,
+				section,
+				values,
+				ImportStatus::Manual,
+				"Requires manual review and was not emitted",
+			);
 		}
 		for setting in config.litellm_settings.keys() {
 			if setting == "fallbacks" {
@@ -286,6 +319,13 @@ impl ConfigImporter for LiteLlmImporter {
 				message: "No automatic mapping is available".to_string(),
 			});
 		}
+		report_unmapped_fields(
+			&mut plan.findings,
+			"",
+			&config.other,
+			ImportStatus::Unsupported,
+			"Unrecognized LiteLLM top-level field was not emitted",
+		);
 		Ok(plan)
 	}
 }
@@ -294,14 +334,54 @@ fn import_litellm_model(
 	name: String,
 	model: LiteLlmModel,
 	source_path: &str,
+	use_rpm_weights: bool,
 	findings: &mut Vec<ImportFinding>,
 ) -> Option<(String, ImportedModel)> {
-	let public_name = model.model_name;
-	let mut params = model.litellm_params;
-	let model_id = params
-		.remove("model")
-		.and_then(|value| value.as_str().map(str::to_string))
-		.unwrap_or_else(|| public_name.clone());
+	let LiteLlmModel {
+		model_name: public_name,
+		litellm_params: mut params,
+		model_info,
+		other,
+	} = model;
+	report_unmapped_fields(
+		findings,
+		&format!("{source_path}.model_info"),
+		&model_info,
+		ImportStatus::Manual,
+		"LiteLLM model metadata requires manual review and was not emitted",
+	);
+	report_unmapped_fields(
+		findings,
+		source_path,
+		&other,
+		ImportStatus::Unsupported,
+		"Unrecognized LiteLLM model field was not emitted",
+	);
+	let model_id = match params.remove("model") {
+		Some(Value::String(model)) => model,
+		Some(_) => {
+			findings.push(ImportFinding {
+				source_path: format!("{source_path}.litellm_params.model"),
+				status: ImportStatus::Unsupported,
+				message: "LiteLLM model must be a string and was not emitted".to_string(),
+			});
+			return None;
+		},
+		None => public_name.clone(),
+	};
+	if public_name.contains('*') || model_id.contains('*') {
+		let wildcard_path = if public_name.contains('*') {
+			format!("{source_path}.model_name")
+		} else {
+			format!("{source_path}.litellm_params.model")
+		};
+		findings.push(ImportFinding {
+			source_path: wildcard_path,
+			status: ImportStatus::Unsupported,
+			message: "LiteLLM wildcard models are not yet supported and were not emitted".to_string(),
+		});
+		return None;
+	}
 	let (provider_prefix, upstream_model) = split_provider(&model_id);
 	let Some(provider) = map_provider(provider_prefix) else {
 		findings.push(ImportFinding {
@@ -341,21 +421,59 @@ fn import_litellm_model(
 		"vertexRegion",
 	);
 	if let Some(api_key) = params.remove("api_key") {
-		output_params.insert("apiKey".to_string(), normalize_secret(api_key));
+		output_params.insert(
+			"apiKey".to_string(),
+			normalize_environment_references(api_key),
+		);
 	}
 
 	let rpm = params.remove("rpm");
-	let weight = rpm
+	let tpm = params.remove("tpm");
+	if tpm.is_some() {
+		findings.push(ImportFinding {
+			source_path: format!("{source_path}.litellm_params.tpm"),
+			status: ImportStatus::Manual,
+			message: "TPM capacity is not mapped automatically".to_string(),
+		});
+	}
+	let parsed_rpm = rpm
 		.as_ref()
-		.and_then(|value| value.as_u64())
+		.and_then(Value::as_u64)
 		.and_then(|value| usize::try_from(value).ok())
-		.filter(|value| *value > 0)
-		.unwrap_or(1);
+		.filter(|value| *value > 0);
+	let weight = if use_rpm_weights && tpm.is_none() {
+		parsed_rpm.unwrap_or(1)
+	} else {
+		1
+	};
 	if rpm.is_some() {
+		let (status, message) = if parsed_rpm.is_none() {
+			(
+				ImportStatus::Manual,
+				"RPM must be a positive integer and was not mapped".to_string(),
+			)
+		} else if !use_rpm_weights {
+			(
+				ImportStatus::Manual,
+				"RPM capacity was not converted because the routing strategy is not simple-shuffle"
+					.to_string(),
+			)
+		} else if tpm.is_some() {
+			(
+				ImportStatus::Manual,
+				"RPM was not converted because the deployment also specifies unmapped TPM capacity"
+					.to_string(),
+			)
+		} else {
+			(
+				ImportStatus::Approximate,
+				"Used RPM as the relative weight for generated weighted routes".to_string(),
+			)
+		};
 		findings.push(ImportFinding {
 			source_path: format!("{source_path}.litellm_params.rpm"),
-			status: ImportStatus::Approximate,
-			message: "Used RPM as the deployment's relative routing weight".to_string(),
+			status,
+			message,
 		});
 	}
 	let mut defaults = Map::new();
@@ -370,17 +488,16 @@ fn import_litellm_model(
 		"stop",
 	] {
 		if let Some(value) = params.remove(key) {
-			defaults.insert(key.to_string(), value);
+			defaults.insert(key.to_string(), normalize_environment_references(value));
 		}
 	}
-	if !params.is_empty() {
-		let keys = params.keys().cloned().collect::<Vec<_>>().join(", ");
-		findings.push(ImportFinding {
-			source_path: format!("{source_path}.litellm_params"),
-			status: ImportStatus::Manual,
-			message: format!("Review unmapped LiteLLM parameters: {keys}"),
-		});
-	}
+	report_unmapped_fields(
+		findings,
+		&format!("{source_path}.litellm_params"),
+		&params,
+		ImportStatus::Manual,
+		"LiteLLM parameter requires manual review and was not emitted",
+	);
 	findings.push(ImportFinding {
 		source_path: source_path.to_string(),
 		status: ImportStatus::Exact,
@@ -435,50 +552,87 @@ fn move_string(
 	to: &str,
 ) {
 	if let Some(value) = source.remove(from) {
-		target.insert(to.to_string(), value);
+		target.insert(to.to_string(), normalize_environment_references(value));
 	}
 }
 
-fn normalize_secret(value: Value) -> Value {
-	let Some(value) = value.as_str() else {
-		return value;
-	};
-	match value.strip_prefix("os.environ/") {
-		Some(environment) => json!(format!("${environment}")),
-		None => json!(value),
+fn normalize_environment_references(value: Value) -> Value {
+	match value {
+		Value::String(value) => match value.strip_prefix("os.environ/") {
+			Some(environment) => json!(format!("${environment}")),
+			None => json!(value),
+		},
+		Value::Array(values) => Value::Array(
+			values
+				.into_iter()
+				.map(normalize_environment_references)
+				.collect(),
+		),
+		Value::Object(values) => Value::Object(
+			values
+				.into_iter()
+				.map(|(key, value)| (key, normalize_environment_references(value)))
+				.collect(),
+		),
+		value => value,
 	}
 }
 
-fn apply_fallbacks(value: &Value, plan: &mut ImportPlan) {
+fn report_unmapped_fields(
+	findings: &mut Vec<ImportFinding>,
+	prefix: &str,
+	values: &Map<String, Value>,
+	status: ImportStatus,
+	message: &str,
+) {
+	for key in values.keys() {
+		let separator = if prefix.is_empty() { "" } else { "." };
+		findings.push(ImportFinding {
+			source_path: format!("{prefix}{separator}{key}"),
+			status,
+			message: message.to_string(),
+		});
+	}
+}
+
+fn apply_fallbacks(value: &Value, source_path: &str, plan: &mut ImportPlan) {
 	let Some(entries) = value.as_array() else {
 		plan.findings.push(ImportFinding {
-			source_path: "router_settings.fallbacks".to_string(),
+			source_path: source_path.to_string(),
 			status: ImportStatus::Unsupported,
 			message: "Fallbacks must be a list of model mappings".to_string(),
 		});
 		return;
 	};
-	for entry in entries {
+	for (index, entry) in entries.iter().enumerate() {
 		let Some(entry) = entry.as_object() else {
+			plan.findings.push(ImportFinding {
+				source_path: format!("{source_path}[{index}]"),
+				status: ImportStatus::Unsupported,
+				message: "Fallback entry must be a model mapping and was not emitted".to_string(),
+			});
 			continue;
 		};
 		for (source, fallback_names) in entry {
 			if !plan.routes.contains_key(source) {
 				plan.findings.push(ImportFinding {
-					source_path: "router_settings.fallbacks".to_string(),
+					source_path: source_path.to_string(),
 					status: ImportStatus::Manual,
 					message: format!("Fallback source model {source:?} was not imported"),
 				});
 				continue;
 			}
+			let Some(fallback_names) = fallback_names.as_array() else {
+				plan.findings.push(ImportFinding {
+					source_path: format!("{source_path}[{index}].{source}"),
+					status: ImportStatus::Unsupported,
+					message: "Fallback targets must be a list and were not emitted".to_string(),
+				});
+				continue;
+			};
 			let mut seen = HashSet::new();
 			let mut resolved_groups = Vec::new();
-			for fallback_name in fallback_names
-				.as_array()
-				.into_iter()
-				.flatten()
-				.filter_map(Value::as_str)
-			{
+			for fallback_name in fallback_names.iter().filter_map(Value::as_str) {
 				if !seen.insert(fallback_name) {
 					continue;
 				}
@@ -486,7 +640,7 @@ fn apply_fallbacks(value: &Value, plan: &mut ImportPlan) {
 					resolved_groups.push(fallback.targets.clone());
 				} else {
 					plan.findings.push(ImportFinding {
-						source_path: "router_settings.fallbacks".to_string(),
+						source_path: source_path.to_string(),
 						status: ImportStatus::Manual,
 						message: format!("Fallback target model {fallback_name:?} was not imported"),
 					});
@@ -501,7 +655,7 @@ fn apply_fallbacks(value: &Value, plan: &mut ImportPlan) {
 		}
 	}
 	plan.findings.push(ImportFinding {
-		source_path: "router_settings.fallbacks".to_string(),
+		source_path: source_path.to_string(),
 		status: ImportStatus::Approximate,
 		message: "Mapped ordinary LiteLLM fallbacks to agentgateway priority-based failover"
 			.to_string(),
@@ -613,6 +767,127 @@ model_list:
 				.iter()
 				.any(|finding| finding.status == ImportStatus::Unsupported)
 		);
+	}
+
+	#[test]
+	fn reports_unmapped_top_level_and_model_fields() {
+		let input = r#"
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+  model_info:
+    id: deployment-1
+  custom_model_field: true
+credential_list:
+- credential_name: shared
+  credential_values:
+    api_key: os.environ/OPENAI_API_KEY
+  credential_info: {}
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+environment_variables:
+  LOG_LEVEL: info
+custom_section:
+  enabled: true
+"#;
+		let result = import_config("litellm", input).unwrap();
+		for expected in [
+			"model_list[0].model_info.id",
+			"model_list[0].custom_model_field",
+			"credential_list",
+			"general_settings.master_key",
+			"environment_variables.LOG_LEVEL",
+			"custom_section",
+		] {
+			assert!(
+				result
+					.findings
+					.iter()
+					.any(|finding| finding.source_path == expected),
+				"missing finding for {expected}"
+			);
+		}
+	}
+
+	#[test]
+	fn normalizes_environment_references_in_all_mapped_values() {
+		let input = r#"
+model_list:
+- model_name: chat
+  litellm_params:
+    model: azure/gpt-4o
+    api_base: os.environ/AZURE_API_BASE
+    api_key: os.environ/AZURE_API_KEY
+    api_version: os.environ/AZURE_API_VERSION
+    temperature: os.environ/DEFAULT_TEMPERATURE
+    stop: [os.environ/STOP_SEQUENCE]
+"#;
+		let result = import_config("litellm", input).unwrap();
+		let model = &result.config["llm"]["models"][0];
+		assert_eq!(model["params"]["baseUrl"], "$AZURE_API_BASE");
+		assert_eq!(model["params"]["apiKey"], "$AZURE_API_KEY");
+		assert_eq!(model["params"]["azureApiVersion"], "$AZURE_API_VERSION");
+		assert_eq!(model["defaults"]["temperature"], "$DEFAULT_TEMPERATURE");
+		assert_eq!(model["defaults"]["stop"][0], "$STOP_SEQUENCE");
+	}
+
+	#[test]
+	fn does_not_apply_capacity_weights_to_incompatible_routing() {
+		let input = r#"
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+    rpm: 100
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o-mini
+    rpm: 50
+    tpm: 10000
+router_settings:
+  routing_strategy: least-busy
+"#;
+		let result = import_config("litellm", input).unwrap();
+		let targets = result.config["llm"]["virtualModels"][0]["routing"]["weighted"]["targets"]
+			.as_array()
+			.unwrap();
+		assert!(targets.iter().all(|target| target["weight"] == 1));
+		assert!(result.findings.iter().any(|finding| {
+			finding.source_path == "router_settings.routing_strategy"
+				&& finding.status == ImportStatus::Unsupported
+		}));
+		assert!(result.findings.iter().any(|finding| {
+			finding.source_path == "model_list[1].litellm_params.tpm"
+				&& finding.status == ImportStatus::Manual
+		}));
+	}
+
+	#[test]
+	fn reports_wildcard_models_without_emitting_malformed_names() {
+		let input = r#"
+model_list:
+- model_name: "*"
+  litellm_params:
+    model: "openai/*"
+"#;
+		let result = import_config("litellm", input).unwrap();
+		assert!(
+			result.config["llm"]["models"]
+				.as_array()
+				.unwrap()
+				.is_empty()
+		);
+		assert!(
+			result.config["llm"]["virtualModels"]
+				.as_array()
+				.unwrap()
+				.is_empty()
+		);
+		assert!(result.findings.iter().any(|finding| {
+			finding.source_path == "model_list[0].model_name"
+				&& finding.status == ImportStatus::Unsupported
+		}));
 	}
 
 	#[test]
