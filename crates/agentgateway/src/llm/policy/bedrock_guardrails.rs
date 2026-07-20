@@ -101,6 +101,27 @@ impl ApplyGuardrailResponse {
 		}
 	}
 
+	/// True when the guardrail would have blocked or masked in enforce mode.
+	/// The audit path reports `GuardrailOutcome::Audit` only in this case, so the
+	/// `guardrail_checks{action="Audit"}` metric means the same thing for Bedrock
+	/// as for every other guard kind — "the provider would have enforced, but
+	/// audit mode passed the content through." Benign traffic records `Allow`.
+	pub fn would_enforce(&self) -> bool {
+		self.is_blocked() || self.is_anonymized()
+	}
+
+	/// True if the guardrail found anything worth recording in the audit log: it
+	/// intervened, a per-filter assessment is marked `detected`, or a filter
+	/// action is `BLOCKED`/`ANONYMIZED`. This is deliberately broader than
+	/// `would_enforce`: a guardrail *resource* configured in detect mode returns
+	/// a top-level `action: NONE` with per-filter `detected: true`, so it would
+	/// not enforce (records `Allow`) yet still has a finding to surface. Gating
+	/// the log on detection keeps benign traffic quiet.
+	pub fn has_detection(&self) -> bool {
+		self.action == GuardrailAction::GuardrailIntervened
+			|| self.assessments.iter().any(Self::value_indicates_detection)
+	}
+
 	/// Emit a structured, ingestible record of an audit-mode evaluation. The
 	/// `assessments` array carries the per-filter findings (category, confidence,
 	/// `detected`) as AWS returns them, with content-bearing fields redacted (see
@@ -213,6 +234,28 @@ impl ApplyGuardrailResponse {
 				map.values().any(Self::value_contains_blocked)
 			},
 			serde_json::Value::Array(arr) => arr.iter().any(Self::value_contains_blocked),
+			_ => false,
+		}
+	}
+
+	/// Search a JSON assessment for any detection signal: `"detected": true`, or
+	/// an `"action"` of `BLOCKED`/`ANONYMIZED`. Used by `has_detection` to decide
+	/// whether audit mode has anything to log, including the detect-mode-resource
+	/// case where the top-level action is `NONE` but a filter set `detected`.
+	fn value_indicates_detection(value: &serde_json::Value) -> bool {
+		match value {
+			serde_json::Value::Object(map) => {
+				if map.get("detected") == Some(&serde_json::Value::Bool(true)) {
+					return true;
+				}
+				if let Some(serde_json::Value::String(action)) = map.get("action")
+					&& (action == "BLOCKED" || action == "ANONYMIZED")
+				{
+					return true;
+				}
+				map.values().any(Self::value_indicates_detection)
+			},
+			serde_json::Value::Array(arr) => arr.iter().any(Self::value_indicates_detection),
 			_ => false,
 		}
 	}

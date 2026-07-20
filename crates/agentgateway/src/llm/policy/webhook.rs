@@ -259,7 +259,7 @@ mod tests {
 	use super::*;
 	use crate::http::HeaderOrPseudo;
 	use crate::http::jwt::Claims;
-	use crate::llm::policy::FailureMode;
+	use crate::llm::policy::{FailureMode, RejectAuditAction};
 	use crate::types::agent::SimpleBackendReference;
 
 	fn webhook(headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)>) -> Webhook {
@@ -268,6 +268,7 @@ mod tests {
 			headers,
 			forward_header_matches: vec![],
 			failure_mode: FailureMode::FailClosed,
+			action: RejectAuditAction::Reject,
 		}
 	}
 
