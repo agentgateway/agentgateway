@@ -80,6 +80,7 @@ export function CostsPage() {
   }, [customRows, editingCustom]);
 
   async function refreshCosts() {
+    // ConfigSaveButton records file overrides for useUpdateConfig, but this endpoint writes the catalog directly.
     if (hybrid && baseFile) takeHybridFileWriteOverride();
     setRefreshing(true);
     setError(null);

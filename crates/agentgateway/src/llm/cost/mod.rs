@@ -22,14 +22,19 @@ pub mod refresh;
 const TRACE_POLICY_KIND: &str = "llm_cost";
 
 pub struct ModelCatalog {
-	snapshot: ArcSwap<CatalogSnapshot>,
-	sources: ArcSwap<Vec<ModelCatalogSource>>,
+	state: ArcSwap<ModelCatalogState>,
+}
+
+struct ModelCatalogState {
+	snapshot: Arc<CatalogSnapshot>,
+	sources: Vec<ModelCatalogSource>,
 }
 
 impl fmt::Debug for ModelCatalog {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let state = self.state.load();
 		f.debug_struct("ModelCatalog")
-			.field("snapshot", &*self.snapshot.load())
+			.field("snapshot", &state.snapshot)
 			.finish()
 	}
 }
@@ -37,8 +42,10 @@ impl fmt::Debug for ModelCatalog {
 impl Default for ModelCatalog {
 	fn default() -> Self {
 		Self {
-			snapshot: ArcSwap::from_pointee(CatalogSnapshot::empty()),
-			sources: ArcSwap::from_pointee(Vec::new()),
+			state: ArcSwap::from_pointee(ModelCatalogState {
+				snapshot: Arc::new(CatalogSnapshot::empty()),
+				sources: Vec::new(),
+			}),
 		}
 	}
 }
@@ -57,7 +64,10 @@ impl ModelCatalog {
 				ModelCatalogSource::InlineCatalog { .. } => None,
 			})
 			.collect();
-		catalog.sources.store(Arc::new(sources));
+		catalog.state.store(Arc::new(ModelCatalogState {
+			snapshot: Arc::new(CatalogSnapshot::empty()),
+			sources,
+		}));
 		tokio::spawn({
 			let catalog = catalog.clone();
 			async move {
@@ -77,36 +87,50 @@ impl ModelCatalog {
 	}
 
 	pub fn snapshot(&self) -> Arc<CatalogSnapshot> {
-		self.snapshot.load_full()
+		self.state.load().snapshot.clone()
 	}
 
 	pub fn list_models(&self) -> ModelCatalogModels {
-		self.snapshot.load().list_models()
+		self.state.load().snapshot.list_models()
 	}
 
 	pub async fn replace_sources(&self, sources: Vec<ModelCatalogSource>) -> anyhow::Result<()> {
 		if sources.is_empty() {
-			self.sources.store(Arc::new(sources));
-			self.snapshot.store(Arc::new(CatalogSnapshot::empty()));
+			self.state.store(Arc::new(ModelCatalogState {
+				snapshot: Arc::new(CatalogSnapshot::empty()),
+				sources,
+			}));
 			return Ok(());
 		}
 		let loaded = load_sources(&sources).await?;
-		log_loaded_catalog("model catalog reloaded", &loaded);
-		self.sources.store(Arc::new(sources));
-		self.snapshot.store(Arc::new(loaded.snapshot));
+		log_loaded_catalog("model catalog reloaded", &loaded.snapshot, &loaded.missing);
+		self.state.store(Arc::new(ModelCatalogState {
+			snapshot: Arc::new(loaded.snapshot),
+			sources,
+		}));
 		Ok(())
 	}
 
 	pub(super) async fn reload(&self) -> anyhow::Result<()> {
-		let loaded = load_sources(&self.sources.load_full()).await?;
-		log_loaded_catalog("model catalog loaded", &loaded);
-		self.snapshot.store(Arc::new(loaded.snapshot));
-		Ok(())
+		loop {
+			let current = self.state.load_full();
+			let loaded = load_sources(&current.sources).await?;
+			let next = Arc::new(ModelCatalogState {
+				snapshot: Arc::new(loaded.snapshot),
+				sources: current.sources.clone(),
+			});
+			let previous = self.state.compare_and_swap(&current, next.clone());
+			if Arc::ptr_eq(&previous, &current) {
+				log_loaded_catalog("model catalog loaded", &next.snapshot, &loaded.missing);
+				return Ok(());
+			}
+		}
 	}
 
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
 		let provider = info.request.provider.as_str();
-		let snapshot = self.snapshot.load();
+		let state = self.state.load();
+		let snapshot = &state.snapshot;
 		if let Some(provider_model) = &info.response.provider_model {
 			let projection = snapshot.project_with_missing_trace(
 				provider,
@@ -518,15 +542,15 @@ async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCa
 	})
 }
 
-fn log_loaded_catalog(message: &'static str, loaded: &LoadedCatalog) {
-	let catalog = loaded.snapshot.catalog.as_ref();
+fn log_loaded_catalog(message: &'static str, snapshot: &CatalogSnapshot, missing: &[PathBuf]) {
+	let catalog = snapshot.catalog.as_ref();
 	let providers = catalog.map_or(0, |catalog| catalog.providers.len());
 	let models = catalog.map_or(0, |catalog| {
 		catalog.providers.values().map(|p| p.models.len()).sum()
 	});
 	info!(providers, models, "{}", message);
-	if !loaded.missing.is_empty() {
-		debug!(files = ?loaded.missing, "{} configured but missing", message);
+	if !missing.is_empty() {
+		debug!(files = ?missing, "{} configured but missing", message);
 	}
 }
 
@@ -658,8 +682,10 @@ mod tests {
 
 	fn model_catalog(json: &str) -> ModelCatalog {
 		ModelCatalog {
-			snapshot: ArcSwap::from_pointee(CatalogSnapshot::parse(json).unwrap()),
-			..Default::default()
+			state: ArcSwap::from_pointee(ModelCatalogState {
+				snapshot: Arc::new(CatalogSnapshot::parse(json).unwrap()),
+				sources: Vec::new(),
+			}),
 		}
 	}
 

@@ -1,20 +1,19 @@
 use std::fmt;
 use std::str::FromStr;
-use std::time::Duration;
 
-use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
-use sqlx::{Row, SqlitePool};
+use sqlx::types::Json;
+use sqlx::{PgPool, Row, SqlitePool};
 use tokio::sync::watch;
 
+use crate::database::DatabasePool;
 use crate::telemetry::log_store;
 
 #[derive(Clone, Debug)]
 pub struct ConfigResourceStore {
-	pool: SqlitePool,
+	pool: DatabasePool,
 	change_tx: watch::Sender<()>,
 }
 
@@ -96,34 +95,28 @@ pub struct ConfigResourceUpsert {
 }
 
 pub async fn setup(cfg: &log_store::Config) -> anyhow::Result<ConfigResourceStore> {
-	ConfigResourceStore::connect(cfg).await
+	ConfigResourceStore::connect(&cfg.url).await
 }
 
 impl ConfigResourceStore {
-	async fn connect(cfg: &log_store::Config) -> anyhow::Result<Self> {
-		if cfg.url.starts_with("postgres://") || cfg.url.starts_with("postgresql://") {
-			anyhow::bail!("configStore.mode=hybrid currently supports only SQLite config.database.url");
-		}
+	async fn connect(url: &str) -> anyhow::Result<Self> {
+		Self::from_pool(DatabasePool::connect(url).await?).await
+	}
 
-		let options = cfg
-			.url
-			.parse::<SqliteConnectOptions>()
-			.context("failed to parse config store sqlite database URL")?
-			.create_if_missing(true)
-			.journal_mode(SqliteJournalMode::Wal)
-			.synchronous(SqliteSynchronous::Normal)
-			.busy_timeout(Duration::from_secs(5));
-		let pool = SqlitePoolOptions::new()
-			.max_connections(5)
-			.connect_with(options)
-			.await
-			.context("failed to connect config store sqlite database")?;
-		sqlx::raw_sql(SCHEMA).execute(&pool).await?;
+	async fn from_pool(pool: DatabasePool) -> anyhow::Result<Self> {
+		match &pool {
+			DatabasePool::Sqlite(pool) => {
+				sqlx::raw_sql(SQLITE_SCHEMA).execute(pool).await?;
+			},
+			DatabasePool::Postgres(pool) => {
+				sqlx::raw_sql(POSTGRES_SCHEMA).execute(pool).await?;
+			},
+		};
 		let (change_tx, _) = watch::channel(());
 		Ok(Self { pool, change_tx })
 	}
 
-	pub fn pool(&self) -> SqlitePool {
+	pub fn pool(&self) -> DatabasePool {
 		self.pool.clone()
 	}
 
@@ -135,28 +128,10 @@ impl ConfigResourceStore {
 		&self,
 		kind: Option<ConfigResourceKind>,
 	) -> anyhow::Result<Vec<ConfigResource>> {
-		if let Some(kind) = kind {
-			let rows = sqlx::query(
-				"SELECT kind, id, value_json, revision, created_at, updated_at \
-				 FROM agw_config_resources \
-				 WHERE deleted_at IS NULL AND kind = ? \
-				 ORDER BY id",
-			)
-			.bind(kind.as_str())
-			.fetch_all(&self.pool)
-			.await?;
-			return rows.into_iter().map(row_to_resource).collect();
+		match &self.pool {
+			DatabasePool::Sqlite(pool) => list_sqlite(pool, kind).await,
+			DatabasePool::Postgres(pool) => list_postgres(pool, kind).await,
 		}
-
-		let rows = sqlx::query(
-			"SELECT kind, id, value_json, revision, created_at, updated_at \
-			 FROM agw_config_resources \
-			 WHERE deleted_at IS NULL \
-			 ORDER BY kind, id",
-		)
-		.fetch_all(&self.pool)
-		.await?;
-		rows.into_iter().map(row_to_resource).collect()
 	}
 
 	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
@@ -164,38 +139,10 @@ impl ConfigResourceStore {
 		&self,
 		prepared: Vec<PreparedResource>,
 	) -> anyhow::Result<ConfigResourcesResponse> {
-		let mut tx = self.pool.begin().await?;
-		let mut changed = Vec::with_capacity(prepared.len());
-		for PreparedResource { kind, id, value } in prepared {
-			validate_id(&id)?;
-			let now = now();
-			sqlx::query(
-				"INSERT INTO agw_config_resources \
-					(kind, id, value_json, revision, created_at, updated_at, deleted_at) \
-				 VALUES (?, ?, ?, 1, ?, ?, NULL) \
-				 ON CONFLICT(kind, id) DO UPDATE SET \
-					value_json = excluded.value_json, \
-					revision = agw_config_resources.revision + 1, \
-					updated_at = excluded.updated_at, \
-					deleted_at = NULL",
-			)
-			.bind(kind.as_str())
-			.bind(&id)
-			.bind(serde_json::to_string(&value)?)
-			.bind(&now)
-			.bind(&now)
-			.execute(&mut *tx)
-			.await?;
-			changed.push((kind, id));
-		}
-
-		let mut resources = Vec::with_capacity(changed.len());
-		for (kind, id) in changed {
-			if let Some(resource) = fetch_resource(&mut tx, kind, &id).await? {
-				resources.push(resource);
-			}
-		}
-		tx.commit().await?;
+		let resources = match &self.pool {
+			DatabasePool::Sqlite(pool) => upsert_sqlite(pool, prepared).await?,
+			DatabasePool::Postgres(pool) => upsert_postgres(pool, prepared).await?,
+		};
 		if !resources.is_empty() {
 			self.notify_changed();
 		}
@@ -204,19 +151,11 @@ impl ConfigResourceStore {
 
 	pub async fn delete(&self, kind: ConfigResourceKind, id: &str) -> anyhow::Result<()> {
 		validate_id(id)?;
-		let now = now();
-		let result = sqlx::query(
-			"UPDATE agw_config_resources \
-			 SET revision = revision + 1, updated_at = ?, deleted_at = ? \
-			 WHERE kind = ? AND id = ? AND deleted_at IS NULL",
-		)
-		.bind(&now)
-		.bind(&now)
-		.bind(kind.as_str())
-		.bind(id)
-		.execute(&self.pool)
-		.await?;
-		if result.rows_affected() == 0 {
+		let deleted = match &self.pool {
+			DatabasePool::Sqlite(pool) => delete_sqlite(pool, kind, id).await?,
+			DatabasePool::Postgres(pool) => delete_postgres(pool, kind, id).await?,
+		};
+		if !deleted {
 			anyhow::bail!("config resource not found: {kind}/{id}");
 		}
 		self.notify_changed();
@@ -537,12 +476,178 @@ fn string_field(
 		.ok_or_else(|| anyhow::anyhow!(error()))
 }
 
-fn now() -> String {
-	Utc::now().to_rfc3339()
+async fn list_sqlite(
+	pool: &SqlitePool,
+	kind: Option<ConfigResourceKind>,
+) -> anyhow::Result<Vec<ConfigResource>> {
+	let rows = if let Some(kind) = kind {
+		sqlx::query(
+			"SELECT kind, id, value_json, revision, created_at, updated_at \
+			 FROM agw_config_resources \
+			 WHERE deleted_at IS NULL AND kind = ? \
+			 ORDER BY id",
+		)
+		.bind(kind.as_str())
+		.fetch_all(pool)
+		.await?
+	} else {
+		sqlx::query(
+			"SELECT kind, id, value_json, revision, created_at, updated_at \
+			 FROM agw_config_resources \
+			 WHERE deleted_at IS NULL \
+			 ORDER BY kind, id",
+		)
+		.fetch_all(pool)
+		.await?
+	};
+	rows.into_iter().map(sqlite_row_to_resource).collect()
+}
+
+async fn list_postgres(
+	pool: &PgPool,
+	kind: Option<ConfigResourceKind>,
+) -> anyhow::Result<Vec<ConfigResource>> {
+	let rows = if let Some(kind) = kind {
+		sqlx::query(
+			"SELECT kind, id, value_json, revision, created_at, updated_at \
+			 FROM agw_config_resources \
+			 WHERE deleted_at IS NULL AND kind = $1 \
+			 ORDER BY id",
+		)
+		.bind(kind.as_str())
+		.fetch_all(pool)
+		.await?
+	} else {
+		sqlx::query(
+			"SELECT kind, id, value_json, revision, created_at, updated_at \
+			 FROM agw_config_resources \
+			 WHERE deleted_at IS NULL \
+			 ORDER BY kind, id",
+		)
+		.fetch_all(pool)
+		.await?
+	};
+	rows.into_iter().map(postgres_row_to_resource).collect()
+}
+
+async fn upsert_sqlite(
+	pool: &SqlitePool,
+	prepared: Vec<PreparedResource>,
+) -> anyhow::Result<Vec<ConfigResource>> {
+	let mut tx = pool.begin().await?;
+	let mut changed = Vec::with_capacity(prepared.len());
+	for PreparedResource { kind, id, value } in prepared {
+		validate_id(&id)?;
+		let now = Utc::now().to_rfc3339();
+		sqlx::query(
+			"INSERT INTO agw_config_resources \
+			 (kind, id, value_json, revision, created_at, updated_at, deleted_at) \
+			 VALUES (?, ?, ?, 1, ?, ?, NULL) \
+			 ON CONFLICT(kind, id) DO UPDATE SET \
+				value_json = excluded.value_json, \
+				revision = agw_config_resources.revision + 1, \
+				updated_at = excluded.updated_at, \
+				deleted_at = NULL",
+		)
+		.bind(kind.as_str())
+		.bind(&id)
+		.bind(serde_json::to_string(&value)?)
+		.bind(&now)
+		.bind(&now)
+		.execute(&mut *tx)
+		.await?;
+		changed.push((kind, id));
+	}
+
+	let mut resources = Vec::with_capacity(changed.len());
+	for (kind, id) in changed {
+		if let Some(resource) = fetch_sqlite_resource(&mut tx, kind, &id).await? {
+			resources.push(resource);
+		}
+	}
+	tx.commit().await?;
+	Ok(resources)
+}
+
+async fn upsert_postgres(
+	pool: &PgPool,
+	prepared: Vec<PreparedResource>,
+) -> anyhow::Result<Vec<ConfigResource>> {
+	let mut tx = pool.begin().await?;
+	let mut changed = Vec::with_capacity(prepared.len());
+	for PreparedResource { kind, id, value } in prepared {
+		validate_id(&id)?;
+		let now = Utc::now();
+		sqlx::query(
+			"INSERT INTO agw_config_resources \
+			 (kind, id, value_json, revision, created_at, updated_at, deleted_at) \
+			 VALUES ($1, $2, $3, 1, $4, $4, NULL) \
+			 ON CONFLICT(kind, id) DO UPDATE SET \
+				value_json = excluded.value_json, \
+				revision = agw_config_resources.revision + 1, \
+				updated_at = excluded.updated_at, \
+				deleted_at = NULL",
+		)
+		.bind(kind.as_str())
+		.bind(&id)
+		.bind(Json(value))
+		.bind(now)
+		.execute(&mut *tx)
+		.await?;
+		changed.push((kind, id));
+	}
+
+	let mut resources = Vec::with_capacity(changed.len());
+	for (kind, id) in changed {
+		if let Some(resource) = fetch_postgres_resource(&mut tx, kind, &id).await? {
+			resources.push(resource);
+		}
+	}
+	tx.commit().await?;
+	Ok(resources)
+}
+
+async fn delete_sqlite(
+	pool: &SqlitePool,
+	kind: ConfigResourceKind,
+	id: &str,
+) -> anyhow::Result<bool> {
+	let now = Utc::now().to_rfc3339();
+	let result = sqlx::query(
+		"UPDATE agw_config_resources \
+		 SET revision = revision + 1, updated_at = ?, deleted_at = ? \
+		 WHERE kind = ? AND id = ? AND deleted_at IS NULL",
+	)
+	.bind(&now)
+	.bind(&now)
+	.bind(kind.as_str())
+	.bind(id)
+	.execute(pool)
+	.await?;
+	Ok(result.rows_affected() > 0)
+}
+
+async fn delete_postgres(
+	pool: &PgPool,
+	kind: ConfigResourceKind,
+	id: &str,
+) -> anyhow::Result<bool> {
+	let now = Utc::now();
+	let result = sqlx::query(
+		"UPDATE agw_config_resources \
+		 SET revision = revision + 1, updated_at = $1, deleted_at = $1 \
+		 WHERE kind = $2 AND id = $3 AND deleted_at IS NULL",
+	)
+	.bind(now)
+	.bind(kind.as_str())
+	.bind(id)
+	.execute(pool)
+	.await?;
+	Ok(result.rows_affected() > 0)
 }
 
 #[cfg_attr(not(feature = "ui"), allow(dead_code))]
-async fn fetch_resource(
+async fn fetch_sqlite_resource(
 	tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
 	kind: ConfigResourceKind,
 	id: &str,
@@ -556,11 +661,30 @@ async fn fetch_resource(
 	.bind(id)
 	.fetch_optional(&mut **tx)
 	.await?
-	.map(row_to_resource)
+	.map(sqlite_row_to_resource)
 	.transpose()
 }
 
-fn row_to_resource(row: sqlx::sqlite::SqliteRow) -> anyhow::Result<ConfigResource> {
+#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+async fn fetch_postgres_resource(
+	tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+	kind: ConfigResourceKind,
+	id: &str,
+) -> anyhow::Result<Option<ConfigResource>> {
+	sqlx::query(
+		"SELECT kind, id, value_json, revision, created_at, updated_at \
+		 FROM agw_config_resources \
+		 WHERE kind = $1 AND id = $2 AND deleted_at IS NULL",
+	)
+	.bind(kind.as_str())
+	.bind(id)
+	.fetch_optional(&mut **tx)
+	.await?
+	.map(postgres_row_to_resource)
+	.transpose()
+}
+
+fn sqlite_row_to_resource(row: sqlx::sqlite::SqliteRow) -> anyhow::Result<ConfigResource> {
 	let value_json: String = row.try_get("value_json")?;
 	let kind: String = row.try_get("kind")?;
 	let created_at: String = row.try_get("created_at")?;
@@ -575,7 +699,20 @@ fn row_to_resource(row: sqlx::sqlite::SqliteRow) -> anyhow::Result<ConfigResourc
 	})
 }
 
-const SCHEMA: &str = r#"
+fn postgres_row_to_resource(row: sqlx::postgres::PgRow) -> anyhow::Result<ConfigResource> {
+	let kind: String = row.try_get("kind")?;
+	let Json(value) = row.try_get("value_json")?;
+	Ok(ConfigResource {
+		kind: kind.parse()?,
+		id: row.try_get("id")?,
+		value,
+		revision: row.try_get("revision")?,
+		created_at: row.try_get("created_at")?,
+		updated_at: row.try_get("updated_at")?,
+	})
+}
+
+const SQLITE_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS agw_config_resources (
 	kind TEXT NOT NULL,
 	id TEXT NOT NULL,
@@ -584,6 +721,22 @@ CREATE TABLE IF NOT EXISTS agw_config_resources (
 	created_at TEXT NOT NULL,
 	updated_at TEXT NOT NULL,
 	deleted_at TEXT,
+	PRIMARY KEY (kind, id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agw_config_resources_kind_updated
+	ON agw_config_resources(kind, updated_at);
+"#;
+
+const POSTGRES_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS agw_config_resources (
+	kind TEXT NOT NULL,
+	id TEXT NOT NULL,
+	value_json JSONB NOT NULL,
+	revision BIGINT NOT NULL DEFAULT 1,
+	created_at TIMESTAMPTZ NOT NULL,
+	updated_at TIMESTAMPTZ NOT NULL,
+	deleted_at TIMESTAMPTZ,
 	PRIMARY KEY (kind, id)
 );
 

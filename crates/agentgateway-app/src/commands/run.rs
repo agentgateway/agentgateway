@@ -46,6 +46,11 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				&config.logging.level,
 				config.logging.format == LoggingFormat::Json,
 			);
+			info!("version: {}", version::BuildInfo::new());
+			info!(
+				"running with config: {}",
+				serdes::yamlviajson::to_string(&config)?
+			);
 			let config_resource_store = if config.config_store.mode == ConfigStoreMode::Hybrid {
 				let database = config
 					.database
@@ -57,8 +62,8 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 			};
 			let request_log_store = match config.database.as_ref() {
 				Some(cfg) => {
-					let sqlite_pool = config_resource_store.as_ref().map(|store| store.pool());
-					match agentgateway::telemetry::log_store::setup_with_sqlite_pool(cfg, sqlite_pool).await {
+					let pool = config_resource_store.as_ref().map(|store| store.pool());
+					match agentgateway::telemetry::log_store::setup_with_pool(cfg, pool).await {
 						Ok(store) => Some(store),
 						Err(err) => {
 							error!(?err, "failed to initialize request log database");
@@ -160,11 +165,6 @@ async fn proxy(
 	cfg: Arc<Config>,
 	config_resource_store: Option<agentgateway::config_store::ConfigResourceStore>,
 ) -> anyhow::Result<()> {
-	info!("version: {}", version::BuildInfo::new());
-	info!(
-		"running with config: {}",
-		serdes::yamlviajson::to_string(&cfg)?
-	);
 	let bound = agentgateway::app::run(cfg, config_resource_store).await?;
 	spawn_readiness(&bound);
 	bound.wait_termination().await
