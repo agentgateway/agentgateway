@@ -258,7 +258,10 @@ export function HomePage() {
           {tr("copy.enableTheCapabilitiesYouWantToOperateFromTheSetupPath")}
         </StatusBanner>
       ) : warnings.length ? (
-        <StatusBanner state="warn" title={tr("copy.valueWarningValue")}>
+        <StatusBanner
+          state="warn"
+          title={tr("copy.valueWarningValue", { count: warnings.length })}
+        >
           <ul className="banner-warning-list">
             {warnings.map((warning) => (
               <li key={warning}>{configWarningLabel(warning)}</li>
@@ -298,12 +301,11 @@ export function HomePage() {
           setupHash="add=model"
           setupLabel="Set up models"
           overview={[
-            tr("copy.valueModels", models.length),
-            tr("copy.valueVirtualModels", virtualModels.length),
-            tr(
-              "copy.valueSharedProviders",
-              config.data?.llm?.providers?.length ?? 0,
-            ),
+            tr("copy.valueModels", { count: models.length }),
+            tr("copy.valueVirtualModels", { count: virtualModels.length }),
+            tr("copy.valueSharedProviders", {
+              count: config.data?.llm?.providers?.length ?? 0,
+            }),
             surfaceEndpointLabel(
               config.data?.llm?.gateways,
               config.data?.llm?.port ?? 4000,
@@ -332,7 +334,7 @@ export function HomePage() {
           setupTo="/mcp/servers"
           setupLabel="Set up servers"
           overview={[
-            tr("copy.valueConfiguredServers", mcpServers.length),
+            tr("copy.valueConfiguredServers", { count: mcpServers.length }),
             surfaceEndpointLabel(
               config.data?.mcp?.gateways,
               config.data?.mcp?.port ?? 3000,
@@ -369,16 +371,15 @@ export function HomePage() {
           overview={
             hasBinds
               ? [
-                  tr("copy.valueBinds", traffic.binds),
-                  tr("copy.valueListeners", traffic.listeners),
-                  tr(
-                    "copy.valueRoutes",
-                    traffic.httpRoutes + traffic.tcpRoutes,
-                  ),
+                  tr("copy.valueBinds", { count: traffic.binds }),
+                  tr("copy.valueListeners", { count: traffic.listeners }),
+                  tr("copy.valueRoutes", {
+                    count: traffic.httpRoutes + traffic.tcpRoutes,
+                  }),
                 ]
               : [
-                  tr("copy.valueGateways", traffic.gateways),
-                  tr("copy.valueRoutes", traffic.httpRoutes),
+                  tr("copy.valueGateways", { count: traffic.gateways }),
+                  tr("copy.valueRoutes", { count: traffic.httpRoutes }),
                 ]
           }
         />

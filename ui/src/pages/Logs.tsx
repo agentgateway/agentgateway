@@ -409,7 +409,7 @@ export function LogsPage() {
             <p>
               {loading
                 ? tr("copy.refreshing")
-                : tr("copy.valueRows", formatNumber(visibleLogs.length))}
+                : tr("copy.valueRows", { count: visibleLogs.length })}
             </p>
           </div>
           {stream ? (

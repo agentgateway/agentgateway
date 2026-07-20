@@ -71,14 +71,17 @@ export function virtualModelSummary(model: LlmVirtualModel) {
     const rules = targets.filter((target) => target.when?.trim()).length;
     const hasFallback = targets.some((target) => !target.when?.trim());
     return hasFallback
-      ? tr("copy.valueRulesWithFallback", rules)
-      : tr("copy.valueRules", rules);
+      ? tr("copy.valueRulesWithFallback", { count: rules })
+      : tr("copy.valueRules", { count: rules });
   }
   if (model.routing.failover) {
     const targets = model.routing.failover.targets ?? [];
     const priorities = new Set(targets.map((target) => target.priority)).size;
-    return tr("copy.valuePrioritiesValueTargets", [priorities, targets.length]);
+    return tr("copy.priorityTargetSeparator", [
+      tr("copy.priority", { count: priorities }),
+      tr("copy.target", { count: targets.length }),
+    ]);
   }
   const targets = model.routing.weighted?.targets ?? [];
-  return tr("copy.valueWeightedTargets", targets.length);
+  return tr("copy.valueWeightedTargets", { count: targets.length });
 }

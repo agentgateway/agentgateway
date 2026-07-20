@@ -166,7 +166,7 @@ export function ProvidersPage() {
                       <td>
                         {usage.length ? (
                           <span className="badge ok">
-                            {tr("copy.valueModels", usage.length)}
+                            {tr("copy.valueModels", { count: usage.length })}
                           </span>
                         ) : (
                           <span className="badge">{tr("copy.unused")}</span>

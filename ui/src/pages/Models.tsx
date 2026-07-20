@@ -1872,7 +1872,7 @@ function ModelPolicyState(props: { model: LlmModel; warnings: number }) {
   if (policies.length > 0)
     return (
       <span className="badge ok">
-        {tr("copy.valuePolicies", policies.length)}
+        {tr("copy.valuePolicies", { count: policies.length })}
       </span>
     );
   return <span className="badge">{tr("copy.none")}</span>;

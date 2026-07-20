@@ -50,6 +50,10 @@ export function setLanguage(language: AppLanguage) {
 }
 
 type TranslationValue = string | number | boolean | null | undefined;
+type TranslationValues = TranslationValue | readonly TranslationValue[];
+type TranslationOptions = {
+  count: number;
+};
 
 /**
  * Translate a semantic resource key without coupling utility modules to React
@@ -59,10 +63,14 @@ type TranslationValue = string | number | boolean | null | undefined;
  */
 export function tr(
   key: string,
-  values?: TranslationValue | readonly TranslationValue[],
+  values?: TranslationValues | TranslationOptions,
 ): string {
-  const translated = resourceValue(key) ?? key;
-  return interpolateValues(translated, values);
+  const { count, replacements } = normalizeValues(values);
+  const translated =
+    count === undefined
+      ? resourceValue(key)
+      : i18n.t(key, { count, defaultValue: key });
+  return interpolateValues(translated ?? key, replacements);
 }
 
 /** Translate runtime English text, such as JSON Schema descriptions. */
@@ -82,10 +90,19 @@ function resourceValue(key: string) {
   return typeof fallback === "string" ? fallback : undefined;
 }
 
-function interpolateValues(
-  translated: string,
-  values?: TranslationValue | readonly TranslationValue[],
-) {
+function normalizeValues(values?: TranslationValues | TranslationOptions) {
+  if (
+    values !== null &&
+    typeof values === "object" &&
+    !Array.isArray(values) &&
+    "count" in values
+  ) {
+    return { count: values.count, replacements: undefined };
+  }
+  return { count: undefined, replacements: values as TranslationValues };
+}
+
+function interpolateValues(translated: string, values?: TranslationValues) {
   const replacements = Array.isArray(values)
     ? values
     : values === undefined

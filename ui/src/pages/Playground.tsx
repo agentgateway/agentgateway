@@ -708,7 +708,9 @@ export function PlaygroundPage() {
                   />
                   <span>
                     <strong>
-                      {tr("copy.includeMcpToolsValueServers", mcpServerCount)}
+                      {tr("copy.includeMcpToolsValueServers", {
+                        count: mcpServerCount,
+                      })}
                     </strong>
                     <small>
                       {tr("copy.letTheModelCallToolsExposedByTheMcpGateway")}

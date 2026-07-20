@@ -129,7 +129,7 @@ function gatewayOptions(config: GatewayConfig | null | undefined) {
       {
         value: name,
         label: tr("copy.valueAllListeners", [name]),
-        description: tr("copy.valueListeners", [listeners.length]),
+        description: tr("copy.valueListeners", { count: listeners.length }),
       },
       ...listeners.map((listener, index) => {
         const listenerName = listener.name ?? `listener${index}`;
