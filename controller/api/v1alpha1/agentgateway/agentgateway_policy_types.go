@@ -2296,6 +2296,10 @@ type ProcessingOptions struct {
 	AllowModeOverride bool `json:"allowModeOverride,omitempty"`
 }
 
+// NamespacedMetadataContext holds the CEL expressions for a single metadata
+// namespace, keyed by the metadata key within that namespace.
+type NamespacedMetadataContext map[string]CELExpression
+
 type ExtProc struct {
 	// External Processor server to reach.
 	// Supported types: `Service` and `Backend`.
@@ -2320,7 +2324,7 @@ type ExtProc struct {
 	// CEL expressions evaluated per request.
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
-	MetadataContext map[string]map[string]CELExpression `json:"metadataContext,omitempty"`
+	MetadataContext map[string]NamespacedMetadataContext `json:"metadataContext,omitempty"`
 
 	// Request attributes to send to the external processor in the request
 	// `attributes` field of the ProcessingRequest. Values are CEL expressions

@@ -12278,6 +12278,9 @@ spec:
                                       maxLength: 16384
                                       minLength: 1
                                       type: string
+                                    description: |-
+                                      NamespacedMetadataContext holds the CEL expressions for a single metadata
+                                      namespace, keyed by the metadata key within that namespace.
                                     type: object
                                   description: |-
                                     Metadata to send to the external processor in the
@@ -12417,6 +12420,9 @@ spec:
                             maxLength: 16384
                             minLength: 1
                             type: string
+                          description: |-
+                            NamespacedMetadataContext holds the CEL expressions for a single metadata
+                            namespace, keyed by the metadata key within that namespace.
                           type: object
                         description: |-
                           Metadata to send to the external processor in the
