@@ -4595,6 +4595,13 @@
           "description": "Backend that receives guardrail webhook requests.",
           "$ref": "#/$defs/SimpleLocalBackendSerde"
         },
+        "headers": {
+          "description": "Headers to set on the webhook request, computed from CEL expressions.\nKeys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;\nsetting `:path` replaces the default `/request` / `/response` path.\nExpressions are evaluated against the original incoming request (like the\n`transformation` policy), so `request.*` and `jwt.*` refer to the client's request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "forwardHeaderMatches": {
           "description": "Incoming request headers to forward to the webhook.",
           "type": "array",

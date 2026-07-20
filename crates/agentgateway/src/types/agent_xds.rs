@@ -3413,6 +3413,8 @@ fn convert_webhook(
 
 	Ok(llm::policy::Webhook {
 		target,
+		// CEL header expressions are not yet exposed via the XDS API.
+		headers: Default::default(),
 		forward_header_matches,
 		failure_mode,
 	})

@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::http::filters::{BackendRequestTimeout, HeaderModifier};
 use crate::http::jwt::Claims;
-use crate::http::{Response, StatusCode, auth};
+use crate::http::{HeaderOrPseudo, Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
@@ -154,6 +154,21 @@ pub struct Policy {
 	pub routes: SortedRoutes,
 }
 
+fn webhook_header_expressions(g: &PromptGuard) -> impl Iterator<Item = &cel::Expression> {
+	let request = g.request.iter().filter_map(|g| match &g.kind {
+		RequestGuardKind::Webhook(wh) => Some(&wh.headers),
+		_ => None,
+	});
+	let response = g.response.iter().filter_map(|g| match &g.kind {
+		ResponseGuardKind::Webhook(wh) => Some(&wh.headers),
+		_ => None,
+	});
+	request
+		.chain(response)
+		.flatten()
+		.map(|(_, expr)| expr.as_ref())
+}
+
 impl crate::store::HasExpressions for Policy {
 	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
 		self
@@ -161,6 +176,12 @@ impl crate::store::HasExpressions for Policy {
 			.iter()
 			.flatten()
 			.map(|(_, expr)| expr.as_ref())
+			.chain(
+				self
+					.prompt_guard
+					.iter()
+					.flat_map(webhook_header_expressions),
+			)
 	}
 }
 
@@ -374,13 +395,24 @@ impl PromptGuard {
 		&self,
 		text: &str,
 		client: &crate::proxy::httpproxy::PolicyClient,
+		original: Option<&cel::RequestSnapshot>,
 	) -> Option<Bytes> {
 		let headers = ::http::HeaderMap::new();
+		let claims = original.and_then(|s| s.jwt.clone());
 		let mut req = TextRequest {
 			content: text.to_string(),
 		};
 		for g in &self.request {
-			match Policy::apply_single_request_guard(g, &mut req, &headers, client, None).await {
+			match Policy::apply_single_request_guard(
+				g,
+				&mut req,
+				&headers,
+				client,
+				claims.clone(),
+				original,
+			)
+			.await
+			{
 				Ok(GuardrailOutcome::Rejected(rejected)) => {
 					Policy::record_guardrail_trip(
 						client,
@@ -454,11 +486,19 @@ impl PromptGuard {
 		&self,
 		client: &crate::proxy::httpproxy::PolicyClient,
 		http_headers: &HeaderMap,
+		original: Option<Arc<cel::RequestSnapshot>>,
 	) -> Vec<Box<dyn StreamingEvaluator>> {
 		self
 			.response
 			.iter()
-			.map(|g| streaming_guardrails::make_evaluator(g, client.clone(), http_headers.clone()))
+			.map(|g| {
+				streaming_guardrails::make_evaluator(
+					g,
+					client.clone(),
+					http_headers.clone(),
+					original.clone(),
+				)
+			})
 			.collect()
 	}
 
@@ -467,6 +507,7 @@ impl PromptGuard {
 		window: &str,
 		client: &crate::proxy::httpproxy::PolicyClient,
 		http_headers: &HeaderMap,
+		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
 		if window.is_empty() {
 			return Ok(None);
@@ -474,7 +515,9 @@ impl PromptGuard {
 		let mut resp = TextResponse {
 			content: window.to_string(),
 		};
-		match Policy::apply_single_response_guard(guard, &mut resp, http_headers, client).await? {
+		match Policy::apply_single_response_guard(guard, &mut resp, http_headers, client, original)
+			.await?
+		{
 			GuardrailOutcome::Rejected(rejected) => {
 				let body = rejected.into_body().collect().await?.to_bytes();
 				Ok(Some(StreamingGuardrailOutcome::Blocked(body)))
@@ -666,6 +709,7 @@ impl Policy {
 		req: &mut dyn RequestType,
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
+		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<Option<(Response, &'static str)>> {
 		let client = PolicyClient::new(backend_info.inputs.clone());
 		for g in self
@@ -674,7 +718,16 @@ impl Policy {
 			.iter()
 			.flat_map(|g| g.request.iter())
 		{
-			match Self::apply_single_request_guard(g, req, http_headers, &client, claims.clone()).await? {
+			match Self::apply_single_request_guard(
+				g,
+				req,
+				http_headers,
+				&client,
+				claims.clone(),
+				original,
+			)
+			.await?
+			{
 				GuardrailOutcome::Rejected(res) => {
 					Self::record_guardrail_trip(
 						&client,
@@ -721,10 +774,13 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		claims: Option<Claims>,
+		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<GuardrailOutcome> {
 		match &guard.kind {
 			RequestGuardKind::Regex(rg) => Self::apply_regex(req, rg, &guard.rejection),
-			RequestGuardKind::Webhook(wh) => Self::apply_webhook(req, http_headers, client, wh).await,
+			RequestGuardKind::Webhook(wh) => {
+				Self::apply_webhook(req, http_headers, client, wh, original).await
+			},
 			RequestGuardKind::OpenAIModeration(m) => {
 				match Self::apply_moderation(req, claims.clone(), client, &guard.rejection, m).await? {
 					Some(res) => Ok(GuardrailOutcome::Rejected(res)),
@@ -1010,10 +1066,11 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		webhook: &Webhook,
+		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<GuardrailOutcome> {
 		let messsages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_request(client, &webhook.target, &headers, messsages).await {
+		let whr = match webhook::send_request(client, webhook, original, &headers, messsages).await {
 			Ok(whr) => whr,
 			Err(e) => {
 				return match webhook.failure_mode {
@@ -1069,10 +1126,11 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		webhook: &Webhook,
+		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<GuardrailOutcome> {
 		let messsages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_response(client, &webhook.target, &headers, messsages).await {
+		let whr = match webhook::send_response(client, webhook, original, &headers, messsages).await {
 			Ok(whr) => whr,
 			Err(e) => {
 				return match webhook.failure_mode {
@@ -1245,9 +1303,10 @@ impl Policy {
 		resp: &mut dyn ResponseType,
 		http_headers: &HeaderMap,
 		guards: &Vec<ResponseGuard>,
+		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<Option<Response>> {
 		for g in guards {
-			match Self::apply_single_response_guard(g, resp, http_headers, client).await? {
+			match Self::apply_single_response_guard(g, resp, http_headers, client, original).await? {
 				GuardrailOutcome::Rejected(res) => {
 					Self::record_guardrail_trip(
 						client,
@@ -1287,11 +1346,12 @@ impl Policy {
 		resp: &mut dyn ResponseType,
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
+		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<GuardrailOutcome> {
 		match &guard.kind {
 			ResponseGuardKind::Regex(rg) => Self::apply_regex_response(resp, rg, &guard.rejection),
 			ResponseGuardKind::Webhook(wh) => {
-				Self::apply_webhook_response(resp, http_headers, client, wh).await
+				Self::apply_webhook_response(resp, http_headers, client, wh, original).await
 			},
 			ResponseGuardKind::BedrockGuardrails(bg) => {
 				Self::apply_bedrock_guardrails_response(resp, None, client, &guard.rejection, bg).await
@@ -1467,6 +1527,14 @@ pub enum FailureMode {
 pub struct Webhook {
 	/// Backend that receives guardrail webhook requests.
 	pub target: SimpleBackendReference,
+	/// Headers to set on the webhook request, computed from CEL expressions.
+	/// Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;
+	/// setting `:path` replaces the default `/request` / `/response` path.
+	/// Expressions are evaluated against the original incoming request (like the
+	/// `transformation` policy), so `request.*` and `jwt.*` refer to the client's request.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde_as(as = "serde_with::Map<_, _>")]
+	pub headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)>,
 	/// Incoming request headers to forward to the webhook.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub forward_header_matches: Vec<HeaderMatch>,

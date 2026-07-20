@@ -690,6 +690,13 @@ impl<'a> Executor<'a> {
 		this.set_response(resp);
 		this
 	}
+	pub fn new_request_snapshot(req: Option<&'a RequestSnapshot>) -> Self {
+		let mut this = Self::new_empty();
+		if let Some(req) = req {
+			this.set_request_snapshot(req);
+		}
+		this
+	}
 	pub fn new_response(
 		req: Option<&'a RequestSnapshot>,
 		response: &'a crate::http::Response,

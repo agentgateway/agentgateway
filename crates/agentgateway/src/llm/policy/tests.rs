@@ -16,6 +16,7 @@ async fn webhook_fail_open_emits_single_metric() {
 			rejection: Default::default(),
 			kind: RequestGuardKind::Webhook(Webhook {
 				target: SimpleBackendReference::Invalid,
+				headers: Default::default(),
 				forward_header_matches: vec![],
 				failure_mode: FailureMode::FailOpen,
 			}),
@@ -25,7 +26,7 @@ async fn webhook_fail_open_emits_single_metric() {
 
 	let client = crate::test_helpers::policy_client();
 	let blocked = guard
-		.apply_realtime_request_guards("hello world", &client)
+		.apply_realtime_request_guards("hello world", &client, None)
 		.await;
 	assert!(blocked.is_none(), "FailOpen must not block the request");
 
