@@ -281,6 +281,24 @@ enum GuardrailOutcome {
 	FailOpen,
 }
 
+impl GuardrailOutcome {
+	/// The metric label this outcome records. Every guardrail path — HTTP
+	/// request, HTTP response, realtime WebSocket, and streaming — maps its
+	/// outcome to a `GuardrailAction` through this one function, so the
+	/// `guardrail_checks` counter means the same thing on every path and a new
+	/// `GuardrailOutcome` variant cannot silently skip a path's metric.
+	fn metric_action(&self) -> crate::telemetry::metrics::GuardrailAction {
+		use crate::telemetry::metrics::GuardrailAction;
+		match self {
+			GuardrailOutcome::None => GuardrailAction::Allow,
+			GuardrailOutcome::Masked => GuardrailAction::Mask,
+			GuardrailOutcome::Rejected(_) => GuardrailAction::Reject,
+			GuardrailOutcome::Audit => GuardrailAction::Audit,
+			GuardrailOutcome::FailOpen => GuardrailAction::FailOpen,
+		}
+	}
+}
+
 /// A streaming guardrail evaluator. Each guard kind gets one stateless implementation
 /// that evaluates a text window and reports whether it should be blocked.
 ///
@@ -404,48 +422,23 @@ impl PromptGuard {
 		};
 		for g in &self.request {
 			match Policy::apply_single_request_guard(g, &mut req, &headers, client, None).await {
-				Ok(GuardrailOutcome::Rejected(rejected)) => {
-					Policy::record_guardrail_trip(
+				Ok(outcome) => {
+					Policy::record_guardrail_outcome(
 						client,
 						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::Reject,
+						&outcome,
 					);
-					let body = rejected
-						.into_body()
-						.collect()
-						.await
-						.map(|b| b.to_bytes())
-						.unwrap_or_else(|_| g.rejection.body.clone());
-					return Some(body);
-				},
-				// Masking is not supported in the realtime path; treat as pass but still record.
-				Ok(GuardrailOutcome::Masked) => {
-					Policy::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::Mask,
-					);
-				},
-				Ok(GuardrailOutcome::Audit) => {
-					Policy::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::Audit,
-					);
-				},
-				Ok(GuardrailOutcome::None) => {
-					Policy::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::Allow,
-					);
-				},
-				Ok(GuardrailOutcome::FailOpen) => {
-					Policy::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::FailOpen,
-					);
+					// Rejected blocks; Masked (unsupported in the realtime path),
+					// Audit, None, and FailOpen all pass through after recording.
+					if let GuardrailOutcome::Rejected(rejected) = outcome {
+						let body = rejected
+							.into_body()
+							.collect()
+							.await
+							.map(|b| b.to_bytes())
+							.unwrap_or_else(|_| g.rejection.body.clone());
+						return Some(body);
+					}
 				},
 				Err(e) => match g.failure_mode() {
 					FailureMode::FailClosed => {
@@ -492,34 +485,63 @@ impl PromptGuard {
 			.collect()
 	}
 
+	/// Evaluate one streamed response window. Returns the streaming outcome for
+	/// the driver **and** the `GuardrailAction` this window would record, so the
+	/// evaluator can fold it into a single per-stream metric (see
+	/// `streaming_guardrails::ResponseGuardEvaluator`). An empty window is a
+	/// no-op that records `Allow`.
 	pub async fn evaluate_streaming_response_window(
 		guard: &ResponseGuard,
 		window: &str,
 		client: &crate::proxy::httpproxy::PolicyClient,
 		http_headers: &HeaderMap,
-	) -> anyhow::Result<Option<StreamingGuardrailOutcome>> {
+	) -> anyhow::Result<(
+		Option<StreamingGuardrailOutcome>,
+		crate::telemetry::metrics::GuardrailAction,
+	)> {
+		use crate::telemetry::metrics::GuardrailAction;
 		if window.is_empty() {
-			return Ok(None);
+			return Ok((None, GuardrailAction::Allow));
 		}
 		let mut resp = TextResponse {
 			content: window.to_string(),
 		};
-		match Policy::apply_single_response_guard(guard, &mut resp, http_headers, client).await? {
+		let outcome =
+			Policy::apply_single_response_guard(guard, &mut resp, http_headers, client).await?;
+		// Map to the metric label before consuming `outcome` for the block body.
+		let action = outcome.metric_action();
+		let streaming = match outcome {
 			GuardrailOutcome::Rejected(rejected) => {
 				let body = rejected.into_body().collect().await?.to_bytes();
-				Ok(Some(StreamingGuardrailOutcome::Blocked(body)))
+				Some(StreamingGuardrailOutcome::Blocked(body))
 			},
 			GuardrailOutcome::Masked => {
 				debug_assert!(
 					false,
 					"streaming response guard unexpectedly returned Masked; streaming masking is not supported"
 				);
-				Ok(None)
+				None
 			},
-			GuardrailOutcome::Audit => Ok(None),
-			GuardrailOutcome::None => Ok(None),
-			GuardrailOutcome::FailOpen => Ok(None),
-		}
+			// Audit, None, and FailOpen all pass the window through; the metric is
+			// still recorded via `action` above.
+			GuardrailOutcome::Audit | GuardrailOutcome::None | GuardrailOutcome::FailOpen => None,
+		};
+		Ok((streaming, action))
+	}
+
+	/// Record the single response-phase metric for a streamed guard, called once
+	/// per stream when its evaluator is dropped. Kept here so the streaming path
+	/// reuses the same `guardrail_checks` family and `Response` phase as the
+	/// non-streaming response path.
+	pub(crate) fn record_streaming_guardrail_metric(
+		client: &crate::proxy::httpproxy::PolicyClient,
+		action: crate::telemetry::metrics::GuardrailAction,
+	) {
+		Policy::record_guardrail_trip(
+			client,
+			crate::telemetry::metrics::GuardrailPhase::Response,
+			action,
+		);
 	}
 }
 
@@ -705,43 +727,16 @@ impl Policy {
 			.iter()
 			.flat_map(|g| g.request.iter())
 		{
-			match Self::apply_single_request_guard(g, req, http_headers, &client, claims.clone()).await? {
-				GuardrailOutcome::Rejected(res) => {
-					Self::record_guardrail_trip(
-						&client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::Reject,
-					);
-					return Ok(Some((res, g.kind.name())));
-				},
-				GuardrailOutcome::Masked => {
-					Self::record_guardrail_trip(
-						&client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::Mask,
-					);
-				},
-				GuardrailOutcome::Audit => {
-					Self::record_guardrail_trip(
-						&client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::Audit,
-					);
-				},
-				GuardrailOutcome::None => {
-					Self::record_guardrail_trip(
-						&client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::Allow,
-					);
-				},
-				GuardrailOutcome::FailOpen => {
-					Self::record_guardrail_trip(
-						&client,
-						crate::telemetry::metrics::GuardrailPhase::Request,
-						crate::telemetry::metrics::GuardrailAction::FailOpen,
-					);
-				},
+			let outcome =
+				Self::apply_single_request_guard(g, req, http_headers, &client, claims.clone()).await?;
+			Self::record_guardrail_outcome(
+				&client,
+				crate::telemetry::metrics::GuardrailPhase::Request,
+				&outcome,
+			);
+			// Only a rejection short-circuits; Masked/Audit/None/FailOpen continue.
+			if let GuardrailOutcome::Rejected(res) = outcome {
+				return Ok(Some((res, g.kind.name())));
 			}
 		}
 		Ok(None)
@@ -813,14 +808,25 @@ impl Policy {
 		guardrails: &BedrockGuardrails,
 	) -> anyhow::Result<GuardrailOutcome> {
 		let resp = bedrock_guardrails::send_request(req, claims.clone(), client, guardrails).await?;
-		// Audit mode: record what the guardrail would have done, then pass through.
+		// Audit mode: never block or mask. Log the per-filter assessment whenever
+		// the guardrail detected anything (this includes a detect-mode resource,
+		// whose top-level action is NONE but whose filters set `detected`), then
+		// report `Audit` only when it *would* have enforced — so the Audit metric
+		// means the same "would-enforce" event here as for every other guard kind.
+		// Benign traffic falls through to `None` and records `Allow`.
 		if guardrails.action == RejectAuditAction::Audit {
-			resp.log_audit(
-				&guardrails.guardrail_identifier,
-				&guardrails.guardrail_version,
-				bedrock_guardrails::GuardrailSource::Input,
-			);
-			return Ok(GuardrailOutcome::Audit);
+			if resp.has_detection() {
+				resp.log_audit(
+					&guardrails.guardrail_identifier,
+					&guardrails.guardrail_version,
+					bedrock_guardrails::GuardrailSource::Input,
+				);
+			}
+			return Ok(if resp.would_enforce() {
+				GuardrailOutcome::Audit
+			} else {
+				GuardrailOutcome::None
+			});
 		}
 		if resp.is_blocked() {
 			Ok(GuardrailOutcome::Rejected(rej.as_response()))
@@ -857,14 +863,22 @@ impl Policy {
 
 		let guardrail_resp =
 			bedrock_guardrails::send_response(content, claims, client, guardrails).await?;
-		// Audit mode: record what the guardrail would have done, then pass through.
+		// Audit mode: never block or mask. Log on any detection (incl. a
+		// detect-mode resource with top-level action NONE), report `Audit` only
+		// when it would have enforced, else `None` → `Allow`. See the request path.
 		if guardrails.action == RejectAuditAction::Audit {
-			guardrail_resp.log_audit(
-				&guardrails.guardrail_identifier,
-				&guardrails.guardrail_version,
-				bedrock_guardrails::GuardrailSource::Output,
-			);
-			return Ok(GuardrailOutcome::Audit);
+			if guardrail_resp.has_detection() {
+				guardrail_resp.log_audit(
+					&guardrails.guardrail_identifier,
+					&guardrails.guardrail_version,
+					bedrock_guardrails::GuardrailSource::Output,
+				);
+			}
+			return Ok(if guardrail_resp.would_enforce() {
+				GuardrailOutcome::Audit
+			} else {
+				GuardrailOutcome::None
+			});
 		}
 		if guardrail_resp.is_blocked() {
 			Ok(GuardrailOutcome::Rejected(rej.as_response()))
@@ -1287,6 +1301,17 @@ impl Policy {
 			.inc();
 	}
 
+	/// Record the metric for a guard `outcome` in `phase`. Single place that maps
+	/// an outcome to its `GuardrailAction` label (via `metric_action`), so the
+	/// non-streaming request/response paths and the realtime path stay identical.
+	fn record_guardrail_outcome(
+		client: &PolicyClient,
+		phase: crate::telemetry::metrics::GuardrailPhase,
+		outcome: &GuardrailOutcome,
+	) {
+		Self::record_guardrail_trip(client, phase, outcome.metric_action());
+	}
+
 	// fn convert_message(r: Message) -> ChatCompletionRequestMessage {
 	// 	match r.role.as_str() {
 	// 		"system" => universal::RequestMessage::from(universal::RequestSystemMessage::from(r.content)),
@@ -1384,43 +1409,15 @@ impl Policy {
 		guards: &Vec<ResponseGuard>,
 	) -> anyhow::Result<Option<Response>> {
 		for g in guards {
-			match Self::apply_single_response_guard(g, resp, http_headers, client).await? {
-				GuardrailOutcome::Rejected(res) => {
-					Self::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Response,
-						crate::telemetry::metrics::GuardrailAction::Reject,
-					);
-					return Ok(Some(res));
-				},
-				GuardrailOutcome::Masked => {
-					Self::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Response,
-						crate::telemetry::metrics::GuardrailAction::Mask,
-					);
-				},
-				GuardrailOutcome::Audit => {
-					Self::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Response,
-						crate::telemetry::metrics::GuardrailAction::Audit,
-					);
-				},
-				GuardrailOutcome::None => {
-					Self::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Response,
-						crate::telemetry::metrics::GuardrailAction::Allow,
-					);
-				},
-				GuardrailOutcome::FailOpen => {
-					Self::record_guardrail_trip(
-						client,
-						crate::telemetry::metrics::GuardrailPhase::Response,
-						crate::telemetry::metrics::GuardrailAction::FailOpen,
-					);
-				},
+			let outcome = Self::apply_single_response_guard(g, resp, http_headers, client).await?;
+			Self::record_guardrail_outcome(
+				client,
+				crate::telemetry::metrics::GuardrailPhase::Response,
+				&outcome,
+			);
+			// Only a rejection short-circuits; Masked/Audit/None/FailOpen continue.
+			if let GuardrailOutcome::Rejected(res) = outcome {
+				return Ok(Some(res));
 			}
 		}
 		Ok(None)

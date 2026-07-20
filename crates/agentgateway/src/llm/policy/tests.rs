@@ -56,6 +56,145 @@ async fn webhook_fail_open_emits_single_metric() {
 	);
 }
 
+/// Reads a single `guardrail_checks` counter for `(phase, action)`.
+#[cfg(test)]
+fn guardrail_metric(
+	client: &crate::proxy::httpproxy::PolicyClient,
+	phase: crate::telemetry::metrics::GuardrailPhase,
+	action: crate::telemetry::metrics::GuardrailAction,
+) -> u64 {
+	client
+		.inputs
+		.metrics
+		.guardrail_checks
+		.get_or_create(&crate::telemetry::metrics::GuardrailLabels { phase, action })
+		.get()
+}
+
+/// A regex response guard in `Audit` mode that does not match records `Allow`,
+/// not `Audit`: audit mode only records `Audit` when the guard *would* have
+/// enforced, so the metric means the same thing across every guard kind.
+#[tokio::test]
+async fn audit_mode_records_allow_when_nothing_matches() {
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
+
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let mut resp = TextResponse {
+		content: "nothing sensitive here".to_string(),
+	};
+	let headers = ::http::HeaderMap::new();
+	let out = Policy::apply_single_response_guard(&guard, &mut resp, &headers, &client)
+		.await
+		.unwrap();
+	Policy::record_guardrail_outcome(&client, GuardrailPhase::Response, &out);
+
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Allow),
+		1,
+		"a non-matching audit guard records Allow"
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		0,
+		"Audit must not be recorded when the guard would not have enforced"
+	);
+}
+
+/// A regex response guard in `Audit` mode that *does* match records exactly one
+/// `Audit` and passes the content through unchanged (never Reject/Mask).
+#[tokio::test]
+async fn audit_mode_records_audit_and_passes_through_on_match() {
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
+
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let original = "my SECRET token".to_string();
+	let mut resp = TextResponse {
+		content: original.clone(),
+	};
+	let headers = ::http::HeaderMap::new();
+	let out = Policy::apply_single_response_guard(&guard, &mut resp, &headers, &client)
+		.await
+		.unwrap();
+	assert!(
+		matches!(out, GuardrailOutcome::Audit),
+		"a matching audit guard yields Audit, not Reject/Mask"
+	);
+	Policy::record_guardrail_outcome(&client, GuardrailPhase::Response, &out);
+	assert_eq!(resp.content, original, "audit mode must not mutate content");
+
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		1
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Reject),
+		0
+	);
+}
+
+/// A streamed response evaluated over many windows records exactly one metric
+/// for the stream, not one per window — the evaluator folds per-window actions
+/// and records once when dropped.
+#[tokio::test]
+async fn streaming_guard_records_one_metric_per_stream() {
+	use crate::llm::policy::streaming_guardrails::make_evaluator;
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
+
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let headers = ::http::HeaderMap::new();
+	let mut evaluator = make_evaluator(&guard, client.clone(), headers);
+
+	// Three windows: two benign, one matching → would-enforce once. Nothing is
+	// recorded until the evaluator is dropped.
+	let _ = evaluator.evaluate("clean window one").await.unwrap();
+	let _ = evaluator.evaluate("this window has SECRET").await.unwrap();
+	let _ = evaluator.evaluate("clean window three").await.unwrap();
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		0,
+		"no metric recorded mid-stream"
+	);
+
+	drop(evaluator);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		1,
+		"exactly one Audit recorded for the whole stream, not one per window"
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Allow),
+		0,
+		"the matching window's Audit outranks the benign windows' Allow"
+	);
+}
+
 #[test]
 fn test_get_webhook_forward_headers() {
 	let mut headers = HeaderMap::new();
@@ -760,6 +899,79 @@ mod bedrock_guardrails_tests {
 		assert!(redacted.contains("ssn-rule"));
 		assert!(redacted.contains("detected"));
 		assert!(redacted.contains("regexes"));
+	}
+
+	#[test]
+	fn test_would_enforce_matches_block_and_mask_only() {
+		// would_enforce gates the Audit metric, so it must be true exactly when the
+		// guardrail would block or anonymize in enforce mode — the same event the
+		// other guard kinds record as Audit.
+		let blocked: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"assessments": [{ "contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] } }]
+		}))
+		.unwrap();
+		assert!(blocked.would_enforce());
+
+		let anonymized: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "redacted {NAME}"}],
+			"assessments": [{ "sensitiveInformationPolicy": { "piiEntities": [{ "action": "ANONYMIZED", "type": "NAME" }] } }]
+		}))
+		.unwrap();
+		assert!(anonymized.would_enforce());
+
+		// Detect-mode resource: top-level NONE, per-filter detected. Would NOT
+		// enforce, so records Allow — the fix for the metric-inconsistency bug.
+		let detect_only: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "NONE",
+			"assessments": [{ "contentPolicy": {
+				"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+			} }]
+		}))
+		.unwrap();
+		assert!(!detect_only.would_enforce());
+
+		let benign: ApplyGuardrailResponse =
+			serde_json::from_value(json!({ "action": "NONE", "assessments": [{}] })).unwrap();
+		assert!(!benign.would_enforce());
+	}
+
+	#[test]
+	fn test_has_detection_covers_detect_mode_but_not_benign() {
+		// has_detection gates the audit *log* and is deliberately broader than
+		// would_enforce: it fires on a detect-mode resource (top-level NONE with a
+		// per-filter `detected: true`) so the finding is still surfaced, but stays
+		// quiet on genuinely benign traffic so audit mode does not log every request.
+		let detect_only: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "NONE",
+			"assessments": [{ "contentPolicy": {
+				"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+			} }]
+		}))
+		.unwrap();
+		assert!(
+			detect_only.has_detection(),
+			"a detect-mode resource must still be logged"
+		);
+		assert!(
+			!detect_only.would_enforce(),
+			"...but must not record the Audit metric"
+		);
+
+		let intervened: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"assessments": [{ "contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] } }]
+		}))
+		.unwrap();
+		assert!(intervened.has_detection());
+
+		let benign: ApplyGuardrailResponse =
+			serde_json::from_value(json!({ "action": "NONE", "assessments": [{}] })).unwrap();
+		assert!(
+			!benign.has_detection(),
+			"benign traffic must not be logged in audit mode"
+		);
 	}
 }
 
