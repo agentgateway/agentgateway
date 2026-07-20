@@ -54,6 +54,234 @@ spec:
           spec:
             description: Desired model configuration.
             properties:
+              azure:
+                description: Provider-specific settings for Azure AI.
+                properties:
+                  apiVersion:
+                    description: |-
+                      The version of the Azure OpenAI API to use.
+                      If unset, defaults to `v1`.
+                    maxLength: 64
+                    minLength: 1
+                    type: string
+                  model:
+                    description: |-
+                      Model name override, such as `gpt-4o-mini`.
+                      If unset, the model name is taken from the request.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  projectName:
+                    description: |-
+                      The Foundry project name, required when `resourceType` is `Foundry`.
+                      Used to construct paths: /api/projects/{projectName}/openai/v1/...
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  resourceName:
+                    description: |-
+                      The Azure resource name used to construct the endpoint host.
+                      For OpenAI: {resourceName}.openai.azure.com
+                      For Foundry: {resourceName}.services.ai.azure.com
+                      Note: when the Azure portal "Foundry legacy" template was used, the
+                      generated resource name may end in "-resource" (e.g. "myproject-resource");
+                      that suffix is part of the resource name as the user configured it, not
+                      part of the hostname suffix agentgateway should append.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  resourceType:
+                    description: The type of Azure endpoint. Determines the host suffix.
+                    enum:
+                    - Foundry
+                    - OpenAI
+                    type: string
+                required:
+                - resourceName
+                - resourceType
+                type: object
+                x-kubernetes-validations:
+                - message: projectName is required when resourceType is Foundry
+                  rule: self.resourceType != 'Foundry' || has(self.projectName)
+              azureopenai:
+                description: Provider-specific settings for Azure OpenAI.
+                properties:
+                  apiVersion:
+                    description: |-
+                      The version of the Azure OpenAI API to use.
+                      For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference).
+                      If unset, defaults to `v1`.
+                    maxLength: 64
+                    minLength: 1
+                    type: string
+                  deploymentName:
+                    description: |-
+                      The name of the Azure OpenAI model deployment to use.
+                      For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
+                      This is required if `apiVersion` is not `v1`. For `v1`, the model can be
+                      set in the request.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  endpoint:
+                    description: |-
+                      The endpoint for the Azure OpenAI API to use, such as `my-endpoint.openai.azure.com`.
+                      If the scheme is included, it is stripped.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                required:
+                - endpoint
+                type: object
+                x-kubernetes-validations:
+                - message: deploymentName is required for this apiVersion
+                  rule: '!has(self.apiVersion) || self.apiVersion == ''v1'' ? true
+                    : has(self.deploymentName)'
+              bedrock:
+                description: Provider-specific settings for Amazon Bedrock.
+                properties:
+                  guardrail:
+                    description: |-
+                      Guardrail policy to use for the backend. See
+                      <https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html>.
+                      If not specified, the AWS Guardrail policy will not be used.
+                    properties:
+                      identifier:
+                        description: Identifier of the Guardrail policy to use for
+                          the backend.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      version:
+                        description: Version of the Guardrail policy to use for the
+                          backend.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                    required:
+                    - identifier
+                    - version
+                    type: object
+                  model:
+                    description: |-
+                      Model name override, such as `gpt-4o-mini`.
+                      If unset, the model name is taken from the request.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  region:
+                    default: us-east-1
+                    description: |-
+                      AWS region to use for the backend.
+                      Defaults to `us-east-1` if not specified.
+                    maxLength: 63
+                    minLength: 1
+                    pattern: ^[a-z0-9-]+$
+                    type: string
+                type: object
+              custom:
+                description: Provider-specific settings for a custom provider.
+                properties:
+                  backendRef:
+                    description: |-
+                      Kubernetes backend that serves this provider.
+                      `backendRef` may target only a namespace-local Service or InferencePool.
+                      If unset, host and port must be set on the parent provider.
+                    properties:
+                      group:
+                        default: ""
+                        description: |-
+                          API group of the referenced resource. For example, `gateway.networking.k8s.io`.
+                          When unspecified or empty string, core API group is inferred.
+                        maxLength: 253
+                        pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                        type: string
+                      kind:
+                        default: Service
+                        description: |-
+                          Kind of the referenced resource. For example, `Service`.
+                          Defaults to "Service" when not specified.
+                        maxLength: 63
+                        minLength: 1
+                        pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                        type: string
+                      name:
+                        description: Name of the referenced resource.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                      port:
+                        description: |-
+                          Destination port number to use for this resource.
+                          Required when the referenced resource is a Kubernetes Service.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1
+                        type: integer
+                    required:
+                    - name
+                    type: object
+                    x-kubernetes-validations:
+                    - message: Must have port for Service reference
+                      rule: '(size(self.group) == 0 && self.kind == ''Service'') ?
+                        has(self.port) : true'
+                  formats:
+                    description: Provider-native API formats this provider supports.
+                    items:
+                      description: Provider-native LLM API format settings.
+                      properties:
+                        path:
+                          description: |-
+                            Default upstream path override for this format.
+                            If unset, agentgateway uses the default path for the format.
+                          maxLength: 1024
+                          minLength: 1
+                          type: string
+                        type:
+                          description: Provider-native API format.
+                          enum:
+                          - AnthropicTokenCount
+                          - Completions
+                          - Embeddings
+                          - Messages
+                          - Realtime
+                          - Rerank
+                          - Responses
+                          type: string
+                      required:
+                      - type
+                      type: object
+                      x-kubernetes-validations:
+                      - message: path must start with /
+                        rule: '!has(self.path) || self.path.startsWith(''/'')'
+                    maxItems: 6
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - type
+                    x-kubernetes-list-type: map
+                  model:
+                    description: |-
+                      Model name override, such as `gpt-oss`.
+                      If unset, the model name is taken from the request.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                required:
+                - formats
+                type: object
+                x-kubernetes-validations:
+                - message: custom provider backendRef may target only Service or InferencePool
+                  rule: '!has(self.backendRef) || (((!has(self.backendRef.group) ||
+                    self.backendRef.group == "") && (!has(self.backendRef.kind) ||
+                    self.backendRef.kind == ''Service'')) || (has(self.backendRef.group)
+                    && self.backendRef.group == ''inference.networking.k8s.io'' &&
+                    has(self.backendRef.kind) && self.backendRef.kind == ''InferencePool''))'
+              host:
+                description: Hostname override for the provider.
+                maxLength: 256
+                minLength: 1
+                type: string
               modelMatch:
                 description: |-
                   Model name or wildcard expression matched against client requests.
@@ -213,354 +441,37 @@ spec:
                 maxItems: 16
                 minItems: 1
                 type: array
+              path:
+                description: URL path override for provider API requests.
+                maxLength: 1024
+                minLength: 1
+                type: string
+              pathPrefix:
+                description: Overrides the default base path prefix, such as `/v1`,
+                  for upstream requests.
+                maxLength: 1024
+                minLength: 1
+                type: string
+              port:
+                description: Port override for the provider.
+                format: int32
+                maximum: 65535
+                minimum: 1
+                type: integer
               provider:
-                description: Provider serving this concrete model.
-                properties:
-                  anthropic:
-                    description: Anthropic provider settings.
-                    properties:
-                      model:
-                        description: |-
-                          Model name override, such as `gpt-4o-mini`.
-                          If unset, the model name is taken from the request.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                    type: object
-                  azure:
-                    description: |-
-                      Azure provider with resource-based configuration.
-                      Supports both Azure OpenAI and Azure AI Foundry resource types.
-                    properties:
-                      apiVersion:
-                        description: |-
-                          The version of the Azure OpenAI API to use.
-                          If unset, defaults to `v1`.
-                        maxLength: 64
-                        minLength: 1
-                        type: string
-                      model:
-                        description: |-
-                          Model name override, such as `gpt-4o-mini`.
-                          If unset, the model name is taken from the request.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                      projectName:
-                        description: |-
-                          The Foundry project name, required when `resourceType` is `Foundry`.
-                          Used to construct paths: /api/projects/{projectName}/openai/v1/...
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                      resourceName:
-                        description: |-
-                          The Azure resource name used to construct the endpoint host.
-                          For OpenAI: {resourceName}.openai.azure.com
-                          For Foundry: {resourceName}.services.ai.azure.com
-                          Note: when the Azure portal "Foundry legacy" template was used, the
-                          generated resource name may end in "-resource" (e.g. "myproject-resource");
-                          that suffix is part of the resource name as the user configured it, not
-                          part of the hostname suffix agentgateway should append.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                      resourceType:
-                        description: The type of Azure endpoint. Determines the host
-                          suffix.
-                        enum:
-                        - Foundry
-                        - OpenAI
-                        type: string
-                    required:
-                    - resourceName
-                    - resourceType
-                    type: object
-                    x-kubernetes-validations:
-                    - message: projectName is required when resourceType is Foundry
-                      rule: self.resourceType != 'Foundry' || has(self.projectName)
-                  azureopenai:
-                    description: Azure OpenAI provider settings.
-                    properties:
-                      apiVersion:
-                        description: |-
-                          The version of the Azure OpenAI API to use.
-                          For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference).
-                          If unset, defaults to `v1`.
-                        maxLength: 64
-                        minLength: 1
-                        type: string
-                      deploymentName:
-                        description: |-
-                          The name of the Azure OpenAI model deployment to use.
-                          For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
-                          This is required if `apiVersion` is not `v1`. For `v1`, the model can be
-                          set in the request.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                      endpoint:
-                        description: |-
-                          The endpoint for the Azure OpenAI API to use, such as `my-endpoint.openai.azure.com`.
-                          If the scheme is included, it is stripped.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                    required:
-                    - endpoint
-                    type: object
-                    x-kubernetes-validations:
-                    - message: deploymentName is required for this apiVersion
-                      rule: '!has(self.apiVersion) || self.apiVersion == ''v1'' ?
-                        true : has(self.deploymentName)'
-                  bedrock:
-                    description: Bedrock provider settings.
-                    properties:
-                      guardrail:
-                        description: |-
-                          Guardrail policy to use for the backend. See
-                          <https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html>.
-                          If not specified, the AWS Guardrail policy will not be used.
-                        properties:
-                          identifier:
-                            description: Identifier of the Guardrail policy to use
-                              for the backend.
-                            maxLength: 256
-                            minLength: 1
-                            type: string
-                          version:
-                            description: Version of the Guardrail policy to use for
-                              the backend.
-                            maxLength: 256
-                            minLength: 1
-                            type: string
-                        required:
-                        - identifier
-                        - version
-                        type: object
-                      model:
-                        description: |-
-                          Model name override, such as `gpt-4o-mini`.
-                          If unset, the model name is taken from the request.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                      region:
-                        default: us-east-1
-                        description: |-
-                          AWS region to use for the backend.
-                          Defaults to `us-east-1` if not specified.
-                        maxLength: 63
-                        minLength: 1
-                        pattern: ^[a-z0-9-]+$
-                        type: string
-                    type: object
-                  custom:
-                    description: |-
-                      Custom provider configures a non-managed or self-hosted LLM provider.
-                      Use this when the provider target and API formats should be declared
-                      explicitly instead of inferred from a managed provider such as OpenAI or
-                      Anthropic.
-                    properties:
-                      backendRef:
-                        description: |-
-                          Kubernetes backend that serves this provider.
-                          `backendRef` may target only a namespace-local Service or InferencePool.
-                          If unset, host and port must be set on the parent provider.
-                        properties:
-                          group:
-                            default: ""
-                            description: |-
-                              API group of the referenced resource. For example, `gateway.networking.k8s.io`.
-                              When unspecified or empty string, core API group is inferred.
-                            maxLength: 253
-                            pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
-                            type: string
-                          kind:
-                            default: Service
-                            description: |-
-                              Kind of the referenced resource. For example, `Service`.
-                              Defaults to "Service" when not specified.
-                            maxLength: 63
-                            minLength: 1
-                            pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
-                            type: string
-                          name:
-                            description: Name of the referenced resource.
-                            maxLength: 253
-                            minLength: 1
-                            type: string
-                          port:
-                            description: |-
-                              Destination port number to use for this resource.
-                              Required when the referenced resource is a Kubernetes Service.
-                            format: int32
-                            maximum: 65535
-                            minimum: 1
-                            type: integer
-                        required:
-                        - name
-                        type: object
-                        x-kubernetes-validations:
-                        - message: Must have port for Service reference
-                          rule: '(size(self.group) == 0 && self.kind == ''Service'')
-                            ? has(self.port) : true'
-                      formats:
-                        description: Provider-native API formats this provider supports.
-                        items:
-                          description: Provider-native LLM API format settings.
-                          properties:
-                            path:
-                              description: |-
-                                Default upstream path override for this format.
-                                If unset, agentgateway uses the default path for the format.
-                              maxLength: 1024
-                              minLength: 1
-                              type: string
-                            type:
-                              description: Provider-native API format.
-                              enum:
-                              - AnthropicTokenCount
-                              - Completions
-                              - Embeddings
-                              - Messages
-                              - Realtime
-                              - Rerank
-                              - Responses
-                              type: string
-                          required:
-                          - type
-                          type: object
-                          x-kubernetes-validations:
-                          - message: path must start with /
-                            rule: '!has(self.path) || self.path.startsWith(''/'')'
-                        maxItems: 6
-                        minItems: 1
-                        type: array
-                        x-kubernetes-list-map-keys:
-                        - type
-                        x-kubernetes-list-type: map
-                      model:
-                        description: |-
-                          Model name override, such as `gpt-oss`.
-                          If unset, the model name is taken from the request.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                    required:
-                    - formats
-                    type: object
-                    x-kubernetes-validations:
-                    - message: custom provider backendRef may target only Service
-                        or InferencePool
-                      rule: '!has(self.backendRef) || (((!has(self.backendRef.group)
-                        || self.backendRef.group == "") && (!has(self.backendRef.kind)
-                        || self.backendRef.kind == ''Service'')) || (has(self.backendRef.group)
-                        && self.backendRef.group == ''inference.networking.k8s.io''
-                        && has(self.backendRef.kind) && self.backendRef.kind == ''InferencePool''))'
-                  gemini:
-                    description: Gemini provider settings.
-                    properties:
-                      model:
-                        description: |-
-                          Model name override, such as `gemini-2.5-pro`.
-                          If unset, the model name is taken from the request.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                    type: object
-                  host:
-                    description: |-
-                      Hostname to send requests to.
-                      For custom providers without backendRef, host and port specify the target.
-                      For managed providers, host and port override the provider default.
-                    maxLength: 256
-                    minLength: 1
-                    type: string
-                  openai:
-                    description: OpenAI provider settings.
-                    properties:
-                      model:
-                        description: |-
-                          Model name override, such as `gpt-4o-mini`.
-                          If unset, the model name is taken from the request.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                    type: object
-                  path:
-                    description: |-
-                      URL path to use for LLM provider API requests.
-                      This is useful when you need to route requests to a different API endpoint while maintaining
-                      compatibility with the original provider's API structure.
-                      If not specified, the default path for the provider is used.
-                    maxLength: 1024
-                    minLength: 1
-                    type: string
-                  pathPrefix:
-                    description: |-
-                      Overrides the default base path prefix, such as `/v1`, for upstream requests.
-                      Path translation for cross-format requests still applies using this prefix.
-                      Only supported for OpenAI and Anthropic providers.
-                    maxLength: 1024
-                    minLength: 1
-                    type: string
-                  port:
-                    description: Port to send requests to.
-                    format: int32
-                    maximum: 65535
-                    minimum: 1
-                    type: integer
-                  vertexai:
-                    description: Vertex AI provider settings.
-                    properties:
-                      model:
-                        description: |-
-                          Model name override, such as `gpt-4o-mini`.
-                          If unset, the model name is taken from the request.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                      projectId:
-                        description: The ID of the Google Cloud Project that you use
-                          for the Vertex AI.
-                        maxLength: 64
-                        minLength: 1
-                        type: string
-                      region:
-                        default: global
-                        description: |-
-                          The location of the Google Cloud Project that you use for the Vertex AI.
-                          Special values: `global` uses the global endpoint, while `us` and `eu` use restricted
-                          multi-region endpoints. Other values are treated as regional locations.
-                          Defaults to `global` if not specified.
-                        maxLength: 64
-                        minLength: 1
-                        type: string
-                    required:
-                    - projectId
-                    type: object
-                type: object
-                x-kubernetes-validations:
-                - message: both host and port must be set together
-                  rule: 'has(self.host) || has(self.port) ? has(self.host) && has(self.port)
-                    : true'
-                - message: custom providers must specify exactly one of backendRef
-                    or host and port
-                  rule: 'has(self.custom) ? has(self.custom.backendRef) != has(self.host)
-                    : true'
-                - message: path and pathPrefix are mutually exclusive
-                  rule: '!(has(self.path) && has(self.pathPrefix))'
-                - message: path, pathPrefix, and custom format paths are mutually
-                    exclusive
-                  rule: '!(has(self.custom) && self.custom.formats.exists(f, has(f.path))
-                    && (has(self.path) || has(self.pathPrefix)))'
-                - message: pathPrefix requires host to be set
-                  rule: 'has(self.pathPrefix) ? has(self.host) : true'
-                - message: exactly one of the fields in [openai azureopenai azure
-                    anthropic gemini vertexai bedrock custom] must be set
-                  rule: '[has(self.openai),has(self.azureopenai),has(self.azure),has(self.anthropic),has(self.gemini),has(self.vertexai),has(self.bedrock),has(self.custom)].filter(x,x==true).size()
-                    == 1'
+                description: |-
+                  Provider serving this concrete model. Provider-specific configuration is
+                  set by the corresponding field below when needed.
+                enum:
+                - Anthropic
+                - Azure
+                - AzureOpenAI
+                - Bedrock
+                - Custom
+                - Gemini
+                - OpenAI
+                - VertexAI
+                type: string
               providerModel:
                 description: |-
                   Fixed model name sent to the provider. When omitted, the model selected by
@@ -598,6 +509,35 @@ spec:
                 x-kubernetes-list-map-keys:
                 - field
                 x-kubernetes-list-type: map
+              vertexai:
+                description: Provider-specific settings for Vertex AI.
+                properties:
+                  model:
+                    description: |-
+                      Model name override, such as `gpt-4o-mini`.
+                      If unset, the model name is taken from the request.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                  projectId:
+                    description: The ID of the Google Cloud Project that you use for
+                      the Vertex AI.
+                    maxLength: 64
+                    minLength: 1
+                    type: string
+                  region:
+                    default: global
+                    description: |-
+                      The location of the Google Cloud Project that you use for the Vertex AI.
+                      Special values: `global` uses the global endpoint, while `us` and `eu` use restricted
+                      multi-region endpoints. Other values are treated as regional locations.
+                      Defaults to `global` if not specified.
+                    maxLength: 64
+                    minLength: 1
+                    type: string
+                required:
+                - projectId
+                type: object
               virtualModel:
                 description: Request-time routing among concrete AgentgatewayModel
                   resources.
@@ -774,6 +714,26 @@ spec:
               rule: has(self.provider) || !has(self.transformations)
             - message: virtual models must be public
               rule: '!has(self.virtualModel) || self.visibility != ''Internal'''
+            - message: both host and port must be set together
+              rule: 'has(self.host) || has(self.port) ? has(self.host) && has(self.port)
+                : true'
+            - message: pathPrefix requires host to be set
+              rule: 'has(self.pathPrefix) ? has(self.host) : true'
+            - message: path and pathPrefix are mutually exclusive
+              rule: '!(has(self.path) && has(self.pathPrefix))'
+            - message: azureopenai configuration is required only for the AzureOpenAI
+                provider
+              rule: has(self.azureopenai) == (has(self.provider) && self.provider
+                == 'AzureOpenAI')
+            - message: azure configuration is required only for the Azure provider
+              rule: has(self.azure) == (has(self.provider) && self.provider == 'Azure')
+            - message: vertexai configuration is required only for the VertexAI provider
+              rule: has(self.vertexai) == (has(self.provider) && self.provider ==
+                'VertexAI')
+            - message: bedrock configuration is required only for the Bedrock provider
+              rule: has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')
+            - message: custom configuration is required only for the Custom provider
+              rule: has(self.custom) == (has(self.provider) && self.provider == 'Custom')
             - message: exactly one of the fields in [provider virtualModel] must be
                 set
               rule: '[has(self.provider),has(self.virtualModel)].filter(x,x==true).size()

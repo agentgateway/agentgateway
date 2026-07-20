@@ -12,8 +12,7 @@ spec:
   - name: ai-gateway
     sectionName: llm
   modelMatch: gpt-5-mini
-  provider:
-    openai: {}
+  provider: OpenAI
   providerModel: gpt-5-mini
 ---
 apiVersion: agentgateway.dev/v1alpha1
@@ -26,8 +25,7 @@ spec:
     sectionName: llm
   modelMatch: openai/*
   visibility: Internal
-  provider:
-    openai: {}
+  provider: OpenAI
   transformations:
   - field: model
     expression: 'llmRequest.model.stripPrefix("openai/")'
@@ -42,8 +40,7 @@ spec:
     sectionName: llm
   modelMatch: anthropic/*
   visibility: Internal
-  provider:
-    anthropic: {}
+  provider: Anthropic
   transformations:
   - field: model
     expression: 'llmRequest.model.stripPrefix("anthropic/")'
@@ -58,15 +55,15 @@ spec:
     sectionName: llm
   modelMatch: local/llama-3.3
   providerModel: llama-3.3
-  provider:
-    custom:
-      backendRef:
-        group: inference.networking.k8s.io
-        kind: InferencePool
-        name: llama-pool
-      formats:
-      - type: Completions
-      - type: Embeddings
+  provider: Custom
+  custom:
+    backendRef:
+      group: inference.networking.k8s.io
+      kind: InferencePool
+      name: llama-pool
+    formats:
+    - type: Completions
+    - type: Embeddings
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel

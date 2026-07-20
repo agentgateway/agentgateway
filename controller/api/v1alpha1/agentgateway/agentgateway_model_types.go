@@ -44,6 +44,14 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.providerModel)",message="providerModel requires provider"
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
+// +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
+// +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
+// +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="has(self.azureopenai) == (has(self.provider) && self.provider == 'AzureOpenAI')",message="azureopenai configuration is required only for the AzureOpenAI provider"
+// +kubebuilder:validation:XValidation:rule="has(self.azure) == (has(self.provider) && self.provider == 'Azure')",message="azure configuration is required only for the Azure provider"
+// +kubebuilder:validation:XValidation:rule="has(self.vertexai) == (has(self.provider) && self.provider == 'VertexAI')",message="vertexai configuration is required only for the VertexAI provider"
+// +kubebuilder:validation:XValidation:rule="has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')",message="bedrock configuration is required only for the Bedrock provider"
+// +kubebuilder:validation:XValidation:rule="has(self.custom) == (has(self.provider) && self.provider == 'Custom')",message="custom configuration is required only for the Custom provider"
 type AgentgatewayModelSpec struct {
 	// Gateways and listeners to which this model attaches.
 	// +kubebuilder:validation:MinItems=1
@@ -62,9 +70,48 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	Visibility ModelVisibility `json:"visibility,omitempty"`
 
-	// Provider serving this concrete model.
+	// Provider serving this concrete model. Provider-specific configuration is
+	// set by the corresponding field below when needed.
 	// +optional
-	Provider *LLMProvider `json:"provider,omitempty"`
+	Provider *ModelProvider `json:"provider,omitempty"`
+
+	// Provider-specific settings for Azure OpenAI.
+	// +optional
+	AzureOpenAI *AzureOpenAIConfig `json:"azureopenai,omitempty"`
+
+	// Provider-specific settings for Azure AI.
+	// +optional
+	Azure *AzureConfig `json:"azure,omitempty"`
+
+	// Provider-specific settings for Vertex AI.
+	// +optional
+	VertexAI *VertexAIConfig `json:"vertexai,omitempty"`
+
+	// Provider-specific settings for Amazon Bedrock.
+	// +optional
+	Bedrock *BedrockConfig `json:"bedrock,omitempty"`
+
+	// Provider-specific settings for a custom provider.
+	// +optional
+	Custom *CustomProvider `json:"custom,omitempty"`
+
+	// Hostname override for the provider.
+	// +optional
+	Host ShortString `json:"host,omitempty"`
+
+	// Port override for the provider.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int32 `json:"port,omitempty"`
+
+	// URL path override for provider API requests.
+	// +optional
+	Path LongString `json:"path,omitempty"`
+
+	// Overrides the default base path prefix, such as `/v1`, for upstream requests.
+	// +optional
+	PathPrefix LongString `json:"pathPrefix,omitempty"`
 
 	// Fixed model name sent to the provider. When omitted, the model selected by
 	// modelMatch is sent to the provider.
@@ -84,6 +131,21 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	VirtualModel *VirtualModel `json:"virtualModel,omitempty"`
 }
+
+// ModelProvider identifies the LLM provider serving a concrete model.
+// +k8s:enum
+type ModelProvider string
+
+const (
+	ModelProviderOpenAI      ModelProvider = "OpenAI"
+	ModelProviderAzureOpenAI ModelProvider = "AzureOpenAI"
+	ModelProviderAzure       ModelProvider = "Azure"
+	ModelProviderAnthropic   ModelProvider = "Anthropic"
+	ModelProviderGemini      ModelProvider = "Gemini"
+	ModelProviderVertexAI    ModelProvider = "VertexAI"
+	ModelProviderBedrock     ModelProvider = "Bedrock"
+	ModelProviderCustom      ModelProvider = "Custom"
+)
 
 // Visibility of a model to direct client requests.
 // +k8s:enum

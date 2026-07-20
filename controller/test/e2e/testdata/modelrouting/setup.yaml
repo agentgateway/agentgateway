@@ -80,8 +80,7 @@ spec:
     kind: Gateway
     name: model-routing
     sectionName: llm
-  provider:
-    openai: {}
+  provider: OpenAI
     host: ai-testbox.default.svc.cluster.local
     port: 9234
   providerModel: agw-public-direct
@@ -98,8 +97,7 @@ spec:
     name: model-routing
     sectionName: llm
   visibility: Internal
-  provider:
-    openai: {}
+  provider: OpenAI
     host: ai-testbox.default.svc.cluster.local
     port: 9234
   providerModel: agw-internal-fast
@@ -116,8 +114,7 @@ spec:
     name: model-routing
     sectionName: llm
   visibility: Internal
-  provider:
-    openai: {}
+  provider: OpenAI
     host: ai-testbox.default.svc.cluster.local
     port: 9234
   providerModel: agw-internal-premium
@@ -135,8 +132,7 @@ spec:
     sectionName: llm
   modelMatch: internal/*
   visibility: Internal
-  provider:
-    openai: {}
+  provider: OpenAI
     host: ai-testbox.default.svc.cluster.local
     port: 9234
   transformations:
@@ -155,8 +151,7 @@ spec:
     name: model-routing
     sectionName: llm
   visibility: Internal
-  provider:
-    openai: {}
+  provider: OpenAI
     host: model-routing-primary.default.svc.cluster.local
     port: 9234
   providerModel: agw-primary-down

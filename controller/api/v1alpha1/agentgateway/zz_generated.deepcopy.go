@@ -478,7 +478,32 @@ func (in *AgentgatewayModelSpec) DeepCopyInto(out *AgentgatewayModelSpec) {
 	}
 	if in.Provider != nil {
 		in, out := &in.Provider, &out.Provider
-		*out = new(LLMProvider)
+		*out = new(ModelProvider)
+		**out = **in
+	}
+	if in.AzureOpenAI != nil {
+		in, out := &in.AzureOpenAI, &out.AzureOpenAI
+		*out = new(AzureOpenAIConfig)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Azure != nil {
+		in, out := &in.Azure, &out.Azure
+		*out = new(AzureConfig)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.VertexAI != nil {
+		in, out := &in.VertexAI, &out.VertexAI
+		*out = new(VertexAIConfig)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Bedrock != nil {
+		in, out := &in.Bedrock, &out.Bedrock
+		*out = new(BedrockConfig)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Custom != nil {
+		in, out := &in.Custom, &out.Custom
+		*out = new(CustomProvider)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.ProviderModel != nil {

@@ -254,7 +254,7 @@ func modelConcreteBackend(ctx RouteContext, model *agentgateway.AgentgatewayMode
 	if model.Spec.ProviderModel != nil {
 		providerModel = new(string(*model.Spec.ProviderModel))
 	}
-	provider, err := translateModelLLMProvider(ctx, model.Namespace, model.Spec.Provider, utils.SingularLLMProviderSubBackendName, providerModel)
+	provider, err := translateModelLLMProvider(ctx, model.Namespace, &model.Spec, utils.SingularLLMProviderSubBackendName, providerModel)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +279,7 @@ func modelFailoverBackend(ctx RouteContext, model *agentgateway.AgentgatewayMode
 		if refModel.Spec.Provider == nil {
 			return nil, fmt.Errorf("failover target %s/%s is not a concrete provider model", model.Namespace, target.ModelRef.Name)
 		}
-		provider, err := translateModelLLMProvider(ctx, refModel.Namespace, refModel.Spec.Provider, target.ModelRef.Name, new(modelName))
+		provider, err := translateModelLLMProvider(ctx, refModel.Namespace, &refModel.Spec, target.ModelRef.Name, new(modelName))
 		if err != nil {
 			return nil, err
 		}
@@ -326,7 +326,11 @@ func modelFailoverBackendPolicies() []*api.BackendPolicySpec {
 	}}
 }
 
-func translateModelLLMProvider(ctx RouteContext, namespace string, llm *agentgateway.LLMProvider, providerName string, modelOverride *string) (*api.AIBackend_Provider, error) {
+func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec, providerName string, modelOverride *string) (*api.AIBackend_Provider, error) {
+	llm, err := modelLLMProvider(model)
+	if err != nil {
+		return nil, err
+	}
 	if llm == nil {
 		return nil, fmt.Errorf("no LLM provider configured")
 	}
@@ -405,6 +409,54 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, llm *agentgat
 		}
 	default:
 		return nil, fmt.Errorf("no supported LLM provider configured")
+	}
+	return provider, nil
+}
+
+func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.LLMProvider, error) {
+	if model.Provider == nil {
+		return nil, nil
+	}
+	provider := &agentgateway.LLMProvider{
+		Host:       model.Host,
+		Port:       model.Port,
+		Path:       model.Path,
+		PathPrefix: model.PathPrefix,
+	}
+	switch *model.Provider {
+	case agentgateway.ModelProviderOpenAI:
+		provider.OpenAI = &agentgateway.OpenAIConfig{}
+	case agentgateway.ModelProviderAzureOpenAI:
+		if model.AzureOpenAI == nil {
+			return nil, fmt.Errorf("azureopenai provider requires azureopenai configuration")
+		}
+		provider.AzureOpenAI = model.AzureOpenAI
+	case agentgateway.ModelProviderAzure:
+		if model.Azure == nil {
+			return nil, fmt.Errorf("azure provider requires azure configuration")
+		}
+		provider.Azure = model.Azure
+	case agentgateway.ModelProviderAnthropic:
+		provider.Anthropic = &agentgateway.AnthropicConfig{}
+	case agentgateway.ModelProviderGemini:
+		provider.Gemini = &agentgateway.GeminiConfig{}
+	case agentgateway.ModelProviderVertexAI:
+		if model.VertexAI == nil {
+			return nil, fmt.Errorf("vertexai provider requires vertexai configuration")
+		}
+		provider.VertexAI = model.VertexAI
+	case agentgateway.ModelProviderBedrock:
+		if model.Bedrock == nil {
+			return nil, fmt.Errorf("bedrock provider requires bedrock configuration")
+		}
+		provider.Bedrock = model.Bedrock
+	case agentgateway.ModelProviderCustom:
+		if model.Custom == nil {
+			return nil, fmt.Errorf("custom provider requires custom configuration")
+		}
+		provider.Custom = model.Custom
+	default:
+		return nil, fmt.Errorf("unsupported model provider %q", *model.Provider)
 	}
 	return provider, nil
 }

@@ -29,8 +29,7 @@ spec:
     sectionName: llm
   modelMatch: gpt-5-*
   visibility: Internal
-  provider:
-    openai: {}
+  provider: OpenAI
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -43,8 +42,7 @@ spec:
     kind: Gateway
     name: virtual-models
     sectionName: llm
-  provider:
-    openai: {}
+  provider: OpenAI
   providerModel: gpt-5-mini
 ---
 apiVersion: agentgateway.dev/v1alpha1
