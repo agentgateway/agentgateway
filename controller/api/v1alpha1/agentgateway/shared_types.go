@@ -146,51 +146,45 @@ type HeaderModifiers struct {
 	Response *gwv1.HTTPHeaderFilter `json:"response,omitempty"`
 }
 
-// References a same-namespace credential.
-// Set only `name` to reference a Kubernetes Secret.
+// References a same-namespace credential
+// Set only `name` for a Kubernetes Secret
 //
 // +structType=atomic
 // +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
 type LocalSecretObjectRef struct {
-	// The name of the referenced credential.
+	// Name of the referenced credential
 	// +required
 	Name gwv1.ObjectName `json:"name"`
 
-	// The API group of the referenced credential.
-	// Empty selects the core API group.
+	// API group of the referenced credential; empty selects the core API group
 	// +optional
 	Group string `json:"group,omitempty"`
 
-	// The kind of the referenced credential.
-	// Empty defaults to `Secret`.
+	// Kind of the referenced credential; empty defaults to `Secret`
 	// +optional
 	Kind string `json:"kind,omitempty"`
 }
 
-// References a same-namespace credential and, optionally, a specific key
-// within it whose value should be used. Set only `name` to reference a
-// Kubernetes Secret. When `key` is omitted, a location-specific default key
-// is used.
+// References a same-namespace credential and optional key
+// Set only `name` for a Kubernetes Secret. When `key` is omitted, a
+// location-specific default key is used.
 //
 // +structType=atomic
 // +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
 type LocalSecretKeyRef struct {
-	// The name of the referenced credential.
+	// Name of the referenced credential
 	// +required
 	Name gwv1.ObjectName `json:"name"`
 
-	// The API group of the referenced credential.
-	// Empty selects the core API group.
+	// API group of the referenced credential; empty selects the core API group
 	// +optional
 	Group string `json:"group,omitempty"`
 
-	// The kind of the referenced credential.
-	// Empty defaults to `Secret`.
+	// Kind of the referenced credential; empty defaults to `Secret`
 	// +optional
 	Kind string `json:"kind,omitempty"`
 
-	// The key in the referenced Secret whose value is used. If omitted, a
-	// location-specific default key is used.
+	// Key in the referenced Secret. If omitted, a location-specific default is used
 	//
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=253

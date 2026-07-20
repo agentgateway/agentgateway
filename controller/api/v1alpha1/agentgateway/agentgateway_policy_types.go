@@ -179,24 +179,24 @@ const (
 )
 
 type BackendSimple struct {
-	// Settings for managing TCP connections to the backend.
+	// Settings for managing TCP connections to the backend
 	// +optional
 	TCP *BackendTCP `json:"tcp,omitempty"`
-	// Settings for managing TLS connections to the backend.
+	// Settings for managing TLS connections to the backend
 	//
-	// If this field is set, TLS will be initiated to the backend; the system trusted CA certificates will be used to
-	// validate the server, and the SNI will automatically be set based on the destination.
+	// When set, TLS is originated to the backend using the system trusted CA
+	// certificates, and SNI is inferred from the destination.
 	// +optional
 	TLS *BackendTLS `json:"tls,omitempty"`
-	// Settings for managing HTTP requests to the backend.
+	// Settings for managing HTTP requests to the backend
 	// +optional
 	HTTP *BackendHTTP `json:"http,omitempty"`
 
-	// Settings for managing tunnel connections, with behavior like `HTTPS_PROXY`, to the backend.
+	// Settings for managing tunnel connections to the backend, like `HTTPS_PROXY`
 	// +optional
 	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
 
-	// Settings for managing authentication to the backend.
+	// Settings for managing authentication to the backend
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
 }
@@ -249,13 +249,12 @@ type BackendEviction struct {
 	// +optional
 	ConsecutiveFailures *int32 `json:"consecutiveFailures,omitempty"`
 
-	// EWMA health score threshold, expressed as 0 to 100.
-	// When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
-	// For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
-	// Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
-	// so a single success in a stream of failures can delay eviction.
-	// When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
-	// When neither is set, a single unhealthy response triggers eviction.
+	// EWMA health score threshold, from 0 to 100. When set, a backend is evicted
+	// only if its computed health drops below this value after an unhealthy
+	// response (e.g. 50 evicts when EWMA health falls below 50%). Unlike
+	// consecutiveFailures, this sliding-window average lets a single success delay
+	// eviction. If both are set, either condition evicts; if neither, a single
+	// unhealthy response evicts.
 	//
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=100
@@ -395,15 +394,11 @@ const (
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
 type BackendTLS struct {
-	// Enables mutual TLS to the backend, using the
-	// specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-	// credential source, defaulting to a Kubernetes `Secret`.
-	//
-	// An optional `ca.cert` field, if present, will be used to verify the
-	// server certificate. If `caCertificateRefs` is also specified, the
-	// `caCertificateRefs` field takes priority.
-	//
-	// If unspecified, no client certificate will be used.
+	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
+	// referenced credential source (defaulting to a Kubernetes `Secret`). An
+	// optional `ca.cert`, if present, verifies the server certificate, but
+	// `caCertificateRefs` takes priority. If unspecified, no client certificate
+	// is used.
 	//
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
@@ -418,15 +413,13 @@ type BackendTLS struct {
 	// +optional
 	CACertificateRefs []corev1.LocalObjectReference `json:"caCertificateRefs,omitempty"`
 
-	// Originates TLS but skips verification of the backend's certificate.
-	// WARNING: This is an insecure option that should only be used if the risks are understood.
+	// Originates TLS but skips verification of the backend's certificate
+	// WARNING: insecure; only use if the risks are understood
 	//
-	// There are two modes:
-	// * `All` disables all TLS verification.
-	// * `Hostname` verifies the CA certificate is trusted, but ignores any
-	//   mismatch of hostname or SANs. Note that this method is still insecure;
-	//   prefer setting `verifySubjectAltNames` to customize the valid hostnames
-	//   if possible.
+	// Modes:
+	// * `All` disables all TLS verification
+	// * `Hostname` trusts the CA certificate but ignores hostname/SAN mismatches.
+	//   Still insecure; prefer `verifySubjectAltNames` where possible.
 	//
 	// +optional
 	InsecureSkipVerify *InsecureTLSMode `json:"insecureSkipVerify,omitempty"`
@@ -1361,20 +1354,16 @@ type BackendAuth struct {
 	// +optional
 	InlineKey *string `json:"key,omitempty"`
 
-	// Credential source, defaulting to a Kubernetes
-	// `Secret`, storing the key to use as the authorization value. When using
-	// the default Secret resolver, this must be stored in the `Authorization`
-	// key by default; override via `secretRef.key`. A `Bearer ` prefix on the
-	// stored value is stripped only when reading the default `Authorization`
-	// key.
+	// Credential source for the authorization value, defaulting to a Kubernetes
+	// `Secret`. By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
-	// Passes through an existing token that has been sent by the
-	// client and validated. Other policies, like JWT and API key
-	// authentication, will strip the original client credentials. Passthrough backend authentication
-	// causes the original token to be added back into the request. If there are no client authentication policies on the
-	// request, the original token would be unchanged, so this would have no effect.
+	// Reuses a client token already validated by another policy. Those policies
+	// may strip client credentials; passthrough adds the original token back to
+	// the backend request. Without client auth policies, this has no effect.
 	// +optional
 	Passthrough *BackendAuthPassthrough `json:"passthrough,omitempty"`
 
@@ -1399,9 +1388,9 @@ type BackendAuth struct {
 	// +optional
 	OAuthTokenExchange *OAuthTokenExchange `json:"oauthTokenExchange,omitempty"`
 
-	// Where backend credentials are inserted.
-	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
-	// This applies to `key`, `secretRef`, and `passthrough`.
+	// Where backend credentials are inserted. Defaults to the `Authorization`
+	// header with the `Bearer ` prefix. Applies to `key`, `secretRef`, and
+	// `passthrough`.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
 }
@@ -1622,11 +1611,10 @@ type GcpAuth struct {
 	//
 	// +optional
 	Type *GcpAuthType `json:"type,omitempty"`
-	// Credential source, defaulting to a Kubernetes
-	// `Secret`, containing ADC-compatible Google credential JSON. When using
-	// the default Secret resolver, this must be stored in the `credentials.json`
-	// key by default; override via `secretRef.key`. When omitted, ambient
-	// credentials are used.
+	// Credential source for ADC-compatible Google credential JSON, defaulting to
+	// a Kubernetes `Secret`. By default, the value is read from
+	// `credentials.json`; set `secretRef.key` to override it. When omitted,
+	// ambient credentials are used.
 	//
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
@@ -1642,10 +1630,9 @@ type GcpAuth struct {
 //
 // +kubebuilder:validation:XValidation:rule="!(has(self.secretRef) && has(self.assumeRole))",message="secretRef and assumeRole are mutually exclusive"
 type AwsAuth struct {
-	// Credential source, defaulting to a Kubernetes
-	// `Secret`, containing the AWS credentials. When using the default Secret
-	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
-	// optionally `sessionToken`.
+	// Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
+	// The default Secret resolver expects `accessKey`, `secretKey`, and optional
+	// `sessionToken` keys.
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
@@ -1689,9 +1676,8 @@ type AwsAssumeRole struct {
 	// +optional
 	SessionNameExpression *CELExpression `json:"sessionNameExpression,omitempty"`
 
-	// Tags are session tags passed to STS AssumeRole. Once activated as cost
-	// allocation tags, they appear in the AWS Cost & Usage Report for cost
-	// attribution. STS allows at most 50 session tags per role session.
+	// Session tags passed to STS AssumeRole for cost attribution in the AWS Cost
+	// & Usage Report, once activated. STS allows at most 50 per role session.
 	//
 	// +optional
 	// +listType=map
@@ -1718,10 +1704,9 @@ type AwsSessionTag struct {
 	// +kubebuilder:validation:MaxLength=256
 	Value *string `json:"value,omitempty"`
 
-	// Expression is a CEL expression evaluated against each request to produce
-	// the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
-	// expression does not produce a valid tag value at request time, the request
-	// is rejected.
+	// CEL expression evaluated against each request to produce the tag value,
+	// for example `jwt.sub` or `request.headers["x-app"]`. Requests with invalid
+	// tag values are rejected.
 	//
 	// +optional
 	Expression *CELExpression `json:"expression,omitempty"`
@@ -1734,10 +1719,9 @@ type AwsSessionTag struct {
 //
 // +kubebuilder:validation:AtMostOneOf=secretRef;managedIdentity;workloadIdentity
 type AzureAuth struct {
-	// Credential source, defaulting to a Kubernetes
-	// `Secret`, containing the Azure credentials. When using the default Secret
-	// resolver, the `Secret` must have keys `clientID`, `tenantID`, and
-	// `clientSecret`.
+	// Credential source for Azure credentials, defaulting to a Kubernetes
+	// `Secret`. The default Secret resolver expects `clientID`, `tenantID`, and
+	// `clientSecret` keys.
 	//
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
@@ -1747,12 +1731,9 @@ type AzureAuth struct {
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
 
-	// Workload identity authentication settings. Uses the federated token
-	// projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
-	// `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
-	// environment variables) to authenticate. This is the recommended method
-	// when running on Azure Kubernetes Service (AKS) with Workload Identity
-	// enabled.
+	// Workload identity authentication settings. Uses the federated token and
+	// Azure env vars projected into the data plane pod. Recommended on AKS with
+	// Workload Identity enabled.
 	//
 	// +optional
 	WorkloadIdentity *AzureWorkloadIdentity `json:"workloadIdentity,omitempty"`
@@ -2029,17 +2010,10 @@ type BackendTunnel struct {
 }
 
 type BackendHTTP struct {
-	// HTTP protocol version to use when connecting to
-	// the backend.
-	// If not specified, the version is automatically determined:
-	// * `Service` types can specify it with `appProtocol` on the `Service`
-	//   port.
-	// * If traffic is identified as gRPC, `HTTP2` is used.
-	// * If the incoming traffic was plaintext HTTP, the original protocol will
-	//   be used.
-	// * If the incoming traffic was HTTPS, `HTTP1` will be used. This is
-	//   because most clients will transparently upgrade HTTPS traffic to
-	//   `HTTP2`, even if the backend doesn't support it.
+	// HTTP protocol version for backend connections. If unset, it is inferred:
+	// `Service` appProtocol, `HTTP2` for gRPC, the original protocol for
+	// plaintext HTTP, or `HTTP1` for HTTPS because clients often upgrade HTTPS
+	// to HTTP/2 even when the backend does not support it.
 	// +optional
 	Version *HTTPVersion `json:"version,omitempty"`
 
