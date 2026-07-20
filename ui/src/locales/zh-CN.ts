@@ -483,7 +483,7 @@ const zhCN = {
       baseUrl: "基础 URL",
       baseUrlForTheUpstreamProviderExpandsToHostOverridePathPrefixAndTlsForHttpsUrls:
         "上游提供商的基本 URL。对于 https URL，扩展为 hostOverride、pathPrefix 和 tls。",
-      basicAuth: "基本身份验证（Basic Auth）",
+      basicAuth: "Basic Auth",
       bearerToken: "Bearer 令牌",
       bedrockGuardrails: "Bedrock 防护规则",
       behaviorWhenOneOrMoreMcpTargetsFailToInitializeOrFailDuringFanoutDefaultsToFailClosed:
@@ -930,7 +930,7 @@ const zhCN = {
       entries: "条目",
       envVar: "环境变量",
       environmentMustBeAYamlMapping: "环境必须是 YAML 映射。",
-      environmentYaml: "环境 YAML",
+      environmentYaml: "Environment YAML",
       error: "错误",
       evaluate: "评估",
       evaluatePolicyExpressionsAgainstSampleOrCustomRequestContextUsingTheGatewayCelEndpoint:
