@@ -373,14 +373,14 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	if privateKeyJWT == nil {
 		t.Fatal("privateKeyJwt is nil, want configured settings")
 	}
-	if privateKeyJWT.GetSigningKey() == "" {
+	if privateKeyJWT.GetKey().GetSigningKey() == "" {
 		t.Fatal("signing key is empty, want secret value")
 	}
-	if privateKeyJWT.GetAlg() != api.OAuthClientAuth_PrivateKeyJwt_ES256 {
-		t.Fatalf("privateKeyJwt alg = %v, want ES256", privateKeyJWT.GetAlg())
+	if privateKeyJWT.GetKey().GetAlg() != api.JwtSigningKey_ES256 {
+		t.Fatalf("privateKeyJwt alg = %v, want ES256", privateKeyJWT.GetKey().GetAlg())
 	}
-	if privateKeyJWT.GetKid() != "kid-1" {
-		t.Fatalf("privateKeyJwt kid = %q, want kid-1", privateKeyJWT.GetKid())
+	if privateKeyJWT.GetKey().GetKid() != "kid-1" {
+		t.Fatalf("privateKeyJwt kid = %q, want kid-1", privateKeyJWT.GetKey().GetKid())
 	}
 	if privateKeyJWT.GetAssertionAudience() != "https://issuer.example.com/oauth/token" {
 		t.Fatalf("privateKeyJwt assertion audience = %q, want token endpoint URL", privateKeyJWT.GetAssertionAudience())
@@ -425,6 +425,14 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 				RequestedTokenType: ptr.Of(agentgateway.OAuthTokenTypeAccessToken),
 			},
 			want: "requestedTokenType is only valid with TokenExchange",
+		},
+		{
+			name: "custom-requested-token-type",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef:         oauthTokenEndpointRef(),
+				RequestedTokenType: ptr.Of(agentgateway.OAuthTokenType("urn:company:domain:token")),
+			},
+			want: "custom token types are only supported for subjectToken and actorToken",
 		},
 		{
 			name: "may-act-without-jwt-actor",

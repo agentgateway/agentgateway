@@ -386,6 +386,26 @@ message Key {
   AuthorizationLocation authorization_location = 2;
 }
 
+// Private key material and JWS header settings used to sign JWTs.
+message JwtSigningKey {
+  enum SigningAlg {
+    SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
+    RS256                   = 1;
+    RS384                   = 2;
+    RS512                   = 3;
+    ES256                   = 4;
+    ES384                   = 5;
+  }
+
+  // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
+  // EC keys are used with ES* algorithms.
+  string signing_key = 1;
+  // JWS signing algorithm. Defaults to RS256.
+  SigningAlg alg = 2;
+  // Optional JWS key ID header.
+  optional string kid = 3;
+}
+
 // GCP-specific backend authentication.
 message Gcp {
   message AccessToken {}
@@ -1790,22 +1810,11 @@ message OAuthClientAuth {
   }
 
   message PrivateKeyJwt {
-    enum SigningAlg {
-      SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
-      RS256                   = 1;
-      RS384                   = 2;
-      RS512                   = 3;
-      ES256                   = 4;
-      ES384                   = 5;
-    }
-
-    // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
-    // EC keys are used with ES* algorithms.
-    string signing_key = 1;
-    // JWS signing algorithm. Defaults to RS256.
-    SigningAlg alg = 2;
-    // Optional JWS key ID header.
-    optional string kid = 3;
+    // Moved into JwtSigningKey key; kept reserved to avoid wire reuse.
+    reserved 1, 2, 3;
+    reserved "signing_key", "alg", "kid";
+    // Private key used to sign JWTs
+    JwtSigningKey key = 5;
     // Audience for the client assertion, typically the token endpoint URL.
     string assertion_audience = 4;
   }

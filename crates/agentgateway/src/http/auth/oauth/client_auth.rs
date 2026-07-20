@@ -187,11 +187,28 @@ pub enum OAuthClientAuthMethod {
 
 #[derive(Clone, serde::Deserialize)]
 #[serde(try_from = "RawPrivateKeyJwt", rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct PrivateKeyJwt {
 	#[serde(skip)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
-	signing_key: ParsedEncodingKey,
+	key: JwtSigningKey,
+	assertion_audience: String,
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for PrivateKeyJwt {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		std::borrow::Cow::Borrowed("PrivateKeyJwt")
+	}
+
+	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		<PrivateKeyJwtSchema as schemars::JsonSchema>::json_schema(generator)
+	}
+}
+
+#[cfg(feature = "schema")]
+#[derive(schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct PrivateKeyJwtSchema {
 	#[serde(default)]
 	alg: SigningAlg,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -202,9 +219,7 @@ pub struct PrivateKeyJwt {
 impl fmt::Debug for PrivateKeyJwt {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("PrivateKeyJwt")
-			.field("signing_key", &"<redacted>")
-			.field("alg", &self.alg)
-			.field("kid", &self.kid)
+			.field("key", &self.key)
 			.field("assertion_audience", &self.assertion_audience)
 			.finish()
 	}
@@ -218,8 +233,8 @@ impl serde::Serialize for PrivateKeyJwt {
 		use serde::ser::SerializeStruct;
 
 		let mut state = serializer.serialize_struct("PrivateKeyJwt", 3)?;
-		state.serialize_field("alg", &self.alg)?;
-		state.serialize_field("kid", &self.kid)?;
+		state.serialize_field("alg", &self.key.alg)?;
+		state.serialize_field("kid", &self.key.kid)?;
 		state.serialize_field("assertionAudience", &self.assertion_audience)?;
 		state.end()
 	}
@@ -246,25 +261,67 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 		if raw.assertion_audience.is_empty() {
 			return Err("oauth private_key_jwt assertion_audience must not be empty".into());
 		}
-		// TODO: file-based keys are read once at config load; consider reload/rotation (K8s secret remounts need a restart)
-		let pem = raw
-			.signing_key
-			.load()
-			.map_err(|e| format!("failed to load oauth private_key_jwt signing_key: {e}"))?;
-		let signing_key = raw
-			.alg
-			.encoding_key(pem.trim().as_bytes())
-			.map_err(|e| format!("failed to parse oauth private_key_jwt signing_key: {e}"))?;
 		Ok(Self {
-			signing_key: ParsedEncodingKey(signing_key),
-			alg: raw.alg,
-			kid: raw.kid,
+			key: JwtSigningKey::try_from_raw(
+				raw.signing_key,
+				raw.alg,
+				raw.kid,
+				"oauth private_key_jwt signing_key",
+			)?,
 			assertion_audience: raw.assertion_audience,
 		})
 	}
 }
 
-struct ParsedEncodingKey(EncodingKey);
+pub(crate) struct ParsedEncodingKey(pub(crate) EncodingKey);
+
+#[derive(Clone)]
+pub(crate) struct JwtSigningKey {
+	pub(crate) signing_key: ParsedEncodingKey,
+	pub(crate) alg: SigningAlg,
+	pub(crate) kid: Option<String>,
+}
+
+impl JwtSigningKey {
+	pub(crate) fn try_from_raw(
+		signing_key: FileOrInline,
+		alg: SigningAlg,
+		kid: Option<String>,
+		context: &str,
+	) -> Result<Self, String> {
+		// TODO: file-based keys are read once at config load; consider reload/rotation (K8s secret remounts need a restart)
+		let pem = signing_key
+			.load()
+			.map_err(|e| format!("failed to load {context}: {e}"))?;
+		Self::try_from_pem(pem.trim(), alg, kid, context)
+	}
+
+	pub(crate) fn try_from_pem(
+		signing_key_pem: &str,
+		alg: SigningAlg,
+		kid: Option<String>,
+		context: &str,
+	) -> Result<Self, String> {
+		let signing_key = alg
+			.encoding_key(signing_key_pem.as_bytes())
+			.map_err(|e| format!("failed to parse {context}: {e}"))?;
+		Ok(Self {
+			signing_key: ParsedEncodingKey(signing_key),
+			alg,
+			kid,
+		})
+	}
+}
+
+impl fmt::Debug for JwtSigningKey {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("JwtSigningKey")
+			.field("signing_key", &"<redacted>")
+			.field("alg", &self.alg)
+			.field("kid", &self.kid)
+			.finish()
+	}
+}
 
 impl Clone for ParsedEncodingKey {
 	fn clone(&self) -> Self {
@@ -379,12 +436,31 @@ impl TryFrom<proto::o_auth_client_auth::PrivateKeyJwt> for PrivateKeyJwt {
 	fn try_from(
 		private_key_jwt: proto::o_auth_client_auth::PrivateKeyJwt,
 	) -> Result<Self, Self::Error> {
-		Self::try_from(RawPrivateKeyJwt {
-			signing_key: FileOrInline::Inline(private_key_jwt.signing_key),
-			alg: signing_alg_from_proto(private_key_jwt.alg)?,
-			kid: private_key_jwt.kid,
+		if private_key_jwt.assertion_audience.is_empty() {
+			return Err(ProtoError::Generic(
+				"oauth private_key_jwt assertion_audience must not be empty".into(),
+			));
+		}
+		Ok(Self {
+			key: private_key_jwt
+				.key
+				.ok_or(ProtoError::MissingRequiredField)?
+				.try_into()?,
 			assertion_audience: private_key_jwt.assertion_audience,
 		})
+	}
+}
+
+impl TryFrom<proto::JwtSigningKey> for JwtSigningKey {
+	type Error = ProtoError;
+
+	fn try_from(key: proto::JwtSigningKey) -> Result<Self, Self::Error> {
+		Self::try_from_pem(
+			key.signing_key.trim(),
+			signing_alg_from_proto(key.alg)?,
+			key.kid,
+			"JWT signing_key",
+		)
 		.map_err(ProtoError::Generic)
 	}
 }
@@ -406,7 +482,7 @@ pub enum SigningAlg {
 }
 
 impl SigningAlg {
-	fn algorithm(self) -> Algorithm {
+	pub(crate) fn algorithm(self) -> Algorithm {
 		match self {
 			Self::Rs256 => Algorithm::RS256,
 			Self::Rs384 => Algorithm::RS384,
@@ -416,7 +492,7 @@ impl SigningAlg {
 		}
 	}
 
-	fn encoding_key(self, pem: &[u8]) -> anyhow::Result<EncodingKey> {
+	pub(crate) fn encoding_key(self, pem: &[u8]) -> anyhow::Result<EncodingKey> {
 		match self {
 			Self::Rs256 | Self::Rs384 | Self::Rs512 => {
 				EncodingKey::from_rsa_pem(pem).context("failed to load RSA signing key")
@@ -429,7 +505,7 @@ impl SigningAlg {
 }
 
 fn signing_alg_from_proto(alg: i32) -> Result<SigningAlg, ProtoError> {
-	use proto::o_auth_client_auth::private_key_jwt::SigningAlg as ProtoSigningAlg;
+	use proto::jwt_signing_key::SigningAlg as ProtoSigningAlg;
 
 	match ProtoSigningAlg::try_from(alg) {
 		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),
@@ -471,8 +547,8 @@ pub(super) fn sign_client_assertion(
 		exp: now + CLIENT_ASSERTION_LIFETIME.as_secs(),
 	};
 
-	let mut header = Header::new(private_key.alg.algorithm());
-	header.kid = private_key.kid.clone();
-	jsonwebtoken::encode(&header, &claims, &private_key.signing_key.0)
+	let mut header = Header::new(private_key.key.alg.algorithm());
+	header.kid = private_key.key.kid.clone();
+	jsonwebtoken::encode(&header, &claims, &private_key.key.signing_key.0)
 		.context("failed to sign client assertion")
 }

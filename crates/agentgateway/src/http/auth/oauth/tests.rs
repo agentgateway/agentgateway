@@ -1275,9 +1275,11 @@ fn private_key_jwt_client_auth_from_proto() {
 		client_id: "gateway-client".to_string(),
 		method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
 		private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
-			signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
-			alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
-			kid: Some("kid-1".to_string()),
+			key: Some(proto::JwtSigningKey {
+				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+				alg: proto::jwt_signing_key::SigningAlg::Es256 as i32,
+				kid: Some("kid-1".to_string()),
+			}),
 			assertion_audience: "https://issuer.example/token".to_string(),
 		}),
 		..Default::default()
@@ -1373,10 +1375,12 @@ fn private_key_jwt_client_auth_from_proto() {
 			client_secret: Some("secret".to_string()),
 			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
 			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
-				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
-				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				key: Some(proto::JwtSigningKey {
+					signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+					alg: proto::jwt_signing_key::SigningAlg::Es256 as i32,
+					..Default::default()
+				}),
 				assertion_audience: "https://issuer.example/token".to_string(),
-				..Default::default()
 			}),
 		}),
 		..Default::default()
@@ -1390,10 +1394,12 @@ fn private_key_jwt_client_auth_from_proto() {
 			client_secret: Some("secret".to_string()),
 			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
 			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
-				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
-				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				key: Some(proto::JwtSigningKey {
+					signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+					alg: proto::jwt_signing_key::SigningAlg::Es256 as i32,
+					..Default::default()
+				}),
 				assertion_audience: "https://issuer.example/token".to_string(),
-				..Default::default()
 			}),
 		}),
 		..Default::default()

@@ -947,7 +947,8 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 	}
 	logger.Debug("generated backend auth policy",
 		"policy", policy.Name,
-		"agentgateway_policy", authPolicy.Name)
+		"agentgateway_policy", authPolicy.Name,
+	)
 
 	return authPolicy, errors.Join(append(errs, kindErrs...)...)
 }
@@ -1101,9 +1102,11 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
 		Cache:                 translateOAuthTokenCache(auth.Cache),
 	}
+
 	if auth.Path != nil && !strings.HasPrefix(*auth.Path, "/") {
 		errs = append(errs, fmt.Errorf("oauthTokenExchange.path %q must start with /", *auth.Path))
 	}
+
 	if oauth.GrantType == api.OAuthTokenExchange_JWT_BEARER {
 		if oauth.ActorToken != nil {
 			errs = append(errs, errors.New("oauth actorToken is only valid with TokenExchange grantType"))
@@ -1112,9 +1115,20 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 			errs = append(errs, errors.New("oauth requestedTokenType is only valid with TokenExchange grantType"))
 		}
 	}
-	if auth.RequestedTokenType != nil && *auth.RequestedTokenType == agentgateway.OAuthTokenTypeIDJAG {
-		errs = append(errs, errors.New("oauth requestedTokenType IdJag is only supported by crossAppAccess"))
+
+	if req := auth.RequestedTokenType; req != nil {
+		// mirror the data plane's requestable token type set
+		switch *req {
+		case agentgateway.OAuthTokenTypeAccessToken,
+			agentgateway.OAuthTokenTypeJWT,
+			agentgateway.OAuthTokenTypeIDToken:
+		case agentgateway.OAuthTokenTypeIDJAG:
+			errs = append(errs, errors.New("oauth requestedTokenType IdJag is only supported by crossAppAccess"))
+		default:
+			errs = append(errs, fmt.Errorf("oauth requestedTokenType %q must be a built-in token type; custom token types are only supported for subjectToken and actorToken", *req))
+		}
 	}
+
 	if auth.ActorToken != nil && ptr.OrDefault(auth.ActorToken.MayAct, "") == agentgateway.OAuthMayActValidationModeRequired && ptr.OrDefault(auth.ActorToken.TokenType, "") != agentgateway.OAuthTokenTypeJWT {
 		errs = append(errs, errors.New("oauth actorToken mayAct Required requires tokenType Jwt"))
 	}
@@ -1221,8 +1235,10 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 
 	var errs []error
 	res := &api.OAuthClientAuth_PrivateKeyJwt{
-		Alg:               translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
-		Kid:               auth.KeyID,
+		Key: &api.JwtSigningKey{
+			Alg: translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
+			Kid: auth.KeyID,
+		},
 		AssertionAudience: auth.AssertionAudience,
 	}
 
@@ -1236,7 +1252,7 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 	} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
 		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, key))
 	} else {
-		res.SigningKey = value
+		res.Key.SigningKey = value
 	}
 
 	return res, errors.Join(errs...)
@@ -1295,23 +1311,23 @@ func translateOAuthClientAuthMethod(method *agentgateway.OAuthClientAuthMethod) 
 	}
 }
 
-func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.OAuthClientAuth_PrivateKeyJwt_SigningAlg {
+func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.JwtSigningKey_SigningAlg {
 	if alg == nil {
-		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+		return api.JwtSigningKey_SIGNING_ALG_UNSPECIFIED
 	}
 	switch *alg {
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS256
+		return api.JwtSigningKey_RS256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS384
+		return api.JwtSigningKey_RS384
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS512
+		return api.JwtSigningKey_RS512
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
-		return api.OAuthClientAuth_PrivateKeyJwt_ES256
+		return api.JwtSigningKey_ES256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
-		return api.OAuthClientAuth_PrivateKeyJwt_ES384
+		return api.JwtSigningKey_ES384
 	default:
-		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+		return api.JwtSigningKey_SIGNING_ALG_UNSPECIFIED
 	}
 }
 

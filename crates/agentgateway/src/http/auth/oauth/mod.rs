@@ -190,9 +190,12 @@ impl OAuthTokenExchangeAuth {
 		if let Some(client_auth) = &self.client_auth {
 			client_auth.validate_load()?;
 		}
-		if let Some(OAuthTokenType::Custom(token_type)) = &self.requested_token_type {
+		if let Some(requested) = &self.requested_token_type
+			&& !requested.is_requestable()
+		{
 			return Err(format!(
-				"unsupported requested_token_type {token_type:?}; custom token types are only supported for subject_token and actor_token"
+				"unsupported requested_token_type {:?}; custom token types are only supported for subject_token and actor_token",
+				requested.as_str()
 			));
 		}
 
@@ -431,13 +434,14 @@ impl OAuthTokenType {
 		}
 	}
 
-	fn supported_requested_from_urn(token_type: &str) -> Option<Self> {
-		match token_type {
-			TOKEN_TYPE_ACCESS => Some(Self::AccessToken),
-			TOKEN_TYPE_JWT => Some(Self::Jwt),
-			TOKEN_TYPE_ID => Some(Self::IdToken),
-			TOKEN_TYPE_ID_JAG => Some(Self::IdJag),
-			_ => None,
+	// Token types the gateway can ask an authorization server to issue in an
+	// RFC 8693 exchange. Exhaustive (no wildcard) so adding a variant forces a
+	// requestable-or-not decision here; the controller's requestedTokenType
+	// accept-list must mirror this set.
+	fn is_requestable(&self) -> bool {
+		match self {
+			Self::AccessToken | Self::Jwt | Self::IdToken | Self::IdJag => true,
+			Self::Custom(_) => false,
 		}
 	}
 
@@ -867,7 +871,8 @@ fn proto_token_type(field: &str, token_type: &str) -> Result<OAuthTokenType, Pro
 }
 
 fn proto_requested_token_type(field: &str, token_type: &str) -> Result<OAuthTokenType, ProtoError> {
-	OAuthTokenType::supported_requested_from_urn(token_type)
+	OAuthTokenType::from_urn(token_type)
+		.filter(OAuthTokenType::is_requestable)
 		.ok_or_else(|| ProtoError::Generic(format!("unsupported {field} {token_type:?}")))
 }
 
