@@ -364,6 +364,7 @@ pub struct RoutePolicies {
 	pub llm: RequestPolicy<llm::Policy>,
 	pub timeout: RequestPolicy<timeout::Policy>,
 	pub retry: RequestPolicy<retry::Policy>,
+	pub delay: RequestPolicy<http::delay::Policy>,
 
 	pub request_header_modifier: RequestPolicy<filters::HeaderModifier>,
 	pub response_header_modifier: RequestPolicy<filters::HeaderModifier>,
@@ -431,6 +432,7 @@ impl RoutePolicies {
 			&self.llm as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
 			&self.retry as &dyn PolicyExpressions,
+			&self.delay as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
@@ -903,6 +905,9 @@ impl Store {
 					pol
 						.retry
 						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
+				},
+				TrafficPolicy::Delay(p) => {
+					pol.delay.merge_with_inheritance(p, lock_inheritance);
 				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
 					pol

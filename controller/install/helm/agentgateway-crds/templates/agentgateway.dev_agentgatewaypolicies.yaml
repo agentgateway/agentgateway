@@ -10277,6 +10277,32 @@ spec:
                         minItems: 1
                         type: array
                     type: object
+                  delay:
+                    description: |-
+                      Injects artificial latency before forwarding requests, for
+                      fault-injection testing.
+                    properties:
+                      duration:
+                        description: |-
+                          Latency to inject before forwarding the request to the backend.
+                          The injected delay counts against the request timeout.
+                        type: string
+                        x-kubernetes-validations:
+                        - message: invalid duration value
+                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                      probability:
+                        description: |-
+                          CEL expression gating whether the delay is injected: a float between 0.0
+                          and 1.0 is the probability the delay applies (a plain number such as
+                          `0.1` is valid CEL), and a bool injects the delay when `true` (for
+                          example `request.headers["x-chaos"] == "1"`). If unset, the delay always
+                          applies.
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
+                    required:
+                    - duration
+                    type: object
                   directResponse:
                     description: |-
                       Sends a direct response to the
@@ -12892,7 +12918,7 @@ spec:
                 - message: phase PreRouting only supports extAuth, authorization,
                     transformation, extProc, jwtAuthentication, basicAuthentication,
                     apiKeyAuthentication and cors
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.buffer),has(self.csrf),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.buffer),has(self.csrf),has(self.delay),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:

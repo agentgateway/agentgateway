@@ -54,6 +54,7 @@ const (
 	hostnameRewritePolicySuffix    = ":hostname-rewrite"
 	retryPolicySuffix              = ":retry"
 	timeoutPolicySuffix            = ":timeout"
+	delayPolicySuffix              = ":delay"
 	jwtPolicySuffix                = ":jwt"
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
@@ -553,6 +554,10 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("retry")(processRetriesPolicy(traffic.Retry, basePolicyName, policyName))
 	}
 
+	if traffic.Delay != nil {
+		appendPolicy("delay")(processDelayPolicy(traffic.Delay, basePolicyName, policyName), nil)
+	}
+
 	if traffic.DirectResponse != nil {
 		appendPolicy("directResponse")(processConditional(
 			traffic.DirectResponse,
@@ -1028,6 +1033,31 @@ func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string,
 		"agentgateway_policy", timeoutPolicy.Name)
 
 	return timeoutPolicy
+}
+
+func processDelayPolicy(delay *agentgateway.Delay, basePolicyName string, policy types.NamespacedName) *api.Policy {
+	translatedDelay := &api.Delay{
+		Duration: durationpb.New(delay.Duration.Duration),
+	}
+	if delay.Probability != nil {
+		translatedDelay.Probability = string(*delay.Probability)
+	}
+
+	delayPolicy := &api.Policy{
+		Key:  basePolicyName + delayPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Delay{Delay: translatedDelay},
+			},
+		},
+	}
+
+	logger.Debug("generated Delay policy",
+		"policy", basePolicyName,
+		"agentgateway_policy", delayPolicy.Name)
+
+	return delayPolicy
 }
 
 func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicyName string, policy types.NamespacedName) *api.Policy {

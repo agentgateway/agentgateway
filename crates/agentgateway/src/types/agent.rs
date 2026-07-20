@@ -2643,6 +2643,7 @@ pub enum FrontendPolicy {
 pub enum TrafficPolicy {
 	Timeout(timeout::Policy),
 	Retry(retry::Policy),
+	Delay(RequestPolicy<http::delay::Policy>),
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	Authorization(Authorization),

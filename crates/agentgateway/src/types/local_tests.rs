@@ -1565,6 +1565,62 @@ binds:
 }
 
 #[tokio::test]
+async fn test_delay_policy() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        delay:
+          duration: 2s
+          probability: 0.1
+      backends:
+      - host: 127.0.0.1:8000
+    - policies:
+        delay:
+          conditional:
+          - condition: request.path == "/chaos"
+            duration: 500ms
+            probability: request.headers["x-chaos"] == "1"
+          - duration: 1s
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let routes = &normalized.listener_routes[0].1;
+
+	let explicit = routes[0]
+		.inline_policies
+		.iter()
+		.find_map(|p| match p {
+			TrafficPolicy::Delay(p) => Some(p.iter().collect::<Vec<_>>()),
+			_ => None,
+		})
+		.expect("expected delay policy");
+	assert_eq!(explicit.len(), 1);
+	assert!(explicit[0].condition.is_none());
+	assert_eq!(
+		explicit[0].pol.duration,
+		std::time::Duration::from_secs(2)
+	);
+	assert!(explicit[0].pol.probability.is_some());
+
+	let conditional = routes[1]
+		.inline_policies
+		.iter()
+		.find_map(|p| match p {
+			TrafficPolicy::Delay(p) => Some(p.iter().collect::<Vec<_>>()),
+			_ => None,
+		})
+		.expect("expected conditional delay policy");
+	assert_eq!(conditional.len(), 2);
+	assert!(conditional[0].condition.is_some());
+	assert!(conditional[1].condition.is_none(), "fallback entry is last");
+}
+
+#[tokio::test]
 async fn test_inference_routing_rejects_failure_mode() {
 	let input = r#"
 binds:

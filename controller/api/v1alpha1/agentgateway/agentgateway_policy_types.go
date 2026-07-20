@@ -863,6 +863,11 @@ type Traffic struct {
 	//
 	// +optional
 	Buffer *Buffer `json:"buffer,omitempty"`
+
+	// Injects artificial latency before forwarding requests, for
+	// fault-injection testing.
+	// +optional
+	Delay *Delay `json:"delay,omitempty"`
 }
 
 // Direct response policy.
@@ -2795,6 +2800,24 @@ type Timeouts struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="request must be at least 1ms"
 	// +optional
 	Request *metav1.Duration `json:"request,omitempty"`
+}
+
+// Artificial latency injection for fault-injection testing.
+type Delay struct {
+	// Latency to inject before forwarding the request to the backend.
+	// The injected delay counts against the request timeout.
+	//
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +required
+	Duration metav1.Duration `json:"duration"`
+
+	// CEL expression gating whether the delay is injected: a float between 0.0
+	// and 1.0 is the probability the delay applies (a plain number such as
+	// `0.1` is valid CEL), and a bool injects the delay when `true` (for
+	// example `request.headers["x-chaos"] == "1"`). If unset, the delay always
+	// applies.
+	// +optional
+	Probability *CELExpression `json:"probability,omitempty"`
 }
 
 // Retry policy.

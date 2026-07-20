@@ -39,6 +39,7 @@ use crate::types::discovery::{NamespacedHostname, Service};
 use crate::types::{backend, frontend};
 use crate::{agentcore, apply, *};
 
+type LocalDelayPolicy = LocalExplicitOrConditional<crate::http::delay::Policy>;
 type LocalExtAuthzPolicy = LocalExplicitOrConditional<crate::http::ext_authz::ExtAuthz>;
 type LocalDirectResponsePolicy = LocalExplicitOrConditional<filters::DirectResponse>;
 type LocalExtProcPolicy = LocalExplicitOrConditional<crate::http::ext_proc::ExtProc>;
@@ -2755,6 +2756,9 @@ pub struct FilterOrPolicy {
 	/// Retry matching failed upstream requests.
 	#[serde(default)]
 	retry: Option<retry::Policy>,
+	/// Inject artificial latency before forwarding requests.
+	#[serde(default)]
+	delay: Option<LocalDelayPolicy>,
 }
 
 #[apply(schema_de!)]
@@ -5125,6 +5129,7 @@ pub(crate) async fn split_policies_for_target(
 		buffer,
 		timeout,
 		retry,
+		delay,
 	} = pol;
 	if let Some(p) = request_header_modifier {
 		if backend_target {
@@ -5307,6 +5312,9 @@ pub(crate) async fn split_policies_for_target(
 	}
 	if let Some(p) = retry {
 		route_policies.push(TrafficPolicy::Retry(p));
+	}
+	if let Some(p) = delay {
+		route_policies.push(TrafficPolicy::Delay(p.into_policy()?));
 	}
 	if let Some(oidc) = compiled_oidc {
 		route_policies.push(oidc);

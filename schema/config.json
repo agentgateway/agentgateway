@@ -1885,6 +1885,17 @@
             }
           ],
           "default": null
+        },
+        "delay": {
+          "description": "Inject artificial latency before forwarding requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_DelayPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -6893,6 +6904,91 @@
       "additionalProperties": false,
       "required": [
         "codes"
+      ]
+    },
+    "LocalExplicitOrConditional_DelayPolicy": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalConditionalPolicies_DelayPolicy"
+        },
+        {
+          "$ref": "#/$defs/DelayPolicy"
+        }
+      ]
+    },
+    "LocalConditionalPolicies_DelayPolicy": {
+      "type": "object",
+      "properties": {
+        "conditional": {
+          "description": "conditional policy entries. An entry without a condition must be the final fallback.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalConditionalPolicy_DelayPolicy"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "conditional"
+      ]
+    },
+    "LocalConditionalPolicy_DelayPolicy": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "description": "condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "duration": {
+          "description": "Artificial latency injected before the request is forwarded to the backend.",
+          "type": "string"
+        },
+        "probability": {
+          "description": "Probability the delay is injected. This should evaluate to either a float between 0.0-1.0\nor true/false, and may be a CEL expression (e.g. `request.headers[\"x-chaos\"] == \"1\"`).\nThis defaults to 'true'.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StringBoolFloat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "duration"
+      ]
+    },
+    "DelayPolicy": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "description": "Artificial latency injected before the request is forwarded to the backend.",
+          "type": "string"
+        },
+        "probability": {
+          "description": "Probability the delay is injected. This should evaluate to either a float between 0.0-1.0\nor true/false, and may be a CEL expression (e.g. `request.headers[\"x-chaos\"] == \"1\"`).\nThis defaults to 'true'.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StringBoolFloat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "duration"
       ]
     },
     "LocalRouteBackend": {
