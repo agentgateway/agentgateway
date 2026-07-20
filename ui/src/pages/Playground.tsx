@@ -97,7 +97,8 @@ type RunStep = {
 };
 
 type RequestModelOption =
-  { kind: "model"; config: LlmModel } | { kind: "virtual" };
+  | { kind: "model"; config: LlmModel }
+  | { kind: "virtual" };
 
 const storageKeys = {
   model: "playgroundModel",
@@ -1065,7 +1066,8 @@ function extractToolCalls(response: unknown): ToolCall[] {
   const choices = (response as { choices?: unknown }).choices;
   if (!Array.isArray(choices)) return [];
   const first = choices[0] as
-    { message?: { tool_calls?: unknown } } | undefined;
+    | { message?: { tool_calls?: unknown } }
+    | undefined;
   const calls = first?.message?.tool_calls;
   if (!Array.isArray(calls)) return [];
   return calls.filter((call): call is ToolCall =>

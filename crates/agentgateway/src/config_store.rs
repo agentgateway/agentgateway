@@ -301,7 +301,7 @@ pub(crate) fn materialize_config(
 ) -> anyhow::Result<String> {
 	let mut config: Value = crate::yamlviajson::from_str(base)?;
 	overlay_config_resources(&mut config, resources)?;
-	crate::yamlviajson::to_string(&config).map_err(Into::into)
+	crate::yamlviajson::to_string(&config)
 }
 
 fn overlay_config_resources(

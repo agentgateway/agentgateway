@@ -113,6 +113,7 @@ pub struct CertsDump {
 }
 
 impl Service {
+	#[allow(clippy::too_many_arguments)]
 	pub async fn new(
 		config: Arc<Config>,
 		model_catalog: Arc<crate::llm::cost::ModelCatalog>,

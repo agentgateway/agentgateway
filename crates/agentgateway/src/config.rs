@@ -1238,6 +1238,7 @@ config:
 
 	#[test]
 	fn config_store_defaults_to_file_mode() {
+		let _env_lock = lock_env();
 		let config = parse_config("{}".to_string(), None).expect("config should parse");
 
 		assert_eq!(config.config_store.mode, ConfigStoreMode::File);
@@ -1246,6 +1247,7 @@ config:
 
 	#[test]
 	fn config_store_hybrid_uses_shared_database_url() {
+		let _env_lock = lock_env();
 		let config = parse_config(
 			r#"
 config:
