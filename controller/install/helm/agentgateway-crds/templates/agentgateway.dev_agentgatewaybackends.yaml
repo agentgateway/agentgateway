@@ -28287,6 +28287,7 @@ spec:
                             - Auth0
                             - Authentik
                             - Descope
+                            - Entra
                             - Keycloak
                             - Okta
                             type: string
