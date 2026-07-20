@@ -19,7 +19,8 @@ use tower_serve_static::ServeDir;
 
 use crate::cel::{self, ExecutorSerde};
 use crate::config_store::{
-	ConfigResourceKind, ConfigResourceStore, ConfigResourceUpsertRequest, ConfigResourcesResponse,
+	ConfigResourceError, ConfigResourceKind, ConfigResourceStore, ConfigResourceUpsertRequest,
+	ConfigResourcesResponse,
 };
 use crate::llm::cost::ModelCatalog;
 use crate::{Config, ConfigSource, ConfigStoreMode, yamlviajson};
@@ -325,8 +326,8 @@ async fn update_config_resource(
 		.parse::<ConfigResourceKind>()
 		.map_err(resource_api_error)?;
 	if kind != ConfigResourceKind::LlmApiKey {
-		return Err(resource_api_error(anyhow::anyhow!(
-			"item updates are only supported for llm.apiKey resources"
+		return Err(resource_api_error(ConfigResourceError::InvalidRequest(
+			"item updates are only supported for llm.apiKey resources".to_string(),
 		)));
 	}
 	let resources = store.list(None).await.map_err(resource_api_error)?;
@@ -334,9 +335,9 @@ async fn update_config_resource(
 		.iter()
 		.any(|resource| resource.kind == kind && resource.id == id)
 	{
-		return Err(resource_api_error(anyhow::anyhow!(
+		return Err(resource_api_error(ConfigResourceError::NotFound(format!(
 			"config resource not found: {kind}/{id}"
-		)));
+		))));
 	}
 	let prepared = vec![
 		crate::config_store::prepare_api_key_update(id, resource.value).map_err(resource_api_error)?,
@@ -364,9 +365,9 @@ async fn delete_config_resource(
 		.iter()
 		.any(|resource| resource.kind == kind && resource.id == id)
 	{
-		return Err(resource_api_error(anyhow::anyhow!(
+		return Err(resource_api_error(ConfigResourceError::NotFound(format!(
 			"config resource not found: {kind}/{id}"
-		)));
+		))));
 	}
 	let candidate = crate::config_store::apply_delete(resources, kind, &id);
 	validate_materialized_config(&app, &candidate).await?;
@@ -413,24 +414,14 @@ async fn validate_materialized_config(
 	Ok(())
 }
 
-fn resource_api_error(err: anyhow::Error) -> ErrorResponse {
+fn resource_api_error(err: impl Into<anyhow::Error>) -> ErrorResponse {
+	let err = err.into();
 	let message = err.to_string();
-	let status = if message.contains("unsupported config resource kind")
-		|| message.contains("config resource id cannot be empty")
-		|| message.contains("item updates are only supported")
-		|| message.contains("resources require value.")
-		|| message.contains("must be JSON objects")
-		|| message.contains("must not include value.metadata.id")
-	{
-		StatusCode::BAD_REQUEST
-	} else if message.contains("conflicts with file-owned resource")
-		|| message.contains("DB-backed API keys require")
-	{
-		StatusCode::CONFLICT
-	} else if message.contains("config resource not found") {
-		StatusCode::NOT_FOUND
-	} else {
-		StatusCode::INTERNAL_SERVER_ERROR
+	let status = match err.downcast_ref::<ConfigResourceError>() {
+		Some(ConfigResourceError::InvalidRequest(_)) => StatusCode::BAD_REQUEST,
+		Some(ConfigResourceError::Conflict(_)) => StatusCode::CONFLICT,
+		Some(ConfigResourceError::NotFound(_)) => StatusCode::NOT_FOUND,
+		None => StatusCode::INTERNAL_SERVER_ERROR,
 	};
 	ErrorResponse::Status(status, message)
 }

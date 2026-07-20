@@ -34,6 +34,16 @@ pub struct ConfigResourcesResponse {
 	pub resources: Vec<ConfigResource>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigResourceError {
+	#[error("{0}")]
+	InvalidRequest(String),
+	#[error("{0}")]
+	Conflict(String),
+	#[error("{0}")]
+	NotFound(String),
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ConfigResourceKind {
 	#[serde(rename = "modelCatalog")]
@@ -67,7 +77,7 @@ impl fmt::Display for ConfigResourceKind {
 }
 
 impl FromStr for ConfigResourceKind {
-	type Err = anyhow::Error;
+	type Err = ConfigResourceError;
 
 	fn from_str(kind: &str) -> Result<Self, Self::Err> {
 		match kind {
@@ -76,7 +86,9 @@ impl FromStr for ConfigResourceKind {
 			"llm.model" => Ok(Self::LlmModel),
 			"llm.virtualModel" => Ok(Self::LlmVirtualModel),
 			"llm.apiKey" => Ok(Self::LlmApiKey),
-			_ => anyhow::bail!("unsupported config resource kind: {kind}"),
+			_ => Err(ConfigResourceError::InvalidRequest(format!(
+				"unsupported config resource kind: {kind}"
+			))),
 		}
 	}
 }
@@ -156,7 +168,9 @@ impl ConfigResourceStore {
 			DatabasePool::Postgres(pool) => delete_postgres(pool, kind, id).await?,
 		};
 		if !deleted {
-			anyhow::bail!("config resource not found: {kind}/{id}");
+			return Err(
+				ConfigResourceError::NotFound(format!("config resource not found: {kind}/{id}")).into(),
+			);
 		}
 		self.notify_changed();
 		Ok(())
@@ -169,7 +183,9 @@ impl ConfigResourceStore {
 
 fn validate_id(id: &str) -> anyhow::Result<()> {
 	if id.is_empty() {
-		anyhow::bail!("config resource id cannot be empty");
+		return Err(
+			ConfigResourceError::InvalidRequest("config resource id cannot be empty".to_string()).into(),
+		);
 	}
 	Ok(())
 }
@@ -337,14 +353,18 @@ fn append_api_keys(
 	let policies = llm
 		.get_mut("policies")
 		.ok_or_else(|| {
-			anyhow::anyhow!("DB-backed API keys require llm.policies.apiKey in the file config")
+			ConfigResourceError::Conflict(
+				"DB-backed API keys require llm.policies.apiKey in the file config".to_string(),
+			)
 		})?
 		.as_object_mut()
 		.ok_or_else(|| anyhow::anyhow!("local config llm.policies must be an object"))?;
 	let policy = policies
 		.get_mut("apiKey")
 		.ok_or_else(|| {
-			anyhow::anyhow!("DB-backed API keys require llm.policies.apiKey in the file config")
+			ConfigResourceError::Conflict(
+				"DB-backed API keys require llm.policies.apiKey in the file config".to_string(),
+			)
 		})?
 		.as_object_mut()
 		.ok_or_else(|| anyhow::anyhow!("local config llm.policies.apiKey must be an object"))?;
@@ -380,7 +400,12 @@ fn append_llm_kind(
 	for existing in values.iter() {
 		let id = resource_id(kind, existing)?;
 		if db_resources.iter().any(|resource| resource.id == id) {
-			anyhow::bail!("config resource {kind}/{id} conflicts with file-owned resource");
+			return Err(
+				ConfigResourceError::Conflict(format!(
+					"config resource {kind}/{id} conflicts with file-owned resource"
+				))
+				.into(),
+			);
 		}
 	}
 
@@ -438,26 +463,44 @@ fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String
 			.pointer("/metadata/id")
 			.and_then(Value::as_str)
 			.map(ToString::to_string)
-			.ok_or_else(|| anyhow::anyhow!("llm.apiKey resources require value.metadata.id")),
+			.ok_or_else(|| {
+				ConfigResourceError::InvalidRequest(
+					"llm.apiKey resources require value.metadata.id".to_string(),
+				)
+				.into()
+			}),
 	}
 }
 
 fn ensure_no_api_key_id(value: &Value) -> anyhow::Result<()> {
 	if value.pointer("/metadata/id").is_some() {
-		anyhow::bail!("llm.apiKey resources must not include value.metadata.id");
+		return Err(
+			ConfigResourceError::InvalidRequest(
+				"llm.apiKey resources must not include value.metadata.id".to_string(),
+			)
+			.into(),
+		);
 	}
 	Ok(())
 }
 
 fn set_api_key_id(value: &mut Value, id: String) -> anyhow::Result<()> {
 	let Some(object) = value.as_object_mut() else {
-		anyhow::bail!("llm.apiKey resources must be JSON objects");
+		return Err(
+			ConfigResourceError::InvalidRequest("llm.apiKey resources must be JSON objects".to_string())
+				.into(),
+		);
 	};
 	let metadata = object
 		.entry("metadata")
 		.or_insert_with(|| Value::Object(serde_json::Map::new()));
 	let Some(metadata) = metadata.as_object_mut() else {
-		anyhow::bail!("llm.apiKey resources require value.metadata to be an object");
+		return Err(
+			ConfigResourceError::InvalidRequest(
+				"llm.apiKey resources require value.metadata to be an object".to_string(),
+			)
+			.into(),
+		);
 	};
 	metadata.insert("id".to_string(), Value::String(id));
 	Ok(())
@@ -473,7 +516,7 @@ fn string_field(
 		.and_then(Value::as_str)
 		.filter(|value| !value.is_empty())
 		.map(ToString::to_string)
-		.ok_or_else(|| anyhow::anyhow!(error()))
+		.ok_or_else(|| ConfigResourceError::InvalidRequest(error()).into())
 }
 
 async fn list_sqlite(
