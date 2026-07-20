@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import {
   configuredCostSources,
@@ -47,7 +48,10 @@ export function CostsPage() {
     try {
       const refreshed = await refreshBaseCostsAndConfigure(updateConfig);
       setMessage(
-        `Base cost catalog refreshed: ${formatNumber(refreshed.models)} models from ${formatNumber(refreshed.providers)} providers.`,
+        tr("copy.baseCostCatalogRefreshedValueModelsFromValueProviders", [
+          formatNumber(refreshed.models),
+          formatNumber(refreshed.providers),
+        ]),
       );
     } catch (err) {
       setError(
@@ -63,8 +67,10 @@ export function CostsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="LLM Costs"
-        description="Manage model cost catalogs used for analytics and request cost attribution."
+        title={tr("copy.llmCosts")}
+        description={tr(
+          "copy.manageModelCostCatalogsUsedForAnalyticsAndRequestCostAttribution",
+        )}
         actions={
           <button
             className="button primary"
@@ -73,12 +79,12 @@ export function CostsPage() {
             onClick={() => void refreshCosts()}
           >
             <RefreshCw size={16} />
-            Refresh base costs
+            {tr("copy.refreshBaseCosts")}
           </button>
         }
       />
       {error ? (
-        <StatusBanner state="bad" title="Cost refresh failed">
+        <StatusBanner state="bad" title={tr("copy.costRefreshFailed")}>
           {error}
         </StatusBanner>
       ) : null}
@@ -86,10 +92,11 @@ export function CostsPage() {
       <Panel>
         <div className="section-heading-row">
           <div>
-            <h3>Catalog sources</h3>
+            <h3>{tr("copy.catalogSources")}</h3>
             <p>
-              Sources are merged in order. Later sources override earlier
-              entries.
+              {tr(
+                "copy.sourcesAreMergedInOrderLaterSourcesOverrideEarlierEntries",
+              )}
             </p>
           </div>
         </div>
@@ -98,8 +105,8 @@ export function CostsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Source</th>
-                  <th>Type</th>
+                  <th>{tr("copy.source")}</th>
+                  <th>{tr("copy.type")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,18 +123,21 @@ export function CostsPage() {
           </div>
         ) : (
           <EmptyState
-            title="No cost catalogs configured"
-            description="Refresh the base catalog to add pricing data from models.dev."
+            title={tr("copy.noCostCatalogsConfigured")}
+            description={tr(
+              "copy.refreshTheBaseCatalogToAddPricingDataFromModelsDev",
+            )}
           />
         )}
       </Panel>
       <Panel>
         <div className="section-heading-row">
           <div>
-            <h3>Custom costs</h3>
+            <h3>{tr("copy.customCosts")}</h3>
             <p>
-              Inline overrides stored in this gateway configuration. Values are
-              USD per 1M tokens.
+              {tr(
+                "copy.inlineOverridesStoredInThisGatewayConfigurationValuesAreUsdPer1MTokens",
+              )}
             </p>
           </div>
           <div className="button-row compact">
@@ -143,7 +153,7 @@ export function CostsPage() {
                     setEditingCustom(false);
                   }}
                 >
-                  Cancel
+                  {tr("copy.cancel")}
                 </button>
                 <button
                   className="button primary"
@@ -151,7 +161,7 @@ export function CostsPage() {
                   disabled={updateConfig.isPending}
                   onClick={() => void saveCustomCosts()}
                 >
-                  Save
+                  {tr("copy.save")}
                 </button>
               </>
             ) : (
@@ -160,13 +170,13 @@ export function CostsPage() {
                 type="button"
                 onClick={() => setEditingCustom(true)}
               >
-                Edit
+                {tr("copy.edit")}
               </button>
             )}
           </div>
         </div>
         {customError ? (
-          <StatusBanner state="bad" title="Invalid custom costs">
+          <StatusBanner state="bad" title={tr("copy.invalidCustomCosts")}>
             {customError}
           </StatusBanner>
         ) : null}
@@ -174,13 +184,13 @@ export function CostsPage() {
           <table className="data-table custom-cost-table">
             <thead>
               <tr>
-                <th>Provider</th>
-                <th>Model</th>
-                <th>Input</th>
-                <th>Output</th>
-                <th>Cache read</th>
-                <th>Cache write</th>
-                {editingCustom ? <th aria-label="Actions" /> : null}
+                <th>{tr("copy.provider")}</th>
+                <th>{tr("copy.model")}</th>
+                <th>{tr("copy.input")}</th>
+                <th>{tr("copy.output")}</th>
+                <th>{tr("copy.cacheRead")}</th>
+                <th>{tr("copy.cacheWrite")}</th>
+                {editingCustom ? <th aria-label={tr("copy.actions")} /> : null}
               </tr>
             </thead>
             <tbody>
@@ -279,7 +289,7 @@ export function CostsPage() {
                       <button
                         className="icon-button danger"
                         type="button"
-                        aria-label="Remove custom cost"
+                        aria-label={tr("copy.removeCustomCost")}
                         onClick={() =>
                           setCustomDraft((current) =>
                             current.filter(
@@ -297,14 +307,18 @@ export function CostsPage() {
               {editingCustom && customDraft.length === 0 ? (
                 <tr>
                   <td colSpan={7}>
-                    <span className="muted-copy inline">No custom costs.</span>
+                    <span className="muted-copy inline">
+                      {tr("copy.noCustomCosts")}
+                    </span>
                   </td>
                 </tr>
               ) : null}
               {!editingCustom && customRows.length === 0 ? (
                 <tr>
                   <td colSpan={6}>
-                    <span className="muted-copy inline">No custom costs.</span>
+                    <span className="muted-copy inline">
+                      {tr("copy.noCustomCosts")}
+                    </span>
                   </td>
                 </tr>
               ) : null}
@@ -321,7 +335,7 @@ export function CostsPage() {
               }
             >
               <Plus size={16} />
-              Add model cost
+              {tr("copy.addModelCost")}
             </button>
           </div>
         ) : null}

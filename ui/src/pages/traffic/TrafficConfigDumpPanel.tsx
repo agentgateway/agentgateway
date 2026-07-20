@@ -1,3 +1,4 @@
+import { tr } from "../../i18n";
 import { Eye } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -54,10 +55,11 @@ export type DumpRouteRow = {
 export function ReadonlyModeBanner() {
   return (
     <div className="readonly-mode-banner">
-      <strong>Readonly mode</strong>
+      <strong>{tr("copy.readonlyMode")}</strong>
       <span>
-        Configuration is managed by XDS. This view reflects the active runtime
-        dump; editing is disabled.
+        {tr(
+          "copy.configurationIsManagedByXdsThisViewReflectsTheActiveRuntimeDumpEditingIsDisabled",
+        )}
       </span>
     </div>
   );
@@ -73,36 +75,39 @@ export function TrafficDumpOverview(props: {
     <Panel className="traffic-dump-panel">
       <div className="traffic-dump-header">
         <div>
-          <h3>Runtime traffic</h3>
-          <p>Active runtime resources from the gateway dump.</p>
+          <h3>{tr("copy.runtimeTraffic")}</h3>
+          <p>{tr("copy.activeRuntimeResourcesFromTheGatewayDump")}</p>
         </div>
       </div>
       {props.isLoading ? (
         <StatusBanner
           state="loading"
-          title="Loading runtime traffic configuration"
+          title={tr("copy.loadingRuntimeTrafficConfiguration")}
         />
       ) : props.error ? (
-        <StatusBanner state="bad" title="Config dump unavailable">
+        <StatusBanner state="bad" title={tr("copy.configDumpUnavailable")}>
           {props.error.message}
         </StatusBanner>
       ) : inventory && hasTrafficInventory(inventory) ? (
         <div className="traffic-dump-link-list">
           <Link to="/traffic/listeners">
-            <span>Listeners</span>
+            <span>{tr("copy.listeners")}</span>
             <strong>{inventory.listeners.length}</strong>
           </Link>
           <Link to="/traffic/routes">
-            <span>Routes</span>
+            <span>{tr("copy.routes_14u6307")}</span>
             <strong>{inventory.routes.length}</strong>
           </Link>
           <Link to="/traffic/policies">
-            <span>Policies</span>
+            <span>{tr("copy.policies_raqot3")}</span>
             <strong>{inventory.policies.length}</strong>
           </Link>
         </div>
       ) : (
-        <StatusBanner state="warn" title="No runtime traffic configuration" />
+        <StatusBanner
+          state="warn"
+          title={tr("copy.noRuntimeTrafficConfiguration")}
+        />
       )}
     </Panel>
   );
@@ -122,15 +127,18 @@ export function TrafficDumpListenersView(props: {
   return (
     <Panel>
       {props.isLoading ? (
-        <StatusBanner state="loading" title="Loading traffic listeners" />
+        <StatusBanner
+          state="loading"
+          title={tr("copy.loadingTrafficListeners")}
+        />
       ) : props.error ? (
-        <StatusBanner state="bad" title="Config dump unavailable">
+        <StatusBanner state="bad" title={tr("copy.configDumpUnavailable")}>
           {props.error.message}
         </StatusBanner>
       ) : !inventory?.listeners.length ? (
         <EmptyState
-          title="No runtime listeners"
-          description="No listeners are present in the active gateway dump."
+          title={tr("copy.noRuntimeListeners")}
+          description={tr("copy.noListenersArePresentInTheActiveGatewayDump")}
         />
       ) : (
         <div className="traffic-bind-list">
@@ -142,8 +150,9 @@ export function TrafficDumpListenersView(props: {
                   <div>
                     <h3>{bindDisplayName(bind.address)}</h3>
                     <p>
-                      {listeners.length} listeners · {listenerRouteCount(bind)}{" "}
-                      routes
+                      {listeners.length}
+                      {tr("copy.listeners_1fzojr3")}
+                      {listenerRouteCount(bind)} {tr("copy.routes")}
                     </p>
                   </div>
                   <div className="button-row">
@@ -164,8 +173,10 @@ export function TrafficDumpListenersView(props: {
                   />
                 ) : (
                   <EmptyState
-                    title="No listeners on this bind"
-                    description="No listeners are attached to this bind in the runtime dump."
+                    title={tr("copy.noListenersOnThisBind")}
+                    description={tr(
+                      "copy.noListenersAreAttachedToThisBindInTheRuntimeDump",
+                    )}
                   />
                 )}
               </section>
@@ -196,28 +207,28 @@ export function TrafficDumpRoutesView(props: {
   return (
     <Panel>
       {props.isLoading ? (
-        <StatusBanner state="loading" title="Loading traffic routes" />
+        <StatusBanner state="loading" title={tr("copy.loadingTrafficRoutes")} />
       ) : props.error ? (
-        <StatusBanner state="bad" title="Config dump unavailable">
+        <StatusBanner state="bad" title={tr("copy.configDumpUnavailable")}>
           {props.error.message}
         </StatusBanner>
       ) : !inventory?.routes.length ? (
         <EmptyState
-          title="No runtime routes"
-          description="No routes are present in the active gateway dump."
+          title={tr("copy.noRuntimeRoutes")}
+          description={tr("copy.noRoutesArePresentInTheActiveGatewayDump")}
         />
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Listener</th>
-                <th>Match</th>
-                <th>Backends</th>
-                <th>Policies</th>
-                <th aria-label="Actions" />
+                <th>{tr("copy.name")}</th>
+                <th>{tr("copy.type")}</th>
+                <th>{tr("copy.listener")}</th>
+                <th>{tr("copy.match")}</th>
+                <th>{tr("copy.backends_i9thuc")}</th>
+                <th>{tr("copy.policies_raqot3")}</th>
+                <th aria-label={tr("copy.actions")} />
               </tr>
             </thead>
             <tbody>
@@ -242,7 +253,7 @@ export function TrafficDumpRoutesView(props: {
                         <button
                           className="icon-button"
                           type="button"
-                          aria-label={`View ${routeDisplayName(row.route)}`}
+                          aria-label={tr("copy.viewValue")}
                           onClick={() => setSelectedRouteKey(row.route.key)}
                         >
                           <Eye size={16} />
@@ -277,12 +288,12 @@ function RuntimeListenerTable(props: {
       <table>
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Hostname</th>
-            <th>Protocol</th>
-            <th>Routes</th>
-            <th>Backends</th>
-            <th aria-label="Actions" />
+            <th>{tr("copy.name")}</th>
+            <th>{tr("copy.hostname")}</th>
+            <th>{tr("copy.protocol")}</th>
+            <th>{tr("copy.routes_14u6307")}</th>
+            <th>{tr("copy.backends_i9thuc")}</th>
+            <th aria-label={tr("copy.actions")} />
           </tr>
         </thead>
         <tbody>
@@ -304,7 +315,7 @@ function RuntimeListenerTable(props: {
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label={`View ${listener.listenerName || listener.key}`}
+                    aria-label={tr("copy.viewValue")}
                     onClick={() => props.onSelect(listener)}
                   >
                     <Eye size={16} />
@@ -333,28 +344,28 @@ function ListenerDumpDrawer(props: {
     >
       <div className="drawer-summary-list">
         <div>
-          <span>Bind</span>
+          <span>{tr("copy.bind")}</span>
           <strong>{bindDisplayName(props.row.bind.address)}</strong>
         </div>
         <div>
-          <span>Hostname</span>
+          <span>{tr("copy.hostname")}</span>
           <strong>{listener.hostname || "*"}</strong>
         </div>
         <div>
-          <span>Protocol</span>
+          <span>{tr("copy.protocol")}</span>
           <strong>{listenerProtocolLabel(listener.protocol)}</strong>
         </div>
         <div>
-          <span>Routes</span>
+          <span>{tr("copy.routes_14u6307")}</span>
           <strong>{routeCount}</strong>
         </div>
         <div>
-          <span>Backends</span>
+          <span>{tr("copy.backends_i9thuc")}</span>
           <strong>{backendCount}</strong>
         </div>
       </div>
       <div className="drawer-yaml-section">
-        <label className="field-label">Listener YAML</label>
+        <label className="field-label">{tr("copy.listenerYaml")}</label>
         <YamlBlock value={listenerDumpForDisplay(listener)} />
       </div>
     </Drawer>
@@ -381,11 +392,11 @@ function RouteDumpDrawer(props: {
     <Drawer title={routeDisplayName(props.row.route)} onClose={props.onClose}>
       <div className="drawer-summary-list">
         <div>
-          <span>Type</span>
+          <span>{tr("copy.type")}</span>
           <strong>{props.row.type}</strong>
         </div>
         <div>
-          <span>Listener</span>
+          <span>{tr("copy.listener")}</span>
           <strong>
             {props.row.listener
               ? listenerDisplayName(props.row.listener)
@@ -393,25 +404,25 @@ function RouteDumpDrawer(props: {
           </strong>
         </div>
         <div>
-          <span>Match</span>
+          <span>{tr("copy.match")}</span>
           <strong>{routeMatchSummary(props.row)}</strong>
         </div>
         <div>
-          <span>Backends</span>
+          <span>{tr("copy.backends_i9thuc")}</span>
           <strong>{backends.length}</strong>
         </div>
         <div>
-          <span>Policies</span>
+          <span>{tr("copy.policies_raqot3")}</span>
           <strong>{policies.length + backendPolicies.length}</strong>
         </div>
       </div>
       <div className="drawer-yaml-section">
-        <label className="field-label">Route YAML</label>
+        <label className="field-label">{tr("copy.routeYaml")}</label>
         <YamlBlock value={props.row.route} />
       </div>
       {resolvedBackends.length ? (
         <div className="drawer-yaml-section">
-          <label className="field-label">Backend YAML</label>
+          <label className="field-label">{tr("copy.backendYaml")}</label>
           <YamlBlock
             value={
               resolvedBackends.length === 1

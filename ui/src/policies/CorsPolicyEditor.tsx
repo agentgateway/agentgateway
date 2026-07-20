@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useState } from "react";
 import type { SchemaHelp } from "../schemaHelp";
 import { Field, FieldGroup } from "../components/Primitives";
@@ -68,7 +69,7 @@ export function CorsPolicyEditor(props: {
       }}
     >
       <ListEditor
-        label="Allowed origins"
+        label={tr("copy.allowedOrigins")}
         tooltip={props.help.field<CorsPolicy>("CorsSerde", "allowOrigins")}
         values={origins}
         placeholder="http://localhost:19000"
@@ -83,12 +84,12 @@ export function CorsPolicyEditor(props: {
               )
             }
           >
-            Add current origin
+            {tr("copy.addCurrentOrigin")}
           </button>
         }
       />
       <FieldGroup
-        label="Allowed methods"
+        label={tr("copy.allowedMethods")}
         tooltip={props.help.field<CorsPolicy>("CorsSerde", "allowMethods")}
       >
         <div className="method-grid">
@@ -97,7 +98,7 @@ export function CorsPolicyEditor(props: {
             type="button"
             onClick={() => setAllMethods((current) => !current)}
           >
-            ALL
+            {tr("copy.all")}
           </button>
           {corsMethods.map((method) => (
             <button
@@ -119,7 +120,7 @@ export function CorsPolicyEditor(props: {
         </div>
       </FieldGroup>
       <FieldGroup
-        label="Allowed headers"
+        label={tr("copy.allowedHeaders")}
         tooltip={props.help.field<CorsPolicy>("CorsSerde", "allowHeaders")}
       >
         <label className="config-option-row">
@@ -129,14 +130,16 @@ export function CorsPolicyEditor(props: {
             onChange={(event) => setAllHeaders(event.target.checked)}
           />
           <span>
-            <strong>Allow all request headers</strong>
-            <small>Accept any request header in browser preflight checks</small>
+            <strong>{tr("copy.allowAllRequestHeaders")}</strong>
+            <small>
+              {tr("copy.acceptAnyRequestHeaderInBrowserPreflightChecks")}
+            </small>
           </span>
         </label>
       </FieldGroup>
       {!allHeaders ? (
         <ListEditor
-          label="Header allowlist"
+          label={tr("copy.headerAllowlist")}
           values={headers}
           placeholder="authorization"
           suggestions={["authorization", "content-type", "mcp-session-id"]}
@@ -144,7 +147,7 @@ export function CorsPolicyEditor(props: {
         />
       ) : null}
       <ListEditor
-        label="Expose headers"
+        label={tr("copy.exposeHeaders")}
         tooltip={props.help.field<CorsPolicy>("CorsSerde", "exposeHeaders")}
         values={exposeHeaders}
         placeholder="mcp-session-id"
@@ -153,7 +156,7 @@ export function CorsPolicyEditor(props: {
       />
       <div className="form-grid">
         <FieldGroup
-          label="Credentials"
+          label={tr("copy.credentials")}
           tooltip={props.help.field<CorsPolicy>(
             "CorsSerde",
             "allowCredentials",
@@ -166,13 +169,13 @@ export function CorsPolicyEditor(props: {
               onChange={(event) => setAllowCredentials(event.target.checked)}
             />
             <span>
-              <strong>Allow credentials</strong>
-              <small>Permit browser credentials on CORS requests</small>
+              <strong>{tr("copy.allowCredentials")}</strong>
+              <small>{tr("copy.permitBrowserCredentialsOnCorsRequests")}</small>
             </span>
           </label>
         </FieldGroup>
         <Field
-          label="Max age"
+          label={tr("copy.maxAge")}
           tooltip={props.help.field<CorsPolicy>("CorsSerde", "maxAge")}
         >
           <input

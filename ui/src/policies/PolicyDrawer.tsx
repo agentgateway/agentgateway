@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
@@ -91,7 +92,7 @@ export function PolicyDrawer(props: {
             <button
               className="icon-button danger"
               type="button"
-              aria-label="Delete policy"
+              aria-label={tr("copy.deletePolicy")}
               disabled
             >
               <Trash2 size={17} />
@@ -103,7 +104,7 @@ export function PolicyDrawer(props: {
         <ConfigDiffSaveActions
           config={props.config}
           diffTitle={`${props.title} policy config diff`}
-          saveLabel="Save policy"
+          saveLabel={tr("copy.savePolicy")}
           saving={props.saving}
           onSave={() => {
             if (submitPolicyForm()) props.onSave(submittedValue.current);
@@ -130,7 +131,7 @@ export function PolicyDrawer(props: {
         }}
       />
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}

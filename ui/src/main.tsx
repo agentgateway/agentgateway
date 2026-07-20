@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   RouterProvider,
@@ -7,6 +8,8 @@ import {
 } from "@tanstack/react-router";
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { useTranslation } from "react-i18next";
+import "./i18n";
 import { routerBasePath } from "./basePath";
 import { Shell } from "./components/Shell";
 import { CelPage } from "./pages/Cel";
@@ -49,148 +52,155 @@ const rootRoute = createRootRoute({
   component: Shell,
 });
 
+function localizedRoute(Component: React.ComponentType) {
+  return function LocalizedRoute() {
+    useTranslation();
+    return <Component />;
+  };
+}
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: HomePage,
+  component: localizedRoute(HomePage),
 });
 
 const dumpPoliciesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/traffic/policies",
-  component: DumpPoliciesPage,
+  component: localizedRoute(DumpPoliciesPage),
 });
 
 const modelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/models",
-  component: ModelsPage,
+  component: localizedRoute(ModelsPage),
 });
 
 const llmGetStartedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/get-started",
-  component: LlmGetStartedPage,
+  component: localizedRoute(LlmGetStartedPage),
 });
 
 const providersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/providers",
-  component: ProvidersPage,
+  component: localizedRoute(ProvidersPage),
 });
 
 const logsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/logs",
-  component: LogsPage,
+  component: localizedRoute(LogsPage),
 });
 
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/analytics",
-  component: AnalyticsPage,
+  component: localizedRoute(AnalyticsPage),
 });
 
 const policiesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/policies",
-  component: PoliciesPage,
+  component: localizedRoute(PoliciesPage),
 });
 
 const guardrailsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/guardrails",
-  component: GuardrailsPage,
+  component: localizedRoute(GuardrailsPage),
 });
 
 const costsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/costs",
-  component: CostsPage,
+  component: localizedRoute(CostsPage),
 });
 
 const keysRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/keys",
-  component: KeysPage,
+  component: localizedRoute(KeysPage),
 });
 
 const playgroundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/playground",
-  component: PlaygroundPage,
+  component: localizedRoute(PlaygroundPage),
 });
 
 const clientSetupRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/llm/client-setup",
-  component: ClientSetupPage,
+  component: localizedRoute(ClientSetupPage),
 });
 
 const mcpServersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/mcp/servers",
-  component: McpServersPage,
+  component: localizedRoute(McpServersPage),
 });
 
 const mcpPoliciesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/mcp/policies",
-  component: McpPoliciesPage,
+  component: localizedRoute(McpPoliciesPage),
 });
 
 const mcpGetStartedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/mcp/get-started",
-  component: McpGetStartedPage,
+  component: localizedRoute(McpGetStartedPage),
 });
 
 const mcpPlaygroundRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/mcp/playground",
-  component: McpPlaygroundPage,
+  component: localizedRoute(McpPlaygroundPage),
 });
 
 const trafficListenersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/traffic/listeners",
-  component: TrafficListenersPage,
+  component: localizedRoute(TrafficListenersPage),
 });
 
 const trafficGatewaysRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/traffic/gateways",
-  component: TrafficGatewaysPage,
+  component: localizedRoute(TrafficGatewaysPage),
 });
 
 const trafficGetStartedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/traffic/get-started",
-  component: TrafficGetStartedPage,
+  component: localizedRoute(TrafficGetStartedPage),
 });
 
 const trafficRoutesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/traffic/routes",
-  component: TrafficRoutesPage,
+  component: localizedRoute(TrafficRoutesPage),
 });
 
 const celRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/cel",
-  component: CelPage,
+  component: localizedRoute(CelPage),
 });
 
 const rawConfigRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/raw-config",
-  component: RawConfigRoute,
+  component: localizedRoute(RawConfigRoute),
 });
 
 const rawSettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
-  component: RawSettingsPage,
+  component: localizedRoute(RawSettingsPage),
 });
 
 function RawConfigRoute() {
@@ -198,7 +208,7 @@ function RawConfigRoute() {
     <React.Suspense
       fallback={
         <div className="page-stack">
-          <p className="muted-copy">Loading raw configuration...</p>
+          <p className="muted-copy">{tr("copy.loadingRawConfiguration")}</p>
         </div>
       }
     >
@@ -252,10 +262,14 @@ const queryClient = new QueryClient({
   },
 });
 
+function LocalizedRouter() {
+  return <RouterProvider router={router} />;
+}
+
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <LocalizedRouter />
     </QueryClientProvider>
   </React.StrictMode>,
 );

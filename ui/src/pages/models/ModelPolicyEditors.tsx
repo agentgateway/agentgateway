@@ -1,3 +1,4 @@
+import { tr } from "../../i18n";
 import { MiniMonacoEditor } from "../../components/MiniMonacoEditor";
 import { Field, FieldGroup } from "../../components/Primitives";
 import { ListEditor } from "../../policies/ListEditor";
@@ -32,12 +33,12 @@ export function HealthPolicyEditor(props: {
   return (
     <div className="policy-editor-stack compact">
       <FieldGroup
-        label="Unhealthy expression"
+        label={tr("copy.unhealthyExpression")}
         tooltip={props.help.field<LocalHealthPolicy>(
           "LocalHealthPolicy",
           "unhealthyExpression",
         )}
-        hint="Leave empty to use default 5xx and connection failure handling."
+        hint={tr("copy.leaveEmptyToUseDefault5xxAndConnectionFailureHandling")}
       >
         <MiniMonacoEditor
           language="cel"
@@ -50,7 +51,7 @@ export function HealthPolicyEditor(props: {
       </FieldGroup>
       <div className="form-grid">
         <Field
-          label="Eviction duration"
+          label={tr("copy.evictionDuration")}
           tooltip={props.help.field<LocalEviction>("LocalEviction", "duration")}
         >
           <input
@@ -62,7 +63,7 @@ export function HealthPolicyEditor(props: {
           />
         </Field>
         <Field
-          label="Consecutive failures"
+          label={tr("copy.consecutiveFailures")}
           tooltip={props.help.field<LocalEviction>(
             "LocalEviction",
             "consecutiveFailures",
@@ -81,7 +82,7 @@ export function HealthPolicyEditor(props: {
           />
         </Field>
         <Field
-          label="Health threshold"
+          label={tr("copy.healthThreshold")}
           tooltip={props.help.field<LocalEviction>(
             "LocalEviction",
             "healthThreshold",
@@ -99,7 +100,7 @@ export function HealthPolicyEditor(props: {
           />
         </Field>
         <Field
-          label="Restore health"
+          label={tr("copy.restoreHealth")}
           tooltip={props.help.field<LocalEviction>(
             "LocalEviction",
             "restoreHealth",
@@ -153,7 +154,7 @@ export function HeaderModifierEditor(props: {
   return (
     <div className="policy-editor-stack compact">
       <KeyValueEditor
-        label="Add headers"
+        label={tr("copy.addHeaders")}
         tooltip={props.help.field<HeaderModifier>("HeaderModifier", "add")}
         values={value.add ?? {}}
         keyPlaceholder="x-header"
@@ -161,7 +162,7 @@ export function HeaderModifierEditor(props: {
         onChange={(add) => props.onChange({ ...value, add })}
       />
       <KeyValueEditor
-        label="Set headers"
+        label={tr("copy.setHeaders")}
         tooltip={props.help.field<HeaderModifier>("HeaderModifier", "set")}
         values={value.set ?? {}}
         keyPlaceholder="x-header"
@@ -169,7 +170,7 @@ export function HeaderModifierEditor(props: {
         onChange={(set) => props.onChange({ ...value, set })}
       />
       <ListEditor
-        label="Remove headers"
+        label={tr("copy.removeHeaders")}
         tooltip={props.help.field<HeaderModifier>("HeaderModifier", "remove")}
         values={value.remove ?? []}
         placeholder="x-header"
@@ -202,7 +203,7 @@ export function PromptCachingEditor(props: {
             }
           />
           <span>
-            <strong>System prompt</strong>
+            <strong>{tr("copy.systemPrompt")}</strong>
             <small>
               {props.help.field<PromptCachingConfig>(
                 "PromptCachingConfig",
@@ -220,7 +221,7 @@ export function PromptCachingEditor(props: {
             }
           />
           <span>
-            <strong>Messages</strong>
+            <strong>{tr("copy.messages")}</strong>
             <small>
               {props.help.field<PromptCachingConfig>(
                 "PromptCachingConfig",
@@ -238,7 +239,7 @@ export function PromptCachingEditor(props: {
             }
           />
           <span>
-            <strong>Tools</strong>
+            <strong>{tr("copy.tools")}</strong>
             <small>
               {props.help.field<PromptCachingConfig>(
                 "PromptCachingConfig",
@@ -250,7 +251,7 @@ export function PromptCachingEditor(props: {
       </div>
       <div className="form-grid">
         <Field
-          label="Minimum tokens"
+          label={tr("copy.minimumTokens")}
           tooltip={props.help.field<PromptCachingConfig>(
             "PromptCachingConfig",
             "minTokens",
@@ -266,7 +267,7 @@ export function PromptCachingEditor(props: {
           />
         </Field>
         <Field
-          label="Message offset"
+          label={tr("copy.messageOffset")}
           tooltip={props.help.field<PromptCachingConfig>(
             "PromptCachingConfig",
             "cacheMessageOffset",

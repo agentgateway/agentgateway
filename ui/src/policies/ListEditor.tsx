@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { FieldGroup } from "../components/Primitives";
@@ -32,14 +33,14 @@ export function ListEditor(props: {
                 <span>{value}</span>
                 <button
                   type="button"
-                  aria-label={`Remove ${value}`}
+                  aria-label={tr("copy.removeValue")}
                   onClick={() =>
                     props.onChange(
                       props.values.filter((item) => item !== value),
                     )
                   }
                 >
-                  x
+                  {tr("copy.x")}
                 </button>
               </span>
             ))}
@@ -62,7 +63,7 @@ export function ListEditor(props: {
             placeholder={props.placeholder}
           />
           <button className="button" type="button" onClick={() => add(draft)}>
-            Add
+            {tr("copy.add")}
           </button>
           {props.actions}
         </div>

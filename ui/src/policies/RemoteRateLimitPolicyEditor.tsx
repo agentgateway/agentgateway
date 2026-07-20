@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useMemo, useState } from "react";
 import { Gauge, Plus, Trash2 } from "lucide-react";
 import { EnumSelector } from "../components/EnumSelector";
@@ -68,7 +69,7 @@ export function RemoteRateLimitPolicyEditor(props: {
   if (unsupported) {
     return (
       <UnsupportedYamlFallback
-        title="Unsupported remote rate limit shape"
+        title={tr("copy.unsupportedRemoteRateLimitShape")}
         value={props.remoteRateLimit}
         schema={props.help.node(["$defs", "RemoteRateLimit"])}
         help={props.help}
@@ -121,12 +122,14 @@ export function RemoteRateLimitPolicyEditor(props: {
 
       <PolicySection
         icon={<Gauge size={17} />}
-        title="Service"
-        description="Remote rate limit service and domain used when building descriptor checks."
+        title={tr("copy.service")}
+        description={tr(
+          "copy.remoteRateLimitServiceAndDomainUsedWhenBuildingDescriptorChecks",
+        )}
       >
         <div className="form-grid">
           <Field
-            label="Domain"
+            label={tr("copy.domain")}
             tooltip={props.help.field<RemoteRateLimit>(
               "RemoteRateLimit",
               "domain",
@@ -140,7 +143,7 @@ export function RemoteRateLimitPolicyEditor(props: {
             />
           </Field>
           <FieldGroup
-            label="Failure mode"
+            label={tr("copy.failureMode")}
             tooltip={props.help.field<RemoteRateLimit>(
               "RemoteRateLimit",
               "failureMode",
@@ -152,15 +155,17 @@ export function RemoteRateLimitPolicyEditor(props: {
               options={[
                 {
                   value: "failClosed",
-                  label: "Fail closed",
-                  description:
-                    "Deny requests when the rate limit service is unavailable.",
+                  label: tr("copy.failClosed"),
+                  description: tr(
+                    "copy.denyRequestsWhenTheRateLimitServiceIsUnavailable",
+                  ),
                 },
                 {
                   value: "failOpen",
-                  label: "Fail open",
-                  description:
-                    "Allow requests when the rate limit service is unavailable.",
+                  label: tr("copy.failOpen"),
+                  description: tr(
+                    "copy.allowRequestsWhenTheRateLimitServiceIsUnavailable",
+                  ),
                 },
               ]}
               onChange={setFailureMode}
@@ -176,8 +181,10 @@ export function RemoteRateLimitPolicyEditor(props: {
 
       <PolicySection
         icon={<Plus size={17} />}
-        title="Descriptors"
-        description="Descriptor entries sent to the remote service. Values are CEL expressions evaluated from the request."
+        title={tr("copy.descriptors")}
+        description={tr(
+          "copy.descriptorEntriesSentToTheRemoteServiceValuesAreCelExpressionsEvaluatedFromTheRequest",
+        )}
       >
         <div className="remote-descriptor-list">
           {descriptors.map((descriptor, index) => (
@@ -213,7 +220,7 @@ export function RemoteRateLimitPolicyEditor(props: {
           onClick={() => setDescriptors([...descriptors, emptyDescriptor()])}
         >
           <Plus size={16} />
-          Add descriptor
+          {tr("copy.addDescriptor")}
         </button>
       </PolicySection>
 
@@ -267,7 +274,10 @@ function DescriptorEditor(props: {
     >
       <div className="remote-descriptor-header">
         <div>
-          <strong>Descriptor {props.index + 1}</strong>
+          <strong>
+            {tr("copy.descriptor")}
+            {props.index + 1}
+          </strong>
           <small>
             {props.descriptor.entries.length}{" "}
             {props.descriptor.entries.length === 1 ? "entry" : "entries"}
@@ -276,14 +286,14 @@ function DescriptorEditor(props: {
         <button
           className="icon-button danger"
           type="button"
-          aria-label="Remove descriptor"
+          aria-label={tr("copy.removeDescriptor")}
           onClick={props.onRemove}
         >
           <Trash2 size={16} />
         </button>
       </div>
       <FieldGroup
-        label="Type"
+        label={tr("copy.type")}
         tooltip={props.help.field<DescriptorEntry>("DescriptorEntry", "type")}
       >
         <EnumSelector<DescriptorType>
@@ -292,22 +302,24 @@ function DescriptorEditor(props: {
           options={[
             {
               value: "requests",
-              label: "Requests",
-              description:
-                "Evaluate request-count descriptors while processing the request.",
+              label: tr("copy.requests"),
+              description: tr(
+                "copy.evaluateRequestCountDescriptorsWhileProcessingTheRequest",
+              ),
             },
             {
               value: "tokens",
-              label: "Tokens",
-              description:
-                "Evaluate token descriptors after the LLM response completes.",
+              label: tr("copy.tokens"),
+              description: tr(
+                "copy.evaluateTokenDescriptorsAfterTheLlmResponseCompletes",
+              ),
             },
           ]}
           onChange={(type) => props.onChange({ ...props.descriptor, type })}
         />
       </FieldGroup>
       <FieldGroup
-        label="Entries"
+        label={tr("copy.entries")}
         tooltip={props.help.field<DescriptorEntry>(
           "DescriptorEntry",
           "entries",
@@ -334,7 +346,7 @@ function DescriptorEditor(props: {
               <button
                 className="icon-button danger"
                 type="button"
-                aria-label="Remove descriptor entry"
+                aria-label={tr("copy.removeDescriptorEntry")}
                 onClick={() => {
                   const next = props.descriptor.entries.filter(
                     (_, entryIndex) => entryIndex !== index,
@@ -361,12 +373,12 @@ function DescriptorEditor(props: {
           }
         >
           <Plus size={16} />
-          Add entry
+          {tr("copy.addEntry")}
         </button>
       </FieldGroup>
       <div className="form-grid">
         <FieldGroup
-          label="Cost expression"
+          label={tr("copy.costExpression")}
           tooltip={props.help.field<DescriptorEntry>("DescriptorEntry", "cost")}
         >
           <MiniMonacoEditor
@@ -380,7 +392,7 @@ function DescriptorEditor(props: {
           />
         </FieldGroup>
         <FieldGroup
-          label="Limit override"
+          label={tr("copy.limitOverride")}
           tooltip={props.help.field<DescriptorEntry>(
             "DescriptorEntry",
             "limitOverride",

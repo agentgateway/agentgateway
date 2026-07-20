@@ -1,3 +1,4 @@
+import { tr } from "../../i18n";
 import { Server } from "lucide-react";
 import { useState } from "react";
 import { ensureLlm } from "../../config";
@@ -35,7 +36,7 @@ export function LlmSettingsDrawer(props: {
   };
 
   return (
-    <Drawer title="Settings" onClose={props.onClose}>
+    <Drawer title={tr("copy.settings")} onClose={props.onClose}>
       <form
         className="policy-editor-stack"
         onSubmit={(event) => {
@@ -45,8 +46,8 @@ export function LlmSettingsDrawer(props: {
       >
         <PolicySection
           icon={<Server size={17} />}
-          title="Gateway binding"
-          description="Choose how LLM traffic is exposed."
+          title={tr("copy.gatewayBinding")}
+          description={tr("copy.chooseHowLlmTrafficIsExposed")}
         >
           <div className="form-grid">
             <GatewayBindingEditor
@@ -76,7 +77,7 @@ export function LlmSettingsDrawer(props: {
         />
       </form>
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}

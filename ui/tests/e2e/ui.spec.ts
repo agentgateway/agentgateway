@@ -41,6 +41,94 @@ test("core pages render with mocked gateway data", async ({ page }) => {
   }
 });
 
+test("switches the complete shell between English and Simplified Chinese", async ({
+  page,
+}, testInfo) => {
+  await mockGateway(page);
+  await page.goto("/?lang=zh-CN");
+
+  await expect(page.getByRole("heading", { name: "网关概览" })).toBeVisible();
+  await expect(
+    page.locator(".nav-list").getByRole("link", { name: "首页" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("选择语言")).toHaveText("简体中文");
+  if (process.env.I18N_SCREENSHOT) {
+    await page.screenshot({
+      path: testInfo.outputPath("i18n-shell-zh-CN.png"),
+      fullPage: true,
+    });
+  }
+
+  await page.getByLabel("选择语言").click();
+  await page.getByRole("option", { name: "English" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Gateway Overview" }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".nav-list").getByRole("link", { name: "Home" }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\?lang=en$/);
+  await page
+    .locator(".nav-list")
+    .getByRole("link", { name: "Policies" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "LLM Policies" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Access" })).toBeVisible();
+  await expect(page.getByText("API keys", { exact: true })).toBeVisible();
+  await expect(page.getByText("Basic auth", { exact: true })).toBeVisible();
+  await expect(page.getByText("JWT auth", { exact: true })).toBeVisible();
+  await page.locator(".nav-list").getByRole("link", { name: "Home" }).click();
+  await page.reload();
+  await expect(page.getByLabel("Select language")).toHaveText("English");
+
+  await page.getByLabel("Select language").click();
+  await page.getByRole("option", { name: "简体中文" }).click();
+  await expect(page.getByRole("heading", { name: "网关概览" })).toBeVisible();
+  await expect(page).toHaveURL(/\?lang=zh-CN$/);
+
+  await page.goto("/");
+  await page.reload();
+  await expect(page.getByLabel("选择语言")).toHaveText("简体中文");
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+
+  await page.goto("/llm/client-setup?lang=zh-CN");
+  await page
+    .getByLabel("网关基础 URL")
+    .fill("http://unsaved-local-value.example");
+  await page.getByLabel("选择语言").click();
+  await page.getByRole("option", { name: "English" }).click();
+  await expect(page.getByLabel("Gateway base URL")).toHaveValue(
+    "http://unsaved-local-value.example",
+  );
+});
+
+test("updates the policy catalog when the language changes in place", async ({
+  page,
+}) => {
+  await mockGateway(page);
+  await page.goto("/llm/policies?lang=zh-CN");
+
+  await expect(page.getByRole("heading", { name: "访问" })).toBeVisible();
+  await expect(page.getByText("API 密钥", { exact: true })).toBeVisible();
+  await expect(page.getByText("基本授权", { exact: true })).toBeVisible();
+  await expect(page.getByText("JWT 身份验证", { exact: true })).toBeVisible();
+
+  await page.getByLabel("选择语言").click();
+  await page.getByRole("option", { name: "English" }).click();
+
+  await expect(page).toHaveURL(/\/llm\/policies\?lang=en$/);
+  await expect(page.getByRole("heading", { name: "Access" })).toBeVisible();
+  await expect(page.getByText("API keys", { exact: true })).toBeVisible();
+  await expect(page.getByText("Basic auth", { exact: true })).toBeVisible();
+  await expect(page.getByText("JWT auth", { exact: true })).toBeVisible();
+  await expect(page.getByText("API 密钥", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("基本授权", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("JWT 身份验证", { exact: true })).toHaveCount(0);
+});
+
 test("onboards all surfaces from a completely empty config", async ({
   page,
 }) => {

@@ -6,6 +6,7 @@ import {
   type SchemasSettings,
 } from "monaco-yaml";
 import configSchema from "../../schema/config.json";
+import { translateText } from "./i18n";
 import { configureConfigMonacoWorkers } from "./monacoWorkers";
 
 let yaml: MonacoYaml | null = null;
@@ -182,7 +183,7 @@ function registerConfigYamlCompletions(monaco: typeof Monaco) {
               detail: schemaTypeLabel(resolved),
               documentation:
                 typeof resolved.description === "string"
-                  ? resolved.description
+                  ? translateText(resolved.description)
                   : undefined,
               insertText: structured ? `${name}:\n  ` : `${name}: `,
               range,

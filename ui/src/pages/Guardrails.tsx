@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import {
   Braces,
   ListChecks,
@@ -129,55 +130,107 @@ type GuardrailDraft = {
 };
 
 const builtinOptions: Array<{ value: BuiltinRule; label: string }> = [
-  { value: "email", label: "Email" },
-  { value: "phoneNumber", label: "Phone" },
-  { value: "creditCard", label: "Credit card" },
-  { value: "ssn", label: "SSN" },
-  { value: "caSin", label: "CA SIN" },
+  {
+    value: "email",
+    get label() {
+      return tr("copy.email");
+    },
+  },
+  {
+    value: "phoneNumber",
+    get label() {
+      return tr("copy.phone");
+    },
+  },
+  {
+    value: "creditCard",
+    get label() {
+      return tr("copy.creditCard");
+    },
+  },
+  {
+    value: "ssn",
+    get label() {
+      return tr("copy.ssn");
+    },
+  },
+  {
+    value: "caSin",
+    get label() {
+      return tr("copy.caSin");
+    },
+  },
 ];
 
 const requestGuardKinds: Array<EnumSelectorOption<GuardKind>> = [
   {
     value: "builtin",
-    label: "Built-in detectors",
-    description:
-      "Detect common sensitive data types with built-in regex rules.",
+    get label() {
+      return tr("copy.builtInDetectors");
+    },
+    get description() {
+      return tr("copy.detectCommonSensitiveDataTypesWithBuiltInRegexRules");
+    },
     icon: <ListChecks size={16} />,
   },
   {
     value: "regex",
-    label: "Custom regex",
-    description: "Match and optionally mask custom regular expressions.",
+    get label() {
+      return tr("copy.customRegex");
+    },
+    get description() {
+      return tr("copy.matchAndOptionallyMaskCustomRegularExpressions");
+    },
     icon: <Braces size={16} />,
   },
   {
     value: "webhook",
-    label: "Webhook",
-    description: "Send content to an external guardrail service.",
+    get label() {
+      return tr("copy.webhook");
+    },
+    get description() {
+      return tr("copy.sendContentToAnExternalGuardrailService");
+    },
     icon: <ShieldCheck size={16} />,
   },
   {
     value: "openAIModeration",
-    label: "OpenAI Moderation",
-    description: "Use OpenAI moderation checks for incoming prompts.",
+    get label() {
+      return tr("copy.openAiModeration");
+    },
+    get description() {
+      return tr("copy.useOpenAiModerationChecksForIncomingPrompts");
+    },
     icon: <GuardrailProviderIcon src={openAiIcon} alt="" />,
   },
   {
     value: "bedrockGuardrails",
-    label: "Bedrock Guardrails",
-    description: "Use AWS Bedrock Guardrails.",
+    get label() {
+      return tr("copy.bedrockGuardrails");
+    },
+    get description() {
+      return tr("copy.useAwsBedrockGuardrails");
+    },
     icon: <GuardrailProviderIcon src={bedrockIcon} alt="" />,
   },
   {
     value: "googleModelArmor",
-    label: "Google Model Armor",
-    description: "Use Google Model Armor for safety checks.",
+    get label() {
+      return tr("copy.googleModelArmor");
+    },
+    get description() {
+      return tr("copy.useGoogleModelArmorForSafetyChecks");
+    },
     icon: <GuardrailProviderIcon src={googleCloudIcon} alt="" />,
   },
   {
     value: "azureContentSafety",
-    label: "Azure Content Safety",
-    description: "Use Azure AI Content Safety.",
+    get label() {
+      return tr("copy.azureContentSafety");
+    },
+    get description() {
+      return tr("copy.useAzureAiContentSafety");
+    },
     icon: <GuardrailProviderIcon src={azureIcon} alt="" />,
   },
 ];
@@ -204,8 +257,8 @@ export function GuardrailsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="LLM Guardrails"
-        description="Apply prompt and response guardrails to all LLM models."
+        title={tr("copy.llmGuardrails")}
+        description={tr("copy.applyPromptAndResponseGuardrailsToAllLlmModels")}
         actions={
           guardrails ? (
             <button
@@ -215,23 +268,26 @@ export function GuardrailsPage() {
               onClick={() => setRemoveAllOpen(true)}
             >
               <Trash2 size={16} />
-              Remove
+              {tr("copy.remove")}
             </button>
           ) : null
         }
       />
 
       {update.isError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {update.error.message}
         </StatusBanner>
       ) : null}
 
       <Panel>
         {config.isLoading ? (
-          <StatusBanner state="loading" title="Loading guardrails" />
+          <StatusBanner state="loading" title={tr("copy.loadingGuardrails")} />
         ) : config.isError ? (
-          <StatusBanner state="bad" title="Configuration API unavailable">
+          <StatusBanner
+            state="bad"
+            title={tr("copy.configurationApiUnavailable")}
+          >
             {config.error.message}
           </StatusBanner>
         ) : (
@@ -250,9 +306,9 @@ export function GuardrailsPage() {
       </Panel>
       {removeAllOpen ? (
         <ConfirmDialog
-          title="Remove all LLM guardrails?"
+          title={tr("copy.removeAllLlmGuardrails")}
           destructive
-          confirmLabel="Remove guardrails"
+          confirmLabel={tr("copy.removeGuardrails")}
           confirmDisabled={update.isPending}
           onCancel={() => setRemoveAllOpen(false)}
           onConfirm={() =>
@@ -262,8 +318,9 @@ export function GuardrailsPage() {
           }
         >
           <p>
-            Remove all request and response guardrails? LLM traffic will no
-            longer be checked by these rules.
+            {tr(
+              "copy.removeAllRequestAndResponseGuardrailsLlmTrafficWillNoLongerBeCheckedByTheseRules",
+            )}
           </p>
         </ConfirmDialog>
       ) : null}
@@ -313,12 +370,12 @@ function GuardrailsEditor(props: {
   return (
     <div className="guardrails-editor">
       {error ? (
-        <StatusBanner state="bad" title="Invalid guardrails">
+        <StatusBanner state="bad" title={tr("copy.invalidGuardrails")}>
           {error}
         </StatusBanner>
       ) : null}
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}
@@ -367,12 +424,13 @@ function GuardrailSection(props: {
 }) {
   const [guardDrawer, setGuardDrawer] = useStickyQueryParam("guard");
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
-  const title =
-    props.phase === "request" ? "Request guards" : "Response guards";
+  const title = tr(
+    props.phase === "request" ? "copy.requestGuards" : "copy.responseGuards",
+  );
   const description =
     props.phase === "request"
-      ? "Inspect prompts before they reach the upstream model."
-      : "Inspect model output before it is returned to the caller.";
+      ? tr("copy.inspectPromptsBeforeTheyReachTheUpstreamModel")
+      : tr("copy.inspectModelOutputBeforeItIsReturnedToTheCaller");
   const addOpen = guardDrawer === `${props.phase}:new`;
   const editingIndex = guardDrawerIndex(
     guardDrawer,
@@ -405,7 +463,7 @@ function GuardrailSection(props: {
       </div>
       <div className="policy-form-section-body">
         {props.guards.length === 0 ? (
-          <p className="muted-copy">No guards configured.</p>
+          <p className="muted-copy">{tr("copy.noGuardsConfigured")}</p>
         ) : null}
         {props.guards.map((guard, index) => (
           <GuardCard
@@ -443,9 +501,9 @@ function GuardrailSection(props: {
         ) : null}
         {deletingIndex != null && props.guards[deletingIndex] ? (
           <ConfirmDialog
-            title="Remove guardrail?"
+            title={tr("copy.removeGuardrail_1r9af69")}
             destructive
-            confirmLabel="Remove guardrail"
+            confirmLabel={tr("copy.removeGuardrail")}
             onCancel={() => setDeletingIndex(null)}
             onConfirm={() => {
               props.onChange(
@@ -457,11 +515,11 @@ function GuardrailSection(props: {
             }}
           >
             <p>
-              Remove the{" "}
+              {tr("copy.removeThe")}{" "}
               <strong>
                 {guardKindLabel(props.guards[deletingIndex].kind)}
               </strong>{" "}
-              guard? This takes effect immediately.
+              {tr("copy.guardThisTakesEffectImmediately")}
             </p>
           </ConfirmDialog>
         ) : null}
@@ -474,7 +532,7 @@ function AddGuardButton(props: { onOpen: () => void }) {
   return (
     <button className="button" type="button" onClick={props.onOpen}>
       <Plus size={16} />
-      Add guard
+      {tr("copy.addGuard")}
     </button>
   );
 }
@@ -498,13 +556,13 @@ function AddGuardModal(props: {
 
   return (
     <Drawer
-      title={`Add ${props.phase} guard`}
+      title={tr("copy.addValueGuard")}
       onClose={props.onClose}
       dirty={guard != null}
       footer={(requestClose) => (
         <div className="button-row">
           <button className="button" type="button" onClick={requestClose}>
-            Cancel
+            {tr("copy.cancel")}
           </button>
           <button
             className="button primary"
@@ -513,20 +571,20 @@ function AddGuardModal(props: {
             onClick={() => guard && props.onAdd(guard)}
           >
             <Plus size={16} />
-            Add guard
+            {tr("copy.addGuard")}
           </button>
         </div>
       )}
     >
       <FieldGroup
-        label="Guard type"
+        label={tr("copy.guardType")}
         tooltip={guardTypeHelp(props.phase, props.help)}
       >
         <EnumSelector
           ariaLabel="Guard type"
           value={kind}
           options={options}
-          placeholder="Select guard type"
+          placeholder={tr("copy.selectGuardType")}
           allowEmpty
           onChange={selectKind}
         />
@@ -562,7 +620,7 @@ function GuardCard(props: {
         <div className="button-row compact">
           <button className="table-action" type="button" onClick={props.onEdit}>
             <Pencil size={14} />
-            Edit
+            {tr("copy.edit")}
           </button>
           <button
             className="table-action danger"
@@ -570,20 +628,20 @@ function GuardCard(props: {
             onClick={props.onRemove}
           >
             <Trash2 size={14} />
-            Remove
+            {tr("copy.remove")}
           </button>
         </div>
       </div>
       <p className="muted-copy">{guardSummary(props.guard)}</p>
       {props.guard.kind === "unsupported" ? (
         <details>
-          <summary>Raw guard YAML</summary>
+          <summary>{tr("copy.rawGuardYaml")}</summary>
           <YamlBlock value={props.guard.raw} />
         </details>
       ) : null}
       {props.guard.kind !== "unsupported" && props.guard.policies ? (
         <details>
-          <summary>Backend policies preserved</summary>
+          <summary>{tr("copy.backendPoliciesPreserved")}</summary>
           <YamlBlock value={props.guard.policies} />
         </details>
       ) : null}
@@ -601,13 +659,13 @@ function EditGuardDrawer(props: {
   const [draft, setDraft] = useState<GuardDraft>(props.guard);
   return (
     <Drawer
-      title={`Edit ${props.phase} guard`}
+      title={tr("copy.editValueGuard")}
       onClose={props.onClose}
       dirty={JSON.stringify(draft) !== JSON.stringify(props.guard)}
       footer={(requestClose) => (
         <div className="button-row">
           <button className="button" type="button" onClick={requestClose}>
-            Cancel
+            {tr("copy.cancel")}
           </button>
           <button
             className="button primary"
@@ -615,14 +673,14 @@ function EditGuardDrawer(props: {
             onClick={() => props.onApply(draft)}
           >
             <Save size={16} />
-            Apply changes
+            {tr("copy.applyChanges")}
           </button>
         </div>
       )}
     >
       {draft.kind === "unsupported" ? (
         <>
-          <Field label="Guard type">
+          <Field label={tr("copy.guardType")}>
             <input value="Unsupported raw YAML" disabled />
           </Field>
           <UnsupportedGuardFields guard={draft} />
@@ -630,7 +688,7 @@ function EditGuardDrawer(props: {
       ) : (
         <>
           <FieldGroup
-            label="Guard type"
+            label={tr("copy.guardType")}
             tooltip={guardTypeHelp(props.phase, props.help)}
           >
             <EnumSelector
@@ -661,9 +719,10 @@ function EditGuardDrawer(props: {
 function UnsupportedGuardFields(props: { guard: UnsupportedGuardDraft }) {
   return (
     <div className="policy-editor-stack">
-      <StatusBanner state="warn" title="Unsupported guard shape">
-        This guard uses a shape the visual editor does not support yet. It will
-        be preserved as raw YAML.
+      <StatusBanner state="warn" title={tr("copy.unsupportedGuardShape")}>
+        {tr(
+          "copy.thisGuardUsesAShapeTheVisualEditorDoesNotSupportYetItWillBePreservedAsRawYaml",
+        )}
       </StatusBanner>
       <YamlBlock value={props.guard.raw} />
     </div>
@@ -759,7 +818,7 @@ function BuiltinGuardFields(props: {
   return (
     <>
       <FieldGroup
-        label="Action"
+        label={tr("copy.action")}
         tooltip={props.help.field<RegexRules>("RegexRules", "action")}
       >
         <EnumSelector
@@ -768,13 +827,13 @@ function BuiltinGuardFields(props: {
           options={[
             {
               value: "reject",
-              label: "Reject request",
-              description: "Reject the request when a detector matches.",
+              label: tr("copy.rejectRequest"),
+              description: tr("copy.rejectTheRequestWhenADetectorMatches"),
             },
             {
               value: "mask",
-              label: "Mask matched text",
-              description: "Replace matched content and continue.",
+              label: tr("copy.maskMatchedText"),
+              description: tr("copy.replaceMatchedContentAndContinue"),
             },
           ]}
           schema={props.help.node([
@@ -788,7 +847,7 @@ function BuiltinGuardFields(props: {
       </FieldGroup>
       <FieldGroup
         className="guardrail-builtins"
-        label="Built-in detectors"
+        label={tr("copy.builtInDetectors")}
         tooltip={props.help.field<RegexRules>("RegexRules", "rules")}
       >
         <div className="method-grid">
@@ -839,7 +898,7 @@ function RegexGuardFields(props: {
   return (
     <>
       <FieldGroup
-        label="Action"
+        label={tr("copy.action")}
         tooltip={props.help.field<RegexRules>("RegexRules", "action")}
       >
         <EnumSelector
@@ -848,13 +907,13 @@ function RegexGuardFields(props: {
           options={[
             {
               value: "reject",
-              label: "Reject request",
-              description: "Reject the request when a regex matches.",
+              label: tr("copy.rejectRequest"),
+              description: tr("copy.rejectTheRequestWhenARegexMatches"),
             },
             {
               value: "mask",
-              label: "Mask matched text",
-              description: "Replace matched content and continue.",
+              label: tr("copy.maskMatchedText"),
+              description: tr("copy.replaceMatchedContentAndContinue"),
             },
           ]}
           schema={props.help.node([
@@ -891,9 +950,9 @@ function WebhookGuardFields(props: {
   return (
     <>
       <Field
-        label="Webhook target"
+        label={tr("copy.webhookTarget")}
         tooltip={props.help.field<Webhook>("Webhook", "target")}
-        hint="Backend host URL for guardrail checks."
+        hint={tr("copy.backendHostUrlForGuardrailChecks")}
       >
         <input
           value={props.guard.target}
@@ -906,7 +965,7 @@ function WebhookGuardFields(props: {
         />
       </Field>
       <FieldGroup
-        label="Failure mode"
+        label={tr("copy.failureMode")}
         tooltip={props.help.field<Webhook>("Webhook", "failureMode")}
       >
         <EnumSelector
@@ -915,14 +974,15 @@ function WebhookGuardFields(props: {
           options={[
             {
               value: "failClosed",
-              label: "Fail closed",
-              description: "Reject when the webhook is unavailable or errors.",
+              label: tr("copy.failClosed"),
+              description: tr("copy.rejectWhenTheWebhookIsUnavailableOrErrors"),
             },
             {
               value: "failOpen",
-              label: "Fail open",
-              description:
-                "Continue when the webhook is unavailable or errors.",
+              label: tr("copy.failOpen"),
+              description: tr(
+                "copy.continueWhenTheWebhookIsUnavailableOrErrors",
+              ),
             },
           ]}
           schema={props.help.node([
@@ -949,9 +1009,9 @@ function OpenAIModerationFields(props: {
 }) {
   return (
     <Field
-      label="Moderation model"
+      label={tr("copy.moderationModel")}
       tooltip={props.help.field<Moderation>("Moderation", "model")}
-      hint="Optional. Defaults to omni-moderation-latest."
+      hint={tr("copy.optionalDefaultsToOmniModerationLatest")}
     >
       <input
         value={props.guard.model}
@@ -974,7 +1034,7 @@ function BedrockGuardFields(props: {
   return (
     <div className="form-grid">
       <Field
-        label="Guardrail identifier"
+        label={tr("copy.guardrailIdentifier")}
         tooltip={props.help.field<BedrockGuardrails>(
           "BedrockGuardrails",
           "guardrailIdentifier",
@@ -990,7 +1050,7 @@ function BedrockGuardFields(props: {
         />
       </Field>
       <Field
-        label="Guardrail version"
+        label={tr("copy.guardrailVersion")}
         tooltip={props.help.field<BedrockGuardrails>(
           "BedrockGuardrails",
           "guardrailVersion",
@@ -1006,7 +1066,7 @@ function BedrockGuardFields(props: {
         />
       </Field>
       <Field
-        label="AWS region"
+        label={tr("copy.awsRegion")}
         tooltip={props.help.field<BedrockGuardrails>(
           "BedrockGuardrails",
           "region",
@@ -1036,7 +1096,7 @@ function GoogleModelArmorFields(props: {
   return (
     <div className="form-grid">
       <Field
-        label="Template ID"
+        label={tr("copy.templateId")}
         tooltip={props.help.field<GoogleModelArmor>(
           "GoogleModelArmor",
           "templateId",
@@ -1052,7 +1112,7 @@ function GoogleModelArmorFields(props: {
         />
       </Field>
       <Field
-        label="Project ID"
+        label={tr("copy.projectId")}
         tooltip={props.help.field<GoogleModelArmor>(
           "GoogleModelArmor",
           "projectId",
@@ -1068,12 +1128,12 @@ function GoogleModelArmorFields(props: {
         />
       </Field>
       <Field
-        label="Location"
+        label={tr("copy.location")}
         tooltip={props.help.field<GoogleModelArmor>(
           "GoogleModelArmor",
           "location",
         )}
-        hint="Optional. Defaults to us-central1."
+        hint={tr("copy.optionalDefaultsToUsCentral1")}
       >
         <CloudRegionCombobox
           cloud="google"
@@ -1100,7 +1160,7 @@ function AzureContentSafetyFields(props: {
   return (
     <>
       <Field
-        label="Endpoint"
+        label={tr("copy.endpoint")}
         tooltip={props.help.field<AzureContentSafety>(
           "AzureContentSafety",
           "endpoint",
@@ -1118,12 +1178,12 @@ function AzureContentSafetyFields(props: {
       </Field>
       <div className="form-grid">
         <Field
-          label="Severity threshold"
+          label={tr("copy.severityThreshold")}
           tooltip={props.help.field<AnalyzeTextConfig>(
             "AnalyzeTextConfig",
             "severityThreshold",
           )}
-          hint="Optional. 0-6; default is 2."
+          hint={tr("copy.optional06DefaultIs2")}
         >
           <input
             value={props.guard.severityThreshold}
@@ -1136,7 +1196,7 @@ function AzureContentSafetyFields(props: {
           />
         </Field>
         <Field
-          label="Analyze API version"
+          label={tr("copy.analyzeApiVersion")}
           tooltip={props.help.field<AnalyzeTextConfig>(
             "AnalyzeTextConfig",
             "apiVersion",
@@ -1153,12 +1213,12 @@ function AzureContentSafetyFields(props: {
           />
         </Field>
         <Field
-          label="Blocklists"
+          label={tr("copy.blocklists")}
           tooltip={props.help.field<AnalyzeTextConfig>(
             "AnalyzeTextConfig",
             "blocklistNames",
           )}
-          hint="Comma-separated names."
+          hint={tr("copy.commaSeparatedNames")}
         >
           <input
             value={props.guard.blocklistNames}
@@ -1180,7 +1240,7 @@ function AzureContentSafetyFields(props: {
             } as Partial<SupportedGuardDraft>)
           }
         />
-        <span>Halt on blocklist hit</span>
+        <span>{tr("copy.haltOnBlocklistHit")}</span>
       </label>
       {props.phase === "request" ? (
         <>
@@ -1194,11 +1254,11 @@ function AzureContentSafetyFields(props: {
                 } as Partial<SupportedGuardDraft>)
               }
             />
-            <span>Detect jailbreak attempts</span>
+            <span>{tr("copy.detectJailbreakAttempts")}</span>
           </label>
           {props.guard.detectJailbreak ? (
             <Field
-              label="Jailbreak API version"
+              label={tr("copy.jailbreakApiVersion")}
               tooltip={props.help.field<DetectJailbreakConfig>(
                 "DetectJailbreakConfig",
                 "apiVersion",
@@ -1230,7 +1290,7 @@ function RejectionFields(props: {
   return (
     <div className="form-grid">
       <Field
-        label="Rejection status"
+        label={tr("copy.rejectionStatus")}
         tooltip={
           props.phase === "request"
             ? props.help.field<RequestRejection>("RequestRejection", "status")
@@ -1248,7 +1308,7 @@ function RejectionFields(props: {
         />
       </Field>
       <Field
-        label="Rejection body"
+        label={tr("copy.rejectionBody")}
         tooltip={
           props.phase === "request"
             ? props.help.field<RequestRejection>(
@@ -1286,7 +1346,7 @@ function PatternList(props: {
   return (
     <FieldGroup
       className="guardrail-pattern-list"
-      label="Custom regex patterns"
+      label={tr("copy.customRegexPatterns")}
       tooltip={props.help.field<RegexRules>("RegexRules", "rules")}
     >
       {props.patterns.map((pattern, index) => (
@@ -1306,7 +1366,7 @@ function PatternList(props: {
           <button
             className="icon-button danger guardrail-pattern-remove"
             type="button"
-            aria-label="Remove pattern"
+            aria-label={tr("copy.removePattern")}
             onClick={() =>
               props.onChange(
                 props.patterns.filter((_, itemIndex) => itemIndex !== index),
@@ -1323,7 +1383,7 @@ function PatternList(props: {
         onClick={() => props.onChange([...props.patterns, ""])}
       >
         <Plus size={16} />
-        Add pattern
+        {tr("copy.addPattern")}
       </button>
     </FieldGroup>
   );

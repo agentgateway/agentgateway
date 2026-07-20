@@ -1,6 +1,8 @@
+import { tr, translateText } from "../i18n";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { ComponentType, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Shield } from "lucide-react";
 import { ensureLlm, ensureMcp } from "../config";
 import { useGatewayConfig, useUpdateConfig } from "../hooks";
@@ -23,7 +25,9 @@ import type { GatewayConfig } from "../types";
 
 const llmPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
   {
-    title: "Access",
+    get title() {
+      return tr("copy.access");
+    },
     keys: [
       "cors",
       "apiKey",
@@ -34,12 +38,24 @@ const llmPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
       "extAuthz",
     ] as PolicyKey[],
   },
-  { title: "Safety", keys: ["guardrails"] as PolicyKey[] },
   {
-    title: "Traffic Shaping",
+    get title() {
+      return tr("copy.safety");
+    },
+    keys: ["guardrails"] as PolicyKey[],
+  },
+  {
+    get title() {
+      return tr("copy.trafficShaping");
+    },
     keys: ["localRateLimit", "remoteRateLimit"] as PolicyKey[],
   },
-  { title: "Mutation", keys: ["transformations", "extProc"] as PolicyKey[] },
+  {
+    get title() {
+      return tr("copy.mutation");
+    },
+    keys: ["transformations", "extProc"] as PolicyKey[],
+  },
 ];
 
 const mcpPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
@@ -52,14 +68,23 @@ const mcpPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
     ] as PolicyKey[],
   },
   {
-    title: "Access",
+    get title() {
+      return tr("copy.access");
+    },
     keys: ["authorization", "cors", "extAuthz", "jwtAuth"] as PolicyKey[],
   },
   {
-    title: "Traffic Shaping",
+    get title() {
+      return tr("copy.trafficShaping");
+    },
     keys: ["localRateLimit", "remoteRateLimit"] as PolicyKey[],
   },
-  { title: "Mutation", keys: ["transformations", "extProc"] as PolicyKey[] },
+  {
+    get title() {
+      return tr("copy.mutation");
+    },
+    keys: ["transformations", "extProc"] as PolicyKey[],
+  },
 ];
 
 const mcpPolicyKeys = mcpPolicySections.flatMap((section) => section.keys);
@@ -67,8 +92,10 @@ const mcpPolicyKeys = mcpPolicySections.flatMap((section) => section.keys);
 export function PoliciesPage() {
   return (
     <PolicyCatalogPage
-      title="LLM Policies"
-      description="Configure top-level behavior that applies before model-specific routing."
+      title={tr("copy.llmPolicies")}
+      description={tr(
+        "copy.configureTopLevelBehaviorThatAppliesBeforeModelSpecificRouting",
+      )}
       schemaRoot="LocalLLMPolicy"
       sections={llmPolicySections}
       yamlDescription="Read-only view of llm.policies."
@@ -76,8 +103,14 @@ export function PoliciesPage() {
         config.data?.llm?.policies as Record<string, unknown> | null | undefined
       }
       managedLinks={{
-        apiKey: { to: "/llm/keys", summary: "Managed on Virtual API Keys" },
-        guardrails: { to: "/llm/guardrails", summary: "Managed on Guardrails" },
+        apiKey: {
+          to: "/llm/keys",
+          summary: tr("copy.managedOnVirtualApiKeys"),
+        },
+        guardrails: {
+          to: "/llm/guardrails",
+          summary: tr("copy.managedOnGuardrails"),
+        },
       }}
       onSavePolicy={(next, key, value) => {
         const llm = ensureLlm(next);
@@ -97,8 +130,8 @@ export function PoliciesPage() {
 export function McpPoliciesPage() {
   return (
     <PolicyCatalogPage
-      title="MCP Policies"
-      description="Configure top-level behavior for MCP gateway traffic."
+      title={tr("copy.mcpPolicies")}
+      description={tr("copy.configureTopLevelBehaviorForMcpGatewayTraffic")}
       schemaRoot="FilterOrPolicy"
       sections={mcpPolicySections}
       policyKeys={mcpPolicyKeys}
@@ -137,6 +170,8 @@ export function PolicyCatalogPage(props: {
   onSavePolicy: (config: GatewayConfig, key: PolicyKey, value: unknown) => void;
   onDisablePolicy: (config: GatewayConfig, key: PolicyKey) => void;
 }) {
+  const { i18n } = useTranslation();
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const config = useGatewayConfig();
   const update = useUpdateConfig();
   const policies = props.policies(config);
@@ -161,7 +196,7 @@ export function PolicyCatalogPage(props: {
       const ui = policyUi[policyKey];
       return {
         key: policyKey,
-        title: ui?.title ?? titleFromKey(policyKey),
+        title: ui?.title ?? translateText(titleFromKey(policyKey)),
         description:
           help.propertyDescription(
             props.schemaRoot,
@@ -172,7 +207,7 @@ export function PolicyCatalogPage(props: {
         customEditor: ui?.customEditor,
       };
     });
-  }, [help, props.policyKeys, props.schemaRoot]);
+  }, [help, language, props.policyKeys, props.schemaRoot]);
   const selectedMeta = policyCatalog.find((policy) => policy.key === selected);
 
   const policyItems = useMemo(() => {
@@ -208,9 +243,12 @@ export function PolicyCatalogPage(props: {
           a.title.localeCompare(b.title),
       );
     return otherPolicies.length
-      ? [...sections, { title: "Other", keys: [], policies: otherPolicies }]
+      ? [
+          ...sections,
+          { title: tr("copy.other"), keys: [], policies: otherPolicies },
+        ]
       : sections;
-  }, [policyItems, props.sections]);
+  }, [language, policyItems, props.sections]);
 
   useEffect(() => {
     function syncSelectedFromUrl() {
@@ -253,12 +291,15 @@ export function PolicyCatalogPage(props: {
         actions={props.actions}
       />
       {config.isError ? (
-        <StatusBanner state="bad" title="Configuration API unavailable">
+        <StatusBanner
+          state="bad"
+          title={tr("copy.configurationApiUnavailable")}
+        >
           {config.error.message}
         </StatusBanner>
       ) : null}
       {update.isError && !selected ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {update.error.message}
         </StatusBanner>
       ) : null}
@@ -290,7 +331,7 @@ export function PolicyCatalogPage(props: {
       </div>
 
       <details className="schema-details policy-yaml-details">
-        <summary>Current top-level policy YAML</summary>
+        <summary>{tr("copy.currentTopLevelPolicyYaml")}</summary>
         <Panel>
           <div className="section-heading">
             <p>{props.yamlDescription}</p>
@@ -422,7 +463,7 @@ function PolicyTileContent(props: {
           <Icon size={18} />
         </span>
         <span className={props.policy.enabled ? "badge ok" : "badge"}>
-          {props.policy.enabled ? "enabled" : "disabled"}
+          {props.policy.enabled ? tr("copy.enabled") : tr("copy.disabled")}
         </span>
       </div>
       <strong>{props.policy.title}</strong>

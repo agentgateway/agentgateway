@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import { GitBranch } from "lucide-react";
 import { providerReferenceName } from "./config";
 import { ProviderIcon } from "./components/ProviderIcon";
@@ -45,7 +46,7 @@ export function llmModelOptions(
       kind: "virtual" as const,
       name: model.name,
       label: model.name,
-      description: "Virtual model",
+      description: tr("copy.virtualModel"),
       icon: <GitBranch size={16} />,
       searchText: `${model.name} virtual model`,
       virtualModel: model,

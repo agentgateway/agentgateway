@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useMemo, useRef, useState } from "react";
 import {
   Check,
@@ -94,8 +95,10 @@ export function KeysPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="Virtual API Keys"
-        description="Provision incoming credentials and metadata for callers."
+        title={tr("copy.virtualApiKeys")}
+        description={tr(
+          "copy.provisionIncomingCredentialsAndMetadataForCallers",
+        )}
         actions={
           <div className="button-row">
             <button
@@ -104,7 +107,7 @@ export function KeysPage() {
               onClick={() => setKeyDrawer("settings")}
             >
               <SlidersHorizontal size={16} />
-              Settings
+              {tr("copy.settings")}
             </button>
             <button
               className="button primary"
@@ -112,37 +115,39 @@ export function KeysPage() {
               onClick={openNewKey}
             >
               <Plus size={16} />
-              New key
+              {tr("copy.newKey")}
             </button>
           </div>
         }
       />
 
       {update.isError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {update.error.message}
         </StatusBanner>
       ) : null}
       {policy?.mode && policy.mode !== "strict" ? (
-        <StatusBanner
-          state="warn"
-          title={`Policy mode is ${modeLabel(policy.mode)}`}
-        >
-          Use strict mode when keys should be mandatory.
+        <StatusBanner state="warn" title={tr("copy.policyModeIsValue")}>
+          {tr("copy.useStrictModeWhenKeysShouldBeMandatory")}
         </StatusBanner>
       ) : null}
 
       <Panel>
         {config.isLoading ? (
-          <StatusBanner state="loading" title="Loading keys" />
+          <StatusBanner state="loading" title={tr("copy.loadingKeys")} />
         ) : config.isError ? (
-          <StatusBanner state="bad" title="Configuration API unavailable">
+          <StatusBanner
+            state="bad"
+            title={tr("copy.configurationApiUnavailable")}
+          >
             {config.error.message}
           </StatusBanner>
         ) : keys.length === 0 ? (
           <EmptyState
-            title="No virtual API keys"
-            description="Create a key so callers can authenticate without exposing provider credentials."
+            title={tr("copy.noVirtualApiKeys")}
+            description={tr(
+              "copy.createAKeySoCallersCanAuthenticateWithoutExposingProviderCredentials",
+            )}
             action={
               <div className="button-row">
                 {policy ? (
@@ -153,7 +158,7 @@ export function KeysPage() {
                     onClick={() => setDisablePolicyOpen(true)}
                   >
                     <X size={16} />
-                    Disable API Key Policy
+                    {tr("copy.disableApiKeyPolicy_ckgvai")}
                   </button>
                 ) : null}
                 <button
@@ -162,7 +167,7 @@ export function KeysPage() {
                   onClick={openNewKey}
                 >
                   <Plus size={16} />
-                  New key
+                  {tr("copy.newKey")}
                 </button>
               </div>
             }
@@ -172,9 +177,9 @@ export function KeysPage() {
             <table className="keys-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Key</th>
-                  <th>Metadata</th>
+                  <th>{tr("copy.name")}</th>
+                  <th>{tr("copy.key")}</th>
+                  <th>{tr("copy.metadata")}</th>
                   <th />
                 </tr>
               </thead>
@@ -196,22 +201,22 @@ export function KeysPage() {
                           <button
                             className="table-action"
                             type="button"
-                            aria-label="Edit key"
+                            aria-label={tr("copy.editKey")}
                             onClick={() => openEditKey(item, index)}
                           >
                             <Pencil size={14} />
-                            Edit
+                            {tr("copy.edit")}
                           </button>
                         </Tooltip>
                         <Tooltip content="Delete key">
                           <button
                             className="table-action danger"
                             type="button"
-                            aria-label="Delete key"
+                            aria-label={tr("copy.deleteKey")}
                             onClick={() => setDeleteKey(item)}
                           >
                             <Trash2 size={14} />
-                            Delete
+                            {tr("copy.delete")}
                           </button>
                         </Tooltip>
                       </div>
@@ -244,9 +249,9 @@ export function KeysPage() {
       ) : null}
       {deleteKey ? (
         <ConfirmDialog
-          title="Delete virtual API key?"
+          title={tr("copy.deleteVirtualApiKey")}
           destructive
-          confirmLabel="Delete key"
+          confirmLabel={tr("copy.deleteKey")}
           confirmDisabled={update.isPending}
           onCancel={() => setDeleteKey(null)}
           onConfirm={() => {
@@ -257,16 +262,17 @@ export function KeysPage() {
           }}
         >
           <p>
-            Delete <strong>{virtualKeyDeleteLabel(deleteKey)}</strong>? This
-            cannot be undone.
+            {tr("copy.delete")}
+            <strong>{virtualKeyDeleteLabel(deleteKey)}</strong>
+            {tr("copy.thisCannotBeUndone")}
           </p>
         </ConfirmDialog>
       ) : null}
       {disablePolicyOpen ? (
         <ConfirmDialog
-          title="Disable API key policy?"
+          title={tr("copy.disableApiKeyPolicy_9229n3")}
           destructive
-          confirmLabel="Disable API Key Policy"
+          confirmLabel={tr("copy.disableApiKeyPolicy_ckgvai")}
           confirmDisabled={update.isPending}
           onCancel={() => setDisablePolicyOpen(false)}
           onConfirm={() => {
@@ -279,8 +285,9 @@ export function KeysPage() {
           }}
         >
           <p>
-            Disable virtual API key validation? Requests will no longer be
-            validated against virtual API keys.
+            {tr(
+              "copy.disableVirtualApiKeyValidationRequestsWillNoLongerBeValidatedAgainstVirtualApiKeys",
+            )}
           </p>
         </ConfirmDialog>
       ) : null}
@@ -323,7 +330,7 @@ function AdvancedSettingsDrawer(props: {
   onSave: (policy: Partial<LlmApiKeyPolicy>) => void;
 }) {
   return (
-    <Drawer title="Settings" onClose={props.onClose}>
+    <Drawer title={tr("copy.settings")} onClose={props.onClose}>
       <PolicyControls
         policy={props.policy}
         config={props.config}
@@ -334,7 +341,7 @@ function AdvancedSettingsDrawer(props: {
         onSave={props.onSave}
       />
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}
@@ -369,7 +376,7 @@ function PolicyControls(props: {
   return (
     <div className="policy-controls api-key-policy-controls">
       <FieldGroup
-        label="Validation mode"
+        label={tr("copy.validationMode")}
         tooltip={props.help.field<LlmApiKeyPolicy>(
           "LocalAPIKeys",
           "mode",
@@ -403,8 +410,10 @@ function PolicyControls(props: {
         <AdvancedSettingRow
           className="api-key-location-row"
           icon={<X size={17} />}
-          title="Disable API key policy"
-          description="Remove the API key policy entirely. Requests will not be validated against virtual API keys."
+          title={tr("copy.disableApiKeyPolicy")}
+          description={tr(
+            "copy.removeTheApiKeyPolicyEntirelyRequestsWillNotBeValidatedAgainstVirtualApiKeys",
+          )}
           action={
             <button
               className="button danger compact-action"
@@ -412,7 +421,7 @@ function PolicyControls(props: {
               disabled={props.saving}
               onClick={props.onDisable}
             >
-              Disable
+              {tr("copy.disable")}
             </button>
           }
         />
@@ -420,7 +429,7 @@ function PolicyControls(props: {
       <ConfigDiffSaveActions
         config={props.config}
         diffTitle="API key policy config diff"
-        saveLabel="Save policy"
+        saveLabel={tr("copy.savePolicy")}
         saving={props.saving}
         onSave={() => props.onSave(patch)}
         applyDiff={(next) => {
@@ -445,7 +454,7 @@ function ApiKeyLocationSetting(props: {
       <AdvancedSettingRow
         className="api-key-location-row"
         icon={<KeyRound size={17} />}
-        title="Credential location"
+        title={tr("copy.credentialLocation")}
         description={
           props.help.field<LlmApiKeyPolicy>(
             "LocalAPIKeys",
@@ -460,7 +469,7 @@ function ApiKeyLocationSetting(props: {
             onClick={() => props.onEnabledChange(true)}
           >
             <SlidersHorizontal size={15} />
-            Customize
+            {tr("copy.customize")}
           </button>
         }
       />
@@ -471,7 +480,7 @@ function ApiKeyLocationSetting(props: {
     <AdvancedSettingPanel
       className="api-key-location-panel"
       icon={<KeyRound size={17} />}
-      title="Credential location"
+      title={tr("copy.credentialLocation")}
       description={
         props.help.definition(
           "AuthorizationLocation",
@@ -485,13 +494,13 @@ function ApiKeyLocationSetting(props: {
           onClick={() => props.onEnabledChange(false)}
         >
           <X size={15} />
-          Use default
+          {tr("copy.useDefault")}
         </button>
       }
     >
       <div className="api-key-location-fields">
         <Field
-          label="Header name"
+          label={tr("copy.headerName_8vzq77")}
           tooltip={props.help.field<AuthorizationLocation>(
             "AuthorizationLocation",
             "header.name",
@@ -504,7 +513,7 @@ function ApiKeyLocationSetting(props: {
           />
         </Field>
         <Field
-          label="Header prefix"
+          label={tr("copy.headerPrefix")}
           tooltip={props.help.field<AuthorizationLocation>(
             "AuthorizationLocation",
             "header.prefix",
@@ -615,42 +624,43 @@ function KeyEditor(props: {
         />
       )}
     >
-      <Field label="Name">
+      <Field label={tr("copy.name")}>
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Platform team"
+          placeholder={tr("copy.platformTeam")}
         />
       </Field>
       {submitted && nameRequired ? (
-        <StatusBanner state="bad" title="Name is required">
-          Add a name before creating this virtual API key.
+        <StatusBanner state="bad" title={tr("copy.nameIsRequired")}>
+          {tr("copy.addANameBeforeCreatingThisVirtualApiKey")}
         </StatusBanner>
       ) : null}
       {duplicateName ? (
-        <StatusBanner state="warn" title="Name already exists">
-          Another virtual key already uses this name. The key will still be
-          created with a unique metadata id.
+        <StatusBanner state="warn" title={tr("copy.nameAlreadyExists")}>
+          {tr(
+            "copy.anotherVirtualKeyAlreadyUsesThisNameTheKeyWillStillBeCreatedWithAUniqueMetadataId",
+          )}
         </StatusBanner>
       ) : null}
       {isNew ? (
         <FieldGroup
-          label="Key value"
+          label={tr("copy.keyValue")}
           tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "key")}
         >
           <Dropdown
             ariaLabel="Key value"
             value={keyMode}
             options={[
-              { value: "auto", label: "agw_sk_***** (auto generate)" },
-              { value: "custom", label: "Use custom key" },
+              { value: "auto", label: tr("copy.agwSkAutoGenerate") },
+              { value: "custom", label: tr("copy.useCustomKey") },
             ]}
             onChange={(value) => setKeyMode(value as "auto" | "custom")}
           />
         </FieldGroup>
       ) : (
         <FieldGroup
-          label="Key value"
+          label={tr("copy.keyValue")}
           tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "key")}
         >
           <div className="key-editor-value-row">
@@ -667,7 +677,7 @@ function KeyEditor(props: {
       )}
       {(isNew && keyMode === "custom") || (!isNew && replaceKey) ? (
         <Field
-          label="Key value"
+          label={tr("copy.keyValue")}
           tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "key")}
         >
           <input
@@ -688,7 +698,7 @@ function KeyEditor(props: {
         </Field>
       ) : null}
       <KeyValueEditor
-        label="Metadata"
+        label={tr("copy.metadata")}
         tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "metadata")}
         values={metadataValues}
         quickKeys={["user", "group"]}
@@ -697,7 +707,7 @@ function KeyEditor(props: {
         onChange={setMetadataValues}
       />
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}
@@ -718,15 +728,6 @@ function randomKey(length: number) {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
-}
-
-function modeLabel(mode: string) {
-  const labels: Record<string, string> = {
-    strict: "Strict",
-    optional: "Optional",
-    permissive: "Permissive",
-  };
-  return labels[mode] ?? mode;
 }
 
 function keyName(key: VirtualApiKey) {
@@ -811,22 +812,22 @@ function VirtualKeyValue(props: { value: string }) {
     <div className="virtual-key-value">
       <code>{shown ? props.value : maskKey(props.value)}</code>
       <div className="virtual-key-value-actions">
-        <Tooltip content={shown ? "Hide full key" : "Show full key"}>
+        <Tooltip content={tr(shown ? "copy.hideFullKey" : "copy.showFullKey")}>
           <button
             className="table-action"
             type="button"
-            aria-label={shown ? "Hide full key" : "Show full key"}
+            aria-label={tr(shown ? "copy.hideFullKey" : "copy.showFullKey")}
             onClick={() => setShown((current) => !current)}
           >
             {shown ? <EyeOff size={14} /> : <Eye size={14} />}
-            {shown ? "Hide" : "Show"}
+            {tr(shown ? "copy.hide" : "copy.show")}
           </button>
         </Tooltip>
-        <Tooltip content={copied ? "Copied" : "Copy key"}>
+        <Tooltip content={tr(copied ? "common.copied" : "copy.copyKey")}>
           <button
             className={copied ? "table-action copied" : "table-action"}
             type="button"
-            aria-label="Copy key"
+            aria-label={tr("copy.copyKey")}
             onClick={() => {
               void copyVirtualKey(props.value).then((success) => {
                 if (success) {
@@ -837,7 +838,7 @@ function VirtualKeyValue(props: { value: string }) {
             }}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
-            Copy
+            {tr("copy.copy")}
           </button>
         </Tooltip>
       </div>
@@ -848,7 +849,7 @@ function VirtualKeyValue(props: { value: string }) {
 function MetadataSummary(props: { value: unknown }) {
   const metadata = withoutManagedMetadata(metadataObject(props.value));
   const entries = Object.entries(metadata);
-  if (!entries.length) return <span className="muted">none</span>;
+  if (!entries.length) return <span className="muted">{tr("copy.none")}</span>;
   return (
     <div className="metadata-summary">
       {entries.slice(0, 3).map(([key, value]) => (

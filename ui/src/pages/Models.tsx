@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
@@ -231,8 +232,10 @@ export function ModelsPage() {
   return (
     <div className="page-stack">
       <PageHeader
-        title="LLM Models"
-        description="Onboard provider-backed models and configure model-specific behavior."
+        title={tr("copy.llmModels")}
+        description={tr(
+          "copy.onboardProviderBackedModelsAndConfigureModelSpecificBehavior",
+        )}
         actions={
           <div className="button-row">
             <button
@@ -241,7 +244,7 @@ export function ModelsPage() {
               onClick={openNewVirtualModel}
             >
               <GitBranch size={16} />
-              Add virtual model
+              {tr("copy.addVirtualModel")}
             </button>
             <button
               className="button primary"
@@ -249,32 +252,37 @@ export function ModelsPage() {
               onClick={openNewModel}
             >
               <Plus size={16} />
-              Add model
+              {tr("copy.addModel")}
             </button>
           </div>
         }
       />
 
       {update.isError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {update.error.message}
         </StatusBanner>
       ) : null}
       {update.isSuccess ? (
-        <StatusBanner state="ok" title="Configuration saved" />
+        <StatusBanner state="ok" title={tr("copy.configurationSaved")} />
       ) : null}
 
       <Panel>
         {config.isLoading ? (
-          <StatusBanner state="loading" title="Loading models" />
+          <StatusBanner state="loading" title={tr("copy.loadingModels")} />
         ) : config.isError ? (
-          <StatusBanner state="bad" title="Configuration API unavailable">
+          <StatusBanner
+            state="bad"
+            title={tr("copy.configurationApiUnavailable")}
+          >
             {config.error.message}
           </StatusBanner>
         ) : modelRows.length === 0 ? (
           <EmptyState
-            title="No models configured"
-            description="Create the first model to make LLM traffic available through the gateway."
+            title={tr("copy.noModelsConfigured")}
+            description={tr(
+              "copy.createTheFirstModelToMakeLlmTrafficAvailableThroughTheGateway",
+            )}
             action={
               <div className="button-row">
                 <button
@@ -283,7 +291,7 @@ export function ModelsPage() {
                   onClick={openNewModel}
                 >
                   <Plus size={16} />
-                  Add model
+                  {tr("copy.addModel")}
                 </button>
                 <button
                   className="button"
@@ -291,7 +299,7 @@ export function ModelsPage() {
                   onClick={openNewVirtualModel}
                 >
                   <GitBranch size={16} />
-                  Add virtual model
+                  {tr("copy.addVirtualModel")}
                 </button>
               </div>
             }
@@ -301,10 +309,10 @@ export function ModelsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Provider</th>
-                  <th>Outgoing model</th>
-                  <th>Policy state</th>
+                  <th>{tr("copy.name")}</th>
+                  <th>{tr("copy.provider")}</th>
+                  <th>{tr("copy.outgoingModel")}</th>
+                  <th>{tr("copy.policyState")}</th>
                   <th />
                 </tr>
               </thead>
@@ -317,7 +325,8 @@ export function ModelsPage() {
                         <td className="strong">{model.name}</td>
                         <td>
                           <span className="badge">
-                            <GitBranch size={14} /> Virtual
+                            <GitBranch size={14} />
+                            {tr("copy.virtual")}
                           </span>
                         </td>
                         <td>{virtualModelSummary(model)}</td>
@@ -330,7 +339,7 @@ export function ModelsPage() {
                           <Tooltip content="Open in playground">
                             <Link
                               className="icon-button"
-                              aria-label="Open in playground"
+                              aria-label={tr("copy.openInPlayground")}
                               to="/llm/playground"
                               search={{ model: model.name }}
                             >
@@ -340,7 +349,7 @@ export function ModelsPage() {
                           <Tooltip content="Edit model">
                             <button
                               className="icon-button"
-                              aria-label="Edit model"
+                              aria-label={tr("copy.editModel")}
                               type="button"
                               onClick={() =>
                                 setEditingVirtual({
@@ -355,7 +364,7 @@ export function ModelsPage() {
                           <Tooltip content="Delete model">
                             <button
                               className="icon-button danger"
-                              aria-label="Delete model"
+                              aria-label={tr("copy.deleteModel")}
                               type="button"
                               disabled={update.isPending}
                               onClick={() =>
@@ -383,7 +392,7 @@ export function ModelsPage() {
                           providers={providers}
                         />
                       </td>
-                      <td>{model.params?.model || "Incoming model"}</td>
+                      <td>{model.params?.model || tr("copy.incomingModel")}</td>
                       <td>
                         <ModelPolicyState
                           model={model}
@@ -394,7 +403,7 @@ export function ModelsPage() {
                         <Tooltip content="Open in playground">
                           <Link
                             className="icon-button"
-                            aria-label="Open in playground"
+                            aria-label={tr("copy.openInPlayground")}
                             to="/llm/playground"
                             search={{ model: model.name }}
                           >
@@ -404,7 +413,7 @@ export function ModelsPage() {
                         <Tooltip content="Edit model">
                           <button
                             className="icon-button"
-                            aria-label="Edit model"
+                            aria-label={tr("copy.editModel")}
                             type="button"
                             onClick={() => openModelEditor(model)}
                           >
@@ -414,7 +423,7 @@ export function ModelsPage() {
                         <Tooltip content="Delete model">
                           <button
                             className="icon-button danger"
-                            aria-label="Delete model"
+                            aria-label={tr("copy.deleteModel")}
                             type="button"
                             disabled={update.isPending}
                             onClick={() =>
@@ -476,9 +485,9 @@ export function ModelsPage() {
       ) : null}
       {deleting ? (
         <ConfirmDialog
-          title={`Delete ${deleting.kind}?`}
+          title={tr("copy.deleteValue_pkbukw")}
           destructive
-          confirmLabel={`Delete ${deleting.kind}`}
+          confirmLabel={tr("copy.deleteValue")}
           confirmDisabled={update.isPending}
           onCancel={() => setDeleting(null)}
           onConfirm={() =>
@@ -492,7 +501,9 @@ export function ModelsPage() {
           }
         >
           <p>
-            Delete <strong>{deleting.name}</strong>? This cannot be undone.
+            {tr("copy.delete")}
+            <strong>{deleting.name}</strong>
+            {tr("copy.thisCannotBeUndone")}
           </p>
         </ConfirmDialog>
       ) : null}
@@ -647,25 +658,32 @@ function ModelEditor(props: {
       )}
     >
       <details className="schema-details model-help-details">
-        <summary>Help</summary>
+        <summary>{tr("copy.help")}</summary>
         <div className="model-help-copy">
           <p>
-            Agentgateway routes requests by matching an incoming model name, and
-            then sending it to the configured model. The outgoing model can be
-            passed through from the incoming model, be transformed, or be a
-            static model.
+            {tr(
+              "copy.agentgatewayRoutesRequestsByMatchingAnIncomingModelNameAndThenSendingItToTheConf_w5k7w1",
+            )}
           </p>
-          <p>Some examples:</p>
+          <p>{tr("copy.someExamples")}</p>
           <ul>
             <li>
-              Match <code>fast</code> and send to <code>gpt-mini</code>.
+              {tr("copy.match")}
+              <code>fast</code>
+              {tr("copy.andSendTo")}
+              <code>gpt-mini</code>.
             </li>
             <li>
-              Match <code>*</code> and forward the model as-is.
+              {tr("copy.match")}
+              <code>*</code>
+              {tr("copy.andForwardTheModelAsIs")}
             </li>
             <li>
-              Match <code>openai/*</code> and strip the <code>openai/</code>{" "}
-              prefix, forwarding the remaining model as-is.
+              {tr("copy.match")}
+              <code>openai/*</code>
+              {tr("copy.andStripThe")}
+              <code>openai/</code>{" "}
+              {tr("copy.prefixForwardingTheRemainingModelAsIs")}
             </li>
           </ul>
         </div>
@@ -673,7 +691,7 @@ function ModelEditor(props: {
 
       <div className="form-grid">
         <Field
-          label="Incoming model match"
+          label={tr("copy.incomingModelMatch")}
           tooltip={props.help.field<LlmModel>(
             "LocalLLMModels",
             "name",
@@ -755,8 +773,8 @@ function ModelEditor(props: {
 
           <CollapsiblePolicySection
             icon={<SlidersHorizontal size={17} />}
-            title="Advanced"
-            description="Match conditions and model-specific policies"
+            title={tr("copy.advanced")}
+            description={tr("copy.matchConditionsAndModelSpecificPolicies")}
           >
             <div className="policy-editor-stack">
               <ModelMatchesEditor
@@ -793,7 +811,7 @@ function ModelEditor(props: {
 
       {providerSelected && warnings.length ? (
         <div className="model-warning-block">
-          <StatusBanner state="warn" title="Model warnings">
+          <StatusBanner state="warn" title={tr("copy.modelWarnings")}>
             <ul>
               {warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
@@ -803,19 +821,19 @@ function ModelEditor(props: {
         </div>
       ) : null}
       {policyError ? (
-        <StatusBanner state="bad" title="Invalid model policies">
+        <StatusBanner state="bad" title={tr("copy.invalidModelPolicies")}>
           {policyError}
         </StatusBanner>
       ) : null}
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}
 
       {providerSelected ? (
         <details>
-          <summary>Generated model config</summary>
+          <summary>{tr("copy.generatedModelConfig")}</summary>
           <YamlBlock value={preview ?? {}} />
         </details>
       ) : null}
@@ -842,7 +860,7 @@ function UpstreamModelFields(props: {
   return (
     <>
       <FieldGroup
-        label="Outgoing model"
+        label={tr("copy.outgoingModel")}
         tooltip={props.help.field<LocalLLMParams>("LocalLLMParams", "model")}
       >
         <div className="segmented-control upstream-model-control">
@@ -851,14 +869,14 @@ function UpstreamModelFields(props: {
             type="button"
             onClick={() => props.setMode("incoming")}
           >
-            Incoming model
+            {tr("copy.incomingModel")}
           </button>
           <button
             className={mode === "explicit" ? "active" : ""}
             type="button"
             onClick={() => props.setMode("explicit")}
           >
-            Explicit
+            {tr("copy.explicit")}
           </button>
           {prefix ? (
             <button
@@ -874,14 +892,14 @@ function UpstreamModelFields(props: {
             type="button"
             onClick={() => props.setMode("custom")}
           >
-            Custom
+            {tr("copy.custom")}
           </button>
         </div>
       </FieldGroup>
 
       {mode === "explicit" ? (
         <Field
-          label="Explicit outgoing model"
+          label={tr("copy.explicitOutgoingModel")}
           tooltip={props.help.field<LocalLLMParams>("LocalLLMParams", "model")}
         >
           <CatalogModelSelector
@@ -895,7 +913,7 @@ function UpstreamModelFields(props: {
       ) : null}
       {mode === "custom" ? (
         <FieldGroup
-          label="Model CEL expression"
+          label={tr("copy.modelCelExpression")}
           tooltip={props.help.field<LlmModel>(
             "LocalLLMModels",
             "transformation",
@@ -905,7 +923,7 @@ function UpstreamModelFields(props: {
             language="cel"
             value={props.customModelExpression}
             onChange={props.setCustomModelExpression}
-            placeholder='llmRequest.model.stripPrefix("anthropic/")'
+            placeholder={tr("copy.llmRequestModelStripPrefixAnthropic")}
           />
         </FieldGroup>
       ) : null}
@@ -945,13 +963,13 @@ function ModelPoliciesInline(props: {
   return (
     <CollapsiblePolicySection
       icon={<SlidersHorizontal size={17} />}
-      title="Model policies"
+      title={tr("copy.modelPolicies")}
       description={modelPolicySummary({ ...props.model, ...patch.value })}
     >
       <div className="policy-editor-stack">
         <CollapsiblePolicySection
           icon={<SlidersHorizontal size={17} />}
-          title="Transformation"
+          title={tr("copy.transformation")}
           description={
             Object.keys(props.transformation).length
               ? `${Object.keys(props.transformation).length} fields configured`
@@ -960,7 +978,7 @@ function ModelPoliciesInline(props: {
           defaultOpen={transformationEnabled}
         >
           <KeyValueEditor
-            label="LLM request fields"
+            label={tr("copy.llmRequestFields")}
             tooltip={props.help.field<LlmModel>(
               "LocalLLMModels",
               "transformation",
@@ -974,7 +992,7 @@ function ModelPoliciesInline(props: {
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
           icon={<FileText size={17} />}
-          title="Default request values"
+          title={tr("copy.defaultRequestValues")}
           description={
             props.defaultsText.trim()
               ? "Defaults configured"
@@ -983,16 +1001,16 @@ function ModelPoliciesInline(props: {
           defaultOpen={defaultsEnabled}
         >
           <YamlMappingEditor
-            label="Defaults YAML"
+            label={tr("copy.defaultsYaml")}
             tooltip={props.help.field<LlmModel>("LocalLLMModels", "defaults")}
             value={props.defaultsText}
             onChange={props.setDefaultsText}
-            placeholder="temperature: 0.2"
+            placeholder={tr("copy.temperature02")}
           />
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
           icon={<FileText size={17} />}
-          title="Override request values"
+          title={tr("copy.overrideRequestValues")}
           description={
             props.overridesText.trim()
               ? "Overrides configured"
@@ -1001,16 +1019,16 @@ function ModelPoliciesInline(props: {
           defaultOpen={overridesEnabled}
         >
           <YamlMappingEditor
-            label="Overrides YAML"
+            label={tr("copy.overridesYaml")}
             tooltip={props.help.field<LlmModel>("LocalLLMModels", "overrides")}
             value={props.overridesText}
             onChange={props.setOverridesText}
-            placeholder="stream: false"
+            placeholder={tr("copy.streamFalse")}
           />
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
           icon={<SlidersHorizontal size={17} />}
-          title="Request headers"
+          title={tr("copy.requestHeaders")}
           description={headerModifierSummary(props.requestHeaders, "request")}
           defaultOpen={Boolean(props.model.requestHeaders)}
         >
@@ -1022,7 +1040,7 @@ function ModelPoliciesInline(props: {
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
           icon={<SlidersHorizontal size={17} />}
-          title="Response headers"
+          title={tr("copy.responseHeaders")}
           description={headerModifierSummary(props.responseHeaders, "response")}
           defaultOpen={Boolean(props.model.responseHeaders)}
         >
@@ -1034,7 +1052,7 @@ function ModelPoliciesInline(props: {
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
           icon={<Activity size={17} />}
-          title="Health"
+          title={tr("copy.health")}
           description={healthSummary(props.health)}
           defaultOpen={Boolean(props.model.health)}
         >
@@ -1046,7 +1064,7 @@ function ModelPoliciesInline(props: {
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
           icon={<ShieldCheck size={17} />}
-          title="Authorization"
+          title={tr("copy.authorization")}
           description={authorizationSummary(props.authorization)}
           defaultOpen={Boolean(props.model.authorization)}
         >
@@ -1063,14 +1081,14 @@ function ModelPoliciesInline(props: {
                 type="button"
                 onClick={() => props.setAuthorization(null)}
               >
-                Clear authorization
+                {tr("copy.clearAuthorization")}
               </button>
             ) : null}
           </div>
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
           icon={<SlidersHorizontal size={17} />}
-          title="Prompt caching"
+          title={tr("copy.promptCaching")}
           description={promptCachingSummary(props.promptCaching)}
           defaultOpen={Boolean(props.model.promptCaching)}
         >
@@ -1333,7 +1351,7 @@ function VirtualModelEditor(props: {
       )}
     >
       <Field
-        label="Virtual model name"
+        label={tr("copy.virtualModelName")}
         tooltip={props.help.field<LlmVirtualModel>(
           "LocalLLMVirtualModel",
           "name",
@@ -1347,7 +1365,7 @@ function VirtualModelEditor(props: {
       </Field>
 
       <FieldGroup
-        label="Routing strategy"
+        label={tr("copy.routingStrategy")}
         tooltip={props.help.field<LlmVirtualModel>(
           "LocalLLMVirtualModel",
           "routing",
@@ -1359,28 +1377,28 @@ function VirtualModelEditor(props: {
             type="button"
             onClick={() => setStrategy("weighted")}
           >
-            Weighted
+            {tr("copy.weighted")}
           </button>
           <button
             className={strategy === "failover" ? "active" : ""}
             type="button"
             onClick={() => setStrategy("failover")}
           >
-            Failover
+            {tr("copy.failover")}
           </button>
           <button
             className={strategy === "conditional" ? "active" : ""}
             type="button"
             onClick={() => setStrategy("conditional")}
           >
-            Conditional
+            {tr("copy.conditional")}
           </button>
         </div>
       </FieldGroup>
 
       {strategy === "weighted" ? (
         <FieldGroup
-          label="Weighted targets"
+          label={tr("copy.weightedTargets")}
           tooltip={props.help.field<LocalLLMWeightedRouting>(
             "LocalLLMWeightedRouting",
             "targets",
@@ -1390,7 +1408,7 @@ function VirtualModelEditor(props: {
             {weightedTargets.map((target, index) => (
               <div className="target-row weighted" key={index}>
                 <VirtualTargetSelector
-                  label="Model"
+                  label={tr("copy.model")}
                   targetModel={target.model}
                   baseModels={props.baseModels}
                   options={targetOptions}
@@ -1398,9 +1416,9 @@ function VirtualModelEditor(props: {
                   onChange={(value) => updateWeighted(index, { model: value })}
                 />
                 <label className="target-field">
-                  <span className="target-label">Weight</span>
+                  <span className="target-label">{tr("copy.weight")}</span>
                   <input
-                    aria-label="Weight"
+                    aria-label={tr("copy.weight")}
                     value={target.weight ?? 1}
                     onChange={(event) =>
                       updateWeighted(index, {
@@ -1414,7 +1432,7 @@ function VirtualModelEditor(props: {
                 <button
                   className="icon-button danger"
                   type="button"
-                  aria-label="Remove target"
+                  aria-label={tr("copy.removeTarget")}
                   onClick={() =>
                     setModel((current) => ({
                       ...current,
@@ -1451,12 +1469,12 @@ function VirtualModelEditor(props: {
             }
           >
             <Plus size={16} />
-            Add target
+            {tr("copy.addTarget")}
           </button>
         </FieldGroup>
       ) : strategy === "failover" ? (
         <FieldGroup
-          label="Failover targets"
+          label={tr("copy.failoverTargets")}
           tooltip={props.help.field<LocalLLMFailoverRouting>(
             "LocalLLMFailoverRouting",
             "targets",
@@ -1475,7 +1493,7 @@ function VirtualModelEditor(props: {
                     <button
                       className="icon-button danger"
                       type="button"
-                      aria-label={`Remove failover group ${groupIndex + 1}`}
+                      aria-label={tr("copy.removeFailoverGroupValue")}
                       onClick={() =>
                         updateFailoverGroups(
                           failoverGroups.filter(
@@ -1493,7 +1511,7 @@ function VirtualModelEditor(props: {
                     {group.map((target, targetIndex) => (
                       <div className="target-row failover" key={targetIndex}>
                         <VirtualTargetSelector
-                          label="Model"
+                          label={tr("copy.model")}
                           targetModel={target.model}
                           baseModels={props.baseModels}
                           options={targetOptions}
@@ -1515,7 +1533,7 @@ function VirtualModelEditor(props: {
                         <button
                           className="icon-button danger"
                           type="button"
-                          aria-label="Remove target"
+                          aria-label={tr("copy.removeTarget")}
                           onClick={() =>
                             updateFailoverGroups(
                               failoverGroups
@@ -1553,7 +1571,7 @@ function VirtualModelEditor(props: {
                     }
                   >
                     <Plus size={16} />
-                    Add target
+                    {tr("copy.addTarget")}
                   </button>
                 </div>
               </section>
@@ -1570,12 +1588,12 @@ function VirtualModelEditor(props: {
             }
           >
             <Plus size={16} />
-            Add fallback group
+            {tr("copy.addFallbackGroup")}
           </button>
         </FieldGroup>
       ) : (
         <FieldGroup
-          label="Conditional targets"
+          label={tr("copy.conditionalTargets")}
           tooltip={props.help.field<LocalLLMConditionalRouting>(
             "LocalLLMConditionalRouting",
             "targets",
@@ -1594,7 +1612,7 @@ function VirtualModelEditor(props: {
                       <button
                         className="icon-button danger"
                         type="button"
-                        aria-label="Remove conditional target"
+                        aria-label={tr("copy.removeConditionalTarget")}
                         onClick={() =>
                           setModel((current) => ({
                             ...current,
@@ -1614,7 +1632,7 @@ function VirtualModelEditor(props: {
                   </div>
                   <div className="conditional-target-body">
                     <FieldGroup
-                      label="Condition"
+                      label={tr("copy.condition")}
                       tooltip={props.help.field<LocalLLMConditionalTarget>(
                         "LocalLLMConditionalTarget",
                         "when",
@@ -1636,7 +1654,7 @@ function VirtualModelEditor(props: {
                       />
                     </FieldGroup>
                     <VirtualTargetSelector
-                      label="Target model"
+                      label={tr("copy.targetModel")}
                       targetModel={target.model}
                       baseModels={props.baseModels}
                       options={targetOptions}
@@ -1653,7 +1671,7 @@ function VirtualModelEditor(props: {
           {hasInvalidConditionalFallback ? (
             <StatusBanner
               state="warn"
-              title="Only the final conditional target can omit a condition."
+              title={tr("copy.onlyTheFinalConditionalTargetCanOmitACondition")}
             />
           ) : null}
           <div className="button-row">
@@ -1678,7 +1696,7 @@ function VirtualModelEditor(props: {
               }
             >
               <Plus size={16} />
-              Add rule
+              {tr("copy.addRule")}
             </button>
             <button
               className="button"
@@ -1700,18 +1718,18 @@ function VirtualModelEditor(props: {
               }
             >
               <Plus size={16} />
-              Add fallback
+              {tr("copy.addFallback")}
             </button>
           </div>
         </FieldGroup>
       )}
 
       <details>
-        <summary>Generated virtual model config</summary>
+        <summary>{tr("copy.generatedVirtualModelConfig")}</summary>
         <YamlBlock value={preview ?? {}} />
       </details>
       {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
+        <StatusBanner state="bad" title={tr("copy.saveFailed")}>
           {props.saveError}
         </StatusBanner>
       ) : null}
@@ -1764,7 +1782,7 @@ function VirtualTargetSelector(props: {
         value={selectedModelName}
         searchable
         options={props.options}
-        placeholder="No configured models"
+        placeholder={tr("copy.noConfiguredModels")}
         onChange={(value) => props.onChange(concreteModelName(value, ""))}
       />
       {wildcard ? (
@@ -1814,7 +1832,7 @@ function ModelProviderBadge(props: {
       >
         <ProviderIcon provider={provider as ProviderName} />
         {reference}
-        <span className="muted">reference</span>
+        <span className="muted">{tr("copy.reference")}</span>
       </Link>
     );
   }
@@ -1843,16 +1861,21 @@ function ModelPolicyState(props: { model: LlmModel; warnings: number }) {
     props.model.promptCaching ? "promptCaching" : null,
   ].filter(Boolean);
   if (props.warnings > 0)
-    return <span className="badge warn">{props.warnings} warnings</span>;
+    return (
+      <span className="badge warn">
+        {props.warnings}
+        {tr("copy.warnings")}
+      </span>
+    );
   if (props.model.auth)
-    return <span className="badge">Custom auth detected</span>;
+    return <span className="badge">{tr("copy.customAuthDetected")}</span>;
   if (policies.length > 0)
     return (
       <span className="badge ok">
-        {policies.length} {policies.length === 1 ? "policy" : "policies"}
+        {tr("copy.valuePolicies", { count: policies.length })}
       </span>
     );
-  return <span className="badge">none</span>;
+  return <span className="badge">{tr("copy.none")}</span>;
 }
 
 function parseOptionalYamlMapping(text: string) {
@@ -1860,7 +1883,7 @@ function parseOptionalYamlMapping(text: string) {
   if (!trimmed || trimmed === "{}") return null;
   const parsed = parseYamlText(trimmed);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Expected a YAML mapping.");
+    throw new Error(tr("copy.expectedAYamlMapping"));
   }
   return parsed as Record<string, unknown>;
 }

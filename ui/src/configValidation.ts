@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import Ajv2020 from "ajv/dist/2020";
 import type { ErrorObject } from "ajv";
 import configSchema from "../../schema/config.json";
@@ -13,7 +14,9 @@ export async function validateGatewayConfig(config: GatewayConfig) {
     const path = error.instancePath || "/";
     return `${path}: ${error.message ?? "invalid value"}`;
   });
-  throw new Error(`Configuration validation failed: ${messages.join("; ")}`);
+  throw new Error(
+    tr("copy.configurationValidationFailedValue", [messages.join("; ")]),
+  );
 }
 
 export async function getGatewayConfigValidationErrors(

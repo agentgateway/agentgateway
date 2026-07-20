@@ -1,4 +1,5 @@
 import { providerLabel } from "../../config";
+import { tr } from "../../i18n";
 import {
   isWildcardModelName,
   resolvedProviderLabel,
@@ -59,9 +60,9 @@ export function failoverTargetGroups(
 }
 
 export function virtualModelStrategy(model: LlmVirtualModel) {
-  if (model.routing.conditional) return "conditional";
-  if (model.routing.failover) return "failover";
-  return "weighted";
+  if (model.routing.conditional) return tr("copy.conditional");
+  if (model.routing.failover) return tr("copy.failover");
+  return tr("copy.weighted");
 }
 
 export function virtualModelSummary(model: LlmVirtualModel) {
@@ -69,13 +70,18 @@ export function virtualModelSummary(model: LlmVirtualModel) {
     const targets = model.routing.conditional.targets ?? [];
     const rules = targets.filter((target) => target.when?.trim()).length;
     const hasFallback = targets.some((target) => !target.when?.trim());
-    return `${rules} ${rules === 1 ? "rule" : "rules"}${hasFallback ? ", fallback" : ""}`;
+    return hasFallback
+      ? tr("copy.valueRulesWithFallback", { count: rules })
+      : tr("copy.valueRules", { count: rules });
   }
   if (model.routing.failover) {
     const targets = model.routing.failover.targets ?? [];
     const priorities = new Set(targets.map((target) => target.priority)).size;
-    return `${priorities} ${priorities === 1 ? "priority" : "priorities"}, ${targets.length} ${targets.length === 1 ? "target" : "targets"}`;
+    return tr("copy.priorityTargetSeparator", [
+      tr("copy.priority", { count: priorities }),
+      tr("copy.target", { count: targets.length }),
+    ]);
   }
   const targets = model.routing.weighted?.targets ?? [];
-  return `${targets.length} weighted ${targets.length === 1 ? "target" : "targets"}`;
+  return tr("copy.valueWeightedTargets", { count: targets.length });
 }
