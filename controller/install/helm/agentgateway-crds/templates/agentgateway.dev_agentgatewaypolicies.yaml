@@ -524,29 +524,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -558,27 +549,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -643,26 +628,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -694,26 +684,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -774,29 +767,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -808,27 +792,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -893,26 +871,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -944,26 +927,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -2296,29 +2282,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -2330,27 +2307,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -2415,26 +2386,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -2466,26 +2442,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -2546,29 +2525,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -2580,27 +2550,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -2665,26 +2629,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -2716,26 +2685,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -4063,29 +4035,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -4097,27 +4060,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -4182,26 +4139,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -4233,26 +4195,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -4313,29 +4278,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -4347,27 +4303,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -4432,26 +4382,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -4483,26 +4438,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -6009,29 +5967,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -6043,27 +5992,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -6128,26 +6071,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -6179,26 +6127,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -6259,29 +6210,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -6293,27 +6235,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -6378,26 +6314,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -6429,26 +6370,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -7781,29 +7725,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -7815,27 +7750,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -7900,26 +7829,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -7951,26 +7885,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -8031,29 +7968,20 @@ spec:
                                                       properties:
                                                         group:
                                                           default: ""
-                                                          description: |-
-                                                            Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                                            When unspecified or empty string, core API group is inferred.
+                                                          description: Group of the
+                                                            referent, for example
+                                                            `gateway.networking.k8s.io`.
+                                                            Empty selects the core
+                                                            API group
                                                           maxLength: 253
                                                           pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                                           type: string
                                                         kind:
                                                           default: Service
-                                                          description: |-
-                                                            Kind is the Kubernetes resource kind of the referent. For example
-                                                            "Service".
-
-                                                            Defaults to "Service" when not specified.
-
-                                                            ExternalName services can refer to CNAME DNS records that may live
-                                                            outside of the cluster and as such are difficult to reason about in
-                                                            terms of conformance. They also may not be safe to forward to (see
-                                                            CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                                            support ExternalName Services.
-
-                                                            Support: Core (Services with a type other than ExternalName)
-
-                                                            Support: Implementation-specific (Services with type ExternalName)
+                                                          description: Kubernetes
+                                                            resource kind of the referent,
+                                                            for example `Service`.
+                                                            Defaults to `Service`
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -8065,27 +7993,21 @@ spec:
                                                           minLength: 1
                                                           type: string
                                                         namespace:
-                                                          description: |-
-                                                            Namespace is the namespace of the backend. When unspecified, the local
-                                                            namespace is inferred.
-
-                                                            Note that when a namespace different than the local namespace is specified,
-                                                            a ReferenceGrant object is required in the referent namespace to allow that
-                                                            namespace's owner to accept the reference. See the ReferenceGrant
-                                                            documentation for details.
-
-                                                            Support: Core
+                                                          description: Namespace of
+                                                            the referent. Defaults
+                                                            to the local namespace.
+                                                            A cross-namespace reference
+                                                            requires a ReferenceGrant
+                                                            in the referent namespace
                                                           maxLength: 63
                                                           minLength: 1
                                                           pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                                           type: string
                                                         port:
-                                                          description: |-
-                                                            Port specifies the destination port number to use for this resource.
-                                                            Port is required when the referent is a Kubernetes Service. In this
-                                                            case, the port number is the service port number, not the target port.
-                                                            For other resources, destination port might be derived from the referent
-                                                            resource or this field.
+                                                          description: Destination
+                                                            port number. Required
+                                                            when the referent is a
+                                                            Kubernetes `Service`
                                                           format: int32
                                                           maximum: 65535
                                                           minimum: 1
@@ -8150,26 +8072,31 @@ spec:
                                                                 or EC private key; override the key name via `signingKeyRef.key`.
                                                               properties:
                                                                 group:
-                                                                  description: |-
-                                                                    The API group of the referenced credential.
-                                                                    Empty selects the core API group.
+                                                                  description: API
+                                                                    group of the referenced
+                                                                    credential; empty
+                                                                    selects the core
+                                                                    API group
                                                                   type: string
                                                                 key:
-                                                                  description: |-
-                                                                    The key in the referenced Secret whose value is used. If omitted, a
-                                                                    location-specific default key is used.
+                                                                  description: Key
+                                                                    in the referenced
+                                                                    Secret. If omitted,
+                                                                    a location-specific
+                                                                    default is used
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
                                                                 kind:
-                                                                  description: |-
-                                                                    The kind of the referenced credential.
-                                                                    Empty defaults to `Secret`.
+                                                                  description: Kind
+                                                                    of the referenced
+                                                                    credential; empty
+                                                                    defaults to `Secret`
                                                                   type: string
                                                                 name:
-                                                                  description: The
-                                                                    name of the referenced
-                                                                    credential.
+                                                                  description: Name
+                                                                    of the referenced
+                                                                    credential
                                                                   maxLength: 253
                                                                   minLength: 1
                                                                   type: string
@@ -8201,26 +8128,29 @@ spec:
                                                             is only valid with ClientSecretPost.
                                                           properties:
                                                             group:
-                                                              description: |-
-                                                                The API group of the referenced credential.
-                                                                Empty selects the core API group.
+                                                              description: API group
+                                                                of the referenced
+                                                                credential; empty
+                                                                selects the core API
+                                                                group
                                                               type: string
                                                             key:
-                                                              description: |-
-                                                                The key in the referenced Secret whose value is used. If omitted, a
-                                                                location-specific default key is used.
+                                                              description: Key in
+                                                                the referenced Secret.
+                                                                If omitted, a location-specific
+                                                                default is used
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
                                                             kind:
-                                                              description: |-
-                                                                The kind of the referenced credential.
-                                                                Empty defaults to `Secret`.
+                                                              description: Kind of
+                                                                the referenced credential;
+                                                                empty defaults to
+                                                                `Secret`
                                                               type: string
                                                             name:
-                                                              description: The name
-                                                                of the referenced
-                                                                credential.
+                                                              description: Name of
+                                                                the referenced credential
                                                               maxLength: 253
                                                               minLength: 1
                                                               type: string
@@ -9767,29 +9697,16 @@ spec:
                                 properties:
                                   group:
                                     default: ""
-                                    description: |-
-                                      Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                      When unspecified or empty string, core API group is inferred.
+                                    description: Group of the referent, for example
+                                      `gateway.networking.k8s.io`. Empty selects the
+                                      core API group
                                     maxLength: 253
                                     pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                     type: string
                                   kind:
                                     default: Service
-                                    description: |-
-                                      Kind is the Kubernetes resource kind of the referent. For example
-                                      "Service".
-
-                                      Defaults to "Service" when not specified.
-
-                                      ExternalName services can refer to CNAME DNS records that may live
-                                      outside of the cluster and as such are difficult to reason about in
-                                      terms of conformance. They also may not be safe to forward to (see
-                                      CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                      support ExternalName Services.
-
-                                      Support: Core (Services with a type other than ExternalName)
-
-                                      Support: Implementation-specific (Services with type ExternalName)
+                                    description: Kubernetes resource kind of the referent,
+                                      for example `Service`. Defaults to `Service`
                                     maxLength: 63
                                     minLength: 1
                                     pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -9800,27 +9717,16 @@ spec:
                                     minLength: 1
                                     type: string
                                   namespace:
-                                    description: |-
-                                      Namespace is the namespace of the backend. When unspecified, the local
-                                      namespace is inferred.
-
-                                      Note that when a namespace different than the local namespace is specified,
-                                      a ReferenceGrant object is required in the referent namespace to allow that
-                                      namespace's owner to accept the reference. See the ReferenceGrant
-                                      documentation for details.
-
-                                      Support: Core
+                                    description: Namespace of the referent. Defaults
+                                      to the local namespace. A cross-namespace reference
+                                      requires a ReferenceGrant in the referent namespace
                                     maxLength: 63
                                     minLength: 1
                                     pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                     type: string
                                   port:
-                                    description: |-
-                                      Port specifies the destination port number to use for this resource.
-                                      Port is required when the referent is a Kubernetes Service. In this
-                                      case, the port number is the service port number, not the target port.
-                                      For other resources, destination port might be derived from the referent
-                                      resource or this field.
+                                    description: Destination port number. Required
+                                      when the referent is a Kubernetes `Service`
                                     format: int32
                                     maximum: 65535
                                     minimum: 1
@@ -9874,25 +9780,23 @@ spec:
                                           or EC private key; override the key name via `signingKeyRef.key`.
                                         properties:
                                           group:
-                                            description: |-
-                                              The API group of the referenced credential.
-                                              Empty selects the core API group.
+                                            description: API group of the referenced
+                                              credential; empty selects the core API
+                                              group
                                             type: string
                                           key:
-                                            description: |-
-                                              The key in the referenced Secret whose value is used. If omitted, a
-                                              location-specific default key is used.
+                                            description: Key in the referenced Secret.
+                                              If omitted, a location-specific default
+                                              is used
                                             maxLength: 253
                                             minLength: 1
                                             type: string
                                           kind:
-                                            description: |-
-                                              The kind of the referenced credential.
-                                              Empty defaults to `Secret`.
+                                            description: Kind of the referenced credential;
+                                              empty defaults to `Secret`
                                             type: string
                                           name:
-                                            description: The name of the referenced
-                                              credential.
+                                            description: Name of the referenced credential
                                             maxLength: 253
                                             minLength: 1
                                             type: string
@@ -9918,24 +9822,22 @@ spec:
                                       is only valid with ClientSecretPost.
                                     properties:
                                       group:
-                                        description: |-
-                                          The API group of the referenced credential.
-                                          Empty selects the core API group.
+                                        description: API group of the referenced credential;
+                                          empty selects the core API group
                                         type: string
                                       key:
-                                        description: |-
-                                          The key in the referenced Secret whose value is used. If omitted, a
-                                          location-specific default key is used.
+                                        description: Key in the referenced Secret.
+                                          If omitted, a location-specific default
+                                          is used
                                         maxLength: 253
                                         minLength: 1
                                         type: string
                                       kind:
-                                        description: |-
-                                          The kind of the referenced credential.
-                                          Empty defaults to `Secret`.
+                                        description: Kind of the referenced credential;
+                                          empty defaults to `Secret`
                                         type: string
                                       name:
-                                        description: The name of the referenced credential.
+                                        description: Name of the referenced credential
                                         maxLength: 253
                                         minLength: 1
                                         type: string
@@ -9982,29 +9884,16 @@ spec:
                                 properties:
                                   group:
                                     default: ""
-                                    description: |-
-                                      Group is the group of the referent. For example, "gateway.networking.k8s.io".
-                                      When unspecified or empty string, core API group is inferred.
+                                    description: Group of the referent, for example
+                                      `gateway.networking.k8s.io`. Empty selects the
+                                      core API group
                                     maxLength: 253
                                     pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                                     type: string
                                   kind:
                                     default: Service
-                                    description: |-
-                                      Kind is the Kubernetes resource kind of the referent. For example
-                                      "Service".
-
-                                      Defaults to "Service" when not specified.
-
-                                      ExternalName services can refer to CNAME DNS records that may live
-                                      outside of the cluster and as such are difficult to reason about in
-                                      terms of conformance. They also may not be safe to forward to (see
-                                      CVE-2021-25740 for more information). Implementations SHOULD NOT
-                                      support ExternalName Services.
-
-                                      Support: Core (Services with a type other than ExternalName)
-
-                                      Support: Implementation-specific (Services with type ExternalName)
+                                    description: Kubernetes resource kind of the referent,
+                                      for example `Service`. Defaults to `Service`
                                     maxLength: 63
                                     minLength: 1
                                     pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
@@ -10015,27 +9904,16 @@ spec:
                                     minLength: 1
                                     type: string
                                   namespace:
-                                    description: |-
-                                      Namespace is the namespace of the backend. When unspecified, the local
-                                      namespace is inferred.
-
-                                      Note that when a namespace different than the local namespace is specified,
-                                      a ReferenceGrant object is required in the referent namespace to allow that
-                                      namespace's owner to accept the reference. See the ReferenceGrant
-                                      documentation for details.
-
-                                      Support: Core
+                                    description: Namespace of the referent. Defaults
+                                      to the local namespace. A cross-namespace reference
+                                      requires a ReferenceGrant in the referent namespace
                                     maxLength: 63
                                     minLength: 1
                                     pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                                     type: string
                                   port:
-                                    description: |-
-                                      Port specifies the destination port number to use for this resource.
-                                      Port is required when the referent is a Kubernetes Service. In this
-                                      case, the port number is the service port number, not the target port.
-                                      For other resources, destination port might be derived from the referent
-                                      resource or this field.
+                                    description: Destination port number. Required
+                                      when the referent is a Kubernetes `Service`
                                     format: int32
                                     maximum: 65535
                                     minimum: 1
@@ -10089,25 +9967,23 @@ spec:
                                           or EC private key; override the key name via `signingKeyRef.key`.
                                         properties:
                                           group:
-                                            description: |-
-                                              The API group of the referenced credential.
-                                              Empty selects the core API group.
+                                            description: API group of the referenced
+                                              credential; empty selects the core API
+                                              group
                                             type: string
                                           key:
-                                            description: |-
-                                              The key in the referenced Secret whose value is used. If omitted, a
-                                              location-specific default key is used.
+                                            description: Key in the referenced Secret.
+                                              If omitted, a location-specific default
+                                              is used
                                             maxLength: 253
                                             minLength: 1
                                             type: string
                                           kind:
-                                            description: |-
-                                              The kind of the referenced credential.
-                                              Empty defaults to `Secret`.
+                                            description: Kind of the referenced credential;
+                                              empty defaults to `Secret`
                                             type: string
                                           name:
-                                            description: The name of the referenced
-                                              credential.
+                                            description: Name of the referenced credential
                                             maxLength: 253
                                             minLength: 1
                                             type: string
@@ -10133,24 +10009,22 @@ spec:
                                       is only valid with ClientSecretPost.
                                     properties:
                                       group:
-                                        description: |-
-                                          The API group of the referenced credential.
-                                          Empty selects the core API group.
+                                        description: API group of the referenced credential;
+                                          empty selects the core API group
                                         type: string
                                       key:
-                                        description: |-
-                                          The key in the referenced Secret whose value is used. If omitted, a
-                                          location-specific default key is used.
+                                        description: Key in the referenced Secret.
+                                          If omitted, a location-specific default
+                                          is used
                                         maxLength: 253
                                         minLength: 1
                                         type: string
                                       kind:
-                                        description: |-
-                                          The kind of the referenced credential.
-                                          Empty defaults to `Secret`.
+                                        description: Kind of the referenced credential;
+                                          empty defaults to `Secret`
                                         type: string
                                       name:
-                                        description: The name of the referenced credential.
+                                        description: Name of the referenced credential
                                         maxLength: 253
                                         minLength: 1
                                         type: string
