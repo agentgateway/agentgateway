@@ -3688,7 +3688,7 @@ func (in *OAuthTokenExchange) DeepCopyInto(out *OAuthTokenExchange) {
 	}
 	if in.Audiences != nil {
 		in, out := &in.Audiences, &out.Audiences
-		*out = make([]string, len(*in))
+		*out = make([]ShortString, len(*in))
 		copy(*out, *in)
 	}
 	if in.Scopes != nil {

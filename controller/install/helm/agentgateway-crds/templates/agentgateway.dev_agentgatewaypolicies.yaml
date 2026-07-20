@@ -494,6 +494,7 @@ spec:
                                                   description: Identifier of the resource
                                                     authorization server. The issued
                                                     ID-JAG is bound to this audience.
+                                                  maxLength: 256
                                                   minLength: 1
                                                   type: string
                                                 cache:
@@ -1254,6 +1255,8 @@ spec:
                                                   description: Audiences sent to the
                                                     token endpoint.
                                                   items:
+                                                    maxLength: 256
+                                                    minLength: 1
                                                     type: string
                                                   maxItems: 64
                                                   minItems: 1
@@ -2252,6 +2255,7 @@ spec:
                                                   description: Identifier of the resource
                                                     authorization server. The issued
                                                     ID-JAG is bound to this audience.
+                                                  maxLength: 256
                                                   minLength: 1
                                                   type: string
                                                 cache:
@@ -3012,6 +3016,8 @@ spec:
                                                   description: Audiences sent to the
                                                     token endpoint.
                                                   items:
+                                                    maxLength: 256
+                                                    minLength: 1
                                                     type: string
                                                   maxItems: 64
                                                   minItems: 1
@@ -4005,6 +4011,7 @@ spec:
                                                   description: Identifier of the resource
                                                     authorization server. The issued
                                                     ID-JAG is bound to this audience.
+                                                  maxLength: 256
                                                   minLength: 1
                                                   type: string
                                                 cache:
@@ -4765,6 +4772,8 @@ spec:
                                                   description: Audiences sent to the
                                                     token endpoint.
                                                   items:
+                                                    maxLength: 256
+                                                    minLength: 1
                                                     type: string
                                                   maxItems: 64
                                                   minItems: 1
@@ -5937,6 +5946,7 @@ spec:
                                                   description: Identifier of the resource
                                                     authorization server. The issued
                                                     ID-JAG is bound to this audience.
+                                                  maxLength: 256
                                                   minLength: 1
                                                   type: string
                                                 cache:
@@ -6697,6 +6707,8 @@ spec:
                                                   description: Audiences sent to the
                                                     token endpoint.
                                                   items:
+                                                    maxLength: 256
+                                                    minLength: 1
                                                     type: string
                                                   maxItems: 64
                                                   minItems: 1
@@ -7695,6 +7707,7 @@ spec:
                                                   description: Identifier of the resource
                                                     authorization server. The issued
                                                     ID-JAG is bound to this audience.
+                                                  maxLength: 256
                                                   minLength: 1
                                                   type: string
                                                 cache:
@@ -8455,6 +8468,8 @@ spec:
                                                   description: Audiences sent to the
                                                     token endpoint.
                                                   items:
+                                                    maxLength: 256
+                                                    minLength: 1
                                                     type: string
                                                   maxItems: 64
                                                   minItems: 1
@@ -9671,6 +9686,7 @@ spec:
                           audience:
                             description: Identifier of the resource authorization
                               server. The issued ID-JAG is bound to this audience.
+                            maxLength: 256
                             minLength: 1
                             type: string
                           cache:
@@ -10290,6 +10306,8 @@ spec:
                           audiences:
                             description: Audiences sent to the token endpoint.
                             items:
+                              maxLength: 256
+                              minLength: 1
                               type: string
                             maxItems: 64
                             minItems: 1

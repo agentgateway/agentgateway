@@ -1410,9 +1410,8 @@ type CrossAppAccessAuth struct {
 	ResourceAuthorizationServer CrossAppAccessEndpoint `json:"resourceAuthorizationServer"`
 
 	// Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.
-	// +kubebuilder:validation:MinLength=1
 	// +required
-	Audience string `json:"audience"`
+	Audience ShortString `json:"audience"`
 
 	// Resources sent to the token endpoint.
 	// +kubebuilder:validation:MinItems=1
@@ -1476,7 +1475,7 @@ type OAuthTokenExchange struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
-	Audiences []string `json:"audiences,omitempty"`
+	Audiences []ShortString `json:"audiences,omitempty"`
 
 	// Scopes sent to the token endpoint.
 	// +kubebuilder:validation:MinItems=1
