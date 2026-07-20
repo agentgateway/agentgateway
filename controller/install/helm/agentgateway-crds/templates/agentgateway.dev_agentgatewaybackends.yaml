@@ -625,6 +625,19 @@ spec:
                                                     AWS Bedrock Guardrails settings for prompt
                                                     guarding.
                                                   properties:
+                                                    action:
+                                                      default: Reject
+                                                      description: |-
+                                                        Action controls whether the guardrail's verdict is enforced or only
+                                                        observed. `Reject` (the default) enforces the guardrail: a blocked
+                                                        assessment rejects the request/response and an anonymized assessment masks
+                                                        the matched content. `Audit` runs the guardrail in observe mode: it is
+                                                        invoked and its assessment recorded (metrics + structured log), but the
+                                                        request/response is never blocked or masked.
+                                                      enum:
+                                                      - Audit
+                                                      - Reject
+                                                      type: string
                                                     identifier:
                                                       description: Identifier of the
                                                         Guardrail policy to use for
@@ -2170,6 +2183,16 @@ spec:
                                                   description: Google Model Armor
                                                     settings for prompt guarding.
                                                   properties:
+                                                    action:
+                                                      default: Reject
+                                                      description: |-
+                                                        Action controls whether flagged content is rejected or only observed.
+                                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                                        would-be rejection without blocking.
+                                                      enum:
+                                                      - Audit
+                                                      - Reject
+                                                      type: string
                                                     location:
                                                       default: us-central1
                                                       description: |-
@@ -3715,6 +3738,16 @@ spec:
                                                     endpoint.
                                                     See https://developers.openai.com/api/reference/resources/moderations for more information.
                                                   properties:
+                                                    action:
+                                                      default: Reject
+                                                      description: |-
+                                                        Action controls whether flagged content is rejected or only observed.
+                                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                                        would-be rejection without blocking.
+                                                      enum:
+                                                      - Audit
+                                                      - Reject
+                                                      type: string
                                                     model:
                                                       description: |-
                                                         Moderation model to use. For example,
@@ -5249,6 +5282,7 @@ spec:
                                                         matches are always masked by default.
                                                         Defaults to `Mask`.
                                                       enum:
+                                                      - Audit
                                                       - Mask
                                                       - Reject
                                                       type: string
@@ -5311,6 +5345,16 @@ spec:
                                                   description: Webhook that receives
                                                     requests for prompt guarding.
                                                   properties:
+                                                    action:
+                                                      default: Reject
+                                                      description: |-
+                                                        Action controls whether the webhook's verdict is enforced or only observed.
+                                                        `Reject` (the default) enforces it; `Audit` records the would-be action
+                                                        without blocking or masking.
+                                                      enum:
+                                                      - Audit
+                                                      - Reject
+                                                      type: string
                                                     backendRef:
                                                       description: |-
                                                         Webhook server to reach.
@@ -5452,6 +5496,19 @@ spec:
                                                     AWS Bedrock Guardrails settings for prompt
                                                     guarding.
                                                   properties:
+                                                    action:
+                                                      default: Reject
+                                                      description: |-
+                                                        Action controls whether the guardrail's verdict is enforced or only
+                                                        observed. `Reject` (the default) enforces the guardrail: a blocked
+                                                        assessment rejects the request/response and an anonymized assessment masks
+                                                        the matched content. `Audit` runs the guardrail in observe mode: it is
+                                                        invoked and its assessment recorded (metrics + structured log), but the
+                                                        request/response is never blocked or masked.
+                                                      enum:
+                                                      - Audit
+                                                      - Reject
+                                                      type: string
                                                     identifier:
                                                       description: Identifier of the
                                                         Guardrail policy to use for
@@ -6997,6 +7054,16 @@ spec:
                                                   description: Google Model Armor
                                                     settings for prompt guarding.
                                                   properties:
+                                                    action:
+                                                      default: Reject
+                                                      description: |-
+                                                        Action controls whether flagged content is rejected or only observed.
+                                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                                        would-be rejection without blocking.
+                                                      enum:
+                                                      - Audit
+                                                      - Reject
+                                                      type: string
                                                     location:
                                                       default: us-central1
                                                       description: |-
@@ -8549,6 +8616,7 @@ spec:
                                                         matches are always masked by default.
                                                         Defaults to `Mask`.
                                                       enum:
+                                                      - Audit
                                                       - Mask
                                                       - Reject
                                                       type: string
@@ -8611,6 +8679,16 @@ spec:
                                                   description: Webhook that receives
                                                     responses for prompt guarding.
                                                   properties:
+                                                    action:
+                                                      default: Reject
+                                                      description: |-
+                                                        Action controls whether the webhook's verdict is enforced or only observed.
+                                                        `Reject` (the default) enforces it; `Audit` records the would-be action
+                                                        without blocking or masking.
+                                                      enum:
+                                                      - Audit
+                                                      - Reject
+                                                      type: string
                                                     backendRef:
                                                       description: |-
                                                         Webhook server to reach.
@@ -12316,6 +12394,19 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the guardrail's verdict is enforced or only
+                                        observed. `Reject` (the default) enforces the guardrail: a blocked
+                                        assessment rejects the request/response and an anonymized assessment masks
+                                        the matched content. `Audit` runs the guardrail in observe mode: it is
+                                        invoked and its assessment recorded (metrics + structured log), but the
+                                        request/response is never blocked or masked.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     identifier:
                                       description: Identifier of the Guardrail policy
                                         to use for the backend.
@@ -13537,6 +13628,16 @@ spec:
                                   description: Google Model Armor settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     location:
                                       default: us-central1
                                       description: |-
@@ -14758,6 +14859,16 @@ spec:
                                     endpoint.
                                     See https://developers.openai.com/api/reference/resources/moderations for more information.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     model:
                                       description: |-
                                         Moderation model to use. For example,
@@ -15969,6 +16080,7 @@ spec:
                                         matches are always masked by default.
                                         Defaults to `Mask`.
                                       enum:
+                                      - Audit
                                       - Mask
                                       - Reject
                                       type: string
@@ -16029,6 +16141,16 @@ spec:
                                   description: Webhook that receives requests for
                                     prompt guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the webhook's verdict is enforced or only observed.
+                                        `Reject` (the default) enforces it; `Audit` records the would-be action
+                                        without blocking or masking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     backendRef:
                                       description: |-
                                         Webhook server to reach.
@@ -16154,6 +16276,19 @@ spec:
                                     AWS Bedrock Guardrails settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the guardrail's verdict is enforced or only
+                                        observed. `Reject` (the default) enforces the guardrail: a blocked
+                                        assessment rejects the request/response and an anonymized assessment masks
+                                        the matched content. `Audit` runs the guardrail in observe mode: it is
+                                        invoked and its assessment recorded (metrics + structured log), but the
+                                        request/response is never blocked or masked.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     identifier:
                                       description: Identifier of the Guardrail policy
                                         to use for the backend.
@@ -17375,6 +17510,16 @@ spec:
                                   description: Google Model Armor settings for prompt
                                     guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether flagged content is rejected or only observed.
+                                        `Reject` (the default) rejects flagged content; `Audit` records the
+                                        would-be rejection without blocking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     location:
                                       default: us-central1
                                       description: |-
@@ -18602,6 +18747,7 @@ spec:
                                         matches are always masked by default.
                                         Defaults to `Mask`.
                                       enum:
+                                      - Audit
                                       - Mask
                                       - Reject
                                       type: string
@@ -18662,6 +18808,16 @@ spec:
                                   description: Webhook that receives responses for
                                     prompt guarding.
                                   properties:
+                                    action:
+                                      default: Reject
+                                      description: |-
+                                        Action controls whether the webhook's verdict is enforced or only observed.
+                                        `Reject` (the default) enforces it; `Audit` records the would-be action
+                                        without blocking or masking.
+                                      enum:
+                                      - Audit
+                                      - Reject
+                                      type: string
                                     backendRef:
                                       description: |-
                                         Webhook server to reach.

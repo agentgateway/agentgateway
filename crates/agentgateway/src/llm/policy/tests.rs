@@ -18,6 +18,7 @@ async fn webhook_fail_open_emits_single_metric() {
 				target: SimpleBackendReference::Invalid,
 				forward_header_matches: vec![],
 				failure_mode: FailureMode::FailOpen,
+				action: RejectAuditAction::Reject,
 			}),
 		}],
 		response: vec![],
@@ -52,6 +53,145 @@ async fn webhook_fail_open_emits_single_metric() {
 	assert_eq!(
 		allow, 0,
 		"Allow must not be recorded for a FailOpen outcome"
+	);
+}
+
+/// Reads a single `guardrail_checks` counter for `(phase, action)`.
+#[cfg(test)]
+fn guardrail_metric(
+	client: &crate::proxy::httpproxy::PolicyClient,
+	phase: crate::telemetry::metrics::GuardrailPhase,
+	action: crate::telemetry::metrics::GuardrailAction,
+) -> u64 {
+	client
+		.inputs
+		.metrics
+		.guardrail_checks
+		.get_or_create(&crate::telemetry::metrics::GuardrailLabels { phase, action })
+		.get()
+}
+
+/// A regex response guard in `Audit` mode that does not match records `Allow`,
+/// not `Audit`: audit mode only records `Audit` when the guard *would* have
+/// enforced, so the metric means the same thing across every guard kind.
+#[tokio::test]
+async fn audit_mode_records_allow_when_nothing_matches() {
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
+
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let mut resp = TextResponse {
+		content: "nothing sensitive here".to_string(),
+	};
+	let headers = ::http::HeaderMap::new();
+	let out = Policy::apply_single_response_guard(&guard, &mut resp, &headers, &client)
+		.await
+		.unwrap();
+	Policy::record_guardrail_outcome(&client, GuardrailPhase::Response, &out);
+
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Allow),
+		1,
+		"a non-matching audit guard records Allow"
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		0,
+		"Audit must not be recorded when the guard would not have enforced"
+	);
+}
+
+/// A regex response guard in `Audit` mode that *does* match records exactly one
+/// `Audit` and passes the content through unchanged (never Reject/Mask).
+#[tokio::test]
+async fn audit_mode_records_audit_and_passes_through_on_match() {
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
+
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let original = "my SECRET token".to_string();
+	let mut resp = TextResponse {
+		content: original.clone(),
+	};
+	let headers = ::http::HeaderMap::new();
+	let out = Policy::apply_single_response_guard(&guard, &mut resp, &headers, &client)
+		.await
+		.unwrap();
+	assert!(
+		matches!(out, GuardrailOutcome::Audit),
+		"a matching audit guard yields Audit, not Reject/Mask"
+	);
+	Policy::record_guardrail_outcome(&client, GuardrailPhase::Response, &out);
+	assert_eq!(resp.content, original, "audit mode must not mutate content");
+
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		1
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Reject),
+		0
+	);
+}
+
+/// A streamed response evaluated over many windows records exactly one metric
+/// for the stream, not one per window — the evaluator folds per-window actions
+/// and records once when dropped.
+#[tokio::test]
+async fn streaming_guard_records_one_metric_per_stream() {
+	use crate::llm::policy::streaming_guardrails::make_evaluator;
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
+
+	let guard = ResponseGuard {
+		rejection: Default::default(),
+		kind: ResponseGuardKind::Regex(RegexRules {
+			action: Action::Audit,
+			rules: vec![RegexRule::Regex {
+				pattern: regex::Regex::new("SECRET").unwrap(),
+			}],
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let headers = ::http::HeaderMap::new();
+	let mut evaluator = make_evaluator(&guard, client.clone(), headers);
+
+	// Three windows: two benign, one matching → would-enforce once. Nothing is
+	// recorded until the evaluator is dropped.
+	let _ = evaluator.evaluate("clean window one").await.unwrap();
+	let _ = evaluator.evaluate("this window has SECRET").await.unwrap();
+	let _ = evaluator.evaluate("clean window three").await.unwrap();
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		0,
+		"no metric recorded mid-stream"
+	);
+
+	drop(evaluator);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Audit),
+		1,
+		"exactly one Audit recorded for the whole stream, not one per window"
+	);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Allow),
+		0,
+		"the matching window's Audit outranks the benign windows' Allow"
 	);
 }
 
@@ -612,6 +752,226 @@ mod bedrock_guardrails_tests {
 		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
 		assert!(!response.is_blocked());
 		assert!(response.is_anonymized());
+	}
+
+	#[test]
+	fn test_would_action_blocked() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"assessments": [{
+				"contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] }
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "BLOCKED");
+	}
+
+	#[test]
+	fn test_would_action_anonymized() {
+		let json = json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "redacted {NAME}"}],
+			"assessments": [{
+				"sensitiveInformationPolicy": { "piiEntities": [{ "action": "ANONYMIZED", "type": "NAME" }] }
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "ANONYMIZED");
+	}
+
+	#[test]
+	fn test_would_action_none() {
+		// Detect-only mode: AWS returns the detection with per-filter action NONE
+		// and a top-level action of NONE, so the gateway would take no action.
+		let json = json!({
+			"action": "NONE",
+			"assessments": [{
+				"contentPolicy": {
+					"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		assert_eq!(response.would_action(), "NONE");
+		assert!(!response.is_blocked());
+		assert!(!response.is_anonymized());
+	}
+
+	#[test]
+	fn test_audit_log_redacts_matched_pii() {
+		// The raw matched PII string lives in `match`; audit-mode logging must
+		// strip it while keeping the structural metadata (type/action/detected).
+		let json = json!({
+			"action": "NONE",
+			"assessments": [{
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{
+						"action": "NONE",
+						"type": "EMAIL",
+						"detected": true,
+						"match": "jane.doe@example.com"
+					}]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		let redacted = serde_json::to_string(&response.redacted_assessments()).unwrap();
+		// The matched secret must be gone...
+		assert!(
+			!redacted.contains("jane.doe@example.com"),
+			"matched PII leaked into the redacted assessment: {redacted}"
+		);
+		assert!(
+			!redacted.contains("\"match\""),
+			"the `match` key must be removed"
+		);
+		// ...but the useful metadata must survive.
+		assert!(redacted.contains("EMAIL"));
+		assert!(redacted.contains("detected"));
+		assert!(redacted.contains("piiEntities"));
+	}
+
+	#[test]
+	fn test_audit_log_redaction_is_allowlist_not_denylist() {
+		// Redaction keeps only known-safe metadata keys, so a content-bearing
+		// field the API adds later (here `match`'s neighbors: a hypothetical
+		// `matchedText`, a `regex` pattern, and a raw content echo) is dropped by
+		// default rather than passed through. This is the guarantee a `match`-only
+		// denylist could not make.
+		let json = json!({
+			"action": "NONE",
+			"assessments": [{
+				"sensitiveInformationPolicy": {
+					"piiEntities": [{
+						"action": "NONE",
+						"type": "EMAIL",
+						"detected": true,
+						"match": "jane.doe@example.com",
+						"matchedText": "jane.doe@example.com",
+						"originalContent": "my email is jane.doe@example.com"
+					}],
+					"regexes": [{
+						"action": "NONE",
+						"name": "ssn-rule",
+						"detected": true,
+						"regex": "\\d{3}-\\d{2}-\\d{4}",
+						"match": "123-45-6789"
+					}]
+				},
+				// An entirely new, unknown policy block must not leak either.
+				"futurePolicy": {
+					"items": [{ "rawUserText": "some sensitive prompt content" }]
+				}
+			}]
+		});
+		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
+		let redacted = serde_json::to_string(&response.redacted_assessments()).unwrap();
+
+		// Every content-bearing value — under known OR unknown keys — is gone.
+		for leaked in [
+			"jane.doe@example.com",
+			"my email is",
+			"123-45-6789",
+			"\\d{3}",
+			"some sensitive prompt content",
+		] {
+			assert!(
+				!redacted.contains(leaked),
+				"content leaked through the allowlist: {leaked:?} in {redacted}"
+			);
+		}
+		// The unknown keys themselves are dropped, not just their values. (Note
+		// `regex` is not checked here: the allowlisted container `regexes` contains
+		// it as a substring; the raw pattern value is covered by `leaked` above.)
+		for dropped_key in [
+			"\"matchedText\"",
+			"\"originalContent\"",
+			"\"futurePolicy\"",
+			"\"rawUserText\"",
+		] {
+			assert!(
+				!redacted.contains(dropped_key),
+				"non-allowlisted key {dropped_key:?} survived: {redacted}"
+			);
+		}
+		// Structural metadata still survives for the audit trail.
+		assert!(redacted.contains("EMAIL"));
+		assert!(redacted.contains("ssn-rule"));
+		assert!(redacted.contains("detected"));
+		assert!(redacted.contains("regexes"));
+	}
+
+	#[test]
+	fn test_would_enforce_matches_block_and_mask_only() {
+		// would_enforce gates the Audit metric, so it must be true exactly when the
+		// guardrail would block or anonymize in enforce mode — the same event the
+		// other guard kinds record as Audit.
+		let blocked: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"assessments": [{ "contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] } }]
+		}))
+		.unwrap();
+		assert!(blocked.would_enforce());
+
+		let anonymized: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"outputs": [{"text": "redacted {NAME}"}],
+			"assessments": [{ "sensitiveInformationPolicy": { "piiEntities": [{ "action": "ANONYMIZED", "type": "NAME" }] } }]
+		}))
+		.unwrap();
+		assert!(anonymized.would_enforce());
+
+		// Detect-mode resource: top-level NONE, per-filter detected. Would NOT
+		// enforce, so records Allow — the fix for the metric-inconsistency bug.
+		let detect_only: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "NONE",
+			"assessments": [{ "contentPolicy": {
+				"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+			} }]
+		}))
+		.unwrap();
+		assert!(!detect_only.would_enforce());
+
+		let benign: ApplyGuardrailResponse =
+			serde_json::from_value(json!({ "action": "NONE", "assessments": [{}] })).unwrap();
+		assert!(!benign.would_enforce());
+	}
+
+	#[test]
+	fn test_has_detection_covers_detect_mode_but_not_benign() {
+		// has_detection gates the audit *log* and is deliberately broader than
+		// would_enforce: it fires on a detect-mode resource (top-level NONE with a
+		// per-filter `detected: true`) so the finding is still surfaced, but stays
+		// quiet on genuinely benign traffic so audit mode does not log every request.
+		let detect_only: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "NONE",
+			"assessments": [{ "contentPolicy": {
+				"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+			} }]
+		}))
+		.unwrap();
+		assert!(
+			detect_only.has_detection(),
+			"a detect-mode resource must still be logged"
+		);
+		assert!(
+			!detect_only.would_enforce(),
+			"...but must not record the Audit metric"
+		);
+
+		let intervened: ApplyGuardrailResponse = serde_json::from_value(json!({
+			"action": "GUARDRAIL_INTERVENED",
+			"assessments": [{ "contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] } }]
+		}))
+		.unwrap();
+		assert!(intervened.has_detection());
+
+		let benign: ApplyGuardrailResponse =
+			serde_json::from_value(json!({ "action": "NONE", "assessments": [{}] })).unwrap();
+		assert!(
+			!benign.has_detection(),
+			"benign traffic must not be logged in audit mode"
+		);
 	}
 }
 
@@ -1299,6 +1659,112 @@ mod prompt_guard_config_tests {
 	}
 
 	#[test]
+	fn test_bedrock_action_defaults_to_reject() {
+		// Absent `action` must preserve the enforcing behavior (Reject).
+		let json = json!({
+			"promptGuard": {
+				"request": [{
+					"bedrockGuardrails": {
+						"guardrailIdentifier": "gr",
+						"guardrailVersion": "1",
+						"region": "us-west-2"
+					}
+				}]
+			}
+		});
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		match &policy.prompt_guard.unwrap().request[0].kind {
+			RequestGuardKind::BedrockGuardrails(bg) => {
+				assert_eq!(bg.action, RejectAuditAction::Reject);
+			},
+			_ => panic!("Expected BedrockGuardrails guard kind"),
+		}
+	}
+
+	#[test]
+	fn test_bedrock_action_audit_deserializes() {
+		let json = json!({
+			"promptGuard": {
+				"request": [{
+					"bedrockGuardrails": {
+						"guardrailIdentifier": "gr",
+						"guardrailVersion": "1",
+						"region": "us-west-2",
+						"action": "audit"
+					}
+				}]
+			}
+		});
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		match &policy.prompt_guard.unwrap().request[0].kind {
+			RequestGuardKind::BedrockGuardrails(bg) => {
+				assert_eq!(bg.action, RejectAuditAction::Audit);
+			},
+			_ => panic!("Expected BedrockGuardrails guard kind"),
+		}
+	}
+
+	#[test]
+	fn test_reject_only_kinds_accept_audit_action() {
+		// The reject-only kinds expose Reject|Audit and default to Reject.
+		let json = json!({
+			"promptGuard": {
+				"request": [
+					{ "openAIModeration": { "action": "audit" } },
+					{ "googleModelArmor": { "templateId": "t", "projectId": "p", "action": "audit" } }
+				]
+			}
+		});
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		let request = &policy.prompt_guard.unwrap().request;
+		match &request[0].kind {
+			RequestGuardKind::OpenAIModeration(m) => {
+				assert_eq!(m.action, RejectAuditAction::Audit);
+			},
+			_ => panic!("Expected OpenAIModeration guard kind"),
+		}
+		match &request[1].kind {
+			RequestGuardKind::GoogleModelArmor(gma) => {
+				assert_eq!(gma.action, RejectAuditAction::Audit);
+			},
+			_ => panic!("Expected GoogleModelArmor guard kind"),
+		}
+	}
+
+	#[test]
+	fn test_reject_only_kind_rejects_mask_action() {
+		// A reject-only kind cannot express Mask: the value is not in its enum,
+		// so deserialization fails (illegal state unrepresentable at the boundary).
+		let json = json!({
+			"promptGuard": {
+				"request": [{ "openAIModeration": { "action": "mask" } }]
+			}
+		});
+		assert!(
+			serde_json::from_value::<Policy>(json).is_err(),
+			"openAIModeration must reject action=mask"
+		);
+	}
+
+	#[test]
+	fn test_regex_action_audit_deserializes() {
+		let json = json!({
+			"promptGuard": {
+				"request": [{
+					"regex": { "action": "audit", "rules": [{ "pattern": "secret" }] }
+				}]
+			}
+		});
+		let policy: Policy = serde_json::from_value(json).unwrap();
+		match &policy.prompt_guard.unwrap().request[0].kind {
+			RequestGuardKind::Regex(rr) => {
+				assert!(matches!(rr.action, Action::Audit));
+			},
+			_ => panic!("Expected Regex guard kind"),
+		}
+	}
+
+	#[test]
 	fn test_guardrail_with_custom_rejection() {
 		let json = json!({
 			"promptGuard": {
@@ -1348,6 +1814,7 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
+		action: RejectAuditAction::Reject,
 		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
 			AwsAuth::ExplicitConfig {
 				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
@@ -1385,6 +1852,7 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-west-2"),
+		action: RejectAuditAction::Reject,
 		policies: vec![],
 	};
 
@@ -1419,6 +1887,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
+		action: RejectAuditAction::Reject,
 		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
 			value: SecretString::new("user-provided-api-key".into()),
 			location: None,
@@ -1453,6 +1922,7 @@ fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: None,
+		action: RejectAuditAction::Reject,
 		policies: vec![],
 	};
 
