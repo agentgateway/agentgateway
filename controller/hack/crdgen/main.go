@@ -1060,12 +1060,12 @@ var importedDescriptionOverrides = []importedDescriptionOverride{
 	},
 }
 
-// applyImportedDescriptionOverrides rewrites parsed docs before schema generation and validates override targets
 func applyImportedDescriptionOverrides(parser *crd.Parser, roots []*loader.Package) error {
 	for _, o := range importedDescriptionOverrides {
 		pkg := importedPackageForPath(parser, roots, o.pkgPath)
 		if pkg == nil {
-			return fmt.Errorf("package %q not imported by any root", o.pkgPath)
+			_, _ = fmt.Fprintf(os.Stderr, "warning: package %q not imported by any root; skipping imported description override\n", o.pkgPath)
+			continue
 		}
 		parser.NeedPackage(pkg)
 

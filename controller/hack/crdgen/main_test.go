@@ -101,6 +101,19 @@ func TestApplyImportedDescriptionOverridesErrorsForMissingField(t *testing.T) {
 	require.EqualError(t, err, "field github.com/agentgateway/agentgateway/controller/hack/crdgen/testdata/overrideembedded/upstream.FullPolicy.Missing not found")
 }
 
+func TestApplyImportedDescriptionOverridesSkipsMissingPackage(t *testing.T) {
+	roots, parser := newTestParser(t, overrideEmbeddedRootPath)
+	withImportedDescriptionOverrides(t, []importedDescriptionOverride{
+		{
+			pkgPath:  "example.com/not/imported",
+			typeName: "Missing",
+			doc:      "Short missing doc",
+		},
+	})
+
+	require.NoError(t, applyImportedDescriptionOverrides(parser, roots))
+}
+
 func withImportedDescriptionOverrides(t *testing.T, overrides []importedDescriptionOverride) {
 	t.Helper()
 
