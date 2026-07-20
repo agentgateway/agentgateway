@@ -133,7 +133,7 @@ impl ClientCore {
 				let (body, _encoding) =
 					crate::http::compression::decompress_body(resp.into_body(), content_encoding.as_ref())
 						.map_err(ClientError::new)?;
-				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
+				let event_stream = SseStream::from_bytes_stream(body.into_data_stream()).boxed();
 				Ok(StreamableHttpPostResponse::Sse(event_stream, None))
 			},
 			_ => Err(ClientError::new(anyhow!(
