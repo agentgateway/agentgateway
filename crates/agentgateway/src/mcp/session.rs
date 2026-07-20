@@ -25,6 +25,7 @@ use crate::http::Response;
 use crate::mcp::handler::{Relay, RelayInputs, ResolveKind};
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
+use crate::mcp::subscriptions::ResourceSubscription;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
@@ -490,49 +491,37 @@ impl Session {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_empty())).await
 					},
 					ClientRequest::SubscriptionsListenRequest(slr) => {
-						// Snapshot the client's filter (URIs still in service+ form) for the ack before the
-						// loop below rewrites them to upstream form for matching forwarded notifications.
+						// Per-target upstream filters are rebuilt from resource_subs, so the request's
+						// URIs stay in the client's service+ form and are never sent upstream as-is.
 						let client_filter = slr.params.notifications.clone();
-						let target_name = if let Some(resource_subscriptions) =
-							&mut slr.params.notifications.resource_subscriptions
+						let mut resource_subs = Vec::new();
+						for uri in slr
+							.params
+							.notifications
+							.resource_subscriptions
+							.as_deref()
+							.unwrap_or_default()
 						{
-							let mut target_name = None;
-							for uri in resource_subscriptions.iter_mut() {
-								let requested_uri = uri.clone();
-								let (service_name, original_uri) = self.relay.parse_resource_uri(&requested_uri)?;
-								if let Some(target_name) = &target_name
-									&& target_name != service_name
-								{
-									return Err(UpstreamError::InvalidRequest(
-										"subscriptions/listen resourceSubscriptions must target one upstream"
-											.to_string(),
-									));
-								}
-								self.authorize_resource_request(
-									service_name,
-									&original_uri,
-									&method,
-									&mut span,
-									&log,
-									&cel,
-								)?;
-								target_name = Some(service_name.to_string());
-								*uri = original_uri;
-							}
-							target_name
-						} else {
-							None
-						};
-						// URIs in this filter were rewritten to upstream form in the loop above; it matches
-						// forwarded ResourceUpdated frames before their URIs are rewritten back to service+ form.
-						let upstream_filter = slr.params.notifications.clone();
-						Box::pin(self.relay.send_subscriptions_listen(
-							r,
-							ctx,
-							client_filter,
-							upstream_filter,
-							target_name,
-						))
+							let (service_name, upstream_uri) = self.relay.parse_resource_uri(uri)?;
+							self.authorize_resource_request(
+								service_name,
+								&upstream_uri,
+								&method,
+								&mut span,
+								&log,
+								&cel,
+							)?;
+							resource_subs.push(ResourceSubscription {
+								owner: service_name.to_string(),
+								client_uri: uri.clone(),
+								upstream_uri,
+							});
+						}
+						Box::pin(
+							self
+								.relay
+								.send_subscriptions_listen(r, ctx, client_filter, resource_subs),
+						)
 						.await
 					},
 					ClientRequest::ListPromptsRequest(_) => {

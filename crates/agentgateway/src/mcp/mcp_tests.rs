@@ -2433,6 +2433,105 @@ async fn resource_scoped_listen_preserves_global_filters_for_other_backends() {
 	);
 }
 
+#[tokio::test]
+async fn listen_resource_subscriptions_span_multiple_upstreams() {
+	use wiremock::{Mock, ResponseTemplate};
+
+	// `a` accepts its one URI; `b` accepts only b1 of its two. The downstream ack must
+	// combine per-owner accepted URIs in client form, and each upstream must receive
+	// only the URIs it owns.
+	let a = wiremock::MockServer::start().await;
+	let b = wiremock::MockServer::start().await;
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(ResponseTemplate::new(200).set_body_raw(
+			"data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/subscriptions/acknowledged\",\"params\":{\"notifications\":{\"resourceSubscriptions\":[\"https://example.com/a\"]}}}\n\n",
+			"text/event-stream",
+		))
+		.mount(&a)
+		.await;
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(ResponseTemplate::new(200).set_body_raw(
+			"data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/subscriptions/acknowledged\",\"params\":{\"notifications\":{\"resourceSubscriptions\":[\"https://example.com/b1\"]}}}\n\n",
+			"text/event-stream",
+		))
+		.mount(&b)
+		.await;
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("a", *a.address(), false), ("b", *b.address(), false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let listen = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "subscriptions/listen",
+		"params": {
+			"_meta": modern_meta(),
+			"notifications": {
+				"resourceSubscriptions": [
+					"a+https://example.com/a",
+					"b+https://example.com/b1",
+					"b+https://example.com/b2"
+				]
+			}
+		}
+	});
+	let response = mcp_json_post(&client, &url, &listen)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "subscriptions/listen")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let frames = response
+		.text()
+		.await
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data:"))
+		.map(|data| serde_json::from_str::<serde_json::Value>(data.trim()).unwrap())
+		.collect::<Vec<_>>();
+	assert_eq!(
+		frames[0]["method"],
+		"notifications/subscriptions/acknowledged"
+	);
+	assert_eq!(
+		frames[0]["params"]["notifications"],
+		serde_json::json!({
+			"resourceSubscriptions": ["a+https://example.com/a", "b+https://example.com/b1"]
+		})
+	);
+
+	for (server, expected) in [
+		(&a, serde_json::json!(["https://example.com/a"])),
+		(
+			&b,
+			serde_json::json!(["https://example.com/b1", "https://example.com/b2"]),
+		),
+	] {
+		let listen_request = server
+			.received_requests()
+			.await
+			.unwrap()
+			.iter()
+			.map(|request| serde_json::from_slice::<serde_json::Value>(&request.body).unwrap())
+			.find(|request| request["method"] == "subscriptions/listen")
+			.expect("each owner should receive a listen request");
+		assert_eq!(
+			listen_request["params"]["notifications"],
+			serde_json::json!({ "resourceSubscriptions": expected })
+		);
+	}
+}
+
 /// Test that a deny policy using request.headers correctly filters tools per-agent.
 /// This exercises the router.rs fix that registers authorization policies on the log's
 /// CEL context so the request snapshot includes headers needed by CEL expressions.

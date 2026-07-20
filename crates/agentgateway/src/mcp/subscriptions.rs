@@ -226,10 +226,17 @@ pub(super) async fn prepare_listen_streams(
 	Ok((prepared, accepted))
 }
 
+pub(super) struct ResourceSubscription {
+	pub owner: String,
+	pub client_uri: String,
+	pub upstream_uri: String,
+}
+
 pub(super) fn client_filter_from_accepted(
 	client_filter: &SubscriptionFilter,
-	upstream_filter: &SubscriptionFilter,
+	resource_subs: &[ResourceSubscription],
 	accepted_filter: &SubscriptionFilter,
+	prepared: &[PreparedListenStream],
 ) -> SubscriptionFilter {
 	let mut filter = SubscriptionFilter::new();
 	filter.tools_list_changed = (client_filter.tools_list_changed == Some(true)
@@ -241,22 +248,20 @@ pub(super) fn client_filter_from_accepted(
 	filter.resources_list_changed = (client_filter.resources_list_changed == Some(true)
 		&& accepted_filter.resources_list_changed == Some(true))
 	.then_some(true);
-	let accepted_uris = accepted_filter
-		.resource_subscriptions
-		.as_deref()
-		.unwrap_or_default();
-	let uris = client_filter
-		.resource_subscriptions
-		.as_deref()
-		.unwrap_or_default()
+	let uris = resource_subs
 		.iter()
-		.zip(
-			upstream_filter
-				.resource_subscriptions
-				.as_deref()
-				.unwrap_or_default(),
-		)
-		.filter_map(|(client, upstream)| accepted_uris.contains(upstream).then_some(client.clone()))
+		.filter(|sub| {
+			prepared.iter().any(|stream| {
+				stream.target.as_str() == sub.owner
+					&& stream
+						.accepted_filter
+						.resource_subscriptions
+						.as_deref()
+						.unwrap_or_default()
+						.contains(&sub.upstream_uri)
+			})
+		})
+		.map(|sub| sub.client_uri.clone())
 		.fold(Vec::new(), |mut uris, uri| {
 			if !uris.contains(&uri) {
 				uris.push(uri);
@@ -406,9 +411,26 @@ mod tests {
 		)
 		.await
 		.unwrap();
+		let resource_subs = client_filter
+			.resource_subscriptions
+			.as_deref()
+			.unwrap_or_default()
+			.iter()
+			.zip(
+				upstream_filter
+					.resource_subscriptions
+					.as_deref()
+					.unwrap_or_default(),
+			)
+			.map(|(client_uri, upstream_uri)| ResourceSubscription {
+				owner: target.to_string(),
+				client_uri: client_uri.clone(),
+				upstream_uri: upstream_uri.clone(),
+			})
+			.collect::<Vec<_>>();
 		let ack = synthesize_listen_ack(
 			id.clone(),
-			client_filter_from_accepted(&client_filter, &upstream_filter, &accepted_filter),
+			client_filter_from_accepted(&client_filter, &resource_subs, &accepted_filter, &prepared),
 		);
 		let PreparedListenStream {
 			target: target_name,
@@ -510,24 +532,60 @@ mod tests {
 		);
 	}
 
+	fn prepared_with_accepted(
+		target: &str,
+		accepted_filter: SubscriptionFilter,
+	) -> PreparedListenStream {
+		PreparedListenStream {
+			target: agent_core::strng::new(target),
+			stream: Messages::from_results(Vec::new()),
+			accepted_filter,
+		}
+	}
+
+	fn resource_sub(owner: &str, uri: &str) -> ResourceSubscription {
+		ResourceSubscription {
+			owner: owner.to_string(),
+			client_uri: format!("{owner}+{uri}"),
+			upstream_uri: uri.to_string(),
+		}
+	}
+
 	#[test]
 	fn client_filter_from_accepted_restores_resource_uri_order() {
-		let client = SubscriptionFilter::new().with_resource_subscriptions(vec![
-			"svc+https://example.com/a".to_string(),
-			"svc+https://example.com/b".to_string(),
-			"svc+https://example.com/a".to_string(),
-		]);
-		let upstream = SubscriptionFilter::new().with_resource_subscriptions(vec![
-			"https://example.com/a".to_string(),
-			"https://example.com/b".to_string(),
-			"https://example.com/a".to_string(),
-		]);
+		let subs = vec![
+			resource_sub("svc", "https://example.com/a"),
+			resource_sub("svc", "https://example.com/b"),
+			resource_sub("svc", "https://example.com/a"),
+		];
 		let accepted = SubscriptionFilter::new()
 			.with_resource_subscriptions(vec!["https://example.com/a".to_string()]);
+		let prepared = [prepared_with_accepted("svc", accepted.clone())];
 		assert_eq!(
-			client_filter_from_accepted(&client, &upstream, &accepted),
+			client_filter_from_accepted(&SubscriptionFilter::new(), &subs, &accepted, &prepared),
 			SubscriptionFilter::new()
 				.with_resource_subscriptions(vec!["svc+https://example.com/a".to_string()])
+		);
+	}
+
+	#[test]
+	fn client_filter_from_accepted_distinguishes_same_uri_across_targets() {
+		// Both targets were asked for the same upstream-form URI; only `a` accepted it.
+		// The ack must keep a's client URI and drop b's.
+		let subs = vec![
+			resource_sub("a", "https://example.com/r"),
+			resource_sub("b", "https://example.com/r"),
+		];
+		let accepted_a = SubscriptionFilter::new()
+			.with_resource_subscriptions(vec!["https://example.com/r".to_string()]);
+		let prepared = [
+			prepared_with_accepted("a", accepted_a.clone()),
+			prepared_with_accepted("b", SubscriptionFilter::new()),
+		];
+		assert_eq!(
+			client_filter_from_accepted(&SubscriptionFilter::new(), &subs, &accepted_a, &prepared),
+			SubscriptionFilter::new()
+				.with_resource_subscriptions(vec!["a+https://example.com/r".to_string()])
 		);
 	}
 

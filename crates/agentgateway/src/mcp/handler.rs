@@ -26,6 +26,7 @@ use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
+use crate::mcp::subscriptions::ResourceSubscription;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
@@ -1011,15 +1012,14 @@ impl Relay {
 
 	/// Handles `subscriptions/listen` with an ACK derived from every selected upstream.
 	///
-	/// `client_filter` keeps service+ URIs for the downstream ACK. `upstream_filter` has rewritten
-	/// upstream URIs for request routing and matching `ResourceUpdated` notifications.
+	/// `client_filter` keeps service+ URIs for the downstream ACK. `resource_subs` carries the
+	/// owning target and rewritten upstream URI for each of them.
 	pub async fn send_subscriptions_listen(
 		&self,
 		r: JsonRpcRequest<ClientRequest>,
 		mut ctx: IncomingRequestContext,
 		client_filter: SubscriptionFilter,
-		upstream_filter: SubscriptionFilter,
-		resource_target: Option<String>,
+		resource_subs: Vec<ResourceSubscription>,
 	) -> Result<Response, UpstreamError> {
 		use futures_util::StreamExt;
 
@@ -1028,19 +1028,25 @@ impl Relay {
 			synthesize_listen_ack,
 		};
 		let id = r.id.clone();
-		let has_global_filter = upstream_filter.tools_list_changed == Some(true)
-			|| upstream_filter.prompts_list_changed == Some(true)
-			|| upstream_filter.resources_list_changed == Some(true);
-		let targets = resource_target
-			.as_ref()
-			.filter(|_| !has_global_filter)
-			.map(|target| vec![target.clone()]);
+		let has_global_filter = client_filter.tools_list_changed == Some(true)
+			|| client_filter.prompts_list_changed == Some(true)
+			|| client_filter.resources_list_changed == Some(true);
+		// Resource-only listens go to just the owning targets; any global filter widens the
+		// fanout to every upstream (non-owners then get a filter without resource URIs).
+		let targets = (!has_global_filter && !resource_subs.is_empty()).then(|| {
+			resource_subs.iter().fold(Vec::new(), |mut targets, sub| {
+				if !targets.contains(&sub.owner) {
+					targets.push(sub.owner.clone());
+				}
+				targets
+			})
+		});
 		let (streams, service_names) = self
 			.fanout_open_streams(&r, &mut ctx, targets, |target, r| {
 				let mut r = r.clone();
 				if let ClientRequest::SubscriptionsListenRequest(slr) = &mut r.request {
 					slr.params.notifications =
-						listen_filter_for_target(&upstream_filter, resource_target.as_deref(), target);
+						listen_filter_for_target(&client_filter, &resource_subs, target);
 				}
 				r
 			})
@@ -1049,8 +1055,7 @@ impl Relay {
 		let prepared_inputs = streams
 			.into_iter()
 			.map(|(name, stream)| {
-				let filter =
-					listen_filter_for_target(&upstream_filter, resource_target.as_deref(), name.as_str());
+				let filter = listen_filter_for_target(&client_filter, &resource_subs, name.as_str());
 				(name, stream, filter)
 			})
 			.collect();
@@ -1070,7 +1075,7 @@ impl Relay {
 			};
 
 		let ack_filter =
-			client_filter_from_accepted(&client_filter, &upstream_filter, &accepted_filter);
+			client_filter_from_accepted(&client_filter, &resource_subs, &accepted_filter, &prepared);
 		let ack = synthesize_listen_ack(id.clone(), ack_filter);
 		let pipelines = prepared
 			.into_iter()
@@ -1455,14 +1460,17 @@ pub(crate) fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
 }
 
 fn listen_filter_for_target(
-	upstream_filter: &SubscriptionFilter,
-	resource_target: Option<&str>,
+	client_filter: &SubscriptionFilter,
+	resource_subs: &[ResourceSubscription],
 	target: &str,
 ) -> SubscriptionFilter {
-	let mut filter = upstream_filter.clone();
-	if resource_target.is_some_and(|resource_target| resource_target != target) {
-		filter.resource_subscriptions = None;
-	}
+	let mut filter = client_filter.clone();
+	let mine = resource_subs
+		.iter()
+		.filter(|sub| sub.owner == target)
+		.map(|sub| sub.upstream_uri.clone())
+		.collect::<Vec<_>>();
+	filter.resource_subscriptions = (!mine.is_empty()).then_some(mine);
 	filter
 }
 
