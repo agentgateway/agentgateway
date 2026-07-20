@@ -31,6 +31,7 @@ pub mod config_store;
 pub mod control;
 pub mod database;
 pub mod http;
+pub mod import;
 pub mod json;
 pub mod llm;
 pub mod management;
