@@ -1181,7 +1181,8 @@ pub mod from_completions {
 					None => done.map(|done| (Ok(done), (None, None))),
 				}
 			},
-		);
+		)
+		.fuse();
 		Body::from_stream(stream)
 	}
 

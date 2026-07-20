@@ -384,6 +384,7 @@ fn trace_sse_stream(
 				},
 			}
 		});
+	let events = events.fuse();
 	futures_util::stream::once(async { Ok(Bytes::from_static(b": ready\n\n")) }).chain(events)
 }
 

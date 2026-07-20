@@ -92,6 +92,7 @@ impl RecordedBodyHandle {
 pub struct RecordedBody<B = crate::http::Body> {
 	inner: B,
 	handle: RecordedBodyHandle,
+	finished: bool,
 }
 
 impl<B> RecordedBody<B> {
@@ -112,6 +113,7 @@ impl<B> RecordedBody<B> {
 			Self {
 				inner,
 				handle: handle.clone(),
+				finished: false,
 			},
 			handle,
 		)
@@ -135,10 +137,17 @@ where
 		cx: &mut Context<'_>,
 	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
 		let this = self.get_mut();
+		if this.finished {
+			return Poll::Ready(None);
+		}
 		let frame = match futures::ready!(Pin::new(&mut this.inner).poll_frame(cx)) {
 			Some(Ok(frame)) => frame,
-			Some(Err(error)) => return Poll::Ready(Some(Err(error.into()))),
+			Some(Err(error)) => {
+				this.finished = true;
+				return Poll::Ready(Some(Err(error.into())));
+			},
 			None => {
+				this.finished = true;
 				this.handle.complete();
 				return Poll::Ready(None);
 			},
@@ -154,18 +163,20 @@ where
 				Poll::Ready(Some(Ok(Frame::data(bytes))))
 			},
 			Err(Ok(trailers)) => {
+				this.finished = true;
 				this.handle.complete();
 				Poll::Ready(Some(Ok(Frame::trailers(trailers))))
 			},
 			Err(Err(_unknown)) => {
 				tracing::warn!("An unknown body frame has been recorded");
+				this.finished = true;
 				Poll::Ready(None)
 			},
 		}
 	}
 
 	fn is_end_stream(&self) -> bool {
-		self.inner.is_end_stream()
+		self.finished || self.inner.is_end_stream()
 	}
 
 	fn size_hint(&self) -> SizeHint {
@@ -202,6 +213,27 @@ mod tests {
 
 		assert_eq!(got, Bytes::from_static(b"hello world"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"hello world"));
+	}
+
+	#[tokio::test]
+	async fn does_not_repoll_inner_after_eof() {
+		let inner = crate::http::Body::new(http_body_util::StreamBody::new(
+			futures_util::stream::unfold(false, |emitted| async move {
+				if emitted {
+					None
+				} else {
+					Some((
+						Ok::<_, crate::http::Error>(Frame::data(Bytes::from_static(b"body"))),
+						true,
+					))
+				}
+			}),
+		));
+		let (mut body, _handle) = RecordedBody::new(inner);
+
+		assert!(body.frame().await.is_some(), "data frame should be present");
+		assert!(body.frame().await.is_none(), "stream should report EOF");
+		assert!(body.frame().await.is_none(), "stream must remain at EOF");
 	}
 
 	#[tokio::test]
