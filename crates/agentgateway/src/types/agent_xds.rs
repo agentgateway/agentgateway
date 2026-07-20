@@ -1380,7 +1380,16 @@ impl ModelRoute {
 		use proto::agent::model_route;
 		use proto::agent::model_route::virtual_model;
 
-		let name = strng::new(&s.name);
+		let model_match = s
+			.r#match
+			.as_ref()
+			.ok_or_else(|| ProtoError::Generic("model route match is required".to_string()))?;
+		if model_match.model.is_empty() {
+			return Err(ProtoError::Generic(
+				"model route match.model must not be empty".to_string(),
+			));
+		}
+		let name = strng::new(&model_match.model);
 		let kind = match &s.kind {
 			Some(model_route::Kind::ConcreteModel(concrete)) => {
 				let visibility = match concrete.model_visibility() {
@@ -1401,7 +1410,7 @@ impl ModelRoute {
 						.collect::<Result<Vec<_>, _>>()?,
 				};
 				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
-					name: s.name.clone(),
+					name: model_match.model.clone(),
 					visibility,
 					header_matches: vec![],
 					backend,
@@ -1450,7 +1459,7 @@ impl ModelRoute {
 								when: when.map(|expr| {
 									permissive_cel_expression_arc(
 										diagnostics,
-										format!("modelRoute.{}.conditional.when", s.name),
+										format!("modelRoute.{}.conditional.when", model_match.model),
 										expr.clone(),
 									)
 								}),
@@ -1474,7 +1483,7 @@ impl ModelRoute {
 					},
 				};
 				ModelRouteKind::Virtual(llm::model_router::VirtualModelRoute {
-					name: s.name.clone(),
+					name: model_match.model.clone(),
 					llm_policy: llm::model_router::default_route_types(),
 					routing,
 				})
@@ -4379,7 +4388,9 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
-			name: "gpt-5-mini".to_string(),
+			r#match: Some(proto::agent::model_route::Match {
+				model: "gpt-5-mini".to_string(),
+			}),
 			kind: Some(Kind::ConcreteModel(ConcreteModel {
 				model_visibility: ModelVisibility::Internal as i32,
 				backend: Some(proto::agent::BackendReference {
@@ -4422,6 +4433,25 @@ mod tests {
 	}
 
 	#[test]
+	fn test_model_route_rejects_missing_match() {
+		use proto::agent::model_route::{ConcreteModel, Kind};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/gpt-5-mini".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			r#match: None,
+			kind: Some(Kind::ConcreteModel(ConcreteModel::default())),
+		};
+
+		let err = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())
+			.expect_err("missing match should be rejected");
+		assert!(
+			err.to_string().contains("model route match is required"),
+			"{err}"
+		);
+	}
+
+	#[test]
 	fn test_virtual_model_route_from_xds() -> Result<(), ProtoError> {
 		use proto::agent::model_route::virtual_model::{Routing, Weighted, weighted};
 		use proto::agent::model_route::{Kind, VirtualModel};
@@ -4429,7 +4459,9 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/fast".to_string(),
 			listener_key: "default/gw.http".to_string(),
-			name: "fast".to_string(),
+			r#match: Some(proto::agent::model_route::Match {
+				model: "fast".to_string(),
+			}),
 			kind: Some(Kind::VirtualModel(VirtualModel {
 				routing: Some(Routing::Weighted(Weighted {
 					targets: vec![
@@ -4472,7 +4504,9 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
-			name: "smart".to_string(),
+			r#match: Some(proto::agent::model_route::Match {
+				model: "smart".to_string(),
+			}),
 			kind: Some(Kind::VirtualModel(VirtualModel {
 				routing: Some(Routing::Conditional(Conditional {
 					targets: vec![
@@ -4513,7 +4547,9 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
-			name: "smart".to_string(),
+			r#match: Some(proto::agent::model_route::Match {
+				model: "smart".to_string(),
+			}),
 			kind: Some(Kind::VirtualModel(VirtualModel {
 				routing: Some(Routing::Conditional(Conditional {
 					targets: vec![
@@ -4549,7 +4585,9 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/resilient".to_string(),
 			listener_key: "default/gw.http".to_string(),
-			name: "resilient".to_string(),
+			r#match: Some(proto::agent::model_route::Match {
+				model: "resilient".to_string(),
+			}),
 			kind: Some(Kind::VirtualModel(VirtualModel {
 				routing: Some(Routing::Failover(Failover {
 					backend: Some(proto::agent::BackendReference {

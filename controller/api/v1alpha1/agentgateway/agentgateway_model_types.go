@@ -9,7 +9,7 @@ import (
 // +kubebuilder:rbac:groups=agentgateway.dev,resources=agentgatewaymodels,verbs=get;list;watch
 // +kubebuilder:rbac:groups=agentgateway.dev,resources=agentgatewaymodels/status,verbs=get;update;patch
 
-// +kubebuilder:printcolumn:name="Model Match",type=string,JSONPath=".spec.modelMatch",description="Model name matched from client requests"
+// +kubebuilder:printcolumn:name="Model Match",type=string,JSONPath=".spec.match.model",description="Model name matched from client requests"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=".metadata.creationTimestamp",description="The age of the model."
 
 // +genclient
@@ -44,6 +44,7 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.providerModel)",message="providerModel requires provider"
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
+// +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
 // +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
 // +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
@@ -59,10 +60,9 @@ type AgentgatewayModelSpec struct {
 	// +required
 	ParentRefs []gwv1.ParentReference `json:"parentRefs"`
 
-	// Model name or wildcard expression matched against client requests.
-	// When omitted, the model matches metadata.name exactly.
+	// Conditions for selecting this model from client requests.
 	// +optional
-	ModelMatch *LongString `json:"modelMatch,omitempty"`
+	Match *ModelMatch `json:"match,omitempty"`
 
 	// Controls whether clients can request this model directly. Internal models
 	// can only be selected by virtual models. Defaults to Public.
@@ -114,7 +114,7 @@ type AgentgatewayModelSpec struct {
 	PathPrefix LongString `json:"pathPrefix,omitempty"`
 
 	// Fixed model name sent to the provider. When omitted, the model selected by
-	// modelMatch is sent to the provider.
+	// match.model is sent to the provider.
 	// +optional
 	ProviderModel *ShortString `json:"providerModel,omitempty"`
 
@@ -130,6 +130,16 @@ type AgentgatewayModelSpec struct {
 	// Request-time routing among concrete AgentgatewayModel resources.
 	// +optional
 	VirtualModel *VirtualModel `json:"virtualModel,omitempty"`
+}
+
+// ModelMatch contains conditions for selecting a model.
+type ModelMatch struct {
+	// Model name or wildcard expression matched against client requests.
+	// When omitted, the model matches metadata.name exactly. Virtual models must
+	// use an exact model name because the Rust data plane enforces exact matching
+	// for virtual model routes.
+	// +optional
+	Model *LongString `json:"model,omitempty"`
 }
 
 // ModelProvider identifies the LLM provider serving a concrete model.
@@ -237,8 +247,8 @@ type ModelTargetReference struct {
 	ModelRef corev1.LocalObjectReference `json:"modelRef"`
 
 	// Concrete model name selected through the referenced model. This is needed
-	// when modelRef points to a wildcard modelMatch. When omitted, the referenced
-	// model's effective modelMatch is used.
+	// when modelRef points to a wildcard match.model. When omitted, the referenced
+	// model's effective match.model is used.
 	// +optional
 	Model *LongString `json:"model,omitempty"`
 }

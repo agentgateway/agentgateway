@@ -1,0 +1,16 @@
+_err: virtual model match.model must be an exact name
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: wildcard-virtual-model
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: virtual/*
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: concrete-model

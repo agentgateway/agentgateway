@@ -11,7 +11,8 @@ spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
-  modelMatch: gpt-5-mini
+  match:
+    model: gpt-5-mini
   provider: OpenAI
   providerModel: gpt-5-mini
 ---
@@ -23,7 +24,8 @@ spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
-  modelMatch: openai/*
+  match:
+    model: openai/*
   visibility: Internal
   provider: OpenAI
   transformations:
@@ -38,7 +40,8 @@ spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
-  modelMatch: anthropic/*
+  match:
+    model: anthropic/*
   visibility: Internal
   provider: Anthropic
   transformations:
@@ -53,7 +56,8 @@ spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
-  modelMatch: local/llama-3.3
+  match:
+    model: local/llama-3.3
   providerModel: llama-3.3
   provider: Custom
   custom:

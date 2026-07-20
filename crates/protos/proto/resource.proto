@@ -1970,6 +1970,11 @@ message CrossAppAccessAuth {
 }
 
 message ModelRoute {
+  message Match {
+    // User-facing model name or wildcard pattern for this model route.
+    string model = 1;
+  }
+
   message VirtualModel {
     message Weighted {
       message Target {
@@ -1977,11 +1982,11 @@ message ModelRoute {
         //
         // This is not a ModelRoute resource key. The data plane rewrites the
         // incoming request model to this value, then resolves it against the
-        // concrete ModelRoute.name values/patterns in the same listener's model
+        // concrete ModelRoute.match.model values/patterns in the same listener's model
         // table. For Kubernetes AgentgatewayModel ModelTargetReference, the
         // control plane sets this to target.model when specified; otherwise it
-        // uses the referenced model's effective modelMatch, defaulting to the
-        // referenced resource name when modelMatch is omitted.
+        // uses the referenced model's effective match.model, defaulting to the
+        // referenced resource name when match.model is omitted.
         string model = 1;
         uint32 weight = 2;
       }
@@ -2034,12 +2039,9 @@ message ModelRoute {
   // Key for the listener this model is part of.
   string listener_key = 2;
 
-  // User-facing model name or wildcard pattern for this model route.
-  //
-  // Concrete routes use this for direct request matching and virtual target
-  // resolution. Virtual routes use this as the exact client-requested virtual
-  // model name.
-  string name = 3;
+  // Conditions used to select this model route. Headers and other request
+  // matchers may be added to this message in a future API revision.
+  Match match = 3;
 
   oneof kind {
     VirtualModel virtual_model = 4;

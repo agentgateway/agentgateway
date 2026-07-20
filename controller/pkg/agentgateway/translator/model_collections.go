@@ -165,7 +165,7 @@ func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.Agentgateway
 	route := &api.ModelRoute{
 		Key:         key,
 		ListenerKey: parent.ListenerKey,
-		Name:        effectiveModelMatch(model),
+		Match:       &api.ModelRoute_Match{Model: effectiveModelName(model)},
 	}
 	var resources []*api.Resource
 
@@ -536,7 +536,7 @@ func resolveModelTarget(ctx RouteContext, namespace string, target agentgateway.
 	if target.Model != nil {
 		return ref, string(*target.Model), nil
 	}
-	return ref, effectiveModelMatch(ref), nil
+	return ref, effectiveModelName(ref), nil
 }
 
 func routeConditionMessage(condition *reporter.RouteCondition) string {
@@ -563,9 +563,9 @@ func stringPtr[T ~string](v *T) *string {
 	return new(string(*v))
 }
 
-func effectiveModelMatch(model *agentgateway.AgentgatewayModel) string {
-	if model.Spec.ModelMatch != nil {
-		return string(*model.Spec.ModelMatch)
+func effectiveModelName(model *agentgateway.AgentgatewayModel) string {
+	if model.Spec.Match != nil && model.Spec.Match.Model != nil {
+		return string(*model.Spec.Match.Model)
 	}
 	return model.Name
 }

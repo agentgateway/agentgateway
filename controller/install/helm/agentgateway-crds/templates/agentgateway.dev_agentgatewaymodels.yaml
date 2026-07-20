@@ -23,7 +23,7 @@ spec:
   versions:
   - additionalPrinterColumns:
     - description: Model name matched from client requests
-      jsonPath: .spec.modelMatch
+      jsonPath: .spec.match.model
       name: Model Match
       type: string
     - description: The age of the model.
@@ -282,13 +282,19 @@ spec:
                 maxLength: 256
                 minLength: 1
                 type: string
-              modelMatch:
-                description: |-
-                  Model name or wildcard expression matched against client requests.
-                  When omitted, the model matches metadata.name exactly.
-                maxLength: 1024
-                minLength: 1
-                type: string
+              match:
+                description: Conditions for selecting this model from client requests.
+                properties:
+                  model:
+                    description: |-
+                      Model name or wildcard expression matched against client requests.
+                      When omitted, the model matches metadata.name exactly. Virtual models must
+                      use an exact model name because the Rust data plane enforces exact matching
+                      for virtual model routes.
+                    maxLength: 1024
+                    minLength: 1
+                    type: string
+                type: object
               parentRefs:
                 description: Gateways and listeners to which this model attaches.
                 items:
@@ -475,7 +481,7 @@ spec:
               providerModel:
                 description: |-
                   Fixed model name sent to the provider. When omitted, the model selected by
-                  modelMatch is sent to the provider.
+                  match.model is sent to the provider.
                 maxLength: 256
                 minLength: 1
                 type: string
@@ -554,8 +560,8 @@ spec:
                             model:
                               description: |-
                                 Concrete model name selected through the referenced model. This is needed
-                                when modelRef points to a wildcard modelMatch. When omitted, the referenced
-                                model's effective modelMatch is used.
+                                when modelRef points to a wildcard match.model. When omitted, the referenced
+                                model's effective match.model is used.
                               maxLength: 1024
                               minLength: 1
                               type: string
@@ -606,8 +612,8 @@ spec:
                             model:
                               description: |-
                                 Concrete model name selected through the referenced model. This is needed
-                                when modelRef points to a wildcard modelMatch. When omitted, the referenced
-                                model's effective modelMatch is used.
+                                when modelRef points to a wildcard match.model. When omitted, the referenced
+                                model's effective match.model is used.
                               maxLength: 1024
                               minLength: 1
                               type: string
@@ -653,8 +659,8 @@ spec:
                             model:
                               description: |-
                                 Concrete model name selected through the referenced model. This is needed
-                                when modelRef points to a wildcard modelMatch. When omitted, the referenced
-                                model's effective modelMatch is used.
+                                when modelRef points to a wildcard match.model. When omitted, the referenced
+                                model's effective match.model is used.
                               maxLength: 1024
                               minLength: 1
                               type: string
@@ -714,6 +720,9 @@ spec:
               rule: has(self.provider) || !has(self.transformations)
             - message: virtual models must be public
               rule: '!has(self.virtualModel) || self.visibility != ''Internal'''
+            - message: virtual model match.model must be an exact name
+              rule: '!has(self.virtualModel) || !has(self.match) || !has(self.match.model)
+                || !self.match.model.contains(''*'')'
             - message: both host and port must be set together
               rule: 'has(self.host) || has(self.port) ? has(self.host) && has(self.port)
                 : true'

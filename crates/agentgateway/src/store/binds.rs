@@ -2281,7 +2281,9 @@ mod tests {
 		let model_route = crate::types::proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: listener_key.to_string(),
-			name: "gpt-5-mini".to_string(),
+			r#match: Some(crate::types::proto::agent::model_route::Match {
+				model: "gpt-5-mini".to_string(),
+			}),
 			kind: Some(Kind::ConcreteModel(ConcreteModel {
 				model_visibility: ModelVisibility::Public as i32,
 				backend: Some(crate::types::proto::agent::BackendReference {
@@ -2326,7 +2328,9 @@ mod tests {
 		let second_model_route = crate::types::proto::agent::ModelRoute {
 			key: "default/claude-haiku".to_string(),
 			listener_key: listener_key.to_string(),
-			name: "claude-haiku".to_string(),
+			r#match: Some(crate::types::proto::agent::model_route::Match {
+				model: "claude-haiku".to_string(),
+			}),
 			kind: Some(Kind::ConcreteModel(ConcreteModel {
 				model_visibility: ModelVisibility::Public as i32,
 				backend: Some(crate::types::proto::agent::BackendReference {
@@ -2398,7 +2402,9 @@ mod tests {
 			crate::types::proto::agent::ModelRoute {
 				key: key.to_string(),
 				listener_key: listener_key.to_string(),
-				name: name.to_string(),
+				r#match: Some(crate::types::proto::agent::model_route::Match {
+					model: name.to_string(),
+				}),
 				kind: Some(Kind::ConcreteModel(ConcreteModel {
 					model_visibility: ModelVisibility::Public as i32,
 					backend: Some(crate::types::proto::agent::BackendReference {

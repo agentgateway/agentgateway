@@ -27,7 +27,8 @@ spec:
     kind: Gateway
     name: virtual-models
     sectionName: llm
-  modelMatch: gpt-5-*
+  match:
+    model: gpt-5-*
   visibility: Internal
   provider: OpenAI
 ---
@@ -194,7 +195,8 @@ output:
     modelRoute:
       key: default/fast.llm
       listenerKey: default/virtual-models.llm
-      name: fast
+      match:
+        model: fast
       virtualModel:
         weighted:
           targets:
@@ -212,7 +214,8 @@ output:
           backend: default/gpt-5-mini/backend.llm
       key: default/gpt-5-mini.llm
       listenerKey: default/virtual-models.llm
-      name: gpt-5-mini
+      match:
+        model: gpt-5-mini
 - gateway:
     Name: virtual-models
     Namespace: default
@@ -224,7 +227,8 @@ output:
         modelVisibility: INTERNAL
       key: default/openai-models.llm
       listenerKey: default/virtual-models.llm
-      name: gpt-5-*
+      match:
+        model: gpt-5-*
 - gateway:
     Name: virtual-models
     Namespace: default
@@ -232,7 +236,8 @@ output:
     modelRoute:
       key: default/resilient.llm
       listenerKey: default/virtual-models.llm
-      name: resilient
+      match:
+        model: resilient
       virtualModel:
         failover:
           backend:
@@ -244,7 +249,8 @@ output:
     modelRoute:
       key: default/smart.llm
       listenerKey: default/virtual-models.llm
-      name: smart
+      match:
+        model: smart
       virtualModel:
         conditional:
           targets:
