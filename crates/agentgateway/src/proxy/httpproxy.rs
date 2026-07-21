@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use ::http::uri::PathAndQuery;
-use ::http::{header, HeaderMap};
+use ::http::{HeaderMap, header};
 use agent_core::prelude::AssertSize;
 use anyhow::anyhow;
 use frozen_collections::Len;
@@ -13,8 +13,8 @@ use futures_util::FutureExt;
 use headers::HeaderMapExt;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
-use rand::seq::{IndexedRandom, IteratorRandom};
 use rand::RngExt;
+use rand::seq::{IndexedRandom, IteratorRandom};
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -28,15 +28,15 @@ use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
-	auth, filters, merge_in_headers, retry, Authority, HeaderName, HeaderValue, Request, Response,
-	Scheme, StatusCode, Uri,
+	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
+	merge_in_headers, retry,
 };
 use crate::llm::{
-	model_router, InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType,
+	InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
 };
 use crate::proxy::tcpproxy::TCPProxy;
 use crate::proxy::{
-	dtrace, resolve_simple_backend, ProxyError, ProxyResponse, ProxyResponseReason, WaypointService,
+	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, dtrace, resolve_simple_backend,
 };
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
@@ -49,7 +49,7 @@ use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, Socket, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::local::InternalBackend;
 use crate::types::{backend, frontend};
-use crate::{store, ProxyInputs, *};
+use crate::{ProxyInputs, store, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
 	route
@@ -145,7 +145,7 @@ async fn apply_request_policies(
 	req: &mut Request,
 	rp: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
-  // TODO we only need allow policies to be timeout-aware because we odn't have
+	// TODO we only need allow policies to be timeout-aware because we odn't have
 	// a unified timeout guard that applies during policy evalutation
 	if let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout) {
 		req.extensions_mut().insert(http::filters::RequestDeadline(

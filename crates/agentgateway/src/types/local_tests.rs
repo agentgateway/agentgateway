@@ -1598,7 +1598,10 @@ binds:
 	};
 
 	// A bare duration literal is wrapped into a CEL `duration(...)` call.
-	assert_eq!(delay_of(0).duration.original_expression, r#"duration("2s")"#);
+	assert_eq!(
+		delay_of(0).duration.original_expression,
+		r#"duration("2s")"#
+	);
 	// A CEL expression is preserved as-is.
 	assert_eq!(
 		delay_of(1).duration.original_expression,

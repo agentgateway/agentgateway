@@ -2204,12 +2204,8 @@ where
 				Ok(BackendAuth::OAuthTokenExchange(auth))
 			},
 			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
-				// Cross App Access is backed by the OAuth exchange implementation but has its own
-				// focused config shape and cross-field checks.
-				let mut auth = auth;
-				auth
-					.apply_local_defaults()
-					.map_err(serde::de::Error::custom)?;
+				// The derived exchange is built on deserialize; validate here so untagged
+				// compat parsing still returns the real cross-field error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
 				Ok(BackendAuth::CrossAppAccess(auth))
 			},

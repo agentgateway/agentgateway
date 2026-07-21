@@ -52,6 +52,20 @@ func oauthTokenEndpointRef() gwv1.BackendObjectReference {
 	}
 }
 
+func crossAppAccessEndpoint(name string) agentgateway.CrossAppAccessEndpoint {
+	return agentgateway.CrossAppAccessEndpoint{
+		BackendRef: gwv1.BackendObjectReference{
+			Group: ptr.Of(gwv1.Group("agentgateway.dev")),
+			Kind:  ptr.Of(gwv1.Kind("AgentgatewayBackend")),
+			Name:  gwv1.ObjectName(name),
+		},
+		ClientAuth: agentgateway.OAuthClientAuth{
+			ClientID: "gateway",
+			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodClientSecretPost),
+		},
+	}
+}
+
 func TestOAuthTokenExchangeTokenEndpointIsReferencedBackend(t *testing.T) {
 	policy := &agentgateway.AgentgatewayPolicy{
 		Spec: agentgateway.AgentgatewayPolicySpec{
@@ -79,6 +93,32 @@ func TestOAuthTokenExchangeTokenEndpointIsReferencedBackend(t *testing.T) {
 	}
 }
 
+func TestCrossAppAccessTokenEndpointsAreReferencedBackends(t *testing.T) {
+	policy := &agentgateway.AgentgatewayPolicy{
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Backend: &agentgateway.BackendFull{
+				BackendSimple: agentgateway.BackendSimple{
+					Auth: &agentgateway.BackendAuth{
+						CrossAppAccess: &agentgateway.CrossAppAccessAuth{
+							IdentityProvider:            crossAppAccessEndpoint("idp"),
+							ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+							Audience:                    "https://resource.example.com",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	refs := referencedBackendRefsFromPolicy(policy)
+	if len(refs) != 2 {
+		t.Fatalf("referenced backend refs length = %d, want 2", len(refs))
+	}
+	if refs[0].Name != "idp" || refs[1].Name != "resource-as" {
+		t.Fatalf("referenced backend refs = %+v, want idp and resource-as", refs)
+	}
+}
+
 func TestBuildOAuthTokenExchangeResolvesTokenEndpointWhenNil(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 
@@ -90,6 +130,90 @@ func TestBuildOAuthTokenExchangeResolvesTokenEndpointWhenNil(t *testing.T) {
 	}
 	if got := oauth.GetTokenEndpoint().GetBackend(); got != "default/token-endpoint" {
 		t.Fatalf("token endpoint backend = %q, want default/token-endpoint", got)
+	}
+}
+
+func TestBuildCrossAppAccess(t *testing.T) {
+	ctx := oauthTestPolicyCtxWithBackend(t, func(_ krt.HandlerContext, _ string, _ schema.GroupKind, name gwv1.ObjectName, _ *gwv1.Namespace, _ *gwv1.PortNumber) (*api.BackendReference, error) {
+		return &api.BackendReference{
+			Kind: &api.BackendReference_Backend{
+				Backend: "default/" + string(name),
+			},
+		}, nil
+	})
+	idpPath := "/idp/token"
+	resourcePath := "/resource/token"
+
+	crossAppAccess, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
+		IdentityProvider: agentgateway.CrossAppAccessEndpoint{
+			BackendRef: crossAppAccessEndpoint("idp").BackendRef,
+			Path:       &idpPath,
+			ClientAuth: crossAppAccessEndpoint("idp").ClientAuth,
+		},
+		ResourceAuthorizationServer: agentgateway.CrossAppAccessEndpoint{
+			BackendRef: crossAppAccessEndpoint("resource-as").BackendRef,
+			Path:       &resourcePath,
+			ClientAuth: crossAppAccessEndpoint("resource-as").ClientAuth,
+		},
+		Audience:  "https://resource.example.com",
+		Resources: []string{"https://api.example.com"},
+		Scopes:    []string{"read", "write"},
+	}, "default")
+	if err != nil {
+		t.Fatalf("BuildCrossAppAccess() error = %v, want nil", err)
+	}
+
+	if got := crossAppAccess.GetIdentityProvider().GetTokenEndpoint().GetBackend(); got != "default/idp" {
+		t.Fatalf("identity provider backend = %q, want default/idp", got)
+	}
+	if got := crossAppAccess.GetResourceAuthorizationServer().GetTokenEndpoint().GetBackend(); got != "default/resource-as" {
+		t.Fatalf("resource authorization server backend = %q, want default/resource-as", got)
+	}
+	if got := crossAppAccess.GetIdentityProvider().GetTokenEndpointPath(); got != idpPath {
+		t.Fatalf("identity provider path = %q, want %q", got, idpPath)
+	}
+	if got := crossAppAccess.GetResourceAuthorizationServer().GetTokenEndpointPath(); got != resourcePath {
+		t.Fatalf("resource authorization server path = %q, want %q", got, resourcePath)
+	}
+	if crossAppAccess.GetAudience() != "https://resource.example.com" {
+		t.Fatalf("audience = %q, want resource audience", crossAppAccess.GetAudience())
+	}
+	if got := crossAppAccess.GetIdentityProvider().GetClientAuth().GetMethod(); got != api.OAuthClientAuth_CLIENT_SECRET_POST {
+		t.Fatalf("identity provider client auth method = %v, want CLIENT_SECRET_POST", got)
+	}
+	if got := crossAppAccess.GetScopes(); len(got) != 2 || got[0] != "read" || got[1] != "write" {
+		t.Fatalf("scopes = %v, want read/write", got)
+	}
+}
+
+func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	path := "token"
+
+	crossAppAccess, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
+		IdentityProvider: agentgateway.CrossAppAccessEndpoint{
+			BackendRef: oauthTokenEndpointRef(),
+			Path:       &path,
+			ClientAuth: agentgateway.OAuthClientAuth{
+				ClientID: "gateway",
+				Method:   ptr.Of(agentgateway.OAuthClientAuthMethodClientSecretPost),
+			},
+		},
+		ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+	}, "default")
+	if err == nil {
+		t.Fatal("BuildCrossAppAccess() error = nil, want validation errors")
+	}
+	for _, want := range []string{
+		"crossAppAccess audience must not be empty",
+		"crossAppAccess.identityProvider.path",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("BuildCrossAppAccess() error = %v, want containing %q", err, want)
+		}
+	}
+	if crossAppAccess.GetIdentityProvider().GetTokenEndpoint() == nil {
+		t.Fatal("identity provider token endpoint is nil, want partial config preserved")
 	}
 }
 

@@ -915,6 +915,12 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		if err != nil {
 			errs = append(errs, err)
 		}
+	} else if auth.CrossAppAccess != nil {
+		crossAppAccessAuth, err := buildCrossAppAccessPolicy(ctx, auth.CrossAppAccess, policy.Namespace)
+		translatedAuth = crossAppAccessAuth
+		if err != nil {
+			errs = append(errs, err)
+		}
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Passthrough{
@@ -970,6 +976,67 @@ func buildOAuthTokenExchangePolicy(ctx PolicyCtx, auth *agentgateway.OAuthTokenE
 			OauthTokenExchange: oauth,
 		},
 	}, err
+}
+
+func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.CrossAppAccessAuth, error) {
+	if auth == nil {
+		return nil, errors.New("crossAppAccess must not be nil")
+	}
+
+	var errs []error
+	if auth.Audience == "" {
+		errs = append(errs, errors.New("crossAppAccess audience must not be empty"))
+	}
+
+	identityProvider, err := buildCrossAppAccessEndpoint(ctx, &auth.IdentityProvider, namespace, "crossAppAccess.identityProvider")
+	if err != nil {
+		errs = append(errs, err)
+	}
+	resourceAuthorizationServer, err := buildCrossAppAccessEndpoint(ctx, &auth.ResourceAuthorizationServer, namespace, "crossAppAccess.resourceAuthorizationServer")
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return &api.CrossAppAccessAuth{
+		IdentityProvider:            identityProvider,
+		ResourceAuthorizationServer: resourceAuthorizationServer,
+		Audience:                    auth.Audience,
+		Resources:                   auth.Resources,
+		Scopes:                      auth.Scopes,
+		Cache:                       translateOAuthTokenCache(auth.Cache),
+	}, errors.Join(errs...)
+}
+
+func buildCrossAppAccessPolicy(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.BackendAuthPolicy, error) {
+	crossAppAccess, err := BuildCrossAppAccess(ctx, auth, namespace)
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_CrossAppAccess{
+			CrossAppAccess: crossAppAccess,
+		},
+	}, err
+}
+
+func buildCrossAppAccessEndpoint(ctx PolicyCtx, endpoint *agentgateway.CrossAppAccessEndpoint, namespace, field string) (*api.CrossAppAccessAuth_Endpoint, error) {
+	var errs []error
+
+	tokenEndpoint, err := BuildBackendRef(ctx, endpoint.BackendRef, namespace)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	clientAuth, err := buildOAuthClientAuth(ctx, &endpoint.ClientAuth, namespace)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	if endpoint.Path != nil && !strings.HasPrefix(*endpoint.Path, "/") {
+		errs = append(errs, fmt.Errorf("%s.path %q must start with /", field, *endpoint.Path))
+	}
+
+	return &api.CrossAppAccessAuth_Endpoint{
+		TokenEndpoint:     tokenEndpoint,
+		TokenEndpointPath: endpoint.Path,
+		ClientAuth:        clientAuth,
+	}, errors.Join(errs...)
 }
 
 // BuildOAuthTokenExchange lowers an OAuth token exchange policy into its xDS representation.

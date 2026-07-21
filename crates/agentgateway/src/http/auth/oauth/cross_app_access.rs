@@ -5,14 +5,47 @@ use super::TokenCacheConfig;
 use super::cache::InMemoryTokenCache;
 use super::{
 	ChainedExchange, OAuthClientAuth, OAuthGrantType, OAuthTokenExchangeAuth, OAuthTokenType,
-	TokenSpec, default_token_cache, deserialize_token_cache,
+	TokenSpec, default_token_cache, deserialize_token_cache, token_cache_from_proto,
 };
 use crate::http::auth::AuthorizationLocation;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
+use crate::types::agent_xds::resolve_simple_reference;
+use crate::types::proto::{ProtoError, agent};
 use crate::{apply, schema};
 
-#[apply(schema!)]
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(from = "CrossAppAccessAuthConfig")]
 pub struct CrossAppAccessAuth {
+	oauth: OAuthTokenExchangeAuth,
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for CrossAppAccessAuth {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"CrossAppAccessAuth".into()
+	}
+
+	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		CrossAppAccessAuthConfig::json_schema(generator)
+	}
+}
+
+impl serde::Serialize for CrossAppAccessAuth {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		serde::Serialize::serialize(
+			&self
+				.config_for_serialize()
+				.map_err(serde::ser::Error::custom)?,
+			serializer,
+		)
+	}
+}
+
+#[apply(schema!)]
+pub(super) struct CrossAppAccessAuthConfig {
 	/// The user's IdP authorization server, used for the RFC 8693 token exchange.
 	pub(super) identity_provider: CrossAppAccessEndpoint,
 	/// The resource authorization server, which exchanges the ID-JAG for an access token.
@@ -34,61 +67,152 @@ pub struct CrossAppAccessAuth {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<TokenCacheConfig>"))]
 	pub(super) cache: Option<InMemoryTokenCache>,
-	#[serde(skip)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
-	pub(super) oauth: Option<OAuthTokenExchangeAuth>,
 }
 
-impl CrossAppAccessAuth {
-	pub(crate) fn validate_load(&self) -> Result<(), String> {
-		if self.audience.is_empty() {
-			return Err("crossAppAccess audience must not be empty".into());
-		}
-		self
-			.identity_provider
-			.validate_load("crossAppAccess.identityProvider")?;
-		self
-			.resource_authorization_server
-			.validate_load("crossAppAccess.resourceAuthorizationServer")?;
-		let oauth = self.oauth.as_ref().ok_or_else(|| {
-			"crossAppAccess derived oauth config must be initialized by apply_local_defaults".to_string()
-		})?;
-		oauth.validate_load()?;
-		Ok(())
-	}
-
-	pub(crate) fn apply_local_defaults(&mut self) -> Result<(), String> {
-		self.oauth = Some(OAuthTokenExchangeAuth {
-			target: self.identity_provider.target.clone(),
-			path: self.identity_provider.path.clone(),
+impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
+	fn from(config: CrossAppAccessAuthConfig) -> Self {
+		// Cross App Access is the RFC 8693 ID-JAG leg (to the IdP) chained into the RFC 7523
+		// jwt-bearer leg (to the resource AS).
+		let CrossAppAccessAuthConfig {
+			identity_provider,
+			resource_authorization_server,
+			audience,
+			resources,
+			scopes,
+			cache,
+		} = config;
+		let CrossAppAccessEndpoint {
+			target,
+			path,
+			client_auth,
+		} = identity_provider;
+		let chained_exchange = resource_authorization_server.into_chained_exchange(scopes.clone());
+		let oauth = OAuthTokenExchangeAuth {
+			target,
+			path,
 			grant_type: OAuthGrantType::TokenExchange,
 			subject_token: TokenSpec {
 				source: AuthorizationLocation::default(),
 				token_type: OAuthTokenType::IdToken,
 			},
 			actor_token: None,
-			audiences: vec![self.audience.clone()],
-			scopes: self.scopes.clone(),
-			resources: self.resources.clone(),
+			audiences: vec![audience],
+			scopes,
+			resources,
 			requested_token_type: Some(OAuthTokenType::IdJag),
-			client_auth: Some(self.identity_provider.client_auth.clone()),
+			client_auth: Some(client_auth),
 			additional_params: BTreeMap::new(),
-			chained_exchange: Some(
-				self
-					.resource_authorization_server
-					.as_chained_exchange(&self.scopes),
-			),
+			chained_exchange: Some(chained_exchange),
 			authorization_location: AuthorizationLocation::default(),
-			cache: self.cache.clone(),
-		});
-		Ok(())
+			cache,
+		};
+		Self { oauth }
+	}
+}
+
+impl CrossAppAccessAuth {
+	pub(crate) fn validate_load(&self) -> Result<(), String> {
+		if self.audience().is_empty() {
+			return Err("crossAppAccess audience must not be empty".into());
+		}
+		self.validate_endpoint_paths()?;
+		self.oauth.validate_load()
+	}
+
+	pub(super) fn audience(&self) -> &str {
+		self
+			.oauth
+			.audiences
+			.first()
+			.map(String::as_str)
+			.unwrap_or_default()
 	}
 
 	pub(super) fn oauth_token_exchange(&self) -> &OAuthTokenExchangeAuth {
-		self
+		&self.oauth
+	}
+
+	fn config_for_serialize(&self) -> Result<CrossAppAccessAuthConfig, String> {
+		let chained_exchange = self
 			.oauth
+			.chained_exchange
 			.as_ref()
-			.expect("Cross App Access derived OAuth config must be initialized by apply_local_defaults")
+			.ok_or_else(|| "cross app access auth must have a chained token exchange".to_string())?;
+		let client_auth = self
+			.oauth
+			.client_auth
+			.as_ref()
+			.ok_or_else(|| "cross app access identity provider must have client auth".to_string())?;
+		let chained_client_auth = chained_exchange.client_auth.as_ref().ok_or_else(|| {
+			"cross app access resource authorization server must have client auth".to_string()
+		})?;
+		let audience = match self.oauth.audiences.as_slice() {
+			[audience] => audience.clone(),
+			audiences => {
+				return Err(format!(
+					"cross app access auth must have exactly one audience, got {}",
+					audiences.len()
+				));
+			},
+		};
+
+		if self.oauth.scopes != chained_exchange.scopes {
+			return Err("cross app access root and chained scopes must match".to_string());
+		}
+
+		Ok(CrossAppAccessAuthConfig {
+			identity_provider: CrossAppAccessEndpoint {
+				target: self.oauth.target.clone(),
+				path: self.oauth.path.clone(),
+				client_auth: client_auth.clone(),
+			},
+			resource_authorization_server: CrossAppAccessEndpoint {
+				target: chained_exchange.target.clone(),
+				path: chained_exchange.path.clone(),
+				client_auth: chained_client_auth.clone(),
+			},
+			audience,
+			resources: self.oauth.resources.clone(),
+			scopes: self.oauth.scopes.clone(),
+			cache: self.oauth.cache.clone(),
+		})
+	}
+
+	fn validate_endpoint_paths(&self) -> Result<(), String> {
+		if !self.oauth.path.is_empty() && !self.oauth.path.starts_with('/') {
+			return Err(format!(
+				"crossAppAccess.identityProvider.path {:?} must start with /",
+				self.oauth.path
+			));
+		}
+		match &self.oauth.chained_exchange {
+			Some(chained_exchange)
+				if !chained_exchange.path.is_empty() && !chained_exchange.path.starts_with('/') =>
+			{
+				return Err(format!(
+					"crossAppAccess.resourceAuthorizationServer.path {:?} must start with /",
+					chained_exchange.path
+				));
+			},
+			_ => {},
+		}
+		Ok(())
+	}
+
+	pub(crate) fn from_proto(t: agent::CrossAppAccessAuth) -> Result<Self, ProtoError> {
+		let config = CrossAppAccessAuthConfig {
+			identity_provider: CrossAppAccessEndpoint::from_proto(t.identity_provider)?,
+			resource_authorization_server: CrossAppAccessEndpoint::from_proto(
+				t.resource_authorization_server,
+			)?,
+			audience: t.audience,
+			resources: t.resources,
+			scopes: t.scopes,
+			cache: token_cache_from_proto(t.cache)?,
+		};
+		let auth = Self::from(config);
+		auth.validate_load().map_err(ProtoError::Generic)?;
+		Ok(auth)
 	}
 }
 
@@ -108,11 +232,26 @@ pub(super) struct CrossAppAccessEndpoint {
 }
 
 impl CrossAppAccessEndpoint {
-	fn validate_load(&self, prefix: &str) -> Result<(), String> {
-		if !self.path.is_empty() && !self.path.starts_with('/') {
-			return Err(format!("{prefix}.path {:?} must start with /", self.path));
-		}
-		self.client_auth.validate_load()
+	fn from_proto(t: Option<agent::cross_app_access_auth::Endpoint>) -> Result<Self, ProtoError> {
+		let t = t.ok_or(ProtoError::MissingRequiredField)?;
+		let token_endpoint = t
+			.token_endpoint
+			.as_ref()
+			.ok_or(ProtoError::MissingRequiredField)?;
+		let client_auth = t
+			.client_auth
+			.ok_or(ProtoError::MissingRequiredField)?
+			.try_into()?;
+		Ok(Self {
+			target: SimpleBackendReferenceWithPolicies {
+				target: std::sync::Arc::new(resolve_simple_reference(Some(token_endpoint))),
+				// Inline connection policies are not supported from xDS;
+				// the backend resource carries its own policies there.
+				policies: Vec::new(),
+			},
+			path: t.token_endpoint_path.unwrap_or_default(),
+			client_auth,
+		})
 	}
 
 	// The root ID-JAG exchange sends configured resources to the IdP; the resulting
@@ -120,13 +259,13 @@ impl CrossAppAccessEndpoint {
 	// It still sends `scope`: RFC 7523 uses it to select the access-token scopes, and
 	// resource ASs (Okta, xaa.dev) issue an unscoped token without it. The draft's
 	// minimal example omits scope, but the ID-JAG's `scope` claim is only the ceiling.
-	fn as_chained_exchange(&self, scopes: &[String]) -> ChainedExchange {
+	fn into_chained_exchange(self, scopes: Vec<String>) -> ChainedExchange {
 		ChainedExchange {
-			target: self.target.clone(),
-			path: self.path.clone(),
-			client_auth: Some(self.client_auth.clone()),
+			target: self.target,
+			path: self.path,
+			client_auth: Some(self.client_auth),
 			audiences: Vec::new(),
-			scopes: scopes.to_vec(),
+			scopes,
 			resources: Vec::new(),
 			additional_params: BTreeMap::new(),
 		}

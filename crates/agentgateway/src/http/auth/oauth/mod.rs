@@ -749,7 +749,7 @@ pub(super) async fn apply_identity_assertion(
 	let oauth = auth.oauth_token_exchange();
 	let client = PolicyClient::new(inputs.clone());
 
-	trace!(audience = %auth.audience, "performing ID-JAG identity assertion exchange");
+	trace!(audience = %auth.audience(), "performing ID-JAG identity assertion exchange");
 	let access_token = fetch_token(&client, oauth, oauth.build_exchange_request(req)?)
 		.await
 		.map_err(FetchError::into_proxy_error)?;
