@@ -67,11 +67,11 @@ func TestBuildConfigMap(t *testing.T) {
 	}
 	labels := map[string]string{migratedLabelKey: "my-policy"}
 
-	cm, err := buildConfigMap(secret, labels)
+	cm, err := buildConfigMap(secret, "my-policy", labels)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cm.Name != "api-key-configmap" || cm.Namespace != "ns" {
+	if cm.Name != "api-key-my-policy-configmap" || cm.Namespace != "ns" {
 		t.Fatalf("unexpected ConfigMap identity: %s/%s", cm.Namespace, cm.Name)
 	}
 	if cm.Labels[migratedLabelKey] != "my-policy" {
@@ -87,6 +87,26 @@ func TestBuildConfigMap(t *testing.T) {
 	}
 	if entry.KeyHash == "" {
 		t.Fatal("expected ConfigMap entry to contain a keyHash")
+	}
+}
+
+func TestBuildConfigMapNameScopedPerPolicy(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
+		Data:       map[string][]byte{"client1": []byte("k-456")},
+	}
+
+	cmA, err := buildConfigMap(secret, "policy-a", map[string]string{migratedLabelKey: "policy-a"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cmB, err := buildConfigMap(secret, "policy-b", map[string]string{migratedLabelKey: "policy-b"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cmA.Name == cmB.Name {
+		t.Fatalf("expected distinct ConfigMap names for distinct policies sharing a Secret, got %q for both", cmA.Name)
 	}
 }
 

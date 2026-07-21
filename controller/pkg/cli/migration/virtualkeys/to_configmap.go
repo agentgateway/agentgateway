@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 
@@ -20,7 +21,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/printer"
 )
 
-// migratedLabel marks a ConfigMap created by this migration, and is used as
+// migratedLabelKey marks a ConfigMap created by this migration, and is used as
 // the configMapSelector's matchLabels so the policy picks it up without
 // needing a per-ConfigMap reference field.
 const migratedLabelKey = "agentgateway.dev/migrated-from-secret"
@@ -85,10 +86,12 @@ func runToConfigMap(cmd *cobra.Command, f *toConfigMapFlags) error {
 		return err
 	}
 
+	out := cmd.OutOrStdout()
+
 	var secretsToRemove []string
 	anyMigrated := false
 	for _, policy := range policies {
-		migrated, secrets, err := migratePolicy(ctx, cmd, kubeClient, policy, f.dryRun)
+		migrated, secrets, err := migratePolicy(ctx, out, kubeClient, policy, f.dryRun)
 		if err != nil {
 			return fmt.Errorf("policy %s/%s: %w", policy.Namespace, policy.Name, err)
 		}
@@ -99,7 +102,7 @@ func runToConfigMap(cmd *cobra.Command, f *toConfigMapFlags) error {
 	}
 
 	if !anyMigrated {
-		fmt.Fprintln(cmd.OutOrStdout(), "no AgentgatewayPolicy resources using secretRef/secretSelector API key credentials were found")
+		fmt.Fprintln(out, "no AgentgatewayPolicy resources using secretRef/secretSelector API key credentials were found")
 		return nil
 	}
 
@@ -110,9 +113,9 @@ func runToConfigMap(cmd *cobra.Command, f *toConfigMapFlags) error {
 		if f.dryRun {
 			verb = "will be able to"
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "\nThe following Secrets are no longer referenced and %s be removed:\n", verb)
+		fmt.Fprintf(out, "\nThe following Secrets are no longer referenced by migrated AgentgatewayPolicy resources and %s be removed, if nothing else references them:\n", verb)
 		for _, s := range secretsToRemove {
-			fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", s)
+			fmt.Fprintf(out, "  - %s\n", s)
 		}
 	}
 
@@ -139,7 +142,7 @@ func loadPolicies(ctx context.Context, kubeClient kubeutil.CLIClient, namespace,
 // migratePolicy migrates a single policy's API key credentials, returning
 // whether it was migrated and the names ("namespace/name") of Secrets that
 // are no longer referenced as a result.
-func migratePolicy(ctx context.Context, cmd *cobra.Command, kubeClient kubeutil.CLIClient, policy agentgateway.AgentgatewayPolicy, dryRun bool) (bool, []string, error) {
+func migratePolicy(ctx context.Context, out io.Writer, kubeClient kubeutil.CLIClient, policy agentgateway.AgentgatewayPolicy, dryRun bool) (bool, []string, error) {
 	if policy.Spec.Traffic == nil || policy.Spec.Traffic.APIKeyAuthentication == nil {
 		return false, nil, nil
 	}
@@ -175,23 +178,23 @@ func migratePolicy(ctx context.Context, cmd *cobra.Command, kubeClient kubeutil.
 			return false, nil, fmt.Errorf("failed to get Secret %s/%s: %w", policy.Namespace, secretName, err)
 		}
 
-		configMap, err := buildConfigMap(secret, labels)
+		configMap, err := buildConfigMap(secret, policy.Name, labels)
 		if err != nil {
 			return false, nil, fmt.Errorf("failed to convert Secret %s/%s: %w", policy.Namespace, secretName, err)
 		}
 
 		if dryRun {
-			fmt.Fprintf(cmd.OutOrStdout(), "would create ConfigMap %s/%s (from Secret %s):\n", configMap.Namespace, configMap.Name, secretName)
-			if err := printYAML(cmd, configMap); err != nil {
+			fmt.Fprintf(out, "would create ConfigMap %s/%s (from Secret %s):\n", configMap.Namespace, configMap.Name, secretName)
+			if err := printYAML(out, configMap); err != nil {
 				return false, nil, err
 			}
 		} else if _, err := kubeClient.Kube().CoreV1().ConfigMaps(policy.Namespace).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
 			if !apierrors.IsAlreadyExists(err) {
 				return false, nil, fmt.Errorf("failed to create ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "ConfigMap %s/%s already exists, skipping creation\n", configMap.Namespace, configMap.Name)
+			fmt.Fprintf(out, "ConfigMap %s/%s already exists, skipping creation\n", configMap.Namespace, configMap.Name)
 		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "created ConfigMap %s/%s (from Secret %s)\n", configMap.Namespace, configMap.Name, secretName)
+			fmt.Fprintf(out, "created ConfigMap %s/%s (from Secret %s)\n", configMap.Namespace, configMap.Name, secretName)
 		}
 
 		secretsToRemove = append(secretsToRemove, fmt.Sprintf("%s/%s", policy.Namespace, secretName))
@@ -203,14 +206,14 @@ func migratePolicy(ctx context.Context, cmd *cobra.Command, kubeClient kubeutil.
 	updated.Spec.Traffic.APIKeyAuthentication.ConfigMapSelector = &agentgateway.ConfigMapSelector{MatchLabels: labels}
 
 	if dryRun {
-		fmt.Fprintf(cmd.OutOrStdout(), "would update AgentgatewayPolicy %s/%s:\n", updated.Namespace, updated.Name)
-		if err := printYAML(cmd, updated); err != nil {
+		fmt.Fprintf(out, "would update AgentgatewayPolicy %s/%s:\n", updated.Namespace, updated.Name)
+		if err := printYAML(out, updated); err != nil {
 			return false, nil, err
 		}
 	} else if _, err := kubeClient.Agentgateway().AgentgatewayAgentgateway().AgentgatewayPolicies(policy.Namespace).Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
 		return false, nil, fmt.Errorf("failed to update AgentgatewayPolicy %s/%s: %w", updated.Namespace, updated.Name, err)
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "updated AgentgatewayPolicy %s/%s to use configMapSelector\n", updated.Namespace, updated.Name)
+		fmt.Fprintf(out, "updated AgentgatewayPolicy %s/%s to use configMapSelector\n", updated.Namespace, updated.Name)
 	}
 
 	return true, secretsToRemove, nil
@@ -224,7 +227,13 @@ type apiKeyEntry struct {
 	Metadata json.RawMessage `json:"metadata,omitempty"`
 }
 
-func buildConfigMap(secret *corev1.Secret, labels map[string]string) (*corev1.ConfigMap, error) {
+// buildConfigMap converts a Secret into the ConfigMap equivalent for a single
+// policy. The ConfigMap name is scoped by policyName (rather than derived
+// from the Secret alone) so that two policies referencing the same Secret
+// don't collide on the same ConfigMap: each gets its own copy, avoiding a
+// silent AlreadyExists-and-skip that would leave one policy's configMapSelector
+// matching nothing.
+func buildConfigMap(secret *corev1.Secret, policyName string, labels map[string]string) (*corev1.ConfigMap, error) {
 	data := make(map[string]string, len(secret.Data)+len(secret.StringData))
 	merged := make(map[string][]byte, len(secret.Data)+len(secret.StringData))
 	maps.Copy(merged, secret.Data)
@@ -252,7 +261,7 @@ func buildConfigMap(secret *corev1.Secret, labels map[string]string) (*corev1.Co
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      secret.Name + "-configmap",
+			Name:      secret.Name + "-" + policyName + "-configmap",
 			Namespace: secret.Namespace,
 			Labels:    labels,
 		},
@@ -279,17 +288,17 @@ func toKeyHashEntry(v []byte) (apiKeyEntry, error) {
 		return apiKeyEntry{KeyHash: entry.KeyHash, Metadata: entry.Metadata}, nil
 	}
 	if entry.Key == "" {
-		return apiKeyEntry{}, fmt.Errorf("exactly one of key or keyHash must be set")
+		return apiKeyEntry{}, fmt.Errorf("one of key or keyHash must be set")
 	}
 
 	sum := sha256.Sum256([]byte(entry.Key))
 	return apiKeyEntry{KeyHash: "sha256:" + hex.EncodeToString(sum[:]), Metadata: entry.Metadata}, nil
 }
 
-func printYAML(cmd *cobra.Command, v any) error {
+func printYAML(out io.Writer, v any) error {
 	p, err := printer.New("yaml")
 	if err != nil {
 		return err
 	}
-	return p.Print(cmd.OutOrStdout(), v)
+	return p.Print(out, v)
 }
