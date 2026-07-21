@@ -2464,12 +2464,9 @@ async fn make_backend_call(
 	let llm_response_log = log.as_ref().map(|l| l.llm_response.clone());
 	let log_content = log
 		.as_ref()
-		.map(|l| {
-			let has_tracer = l.tracer.is_some();
-			llm::LogContentFields {
-				completion: has_tracer || l.cel.cel_context.needs_llm_completion(),
-				tool_calls: has_tracer || l.cel.cel_context.needs_llm_tool_calls(),
-			}
+		.map(|l| llm::LogContentFields {
+			completion: l.cel.cel_context.needs_llm_completion(),
+			tool_calls: l.cel.cel_context.needs_llm_tool_calls(),
 		})
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();

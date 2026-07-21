@@ -1094,12 +1094,9 @@ impl Drop for DropOnLog {
 			let duration = end_time.duration_since(&log.start);
 			let enable_trace = log.tracer.is_some();
 
-			let llm_info_raw = log.llm_response.take();
-			let output_messages = llm_info_raw
-				.as_ref()
-				.and_then(|info| info.response.output_messages.as_ref())
-				.and_then(|msgs| serde_json::to_value(msgs).ok());
-			let mut llm_response: Option<LLMContext> = llm_info_raw
+			let mut llm_response: Option<LLMContext> = log
+				.llm_response
+				.take()
 				.map(|llm_info| LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref())));
 			if let Some(llm_response) = llm_response.as_mut() {
 				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
@@ -1231,7 +1228,6 @@ impl Drop for DropOnLog {
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
 			let cost = llm_response.as_ref().and_then(|l| l.cost.as_ref());
 			let usage_cost_total = cost.map(|b| b.total().to_string());
-			let output_messages_value = &output_messages;
 			let trace_cost_fields = if enable_trace {
 				cost.map(|b| {
 					[
@@ -1419,10 +1415,6 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|l| l.output_audio_tokens)
 						.map(Into::into),
-				),
-				(
-					"gen_ai.output.messages",
-					output_messages_value.as_ref().map(json_value_to_value_bag),
 				),
 				(
 					"gen_ai.request.temperature",
@@ -2324,114 +2316,4 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn output_messages_emitted_as_span_attribute_when_present() {
-		let request = llm::LLMRequest {
-			input_tokens: None,
-			input_format: InputFormat::Completions,
-			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
-			request_model: strng::literal!("my-model"),
-			provider: strng::literal!("openai"),
-			streaming: true,
-			params: llm::LLMRequestParams::default(),
-			prompt: None,
-			provider_state: None,
-		};
-		let response = llm::LLMResponse {
-			output_messages: Some(vec![llm::OutputMessage {
-				role: strng::literal!("assistant"),
-				content: vec![llm::OutputMessagePart::ToolCall {
-					id: strng::literal!("call_1"),
-					name: strng::literal!("get_weather"),
-					arguments: serde_json::json!({"city": "sf"}),
-				}],
-				finish_reason: Some(strng::literal!("tool_calls")),
-			}]),
-			..Default::default()
-		};
-
-		let (tracer, exporter) = test_tracer();
-		let mut log = test_request_log();
-		log.tracer = Some(tracer.clone());
-		let mut outgoing = trc::TraceParent::new();
-		outgoing.flags = 1;
-		log.outgoing_span = Some(outgoing);
-		log.llm_request = Some(request.clone());
-		log
-			.llm_response
-			.store(Some(llm::LLMInfo::new(request, response)));
-
-		drop(DropOnLog::from(log));
-		let _ = tracer.provider.force_flush();
-
-		let spans = exporter.finished_spans();
-		let span = spans
-			.iter()
-			.find(|span| span.name.as_ref() == "unknown")
-			.expect("request span should be exported");
-		let output_messages = span
-			.attributes
-			.iter()
-			.find(|attr| attr.key.as_str() == "gen_ai.output.messages")
-			.expect("expected gen_ai.output.messages span attribute");
-		let value = output_messages.value.as_str();
-		assert!(
-			value.contains("get_weather"),
-			"gen_ai.output.messages should contain the invoked tool name, got {value}"
-		);
-		assert!(
-			value.contains("tool_call"),
-			"gen_ai.output.messages should contain tool_call type, got {value}"
-		);
-		assert!(
-			value.contains("tool_calls"),
-			"gen_ai.output.messages should contain finish_reason, got {value}"
-		);
-	}
-
-	#[test]
-	fn output_messages_absent_when_none() {
-		let request = llm::LLMRequest {
-			input_tokens: None,
-			input_format: InputFormat::Completions,
-			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
-			request_model: strng::literal!("my-model"),
-			provider: strng::literal!("openai"),
-			streaming: true,
-			params: llm::LLMRequestParams::default(),
-			prompt: None,
-			provider_state: None,
-		};
-		let response = llm::LLMResponse {
-			output_messages: None,
-			..Default::default()
-		};
-
-		let (tracer, exporter) = test_tracer();
-		let mut log = test_request_log();
-		log.tracer = Some(tracer.clone());
-		let mut outgoing = trc::TraceParent::new();
-		outgoing.flags = 1;
-		log.outgoing_span = Some(outgoing);
-		log.llm_request = Some(request.clone());
-		log
-			.llm_response
-			.store(Some(llm::LLMInfo::new(request, response)));
-
-		drop(DropOnLog::from(log));
-		let _ = tracer.provider.force_flush();
-
-		let spans = exporter.finished_spans();
-		let span = spans
-			.iter()
-			.find(|span| span.name.as_ref() == "unknown")
-			.expect("request span should be exported");
-		assert!(
-			span
-				.attributes
-				.iter()
-				.all(|attr| attr.key.as_str() != "gen_ai.output.messages"),
-			"gen_ai.output.messages must not be emitted when there are no output messages"
-		);
-	}
 }
