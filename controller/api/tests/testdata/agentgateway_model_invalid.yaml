@@ -1,3 +1,14 @@
+_err: bedrock configuration is required only for the Bedrock provider
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: bedrock-without-settings
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Bedrock
+---
 _err: virtual model match.model must be an exact name
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel

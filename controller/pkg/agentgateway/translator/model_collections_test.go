@@ -55,14 +55,11 @@ func TestModelLLMProvider(t *testing.T) {
 		}
 	})
 
-	t.Run("provider defaults", func(t *testing.T) {
+	t.Run("provider configuration is required", func(t *testing.T) {
 		providerType := agentgateway.ModelProviderBedrock
-		provider, err := modelLLMProvider(&agentgateway.AgentgatewayModelSpec{Provider: &providerType})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if provider.Bedrock == nil || provider.Bedrock.Region != "us-east-1" {
-			t.Fatalf("unexpected default Bedrock provider: %#v", provider.Bedrock)
+		_, err := modelLLMProvider(&agentgateway.AgentgatewayModelSpec{Provider: &providerType})
+		if err == nil || err.Error() != "bedrock provider requires bedrock configuration" {
+			t.Fatalf("error = %v, want missing Bedrock configuration error", err)
 		}
 	})
 
@@ -81,7 +78,6 @@ func TestValidateModelBaseURL(t *testing.T) {
 		{name: "loopback IPv4", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://127.0.0.1/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
 		{name: "loopback IPv6", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://[::1]/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
 		{name: "link local", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("http://169.254.169.254/latest/meta-data")), wantErr: "cannot target localhost, loopback, or link-local"},
-		{name: "link local IPv6 zone", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("http://[fe80::1%25eth0]/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

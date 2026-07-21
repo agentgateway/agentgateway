@@ -506,13 +506,10 @@ type AnthropicConfig struct {
 
 type BedrockSettings struct {
 	// AWS region to use for the backend.
-	// Defaults to `us-east-1` if not specified.
-	// +optional
-	// +kubebuilder:default=us-east-1
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:Pattern="^[a-z0-9-]+$"
-	Region string `json:"region,omitempty"`
+	Region string `json:"region"`
 
 	// Guardrail policy to use for the backend. See
 	// <https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html>.

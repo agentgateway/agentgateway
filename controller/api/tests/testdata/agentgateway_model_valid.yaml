@@ -6,12 +6,14 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
-  name: bedrock-default
+  name: bedrock
 spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
   provider: Bedrock
+  bedrock:
+    region: us-east-1
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel

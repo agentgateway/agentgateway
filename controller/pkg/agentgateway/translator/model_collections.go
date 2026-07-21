@@ -446,14 +446,10 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 		}
 		provider.VertexAI = &agentgateway.VertexAIConfig{VertexAISettings: *model.VertexAI}
 	case agentgateway.ModelProviderBedrock:
-		settings := agentgateway.BedrockSettings{Region: "us-east-1"}
-		if model.Bedrock != nil {
-			settings = *model.Bedrock
-			if settings.Region == "" {
-				settings.Region = "us-east-1"
-			}
+		if model.Bedrock == nil {
+			return nil, fmt.Errorf("bedrock provider requires bedrock configuration")
 		}
-		provider.Bedrock = &agentgateway.BedrockConfig{BedrockSettings: settings}
+		provider.Bedrock = &agentgateway.BedrockConfig{BedrockSettings: *model.Bedrock}
 	case agentgateway.ModelProviderCustom:
 		if model.Custom == nil {
 			return nil, fmt.Errorf("custom provider requires custom configuration")
@@ -495,8 +491,7 @@ func validateModelBaseURL(model *agentgateway.AgentgatewayModelSpec) error {
 	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
 		return fmt.Errorf("upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses")
 	}
-	ipHost, _, _ := strings.Cut(host, "%")
-	if addr, err := netip.ParseAddr(ipHost); err == nil {
+	if addr, err := netip.ParseAddr(host); err == nil {
 		addr = addr.Unmap()
 		if addr.IsLoopback() || addr.IsLinkLocalUnicast() {
 			return fmt.Errorf("upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses")

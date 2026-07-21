@@ -48,7 +48,7 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || (has(self.upstreamOverrides) && has(self.upstreamOverrides.baseURL))",message="ollama requires upstreamOverrides.baseURL"
 // +kubebuilder:validation:XValidation:rule="has(self.azure) == (has(self.provider) && self.provider == 'Azure')",message="azure configuration is required only for the Azure provider"
 // +kubebuilder:validation:XValidation:rule="has(self.vertexai) == (has(self.provider) && self.provider == 'VertexAI')",message="vertexai configuration is required only for the VertexAI provider"
-// +kubebuilder:validation:XValidation:rule="!has(self.bedrock) || (has(self.provider) && self.provider == 'Bedrock')",message="bedrock configuration is supported only for the Bedrock provider"
+// +kubebuilder:validation:XValidation:rule="has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')",message="bedrock configuration is required only for the Bedrock provider"
 // +kubebuilder:validation:XValidation:rule="has(self.custom) == (has(self.provider) && self.provider == 'Custom')",message="custom configuration is required only for the Custom provider"
 type AgentgatewayModelSpec struct {
 	// Gateways and listeners to which this model attaches.
