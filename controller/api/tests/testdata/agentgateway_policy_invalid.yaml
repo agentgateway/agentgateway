@@ -9,6 +9,70 @@ spec:
       keepalive:
         interval: 100ms
 ---
+_err: unknown fields
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: prompt-guard-auxiliary-oauth-token-exchange
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - openAIModeration:
+            policies:
+              auth:
+                oauthTokenExchange: {}
+---
+_err: unknown fields
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: bedrock-guardrails-secret-ref
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - bedrockGuardrails:
+            identifier: guardrail
+            version: DRAFT
+            region: us-west-2
+            policies:
+              auth:
+                secretRef:
+                  name: openai-secret
+---
+_err: unknown fields
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: google-model-armor-aws-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - googleModelArmor:
+            templateId: template
+            projectId: project
+            policies:
+              auth:
+                aws:
+                  serviceName: bedrock
+---
 _err: 'sni in body should be at least 1 char'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

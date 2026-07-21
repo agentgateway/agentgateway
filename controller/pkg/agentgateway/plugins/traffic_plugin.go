@@ -2252,6 +2252,11 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 			app(backend.Tunnel.BackendRef)
 		}
 	}
+	appAuxiliaryTunnel := func(backend interface {
+		BackendSimple() *agentgateway.BackendSimple
+	}) {
+		appTunnel(backend.BackendSimple())
+	}
 	appTunnel(&s.BackendSimple)
 	if s.ExtAuth != nil && s.ExtAuth.BackendRef != nil {
 		app(*s.ExtAuth.BackendRef)
@@ -2279,13 +2284,13 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 				app(p.Webhook.BackendRef)
 			}
 			if p.OpenAIModeration != nil {
-				appTunnel(p.OpenAIModeration.Policies)
+				appAuxiliaryTunnel(p.OpenAIModeration.Policies)
 			}
 			if p.GoogleModelArmor != nil {
-				appTunnel(p.GoogleModelArmor.Policies)
+				appAuxiliaryTunnel(p.GoogleModelArmor.Policies)
 			}
 			if p.BedrockGuardrails != nil {
-				appTunnel(p.BedrockGuardrails.Policies)
+				appAuxiliaryTunnel(p.BedrockGuardrails.Policies)
 			}
 		}
 		for _, p := range s.AI.PromptGuard.Response {
@@ -2293,10 +2298,10 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 				app(p.Webhook.BackendRef)
 			}
 			if p.GoogleModelArmor != nil {
-				appTunnel(p.GoogleModelArmor.Policies)
+				appAuxiliaryTunnel(p.GoogleModelArmor.Policies)
 			}
 			if p.BedrockGuardrails != nil {
-				appTunnel(p.BedrockGuardrails.Policies)
+				appAuxiliaryTunnel(p.BedrockGuardrails.Policies)
 			}
 		}
 	}

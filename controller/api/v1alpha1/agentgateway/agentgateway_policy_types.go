@@ -201,6 +201,89 @@ type BackendSimple struct {
 	Auth *BackendAuth `json:"auth,omitempty"`
 }
 
+// BackendConnectionPolicy configures common connection behavior for auxiliary backend calls.
+type BackendConnectionPolicy struct {
+	// Settings for managing TCP connections to the backend
+	// +optional
+	TCP *BackendTCP `json:"tcp,omitempty"`
+
+	// Settings for managing TLS connections to the backend
+	//
+	// When set, TLS is originated to the backend using the system trusted CA
+	// certificates, and SNI is inferred from the destination.
+	// +optional
+	TLS *BackendTLS `json:"tls,omitempty"`
+
+	// Settings for managing HTTP requests to the backend
+	// +optional
+	HTTP *BackendHTTP `json:"http,omitempty"`
+
+	// Settings for managing tunnel connections to the backend, like `HTTPS_PROXY`
+	// +optional
+	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
+}
+
+func (p BackendConnectionPolicy) backendSimple(auth *BackendAuth) *BackendSimple {
+	return &BackendSimple{
+		TCP:    p.TCP,
+		TLS:    p.TLS,
+		HTTP:   p.HTTP,
+		Tunnel: p.Tunnel,
+		Auth:   auth,
+	}
+}
+
+// OpenAIModerationPolicy configures calls to the OpenAI Moderation API.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type OpenAIModerationPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to OpenAI.
+	// +optional
+	Auth *OpenAIModerationAuth `json:"auth,omitempty"`
+}
+
+func (p *OpenAIModerationPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
+// BedrockGuardrailsPolicy configures calls to AWS Bedrock Guardrails.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type BedrockGuardrailsPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to AWS Bedrock Guardrails.
+	// +optional
+	Auth *BedrockGuardrailsAuth `json:"auth,omitempty"`
+}
+
+func (p *BedrockGuardrailsPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
+// GoogleModelArmorPolicy configures calls to Google Model Armor.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type GoogleModelArmorPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to Google Model Armor.
+	// +optional
+	Auth *GoogleModelArmorAuth `json:"auth,omitempty"`
+}
+
+func (p *GoogleModelArmorPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
 type Health struct {
 	// CEL expression that determines whether a response indicates an unhealthy backend.
 	// When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
@@ -1402,6 +1485,76 @@ type BackendAuth struct {
 	// `passthrough`.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+// OpenAIModerationAuth configures credentials for OpenAI Moderation requests.
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef
+type OpenAIModerationAuth struct {
+	// Inline key to use as the value of the
+	// `Authorization` header. This option is the least secure; usage of a
+	// `Secret` is preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the authorization value, defaulting to a Kubernetes
+	// `Secret`. By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where backend credentials are inserted. Defaults to the `Authorization`
+	// header with the `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+func (a *OpenAIModerationAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		Location:  a.Location,
+	}
+}
+
+// BedrockGuardrailsAuth configures credentials for AWS Bedrock Guardrails requests.
+type BedrockGuardrailsAuth struct {
+	// AWS authentication method for Bedrock Guardrails. Use `aws: {}` for
+	// default AWS SDK credential discovery.
+	//
+	// +optional
+	AWS *AwsAuth `json:"aws,omitempty"`
+}
+
+func (a *BedrockGuardrailsAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		AWS: a.AWS,
+	}
+}
+
+// GoogleModelArmorAuth configures credentials for Google Model Armor requests.
+type GoogleModelArmorAuth struct {
+	// Google authentication method for Model Armor. Use `gcp: {}` for default
+	// Google credential discovery.
+	//
+	// +optional
+	GCP *GcpAuth `json:"gcp,omitempty"`
+}
+
+func (a *GoogleModelArmorAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		GCP: a.GCP,
+	}
 }
 
 // Cross App Access settings for backend authentication.
