@@ -330,7 +330,7 @@ where
 		// If this clone isn't holding the body, return the original size hint.
 		let state = match self.state.as_ref() {
 			Some(state) => state,
-			None => return self.shared.orig_size_hint.clone(),
+			None => return self.shared.orig_size_hint,
 		};
 
 		// Otherwise, if we're holding the state but have dropped the inner
