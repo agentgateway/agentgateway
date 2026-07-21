@@ -1355,23 +1355,31 @@ impl Relay {
 			capabilities.extensions = extensions;
 			capabilities
 		};
-		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
-		let instructions = if upstream_instructions.is_empty() {
-			Some(gateway_preamble.to_string())
-		} else {
-			let mut merged = String::from(gateway_preamble);
-			for (server_name, instruction) in &upstream_instructions {
-				merged.push_str(&format!("\n\n[{server_name}]\n{instruction}"));
-			}
-			Some(merged)
-		};
-		ServerInfo::new(capabilities)
+		let instructions = Self::merge_upstream_instructions(upstream_instructions);
+		let info = ServerInfo::new(capabilities)
 			.with_protocol_version(pv)
 			.with_server_info(Implementation::new(
 				"agentgateway",
 				BuildInfo::new().version.to_string(),
-			))
-			.with_instructions(instructions.unwrap_or_default())
+			));
+		if let Some(instructions) = instructions {
+			info.with_instructions(instructions)
+		} else {
+			info
+		}
+	}
+
+	fn merge_upstream_instructions(upstream_instructions: Vec<(String, String)>) -> Option<String> {
+		if upstream_instructions.is_empty() {
+			None
+		} else {
+			Some(
+				upstream_instructions
+					.into_iter()
+					.map(|(server_name, instruction)| format!("[{server_name}]\n{instruction}"))
+					.join("\n\n"),
+			)
+		}
 	}
 
 	fn get_discovery(
@@ -1385,12 +1393,17 @@ impl Relay {
 			upstream_instructions,
 			extensions,
 		);
-		DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
-			.with_server_info(info.server_info)
-			.with_instructions(info.instructions.unwrap_or_default())
-			// Discovery is immediately stale because the gateway has no way to
-			// invalidate clients when backend membership or routing config changes.
-			.with_cache(0, CacheScope::Private)
+		let instructions = info.instructions;
+		let discover = DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
+			.with_server_info(info.server_info);
+		let discover = if let Some(instructions) = instructions {
+			discover.with_instructions(instructions)
+		} else {
+			discover
+		};
+		// Discovery is immediately stale because the gateway has no way to
+		// invalidate clients when backend membership or routing config changes.
+		discover.with_cache(0, CacheScope::Private)
 	}
 }
 

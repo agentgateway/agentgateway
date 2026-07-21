@@ -4816,26 +4816,12 @@ fn test_merge_initialize_merges_upstream_instructions_when_multiplexing() {
 	};
 
 	let instructions = info.instructions.expect("instructions should be present");
-	assert!(
-		instructions.contains("Alpha server: handles data processing."),
-		"merged instructions should contain alpha's instructions, got: {instructions}"
+	assert_eq!(
+		instructions,
+		"[alpha]\nAlpha server: handles data processing.\n\n[beta]\nBeta server: handles notifications.",
+		"multiple instruction-bearing upstreams should retain compact source attribution"
 	);
-	assert!(
-		instructions.contains("Beta server: handles notifications."),
-		"merged instructions should contain beta's instructions, got: {instructions}"
-	);
-	assert!(
-		instructions.contains("[alpha]"),
-		"merged instructions should label alpha's section, got: {instructions}"
-	);
-	assert!(
-		instructions.contains("[beta]"),
-		"merged instructions should label beta's section, got: {instructions}"
-	);
-	assert!(
-		instructions.contains("gateway"),
-		"merged instructions should contain gateway preamble, got: {instructions}"
-	);
+	assert!(!instructions.contains("This server is a gateway"));
 }
 
 #[test]
@@ -4874,15 +4860,68 @@ fn test_merge_initialize_no_instructions_when_multiplexing() {
 		other => panic!("expected InitializeResult, got: {:?}", other),
 	};
 
-	let instructions = info.instructions.expect("instructions should be present");
-	// When no upstream provides instructions, only the gateway preamble should be present
 	assert!(
-		instructions.contains("gateway"),
-		"should contain gateway preamble, got: {instructions}"
+		info.instructions.is_none(),
+		"multiplexing should not invent generic instructions when upstreams provide none"
+	);
+}
+
+#[test]
+fn test_merge_initialize_attributes_one_instruction_bearing_upstream() {
+	use rmcp::model::{
+		Implementation, InitializeResult, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30106))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30107))),
+			],
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let merge_fn = relay.merge_initialize(ProtocolVersion::V_2025_06_18, true);
+	let results: Vec<(Strng, ServerResult)> = vec![
+		(
+			"alpha".into(),
+			ServerResult::InitializeResult(
+				InitializeResult::new(ServerCapabilities::default())
+					.with_protocol_version(ProtocolVersion::V_2025_06_18)
+					.with_server_info(Implementation::new("alpha-server", "1.0"))
+					.with_instructions("Only upstream guidance."),
+			),
+		),
+		(
+			"beta".into(),
+			ServerResult::InitializeResult(
+				InitializeResult::new(ServerCapabilities::default())
+					.with_protocol_version(ProtocolVersion::V_2025_06_18)
+					.with_server_info(Implementation::new("beta-server", "1.0")),
+			),
+		),
+	];
+
+	let result = merge_fn(results, &empty_cel()).unwrap();
+	let info = match result {
+		ServerResult::InitializeResult(ir) => ir,
+		other => panic!("expected InitializeResult, got: {:?}", other),
+	};
+
+	assert_eq!(
+		info.instructions.as_deref(),
+		Some("[alpha]\nOnly upstream guidance.")
 	);
 	assert!(
-		!instructions.contains("[alpha]"),
-		"should not contain server sections when no instructions provided, got: {instructions}"
+		!info
+			.instructions
+			.as_deref()
+			.unwrap_or_default()
+			.contains("This server is a gateway")
 	);
 }
 
@@ -5012,6 +5051,126 @@ fn test_merge_discover_unions_extensions_recorded_at_initialize() {
 		"discover must include extensions recorded from the legacy target's initialize"
 	);
 	assert!(extensions.contains_key("example.com/other"));
+	assert!(
+		discover.instructions.is_none(),
+		"discover should omit instructions when no upstream provides them"
+	);
+}
+
+#[test]
+fn test_merge_discover_attributes_multiple_instruction_bearing_upstreams() {
+	use rmcp::model::{
+		DiscoverResult, Implementation, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30114))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30115))),
+			],
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let discover_merge = relay.merge_discover(true);
+	let results: Vec<(Strng, ServerResult)> =
+		[("alpha", "Alpha guidance."), ("beta", "Beta guidance.")]
+			.into_iter()
+			.map(|(name, instructions)| {
+				(
+					name.into(),
+					ServerResult::DiscoverResult(
+						DiscoverResult::new(
+							ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+							ServerCapabilities::default(),
+						)
+						.with_server_info(Implementation::new(format!("{name}-server"), "1.0"))
+						.with_instructions(instructions),
+					),
+				)
+			})
+			.collect();
+
+	let result = discover_merge(results, &empty_cel()).unwrap();
+	let discover = match result {
+		ServerResult::DiscoverResult(dr) => dr,
+		other => panic!("expected DiscoverResult, got: {:?}", other),
+	};
+	let instructions = discover
+		.instructions
+		.expect("instructions should be present");
+	assert_eq!(
+		instructions,
+		"[alpha]\nAlpha guidance.\n\n[beta]\nBeta guidance."
+	);
+	assert!(!instructions.contains("This server is a gateway"));
+}
+
+#[test]
+fn test_merge_discover_attributes_one_instruction_bearing_upstream() {
+	use rmcp::model::{
+		DiscoverResult, Implementation, ProtocolVersion, ServerCapabilities, ServerResult,
+	};
+
+	let relay = Relay::new(
+		McpBackendGroup {
+			targets: vec![
+				fake_streamable_target("alpha", SocketAddr::from(([127, 0, 0, 1], 30116))),
+				fake_streamable_target("beta", SocketAddr::from(([127, 0, 0, 1], 30117))),
+			],
+			..Default::default()
+		},
+		empty_mcp_policies(),
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+	)
+	.unwrap();
+
+	let discover_merge = relay.merge_discover(true);
+	let results: Vec<(Strng, ServerResult)> = vec![
+		(
+			"alpha".into(),
+			ServerResult::DiscoverResult(
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::default(),
+				)
+				.with_server_info(Implementation::new("alpha-server", "1.0"))
+				.with_instructions("Only upstream guidance."),
+			),
+		),
+		(
+			"beta".into(),
+			ServerResult::DiscoverResult(
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::default(),
+				)
+				.with_server_info(Implementation::new("beta-server", "1.0")),
+			),
+		),
+	];
+
+	let result = discover_merge(results, &empty_cel()).unwrap();
+	let discover = match result {
+		ServerResult::DiscoverResult(dr) => dr,
+		other => panic!("expected DiscoverResult, got: {:?}", other),
+	};
+
+	assert_eq!(
+		discover.instructions.as_deref(),
+		Some("[alpha]\nOnly upstream guidance.")
+	);
+	assert!(
+		!discover
+			.instructions
+			.as_deref()
+			.unwrap_or_default()
+			.contains("This server is a gateway")
+	);
 }
 
 #[test]
