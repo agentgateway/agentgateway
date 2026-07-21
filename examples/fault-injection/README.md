@@ -31,15 +31,23 @@ policy:
 ```yaml
 policies:
   delay:
-    duration: 2s       # latency added before the request is forwarded
-    probability: 0.1   # a fraction (0.0-1.0), a bool, or a CEL expression evaluating to either
+    duration: 2s   # latency added before the request is forwarded
 ```
 
-`probability` defaults to always. Because it accepts CEL, faults can target a
-subset of traffic, for example `request.headers["x-chaos"] == "1"` delays only
-requests carrying a chaos-test header, and jwt claims, paths, or any other
-request attribute work the same way. Like every policy, `delay` also composes
-with the `conditional` wrapper for first-match-wins rules.
+To delay only a subset of traffic, use the `conditional` wrapper (available on
+every policy) with a CEL condition:
+
+```yaml
+policies:
+  delay:
+    conditional:
+    - condition: random() < 0.1   # delay ~10% of requests
+      duration: 2s
+```
+
+As with aborts, the condition can target headers
+(`request.headers["x-chaos"] == "1"`), JWT claims, paths, or any other request
+attribute, and multiple entries form first-match-wins rules.
 
 Injected delay counts against the route's `requestTimeout` (which measures the
 full request from its start); if the delay would pass the deadline the request

@@ -1039,9 +1039,6 @@ func processDelayPolicy(delay *agentgateway.Delay, basePolicyName string, policy
 	translatedDelay := &api.Delay{
 		Duration: durationpb.New(delay.Duration.Duration),
 	}
-	if delay.Probability != nil {
-		translatedDelay.Probability = string(*delay.Probability)
-	}
 
 	delayPolicy := &api.Policy{
 		Key:  basePolicyName + delayPolicySuffix,

@@ -339,9 +339,6 @@ message Retry {
 message Delay {
   // Artificial latency injected before the request is forwarded to the backend.
   google.protobuf.Duration duration = 1;
-  // CEL expression gating injection, evaluating to a float 0.0-1.0 (probability) or a bool.
-  // Empty means the delay always applies.
-  string probability = 2;
 }
 
 message BackendAuthPolicy {

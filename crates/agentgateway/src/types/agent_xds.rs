@@ -1987,24 +1987,12 @@ fn traffic_policy_from_proto(
 				condition,
 			})
 		},
-		Some(tps::Kind::Delay(d)) => {
-			let probability = if d.probability.is_empty() {
-				None
-			} else {
-				Some(permissive_cel_expression_arc(
-					diagnostics,
-					"delay.probability",
-					&d.probability,
-				))
-			};
-			TrafficPolicy::Delay(RequestPolicy::single(http::delay::Policy {
-				duration: d
-					.duration
-					.ok_or(ProtoError::MissingRequiredField)?
-					.try_into()?,
-				probability,
-			}))
-		},
+		Some(tps::Kind::Delay(d)) => TrafficPolicy::Delay(RequestPolicy::single(http::delay::Policy {
+			duration: d
+				.duration
+				.ok_or(ProtoError::MissingRequiredField)?
+				.try_into()?,
+		})),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
 			let t = tps::local_rate_limit::Type::try_from(lrl.r#type)?;
 			let spec = http::localratelimit::RateLimitSpec {

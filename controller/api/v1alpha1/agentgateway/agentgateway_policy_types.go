@@ -2810,14 +2810,6 @@ type Delay struct {
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +required
 	Duration metav1.Duration `json:"duration"`
-
-	// CEL expression gating whether the delay is injected: a float between 0.0
-	// and 1.0 is the probability the delay applies (a plain number such as
-	// `0.1` is valid CEL), and a bool injects the delay when `true` (for
-	// example `request.headers["x-chaos"] == "1"`). If unset, the delay always
-	// applies.
-	// +optional
-	Probability *CELExpression `json:"probability,omitempty"`
 }
 
 // Retry policy.

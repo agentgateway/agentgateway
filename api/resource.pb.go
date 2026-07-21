@@ -4282,10 +4282,7 @@ func (x *Retry) GetCondition() string {
 type Delay struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Artificial latency injected before the request is forwarded to the backend.
-	Duration *durationpb.Duration `protobuf:"bytes,1,opt,name=duration,proto3" json:"duration,omitempty"`
-	// CEL expression gating injection, evaluating to a float 0.0-1.0 (probability) or a bool.
-	// Empty means the delay always applies.
-	Probability   string `protobuf:"bytes,2,opt,name=probability,proto3" json:"probability,omitempty"`
+	Duration      *durationpb.Duration `protobuf:"bytes,1,opt,name=duration,proto3" json:"duration,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4325,13 +4322,6 @@ func (x *Delay) GetDuration() *durationpb.Duration {
 		return x.Duration
 	}
 	return nil
-}
-
-func (x *Delay) GetProbability() string {
-	if x != nil {
-		return x.Probability
-	}
-	return ""
 }
 
 type BackendAuthPolicy struct {
@@ -15774,10 +15764,9 @@ const file_resource_proto_rawDesc = "" +
 	"\battempts\x18\x02 \x01(\x05R\battempts\x123\n" +
 	"\abackoff\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\abackoff\x12\"\n" +
 	"\fprecondition\x18\x04 \x01(\tR\fprecondition\x12\x1c\n" +
-	"\tcondition\x18\x05 \x01(\tR\tcondition\"`\n" +
+	"\tcondition\x18\x05 \x01(\tR\tcondition\">\n" +
 	"\x05Delay\x125\n" +
-	"\bduration\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\bduration\x12 \n" +
-	"\vprobability\x18\x02 \x01(\tR\vprobability\"\xa0\x03\n" +
+	"\bduration\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\bduration\"\xa0\x03\n" +
 	"\x11BackendAuthPolicy\x12J\n" +
 	"\vpassthrough\x18\x01 \x01(\v2&.agentgateway.dev.resource.PassthroughH\x00R\vpassthrough\x122\n" +
 	"\x03key\x18\x02 \x01(\v2\x1e.agentgateway.dev.resource.KeyH\x00R\x03key\x122\n" +

@@ -1574,15 +1574,13 @@ binds:
     - policies:
         delay:
           duration: 2s
-          probability: 0.1
       backends:
       - host: 127.0.0.1:8000
     - policies:
         delay:
           conditional:
-          - condition: request.path == "/chaos"
+          - condition: random() < 0.1
             duration: 500ms
-            probability: request.headers["x-chaos"] == "1"
           - duration: 1s
       backends:
       - host: 127.0.0.1:8000
@@ -1601,11 +1599,7 @@ binds:
 		.expect("expected delay policy");
 	assert_eq!(explicit.len(), 1);
 	assert!(explicit[0].condition.is_none());
-	assert_eq!(
-		explicit[0].pol.duration,
-		std::time::Duration::from_secs(2)
-	);
-	assert!(explicit[0].pol.probability.is_some());
+	assert_eq!(explicit[0].pol.duration, std::time::Duration::from_secs(2));
 
 	let conditional = routes[1]
 		.inline_policies

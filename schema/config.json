@@ -6950,17 +6950,6 @@
         "duration": {
           "description": "Artificial latency injected before the request is forwarded to the backend.",
           "type": "string"
-        },
-        "probability": {
-          "description": "Probability the delay is injected. This should evaluate to either a float between 0.0-1.0\nor true/false, and may be a CEL expression (e.g. `request.headers[\"x-chaos\"] == \"1\"`).\nThis defaults to 'true'.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StringBoolFloat"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "required": [
@@ -6973,17 +6962,6 @@
         "duration": {
           "description": "Artificial latency injected before the request is forwarded to the backend.",
           "type": "string"
-        },
-        "probability": {
-          "description": "Probability the delay is injected. This should evaluate to either a float between 0.0-1.0\nor true/false, and may be a CEL expression (e.g. `request.headers[\"x-chaos\"] == \"1\"`).\nThis defaults to 'true'.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/StringBoolFloat"
-            },
-            {
-              "type": "null"
-            }
-          ]
         }
       },
       "additionalProperties": false,

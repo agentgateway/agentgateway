@@ -11,8 +11,9 @@ binds:
           pathPrefix: /random
       policies:
         delay:
-          duration: 2s
-          probability: 0.1
+          conditional:
+          - condition: random() < 0.1
+            duration: 2s
       backends:
       - host: 127.0.0.1:8080
     # Delay only requests that opt in via a header, e.g. from a chaos test client.
@@ -22,8 +23,9 @@ binds:
           pathPrefix: /header
       policies:
         delay:
-          duration: 500ms
-          probability: request.headers["x-chaos"] == "1"
+          conditional:
+          - condition: request.headers["x-chaos"] == "1"
+            duration: 500ms
       backends:
       - host: 127.0.0.1:8080
     # Abort 10% of requests with a 503 instead of reaching the backend.
