@@ -743,18 +743,37 @@ pub async fn read_response_body(
 	read_body_with_limit(b, lim).await.map(|b| (h, b))
 }
 
-pub async fn inspect_body(req: &mut Request) -> anyhow::Result<Bytes> {
+/// Result of inspecting a body without consuming it from the caller's perspective.
+#[derive(Debug)]
+#[must_use]
+pub enum BodyInspection {
+	/// The complete body fit within the configured limit.
+	Complete(Bytes),
+	/// The body exceeded the limit. Contains the first `limit` bytes.
+	Partial(Bytes),
+}
+
+pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
 	let lim = buffer_limit(req);
 	inspect_body_with_limit(req.body_mut(), lim).await
 }
 
-pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<Bytes> {
+pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
 	let lim = response_buffer_limit(resp);
 	inspect_body_with_limit(resp.body_mut(), lim).await
 }
 
-pub async fn inspect_body_with_limit(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {
-	peekbody::inspect_body(body, limit).await
+pub async fn inspect_body_with_limit(
+	body: &mut Body,
+	limit: usize,
+) -> anyhow::Result<BodyInspection> {
+	let mut bytes = peekbody::inspect_body(body, limit.saturating_add(1)).await?;
+	if bytes.len() > limit {
+		bytes.truncate(limit);
+		Ok(BodyInspection::Partial(bytes))
+	} else {
+		Ok(BodyInspection::Complete(bytes))
+	}
 }
 
 #[derive(Debug, Default)]

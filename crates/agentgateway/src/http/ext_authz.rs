@@ -271,21 +271,18 @@ impl ExtAuthz {
 	) -> Result<BufferedRequestBody, BufferRequestBodyError> {
 		let max_size = body_opts.max_request_bytes as usize;
 
-		let peek_limit = max_size.saturating_add(1);
-		let body = crate::http::inspect_body_with_limit(req.body_mut(), peek_limit)
+		let inspection = crate::http::inspect_body_with_limit(req.body_mut(), max_size)
 			.await
 			.map_err(BufferRequestBodyError::Read)?;
-		let is_partial = body.len() > max_size;
+		let (body, is_partial) = match inspection {
+			crate::http::BodyInspection::Complete(body) => (body, false),
+			crate::http::BodyInspection::Partial(body) => (body, true),
+		};
 
 		if is_partial && !body_opts.allow_partial_message {
 			return Err(BufferRequestBodyError::TooLarge);
 		}
 
-		let body = if is_partial {
-			body.slice(0..max_size)
-		} else {
-			body
-		};
 		let original_size = match is_partial {
 			false => i64::try_from(body.len()).unwrap_or(i64::MAX),
 			true => -1,
@@ -863,7 +860,7 @@ impl ExtAuthz {
 			let mut dynamic_metadata = None;
 			if !metadata.is_empty() {
 				if let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
-					resp.extensions_mut().insert(BufferedBody(body));
+					resp.extensions_mut().insert(BufferedBody::from(body));
 				};
 				let m = metadata
 					.iter()

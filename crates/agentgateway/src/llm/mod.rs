@@ -1925,7 +1925,7 @@ impl AIProvider {
 		if encoding.is_some() {
 			parts
 				.extensions
-				.insert(crate::cel::BufferedBody(bytes.clone()));
+				.insert(crate::cel::BufferedBody::complete(bytes.clone()));
 			parts.headers.remove(header::CONTENT_ENCODING);
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}

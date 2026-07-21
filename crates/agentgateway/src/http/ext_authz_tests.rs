@@ -588,7 +588,10 @@ async fn test_cached_http_direct_response_replays_status_headers_and_body() {
 	let body = crate::http::inspect_response_body(&mut direct_response)
 		.await
 		.unwrap();
-	assert_eq!(body, Bytes::from_static(b"nope"));
+	assert!(matches!(
+		body,
+		crate::http::BodyInspection::Complete(body) if body == Bytes::from_static(b"nope")
+	));
 }
 
 #[test]

@@ -69,7 +69,7 @@ async fn test_transformation_form_urlencoded_body_merge() {
 		.unwrap();
 	req
 		.extensions_mut()
-		.insert(crate::cel::BufferedBody(bytes::Bytes::new()));
+		.insert(crate::cel::BufferedBody::complete(bytes::Bytes::new()));
 
 	let c = super::LocalTransformationConfig {
 		request: Some(super::LocalTransform {
@@ -116,9 +116,11 @@ request.body
 		.unwrap();
 	req
 		.extensions_mut()
-		.insert(crate::cel::BufferedBody(bytes::Bytes::from_static(
-			b"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc",
-		)));
+		.insert(crate::cel::BufferedBody::complete(
+			bytes::Bytes::from_static(
+				b"grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code&device_code=abc",
+			),
+		));
 
 	xfm.apply_request(&mut req);
 
@@ -169,7 +171,7 @@ json(response.body).with(body,
 			r#"{"verification_uri":"https://login.microsoft.com/device","verification_uri_complete":"https://login.microsoft.com/device?user_code=ABCDEFGH","user_code":"ABCDEFGH"}"#,
 		))
 		.unwrap();
-	resp.extensions_mut().insert(crate::cel::BufferedBody(
+	resp.extensions_mut().insert(crate::cel::BufferedBody::complete(
 		bytes::Bytes::from_static(
 			br#"{"verification_uri":"https://login.microsoft.com/device","verification_uri_complete":"https://login.microsoft.com/device?user_code=ABCDEFGH","user_code":"ABCDEFGH"}"#,
 		),

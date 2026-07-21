@@ -61,7 +61,7 @@
           "default": {}
         },
         "body": {
-          "description": "The body of the request. Warning: accessing the body will cause the body to be buffered.",
+          "description": "The request's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,\nthis field is not available and will fail to evaluate.\nIncluding this attribute in an expression will trigger the body to be buffered.",
           "type": [
             "string",
             "null"
@@ -118,7 +118,7 @@
           "default": {}
         },
         "body": {
-          "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
+          "description": "The response's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,\nthis field is not available and will fail to evaluate.\nIncluding this attribute in an expression will trigger the body to be buffered.",
           "type": [
             "string",
             "null"

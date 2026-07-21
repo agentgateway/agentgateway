@@ -18,6 +18,7 @@ pub struct RecordedBodyHandle {
 struct RecordedBodyHandleInner {
 	state: RecordedBodyState,
 	recorded: usize,
+	exceeded_limit: bool,
 }
 
 #[derive(Debug)]
@@ -33,6 +34,11 @@ impl Default for RecordedBodyState {
 }
 
 impl RecordedBodyHandle {
+	/// Returns whether recording observed more bytes than the configured limit.
+	pub fn exceeded_limit(&self) -> bool {
+		self.inner.lock().exceeded_limit
+	}
+
 	pub fn bytes(&self) -> Bytes {
 		let mut inner = self.inner.lock();
 		match &mut inner.state {
@@ -50,6 +56,9 @@ impl RecordedBodyHandle {
 	fn push(&self, bytes: Bytes) {
 		let mut inner = self.inner.lock();
 		let remaining = self.limit.saturating_sub(inner.recorded);
+		if bytes.len() > remaining {
+			inner.exceeded_limit = true;
+		}
 		if let RecordedBodyState::Recording(buffer) = &mut inner.state {
 			let to_record = bytes.len().min(remaining);
 			if to_record == 0 {
@@ -95,6 +104,7 @@ impl<B> RecordedBody<B> {
 			inner: Arc::new(Mutex::new(RecordedBodyHandleInner {
 				state: RecordedBodyState::default(),
 				recorded: 0,
+				exceeded_limit: false,
 			})),
 			limit,
 		};
@@ -221,6 +231,7 @@ mod tests {
 
 		assert_eq!(got, Bytes::from_static(b"helloworld"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"hellowo"));
+		assert!(recorded.exceeded_limit());
 	}
 
 	#[tokio::test]
@@ -235,6 +246,7 @@ mod tests {
 
 		assert_eq!(got, Bytes::from_static(b"hello"));
 		assert!(recorded.bytes().is_empty());
+		assert!(recorded.exceeded_limit());
 	}
 
 	#[tokio::test]

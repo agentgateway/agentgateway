@@ -994,7 +994,9 @@ pub struct RequestRefSerde {
 	)]
 	pub headers: http::HeaderMap,
 
-	/// The body of the request. Warning: accessing the body will cause the body to be buffered.
+	/// The request's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,
+	/// this field is not available and will fail to evaluate.
+	/// Including this attribute in an expression will trigger the body to be buffered.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<BufferedBody>,
 
@@ -1028,7 +1030,9 @@ pub struct ResponseRefSerde {
 	)]
 	pub headers: http::HeaderMap,
 
-	/// The body of the response. Warning: accessing the body will cause the body to be buffered.
+	/// The response's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,
+	/// this field is not available and will fail to evaluate.
+	/// Including this attribute in an expression will trigger the body to be buffered.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<BufferedBody>,
 }
@@ -1085,7 +1089,45 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct BufferedBody(#[cfg_attr(feature = "schema", schemars(with = "String"))] pub Bytes);
+pub struct BufferedBody(
+	#[cfg_attr(feature = "schema", schemars(with = "String"))] BufferedBodyState,
+);
+
+#[derive(Debug, Clone)]
+enum BufferedBodyState {
+	Complete(Bytes),
+	ExceededLimit,
+}
+
+impl BufferedBody {
+	pub fn complete(bytes: Bytes) -> Self {
+		Self(BufferedBodyState::Complete(bytes))
+	}
+
+	pub fn exceeded_limit() -> Self {
+		Self(BufferedBodyState::ExceededLimit)
+	}
+
+	pub fn bytes(&self) -> Option<&Bytes> {
+		match &self.0 {
+			BufferedBodyState::Complete(bytes) => Some(bytes),
+			BufferedBodyState::ExceededLimit => None,
+		}
+	}
+
+	fn is_too_large(&self) -> bool {
+		matches!(&self.0, BufferedBodyState::ExceededLimit)
+	}
+}
+
+impl From<crate::http::BodyInspection> for BufferedBody {
+	fn from(inspection: crate::http::BodyInspection) -> Self {
+		match inspection {
+			crate::http::BodyInspection::Complete(bytes) => Self::complete(bytes),
+			crate::http::BodyInspection::Partial(_) => Self::exceeded_limit(),
+		}
+	}
+}
 
 impl Serialize for BufferedBody {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -1093,8 +1135,13 @@ impl Serialize for BufferedBody {
 		S: serde::Serializer,
 	{
 		use base64::Engine;
-		let encoded = base64::engine::general_purpose::STANDARD.encode(&self.0);
-		serializer.serialize_str(&encoded)
+		match &self.0 {
+			BufferedBodyState::Complete(bytes) => {
+				let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+				serializer.serialize_str(&encoded)
+			},
+			BufferedBodyState::ExceededLimit => serializer.serialize_none(),
+		}
 	}
 }
 
@@ -1108,7 +1155,7 @@ impl<'de> Deserialize<'de> for BufferedBody {
 		let bytes = base64::engine::general_purpose::STANDARD
 			.decode(&s)
 			.map_err(serde::de::Error::custom)?;
-		Ok(BufferedBody(Bytes::from(bytes)))
+		Ok(BufferedBody::complete(Bytes::from(bytes)))
 	}
 }
 
@@ -1118,7 +1165,10 @@ impl DynamicType for BufferedBody {
 	}
 
 	fn materialize(&self) -> Value<'_> {
-		Value::Bytes(BytesValue::Bytes(self.0.clone()))
+		match &self.0 {
+			BufferedBodyState::Complete(bytes) => Value::Bytes(BytesValue::Bytes(bytes.clone())),
+			BufferedBodyState::ExceededLimit => Value::Null,
+		}
 	}
 }
 
@@ -1147,15 +1197,25 @@ impl BodyExtensionOrDirect<'_> {
 	}
 
 	fn bytes(&self) -> Option<Bytes> {
+		if self.too_large() {
+			return None;
+		}
 		if let Some(buffered) = self.buffered() {
-			Some(buffered.0.clone())
+			buffered.bytes().cloned()
 		} else {
 			self.recorded().map(RecordedBodyHandle::bytes)
 		}
 	}
 
 	fn is_none(&self) -> bool {
-		self.buffered().is_none() && self.recorded().is_none()
+		self.too_large() || (self.buffered().is_none() && self.recorded().is_none())
+	}
+
+	fn too_large(&self) -> bool {
+		self.buffered().is_some_and(BufferedBody::is_too_large)
+			|| self
+				.recorded()
+				.is_some_and(RecordedBodyHandle::exceeded_limit)
 	}
 }
 
@@ -1174,7 +1234,7 @@ impl Serialize for BodyExtensionOrDirect<'_> {
 		S: serde::Serializer,
 	{
 		match self.bytes() {
-			Some(bytes) => BufferedBody(bytes).serialize(serializer),
+			Some(bytes) => BufferedBody::complete(bytes).serialize(serializer),
 			None => serializer.serialize_none(),
 		}
 	}
@@ -2028,7 +2088,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			path_and_query: "/api/test?k=v".parse::<Uri>().unwrap(),
 			version: Version::HTTP_11,
 			headers: req_headers,
-			body: Some(BufferedBody(Bytes::from(r#"{"model": "fast"}"#))),
+			body: Some(BufferedBody::complete(Bytes::from(r#"{"model": "fast"}"#))),
 			start_time: Some(RequestTime(
 				chrono::DateTime::parse_from_rfc3339("2000-01-01T12:00:00Z").unwrap(),
 			)),
@@ -2040,7 +2100,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			code: 200,
 			grpc_status: None,
 			headers: resp_headers,
-			body: Some(BufferedBody(Bytes::from(r#"{"ok": true}"#))),
+			body: Some(BufferedBody::complete(Bytes::from(r#"{"ok": true}"#))),
 		}),
 		proxy: Some(ProxyContext {
 			bind: Some("bind".into()),

@@ -573,15 +573,12 @@ async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 	let limit = http::buffer_limit(req);
 	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-		if body.0.len() < limit {
-			return Ok(body.0.clone());
-		}
-		if body.0.len() > limit {
-			return Err(Box::new(request_body_too_large_response()));
-		}
+		return body
+			.bytes()
+			.cloned()
+			.ok_or_else(|| Box::new(request_body_too_large_response()));
 	}
-	let inspect_limit = limit.saturating_add(1);
-	let mut body = http::inspect_body_with_limit(req.body_mut(), inspect_limit)
+	let inspection = http::inspect_body_with_limit(req.body_mut(), limit)
 		.await
 		.map_err(|err| {
 			tracing::debug!(%err, "failed to read LLM request body");
@@ -591,13 +588,15 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 				"request_body_read_failed",
 			))
 		})?;
-	if body.len() > limit {
-		return Err(Box::new(request_body_too_large_response()));
-	}
-	if body.len() == inspect_limit {
-		body.truncate(limit);
-	}
-	req.extensions_mut().insert(cel::BufferedBody(body.clone()));
+	let body = match inspection {
+		http::BodyInspection::Complete(body) => body,
+		http::BodyInspection::Partial(_) => {
+			return Err(Box::new(request_body_too_large_response()));
+		},
+	};
+	req
+		.extensions_mut()
+		.insert(cel::BufferedBody::complete(body.clone()));
 	Ok(body)
 }
 

@@ -11,14 +11,14 @@
 |`request.pathAndQuery`|string|The path and query of the request URI. For example, `/path?foo=bar`.|
 |`request.version`|string|The version of the request. For example, `HTTP/1.1`.|
 |`request.headers`|object|The headers of the request.|
-|`request.body`|string|The body of the request. Warning: accessing the body will cause the body to be buffered.|
+|`request.body`|string|The request's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,<br>this field is not available and will fail to evaluate.<br>Including this attribute in an expression will trigger the body to be buffered.|
 |`request.startTime`|string|The time the request started|
 |`request.endTime`|string|The time the request completed|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
 |`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
 |`response.headers`|object|The headers of the response.|
-|`response.body`|string|The body of the response. Warning: accessing the body will cause the body to be buffered.|
+|`response.body`|string|The response's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,<br>this field is not available and will fail to evaluate.<br>Including this attribute in an expression will trigger the body to be buffered.|
 |`proxy`|object|`proxy` contains proxy timing information for the request.|
 |`proxy.bind`|string|The bind that accepted the request.|
 |`proxy.gateway`|object|The selected Gateway.|
