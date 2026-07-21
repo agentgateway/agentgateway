@@ -21,16 +21,17 @@ import (
 
 // Status message constants
 const (
-	GatewayAcceptedMessage       = "Successfully accepted Gateway"
-	GatewayProgrammedMessage     = "Successfully programmed Gateway"
-	ListenerSetAcceptedMessage   = "Successfully accepted ListenerSet"
-	ListenerSetProgrammedMessage = "Successfully programmed ListenerSet"
-	ListenerAcceptedMessage      = "Successfully accepted Listener"
-	ListenerNoConflictsMessage   = "Successfully verified that Listener has no conflicts"
-	ValidRefsMessage             = "Successfully resolved all references"
-	ListenerProgrammedMessage    = "Successfully programmed Listener"
-	RouteAcceptedMessage         = "Successfully accepted Route"
-	GatewayClassAcceptedMessage  = "GatewayClass accepted by agentgateway controller"
+	GatewayAcceptedMessage           = "Successfully accepted Gateway"
+	GatewayProgrammedMessage         = "Successfully programmed Gateway"
+	ListenerSetAcceptedMessage       = "Successfully accepted ListenerSet"
+	ListenerSetProgrammedMessage     = "Successfully programmed ListenerSet"
+	ListenerAcceptedMessage          = "Successfully accepted Listener"
+	ListenerNoConflictsMessage       = "Successfully verified that Listener has no conflicts"
+	ValidRefsMessage                 = "Successfully resolved all references"
+	ListenerProgrammedMessage        = "Successfully programmed Listener"
+	RouteAcceptedMessage             = "Successfully accepted Route"
+	AgentgatewayModelAcceptedMessage = "Successfully accepted AgentgatewayModel"
+	GatewayClassAcceptedMessage      = "GatewayClass accepted by agentgateway controller"
 )
 
 // TODO: refactor this struct + methods to better reflect the usage now in proxy_syncer

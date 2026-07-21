@@ -64,13 +64,6 @@ spec:
                     maxLength: 64
                     minLength: 1
                     type: string
-                  model:
-                    description: |-
-                      Model name override, such as `gpt-4o-mini`.
-                      If unset, the model name is taken from the request.
-                    maxLength: 256
-                    minLength: 1
-                    type: string
                   projectName:
                     description: |-
                       The Foundry project name, required when `resourceType` is `Foundry`.
@@ -103,40 +96,6 @@ spec:
                 x-kubernetes-validations:
                 - message: projectName is required when resourceType is Foundry
                   rule: self.resourceType != 'Foundry' || has(self.projectName)
-              azureopenai:
-                description: Provider-specific settings for Azure OpenAI.
-                properties:
-                  apiVersion:
-                    description: |-
-                      The version of the Azure OpenAI API to use.
-                      For more information, see the [Azure OpenAI API version reference](https://learn.microsoft.com/en-us/azure/foundry/openai/reference).
-                      If unset, defaults to `v1`.
-                    maxLength: 64
-                    minLength: 1
-                    type: string
-                  deploymentName:
-                    description: |-
-                      The name of the Azure OpenAI model deployment to use.
-                      For more information, see the [Azure OpenAI model docs](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure?view=foundry-classic).
-                      This is required if `apiVersion` is not `v1`. For `v1`, the model can be
-                      set in the request.
-                    maxLength: 256
-                    minLength: 1
-                    type: string
-                  endpoint:
-                    description: |-
-                      The endpoint for the Azure OpenAI API to use, such as `my-endpoint.openai.azure.com`.
-                      If the scheme is included, it is stripped.
-                    maxLength: 256
-                    minLength: 1
-                    type: string
-                required:
-                - endpoint
-                type: object
-                x-kubernetes-validations:
-                - message: deploymentName is required for this apiVersion
-                  rule: '!has(self.apiVersion) || self.apiVersion == ''v1'' ? true
-                    : has(self.deploymentName)'
               bedrock:
                 description: Provider-specific settings for Amazon Bedrock.
                 properties:
@@ -162,13 +121,6 @@ spec:
                     - identifier
                     - version
                     type: object
-                  model:
-                    description: |-
-                      Model name override, such as `gpt-4o-mini`.
-                      If unset, the model name is taken from the request.
-                    maxLength: 256
-                    minLength: 1
-                    type: string
                   region:
                     default: us-east-1
                     description: |-
@@ -260,13 +212,6 @@ spec:
                     x-kubernetes-list-map-keys:
                     - type
                     x-kubernetes-list-type: map
-                  model:
-                    description: |-
-                      Model name override, such as `gpt-oss`.
-                      If unset, the model name is taken from the request.
-                    maxLength: 256
-                    minLength: 1
-                    type: string
                 required:
                 - formats
                 type: object
@@ -283,9 +228,7 @@ spec:
                   model:
                     description: |-
                       Model name or wildcard expression matched against client requests.
-                      When omitted, the model matches metadata.name exactly. Virtual models must
-                      use an exact model name because the Rust data plane enforces exact matching
-                      for virtual model routes.
+                      When omitted, the model matches metadata.name exactly.
                     maxLength: 1024
                     minLength: 1
                     type: string
@@ -379,7 +322,6 @@ spec:
                 enum:
                 - Anthropic
                 - Azure
-                - AzureOpenAI
                 - Baseten
                 - Bedrock
                 - Cerebras
@@ -435,9 +377,8 @@ spec:
                   baseURL:
                     description: |-
                       BaseURL overrides the provider address and base path prefix. It must use the
-                      http or https scheme. The data plane uses the full URL to select the
-                      endpoint host, port, base path, and default TLS configuration. Backend
-                      policies may override the default TLS configuration.
+                      http or https scheme. Backend policies may override the default
+                      TLS configuration.
 
                       Query parameters, fragments, and user info are not supported.
                     format: uri
@@ -456,16 +397,21 @@ spec:
                 - message: upstreamOverrides.baseURL must use http or https
                   rule: '!has(self.baseURL) || self.baseURL.startsWith(''http://'')
                     || self.baseURL.startsWith(''https://'')'
+                - message: upstreamOverrides.baseURL cannot target localhost, loopback,
+                    or link-local addresses
+                  rule: '!has(self.baseURL) || !self.baseURL.matches("(?i)^https?://(localhost|[^/]+\\.localhost)(:[0-9]+)?(/|$)")'
+                - message: upstreamOverrides.baseURL cannot target localhost, loopback,
+                    or link-local addresses
+                  rule: '!has(self.baseURL) || !self.baseURL.matches("^https?://127(\\.[0-9]{1,3}){0,3}(:[0-9]+)?(/|$)")'
+                - message: upstreamOverrides.baseURL cannot target localhost, loopback,
+                    or link-local addresses
+                  rule: '!has(self.baseURL) || !self.baseURL.matches("^https?://169\\.254\\.[0-9]{1,3}\\.[0-9]{1,3}(:[0-9]+)?(/|$)")'
+                - message: upstreamOverrides.baseURL cannot target localhost, loopback,
+                    or link-local addresses
+                  rule: '!has(self.baseURL) || !self.baseURL.matches("(?i)^https?://\\[(::1|fe[89ab][0-9a-f:]*)\\](:[0-9]+)?(/|$)")'
               vertexai:
                 description: Provider-specific settings for Vertex AI.
                 properties:
-                  model:
-                    description: |-
-                      Model name override, such as `gpt-4o-mini`.
-                      If unset, the model name is taken from the request.
-                    maxLength: 256
-                    minLength: 1
-                    type: string
                   projectId:
                     description: The ID of the Google Cloud Project that you use for
                       the Vertex AI.
@@ -649,17 +595,17 @@ spec:
             - message: virtual model match.model must be an exact name
               rule: '!has(self.virtualModel) || !has(self.match) || !has(self.match.model)
                 || !self.match.model.contains(''*'')'
-            - message: azureopenai configuration is required only for the AzureOpenAI
-                provider
-              rule: has(self.azureopenai) == (has(self.provider) && self.provider
-                == 'AzureOpenAI')
+            - message: ollama requires upstreamOverrides.baseURL
+              rule: '!has(self.provider) || self.provider != ''Ollama'' || (has(self.upstreamOverrides)
+                && has(self.upstreamOverrides.baseURL))'
             - message: azure configuration is required only for the Azure provider
               rule: has(self.azure) == (has(self.provider) && self.provider == 'Azure')
             - message: vertexai configuration is required only for the VertexAI provider
               rule: has(self.vertexai) == (has(self.provider) && self.provider ==
                 'VertexAI')
-            - message: bedrock configuration is required only for the Bedrock provider
-              rule: has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')
+            - message: bedrock configuration is supported only for the Bedrock provider
+              rule: '!has(self.bedrock) || (has(self.provider) && self.provider ==
+                ''Bedrock'')'
             - message: custom configuration is required only for the Custom provider
               rule: has(self.custom) == (has(self.provider) && self.provider == 'Custom')
             - message: exactly one of the fields in [provider virtualModel] must be

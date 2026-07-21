@@ -315,22 +315,17 @@ type LocalBackendObjectReference struct {
 	Port *int32 `json:"port,omitempty"`
 }
 
-// Provider with explicit API format support and an explicit target.
+// Provider settings with explicit API format support and an explicit target.
 // Use this for local, self-hosted, or OpenAI-compatible providers whose
 // supported request/response formats are not fully described by the managed
 // provider types.
 // +kubebuilder:validation:XValidation:rule="!has(self.backendRef) || (((!has(self.backendRef.group) || self.backendRef.group == \"\") && (!has(self.backendRef.kind) || self.backendRef.kind == 'Service')) || (has(self.backendRef.group) && self.backendRef.group == 'inference.networking.k8s.io' && has(self.backendRef.kind) && self.backendRef.kind == 'InferencePool'))",message="custom provider backendRef may target only Service or InferencePool"
-type CustomProvider struct {
+type CustomProviderSettings struct {
 	// Kubernetes backend that serves this provider.
 	// `backendRef` may target only a namespace-local Service or InferencePool.
 	// If unset, host and port must be set on the parent provider.
 	// +optional
 	BackendRef *LocalBackendObjectReference `json:"backendRef,omitempty"`
-
-	// Model name override, such as `gpt-oss`.
-	// If unset, the model name is taken from the request.
-	// +optional
-	Model *ShortString `json:"model,omitempty"`
 
 	// Provider-native API formats this provider supports.
 	// +kubebuilder:validation:MinItems=1
@@ -339,6 +334,16 @@ type CustomProvider struct {
 	// +listMapKey=type
 	// +required
 	Formats []ProviderFormatConfig `json:"formats"`
+}
+
+// Provider with explicit API format support and an explicit target.
+type CustomProvider struct {
+	CustomProviderSettings `json:",inline"`
+
+	// Model name override, such as `gpt-oss`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
 }
 
 // Provider-native LLM API format settings.
@@ -424,7 +429,7 @@ const (
 
 // Settings for Azure AI backends, supporting both Azure OpenAI and Azure AI Foundry.
 // +kubebuilder:validation:XValidation:message="projectName is required when resourceType is Foundry",rule="self.resourceType != 'Foundry' || has(self.projectName)"
-type AzureConfig struct {
+type AzureSettings struct {
 	// The Azure resource name used to construct the endpoint host.
 	// For OpenAI: {resourceName}.openai.azure.com
 	// For Foundry: {resourceName}.services.ai.azure.com
@@ -439,11 +444,6 @@ type AzureConfig struct {
 	// +required
 	ResourceType AzureResourceType `json:"resourceType"`
 
-	// Model name override, such as `gpt-4o-mini`.
-	// If unset, the model name is taken from the request.
-	// +optional
-	Model *ShortString `json:"model,omitempty"`
-
 	// The version of the Azure OpenAI API to use.
 	// If unset, defaults to `v1`.
 	// +optional
@@ -455,6 +455,15 @@ type AzureConfig struct {
 	ProjectName *ShortString `json:"projectName,omitempty"`
 }
 
+type AzureConfig struct {
+	AzureSettings `json:",inline"`
+
+	// Model name override, such as `gpt-4o-mini`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+}
+
 // Settings for the [Gemini](https://ai.google.dev/gemini-api/docs) LLM provider.
 type GeminiConfig struct {
 	// Model name override, such as `gemini-2.5-pro`.
@@ -464,12 +473,7 @@ type GeminiConfig struct {
 }
 
 // Settings for the [Vertex AI](https://docs.cloud.google.com/gemini-enterprise-agent-platform) LLM provider.
-type VertexAIConfig struct {
-	// Model name override, such as `gpt-4o-mini`.
-	// If unset, the model name is taken from the request.
-	// +optional
-	Model *ShortString `json:"model,omitempty"`
-
+type VertexAISettings struct {
 	// The ID of the Google Cloud Project that you use for the Vertex AI.
 	// +required
 	ProjectId TinyString `json:"projectId"`
@@ -483,6 +487,15 @@ type VertexAIConfig struct {
 	Region TinyString `json:"region,omitempty"`
 }
 
+type VertexAIConfig struct {
+	VertexAISettings `json:",inline"`
+
+	// Model name override, such as `gpt-4o-mini`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+}
+
 // Settings for the [Anthropic](https://platform.claude.com/docs/en/release-notes/overview) LLM provider.
 type AnthropicConfig struct {
 	// Model name override, such as `gpt-4o-mini`.
@@ -491,7 +504,7 @@ type AnthropicConfig struct {
 	Model *ShortString `json:"model,omitempty"`
 }
 
-type BedrockConfig struct {
+type BedrockSettings struct {
 	// AWS region to use for the backend.
 	// Defaults to `us-east-1` if not specified.
 	// +optional
@@ -501,16 +514,20 @@ type BedrockConfig struct {
 	// +kubebuilder:validation:Pattern="^[a-z0-9-]+$"
 	Region string `json:"region,omitempty"`
 
-	// Model name override, such as `gpt-4o-mini`.
-	// If unset, the model name is taken from the request.
-	// +optional
-	Model *ShortString `json:"model,omitempty"`
-
 	// Guardrail policy to use for the backend. See
 	// <https://docs.aws.amazon.com/bedrock/latest/userguide/guardrails.html>.
 	// If not specified, the AWS Guardrail policy will not be used.
 	// +optional
 	Guardrail *AWSGuardrailConfig `json:"guardrail,omitempty"`
+}
+
+type BedrockConfig struct {
+	BedrockSettings `json:",inline"`
+
+	// Model name override, such as `gpt-4o-mini`.
+	// If unset, the model name is taken from the request.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
 }
 
 type AWSGuardrailConfig struct {

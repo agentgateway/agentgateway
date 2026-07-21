@@ -15,6 +15,32 @@ spec:
       - modelRef:
           name: concrete-model
 ---
+_err: unknown fields [spec.custom.model]
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: custom-model-setting
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Custom
+  custom:
+    model: gpt-oss
+    formats:
+    - type: Completions
+---
+_err: 'Unsupported value: "AzureOpenAI"'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: legacy-azure-openai
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: AzureOpenAI
+---
 _err: upstreamOverrides.baseURL must use http or https
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -44,3 +70,27 @@ spec:
       targets:
       - modelRef:
           name: concrete-model
+---
+_err: ollama requires upstreamOverrides.baseURL
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: ollama-without-base-url
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Ollama
+---
+_err: upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: local-base-url
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: OpenAI
+  upstreamOverrides:
+    baseURL: http://169.254.169.254/latest/meta-data

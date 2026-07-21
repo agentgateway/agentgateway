@@ -1,6 +1,7 @@
 package translator
 
 import (
+	"strings"
 	"testing"
 
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -44,7 +45,7 @@ func TestModelLLMProvider(t *testing.T) {
 		providerType := agentgateway.ModelProviderBedrock
 		provider, err := modelLLMProvider(&agentgateway.AgentgatewayModelSpec{
 			Provider: &providerType,
-			Bedrock:  &agentgateway.BedrockConfig{Region: "us-west-2"},
+			Bedrock:  &agentgateway.BedrockSettings{Region: "us-west-2"},
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -54,14 +55,52 @@ func TestModelLLMProvider(t *testing.T) {
 		}
 	})
 
-	t.Run("missing provider configuration", func(t *testing.T) {
+	t.Run("provider defaults", func(t *testing.T) {
 		providerType := agentgateway.ModelProviderBedrock
-		_, err := modelLLMProvider(&agentgateway.AgentgatewayModelSpec{Provider: &providerType})
-		if err == nil {
-			t.Fatal("expected Bedrock provider without configuration to be rejected")
+		provider, err := modelLLMProvider(&agentgateway.AgentgatewayModelSpec{Provider: &providerType})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if provider.Bedrock == nil || provider.Bedrock.Region != "us-east-1" {
+			t.Fatalf("unexpected default Bedrock provider: %#v", provider.Bedrock)
 		}
 	})
 
+}
+
+func TestValidateModelBaseURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider agentgateway.ModelProvider
+		baseURL  *agentgateway.LongString
+		wantErr  string
+	}{
+		{name: "public address", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://api.example.com/v1"))},
+		{name: "ollama requires override", provider: agentgateway.ModelProviderOllama, wantErr: "ollama requires upstreamOverrides.baseURL"},
+		{name: "localhost", provider: agentgateway.ModelProviderOllama, baseURL: new(agentgateway.LongString("http://localhost:11434/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
+		{name: "loopback IPv4", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://127.0.0.1/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
+		{name: "loopback IPv6", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://[::1]/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
+		{name: "link local", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("http://169.254.169.254/latest/meta-data")), wantErr: "cannot target localhost, loopback, or link-local"},
+		{name: "link local IPv6 zone", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("http://[fe80::1%25eth0]/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := &agentgateway.AgentgatewayModelSpec{Provider: &tt.provider}
+			if tt.baseURL != nil {
+				model.UpstreamOverrides = &agentgateway.UpstreamOverrides{BaseURL: tt.baseURL}
+			}
+			err := validateModelBaseURL(model)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestTranslatePresetProviderOverrides(t *testing.T) {

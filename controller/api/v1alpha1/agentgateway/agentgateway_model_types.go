@@ -45,10 +45,10 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
-// +kubebuilder:validation:XValidation:rule="has(self.azureopenai) == (has(self.provider) && self.provider == 'AzureOpenAI')",message="azureopenai configuration is required only for the AzureOpenAI provider"
+// +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || (has(self.upstreamOverrides) && has(self.upstreamOverrides.baseURL))",message="ollama requires upstreamOverrides.baseURL"
 // +kubebuilder:validation:XValidation:rule="has(self.azure) == (has(self.provider) && self.provider == 'Azure')",message="azure configuration is required only for the Azure provider"
 // +kubebuilder:validation:XValidation:rule="has(self.vertexai) == (has(self.provider) && self.provider == 'VertexAI')",message="vertexai configuration is required only for the VertexAI provider"
-// +kubebuilder:validation:XValidation:rule="has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')",message="bedrock configuration is required only for the Bedrock provider"
+// +kubebuilder:validation:XValidation:rule="!has(self.bedrock) || (has(self.provider) && self.provider == 'Bedrock')",message="bedrock configuration is supported only for the Bedrock provider"
 // +kubebuilder:validation:XValidation:rule="has(self.custom) == (has(self.provider) && self.provider == 'Custom')",message="custom configuration is required only for the Custom provider"
 type AgentgatewayModelSpec struct {
 	// Gateways and listeners to which this model attaches.
@@ -72,25 +72,21 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	Provider *ModelProvider `json:"provider,omitempty"`
 
-	// Provider-specific settings for Azure OpenAI.
-	// +optional
-	AzureOpenAI *AzureOpenAIConfig `json:"azureopenai,omitempty"`
-
 	// Provider-specific settings for Azure AI.
 	// +optional
-	Azure *AzureConfig `json:"azure,omitempty"`
+	Azure *AzureSettings `json:"azure,omitempty"`
 
 	// Provider-specific settings for Vertex AI.
 	// +optional
-	VertexAI *VertexAIConfig `json:"vertexai,omitempty"`
+	VertexAI *VertexAISettings `json:"vertexai,omitempty"`
 
 	// Provider-specific settings for Amazon Bedrock.
 	// +optional
-	Bedrock *BedrockConfig `json:"bedrock,omitempty"`
+	Bedrock *BedrockSettings `json:"bedrock,omitempty"`
 
 	// Provider-specific settings for a custom provider.
 	// +optional
-	Custom *CustomProvider `json:"custom,omitempty"`
+	Custom *CustomProviderSettings `json:"custom,omitempty"`
 
 	// Shared overrides for requests sent to the selected provider.
 	// +optional
@@ -112,6 +108,10 @@ type AgentgatewayModelSpec struct {
 
 // Shared overrides for requests sent to an LLM provider.
 // +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || self.baseURL.startsWith('http://') || self.baseURL.startsWith('https://')",message="upstreamOverrides.baseURL must use http or https"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"(?i)^https?://(localhost|[^/]+\\\\.localhost)(:[0-9]+)?(/|$)\")",message="upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"^https?://127(\\\\.[0-9]{1,3}){0,3}(:[0-9]+)?(/|$)\")",message="upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"^https?://169\\\\.254\\\\.[0-9]{1,3}\\\\.[0-9]{1,3}(:[0-9]+)?(/|$)\")",message="upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"(?i)^https?://\\\\[(::1|fe[89ab][0-9a-f:]*)\\\\](:[0-9]+)?(/|$)\")",message="upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses"
 type UpstreamOverrides struct {
 	// BaseURL overrides the provider address and base path prefix. It must use the
 	// http or https scheme. Backend policies may override the default
@@ -131,9 +131,7 @@ type UpstreamOverrides struct {
 // ModelMatch contains conditions for selecting a model.
 type ModelMatch struct {
 	// Model name or wildcard expression matched against client requests.
-	// When omitted, the model matches metadata.name exactly. Virtual models must
-	// use an exact model name because the Rust data plane enforces exact matching
-	// for virtual model routes.
+	// When omitted, the model matches metadata.name exactly.
 	// +optional
 	Model *LongString `json:"model,omitempty"`
 }
@@ -144,7 +142,6 @@ type ModelProvider string
 
 const (
 	ModelProviderOpenAI      ModelProvider = "OpenAI"
-	ModelProviderAzureOpenAI ModelProvider = "AzureOpenAI"
 	ModelProviderAzure       ModelProvider = "Azure"
 	ModelProviderAnthropic   ModelProvider = "Anthropic"
 	ModelProviderGemini      ModelProvider = "Gemini"

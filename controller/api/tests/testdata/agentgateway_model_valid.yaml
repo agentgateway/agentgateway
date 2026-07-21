@@ -6,6 +6,16 @@
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
+  name: bedrock-default
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Bedrock
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
   name: openai-default
 spec:
   parentRefs:

@@ -131,7 +131,7 @@ status:
     parents:
     - conditions:
       - lastTransitionTime: fake
-        message: ""
+        message: Successfully accepted AgentgatewayModel
         reason: Accepted
         status: "True"
         type: Accepted

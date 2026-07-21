@@ -3,6 +3,8 @@ package translator
 import (
 	"context"
 	"fmt"
+	"net/netip"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -118,9 +120,10 @@ func translateModelForParents(
 			pr := routeReporter.ParentRef(&prStatusRef)
 			if a.anyAllowed {
 				pr.SetCondition(reporter.RouteCondition{
-					Type:   gwv1.RouteConditionAccepted,
-					Status: "True",
-					Reason: gwv1.RouteReasonAccepted,
+					Type:    gwv1.RouteConditionAccepted,
+					Status:  "True",
+					Reason:  gwv1.RouteReasonAccepted,
+					Message: reports.AgentgatewayModelAcceptedMessage,
 				})
 			} else {
 				reason := gwv1.RouteReasonNoMatchingParent
@@ -323,6 +326,9 @@ func modelFailoverBackendPolicies() []*api.BackendPolicySpec {
 }
 
 func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec, providerName string, modelOverride *string) (*api.AIBackend_Provider, error) {
+	if err := validateModelBaseURL(model); err != nil {
+		return nil, err
+	}
 	if model.UpstreamOverrides != nil && model.UpstreamOverrides.Model != nil {
 		modelOverride = new(string(*model.UpstreamOverrides.Model))
 	}
@@ -361,12 +367,6 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	switch {
 	case llm.OpenAI != nil:
 		provider.Provider = &api.AIBackend_Provider_Openai{Openai: &api.AIBackend_OpenAI{Model: providerModel(modelOverride, llm.OpenAI.Model)}}
-	case llm.AzureOpenAI != nil:
-		provider.Provider = &api.AIBackend_Provider_Azureopenai{Azureopenai: &api.AIBackend_AzureOpenAI{
-			Host:       string(llm.AzureOpenAI.Endpoint),
-			Model:      providerModel(modelOverride, llm.AzureOpenAI.DeploymentName),
-			ApiVersion: stringPtr(llm.AzureOpenAI.ApiVersion),
-		}}
 	case llm.Azure != nil:
 		resourceType := api.AIBackend_OPEN_AI
 		if llm.Azure.ResourceType == agentgateway.AzureResourceTypeFoundry {
@@ -431,16 +431,11 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 	switch *model.Provider {
 	case agentgateway.ModelProviderOpenAI:
 		provider.OpenAI = &agentgateway.OpenAIConfig{}
-	case agentgateway.ModelProviderAzureOpenAI:
-		if model.AzureOpenAI == nil {
-			return nil, fmt.Errorf("azureopenai provider requires azureopenai configuration")
-		}
-		provider.AzureOpenAI = model.AzureOpenAI
 	case agentgateway.ModelProviderAzure:
 		if model.Azure == nil {
 			return nil, fmt.Errorf("azure provider requires azure configuration")
 		}
-		provider.Azure = model.Azure
+		provider.Azure = &agentgateway.AzureConfig{AzureSettings: *model.Azure}
 	case agentgateway.ModelProviderAnthropic:
 		provider.Anthropic = &agentgateway.AnthropicConfig{}
 	case agentgateway.ModelProviderGemini:
@@ -449,21 +444,67 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 		if model.VertexAI == nil {
 			return nil, fmt.Errorf("vertexai provider requires vertexai configuration")
 		}
-		provider.VertexAI = model.VertexAI
+		provider.VertexAI = &agentgateway.VertexAIConfig{VertexAISettings: *model.VertexAI}
 	case agentgateway.ModelProviderBedrock:
-		if model.Bedrock == nil {
-			return nil, fmt.Errorf("bedrock provider requires bedrock configuration")
+		settings := agentgateway.BedrockSettings{Region: "us-east-1"}
+		if model.Bedrock != nil {
+			settings = *model.Bedrock
+			if settings.Region == "" {
+				settings.Region = "us-east-1"
+			}
 		}
-		provider.Bedrock = model.Bedrock
+		provider.Bedrock = &agentgateway.BedrockConfig{BedrockSettings: settings}
 	case agentgateway.ModelProviderCustom:
 		if model.Custom == nil {
 			return nil, fmt.Errorf("custom provider requires custom configuration")
 		}
-		provider.Custom = model.Custom
+		provider.Custom = &agentgateway.CustomProvider{CustomProviderSettings: *model.Custom}
 	default:
 		return nil, fmt.Errorf("unsupported model provider %q", *model.Provider)
 	}
 	return provider, nil
+}
+
+func validateModelBaseURL(model *agentgateway.AgentgatewayModelSpec) error {
+	var baseURL string
+	if model.UpstreamOverrides != nil && model.UpstreamOverrides.BaseURL != nil {
+		baseURL = string(*model.UpstreamOverrides.BaseURL)
+	}
+	if model.Provider != nil && *model.Provider == agentgateway.ModelProviderOllama && baseURL == "" {
+		return fmt.Errorf("ollama requires upstreamOverrides.baseURL")
+	}
+	if baseURL == "" {
+		return nil
+	}
+
+	parsed, err := url.ParseRequestURI(baseURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("upstreamOverrides.baseURL must be an absolute URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("upstreamOverrides.baseURL must use http or https")
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("upstreamOverrides.baseURL cannot include user info, query parameters, or a fragment")
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return fmt.Errorf("upstreamOverrides.baseURL must include a host")
+	}
+	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
+		return fmt.Errorf("upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses")
+	}
+	ipHost, _, _ := strings.Cut(host, "%")
+	if addr, err := netip.ParseAddr(ipHost); err == nil {
+		addr = addr.Unmap()
+		if addr.IsLoopback() || addr.IsLinkLocalUnicast() {
+			return fmt.Errorf("upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses")
+		}
+	} else if strings.Trim(host, ".0123456789") == "" || strings.HasPrefix(strings.ToLower(host), "0x") {
+		return fmt.Errorf("upstreamOverrides.baseURL cannot use an ambiguous IP address")
+	}
+	return nil
 }
 
 func modelProviderPreset(provider agentgateway.ModelProvider) (api.AIBackend_ProviderPreset, bool) {
