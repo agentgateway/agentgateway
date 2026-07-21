@@ -1889,6 +1889,7 @@ impl StoreUpdater {
 		prev: PreviousState,
 	) -> anyhow::Result<PreviousState> {
 		let mut s = self.state.write().expect("mutex acquired");
+		let prev_bind_keys = prev.binds.clone();
 		let mut old_binds = prev.binds;
 		let mut old_routes = prev.routes;
 		let mut old_tcp_routes = prev.tcp_routes;
@@ -1904,14 +1905,19 @@ impl StoreUpdater {
 			route_groups: Default::default(),
 		};
 		// Unlike XDS (which must tolerate a bad dynamic config), a static local config that
-		// cannot bind a listener is a fatal misconfiguration. Collect any bind failures and
-		// surface them so startup exits(1) rather than silently serving nothing (issue #87).
+		// cannot open a newly added listener is a fatal misconfiguration. Only treat bind
+		// failures for binds introduced after the previous sync as errors: existing binds are
+		// not re-opened, and a reload that adds a new port after startup must not silently
+		// serve nothing on that bind (issue #87).
 		let mut bind_errors = Vec::new();
 		for b in binds {
+			let is_new_bind = !prev_bind_keys.contains(&b.key);
 			old_binds.remove(&b.key);
 			next_state.binds.insert(b.key.clone());
 			let key = b.key.clone();
-			if let Err(err) = s.upsert_bind(key, b) {
+			if let Err(err) = s.upsert_bind(key, b)
+				&& is_new_bind
+			{
 				bind_errors.push(format!("{err:#}"));
 			}
 		}
@@ -2047,7 +2053,7 @@ mod tests {
 	use crate::telemetry::log::OrderedStringMap;
 	use crate::types::agent::{
 		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, ListenerSetTarget, PolicyType,
-		ResourceName, TunnelProtocol,
+		ResourceName, Target, TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
 
@@ -2265,6 +2271,78 @@ mod tests {
 				Default::default(),
 			)
 			.expect("bind on an ephemeral port should succeed");
+	}
+
+	#[test]
+	fn sync_local_new_bind_on_reload_failure_is_fatal() {
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let occupied_addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let prev = updater
+			.sync_local(
+				vec![standard_bind("127.0.0.1:0".parse().unwrap())],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect("initial bind should succeed");
+
+		let mut new_bind = standard_bind(occupied_addr);
+		new_bind.key = strng::literal!("bind2");
+		let err = updater
+			.sync_local(
+				vec![
+					standard_bind("127.0.0.1:0".parse().unwrap()),
+					new_bind,
+				],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				prev,
+			)
+			.expect_err("adding a new bind on an occupied port after startup must fail");
+		assert!(
+			err.to_string().contains("failed to start bind listener"),
+			"unexpected error: {err:#}"
+		);
+	}
+
+	#[test]
+	fn sync_local_bind_failure_still_applies_config() {
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let backend_key: BackendKey = strng::literal!("ns/backend");
+		let backend = BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::literal!("backend"), strng::literal!("ns")),
+				Target::Address("127.0.0.1:8080".parse().unwrap()),
+			),
+			inline_policies: vec![],
+		};
+		let _err = updater
+			.sync_local(
+				vec![standard_bind(addr)],
+				vec![],
+				vec![],
+				vec![],
+				vec![backend],
+				vec![],
+				Default::default(),
+			)
+			.expect_err("bind on an occupied port must fail");
+
+		assert!(
+			updater.read().backend(&backend_key).is_some(),
+			"bind failure must not prevent the rest of sync_local from applying"
+		);
 	}
 
 	#[test]

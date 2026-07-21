@@ -202,8 +202,9 @@ impl LocalClient {
 		.await?;
 		info!("loaded config from {:?}", self.cfg);
 
-		// Sync the state
-		let next_binds = self.stores.binds.sync_local(
+		// Sync binds first, but always run discovery sync even when a new bind cannot open.
+		// Propagating bind errors before discovery sync would skip workload/service state.
+		let bind_result = self.stores.binds.sync_local(
 			config.binds,
 			config.listener_routes,
 			config.listener_tcp_routes,
@@ -211,12 +212,13 @@ impl LocalClient {
 			config.backends,
 			config.route_groups,
 			prev.binds,
-		)?;
+		);
 		let next_discovery =
 			self
 				.stores
 				.discovery
 				.sync_local(config.services, config.workloads, prev.discovery)?;
+		let next_binds = bind_result?;
 
 		Ok(PreviousState {
 			binds: next_binds,
