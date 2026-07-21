@@ -1522,12 +1522,31 @@ func (a *OpenAIModerationAuth) BackendAuth() *BackendAuth {
 }
 
 // BedrockGuardrailsAuth configures credentials for AWS Bedrock Guardrails requests.
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;aws
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) : true",message="location may only be set for key or secretRef auth"
 type BedrockGuardrailsAuth struct {
 	// AWS authentication method for Bedrock Guardrails. Use `aws: {}` for
 	// default AWS SDK credential discovery.
-	//
 	// +optional
 	AWS *AwsAuth `json:"aws,omitempty"`
+
+	// Inline API key to use as the value of the `Authorization` header.
+	// This option is the least secure; usage of a `Secret` is preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the API key, defaulting to a Kubernetes `Secret`.
+	// By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where API keys are inserted. Defaults to the `Authorization` header with
+	// the `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
 }
 
 func (a *BedrockGuardrailsAuth) BackendAuth() *BackendAuth {
@@ -1535,11 +1554,15 @@ func (a *BedrockGuardrailsAuth) BackendAuth() *BackendAuth {
 		return nil
 	}
 	return &BackendAuth{
-		AWS: a.AWS,
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		AWS:       a.AWS,
+		Location:  a.Location,
 	}
 }
 
 // GoogleModelArmorAuth configures credentials for Google Model Armor requests.
+// +kubebuilder:validation:ExactlyOneOf=gcp
 type GoogleModelArmorAuth struct {
 	// Google authentication method for Model Armor. Use `gcp: {}` for default
 	// Google credential discovery.

@@ -162,6 +162,52 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: bedrock-guardrails-api-key
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - bedrockGuardrails:
+            identifier: guardrail
+            version: DRAFT
+            region: us-west-2
+            policies:
+              auth:
+                secretRef:
+                  name: bedrock-api-key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: bedrock-guardrails-inline-key-location
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - bedrockGuardrails:
+            identifier: guardrail
+            version: DRAFT
+            region: us-west-2
+            policies:
+              auth:
+                key: test-key
+                location:
+                  header:
+                    name: X-Api-Key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: frontend-http
 spec:
   targetRefs:

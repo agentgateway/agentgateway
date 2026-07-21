@@ -429,7 +429,112 @@ spec:
                                               - message: secretRef and assumeRole
                                                   are mutually exclusive
                                                 rule: '!(has(self.secretRef) && has(self.assumeRole))'
+                                            key:
+                                              description: |-
+                                                Inline API key to use as the value of the `Authorization` header.
+                                                This option is the least secure; usage of a `Secret` is preferred.
+                                              maxLength: 2048
+                                              type: string
+                                            location:
+                                              description: |-
+                                                Where API keys are inserted. Defaults to the `Authorization` header with
+                                                the `Bearer ` prefix. Applies to `key` and `secretRef`.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: Name of an HTTP
+                                                        header. HTTP/2 pseudo-headers
+                                                        (names beginning with `:`)
+                                                        are not supported
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie]
+                                                  must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                  == 1'
+                                            secretRef:
+                                              description: |-
+                                                Credential source for the API key, defaulting to a Kubernetes `Secret`.
+                                                By default, the value is read from the `Authorization` key; set
+                                                `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+                                                the default `Authorization` key.
+                                              properties:
+                                                group:
+                                                  description: API group of the referenced
+                                                    credential; empty selects the
+                                                    core API group
+                                                  type: string
+                                                key:
+                                                  description: Key in the referenced
+                                                    Secret. If omitted, a location-specific
+                                                    default is used
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                kind:
+                                                  description: Kind of the referenced
+                                                    credential; empty defaults to
+                                                    `Secret`
+                                                  type: string
+                                                name:
+                                                  description: Name of the referenced
+                                                    credential
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                              x-kubernetes-validations:
+                                              - message: custom credential refs must
+                                                  set both group and kind
+                                                rule: '(!has(self.group) || size(self.group)
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: location may only be set for
+                                              key or secretRef auth
+                                            rule: 'has(self.location) ? has(self.key)
+                                              || has(self.secretRef) : true'
+                                          - message: exactly one of the fields in
+                                              [key secretRef aws] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.aws)].filter(x,x==true).size()
+                                              == 1'
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend
@@ -828,6 +933,11 @@ spec:
                                                 rule: 'has(self.audience) ? self.type
                                                   == ''IdToken'' : true'
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: exactly one of the fields in
+                                              [gcp] must be set
+                                            rule: '[has(self.gcp)].filter(x,x==true).size()
+                                              == 1'
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend
@@ -1892,7 +2002,112 @@ spec:
                                               - message: secretRef and assumeRole
                                                   are mutually exclusive
                                                 rule: '!(has(self.secretRef) && has(self.assumeRole))'
+                                            key:
+                                              description: |-
+                                                Inline API key to use as the value of the `Authorization` header.
+                                                This option is the least secure; usage of a `Secret` is preferred.
+                                              maxLength: 2048
+                                              type: string
+                                            location:
+                                              description: |-
+                                                Where API keys are inserted. Defaults to the `Authorization` header with
+                                                the `Bearer ` prefix. Applies to `key` and `secretRef`.
+                                              properties:
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: Name of an HTTP
+                                                        header. HTTP/2 pseudo-headers
+                                                        (names beginning with `:`)
+                                                        are not supported
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie]
+                                                  must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                                  == 1'
+                                            secretRef:
+                                              description: |-
+                                                Credential source for the API key, defaulting to a Kubernetes `Secret`.
+                                                By default, the value is read from the `Authorization` key; set
+                                                `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+                                                the default `Authorization` key.
+                                              properties:
+                                                group:
+                                                  description: API group of the referenced
+                                                    credential; empty selects the
+                                                    core API group
+                                                  type: string
+                                                key:
+                                                  description: Key in the referenced
+                                                    Secret. If omitted, a location-specific
+                                                    default is used
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                                kind:
+                                                  description: Kind of the referenced
+                                                    credential; empty defaults to
+                                                    `Secret`
+                                                  type: string
+                                                name:
+                                                  description: Name of the referenced
+                                                    credential
+                                                  maxLength: 253
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                              x-kubernetes-validations:
+                                              - message: custom credential refs must
+                                                  set both group and kind
+                                                rule: '(!has(self.group) || size(self.group)
+                                                  == 0) ? (!has(self.kind) || size(self.kind)
+                                                  == 0 || self.kind == ''Secret'')
+                                                  : (has(self.kind) && size(self.kind)
+                                                  > 0)'
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: location may only be set for
+                                              key or secretRef auth
+                                            rule: 'has(self.location) ? has(self.key)
+                                              || has(self.secretRef) : true'
+                                          - message: exactly one of the fields in
+                                              [key secretRef aws] must be set
+                                            rule: '[has(self.key),has(self.secretRef),has(self.aws)].filter(x,x==true).size()
+                                              == 1'
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend
@@ -2291,6 +2506,11 @@ spec:
                                                 rule: 'has(self.audience) ? self.type
                                                   == ''IdToken'' : true'
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: exactly one of the fields in
+                                              [gcp] must be set
+                                            rule: '[has(self.gcp)].filter(x,x==true).size()
+                                              == 1'
                                         http:
                                           description: Settings for managing HTTP
                                             requests to the backend

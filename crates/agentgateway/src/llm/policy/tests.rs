@@ -1377,6 +1377,43 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 }
 
 #[test]
+fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
+	use secrecy::SecretString;
+
+	use crate::http::auth::BackendAuth;
+	use crate::store::BindStore;
+	use crate::types::agent::BackendTrafficPolicy;
+
+	let guardrails = BedrockGuardrails {
+		guardrail_identifier: strng::new("test-guardrail"),
+		guardrail_version: strng::new("1"),
+		region: strng::new("us-east-1"),
+		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+			value: SecretString::new("bedrock-api-key".into()),
+			location: None,
+		})],
+	};
+
+	let pols = guardrails.build_request_policies();
+
+	let store = BindStore::default();
+	let resolved = store.inline_backend_policies(&pols);
+
+	assert!(
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth::Key {
+				value: _,
+				location: _
+			})
+		),
+		"Expected Bedrock API key auth to take precedence over \
+		 the implicit AWS fallback, but got: {:?}",
+		resolved.backend_auth
+	);
+}
+
+#[test]
 fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 	use crate::http::auth::{AwsAuth, BackendAuth};
 	use crate::store::BindStore;

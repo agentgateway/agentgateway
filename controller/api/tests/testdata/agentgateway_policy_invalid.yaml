@@ -28,11 +28,11 @@ spec:
               auth:
                 oauthTokenExchange: {}
 ---
-_err: unknown fields
+_err: exactly one
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
-  name: bedrock-guardrails-secret-ref
+  name: bedrock-guardrails-multiple-auth
 spec:
   targetRefs:
   - group: gateway.networking.k8s.io
@@ -48,8 +48,55 @@ spec:
             region: us-west-2
             policies:
               auth:
+                aws: {}
                 secretRef:
-                  name: openai-secret
+                  name: bedrock-secret
+---
+_err: exactly one
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: bedrock-guardrails-empty-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - bedrockGuardrails:
+            identifier: guardrail
+            version: DRAFT
+            region: us-west-2
+            policies:
+              auth: {}
+---
+_err: location may only be set for key or secretRef auth
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: bedrock-guardrails-aws-location
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - bedrockGuardrails:
+            identifier: guardrail
+            version: DRAFT
+            region: us-west-2
+            policies:
+              auth:
+                aws: {}
+                location:
+                  header:
+                    name: X-Api-Key
 ---
 _err: unknown fields
 apiVersion: agentgateway.dev/v1alpha1
@@ -72,6 +119,26 @@ spec:
               auth:
                 aws:
                   serviceName: bedrock
+---
+_err: exactly one
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: google-model-armor-empty-auth
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: dummy
+  backend:
+    ai:
+      promptGuard:
+        request:
+        - googleModelArmor:
+            templateId: template
+            projectId: project
+            policies:
+              auth: {}
 ---
 _err: 'sni in body should be at least 1 char'
 apiVersion: agentgateway.dev/v1alpha1
