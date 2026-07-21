@@ -1532,7 +1532,6 @@ func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpre
 	return string(item)
 }
 
-
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
 func processAuthorizationPolicy(
 	auth *agentgateway.Authorization,
