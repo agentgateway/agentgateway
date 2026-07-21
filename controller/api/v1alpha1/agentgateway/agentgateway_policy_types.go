@@ -867,7 +867,7 @@ type Traffic struct {
 	// Injects artificial latency before forwarding requests, for
 	// fault-injection testing.
 	// +optional
-	Delay *Delay `json:"delay,omitempty"`
+	Delay *DelayOrConditional `json:"delay,omitempty"`
 }
 
 // Direct response policy.
@@ -2808,8 +2808,46 @@ type Delay struct {
 	// The injected delay counts against the request timeout.
 	//
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +optional
+	Duration *metav1.Duration `json:"duration,omitempty"`
+}
+
+type DelayConditional struct {
+	// CEL expression that must evaluate to true for this policy to execute.
+	// +optional
+	Condition CELExpression `json:"condition,omitempty"`
+	// Policy to apply when the condition matches.
 	// +required
-	Duration metav1.Duration `json:"duration"`
+	// +kubebuilder:validation:XValidation:rule="has(self.duration)",message="duration is required"
+	Policy Delay `json:"policy"`
+}
+
+// +kubebuilder:validation:ConditionalPolicy:fields=duration
+type DelayOrConditional struct {
+	// +optional
+	Delay `json:",inline"`
+	// Conditional policy execution. Set this or the top-level delay fields.
+	// The first matching policy will be executed.
+	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
+	// in case no conditions are met.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
+	Conditional []DelayConditional `json:"conditional,omitempty"`
+}
+
+func (d *DelayOrConditional) ConditionalPolicy() (*Delay, iter.Seq[ConditionalPolicyEntry[Delay]]) {
+	seq := mapseq(d.Conditional, func(d DelayConditional) ConditionalPolicyEntry[Delay] {
+		return ConditionalPolicyEntry[Delay]{
+			Condition: d.Condition,
+			Policy:    d.Policy,
+		}
+	})
+	if len(d.Conditional) > 0 {
+		return nil, seq
+	}
+	return &d.Delay, seq
 }
 
 // Retry policy.

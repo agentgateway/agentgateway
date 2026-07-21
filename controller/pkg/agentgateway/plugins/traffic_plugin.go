@@ -555,7 +555,15 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.Delay != nil {
-		appendPolicy("delay")(processDelayPolicy(traffic.Delay, basePolicyName, policyName), nil)
+		appendPolicy("delay")(processConditional(
+			traffic.Delay,
+			processDelayTraffic,
+			delayPolicySuffix,
+			ctx,
+			traffic.Phase,
+			basePolicyName,
+			policyName,
+		))
 	}
 
 	if traffic.DirectResponse != nil {
@@ -1035,26 +1043,17 @@ func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string,
 	return timeoutPolicy
 }
 
-func processDelayPolicy(delay *agentgateway.Delay, basePolicyName string, policy types.NamespacedName) *api.Policy {
-	translatedDelay := &api.Delay{
-		Duration: durationpb.New(delay.Duration.Duration),
+func processDelayTraffic(_ PolicyCtx, delay *agentgateway.Delay, _ types.NamespacedName) (*api.Policy_Traffic, error) {
+	if delay.Duration == nil {
+		return nil, fmt.Errorf("failed to build delay: duration is required")
 	}
-
-	delayPolicy := &api.Policy{
-		Key:  basePolicyName + delayPolicySuffix,
-		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Kind: &api.Policy_Traffic{
-			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Delay{Delay: translatedDelay},
-			},
+	return &api.Policy_Traffic{
+		Traffic: &api.TrafficPolicySpec{
+			Kind: &api.TrafficPolicySpec_Delay{Delay: &api.Delay{
+				Duration: durationpb.New(delay.Duration.Duration),
+			}},
 		},
-	}
-
-	logger.Debug("generated Delay policy",
-		"policy", basePolicyName,
-		"agentgateway_policy", delayPolicy.Name)
-
-	return delayPolicy
+	}, nil
 }
 
 func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicyName string, policy types.NamespacedName) *api.Policy {
