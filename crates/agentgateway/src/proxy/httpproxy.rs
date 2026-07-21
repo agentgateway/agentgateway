@@ -255,19 +255,17 @@ async fn apply_request_policies(
 		.await?;
 
 	// delay should happen after auth but before direct response
-	if let Some(delay) = pol.delay.select("delay", req) {
-		let sleep = tokio::time::sleep(delay.duration);
-		match rp.timeout.as_ref().and_then(|t| t.request_timeout) {
-			Some(timeout) => {
-				// delay is counted against request timeout, mimicks real latency
-				let deadline = tokio::time::Instant::from_std(l.start.as_instant() + timeout);
-				tokio::time::timeout_at(deadline, sleep)
-					.await
-					.map_err(|_| ProxyError::RequestTimeout)?;
-			},
-			None => sleep.await,
-		}
+	if !pol.delay.is_empty()
+		&& let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout)
+	{
+		req
+			.extensions_mut()
+			.insert(http::filters::RequestDeadline(l.start.as_instant() + timeout));
 	}
+	pol
+		.delay
+		.apply_without_response("delay", c, l, req, rp.headers())
+		.await?;
 	pol
 		.direct_response
 		.apply_without_response("direct response", c, l, req, rp.headers())

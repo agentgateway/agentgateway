@@ -227,6 +227,10 @@ pub struct AutoHostname {
 #[derive(Debug, Clone)]
 pub struct BackendRequestTimeout(pub Duration);
 
+/// RequestDeadline is an HTTP Extension that signals the deadline of the route's request timeout.
+#[derive(Debug, Clone, Copy)]
+pub struct RequestDeadline(pub std::time::Instant);
+
 impl UrlRewrite {
 	pub fn apply(&self, req: &mut Request) -> Result<(), Error> {
 		const DEFAULT_PATH: &PathMatch = &PathMatch::PathPrefix(strng::literal!("/"));
