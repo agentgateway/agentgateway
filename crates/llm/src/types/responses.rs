@@ -395,15 +395,8 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 					}
 				}
 			},
-			OutputItem::FunctionCall(call) => {
-				let id = call.id.as_deref().unwrap_or(call.call_id.as_str());
-				let arguments = serde_json::from_str(&call.arguments)
-					.unwrap_or(serde_json::Value::Object(Default::default()));
-				content.push(OutputMessagePart::ToolCall {
-					id: strng::new(id),
-					name: strng::new(&call.name),
-					arguments,
-				});
+			OutputItem::FunctionCall(_) => {
+				content.extend(output_item_tool_call_part(item));
 			},
 			_ => {},
 		}
@@ -418,6 +411,24 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 		content,
 		finish_reason: Some(strng::new(&resp.status)),
 	}])
+}
+
+pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
+	let OutputItem::FunctionCall(call) = item else {
+		return None;
+	};
+	let id = call
+		.id
+		.as_deref()
+		.filter(|id| !id.is_empty())
+		.unwrap_or(call.call_id.as_str());
+	let arguments = serde_json::from_str(&call.arguments)
+		.unwrap_or(serde_json::Value::Object(Default::default()));
+	Some(OutputMessagePart::ToolCall {
+		id: strng::new(id),
+		name: strng::new(&call.name),
+		arguments,
+	})
 }
 
 impl ResponseType for Response {
