@@ -269,6 +269,11 @@ function DatabaseResourcesPanel(props: {
   const [deleting, setDeleting] = useState<ConfigResource | null>(null);
   const deleteResource = useDeleteConfigResource();
   const dangerousActionsVisible = useHybridFileWriteOverrideKeys();
+
+  useEffect(() => {
+    if (!dangerousActionsVisible && deleting) setDeleting(null);
+  }, [dangerousActionsVisible, deleting]);
+
   return (
     <>
       <Panel>
@@ -359,9 +364,10 @@ function DatabaseResourcesPanel(props: {
           title="Delete database resource?"
           destructive
           confirmLabel="Delete resource"
-          confirmDisabled={deleteResource.isPending}
+          confirmDisabled={deleteResource.isPending || !dangerousActionsVisible}
           onCancel={() => setDeleting(null)}
           onConfirm={() => {
+            if (!dangerousActionsVisible) return;
             const key = `${deleting.kind}:${deleting.id}`;
             deleteResource.mutate(
               { kind: deleting.kind, id: deleting.id },

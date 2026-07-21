@@ -592,8 +592,8 @@ export function makeEmptyMcpTarget(): McpTarget {
   };
 }
 
-export function enableTrafficConfig(config: GatewayConfig) {
+export function enableTrafficConfig(config: GatewayConfig, port = 8080) {
   if (!("gateways" in config)) {
-    config.gateways = { public: { port: 8080 } };
+    config.gateways = { public: { port } };
   }
 }

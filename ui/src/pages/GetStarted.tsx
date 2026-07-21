@@ -118,7 +118,10 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
               parsePort(port, defaultSurfacePort(props.surface)),
             );
         } else {
-          enableTrafficConfig(next);
+          enableTrafficConfig(
+            next,
+            parsePort(port, defaultSurfacePort(props.surface)),
+          );
         }
       });
       void navigate({ to: surface.destination });

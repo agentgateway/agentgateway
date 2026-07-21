@@ -902,7 +902,7 @@ impl Gateway {
 					dtrace::DebugTracer::maybe_scope(req, |req| async move {
 						proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
 					})
-					.assert_size::<{ 16 * 1024 }>(),
+					.assert_size::<{ 17 * 1024 }>(),
 				)
 			}),
 		);

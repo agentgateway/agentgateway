@@ -405,7 +405,7 @@ function clientRecipes(args: {
   const requiredApiKey = args.apiKey || "dummy_key";
   const continuation = "\\";
   const curlAuthorization = args.apiKey
-    ? `  -H "Authorization: Bearer ${args.apiKey}" ${continuation}\n`
+    ? `  -H ${JSON.stringify(`Authorization: Bearer ${args.apiKey}`)} ${continuation}\n`
     : "";
   const openCodeApiKey = args.apiKey
     ? `,
@@ -414,7 +414,7 @@ function clientRecipes(args: {
   const openCodeApiKeyExport = args.apiKey
     ? `
 
-export AGENTGATEWAY_API_KEY='${args.apiKey}'  # Alternatively, type /connect to enter your API key.`
+export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, type /connect to enter your API key.`
     : "";
   return [
     {
@@ -440,10 +440,10 @@ ${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
         "Use the gateway URL and key with Claude-compatible model routes when configured.",
       icon: "claude",
       language: "bash",
-      code: `export ANTHROPIC_AUTH_TOKEN="${requiredApiKey}"
-export ANTHROPIC_BASE_URL="${base}"
+      code: `export ANTHROPIC_AUTH_TOKEN=${JSON.stringify(requiredApiKey)}
+export ANTHROPIC_BASE_URL=${JSON.stringify(base)}
 
-claude --model "${args.model}"`,
+claude --model ${JSON.stringify(args.model)}`,
     },
     {
       id: "claude-desktop",
@@ -482,7 +482,7 @@ API Key: ${requiredApiKey}`,
         "Use OpenAI-compatible environment variables when running Codex against the gateway.",
       icon: "codex",
       language: "bash",
-      code: `export OPENAI_API_KEY='${requiredApiKey}'
+      code: `export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
 # If Codex has an existing login it can impact functionality. Better if it's logged out.
 # If you don't want to override your Codex configuration, you can set up a new dedicated configuration file.
 export CODEX_HOME=/tmp/codex-gateway-home && mkdir -p $CODEX_HOME # optional
