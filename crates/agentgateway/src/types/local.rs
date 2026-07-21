@@ -972,7 +972,7 @@ impl LocalLLMModels {
 			return;
 		}
 		if let LocalModelAIProvider::Preset(preset) = &self.provider {
-			self.params.base_url = Some(strng::new(preset.clone().base_url()));
+			self.params.base_url = Some(strng::new(preset.base_url()));
 		}
 	}
 
@@ -4135,7 +4135,7 @@ async fn convert_llm_config(
 				})
 			},
 			LocalModelAIProvider::Preset(preset) => {
-				AIProvider::Custom(preset.clone().provider(model.clone()))
+				AIProvider::Custom(preset.provider(model.clone()))
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Vertex) => {
 				AIProvider::Vertex(crate::llm::vertex::Provider {

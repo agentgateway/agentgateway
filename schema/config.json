@@ -10616,6 +10616,16 @@
       "$ref": "#/$defs/FileOrInline"
     },
     "LocalModelAIProvider": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalBuiltinModelAIProvider"
+        },
+        {
+          "$ref": "#/$defs/ProviderPreset"
+        }
+      ]
+    },
+    "LocalBuiltinModelAIProvider": {
       "oneOf": [
         {
           "type": "string",
@@ -10627,20 +10637,7 @@
             "anthropic",
             "bedrock",
             "azure",
-            "copilot",
-            "cohere",
-            "ollama",
-            "baseten",
-            "cerebras",
-            "deepinfra",
-            "deepseek",
-            "groq",
-            "huggingface",
-            "mistral",
-            "openrouter",
-            "togetherai",
-            "xai",
-            "fireworks"
+            "copilot"
           ]
         },
         {
@@ -10667,6 +10664,25 @@
           ],
           "additionalProperties": false
         }
+      ]
+    },
+    "ProviderPreset": {
+      "description": "A named custom-provider configuration maintained by agentgateway.\n\nThese presets deliberately live beside `Provider`: both standalone and xDS\nconfiguration expand them here, keeping endpoint and format behavior alike.",
+      "type": "string",
+      "enum": [
+        "cohere",
+        "ollama",
+        "baseten",
+        "cerebras",
+        "deepinfra",
+        "deepseek",
+        "groq",
+        "huggingface",
+        "mistral",
+        "openrouter",
+        "togetherai",
+        "xAI",
+        "fireworks"
       ]
     },
     "LocalLLMProviderDefaults": {
