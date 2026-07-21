@@ -607,6 +607,7 @@ async fn test_aws_sign_request_no_region_error() {
 async fn test_aws_sign_request_implicit_with_extension() {
 	// Test AWS signing with implicit auth uses region from request extensions
 	// Set temporary AWS credentials in environment for test consistency
+	let _env_guard = crate::config::lock_env_for_tests();
 	unsafe {
 		std::env::set_var("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE");
 		std::env::set_var(
