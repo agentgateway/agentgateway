@@ -47,7 +47,19 @@ import bedrockIcon from "../assets/providers/bedrock.svg";
 import googleCloudIcon from "../assets/providers/googlecloud.svg";
 import openAiIcon from "../assets/providers/openai.svg";
 
-type BuiltinRule = "ssn" | "creditCard" | "phoneNumber" | "email" | "caSin";
+type BuiltinRule =
+  | "ssn"
+  | "creditCard"
+  | "phoneNumber"
+  | "email"
+  | "caSin"
+  | "apiKey"
+  | "privateKey"
+  | "githubToken"
+  | "awsAccessKey"
+  | "slackToken"
+  | "jwt"
+  | "gcpApiKey";
 type GuardPhase = "request" | "response";
 type GuardObject = NonNullable<LlmGuardrail["request"]>[number];
 type GuardKind =
@@ -134,6 +146,13 @@ const builtinOptions: Array<{ value: BuiltinRule; label: string }> = [
   { value: "creditCard", label: "Credit card" },
   { value: "ssn", label: "SSN" },
   { value: "caSin", label: "CA SIN" },
+  { value: "apiKey", label: "API key" },
+  { value: "privateKey", label: "Private key" },
+  { value: "githubToken", label: "GitHub token" },
+  { value: "awsAccessKey", label: "AWS access key" },
+  { value: "slackToken", label: "Slack token" },
+  { value: "jwt", label: "JWT" },
+  { value: "gcpApiKey", label: "GCP API key" },
 ];
 
 const requestGuardKinds: Array<EnumSelectorOption<GuardKind>> = [
