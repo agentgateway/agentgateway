@@ -277,12 +277,13 @@ async fn multiple_requests() {
 #[tokio::test]
 async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 	let (_mock, _bind, io) = basic_setup().await;
-	// Watchers are process-global, so use a path disjoint from concurrent debug trace tests.
+	const PATH: &str = "/debug-trace-only-captures-one-request";
 	let mut trace_rx = agentgateway::proxy::dtrace::track_expression(Some(
-		agentgateway::cel::Expression::new_strict("request.path == '/keepalive'").unwrap(),
+		agentgateway::cel::Expression::new_strict(format!("request.path == '{PATH}'")).unwrap(),
 	));
 
-	let res = send_request(io.clone(), Method::GET, "http://lo/keepalive").await;
+	let url = format!("http://lo{PATH}");
+	let res = send_request(io.clone(), Method::GET, &url).await;
 	assert_eq!(res.status(), 200);
 	read_body_raw(res.into_body()).await;
 
@@ -305,14 +306,17 @@ async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 #[tokio::test]
 async fn debug_trace_expression_watchers_match_first_request() {
 	let (_mock, _bind, io) = basic_setup().await;
+	const FIRST_PATH: &str = "/debug-trace-expression-watchers-first";
+	const SECOND_PATH: &str = "/debug-trace-expression-watchers-second";
 	let mut first_trace_rx = agentgateway::proxy::dtrace::track_expression(Some(
-		agentgateway::cel::Expression::new_strict("request.path == '/first'").unwrap(),
+		agentgateway::cel::Expression::new_strict(format!("request.path == '{FIRST_PATH}'")).unwrap(),
 	));
 	let mut second_trace_rx = agentgateway::proxy::dtrace::track_expression(Some(
-		agentgateway::cel::Expression::new_strict("request.path == '/second'").unwrap(),
+		agentgateway::cel::Expression::new_strict(format!("request.path == '{SECOND_PATH}'")).unwrap(),
 	));
 
-	let res = send_request(io.clone(), Method::GET, "http://lo/second").await;
+	let second_url = format!("http://lo{SECOND_PATH}");
+	let res = send_request(io.clone(), Method::GET, &second_url).await;
 	assert_eq!(res.status(), 200);
 	read_body_raw(res.into_body()).await;
 
@@ -331,7 +335,8 @@ async fn debug_trace_expression_watchers_match_first_request() {
 		"requestStarted"
 	);
 
-	let res = send_request(io.clone(), Method::GET, "http://lo/first").await;
+	let first_url = format!("http://lo{FIRST_PATH}");
+	let res = send_request(io.clone(), Method::GET, &first_url).await;
 	assert_eq!(res.status(), 200);
 	read_body_raw(res.into_body()).await;
 

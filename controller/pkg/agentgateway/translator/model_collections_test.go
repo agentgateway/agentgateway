@@ -1,6 +1,7 @@
 package translator
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -49,54 +50,64 @@ func TestModelLLMProvider(t *testing.T) {
 			port       int32
 			path       string
 			pathPrefix string
+			wantErr    string
 		}{
 			{
-				name: "default port",
+				name: "https default port",
 				model: agentgateway.AgentgatewayModelSpec{
-					Provider: &providerType,
-					UpstreamOverrides: &agentgateway.UpstreamOverrides{Endpoint: &agentgateway.UpstreamEndpoint{
-						Host: "provider.example.com",
-					}},
+					Provider:          &providerType,
+					UpstreamOverrides: &agentgateway.UpstreamOverrides{BaseURL: new(agentgateway.LongString("https://provider.example.com"))},
 				},
 				host: "provider.example.com",
 				port: 443,
 			},
 			{
-				name: "host port and path override",
+				name: "http explicit port and path prefix",
 				model: agentgateway.AgentgatewayModelSpec{
-					Provider: &providerType,
-					UpstreamOverrides: &agentgateway.UpstreamOverrides{
-						Endpoint: &agentgateway.UpstreamEndpoint{
-							Host: "provider.example.com",
-							Port: 8443,
-							Path: "/api/chat",
-						},
-					},
+					Provider:          &providerType,
+					UpstreamOverrides: &agentgateway.UpstreamOverrides{BaseURL: new(agentgateway.LongString("http://provider.example.com:8443/api/chat"))},
 				},
-				host: "provider.example.com",
-				port: 8443,
-				path: "/api/chat",
+				host:       "provider.example.com",
+				port:       8443,
+				pathPrefix: "/api/chat",
 			},
 			{
-				name: "path prefix override",
+				name: "trailing slash is omitted from path prefix",
 				model: agentgateway.AgentgatewayModelSpec{
-					Provider: &providerType,
-					UpstreamOverrides: &agentgateway.UpstreamOverrides{
-						Endpoint: &agentgateway.UpstreamEndpoint{
-							Host:       "provider.example.com",
-							PathPrefix: "/v1",
-						},
-					},
+					Provider:          &providerType,
+					UpstreamOverrides: &agentgateway.UpstreamOverrides{BaseURL: new(agentgateway.LongString("https://provider.example.com/v1/"))},
 				},
 				host:       "provider.example.com",
 				port:       443,
 				pathPrefix: "/v1",
+			},
+			{
+				name: "invalid base URL",
+				model: agentgateway.AgentgatewayModelSpec{
+					Provider:          &providerType,
+					UpstreamOverrides: &agentgateway.UpstreamOverrides{BaseURL: new(agentgateway.LongString("ftp://provider.example.com"))},
+				},
+				wantErr: "must use http or https",
+			},
+			{
+				name: "base URL query is rejected",
+				model: agentgateway.AgentgatewayModelSpec{
+					Provider:          &providerType,
+					UpstreamOverrides: &agentgateway.UpstreamOverrides{BaseURL: new(agentgateway.LongString("https://provider.example.com/v1?api-version=2025-01-01"))},
+				},
+				wantErr: "cannot include user info, query parameters, or a fragment",
 			},
 		}
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				provider, err := translateModelLLMProvider(RouteContext{}, "default", &tt.model, "openai", nil)
+				if tt.wantErr != "" {
+					if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+						t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+					}
+					return
+				}
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -489,40 +489,17 @@ spec:
               upstreamOverrides:
                 description: Shared overrides for requests sent to the selected provider.
                 properties:
-                  endpoint:
-                    description: Endpoint overrides for the provider.
-                    properties:
-                      host:
-                        description: Hostname override for the provider.
-                        maxLength: 256
-                        minLength: 1
-                        type: string
-                      path:
-                        description: URL path override for provider API requests.
-                        maxLength: 1024
-                        minLength: 1
-                        type: string
-                      pathPrefix:
-                        description: Overrides the default base path prefix, such
-                          as `/v1`, for upstream requests.
-                        maxLength: 1024
-                        minLength: 1
-                        type: string
-                      port:
-                        description: Port override for the provider.
-                        format: int32
-                        maximum: 65535
-                        minimum: 1
-                        type: integer
-                    type: object
-                    x-kubernetes-validations:
-                    - message: both host and port must be set together
-                      rule: 'has(self.host) || has(self.port) ? has(self.host) &&
-                        has(self.port) : true'
-                    - message: pathPrefix requires host to be set
-                      rule: 'has(self.pathPrefix) ? has(self.host) : true'
-                    - message: path and pathPrefix are mutually exclusive
-                      rule: '!(has(self.path) && has(self.pathPrefix))'
+                  baseURL:
+                    description: |-
+                      BaseURL overrides the provider address and base path prefix. It must use the
+                      http or https scheme. The scheme selects the default port when one is not
+                      included; backend TLS is configured by the provider and backend policies.
+
+                      Query parameters, fragments, and user info are not supported.
+                    format: uri
+                    maxLength: 1024
+                    minLength: 1
+                    type: string
                   model:
                     description: |-
                       Fixed model name sent to the provider. When omitted, the model selected by
@@ -531,6 +508,10 @@ spec:
                     minLength: 1
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: upstreamOverrides.baseURL must use http or https
+                  rule: '!has(self.baseURL) || self.baseURL.startsWith(''http://'')
+                    || self.baseURL.startsWith(''https://'')'
               vertexai:
                 description: Provider-specific settings for Vertex AI.
                 properties:

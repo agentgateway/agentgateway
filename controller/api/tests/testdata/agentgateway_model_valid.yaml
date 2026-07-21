@@ -15,9 +15,7 @@ spec:
     model: gpt-5-mini
   provider: OpenAI
   upstreamOverrides:
-    endpoint:
-      host: api.openai.com
-      port: 443
+    baseURL: https://api.openai.com
     model: gpt-5-mini
 ---
 apiVersion: agentgateway.dev/v1alpha1

@@ -82,9 +82,7 @@ spec:
     sectionName: llm
   provider: OpenAI
   upstreamOverrides:
-    endpoint:
-      host: ai-testbox.default.svc.cluster.local
-      port: 9234
+    baseURL: http://ai-testbox.default.svc.cluster.local:9234
     model: agw-public-direct
 ---
 apiVersion: agentgateway.dev/v1alpha1
@@ -101,9 +99,7 @@ spec:
   visibility: Internal
   provider: OpenAI
   upstreamOverrides:
-    endpoint:
-      host: ai-testbox.default.svc.cluster.local
-      port: 9234
+    baseURL: http://ai-testbox.default.svc.cluster.local:9234
     model: agw-internal-fast
 ---
 apiVersion: agentgateway.dev/v1alpha1
@@ -120,9 +116,7 @@ spec:
   visibility: Internal
   provider: OpenAI
   upstreamOverrides:
-    endpoint:
-      host: ai-testbox.default.svc.cluster.local
-      port: 9234
+    baseURL: http://ai-testbox.default.svc.cluster.local:9234
     model: agw-internal-premium
 ---
 apiVersion: agentgateway.dev/v1alpha1
@@ -141,9 +135,7 @@ spec:
   visibility: Internal
   provider: OpenAI
   upstreamOverrides:
-    endpoint:
-      host: ai-testbox.default.svc.cluster.local
-      port: 9234
+    baseURL: http://ai-testbox.default.svc.cluster.local:9234
   transformations:
   - field: model
     expression: 'llmRequest.model.stripPrefix("internal/")'
@@ -162,9 +154,7 @@ spec:
   visibility: Internal
   provider: OpenAI
   upstreamOverrides:
-    endpoint:
-      host: model-routing-primary.default.svc.cluster.local
-      port: 9234
+    baseURL: http://model-routing-primary.default.svc.cluster.local:9234
     model: agw-primary-down
 ---
 apiVersion: agentgateway.dev/v1alpha1

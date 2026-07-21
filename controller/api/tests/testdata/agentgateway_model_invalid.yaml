@@ -15,7 +15,7 @@ spec:
       - modelRef:
           name: concrete-model
 ---
-_err: both host and port must be set together
+_err: upstreamOverrides.baseURL must use http or https
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
@@ -26,8 +26,7 @@ spec:
     sectionName: llm
   provider: OpenAI
   upstreamOverrides:
-    endpoint:
-      host: api.openai.com
+    baseURL: ftp://api.openai.com
 ---
 _err: upstreamOverrides requires provider
 apiVersion: agentgateway.dev/v1alpha1

@@ -3,7 +3,9 @@ package translator
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -418,11 +420,10 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 		return nil, nil
 	}
 	provider := &agentgateway.LLMProvider{}
-	if model.UpstreamOverrides != nil && model.UpstreamOverrides.Endpoint != nil {
-		provider.Host = model.UpstreamOverrides.Endpoint.Host
-		provider.Port = model.UpstreamOverrides.Endpoint.Port
-		provider.Path = model.UpstreamOverrides.Endpoint.Path
-		provider.PathPrefix = model.UpstreamOverrides.Endpoint.PathPrefix
+	if model.UpstreamOverrides != nil && model.UpstreamOverrides.BaseURL != nil {
+		if err := applyModelBaseURL(provider, string(*model.UpstreamOverrides.BaseURL)); err != nil {
+			return nil, err
+		}
 	}
 	switch *model.Provider {
 	case agentgateway.ModelProviderOpenAI:
@@ -460,6 +461,42 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 		return nil, fmt.Errorf("unsupported model provider %q", *model.Provider)
 	}
 	return provider, nil
+}
+
+func applyModelBaseURL(provider *agentgateway.LLMProvider, rawURL string) error {
+	baseURL, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid upstreamOverrides.baseURL: %w", err)
+	}
+	if baseURL.Scheme != "http" && baseURL.Scheme != "https" {
+		return fmt.Errorf("upstreamOverrides.baseURL must use http or https")
+	}
+	if baseURL.Host == "" {
+		return fmt.Errorf("upstreamOverrides.baseURL must include a host")
+	}
+	if baseURL.User != nil || baseURL.RawQuery != "" || baseURL.Fragment != "" {
+		return fmt.Errorf("upstreamOverrides.baseURL cannot include user info, query parameters, or a fragment")
+	}
+
+	port := baseURL.Port()
+	if port == "" {
+		if baseURL.Scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+	parsedPort, err := strconv.ParseInt(port, 10, 32)
+	if err != nil || parsedPort < 1 || parsedPort > 65535 {
+		return fmt.Errorf("upstreamOverrides.baseURL contains an invalid port %q", port)
+	}
+
+	provider.Host = agentgateway.ShortString(baseURL.Hostname())
+	provider.Port = int32(parsedPort)
+	if pathPrefix := strings.TrimRight(baseURL.EscapedPath(), "/"); pathPrefix != "" {
+		provider.PathPrefix = agentgateway.LongString(pathPrefix)
+	}
+	return nil
 }
 
 func translateModelProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*api.AIBackend_ProviderFormatConfig, error) {

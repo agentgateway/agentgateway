@@ -111,39 +111,21 @@ type AgentgatewayModelSpec struct {
 }
 
 // Shared overrides for requests sent to an LLM provider.
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || self.baseURL.startsWith('http://') || self.baseURL.startsWith('https://')",message="upstreamOverrides.baseURL must use http or https"
 type UpstreamOverrides struct {
-	// Endpoint overrides for the provider.
+	// BaseURL overrides the provider address and base path prefix. It must use the
+	// http or https scheme. The scheme selects the default port when one is not
+	// included; backend TLS is configured by the provider and backend policies.
+	//
+	// Query parameters, fragments, and user info are not supported.
+	// +kubebuilder:validation:Format=uri
 	// +optional
-	Endpoint *UpstreamEndpoint `json:"endpoint,omitempty"`
+	BaseURL *LongString `json:"baseURL,omitempty"`
 
 	// Fixed model name sent to the provider. When omitted, the model selected by
 	// match.model is sent to the provider.
 	// +optional
 	Model *ShortString `json:"model,omitempty"`
-}
-
-// UpstreamEndpoint overrides the endpoint used for provider API requests.
-// +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
-// +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
-// +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
-type UpstreamEndpoint struct {
-	// Hostname override for the provider.
-	// +optional
-	Host ShortString `json:"host,omitempty"`
-
-	// Port override for the provider.
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=65535
-	// +optional
-	Port int32 `json:"port,omitempty"`
-
-	// URL path override for provider API requests.
-	// +optional
-	Path LongString `json:"path,omitempty"`
-
-	// Overrides the default base path prefix, such as `/v1`, for upstream requests.
-	// +optional
-	PathPrefix LongString `json:"pathPrefix,omitempty"`
 }
 
 // ModelMatch contains conditions for selecting a model.
