@@ -334,44 +334,6 @@ async fn buffer_body_partial(
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use http_body_util::BodyExt;
-
-	use super::*;
-
-	#[tokio::test]
-	async fn remainder_body_does_not_repoll_inner_after_eof() {
-		let inner = http::Body::new(http_body_util::StreamBody::new(
-			futures_util::stream::unfold(false, |emitted| async move {
-				if emitted {
-					None
-				} else {
-					Some((
-						Ok::<_, axum_core::Error>(Frame::data(Bytes::from_static(b"body"))),
-						true,
-					))
-				}
-			}),
-		));
-		let mut body = http::Body::new(RemainderBody::new(
-			Some(Bytes::from_static(b"prefix")),
-			inner,
-		));
-
-		assert!(
-			body.frame().await.is_some(),
-			"prefix frame should be present"
-		);
-		assert!(
-			body.frame().await.is_some(),
-			"inner data frame should be present"
-		);
-		assert!(body.frame().await.is_none(), "stream should report EOF");
-		assert!(body.frame().await.is_none(), "stream must remain at EOF");
-	}
-}
-
 fn buffered_bytes(mut buffer: BufList) -> Bytes {
 	let len = buffer.remaining();
 	buffer.copy_to_bytes(len)
@@ -460,4 +422,42 @@ pub(super) fn start_buffered_response_body(
 		max_response_bytes,
 		"failed to read response body for buffering",
 	))
+}
+
+#[cfg(test)]
+mod tests {
+	use http_body_util::BodyExt;
+
+	use super::*;
+
+	#[tokio::test]
+	async fn remainder_body_does_not_repoll_inner_after_eof() {
+		let inner = http::Body::new(http_body_util::StreamBody::new(
+			futures_util::stream::unfold(false, |emitted| async move {
+				if emitted {
+					None
+				} else {
+					Some((
+						Ok::<_, axum_core::Error>(Frame::data(Bytes::from_static(b"body"))),
+						true,
+					))
+				}
+			}),
+		));
+		let mut body = http::Body::new(RemainderBody::new(
+			Some(Bytes::from_static(b"prefix")),
+			inner,
+		));
+
+		assert!(
+			body.frame().await.is_some(),
+			"prefix frame should be present"
+		);
+		assert!(
+			body.frame().await.is_some(),
+			"inner data frame should be present"
+		);
+		assert!(body.frame().await.is_none(), "stream should report EOF");
+		assert!(body.frame().await.is_none(), "stream must remain at EOF");
+	}
 }
