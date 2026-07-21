@@ -1311,6 +1311,10 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 	if auth.ServiceName != nil {
 		serviceName = string(*auth.ServiceName)
 	}
+	var region string
+	if auth.Region != nil {
+		region = string(*auth.Region)
+	}
 	var assumeRole *api.AwsAssumeRole
 	if auth.AssumeRole != nil {
 		assumeRole = &api.AwsAssumeRole{
@@ -1331,6 +1335,7 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 		},
 		ServiceName: serviceName,
 		AssumeRole:  assumeRole,
+		Region:      region,
 	}
 	if auth.SecretRef != nil && auth.SecretRef.Name != "" {
 		if auth.AssumeRole != nil {

@@ -1000,6 +1000,11 @@ fn backend_auth_from_proto(
 			} else {
 				Some(a.service_name.clone())
 			};
+			let region = if a.region.is_empty() {
+				None
+			} else {
+				Some(a.region.clone())
+			};
 			let assume_role = a
 				.assume_role
 				.map(|assume_role| -> Result<_, ProtoError> {
@@ -1078,7 +1083,7 @@ fn backend_auth_from_proto(
 						access_key_id: config.access_key_id.into(),
 						secret_access_key: config.secret_access_key.into(),
 						region: if config.region.is_empty() {
-							None
+							region.clone()
 						} else {
 							Some(config.region.clone())
 						},
@@ -1088,6 +1093,7 @@ fn backend_auth_from_proto(
 				},
 				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {
 					service_name,
+					region,
 					assume_role,
 					source_credentials_cache: Default::default(),
 					assume_role_cache: Default::default(),
@@ -4161,6 +4167,36 @@ mod tests {
 			panic!("Expected Transformation policy variant");
 		};
 		assert_eq!(transformation.expressions().count(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_auth_aws_region_conversion() -> Result<(), ProtoError> {
+		let auth = backend_auth_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(proto::agent::backend_auth_policy::Kind::Aws(
+					proto::agent::Aws {
+						kind: Some(proto::agent::aws::Kind::Implicit(
+							proto::agent::AwsImplicit {},
+						)),
+						service_name: "bedrock-agentcore".to_string(),
+						assume_role: None,
+						region: "us-east-1".to_string(),
+					},
+				)),
+			},
+			&mut Diagnostics::default(),
+		)?;
+		let BackendAuth::Aws(AwsAuth::Implicit {
+			service_name,
+			region,
+			..
+		}) = auth
+		else {
+			panic!("Expected implicit AWS auth, got {auth:?}");
+		};
+		assert_eq!(service_name.as_deref(), Some("bedrock-agentcore"));
+		assert_eq!(region.as_deref(), Some("us-east-1"));
 		Ok(())
 	}
 

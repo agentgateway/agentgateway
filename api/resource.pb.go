@@ -4741,7 +4741,11 @@ type Aws struct {
 	// If unset, typed AWS backends may provide this automatically.
 	ServiceName string `protobuf:"bytes,3,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
 	// Optional STS role to assume before signing requests.
-	AssumeRole    *AwsAssumeRole `protobuf:"bytes,4,opt,name=assume_role,json=assumeRole,proto3" json:"assume_role,omitempty"`
+	AssumeRole *AwsAssumeRole `protobuf:"bytes,4,opt,name=assume_role,json=assumeRole,proto3" json:"assume_role,omitempty"`
+	// AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS
+	// backends may provide this automatically; otherwise the ambient AWS region
+	// is used.
+	Region        string `protobuf:"bytes,5,opt,name=region,proto3" json:"region,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4813,6 +4817,13 @@ func (x *Aws) GetAssumeRole() *AwsAssumeRole {
 		return x.AssumeRole
 	}
 	return nil
+}
+
+func (x *Aws) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
 }
 
 type isAws_Kind interface {
@@ -15745,13 +15756,14 @@ const file_resource_proto_rawDesc = "" +
 	"\t_audienceB\f\n" +
 	"\n" +
 	"token_typeB\r\n" +
-	"\v_credential\"\x9a\x02\n" +
+	"\v_credential\"\xb2\x02\n" +
 	"\x03Aws\x12W\n" +
 	"\x0fexplicit_config\x18\x01 \x01(\v2,.agentgateway.dev.resource.AwsExplicitConfigH\x00R\x0eexplicitConfig\x12D\n" +
 	"\bimplicit\x18\x02 \x01(\v2&.agentgateway.dev.resource.AwsImplicitH\x00R\bimplicit\x12!\n" +
 	"\fservice_name\x18\x03 \x01(\tR\vserviceName\x12I\n" +
 	"\vassume_role\x18\x04 \x01(\v2(.agentgateway.dev.resource.AwsAssumeRoleR\n" +
-	"assumeRoleB\x06\n" +
+	"assumeRole\x12\x16\n" +
+	"\x06region\x18\x05 \x01(\tR\x06regionB\x06\n" +
 	"\x04kind\"\x96\x02\n" +
 	"\x05Azure\x12Y\n" +
 	"\x0fexplicit_config\x18\x01 \x01(\v2..agentgateway.dev.resource.AzureExplicitConfigH\x00R\x0eexplicitConfig\x12b\n" +

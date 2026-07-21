@@ -628,6 +628,7 @@ async fn test_aws_sign_request_implicit_with_extension() {
 
 	let aws_auth = AwsAuth::Implicit {
 		service_name: None,
+		region: None,
 		assume_role: None,
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
@@ -643,6 +644,57 @@ async fn test_aws_sign_request_implicit_with_extension() {
 	}
 
 	result.expect("signing failed");
+}
+
+#[tokio::test]
+async fn test_aws_sign_request_implicit_configured_region_wins() {
+	// A region configured on the auth policy beats the typed-backend region
+	// extension (and thus also the ambient AWS region it falls back to).
+	// AWS_REGION is deliberately not set here: the ambient SDK config is
+	// process-global and cached, so setting it would leak into other tests.
+	unsafe {
+		std::env::set_var("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE");
+		std::env::set_var(
+			"AWS_SECRET_ACCESS_KEY",
+			"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		);
+	}
+
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	*req.uri_mut() = "https://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/x/invocations"
+		.parse()
+		.unwrap();
+	*req.method_mut() = http::Method::POST;
+	req.extensions_mut().insert(AwsRegion {
+		region: "us-east-2".to_string(),
+	});
+
+	let aws_auth = AwsAuth::Implicit {
+		service_name: Some("bedrock-agentcore".to_string()),
+		region: Some("us-east-1".to_string()),
+		assume_role: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	};
+
+	let result = aws::sign_request(&mut req, &aws_auth).await;
+
+	unsafe {
+		std::env::remove_var("AWS_ACCESS_KEY_ID");
+		std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+	}
+
+	result.expect("signing failed");
+	let authz = req
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.expect("authorization header")
+		.to_str()
+		.unwrap();
+	assert!(
+		authz.contains("/us-east-1/bedrock-agentcore/"),
+		"credential scope must use the configured region: {authz}"
+	);
 }
 
 #[test]

@@ -242,6 +242,7 @@ impl TCPProxy {
 					backend_auth: Some(http::auth::BackendAuth::Aws(
 						http::auth::AwsAuth::Implicit {
 							service_name: None,
+							region: None,
 							assume_role: None,
 							source_credentials_cache: Default::default(),
 							assume_role_cache: Default::default(),

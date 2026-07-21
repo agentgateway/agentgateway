@@ -3179,6 +3179,13 @@
                 "null"
               ]
             },
+            "region": {
+              "description": "AWS SigV4 signing region (for example, \"us-east-1\"). If unset, typed AWS\nbackends may provide this automatically; otherwise the ambient AWS region\nis used.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "assumeRole": {
               "description": "Optional AWS STS role to assume before signing requests.",
               "anyOf": [

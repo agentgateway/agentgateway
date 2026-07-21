@@ -734,6 +734,15 @@ spec:
                                                                       may be set
                                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                                       <= 1'
+                                                                region:
+                                                                  description: |-
+                                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                                    target AWS service is in a different region than the gateway. If unset,
+                                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                                    AWS region is used.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                                 secretRef:
                                                                   description: |-
                                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -2268,6 +2277,15 @@ spec:
                                                                       may be set
                                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                                       <= 1'
+                                                                region:
+                                                                  description: |-
+                                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                                    target AWS service is in a different region than the gateway. If unset,
+                                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                                    AWS region is used.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                                 secretRef:
                                                                   description: |-
                                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -3798,6 +3816,15 @@ spec:
                                                                       may be set
                                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                                       <= 1'
+                                                                region:
+                                                                  description: |-
+                                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                                    target AWS service is in a different region than the gateway. If unset,
+                                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                                    AWS region is used.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                                 secretRef:
                                                                   description: |-
                                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -5525,6 +5552,15 @@ spec:
                                                                       may be set
                                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                                       <= 1'
+                                                                region:
+                                                                  description: |-
+                                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                                    target AWS service is in a different region than the gateway. If unset,
+                                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                                    AWS region is used.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                                 secretRef:
                                                                   description: |-
                                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -7059,6 +7095,15 @@ spec:
                                                                       may be set
                                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                                       <= 1'
+                                                                region:
+                                                                  description: |-
+                                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                                    target AWS service is in a different region than the gateway. If unset,
+                                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                                    AWS region is used.
+                                                                  maxLength: 256
+                                                                  minLength: 1
+                                                                  type: string
                                                                 secretRef:
                                                                   description: |-
                                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -8837,6 +8882,15 @@ spec:
                                                 may be set
                                               rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                 <= 1'
+                                          region:
+                                            description: |-
+                                              AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                              target AWS service is in a different region than the gateway. If unset,
+                                              typed AWS backends may provide this automatically; otherwise the ambient
+                                              AWS region is used.
+                                            maxLength: 256
+                                            minLength: 1
+                                            type: string
                                           secretRef:
                                             description: |-
                                               Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -10961,6 +11015,15 @@ spec:
                                               may be set
                                             rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                               <= 1'
+                                        region:
+                                          description: |-
+                                            AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                            target AWS service is in a different region than the gateway. If unset,
+                                            typed AWS backends may provide this automatically; otherwise the ambient
+                                            AWS region is used.
+                                          maxLength: 256
+                                          minLength: 1
+                                          type: string
                                         secretRef:
                                           description: |-
                                             Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -12342,6 +12405,15 @@ spec:
                                                       may be set
                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                       <= 1'
+                                                region:
+                                                  description: |-
+                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                    target AWS service is in a different region than the gateway. If unset,
+                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                    AWS region is used.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                                 secretRef:
                                                   description: |-
                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -13560,6 +13632,15 @@ spec:
                                                       may be set
                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                       <= 1'
+                                                region:
+                                                  description: |-
+                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                    target AWS service is in a different region than the gateway. If unset,
+                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                    AWS region is used.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                                 secretRef:
                                                   description: |-
                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -14773,6 +14854,15 @@ spec:
                                                       may be set
                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                       <= 1'
+                                                region:
+                                                  description: |-
+                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                    target AWS service is in a different region than the gateway. If unset,
+                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                    AWS region is used.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                                 secretRef:
                                                   description: |-
                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -16165,6 +16255,15 @@ spec:
                                                       may be set
                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                       <= 1'
+                                                region:
+                                                  description: |-
+                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                    target AWS service is in a different region than the gateway. If unset,
+                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                    AWS region is used.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                                 secretRef:
                                                   description: |-
                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -17383,6 +17482,15 @@ spec:
                                                       may be set
                                                     rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                                       <= 1'
+                                                region:
+                                                  description: |-
+                                                    AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                                                    target AWS service is in a different region than the gateway. If unset,
+                                                    typed AWS backends may provide this automatically; otherwise the ambient
+                                                    AWS region is used.
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  type: string
                                                 secretRef:
                                                   description: |-
                                                     Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
@@ -18832,6 +18940,15 @@ spec:
                                 may be set
                               rule: '[has(self.sessionName),has(self.sessionNameExpression)].filter(x,x==true).size()
                                 <= 1'
+                          region:
+                            description: |-
+                              AWS SigV4 signing region, for example `us-east-1`. Set this when the
+                              target AWS service is in a different region than the gateway. If unset,
+                              typed AWS backends may provide this automatically; otherwise the ambient
+                              AWS region is used.
+                            maxLength: 256
+                            minLength: 1
+                            type: string
                           secretRef:
                             description: |-
                               Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.

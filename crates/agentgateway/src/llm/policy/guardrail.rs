@@ -140,6 +140,7 @@ impl GuardrailBackend {
 		let backend_auth = match self {
 			GuardrailBackend::Bedrock(_) => Some(BackendAuth::Aws(AwsAuth::Implicit {
 				service_name: None,
+				region: None,
 				assume_role: None,
 				source_credentials_cache: Default::default(),
 				assume_role_cache: Default::default(),

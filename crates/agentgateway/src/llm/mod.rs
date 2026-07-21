@@ -897,6 +897,7 @@ impl AIProvider {
 			AIProvider::Bedrock(p) => BackendPolicies {
 				backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {
 					service_name: None,
+					region: None,
 					assume_role: None,
 					source_credentials_cache: p.source_credentials_cache.clone(),
 					assume_role_cache: p.assume_role_cache.clone(),

@@ -409,6 +409,10 @@ message Aws {
   string service_name = 3;
   // Optional STS role to assume before signing requests.
   AwsAssumeRole assume_role = 4;
+  // AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS
+  // backends may provide this automatically; otherwise the ambient AWS region
+  // is used.
+  string region = 5;
 }
 
 // Azure-specific backend authentication.
