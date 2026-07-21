@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use ::http::uri::PathAndQuery;
-use ::http::{HeaderMap, header};
+use ::http::{header, HeaderMap};
 use agent_core::prelude::AssertSize;
 use anyhow::anyhow;
 use frozen_collections::Len;
@@ -13,8 +13,8 @@ use futures_util::FutureExt;
 use headers::HeaderMapExt;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
-use rand::RngExt;
 use rand::seq::{IndexedRandom, IteratorRandom};
+use rand::RngExt;
 use tracing::{debug, trace};
 use types::agent::*;
 use types::discovery::*;
@@ -28,15 +28,15 @@ use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
-	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
-	merge_in_headers, retry,
+	auth, filters, merge_in_headers, retry, Authority, HeaderName, HeaderValue, Request, Response,
+	Scheme, StatusCode, Uri,
 };
 use crate::llm::{
-	InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
+	model_router, InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType,
 };
 use crate::proxy::tcpproxy::TCPProxy;
 use crate::proxy::{
-	ProxyError, ProxyResponse, ProxyResponseReason, WaypointService, dtrace, resolve_simple_backend,
+	dtrace, resolve_simple_backend, ProxyError, ProxyResponse, ProxyResponseReason, WaypointService,
 };
 use crate::store::{
 	BackendPolicies, FrontendPolices, GatewayPolicies, LLMRequestPolicies, LLMResponsePolicies,
@@ -49,7 +49,7 @@ use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, Socket, TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::local::InternalBackend;
 use crate::types::{backend, frontend};
-use crate::{ProxyInputs, store, *};
+use crate::{store, ProxyInputs, *};
 
 fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference> {
 	route
@@ -145,6 +145,14 @@ async fn apply_request_policies(
 	req: &mut Request,
 	rp: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
+  // TODO we only need allow policies to be timeout-aware because we odn't have
+	// a unified timeout guard that applies during policy evalutation
+	if let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout) {
+		req.extensions_mut().insert(http::filters::RequestDeadline(
+			l.start.as_instant() + timeout,
+		));
+	}
+
 	// CORS must run before authentication, authorization and rate limiting so that:
 	// 1. Preflight OPTIONS requests short-circuit without requiring credentials
 	// 2. CORS response headers are queued even if the request is later rejected,
@@ -255,13 +263,6 @@ async fn apply_request_policies(
 		.await?;
 
 	// delay should happen after auth but before direct response
-	if !pol.delay.is_empty()
-		&& let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout)
-	{
-		req
-			.extensions_mut()
-			.insert(http::filters::RequestDeadline(l.start.as_instant() + timeout));
-	}
 	pol
 		.delay
 		.apply_without_response("delay", c, l, req, rp.headers())

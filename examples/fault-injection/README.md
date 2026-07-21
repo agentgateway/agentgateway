@@ -26,28 +26,30 @@ other request attribute.
 ## Delay (Synthetic Latency)
 
 To add artificial latency before a request is forwarded, use the `delay`
-policy:
+policy. Its `duration` accepts either a plain duration string, or a CEL
+expression evaluated against the request:
 
 ```yaml
 policies:
   delay:
-    duration: 2s   # latency added before the request is forwarded
+    duration: 2s   # always delay 2s before forwarding
 ```
 
-To delay only a subset of traffic, use the `conditional` wrapper (available on
-every policy) with a CEL condition:
+Because the duration can be a full CEL expression, it can delay only a subset
+of traffic, or add jitter, without a separate conditional field. The expression
+may return a duration (`duration("500ms")`) or a number interpreted as
+milliseconds; a non-positive result injects no delay:
 
 ```yaml
 policies:
   delay:
-    conditional:
-    - condition: random() < 0.1   # delay ~10% of requests
-      duration: 2s
+    duration: "random() < 0.1 ? 2000 : 0"   # delay ~10% of requests by 2s
 ```
 
-As with aborts, the condition can target headers
-(`request.headers["x-chaos"] == "1"`), JWT claims, paths, or any other request
-attribute, and multiple entries form first-match-wins rules.
+The expression can target headers
+(`request.headers["x-chaos"] == "1" ? 500 : 0`), JWT claims, paths, or any
+other request attribute, and `random()`-based jitter such as
+`int(random() * 500)`.
 
 Injected delay counts against the route's `requestTimeout` (which measures the
 full request from its start); if the delay would pass the deadline the request

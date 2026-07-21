@@ -24,12 +24,7 @@ spec:
       name: dummy
   traffic:
     delay:
-      conditional:
-        - condition: "random() < 0.1"
-          policy:
-            duration: 2s
-        - policy:
-            duration: 500ms
+      duration: "random() < 0.1 ? 500 : 0"
 
 ---
 # Output
@@ -39,15 +34,6 @@ output:
     Namespace: default
   resource:
     policy:
-      conditional:
-        policies:
-        - condition: random() < 0.1
-          traffic:
-            delay:
-              duration: 2s
-        - traffic:
-            delay:
-              duration: 0.500s
       key: traffic/default/delay-conditional:delay:default/dummy
       name:
         kind: AgentgatewayPolicy
@@ -57,6 +43,9 @@ output:
         gateway:
           name: dummy
           namespace: default
+      traffic:
+        delay:
+          duration: 'random() < 0.1 ? 500 : 0'
 - gateway:
     Name: dummy
     Namespace: default
@@ -73,7 +62,7 @@ output:
           namespace: default
       traffic:
         delay:
-          duration: 2s
+          duration: duration("2s")
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy

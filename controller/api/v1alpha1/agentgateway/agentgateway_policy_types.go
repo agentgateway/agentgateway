@@ -867,7 +867,7 @@ type Traffic struct {
 	// Injects artificial latency before forwarding requests, for
 	// fault-injection testing.
 	// +optional
-	Delay *DelayOrConditional `json:"delay,omitempty"`
+	Delay *Delay `json:"delay,omitempty"`
 }
 
 // Direct response policy.
@@ -2804,50 +2804,15 @@ type Timeouts struct {
 
 // Artificial latency injection for fault-injection testing.
 type Delay struct {
-	// Latency to inject before forwarding the request to the backend.
-	// The injected delay counts against the request timeout.
+	// Latency to inject before forwarding the request to the backend. Either a duration string such
+	// as `2s`, or a CEL expression evaluated against the request that returns a duration (e.g.
+	// `duration("500ms")`) or a number interpreted as milliseconds (e.g. `random() < 0.1 ? 500 : 0`
+	// for probabilistic delay, or `int(random() * 500)` for jitter). A non-positive result injects
+	// no delay.
 	//
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
-	// +optional
-	Duration *metav1.Duration `json:"duration,omitempty"`
-}
-
-type DelayConditional struct {
-	// CEL expression that must evaluate to true for this policy to execute.
-	// +optional
-	Condition CELExpression `json:"condition,omitempty"`
-	// Policy to apply when the condition matches.
+	// The injected delay counts against the request timeout.
 	// +required
-	// +kubebuilder:validation:XValidation:rule="has(self.duration)",message="duration is required"
-	Policy Delay `json:"policy"`
-}
-
-// +kubebuilder:validation:ConditionalPolicy:fields=duration
-type DelayOrConditional struct {
-	// +optional
-	Delay `json:",inline"`
-	// Conditional policy execution. Set this or the top-level delay fields.
-	// The first matching policy will be executed.
-	// A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-	// in case no conditions are met.
-	// +optional
-	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=16
-	// +kubebuilder:validation:XValidation:message="conditional entries without condition must be last",rule="self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e, !has(e.condition)) || !has(self[size(self) - 1].condition))"
-	Conditional []DelayConditional `json:"conditional,omitempty"`
-}
-
-func (d *DelayOrConditional) ConditionalPolicy() (*Delay, iter.Seq[ConditionalPolicyEntry[Delay]]) {
-	seq := mapseq(d.Conditional, func(d DelayConditional) ConditionalPolicyEntry[Delay] {
-		return ConditionalPolicyEntry[Delay]{
-			Condition: d.Condition,
-			Policy:    d.Policy,
-		}
-	})
-	if len(d.Conditional) > 0 {
-		return nil, seq
-	}
-	return &d.Delay, seq
+	Duration CELExpression `json:"duration"`
 }
 
 // Retry policy.

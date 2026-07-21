@@ -907,7 +907,9 @@ impl Store {
 						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::Delay(p) => {
-					pol.delay.merge_with_inheritance(p, lock_inheritance);
+					pol
+						.delay
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
 					pol

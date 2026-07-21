@@ -1578,10 +1578,7 @@ binds:
       - host: 127.0.0.1:8000
     - policies:
         delay:
-          conditional:
-          - condition: random() < 0.1
-            duration: 500ms
-          - duration: 1s
+          duration: 'request.headers["x-chaos"] == "1" ? 500 : 0'
       backends:
       - host: 127.0.0.1:8000
 "#;
@@ -1589,29 +1586,24 @@ binds:
 	let normalized = normalize_test_yaml(input).await.unwrap();
 	let routes = &normalized.listener_routes[0].1;
 
-	let explicit = routes[0]
-		.inline_policies
-		.iter()
-		.find_map(|p| match p {
-			TrafficPolicy::Delay(p) => Some(p.iter().collect::<Vec<_>>()),
-			_ => None,
-		})
-		.expect("expected delay policy");
-	assert_eq!(explicit.len(), 1);
-	assert!(explicit[0].condition.is_none());
-	assert_eq!(explicit[0].pol.duration, std::time::Duration::from_secs(2));
+	let delay_of = |i: usize| {
+		routes[i]
+			.inline_policies
+			.iter()
+			.find_map(|p| match p {
+				TrafficPolicy::Delay(p) => Some(p),
+				_ => None,
+			})
+			.expect("expected delay policy")
+	};
 
-	let conditional = routes[1]
-		.inline_policies
-		.iter()
-		.find_map(|p| match p {
-			TrafficPolicy::Delay(p) => Some(p.iter().collect::<Vec<_>>()),
-			_ => None,
-		})
-		.expect("expected conditional delay policy");
-	assert_eq!(conditional.len(), 2);
-	assert!(conditional[0].condition.is_some());
-	assert!(conditional[1].condition.is_none(), "fallback entry is last");
+	// A bare duration literal is wrapped into a CEL `duration(...)` call.
+	assert_eq!(delay_of(0).duration.original_expression, r#"duration("2s")"#);
+	// A CEL expression is preserved as-is.
+	assert_eq!(
+		delay_of(1).duration.original_expression,
+		r#"request.headers["x-chaos"] == "1" ? 500 : 0"#
+	);
 }
 
 #[tokio::test]

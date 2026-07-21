@@ -337,8 +337,9 @@ message Retry {
 }
 
 message Delay {
-  // Artificial latency injected before the request is forwarded to the backend.
-  google.protobuf.Duration duration = 1;
+  // CEL expression evaluating to the artificial latency, in milliseconds, injected before the
+  // request is forwarded to the backend. A non-positive result injects no delay.
+  string duration = 1;
 }
 
 message BackendAuthPolicy {

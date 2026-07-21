@@ -1987,12 +1987,9 @@ fn traffic_policy_from_proto(
 				condition,
 			})
 		},
-		Some(tps::Kind::Delay(d)) => TrafficPolicy::Delay(RequestPolicy::single(http::delay::Policy {
-			duration: d
-				.duration
-				.ok_or(ProtoError::MissingRequiredField)?
-				.try_into()?,
-		})),
+		Some(tps::Kind::Delay(d)) => TrafficPolicy::Delay(http::delay::Policy {
+			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
+		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
 			let t = tps::local_rate_limit::Type::try_from(lrl.r#type)?;
 			let spec = http::localratelimit::RateLimitSpec {
@@ -3266,7 +3263,6 @@ fn conditional_traffic_policy_to_policy(
 		TrafficPolicy::DirectResponse(_) => build!(DirectResponse),
 		TrafficPolicy::CORS(_) => build!(CORS),
 		TrafficPolicy::Buffer(_) => build!(Buffer),
-		TrafficPolicy::Delay(_) => build!(Delay),
 		other => Err(ProtoError::Generic(format!(
 			"conditional traffic policy kind {} is not supported",
 			traffic_policy_kind_name(other)

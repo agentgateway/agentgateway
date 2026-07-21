@@ -10282,60 +10282,21 @@ spec:
                       Injects artificial latency before forwarding requests, for
                       fault-injection testing.
                     properties:
-                      conditional:
-                        description: |-
-                          Conditional policy execution. Set this or the top-level delay fields.
-                          The first matching policy will be executed.
-                          A single policy may be provided without a condition set; if so, it must be the last policy and will be the fallback
-                          in case no conditions are met.
-                        items:
-                          properties:
-                            condition:
-                              description: CEL expression that must evaluate to true
-                                for this policy to execute.
-                              maxLength: 16384
-                              minLength: 1
-                              type: string
-                            policy:
-                              description: Policy to apply when the condition matches.
-                              properties:
-                                duration:
-                                  description: |-
-                                    Latency to inject before forwarding the request to the backend.
-                                    The injected delay counts against the request timeout.
-                                  type: string
-                                  x-kubernetes-validations:
-                                  - message: invalid duration value
-                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
-                              type: object
-                              x-kubernetes-validations:
-                              - message: duration is required
-                                rule: has(self.duration)
-                          required:
-                          - policy
-                          type: object
-                        maxItems: 16
-                        minItems: 1
-                        type: array
-                        x-kubernetes-validations:
-                        - message: conditional entries without condition must be last
-                          rule: self.filter(e, !has(e.condition)).size() <= 1 && (!self.exists(e,
-                            !has(e.condition)) || !has(self[size(self) - 1].condition))
                       duration:
                         description: |-
-                          Latency to inject before forwarding the request to the backend.
+                          Latency to inject before forwarding the request to the backend. Either a duration string such
+                          as `2s`, or a CEL expression evaluated against the request that returns a duration (e.g.
+                          `duration("500ms")`) or a number interpreted as milliseconds (e.g. `random() < 0.1 ? 500 : 0`
+                          for probabilistic delay, or `int(random() * 500)` for jitter). A non-positive result injects
+                          no delay.
+
                           The injected delay counts against the request timeout.
+                        maxLength: 16384
+                        minLength: 1
                         type: string
-                        x-kubernetes-validations:
-                        - message: invalid duration value
-                          rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                    required:
+                    - duration
                     type: object
-                    x-kubernetes-validations:
-                    - message: conditional cannot be set with any other field
-                      rule: 'has(self.conditional) ? [has(self.duration)].filter(x,x==true).size()
-                        == 0 : true'
-                    - message: 'duration: Required value'
-                      rule: 'has(self.conditional) ? true : has(self.duration)'
                   directResponse:
                     description: |-
                       Sends a direct response to the

@@ -1890,12 +1890,13 @@
           "description": "Inject artificial latency before forwarding requests.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalExplicitOrConditional_DelayPolicy"
+              "$ref": "#/$defs/DelayPolicy"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -6906,62 +6907,12 @@
         "codes"
       ]
     },
-    "LocalExplicitOrConditional_DelayPolicy": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/LocalConditionalPolicies_DelayPolicy"
-        },
-        {
-          "$ref": "#/$defs/DelayPolicy"
-        }
-      ]
-    },
-    "LocalConditionalPolicies_DelayPolicy": {
-      "type": "object",
-      "properties": {
-        "conditional": {
-          "description": "conditional policy entries. An entry without a condition must be the final fallback.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/LocalConditionalPolicy_DelayPolicy"
-          }
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "conditional"
-      ]
-    },
-    "LocalConditionalPolicy_DelayPolicy": {
-      "type": "object",
-      "properties": {
-        "condition": {
-          "description": "condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Expression"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "duration": {
-          "description": "Artificial latency injected before the request is forwarded to the backend.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "duration"
-      ]
-    },
     "DelayPolicy": {
       "type": "object",
       "properties": {
         "duration": {
-          "description": "Artificial latency injected before the request is forwarded to the backend.",
-          "type": "string"
+          "description": "Artificial latency injected before the request is forwarded to the backend. Either a duration\nstring such as `2s`, or a CEL expression evaluated against the request that returns a duration\n(e.g. `duration(\"500ms\")`) or a number interpreted as milliseconds (e.g.\n`random() < 0.1 ? 500 : 0` for probabilistic delay, or `int(random() * 500)` for jitter). A\nnon-positive result injects no delay.",
+          "$ref": "#/$defs/Expression"
         }
       },
       "additionalProperties": false,

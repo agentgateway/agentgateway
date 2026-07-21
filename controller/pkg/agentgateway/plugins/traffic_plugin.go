@@ -555,15 +555,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.Delay != nil {
-		appendPolicy("delay")(processConditional(
-			traffic.Delay,
-			processDelayTraffic,
-			delayPolicySuffix,
-			ctx,
-			traffic.Phase,
-			basePolicyName,
-			policyName,
-		))
+		appendPolicy("delay")(processDelayPolicy(traffic.Delay, basePolicyName, policyName))
 	}
 
 	if traffic.DirectResponse != nil {
@@ -1043,17 +1035,38 @@ func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string,
 	return timeoutPolicy
 }
 
-func processDelayTraffic(_ PolicyCtx, delay *agentgateway.Delay, _ types.NamespacedName) (*api.Policy_Traffic, error) {
-	if delay.Duration == nil {
+func processDelayPolicy(delay *agentgateway.Delay, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
+	if delay.Duration == "" {
 		return nil, fmt.Errorf("failed to build delay: duration is required")
 	}
-	return &api.Policy_Traffic{
-		Traffic: &api.TrafficPolicySpec{
-			Kind: &api.TrafficPolicySpec_Delay{Delay: &api.Delay{
-				Duration: durationpb.New(delay.Duration.Duration),
-			}},
+	var errs []error
+	duration := castDurationOrCEL(delay.Duration, func(expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("delay duration is not a valid duration or CEL expression: %s", expr))
+	})
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return &api.Policy{
+		Key:  basePolicyName + delayPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Delay{Delay: &api.Delay{
+					Duration: duration,
+				}},
+			},
 		},
 	}, nil
+}
+
+// castDurationOrCEL accepts an ergonomic duration string (e.g. "5m") by wrapping it as a CEL
+// duration(...) call, otherwise treats the value as a CEL expression.
+func castDurationOrCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
+	raw := string(item)
+	if _, err := time.ParseDuration(raw); err == nil {
+		return "duration(" + strconv.Quote(raw) + ")"
+	}
+	return castCEL(item, invalid)
 }
 
 func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicyName string, policy types.NamespacedName) *api.Policy {
@@ -1332,7 +1345,7 @@ func buildExtAuthSpec(
 		key := castCELSlice(cache.Key, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache key is not a valid CEL expression: %s", expr))
 		})
-		ttl := castExtAuthCacheTTL(cache.TTL, func(expr agentgateway.CELExpression) {
+		ttl := castDurationOrCEL(cache.TTL, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache ttl is not a valid CEL expression: %s", expr))
 		})
 		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
@@ -1519,13 +1532,6 @@ func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpre
 	return string(item)
 }
 
-func castExtAuthCacheTTL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
-	raw := string(item)
-	if _, err := time.ParseDuration(raw); err == nil {
-		return "duration(" + strconv.Quote(raw) + ")"
-	}
-	return castCEL(item, invalid)
-}
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
 func processAuthorizationPolicy(
