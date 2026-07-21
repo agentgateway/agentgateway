@@ -918,13 +918,20 @@ fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
 	Ok(headers)
 }
 
+// tokio Mutex so async tests can hold the guard across an await without tripping
+// clippy::await_holding_lock (denied in CI).
 #[cfg(test)]
-static ENV_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> =
-	std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
+static ENV_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+	std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 #[cfg(test)]
-pub(crate) fn lock_env_for_tests() -> std::sync::MutexGuard<'static, ()> {
-	ENV_LOCK.lock().expect("env mutex poisoned")
+pub(crate) fn lock_env_for_tests() -> tokio::sync::MutexGuard<'static, ()> {
+	ENV_LOCK.blocking_lock()
+}
+
+#[cfg(test)]
+pub(crate) async fn lock_env_for_tests_async() -> tokio::sync::MutexGuard<'static, ()> {
+	ENV_LOCK.lock().await
 }
 
 #[cfg(test)]
@@ -1010,7 +1017,7 @@ mod tests {
 
 	use super::*;
 
-	fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+	fn lock_env() -> tokio::sync::MutexGuard<'static, ()> {
 		lock_env_for_tests()
 	}
 

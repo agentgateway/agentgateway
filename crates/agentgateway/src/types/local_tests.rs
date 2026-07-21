@@ -17,7 +17,7 @@ use crate::*;
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
 struct ClearTracingEnv {
-	_guard: std::sync::MutexGuard<'static, ()>,
+	_guard: tokio::sync::MutexGuard<'static, ()>,
 	values: Vec<(&'static str, Option<std::ffi::OsString>)>,
 }
 
