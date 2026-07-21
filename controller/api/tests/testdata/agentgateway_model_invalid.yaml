@@ -14,3 +14,34 @@ spec:
       targets:
       - modelRef:
           name: concrete-model
+---
+_err: both host and port must be set together
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: incomplete-upstream-endpoint
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: OpenAI
+  upstreamOverrides:
+    endpoint:
+      host: api.openai.com
+---
+_err: upstreamOverrides requires provider
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: virtual-model-with-upstream-overrides
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  upstreamOverrides:
+    model: should-not-be-accepted
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: concrete-model

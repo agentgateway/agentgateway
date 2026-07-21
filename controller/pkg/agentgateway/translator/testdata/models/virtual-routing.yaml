@@ -44,7 +44,8 @@ spec:
     name: virtual-models
     sectionName: llm
   provider: OpenAI
-  providerModel: gpt-5-mini
+  upstreamOverrides:
+    model: gpt-5-mini
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel

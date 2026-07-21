@@ -251,8 +251,8 @@ func translateVirtualModel(ctx RouteContext, model *agentgateway.AgentgatewayMod
 
 func modelConcreteBackend(ctx RouteContext, model *agentgateway.AgentgatewayModel, parent RouteParentReference, selectedModel *string) (*api.Backend, error) {
 	providerModel := selectedModel
-	if model.Spec.ProviderModel != nil {
-		providerModel = new(string(*model.Spec.ProviderModel))
+	if model.Spec.UpstreamOverrides != nil && model.Spec.UpstreamOverrides.Model != nil {
+		providerModel = new(string(*model.Spec.UpstreamOverrides.Model))
 	}
 	provider, err := translateModelLLMProvider(ctx, model.Namespace, &model.Spec, utils.SingularLLMProviderSubBackendName, providerModel)
 	if err != nil {
@@ -417,11 +417,12 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 	if model.Provider == nil {
 		return nil, nil
 	}
-	provider := &agentgateway.LLMProvider{
-		Host:       model.Host,
-		Port:       model.Port,
-		Path:       model.Path,
-		PathPrefix: model.PathPrefix,
+	provider := &agentgateway.LLMProvider{}
+	if model.UpstreamOverrides != nil && model.UpstreamOverrides.Endpoint != nil {
+		provider.Host = model.UpstreamOverrides.Endpoint.Host
+		provider.Port = model.UpstreamOverrides.Endpoint.Port
+		provider.Path = model.UpstreamOverrides.Endpoint.Path
+		provider.PathPrefix = model.UpstreamOverrides.Endpoint.PathPrefix
 	}
 	switch *model.Provider {
 	case agentgateway.ModelProviderOpenAI:

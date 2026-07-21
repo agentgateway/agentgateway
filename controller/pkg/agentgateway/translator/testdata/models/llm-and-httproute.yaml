@@ -30,7 +30,8 @@ spec:
     name: mixed
     sectionName: http
   provider: OpenAI
-  providerModel: gpt-5-mini
+  upstreamOverrides:
+    model: gpt-5-mini
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -96,7 +97,8 @@ output:
           backend: default/gpt-5-mini/backend.http
       key: default/gpt-5-mini.http
       listenerKey: default/mixed.http
-      name: gpt-5-mini
+      match:
+        model: gpt-5-mini
 - gateway:
     Name: mixed
     Namespace: default

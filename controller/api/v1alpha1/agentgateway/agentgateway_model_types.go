@@ -41,13 +41,10 @@ type AgentgatewayModelList struct {
 }
 
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
-// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.providerModel)",message="providerModel requires provider"
+// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.upstreamOverrides)",message="upstreamOverrides requires provider"
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
-// +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
-// +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
-// +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="has(self.azureopenai) == (has(self.provider) && self.provider == 'AzureOpenAI')",message="azureopenai configuration is required only for the AzureOpenAI provider"
 // +kubebuilder:validation:XValidation:rule="has(self.azure) == (has(self.provider) && self.provider == 'Azure')",message="azure configuration is required only for the Azure provider"
 // +kubebuilder:validation:XValidation:rule="has(self.vertexai) == (has(self.provider) && self.provider == 'VertexAI')",message="vertexai configuration is required only for the VertexAI provider"
@@ -95,6 +92,41 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	Custom *CustomProvider `json:"custom,omitempty"`
 
+	// Shared overrides for requests sent to the selected provider.
+	// +optional
+	UpstreamOverrides *UpstreamOverrides `json:"upstreamOverrides,omitempty"`
+
+	// CEL transformations applied to fields in the provider request body.
+	// Transformations take precedence over upstreamOverrides.model for the same field.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +listType=map
+	// +listMapKey=field
+	// +optional
+	Transformations []FieldTransformation `json:"transformations,omitempty"`
+
+	// Request-time routing among concrete AgentgatewayModel resources.
+	// +optional
+	VirtualModel *VirtualModel `json:"virtualModel,omitempty"`
+}
+
+// Shared overrides for requests sent to an LLM provider.
+type UpstreamOverrides struct {
+	// Endpoint overrides for the provider.
+	// +optional
+	Endpoint *UpstreamEndpoint `json:"endpoint,omitempty"`
+
+	// Fixed model name sent to the provider. When omitted, the model selected by
+	// match.model is sent to the provider.
+	// +optional
+	Model *ShortString `json:"model,omitempty"`
+}
+
+// UpstreamEndpoint overrides the endpoint used for provider API requests.
+// +kubebuilder:validation:XValidation:rule="has(self.host) || has(self.port) ? has(self.host) && has(self.port) : true",message="both host and port must be set together"
+// +kubebuilder:validation:XValidation:rule="has(self.pathPrefix) ? has(self.host) : true",message="pathPrefix requires host to be set"
+// +kubebuilder:validation:XValidation:rule="!(has(self.path) && has(self.pathPrefix))",message="path and pathPrefix are mutually exclusive"
+type UpstreamEndpoint struct {
 	// Hostname override for the provider.
 	// +optional
 	Host ShortString `json:"host,omitempty"`
@@ -112,24 +144,6 @@ type AgentgatewayModelSpec struct {
 	// Overrides the default base path prefix, such as `/v1`, for upstream requests.
 	// +optional
 	PathPrefix LongString `json:"pathPrefix,omitempty"`
-
-	// Fixed model name sent to the provider. When omitted, the model selected by
-	// match.model is sent to the provider.
-	// +optional
-	ProviderModel *ShortString `json:"providerModel,omitempty"`
-
-	// CEL transformations applied to fields in the provider request body.
-	// Transformations take precedence over providerModel for the same field.
-	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=64
-	// +listType=map
-	// +listMapKey=field
-	// +optional
-	Transformations []FieldTransformation `json:"transformations,omitempty"`
-
-	// Request-time routing among concrete AgentgatewayModel resources.
-	// +optional
-	VirtualModel *VirtualModel `json:"virtualModel,omitempty"`
 }
 
 // ModelMatch contains conditions for selecting a model.

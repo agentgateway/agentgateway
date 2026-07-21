@@ -277,11 +277,6 @@ spec:
                     self.backendRef.kind == ''Service'')) || (has(self.backendRef.group)
                     && self.backendRef.group == ''inference.networking.k8s.io'' &&
                     has(self.backendRef.kind) && self.backendRef.kind == ''InferencePool''))'
-              host:
-                description: Hostname override for the provider.
-                maxLength: 256
-                minLength: 1
-                type: string
               match:
                 description: Conditions for selecting this model from client requests.
                 properties:
@@ -447,23 +442,6 @@ spec:
                 maxItems: 16
                 minItems: 1
                 type: array
-              path:
-                description: URL path override for provider API requests.
-                maxLength: 1024
-                minLength: 1
-                type: string
-              pathPrefix:
-                description: Overrides the default base path prefix, such as `/v1`,
-                  for upstream requests.
-                maxLength: 1024
-                minLength: 1
-                type: string
-              port:
-                description: Port override for the provider.
-                format: int32
-                maximum: 65535
-                minimum: 1
-                type: integer
               provider:
                 description: |-
                   Provider serving this concrete model. Provider-specific configuration is
@@ -478,17 +456,10 @@ spec:
                 - OpenAI
                 - VertexAI
                 type: string
-              providerModel:
-                description: |-
-                  Fixed model name sent to the provider. When omitted, the model selected by
-                  match.model is sent to the provider.
-                maxLength: 256
-                minLength: 1
-                type: string
               transformations:
                 description: |-
                   CEL transformations applied to fields in the provider request body.
-                  Transformations take precedence over providerModel for the same field.
+                  Transformations take precedence over upstreamOverrides.model for the same field.
                 items:
                   description: |-
                     Maps a request JSON field to a CEL expression.
@@ -515,6 +486,51 @@ spec:
                 x-kubernetes-list-map-keys:
                 - field
                 x-kubernetes-list-type: map
+              upstreamOverrides:
+                description: Shared overrides for requests sent to the selected provider.
+                properties:
+                  endpoint:
+                    description: Endpoint overrides for the provider.
+                    properties:
+                      host:
+                        description: Hostname override for the provider.
+                        maxLength: 256
+                        minLength: 1
+                        type: string
+                      path:
+                        description: URL path override for provider API requests.
+                        maxLength: 1024
+                        minLength: 1
+                        type: string
+                      pathPrefix:
+                        description: Overrides the default base path prefix, such
+                          as `/v1`, for upstream requests.
+                        maxLength: 1024
+                        minLength: 1
+                        type: string
+                      port:
+                        description: Port override for the provider.
+                        format: int32
+                        maximum: 65535
+                        minimum: 1
+                        type: integer
+                    type: object
+                    x-kubernetes-validations:
+                    - message: both host and port must be set together
+                      rule: 'has(self.host) || has(self.port) ? has(self.host) &&
+                        has(self.port) : true'
+                    - message: pathPrefix requires host to be set
+                      rule: 'has(self.pathPrefix) ? has(self.host) : true'
+                    - message: path and pathPrefix are mutually exclusive
+                      rule: '!(has(self.path) && has(self.pathPrefix))'
+                  model:
+                    description: |-
+                      Fixed model name sent to the provider. When omitted, the model selected by
+                      match.model is sent to the provider.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
+                type: object
               vertexai:
                 description: Provider-specific settings for Vertex AI.
                 properties:
@@ -714,8 +730,8 @@ spec:
             - parentRefs
             type: object
             x-kubernetes-validations:
-            - message: providerModel requires provider
-              rule: has(self.provider) || !has(self.providerModel)
+            - message: upstreamOverrides requires provider
+              rule: has(self.provider) || !has(self.upstreamOverrides)
             - message: transformations require provider
               rule: has(self.provider) || !has(self.transformations)
             - message: virtual models must be public
@@ -723,13 +739,6 @@ spec:
             - message: virtual model match.model must be an exact name
               rule: '!has(self.virtualModel) || !has(self.match) || !has(self.match.model)
                 || !self.match.model.contains(''*'')'
-            - message: both host and port must be set together
-              rule: 'has(self.host) || has(self.port) ? has(self.host) && has(self.port)
-                : true'
-            - message: pathPrefix requires host to be set
-              rule: 'has(self.pathPrefix) ? has(self.host) : true'
-            - message: path and pathPrefix are mutually exclusive
-              rule: '!(has(self.path) && has(self.pathPrefix))'
             - message: azureopenai configuration is required only for the AzureOpenAI
                 provider
               rule: has(self.azureopenai) == (has(self.provider) && self.provider

@@ -14,7 +14,11 @@ spec:
   match:
     model: gpt-5-mini
   provider: OpenAI
-  providerModel: gpt-5-mini
+  upstreamOverrides:
+    endpoint:
+      host: api.openai.com
+      port: 443
+    model: gpt-5-mini
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -58,8 +62,9 @@ spec:
     sectionName: llm
   match:
     model: local/llama-3.3
-  providerModel: llama-3.3
   provider: Custom
+  upstreamOverrides:
+    model: llama-3.3
   custom:
     backendRef:
       group: inference.networking.k8s.io

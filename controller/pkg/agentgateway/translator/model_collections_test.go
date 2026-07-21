@@ -40,7 +40,7 @@ func TestModelLLMProvider(t *testing.T) {
 		}
 	})
 
-	t.Run("top-level overrides", func(t *testing.T) {
+	t.Run("upstream overrides", func(t *testing.T) {
 		providerType := agentgateway.ModelProviderOpenAI
 		tests := []struct {
 			name       string
@@ -54,7 +54,9 @@ func TestModelLLMProvider(t *testing.T) {
 				name: "default port",
 				model: agentgateway.AgentgatewayModelSpec{
 					Provider: &providerType,
-					Host:     "provider.example.com",
+					UpstreamOverrides: &agentgateway.UpstreamOverrides{Endpoint: &agentgateway.UpstreamEndpoint{
+						Host: "provider.example.com",
+					}},
 				},
 				host: "provider.example.com",
 				port: 443,
@@ -63,9 +65,13 @@ func TestModelLLMProvider(t *testing.T) {
 				name: "host port and path override",
 				model: agentgateway.AgentgatewayModelSpec{
 					Provider: &providerType,
-					Host:     "provider.example.com",
-					Port:     8443,
-					Path:     "/api/chat",
+					UpstreamOverrides: &agentgateway.UpstreamOverrides{
+						Endpoint: &agentgateway.UpstreamEndpoint{
+							Host: "provider.example.com",
+							Port: 8443,
+							Path: "/api/chat",
+						},
+					},
 				},
 				host: "provider.example.com",
 				port: 8443,
@@ -74,9 +80,13 @@ func TestModelLLMProvider(t *testing.T) {
 			{
 				name: "path prefix override",
 				model: agentgateway.AgentgatewayModelSpec{
-					Provider:   &providerType,
-					Host:       "provider.example.com",
-					PathPrefix: "/v1",
+					Provider: &providerType,
+					UpstreamOverrides: &agentgateway.UpstreamOverrides{
+						Endpoint: &agentgateway.UpstreamEndpoint{
+							Host:       "provider.example.com",
+							PathPrefix: "/v1",
+						},
+					},
 				},
 				host:       "provider.example.com",
 				port:       443,
