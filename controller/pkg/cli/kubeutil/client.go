@@ -20,6 +20,7 @@ import (
 	gatewayapiclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
+	agentgatewayclient "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
 )
 
 const defaultLocalAddress = "localhost"
@@ -27,6 +28,7 @@ const defaultLocalAddress = "localhost"
 type CLIClient interface {
 	Kube() kubernetes.Interface
 	GatewayAPI() gatewayapiclient.Interface
+	Agentgateway() agentgatewayclient.Interface
 	AgentgatewayRequest(ctx context.Context, podName, podNamespace, method, path string, port int) ([]byte, error)
 	NewPortForwarder(podName, namespace, localAddress string, localPort, podPort int) (PortForwarder, error)
 }
@@ -40,10 +42,11 @@ type PortForwarder interface {
 }
 
 type client struct {
-	restConfig *rest.Config
-	kube       kubernetes.Interface
-	gatewayAPI gatewayapiclient.Interface
-	http       *http.Client
+	restConfig   *rest.Config
+	kube         kubernetes.Interface
+	gatewayAPI   gatewayapiclient.Interface
+	agentgateway agentgatewayclient.Interface
+	http         *http.Client
 }
 
 func NewCLIClient() (CLIClient, error) {
@@ -67,12 +70,17 @@ func NewCLIClient() (CLIClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build Gateway API client: %w", err)
 	}
+	agentgatewayClient, err := agentgatewayclient.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build Agentgateway client: %w", err)
+	}
 
 	return &client{
-		restConfig: restConfig,
-		kube:       kubeClient,
-		gatewayAPI: gatewayClient,
-		http:       http.DefaultClient,
+		restConfig:   restConfig,
+		kube:         kubeClient,
+		gatewayAPI:   gatewayClient,
+		agentgateway: agentgatewayClient,
+		http:         http.DefaultClient,
 	}, nil
 }
 
@@ -82,6 +90,10 @@ func (c *client) Kube() kubernetes.Interface {
 
 func (c *client) GatewayAPI() gatewayapiclient.Interface {
 	return c.gatewayAPI
+}
+
+func (c *client) Agentgateway() agentgatewayclient.Interface {
+	return c.agentgateway
 }
 
 func (c *client) AgentgatewayRequest(ctx context.Context, podName, podNamespace, method, path string, port int) ([]byte, error) {
