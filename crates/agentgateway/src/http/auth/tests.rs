@@ -652,6 +652,7 @@ async fn test_aws_sign_request_implicit_configured_region_wins() {
 	// extension (and thus also the ambient AWS region it falls back to).
 	// AWS_REGION is deliberately not set here: the ambient SDK config is
 	// process-global and cached, so setting it would leak into other tests.
+	let _env_guard = crate::config::lock_env_for_tests();
 	unsafe {
 		std::env::set_var("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE");
 		std::env::set_var(
