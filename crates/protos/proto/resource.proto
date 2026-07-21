@@ -1710,12 +1710,43 @@ message AIBackend {
     optional string model = 2;
     optional string provider_override = 3;
   }
+  // A named provider configuration implemented by the data plane. Its API
+  // formats and default endpoint stay aligned between standalone and xDS
+  // configuration. Use Custom when those settings must be configured
+  // explicitly.
+  enum ProviderPreset {
+    PROVIDER_PRESET_UNSPECIFIED = 0;
+    PROVIDER_PRESET_COHERE = 1;
+    PROVIDER_PRESET_OLLAMA = 2;
+    PROVIDER_PRESET_BASETEN = 3;
+    PROVIDER_PRESET_CEREBRAS = 4;
+    PROVIDER_PRESET_DEEPINFRA = 5;
+    PROVIDER_PRESET_DEEPSEEK = 6;
+    PROVIDER_PRESET_GROQ = 7;
+    PROVIDER_PRESET_HUGGINGFACE = 8;
+    PROVIDER_PRESET_MISTRAL = 9;
+    PROVIDER_PRESET_OPENROUTER = 10;
+    PROVIDER_PRESET_TOGETHERAI = 11;
+    PROVIDER_PRESET_XAI = 12;
+    PROVIDER_PRESET_FIREWORKS = 13;
+  }
 
   message Provider {
     string name = 1;
+    // Used by the AgentgatewayBackend API. Prefer base_url for AgentgatewayModel.
     HostOverride host_override = 2;
+    // Used by the AgentgatewayBackend API to replace the provider request path.
     optional string path_override = 3;
+    // Used by the AgentgatewayBackend API. Prefer base_url for AgentgatewayModel.
     optional string path_prefix = 12;
+    // An explicit provider endpoint. Its scheme, host, port, and base path are
+    // resolved by the data plane. Used by AgentgatewayModel. It may not be
+    // combined with host_override, path_prefix, or provider_backend.
+    optional string base_url = 17;
+    // Overrides the model configured by the selected provider. This is used by
+    // provider presets, whose enum value does not carry provider configuration.
+    optional string model_override = 18;
+    // Used by the AgentgatewayBackend API. It may not be combined with endpoint overrides.
     BackendReference provider_backend = 14;
     oneof provider {
       OpenAI openai = 4;
@@ -1726,6 +1757,7 @@ message AIBackend {
       AzureOpenAI azureopenai = 11;
       Azure azure = 13;
       Custom custom = 15;
+      ProviderPreset provider_preset = 16;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }

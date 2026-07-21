@@ -3,9 +3,7 @@ package translator
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -125,8 +123,8 @@ func translateModelForParents(
 					Reason: gwv1.RouteReasonAccepted,
 				})
 			} else {
-				reason := gwv1.RouteConditionReason("NoMatchingListenerHostname")
-				msg := "No route hostnames intersect any listener hostname"
+				reason := gwv1.RouteReasonNoMatchingParent
+				msg := "No listener matched the parent reference"
 				if dr := denied[statusKey]; dr != nil {
 					reason = gwv1.RouteConditionReason(dr.Reason)
 					msg = dr.Message
@@ -252,11 +250,7 @@ func translateVirtualModel(ctx RouteContext, model *agentgateway.AgentgatewayMod
 }
 
 func modelConcreteBackend(ctx RouteContext, model *agentgateway.AgentgatewayModel, parent RouteParentReference, selectedModel *string) (*api.Backend, error) {
-	providerModel := selectedModel
-	if model.Spec.UpstreamOverrides != nil && model.Spec.UpstreamOverrides.Model != nil {
-		providerModel = new(string(*model.Spec.UpstreamOverrides.Model))
-	}
-	provider, err := translateModelLLMProvider(ctx, model.Namespace, &model.Spec, utils.SingularLLMProviderSubBackendName, providerModel)
+	provider, err := translateModelLLMProvider(ctx, model.Namespace, &model.Spec, utils.SingularLLMProviderSubBackendName, selectedModel)
 	if err != nil {
 		return nil, err
 	}
@@ -329,6 +323,21 @@ func modelFailoverBackendPolicies() []*api.BackendPolicySpec {
 }
 
 func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec, providerName string, modelOverride *string) (*api.AIBackend_Provider, error) {
+	if model.UpstreamOverrides != nil && model.UpstreamOverrides.Model != nil {
+		modelOverride = new(string(*model.UpstreamOverrides.Model))
+	}
+	provider := &api.AIBackend_Provider{Name: providerName}
+	if model.UpstreamOverrides != nil && model.UpstreamOverrides.BaseURL != nil {
+		provider.BaseUrl = new(string(*model.UpstreamOverrides.BaseURL))
+	}
+	if model.Provider != nil {
+		if preset, ok := modelProviderPreset(*model.Provider); ok {
+			provider.ModelOverride = modelOverride
+			provider.Provider = &api.AIBackend_Provider_ProviderPreset{ProviderPreset: preset}
+			return provider, nil
+		}
+	}
+
 	llm, err := modelLLMProvider(model)
 	if err != nil {
 		return nil, err
@@ -336,17 +345,16 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	if llm == nil {
 		return nil, fmt.Errorf("no LLM provider configured")
 	}
-	provider := &api.AIBackend_Provider{Name: providerName}
-	if llm.Host != "" {
+	if provider.HostOverride == nil && llm.Host != "" {
 		provider.HostOverride = &api.AIBackend_HostOverride{
 			Host: string(llm.Host),
 			Port: ptr.NonEmptyOrDefault(llm.Port, 443),
 		}
 	}
-	if llm.Path != "" {
+	if provider.PathOverride == nil && llm.Path != "" {
 		provider.PathOverride = new(string(llm.Path))
 	}
-	if llm.PathPrefix != "" {
+	if provider.PathPrefix == nil && llm.PathPrefix != "" {
 		provider.PathPrefix = new(string(llm.PathPrefix))
 	}
 
@@ -420,11 +428,6 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 		return nil, nil
 	}
 	provider := &agentgateway.LLMProvider{}
-	if model.UpstreamOverrides != nil && model.UpstreamOverrides.BaseURL != nil {
-		if err := applyModelBaseURL(provider, string(*model.UpstreamOverrides.BaseURL)); err != nil {
-			return nil, err
-		}
-	}
 	switch *model.Provider {
 	case agentgateway.ModelProviderOpenAI:
 		provider.OpenAI = &agentgateway.OpenAIConfig{}
@@ -463,40 +466,37 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 	return provider, nil
 }
 
-func applyModelBaseURL(provider *agentgateway.LLMProvider, rawURL string) error {
-	baseURL, err := url.ParseRequestURI(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid upstreamOverrides.baseURL: %w", err)
+func modelProviderPreset(provider agentgateway.ModelProvider) (api.AIBackend_ProviderPreset, bool) {
+	switch provider {
+	case agentgateway.ModelProviderCohere:
+		return api.AIBackend_PROVIDER_PRESET_COHERE, true
+	case agentgateway.ModelProviderOllama:
+		return api.AIBackend_PROVIDER_PRESET_OLLAMA, true
+	case agentgateway.ModelProviderBaseten:
+		return api.AIBackend_PROVIDER_PRESET_BASETEN, true
+	case agentgateway.ModelProviderCerebras:
+		return api.AIBackend_PROVIDER_PRESET_CEREBRAS, true
+	case agentgateway.ModelProviderDeepinfra:
+		return api.AIBackend_PROVIDER_PRESET_DEEPINFRA, true
+	case agentgateway.ModelProviderDeepseek:
+		return api.AIBackend_PROVIDER_PRESET_DEEPSEEK, true
+	case agentgateway.ModelProviderGroq:
+		return api.AIBackend_PROVIDER_PRESET_GROQ, true
+	case agentgateway.ModelProviderHuggingface:
+		return api.AIBackend_PROVIDER_PRESET_HUGGINGFACE, true
+	case agentgateway.ModelProviderMistral:
+		return api.AIBackend_PROVIDER_PRESET_MISTRAL, true
+	case agentgateway.ModelProviderOpenrouter:
+		return api.AIBackend_PROVIDER_PRESET_OPENROUTER, true
+	case agentgateway.ModelProviderTogetherAI:
+		return api.AIBackend_PROVIDER_PRESET_TOGETHERAI, true
+	case agentgateway.ModelProviderXAI:
+		return api.AIBackend_PROVIDER_PRESET_XAI, true
+	case agentgateway.ModelProviderFireworks:
+		return api.AIBackend_PROVIDER_PRESET_FIREWORKS, true
+	default:
+		return api.AIBackend_PROVIDER_PRESET_UNSPECIFIED, false
 	}
-	if baseURL.Scheme != "http" && baseURL.Scheme != "https" {
-		return fmt.Errorf("upstreamOverrides.baseURL must use http or https")
-	}
-	if baseURL.Host == "" {
-		return fmt.Errorf("upstreamOverrides.baseURL must include a host")
-	}
-	if baseURL.User != nil || baseURL.RawQuery != "" || baseURL.Fragment != "" {
-		return fmt.Errorf("upstreamOverrides.baseURL cannot include user info, query parameters, or a fragment")
-	}
-
-	port := baseURL.Port()
-	if port == "" {
-		if baseURL.Scheme == "https" {
-			port = "443"
-		} else {
-			port = "80"
-		}
-	}
-	parsedPort, err := strconv.ParseInt(port, 10, 32)
-	if err != nil || parsedPort < 1 || parsedPort > 65535 {
-		return fmt.Errorf("upstreamOverrides.baseURL contains an invalid port %q", port)
-	}
-
-	provider.Host = agentgateway.ShortString(baseURL.Hostname())
-	provider.Port = int32(parsedPort)
-	if pathPrefix := strings.TrimRight(baseURL.EscapedPath(), "/"); pathPrefix != "" {
-		provider.PathPrefix = agentgateway.LongString(pathPrefix)
-	}
-	return nil
 }
 
 func translateModelProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*api.AIBackend_ProviderFormatConfig, error) {

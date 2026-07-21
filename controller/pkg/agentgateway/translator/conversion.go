@@ -782,57 +782,62 @@ func ReferenceAllowed(
 			}
 		}
 
-		// Next check the hostnames are a match. This is a bi-directional wildcard match. Only one route
-		// hostname must match for it to be allowed (but the others will be filtered at runtime)
-		// If either is empty its treated as a wildcard which always matches
+		// AgentgatewayModels attach to listeners, but have no hostname matching
+		// surface. Their attachment is therefore independent of the listener's
+		// hostname; section, port, and allowedRoutes still apply below.
+		if routeKind != wellknown.AgentgatewayModelGVK {
+			// This is a bi-directional wildcard match. Only one route hostname must
+			// match for it to be allowed (but the others will be filtered at runtime).
+			// If either is empty it is treated as a wildcard which always matches.
+			if len(hostnames) == 0 {
+				hostnames = []gwv1.Hostname{"*"}
+			}
+			if len(parent.Hostnames) > 0 {
+				matched := false
+				hostMatched := false
+			out:
+				for _, routeHostname := range hostnames {
+					for _, parentHostNamespace := range parent.Hostnames {
+						var parentNamespace, parentHostname string
+						if strings.Contains(parentHostNamespace, "/") {
+							spl := strings.Split(parentHostNamespace, "/")
+							parentNamespace, parentHostname = spl[0], spl[1]
+						} else {
+							parentNamespace, parentHostname = "*", parentHostNamespace
+						}
 
-		if len(hostnames) == 0 {
-			hostnames = []gwv1.Hostname{"*"}
-		}
-		if len(parent.Hostnames) > 0 {
-			matched := false
-			hostMatched := false
-		out:
-			for _, routeHostname := range hostnames {
-				for _, parentHostNamespace := range parent.Hostnames {
-					var parentNamespace, parentHostname string
-					if strings.Contains(parentHostNamespace, "/") {
-						spl := strings.Split(parentHostNamespace, "/")
-						parentNamespace, parentHostname = spl[0], spl[1]
-					} else {
-						parentNamespace, parentHostname = "*", parentHostNamespace
-					}
+						hostnameMatch := host.Name(parentHostname).Matches(host.Name(routeHostname))
+						namespaceMatch := parentNamespace == "*" || parentNamespace == localNamespace
 
-					hostnameMatch := host.Name(parentHostname).Matches(host.Name(routeHostname))
-					namespaceMatch := parentNamespace == "*" || parentNamespace == localNamespace
-
-					hostMatched = hostMatched || hostnameMatch
-					if hostnameMatch && namespaceMatch {
-						matched = true
-						break out
+						hostMatched = hostMatched || hostnameMatch
+						if hostnameMatch && namespaceMatch {
+							matched = true
+							break out
+						}
 					}
 				}
-			}
-			if !matched {
-				if hostMatched {
+				if !matched {
+					if hostMatched {
+						return &ParentError{
+							Reason: ParentErrorNotAllowed,
+							Message: fmt.Sprintf(
+								"hostnames matched parent hostname %q, but namespace %q is not allowed by the parent",
+								parent.OriginalHostname, localNamespace,
+							),
+						}
+					}
 					return &ParentError{
-						Reason: ParentErrorNotAllowed,
+						Reason: ParentErrorNoHostname,
 						Message: fmt.Sprintf(
-							"hostnames matched parent hostname %q, but namespace %q is not allowed by the parent",
-							parent.OriginalHostname, localNamespace,
+							"no hostnames matched parent hostname %q",
+							parent.OriginalHostname,
 						),
 					}
-				}
-				return &ParentError{
-					Reason: ParentErrorNoHostname,
-					Message: fmt.Sprintf(
-						"no hostnames matched parent hostname %q",
-						parent.OriginalHostname,
-					),
 				}
 			}
 		}
 	}
+
 	// Also make sure this route kind is allowed
 	matched := false
 	for _, ak := range parent.AllowedKinds {

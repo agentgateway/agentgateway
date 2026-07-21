@@ -114,8 +114,8 @@ type AgentgatewayModelSpec struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || self.baseURL.startsWith('http://') || self.baseURL.startsWith('https://')",message="upstreamOverrides.baseURL must use http or https"
 type UpstreamOverrides struct {
 	// BaseURL overrides the provider address and base path prefix. It must use the
-	// http or https scheme. The scheme selects the default port when one is not
-	// included; backend TLS is configured by the provider and backend policies.
+	// http or https scheme. Backend policies may override the default
+	// TLS configuration.
 	//
 	// Query parameters, fragments, and user info are not supported.
 	// +kubebuilder:validation:Format=uri
@@ -150,6 +150,19 @@ const (
 	ModelProviderGemini      ModelProvider = "Gemini"
 	ModelProviderVertexAI    ModelProvider = "VertexAI"
 	ModelProviderBedrock     ModelProvider = "Bedrock"
+	ModelProviderCohere      ModelProvider = "Cohere"
+	ModelProviderOllama      ModelProvider = "Ollama"
+	ModelProviderBaseten     ModelProvider = "Baseten"
+	ModelProviderCerebras    ModelProvider = "Cerebras"
+	ModelProviderDeepinfra   ModelProvider = "Deepinfra"
+	ModelProviderDeepseek    ModelProvider = "Deepseek"
+	ModelProviderGroq        ModelProvider = "Groq"
+	ModelProviderHuggingface ModelProvider = "Huggingface"
+	ModelProviderMistral     ModelProvider = "Mistral"
+	ModelProviderOpenrouter  ModelProvider = "Openrouter"
+	ModelProviderTogetherAI  ModelProvider = "TogetherAI"
+	ModelProviderXAI         ModelProvider = "XAI"
+	ModelProviderFireworks   ModelProvider = "Fireworks"
 	ModelProviderCustom      ModelProvider = "Custom"
 )
 

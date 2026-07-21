@@ -96,6 +96,140 @@ impl From<XdsHeaderTrailerSendMode> for http::ext_proc::TrailerSendMode {
 	}
 }
 
+fn provider_preset_from_proto(
+	preset: proto::agent::ai_backend::ProviderPreset,
+	provider_idx: usize,
+) -> Result<llm::custom::ProviderPreset, ProtoError> {
+	use proto::agent::ai_backend::ProviderPreset;
+
+	match preset {
+		ProviderPreset::Cohere => Ok(llm::custom::ProviderPreset::Cohere),
+		ProviderPreset::Ollama => Ok(llm::custom::ProviderPreset::Ollama),
+		ProviderPreset::Baseten => Ok(llm::custom::ProviderPreset::Baseten),
+		ProviderPreset::Cerebras => Ok(llm::custom::ProviderPreset::Cerebras),
+		ProviderPreset::Deepinfra => Ok(llm::custom::ProviderPreset::Deepinfra),
+		ProviderPreset::Deepseek => Ok(llm::custom::ProviderPreset::Deepseek),
+		ProviderPreset::Groq => Ok(llm::custom::ProviderPreset::Groq),
+		ProviderPreset::Huggingface => Ok(llm::custom::ProviderPreset::Huggingface),
+		ProviderPreset::Mistral => Ok(llm::custom::ProviderPreset::Mistral),
+		ProviderPreset::Openrouter => Ok(llm::custom::ProviderPreset::Openrouter),
+		ProviderPreset::Togetherai => Ok(llm::custom::ProviderPreset::Togetherai),
+		ProviderPreset::Xai => Ok(llm::custom::ProviderPreset::XAI),
+		ProviderPreset::Fireworks => Ok(llm::custom::ProviderPreset::Fireworks),
+		ProviderPreset::Unspecified => Err(ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} requires a provider preset"
+		))),
+	}
+}
+
+fn override_ai_provider_model(provider: &mut AIProvider, model: &str) {
+	let model = Some(strng::new(model));
+	match provider {
+		AIProvider::Anthropic(provider) => provider.model = model,
+		AIProvider::OpenAI(provider) => provider.model = model,
+		AIProvider::Copilot(provider) => provider.model = model,
+		AIProvider::Gemini(provider) => provider.model = model,
+		AIProvider::Custom(provider) => provider.model = model,
+		AIProvider::Vertex(provider) => provider.model = model,
+		AIProvider::Bedrock(provider) => provider.model = model,
+		AIProvider::Azure(provider) => provider.model = model,
+	}
+}
+
+struct ProviderConnection {
+	host_override: Option<Target>,
+	path_prefix: Option<Strng>,
+	use_tls: bool,
+}
+
+fn resolve_provider_connection(
+	preset: Option<llm::custom::ProviderPreset>,
+	base_url: Option<&str>,
+	host_override: Option<Target>,
+	path_prefix: Option<Strng>,
+	has_provider_backend: bool,
+	provider_idx: usize,
+) -> Result<ProviderConnection, ProtoError> {
+	if preset.is_some() && has_provider_backend {
+		return Err(ProtoError::Generic(format!(
+			"AI backend provider preset at index {provider_idx} cannot set providerBackend"
+		)));
+	}
+	if has_provider_backend
+		&& (base_url.is_some() || host_override.is_some() || path_prefix.is_some())
+	{
+		return Err(ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} cannot combine providerBackend with an endpoint override"
+		)));
+	}
+	if let Some(base_url) = base_url {
+		if host_override.is_some() || path_prefix.is_some() {
+			return Err(ProtoError::Generic(format!(
+				"AI backend provider at index {provider_idx} cannot combine baseUrl with hostOverride or pathPrefix"
+			)));
+		}
+		return provider_connection_from_url(base_url, provider_idx);
+	}
+	if let Some(host_override) = host_override {
+		return Ok(ProviderConnection {
+			host_override: Some(host_override),
+			path_prefix,
+			use_tls: false,
+		});
+	}
+	if let Some(preset) = preset {
+		return provider_connection_from_url(preset.base_url(), provider_idx);
+	}
+	Ok(ProviderConnection {
+		host_override: None,
+		path_prefix,
+		use_tls: false,
+	})
+}
+
+fn provider_connection_from_url(
+	base_url: &str,
+	provider_idx: usize,
+) -> Result<ProviderConnection, ProtoError> {
+	let url = url::Url::parse(base_url).map_err(|err| {
+		ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} has an invalid baseUrl: {err}"
+		))
+	})?;
+	if url.scheme() != "http" && url.scheme() != "https" {
+		return Err(ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} baseUrl must use http or https"
+		)));
+	}
+	if !url.username().is_empty()
+		|| url.password().is_some()
+		|| url.query().is_some()
+		|| url.fragment().is_some()
+	{
+		return Err(ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} baseUrl cannot include user info, query parameters, or a fragment"
+		)));
+	}
+	let host = url.host_str().ok_or_else(|| {
+		ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} baseUrl must include a host"
+		))
+	})?;
+	let port = url.port_or_known_default().ok_or_else(|| {
+		ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} baseUrl must include a port"
+		))
+	})?;
+	Ok(ProviderConnection {
+		host_override: Some(Target::from((host, port))),
+		path_prefix: {
+			let path = url.path().trim_end_matches('/');
+			(!path.is_empty()).then(|| strng::new(path))
+		},
+		use_tls: url.scheme() == "https",
+	})
+}
+
 fn permissive_cel_expression(
 	diagnostics: &mut Diagnostics,
 	context: impl AsRef<str>,
@@ -1560,12 +1694,13 @@ pub(crate) fn backend_with_policies_from_proto(
 			for group in &a.provider_groups {
 				let mut local_provider_group = Vec::new();
 				for (provider_idx, provider_config) in group.providers.iter().enumerate() {
-					let pols = provider_config
+					let mut pols = provider_config
 						.inline_policies
 						.iter()
 						.map(|policy| backend_policy_from_proto(policy, diagnostics))
 						.collect::<Result<Vec<_>, _>>()?;
-					let provider = match &provider_config.provider {
+					let mut preset = None;
+					let mut provider = match &provider_config.provider {
 						Some(provider::Provider::Openai(openai)) => AIProvider::OpenAI(llm::openai::Provider {
 							model: openai.model.as_deref().map(strng::new),
 						}),
@@ -1627,12 +1762,24 @@ pub(crate) fn backend_with_policies_from_proto(
 								formats,
 							})
 						},
+						Some(provider::Provider::ProviderPreset(provider_preset)) => {
+							let provider_preset = proto::agent::ai_backend::ProviderPreset::try_from(*provider_preset)
+								.map_err(|_| ProtoError::Generic(format!(
+									"AI backend provider at index {provider_idx} has an unknown provider preset {provider_preset}"
+								)))?;
+							let provider_preset = provider_preset_from_proto(provider_preset, provider_idx)?;
+							preset = Some(provider_preset);
+							AIProvider::Custom(provider_preset.provider(None))
+						},
 						None => {
 							return Err(ProtoError::Generic(format!(
 								"AI backend provider at index {provider_idx} is required"
 							)));
 						},
 					};
+					if let Some(model_override) = provider_config.model_override.as_deref() {
+						override_ai_provider_model(&mut provider, model_override);
+					}
 
 					let provider_name = if provider_config.name.is_empty() {
 						strng::literal!("default")
@@ -1647,9 +1794,23 @@ pub(crate) fn backend_with_policies_from_proto(
 						.r#host_override
 						.as_ref()
 						.map(|o| Target::from((o.host.as_str(), o.port as u16)));
+					let path_prefix = provider_config.path_prefix.as_ref().map(strng::new);
+					let connection = resolve_provider_connection(
+						preset,
+						provider_config.base_url.as_deref(),
+						host_override,
+						path_prefix,
+						provider_backend.is_some(),
+						provider_idx,
+					)?;
+					if connection.use_tls {
+						pols.push(BackendTrafficPolicy::BackendTLS(
+							crate::http::backendtls::SYSTEM_TRUST.clone(),
+						));
+					}
 					if matches!(provider, AIProvider::Custom(_))
 						&& provider_backend.is_none()
-						&& host_override.is_none()
+						&& connection.host_override.is_none()
 					{
 						return Err(ProtoError::Generic(format!(
 							"AI backend custom provider at index {provider_idx} requires providerBackend or hostOverride"
@@ -1661,9 +1822,9 @@ pub(crate) fn backend_with_policies_from_proto(
 						provider,
 						tokenize: false,
 						provider_backend,
-						host_override,
+						host_override: connection.host_override,
 						path_override: provider_config.path_override.as_ref().map(strng::new),
-						path_prefix: provider_config.path_prefix.as_ref().map(strng::new),
+						path_prefix: connection.path_prefix,
 						inline_policies: pols,
 					};
 					local_provider_group.push((provider_name, np));
@@ -4674,6 +4835,8 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						base_url: None,
+						model_override: None,
 						provider_backend: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
@@ -4718,6 +4881,8 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						base_url: None,
+						model_override: None,
 						provider_backend: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
@@ -4763,6 +4928,8 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						base_url: None,
+						model_override: None,
 						provider_backend: Some(proto::agent::BackendReference {
 							port: 8000,
 							kind: Some(backend_reference::Kind::Service(
@@ -4822,6 +4989,117 @@ mod tests {
 			"llm-pool.test-ns.inference.cluster.local"
 		);
 		assert_eq!(*port, 8000);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_provider_preset_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::ProviderPreset;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/ollama-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "ollama-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "ollama".to_string(),
+						host_override: None,
+						path_override: None,
+						path_prefix: None,
+						base_url: Some("https://ollama.example/v2".to_string()),
+						model_override: Some("llama3.3".to_string()),
+						provider_backend: None,
+						provider: Some(Provider::ProviderPreset(ProviderPreset::Ollama as i32)),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Custom(custom) = &provider.provider else {
+			panic!("Expected AIProvider::Custom");
+		};
+		assert_eq!(custom.provider_override.as_deref(), Some("ollama"));
+		assert_eq!(custom.model.as_deref(), Some("llama3.3"));
+		assert!(custom.supports(llm::custom::ProviderFormat::Responses));
+		assert_eq!(
+			provider.host_override,
+			Some(Target::from(("ollama.example", 443)))
+		);
+		assert_eq!(provider.path_prefix.as_deref(), Some("/v2"));
+		assert_eq!(provider.inline_policies.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn test_provider_connection_precedence() -> Result<(), ProtoError> {
+		let explicit = resolve_provider_connection(
+			Some(llm::custom::ProviderPreset::Ollama),
+			Some("https://override.example/v2/"),
+			None,
+			None,
+			false,
+			0,
+		)?;
+		assert_eq!(
+			explicit.host_override,
+			Some(Target::from(("override.example", 443)))
+		);
+		assert_eq!(explicit.path_prefix.as_deref(), Some("/v2"));
+		assert!(explicit.use_tls);
+
+		let default = resolve_provider_connection(
+			Some(llm::custom::ProviderPreset::Ollama),
+			None,
+			None,
+			None,
+			false,
+			0,
+		)?;
+		assert_eq!(
+			default.host_override,
+			Some(Target::from(("localhost", 11434)))
+		);
+		assert_eq!(default.path_prefix.as_deref(), Some("/v1"));
+		assert!(!default.use_tls);
+
+		assert!(
+			resolve_provider_connection(
+				Some(llm::custom::ProviderPreset::Ollama),
+				None,
+				None,
+				None,
+				true,
+				0,
+			)
+			.is_err()
+		);
+		assert!(
+			resolve_provider_connection(None, Some("ftp://provider.example"), None, None, false, 0)
+				.is_err()
+		);
+		assert!(
+			resolve_provider_connection(
+				None,
+				Some("https://provider.example?query=value"),
+				None,
+				None,
+				false,
+				0
+			)
+			.is_err()
+		);
 		Ok(())
 	}
 

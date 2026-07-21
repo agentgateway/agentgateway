@@ -380,11 +380,24 @@ spec:
                 - Anthropic
                 - Azure
                 - AzureOpenAI
+                - Baseten
                 - Bedrock
+                - Cerebras
+                - Cohere
                 - Custom
+                - Deepinfra
+                - Deepseek
+                - Fireworks
                 - Gemini
+                - Groq
+                - Huggingface
+                - Mistral
+                - Ollama
                 - OpenAI
+                - Openrouter
+                - TogetherAI
                 - VertexAI
+                - XAI
                 type: string
               transformations:
                 description: |-
@@ -422,8 +435,9 @@ spec:
                   baseURL:
                     description: |-
                       BaseURL overrides the provider address and base path prefix. It must use the
-                      http or https scheme. The scheme selects the default port when one is not
-                      included; backend TLS is configured by the provider and backend policies.
+                      http or https scheme. The data plane uses the full URL to select the
+                      endpoint host, port, base path, and default TLS configuration. Backend
+                      policies may override the default TLS configuration.
 
                       Query parameters, fragments, and user info are not supported.
                     format: uri
