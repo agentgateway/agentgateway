@@ -261,6 +261,7 @@ function step_deploy_helm() {
 	  --set-string image.tag="${TAG}"\
 	   --set controller.image.repository=agentgateway-controller \
 	   --set inferenceExtension.enabled=true \
+	   --set agentgatewayModels.enabled=true \
 	   "$@"
 }
 function step_setup_gateway_api() {
