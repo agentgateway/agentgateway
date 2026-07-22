@@ -173,6 +173,7 @@ pub enum OutboundCallSubtype {
 	ExtAuthz,
 	ExtProc,
 	Guardrail,
+	Compression,
 	RateLimit,
 	Oidc,
 }

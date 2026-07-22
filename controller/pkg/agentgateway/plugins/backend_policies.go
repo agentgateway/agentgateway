@@ -824,6 +824,16 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		}
 	}
 
+	if aiSpec.ContextCompression != nil {
+		cc, err := processContextCompression(ctx, agwPolicy.Namespace, aiSpec.ContextCompression)
+		if err != nil {
+			logger.Error("error parsing context compression", "error", err)
+			errs = append(errs, err)
+		} else {
+			translatedAIPolicy.ContextCompression = cc
+		}
+	}
+
 	if aiSpec.Routes != nil {
 		r := make(map[string]api.BackendPolicySpec_Ai_RouteType)
 		for path, routeType := range aiSpec.Routes {

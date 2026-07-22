@@ -44,6 +44,21 @@ pub trait RequestType: Send + Sync {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError>;
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
+
+	/// Native request messages as raw JSON objects, preserving provider-specific blocks
+	/// (cache_control, images, tool calls) that the simplified message view drops.
+	/// Returns `None` for formats without a message array.
+	fn raw_messages(&self) -> Option<Vec<serde_json::Value>> {
+		None
+	}
+
+	/// Replace the native request messages from raw JSON objects. Only meaningful for formats
+	/// where `raw_messages` returns `Some`. Returns `Err` — leaving `self` unchanged — when the
+	/// messages don't fit the format.
+	fn set_raw_messages(&mut self, messages: Vec<serde_json::Value>) -> anyhow::Result<()> {
+		let _ = messages;
+		anyhow::bail!("raw message replacement is not supported for this request format")
+	}
 }
 
 /// SimpleChatCompletionMessage is a simplified chat message

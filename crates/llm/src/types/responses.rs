@@ -377,6 +377,20 @@ impl RequestType for Request {
 				.collect(),
 		);
 	}
+
+	fn raw_messages(&self) -> Option<Vec<serde_json::Value>> {
+		Some(match &self.input {
+			RequestInput::Items(items) => items.iter().map(|i| i.0.clone()).collect(),
+			RequestInput::Text(text) => vec![RawInputItem::from_user_text(text.clone()).0],
+		})
+	}
+
+	fn set_raw_messages(&mut self, messages: Vec<serde_json::Value>) -> anyhow::Result<()> {
+		// Always restore as Items (a Text input is sugar for one user message): a compressor
+		// may merge or split messages, so the original shape or count can't be assumed.
+		self.input = RequestInput::Items(messages.into_iter().map(RawInputItem).collect());
+		Ok(())
+	}
 }
 
 impl ResponseType for Response {

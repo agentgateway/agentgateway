@@ -10,12 +10,17 @@ import (
 
 const llmPort = ":9234"
 
+// compressionMarker is injected into messages by the mock compression engine so downstream
+// handlers (and the e2e) can detect that a request was compressed before reaching the LLM.
+const compressionMarker = "compressed-by-testbox"
+
 func startLLMServer() (shutdownFunc, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", handleOpenAIChatCompletions)
 	mux.HandleFunc("/v1/messages", handleAnthropicMessages)
 	mux.HandleFunc("/request", handleGuardrailsRequest)
 	mux.HandleFunc("/response", handleGuardrailsResponse)
+	mux.HandleFunc("/v1/compress", handleCompress)
 
 	// nolint: gosec // Test code only
 	httpServer := &http.Server{
@@ -73,6 +78,11 @@ func handleAnthropicMessages(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(prompt), "blocked") {
 		content = "blocked content"
 	}
+	// The compression engine (handleCompress) rewrites messages to include this marker.
+	// Echoing a recognizable response lets the e2e assert the compressed body reached upstream.
+	if strings.Contains(prompt, compressionMarker) {
+		content = "compression confirmed"
+	}
 
 	writeJSON(w, map[string]any{
 		"id":            "msg_testbox",
@@ -105,6 +115,25 @@ func readLLMPrompt(r *http.Request) string {
 func writeJSON(w http.ResponseWriter, resp any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// handleCompress implements Headroom's flat POST /v1/compress wire: it accepts
+// {messages, model} and returns {messages, ...telemetry}. The mock "compresses" by
+// collapsing the conversation into a single marked user message, which both proves the
+// callout fired and lets the LLM handler recognize a compressed request.
+func handleCompress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, map[string]any{
+		"messages": []map[string]any{
+			{"role": "user", "content": compressionMarker + " summarize the reference material"},
+		},
+		"tokens_before": 1000,
+		"tokens_after":  50,
+		"tokens_saved":  950,
+	})
 }
 
 func handleGuardrailsRequest(w http.ResponseWriter, r *http.Request) {

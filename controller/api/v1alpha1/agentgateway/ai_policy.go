@@ -146,7 +146,27 @@ type Webhook struct {
 	// `FailClosed` (default) rejects the request.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// Fidelity of the messages sent to (and accepted back from) the webhook.
+	// `Simplified` (default) sends normalized role + text content. `Raw` forwards
+	// provider-native message objects, preserving tool calls, cache markers, and
+	// multi-part content; the webhook server must understand the provider wire format.
+	// +kubebuilder:default=Simplified
+	// +optional
+	MessageFormat MessageFormat `json:"messageFormat,omitempty"`
 }
+
+// MessageFormat controls the fidelity of messages exchanged with a message-processor
+// callout (webhook or compression).
+// +kubebuilder:validation:Enum=Simplified;Raw
+type MessageFormat string
+
+const (
+	// MessageFormatSimplified sends normalized {role, content} messages.
+	MessageFormatSimplified MessageFormat = "Simplified"
+	// MessageFormatRaw forwards provider-native message objects verbatim.
+	MessageFormatRaw MessageFormat = "Raw"
+)
 
 // Response to return to the client if request content
 // is matched against a regex pattern and the action is `REJECT`.
@@ -422,4 +442,43 @@ type PromptCachingConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=0
 	CacheMessageOffset int `json:"cacheMessageOffset,omitempty"`
+}
+
+// ContextCompressionConfig configures compression of request messages through an external
+// compression service (a message-processor webhook) before they reach the LLM provider.
+type ContextCompressionConfig struct {
+	// Compression server to reach.
+	//
+	// Supported types: Service and Backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Request path of the compression endpoint. Defaults to `/v1/compress`.
+	// +optional
+	Path string `json:"path,omitempty"`
+
+	// Incoming request headers to forward to the compression service.
+	//
+	// When empty, a curated set of non-sensitive cache/context headers is forwarded by
+	// default (`anthropic-version`, `anthropic-beta`, `openai-beta`, `cache-control`), so
+	// engines that decide compressibility from headers behave correctly out of the box.
+	// Credentials are never part of the default. Setting any value here replaces that
+	// default entirely; it is not additive, so include the cache headers yourself if you
+	// still need them, or compression may bust prompt caches. To forward nothing, supply a
+	// matcher that matches no header.
+	// +optional
+	ForwardHeaderMatches []gwv1.HTTPHeaderMatch `json:"forwardHeaderMatches,omitempty"`
+
+	// Behavior when the service is unreachable, errors, or returns unusable messages.
+	// `FailOpen` (default) forwards the original request unchanged; `FailClosed` rejects it.
+	// +kubebuilder:default=FailOpen
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// Minimum request body size, in bytes, before compression is attempted. Requests
+	// below the threshold are forwarded untouched.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=16384
+	// +optional
+	MinSizeBytes int `json:"minSizeBytes,omitempty"`
 }

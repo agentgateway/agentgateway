@@ -4419,6 +4419,17 @@
             }
           ]
         },
+        "contextCompression": {
+          "description": "Context compression applied to request messages before they reach the provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextCompression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "routes": {
           "description": "Route type overrides selected by request path suffix.",
           "type": "object",
@@ -4698,6 +4709,10 @@
         "failureMode": {
           "description": "Behavior when the webhook is unreachable or returns an error.\nDefaults to `failClosed`.",
           "$ref": "#/$defs/WebhookFailureMode"
+        },
+        "messageFormat": {
+          "description": "Fidelity of the messages sent to (and accepted back from) the webhook.\nDefaults to `simplified` (role + text content). `raw` forwards provider-native\nmessage objects, preserving tool calls, cache markers, and multi-part content.",
+          "$ref": "#/$defs/MessageFormat"
         }
       },
       "additionalProperties": false,
@@ -4717,6 +4732,21 @@
           "description": "Allow the request through when the webhook guardrail is unavailable.",
           "type": "string",
           "const": "failOpen"
+        }
+      ]
+    },
+    "MessageFormat": {
+      "description": "Fidelity of messages exchanged with a message-processor callout (webhook / compression).",
+      "oneOf": [
+        {
+          "description": "Normalized `{role, content}` messages. Provider-specific blocks (tool calls, cache\nmarkers, multi-part content) are dropped. This is the stable, widely-supported shape.",
+          "type": "string",
+          "const": "simplified"
+        },
+        {
+          "description": "Provider-native message objects, forwarded verbatim. Preserves everything the\nsimplified shape drops; the callout server must understand the provider wire format.",
+          "type": "string",
+          "const": "raw"
         }
       ]
     },
@@ -5068,6 +5098,44 @@
         }
       },
       "additionalProperties": false
+    },
+    "ContextCompression": {
+      "description": "Context compression shrinks request messages through an external compression service before\nthey reach the LLM, to reduce token spend. Compression is an optimization: by default a\nfailure is ignored and the original request is forwarded unchanged.",
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Backend serving the compression endpoint (a message-processor webhook).",
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "path": {
+          "description": "Request path of the compression endpoint. Defaults to `/v1/compress`.",
+          "type": "string",
+          "default": "/v1/compress"
+        },
+        "forwardHeaderMatches": {
+          "description": "Incoming request headers to forward to the compression service.\n\nWhen empty, a curated set of non-sensitive cache/context headers is forwarded by default\n(`anthropic-version`, `anthropic-beta`, `openai-beta`, `cache-control`), so engines that\ndecide compressibility from headers behave correctly out of the box. Credentials are never\npart of the default. Setting any value here *replaces* that default entirely — it is not\nadditive, so include the cache headers yourself if you still need them, or compression may\nbust prompt caches. To forward nothing, supply a matcher that matches no header.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeaderMatch"
+          }
+        },
+        "failureMode": {
+          "description": "Behavior when the service is unreachable, errors, or returns unusable messages.\nDefaults to `failOpen` (forward the original request unchanged).",
+          "$ref": "#/$defs/WebhookFailureMode",
+          "default": "failOpen"
+        },
+        "minSizeBytes": {
+          "description": "Minimum request body size, in bytes, before compression is attempted. Requests below the\nthreshold are forwarded untouched. Defaults to 16384.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 16384
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target"
+      ]
     },
     "RouteType": {
       "description": "The HTTP endpoint class, such as `/v1/chat/completions` or `/v1/messages`.\n\nThis is used both for the client route we matched and for the upstream route\nwe finally send to. For chat, those can differ: a client Anthropic\n`/v1/messages` request is `RouteType::Messages` and `InputFormat::Messages`,\nbut it may be translated and sent upstream as `RouteType::Completions`.\n\n`RouteType` is about the HTTP endpoint. `InputFormat` is about the parsed\nclient payload and the response shape we owe back to that client. The main\ndifference is this type includes things like Detect and Passthrough.",
@@ -10593,6 +10661,16 @@
               "type": "null"
             }
           ]
+        },
+        "contextCompression": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextCompression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -10778,6 +10856,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/PromptCachingConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contextCompression": {
+          "description": "contextCompression shrinks request messages through a compression engine before they\nreach the LLM provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextCompression"
             },
             {
               "type": "null"

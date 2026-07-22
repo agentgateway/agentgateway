@@ -124,31 +124,35 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	}
 
 	w := &api.BackendPolicySpec_Ai_Webhook{
-		Backend:     be,
-		FailureMode: webhookFailureMode(webhook.FailureMode),
+		Backend:       be,
+		FailureMode:   webhookFailureMode(webhook.FailureMode),
+		MessageFormat: webhookMessageFormat(webhook.MessageFormat),
 	}
-
-	if len(webhook.ForwardHeaderMatches) > 0 {
-		headers := make([]*api.HeaderMatch, 0, len(webhook.ForwardHeaderMatches))
-		for _, match := range webhook.ForwardHeaderMatches {
-			switch ptr.OrDefault(match.Type, gwv1.HeaderMatchExact) {
-			case gwv1.HeaderMatchExact:
-				headers = append(headers, &api.HeaderMatch{
-					Name:  string(match.Name),
-					Value: &api.HeaderMatch_Exact{Exact: match.Value},
-				})
-
-			case gwv1.HeaderMatchRegularExpression:
-				headers = append(headers, &api.HeaderMatch{
-					Name:  string(match.Name),
-					Value: &api.HeaderMatch_Regex{Regex: match.Value},
-				})
-			}
-		}
-		w.ForwardHeaderMatches = headers
-	}
+	w.ForwardHeaderMatches = convertForwardHeaderMatches(webhook.ForwardHeaderMatches)
 
 	return w, nil
+}
+
+func convertForwardHeaderMatches(matches []gwv1.HTTPHeaderMatch) []*api.HeaderMatch {
+	if len(matches) == 0 {
+		return nil
+	}
+	headers := make([]*api.HeaderMatch, 0, len(matches))
+	for _, match := range matches {
+		switch ptr.OrDefault(match.Type, gwv1.HeaderMatchExact) {
+		case gwv1.HeaderMatchExact:
+			headers = append(headers, &api.HeaderMatch{
+				Name:  string(match.Name),
+				Value: &api.HeaderMatch_Exact{Exact: match.Value},
+			})
+		case gwv1.HeaderMatchRegularExpression:
+			headers = append(headers, &api.HeaderMatch{
+				Name:  string(match.Name),
+				Value: &api.HeaderMatch_Regex{Regex: match.Value},
+			})
+		}
+	}
+	return headers
 }
 
 func webhookFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_Webhook_FailureMode {
@@ -156,6 +160,46 @@ func webhookFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_
 		return api.BackendPolicySpec_Ai_Webhook_FAIL_OPEN
 	}
 	return api.BackendPolicySpec_Ai_Webhook_FAIL_CLOSED
+}
+
+func webhookMessageFormat(format agentgateway.MessageFormat) api.BackendPolicySpec_Ai_Webhook_MessageFormat {
+	if format == agentgateway.MessageFormatRaw {
+		return api.BackendPolicySpec_Ai_Webhook_RAW
+	}
+	// Default (empty or Simplified) maps to SIMPLIFIED.
+	return api.BackendPolicySpec_Ai_Webhook_SIMPLIFIED
+}
+
+func processContextCompression(ctx PolicyCtx, namespace string, cc *agentgateway.ContextCompressionConfig) (*api.BackendPolicySpec_Ai_ContextCompression, error) {
+	if cc == nil {
+		return nil, nil
+	}
+
+	be, err := BuildBackendRef(ctx, cc.BackendRef, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build context compression backend: %v", err)
+	}
+
+	out := &api.BackendPolicySpec_Ai_ContextCompression{
+		Backend:              be,
+		FailureMode:          contextCompressionFailureMode(cc.FailureMode),
+		ForwardHeaderMatches: convertForwardHeaderMatches(cc.ForwardHeaderMatches),
+	}
+	if cc.Path != "" {
+		out.Path = new(cc.Path)
+	}
+	if cc.MinSizeBytes > 0 {
+		out.MinSizeBytes = new(uint32(cc.MinSizeBytes)) //nolint:gosec // G115: MinSizeBytes is validated by kubebuilder to be >= 0
+	}
+	return out, nil
+}
+
+func contextCompressionFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_ContextCompression_FailureMode {
+	if mode == agentgateway.FailClosed {
+		return api.BackendPolicySpec_Ai_ContextCompression_FAIL_CLOSED
+	}
+	// Default (empty or FailOpen) maps to FAIL_OPEN.
+	return api.BackendPolicySpec_Ai_ContextCompression_FAIL_OPEN
 }
 
 func processBuiltinRegexRule(builtin agentgateway.BuiltIn, logger *slog.Logger) *api.BackendPolicySpec_Ai_RegexRule {

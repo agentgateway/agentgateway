@@ -76,7 +76,104 @@ spec:
       headers:
       - type: Exact
         name: x-direction
-        value: response          
+        value: response
+  - name: anthropic-compress
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: anthropic-compress
+    matches:
+    - path:
+        type: PathPrefix
+        value: /v1/messages
+      headers:
+      - type: Exact
+        name: x-direction
+        value: compress
+  - name: anthropic-compress-failopen
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: anthropic-compress-failopen
+    matches:
+    - path:
+        type: PathPrefix
+        value: /v1/messages
+      headers:
+      - type: Exact
+        name: x-direction
+        value: compress-failopen
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: anthropic-compress
+  namespace: default
+spec:
+  ai:
+    provider:
+      anthropic:
+        model: claude-sonnet-4@20250514
+      host: ai-testbox.default.svc.cluster.local
+      port: 9234
+  policies:
+    auth:
+      key: anthropic-key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: anthropic-compress-failopen
+  namespace: default
+spec:
+  ai:
+    provider:
+      anthropic:
+        model: claude-sonnet-4@20250514
+      host: ai-testbox.default.svc.cluster.local
+      port: 9234
+  policies:
+    auth:
+      key: anthropic-key
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: anthropic-compress-policy
+  namespace: default
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: anthropic-compress
+  backend:
+    ai:
+      contextCompression:
+        # Force compression on small test requests.
+        minSizeBytes: 1
+        backendRef:
+          name: ai-testbox
+          port: 9234
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: anthropic-compress-failopen-policy
+  namespace: default
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: anthropic-compress-failopen
+  backend:
+    ai:
+      contextCompression:
+        minSizeBytes: 1
+        failureMode: FailOpen
+        # Nothing listens on this port; the compression call fails and compression fails open.
+        backendRef:
+          name: ai-testbox
+          port: 9999
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy

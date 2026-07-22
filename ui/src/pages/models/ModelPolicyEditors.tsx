@@ -1,10 +1,11 @@
 import { MiniMonacoEditor } from "../../components/MiniMonacoEditor";
-import { Field, FieldGroup } from "../../components/Primitives";
+import { Dropdown, Field, FieldGroup } from "../../components/Primitives";
 import { ListEditor } from "../../policies/ListEditor";
 import { KeyValueEditor } from "../../policies/PolicyFormControls";
 import type { SchemaHelp } from "../../schemaHelp";
 import type { LlmModel } from "../../types";
 import type {
+  ContextCompression,
   HeaderModifier,
   LocalEviction,
   LocalHealthPolicy,
@@ -287,6 +288,122 @@ export function PromptCachingEditor(props: {
       </div>
     </div>
   );
+}
+
+function compressionHost(value: ContextCompression | null | undefined): string {
+  const target = value?.target;
+  return target && "host" in target ? target.host : "";
+}
+
+export function ContextCompressionEditor(props: {
+  value: LlmModel["contextCompression"] | null | undefined;
+  help: SchemaHelp;
+  onChange: (value: LlmModel["contextCompression"] | null) => void;
+}) {
+  const value = props.value ?? null;
+  const host = compressionHost(value);
+
+  // The target is a union (service/host/backend); this editor manages the common `host`
+  // case. Editing host resets the target to a host reference.
+  function setHost(nextHost: string) {
+    if (!nextHost) {
+      props.onChange(null);
+      return;
+    }
+    props.onChange({
+      ...(value ?? {}),
+      target: { host: nextHost },
+    });
+  }
+
+  function patch(next: Partial<ContextCompression>) {
+    if (!value) return;
+    props.onChange({ ...value, ...next });
+  }
+
+  return (
+    <div className="policy-editor-stack compact">
+      <Field
+        label="Compression host"
+        tooltip={props.help.field<ContextCompression>(
+          "ContextCompression",
+          "target",
+        )}
+      >
+        <input
+          value={host}
+          onChange={(event) => setHost(event.target.value.trim())}
+          placeholder="127.0.0.1:8787"
+        />
+      </Field>
+      <Field
+        label="Compression path"
+        tooltip={props.help.field<ContextCompression>(
+          "ContextCompression",
+          "path",
+        )}
+      >
+        <input
+          value={value?.path ?? ""}
+          disabled={!value}
+          onChange={(event) => patch({ path: event.target.value || undefined })}
+          placeholder="/v1/compress"
+        />
+      </Field>
+      <div className="form-grid">
+        <FieldGroup
+          label="Failure mode"
+          tooltip={props.help.field<ContextCompression>(
+            "ContextCompression",
+            "failureMode",
+          )}
+        >
+          <Dropdown
+            ariaLabel="Compression failure mode"
+            value={value?.failureMode ?? "failOpen"}
+            disabled={!value}
+            options={[
+              { value: "failOpen", label: "Fail open (forward original)" },
+              { value: "failClosed", label: "Fail closed (reject request)" },
+            ]}
+            onChange={(mode) =>
+              patch({ failureMode: mode as ContextCompression["failureMode"] })
+            }
+          />
+        </FieldGroup>
+        <Field
+          label="Minimum size (bytes)"
+          tooltip={props.help.field<ContextCompression>(
+            "ContextCompression",
+            "minSizeBytes",
+          )}
+        >
+          <input
+            type="number"
+            min="0"
+            value={value?.minSizeBytes ?? ""}
+            disabled={!value}
+            onChange={(event) =>
+              patch({
+                minSizeBytes: optionalNumber(event.target.value) ?? undefined,
+              })
+            }
+            placeholder="16384"
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+export function contextCompressionSummary(
+  value: LlmModel["contextCompression"] | null | undefined,
+) {
+  const host = compressionHost(value);
+  if (!host) return "No context compression configured";
+  const mode =
+    value?.failureMode === "failClosed" ? "fail closed" : "fail open";
+  return `Compress via ${host} (${mode})`;
 }
 
 export function healthSummary(health: LlmModel["health"] | null | undefined) {

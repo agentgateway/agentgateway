@@ -409,6 +409,136 @@ spec:
                                       Settings for AI workloads. This is only applicable when
                                       connecting to a `Backend` of type `ai`.
                                     properties:
+                                      contextCompression:
+                                        description: |-
+                                          Context compression shrinks request messages through an external compression
+                                          engine before they reach the LLM provider, to reduce token spend.
+                                        properties:
+                                          backendRef:
+                                            description: |-
+                                              Compression server to reach.
+
+                                              Supported types: Service and Backend.
+                                            properties:
+                                              group:
+                                                default: ""
+                                                description: Group of the referent,
+                                                  for example `gateway.networking.k8s.io`.
+                                                  Empty selects the core API group
+                                                maxLength: 253
+                                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                                type: string
+                                              kind:
+                                                default: Service
+                                                description: Kubernetes resource kind
+                                                  of the referent, for example `Service`.
+                                                  Defaults to `Service`
+                                                maxLength: 63
+                                                minLength: 1
+                                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                                type: string
+                                              name:
+                                                description: Name is the name of the
+                                                  referent.
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                              namespace:
+                                                description: Namespace of the referent.
+                                                  Defaults to the local namespace.
+                                                  A cross-namespace reference requires
+                                                  a ReferenceGrant in the referent
+                                                  namespace
+                                                maxLength: 63
+                                                minLength: 1
+                                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                                type: string
+                                              port:
+                                                description: Destination port number.
+                                                  Required when the referent is a
+                                                  Kubernetes `Service`
+                                                format: int32
+                                                maximum: 65535
+                                                minimum: 1
+                                                type: integer
+                                            required:
+                                            - name
+                                            type: object
+                                            x-kubernetes-validations:
+                                            - message: Must have port for Service
+                                                reference
+                                              rule: '(size(self.group) == 0 && self.kind
+                                                == ''Service'') ? has(self.port) :
+                                                true'
+                                          failureMode:
+                                            default: FailOpen
+                                            description: |-
+                                              Behavior when the service is unreachable, errors, or returns unusable messages.
+                                              `FailOpen` (default) forwards the original request unchanged; `FailClosed` rejects it.
+                                            enum:
+                                            - FailClosed
+                                            - FailOpen
+                                            type: string
+                                          forwardHeaderMatches:
+                                            description: |-
+                                              Incoming request headers to forward to the compression service.
+
+                                              When empty, a curated set of non-sensitive cache/context headers is forwarded by
+                                              default (`anthropic-version`, `anthropic-beta`, `openai-beta`, `cache-control`), so
+                                              engines that decide compressibility from headers behave correctly out of the box.
+                                              Credentials are never part of the default. Setting any value here replaces that
+                                              default entirely; it is not additive, so include the cache headers yourself if you
+                                              still need them, or compression may bust prompt caches. To forward nothing, supply a
+                                              matcher that matches no header.
+                                            items:
+                                              description: |-
+                                                HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request
+                                                headers.
+                                              properties:
+                                                name:
+                                                  description: Name of the HTTP header
+                                                    to match, case-insensitive. When
+                                                    names are equivalent, only the
+                                                    first matching entry is used
+                                                  maxLength: 256
+                                                  minLength: 1
+                                                  pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                  type: string
+                                                type:
+                                                  default: Exact
+                                                  description: 'How to match against
+                                                    the header value: `Exact` (default)
+                                                    or `RegularExpression`. The regex
+                                                    dialect is implementation-specific'
+                                                  enum:
+                                                  - Exact
+                                                  - RegularExpression
+                                                  type: string
+                                                value:
+                                                  description: Value of the HTTP header
+                                                    to match
+                                                  maxLength: 4096
+                                                  minLength: 1
+                                                  type: string
+                                              required:
+                                              - name
+                                              - value
+                                              type: object
+                                            type: array
+                                          minSizeBytes:
+                                            default: 16384
+                                            description: |-
+                                              Minimum request body size, in bytes, before compression is attempted. Requests
+                                              below the threshold are forwarded untouched.
+                                            minimum: 1
+                                            type: integer
+                                          path:
+                                            description: Request path of the compression
+                                              endpoint. Defaults to `/v1/compress`.
+                                            type: string
+                                        required:
+                                        - backendRef
+                                        type: object
                                       defaults:
                                         description: Defaults to merge with user input
                                           fields. If the field is already set, the
@@ -465,7 +595,6 @@ spec:
                                         description: |-
                                           Maps friendly model names to actual provider model names.
                                           Example: `{"fast": "gpt-3.5-turbo", "smart": "gpt-4-turbo"}`.
-                                          Note: This field is only applicable when using the agentgateway data plane.
                                         maxProperties: 64
                                         type: object
                                       overrides:
@@ -2438,6 +2567,17 @@ spec:
                                                         - value
                                                         type: object
                                                       type: array
+                                                    messageFormat:
+                                                      default: Simplified
+                                                      description: |-
+                                                        Fidelity of the messages sent to (and accepted back from) the webhook.
+                                                        `Simplified` (default) sends normalized role + text content. `Raw` forwards
+                                                        provider-native message objects, preserving tool calls, cache markers, and
+                                                        multi-part content; the webhook server must understand the provider wire format.
+                                                      enum:
+                                                      - Simplified
+                                                      - Raw
+                                                      type: string
                                                   required:
                                                   - backendRef
                                                   type: object
@@ -3795,6 +3935,17 @@ spec:
                                                         - value
                                                         type: object
                                                       type: array
+                                                    messageFormat:
+                                                      default: Simplified
+                                                      description: |-
+                                                        Fidelity of the messages sent to (and accepted back from) the webhook.
+                                                        `Simplified` (default) sends normalized role + text content. `Raw` forwards
+                                                        provider-native message objects, preserving tool calls, cache markers, and
+                                                        multi-part content; the webhook server must understand the provider wire format.
+                                                      enum:
+                                                      - Simplified
+                                                      - Raw
+                                                      type: string
                                                   required:
                                                   - backendRef
                                                   type: object
@@ -3877,11 +4028,11 @@ spec:
                                         type: array
                                     type: object
                                     x-kubernetes-validations:
-                                    - message: at least one of the fields in [defaults
-                                        modelAliases overrides prompt promptCaching
+                                    - message: at least one of the fields in [contextCompression
+                                        defaults modelAliases overrides prompt promptCaching
                                         promptGuard routes transformations] must be
                                         set
-                                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
+                                      rule: '[has(self.contextCompression),has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
                                         >= 1'
                                   auth:
                                     description: Settings for managing authentication
@@ -8168,6 +8319,125 @@ spec:
                       Settings for AI workloads. This is only applicable when
                       connecting to a `Backend` of type `ai`.
                     properties:
+                      contextCompression:
+                        description: |-
+                          Context compression shrinks request messages through an external compression
+                          engine before they reach the LLM provider, to reduce token spend.
+                        properties:
+                          backendRef:
+                            description: |-
+                              Compression server to reach.
+
+                              Supported types: Service and Backend.
+                            properties:
+                              group:
+                                default: ""
+                                description: Group of the referent, for example `gateway.networking.k8s.io`.
+                                  Empty selects the core API group
+                                maxLength: 253
+                                pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                type: string
+                              kind:
+                                default: Service
+                                description: Kubernetes resource kind of the referent,
+                                  for example `Service`. Defaults to `Service`
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                type: string
+                              name:
+                                description: Name is the name of the referent.
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: Namespace of the referent. Defaults to
+                                  the local namespace. A cross-namespace reference
+                                  requires a ReferenceGrant in the referent namespace
+                                maxLength: 63
+                                minLength: 1
+                                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                type: string
+                              port:
+                                description: Destination port number. Required when
+                                  the referent is a Kubernetes `Service`
+                                format: int32
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                            required:
+                            - name
+                            type: object
+                            x-kubernetes-validations:
+                            - message: Must have port for Service reference
+                              rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                ? has(self.port) : true'
+                          failureMode:
+                            default: FailOpen
+                            description: |-
+                              Behavior when the service is unreachable, errors, or returns unusable messages.
+                              `FailOpen` (default) forwards the original request unchanged; `FailClosed` rejects it.
+                            enum:
+                            - FailClosed
+                            - FailOpen
+                            type: string
+                          forwardHeaderMatches:
+                            description: |-
+                              Incoming request headers to forward to the compression service.
+
+                              When empty, a curated set of non-sensitive cache/context headers is forwarded by
+                              default (`anthropic-version`, `anthropic-beta`, `openai-beta`, `cache-control`), so
+                              engines that decide compressibility from headers behave correctly out of the box.
+                              Credentials are never part of the default. Setting any value here replaces that
+                              default entirely; it is not additive, so include the cache headers yourself if you
+                              still need them, or compression may bust prompt caches. To forward nothing, supply a
+                              matcher that matches no header.
+                            items:
+                              description: |-
+                                HTTPHeaderMatch describes how to select a HTTP route by matching HTTP request
+                                headers.
+                              properties:
+                                name:
+                                  description: Name of the HTTP header to match, case-insensitive.
+                                    When names are equivalent, only the first matching
+                                    entry is used
+                                  maxLength: 256
+                                  minLength: 1
+                                  pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                  type: string
+                                type:
+                                  default: Exact
+                                  description: 'How to match against the header value:
+                                    `Exact` (default) or `RegularExpression`. The
+                                    regex dialect is implementation-specific'
+                                  enum:
+                                  - Exact
+                                  - RegularExpression
+                                  type: string
+                                value:
+                                  description: Value of the HTTP header to match
+                                  maxLength: 4096
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
+                              - value
+                              type: object
+                            type: array
+                          minSizeBytes:
+                            default: 16384
+                            description: |-
+                              Minimum request body size, in bytes, before compression is attempted. Requests
+                              below the threshold are forwarded untouched.
+                            minimum: 1
+                            type: integer
+                          path:
+                            description: Request path of the compression endpoint.
+                              Defaults to `/v1/compress`.
+                            type: string
+                        required:
+                        - backendRef
+                        type: object
                       defaults:
                         description: Defaults to merge with user input fields. If
                           the field is already set, the field in the request is used.
@@ -8214,7 +8484,6 @@ spec:
                         description: |-
                           Maps friendly model names to actual provider model names.
                           Example: `{"fast": "gpt-3.5-turbo", "smart": "gpt-4-turbo"}`.
-                          Note: This field is only applicable when using the agentgateway data plane.
                         maxProperties: 64
                         type: object
                       overrides:
@@ -9909,6 +10178,17 @@ spec:
                                         - value
                                         type: object
                                       type: array
+                                    messageFormat:
+                                      default: Simplified
+                                      description: |-
+                                        Fidelity of the messages sent to (and accepted back from) the webhook.
+                                        `Simplified` (default) sends normalized role + text content. `Raw` forwards
+                                        provider-native message objects, preserving tool calls, cache markers, and
+                                        multi-part content; the webhook server must understand the provider wire format.
+                                      enum:
+                                      - Simplified
+                                      - Raw
+                                      type: string
                                   required:
                                   - backendRef
                                   type: object
@@ -11070,6 +11350,17 @@ spec:
                                         - value
                                         type: object
                                       type: array
+                                    messageFormat:
+                                      default: Simplified
+                                      description: |-
+                                        Fidelity of the messages sent to (and accepted back from) the webhook.
+                                        `Simplified` (default) sends normalized role + text content. `Raw` forwards
+                                        provider-native message objects, preserving tool calls, cache markers, and
+                                        multi-part content; the webhook server must understand the provider wire format.
+                                      enum:
+                                      - Simplified
+                                      - Raw
+                                      type: string
                                   required:
                                   - backendRef
                                   type: object
@@ -11151,10 +11442,10 @@ spec:
                         type: array
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [defaults modelAliases
-                        overrides prompt promptCaching promptGuard routes transformations]
-                        must be set
-                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
+                    - message: at least one of the fields in [contextCompression defaults
+                        modelAliases overrides prompt promptCaching promptGuard routes
+                        transformations] must be set
+                      rule: '[has(self.contextCompression),has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
                         >= 1'
                   auth:
                     description: Settings for managing authentication to the backend

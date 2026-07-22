@@ -2035,7 +2035,6 @@ type BackendAI struct {
 
 	// Maps friendly model names to actual provider model names.
 	// Example: `{"fast": "gpt-3.5-turbo", "smart": "gpt-4-turbo"}`.
-	// Note: This field is only applicable when using the agentgateway data plane.
 	// +kubebuilder:validation:MaxProperties=64
 	// +optional
 	ModelAliases map[string]string `json:"modelAliases,omitempty"`
@@ -2046,6 +2045,11 @@ type BackendAI struct {
 	// Only applicable for Bedrock Claude 3+ and Nova models.
 	// +optional
 	PromptCaching *PromptCachingConfig `json:"promptCaching,omitempty"`
+
+	// Context compression shrinks request messages through an external compression
+	// engine before they reach the LLM provider, to reduce token spend.
+	// +optional
+	ContextCompression *ContextCompressionConfig `json:"contextCompression,omitempty"`
 
 	// Rules for identifying the type of traffic to handle.
 	// The keys are URL path suffixes matched using ends-with comparison, for

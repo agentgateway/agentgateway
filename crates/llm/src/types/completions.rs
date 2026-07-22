@@ -325,6 +325,22 @@ impl super::RequestType for Request {
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		self.messages = messages.into_iter().map(convert_message).collect();
 	}
+
+	fn raw_messages(&self) -> Option<Vec<serde_json::Value>> {
+		self
+			.messages
+			.iter()
+			.map(|m| serde_json::to_value(m).ok())
+			.collect()
+	}
+
+	fn set_raw_messages(&mut self, messages: Vec<serde_json::Value>) -> anyhow::Result<()> {
+		self.messages = messages
+			.into_iter()
+			.map(serde_json::from_value)
+			.collect::<Result<_, _>>()?;
+		Ok(())
+	}
 }
 
 fn convert_message(r: SimpleChatCompletionMessage) -> RequestMessage {
