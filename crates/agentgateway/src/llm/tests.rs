@@ -1374,13 +1374,19 @@ async fn bedrock_from_messages_stream_captures_tool_calls() {
 		.response
 		.output_messages
 		.expect("output messages should be set for Bedrock tool calls");
-	assert_eq!(output_messages[0].finish_reason.as_deref(), Some("tool_use"));
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("tool_use")
+	);
 	let tool_calls = output_messages[0].tool_calls();
 	assert_eq!(tool_calls.len(), 2);
 	assert_eq!(tool_calls[0].name.as_str(), "top_song");
 	assert_eq!(tool_calls[0].arguments, serde_json::json!({"sign": "WZPZ"}));
 	assert_eq!(tool_calls[1].name.as_str(), "hello");
-	assert_eq!(tool_calls[1].arguments, serde_json::json!({"sign": "world"}));
+	assert_eq!(
+		tool_calls[1].arguments,
+		serde_json::json!({"sign": "world"})
+	);
 }
 
 #[tokio::test]
@@ -1477,8 +1483,8 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 
 #[tokio::test]
 async fn messages_passthrough_stream_captures_tool_calls() {
-	let input_bytes = fs::read(fixture_path("response/anthropic/stream_tool.json"))
-		.expect("Failed to read fixture");
+	let input_bytes =
+		fs::read(fixture_path("response/anthropic/stream_tool.json")).expect("Failed to read fixture");
 	let body = Body::from(input_bytes);
 	let log = AsyncLog::default();
 	let log2 = log.clone();
@@ -1516,7 +1522,10 @@ async fn messages_passthrough_stream_captures_tool_calls() {
 		.response
 		.output_messages
 		.expect("output messages should be set for Anthropic tool calls");
-	assert_eq!(output_messages[0].finish_reason.as_deref(), Some("tool_use"));
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("tool_use")
+	);
 	let tool_calls = output_messages[0].tool_calls();
 	assert_eq!(tool_calls.len(), 1);
 	assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
@@ -1573,7 +1582,10 @@ async fn responses_passthrough_stream_captures_completion_and_tool_calls() {
 		.response
 		.output_messages
 		.expect("output messages should be set for responses streaming");
-	assert_eq!(output_messages[0].finish_reason.as_deref(), Some("completed"));
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("completed")
+	);
 	let tool_calls = output_messages[0].tool_calls();
 	assert_eq!(tool_calls.len(), 1);
 	assert_eq!(tool_calls[0].id.as_str(), "call_xxx");

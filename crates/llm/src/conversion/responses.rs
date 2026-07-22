@@ -81,8 +81,7 @@ pub fn passthrough_stream(
 			},
 			types::responses::typed::ResponseStreamEvent::ResponseOutputItemDone(done) => {
 				if let Some(tool_calls) = tool_calls.as_mut()
-					&& let Some(part) =
-						types::responses::output_item_tool_call_part(&done.item)
+					&& let Some(part) = types::responses::output_item_tool_call_part(&done.item)
 				{
 					tool_calls.insert(done.output_index, part);
 				}
@@ -106,8 +105,7 @@ pub fn passthrough_stream(
 					if let Some(c) = completion.take() {
 						r.response.completion = Some(vec![c]);
 					}
-					r.response.output_messages =
-						take_output_messages(&mut tool_calls, finish_reason.clone());
+					r.response.output_messages = take_output_messages(&mut tool_calls, finish_reason.clone());
 				});
 			},
 			_ => {},

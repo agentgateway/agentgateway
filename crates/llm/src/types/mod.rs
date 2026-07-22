@@ -68,9 +68,6 @@ pub struct ToolCall {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutputMessagePart {
-	Text {
-		text: String,
-	},
 	ToolCall {
 		id: Strng,
 		name: Strng,
@@ -92,17 +89,16 @@ impl OutputMessage {
 		self
 			.content
 			.iter()
-			.filter_map(|p| match p {
+			.map(|p| match p {
 				OutputMessagePart::ToolCall {
 					id,
 					name,
 					arguments,
-				} => Some(ToolCall {
+				} => ToolCall {
 					id: id.clone(),
 					name: name.clone(),
 					arguments: arguments.clone(),
-				}),
-				_ => None,
+				},
 			})
 			.collect()
 	}

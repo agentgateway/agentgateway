@@ -384,17 +384,6 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 
 	for item in &resp.output {
 		match item {
-			OutputItem::Message(msg) => {
-				for c in &msg.content {
-					if let Content::OutputText(t) = c
-						&& !t.text.is_empty()
-					{
-						content.push(OutputMessagePart::Text {
-							text: t.text.clone(),
-						});
-					}
-				}
-			},
 			OutputItem::FunctionCall(_) => {
 				content.extend(output_item_tool_call_part(item));
 			},
@@ -422,8 +411,8 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 		.as_deref()
 		.filter(|id| !id.is_empty())
 		.unwrap_or(call.call_id.as_str());
-	let arguments = serde_json::from_str(&call.arguments)
-		.unwrap_or(serde_json::Value::Object(Default::default()));
+	let arguments =
+		serde_json::from_str(&call.arguments).unwrap_or(serde_json::Value::Object(Default::default()));
 	Some(OutputMessagePart::ToolCall {
 		id: strng::new(id),
 		name: strng::new(&call.name),

@@ -406,6 +406,7 @@ pub mod from_messages {
 					return;
 				},
 			};
+			let finish_reason = crate::types::serialize_str(&stop_reason);
 
 			close_text_block(state, events);
 			close_all_tool_blocks(state, events);
@@ -449,8 +450,9 @@ pub mod from_messages {
 						.map(|(idx, call)| (idx, call.id, call.name, call.arguments)),
 				) {
 				let mut tool_parts = Some(tool_parts);
+				let mut finish_reason = finish_reason;
 				log.update(|r| {
-					super::build_output_messages(&mut r.response, None, tool_parts.take());
+					super::build_output_messages(&mut r.response, tool_parts.take(), finish_reason.take());
 				});
 			}
 		}
@@ -1001,26 +1003,17 @@ fn finalize_streaming_tool_calls(
 	(!parts.is_empty()).then_some(parts)
 }
 
-/// Builds `output_messages` on `LLMResponse` from accumulated text and tool call parts.
+/// Builds `output_messages` on `LLMResponse` from accumulated tool call parts.
 pub(crate) fn build_output_messages(
 	response: &mut crate::LLMResponse,
-	text: Option<String>,
 	tool_parts: Option<Vec<crate::OutputMessagePart>>,
+	finish_reason: Option<agent_core::strng::Strng>,
 ) {
-	let mut content = Vec::new();
-	if let Some(t) = text
-		&& !t.is_empty()
-	{
-		content.push(crate::OutputMessagePart::Text { text: t });
-	}
-	if let Some(parts) = tool_parts {
-		content.extend(parts);
-	}
-	if !content.is_empty() {
+	if let Some(content) = tool_parts.filter(|parts| !parts.is_empty()) {
 		response.output_messages = Some(vec![crate::OutputMessage {
 			role: agent_core::strng::literal!("assistant"),
 			content,
-			finish_reason: None,
+			finish_reason,
 		}]);
 	}
 }
@@ -1048,6 +1041,7 @@ pub fn passthrough_stream(
 	}
 
 	let mut completion = log_content.completion.then(String::new);
+	let mut finish_reason = None;
 	let mut pending_tool_calls: Option<std::collections::HashMap<u32, PendingPassthroughToolCall>> =
 		log_content.tool_calls.then(std::collections::HashMap::new);
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
@@ -1060,6 +1054,13 @@ pub fn passthrough_stream(
 			move |f| {
 				match f {
 					Some(Ok(f)) => {
+						if let Some(reason) = f
+							.choices
+							.first()
+							.and_then(|choice| choice.finish_reason.as_ref())
+						{
+							finish_reason = crate::types::serialize_str(reason);
+						}
 						if let Some(c) = completion.as_mut()
 							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
 						{
@@ -1118,12 +1119,11 @@ pub fn passthrough_stream(
 									.completion_tokens_details
 									.as_ref()
 									.and_then(|d| d.reasoning_tokens);
-								let text_part = completion.take();
-								if let Some(c) = &text_part {
-									r.response.completion = Some(vec![c.clone()]);
+								if let Some(c) = completion.take() {
+									r.response.completion = Some(vec![c]);
 								}
 								let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
-								build_output_messages(&mut r.response, text_part, tool_parts);
+								build_output_messages(&mut r.response, tool_parts, finish_reason.take());
 							});
 
 							log.report_usage();
@@ -1136,12 +1136,11 @@ pub fn passthrough_stream(
 						// We are done, try to set completion if we haven't already
 						// This is useful in case we never see "usage"
 						log.update(|r| {
-							let text_part = completion.take();
-							if let Some(c) = &text_part {
-								r.response.completion = Some(vec![c.clone()]);
+							if let Some(c) = completion.take() {
+								r.response.completion = Some(vec![c]);
 							}
 							let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
-							build_output_messages(&mut r.response, text_part, tool_parts);
+							build_output_messages(&mut r.response, tool_parts, finish_reason.take());
 						});
 					},
 				}

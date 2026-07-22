@@ -75,7 +75,10 @@ fn test_response(
 
 	let resp = xlate(Bytes::copy_from_slice(&provider_bytes))
 		.expect("failed to translate provider response to expected format");
-	let llm_response = resp.to_llm_response(crate::LogContentFields::default());
+	let llm_response = resp.to_llm_response(crate::LogContentFields {
+		completion: false,
+		tool_calls: true,
+	});
 	let raw = resp.serialize().expect("failed to serialize response");
 	let resp_val = serde_json::from_slice::<Value>(&raw)
 		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));

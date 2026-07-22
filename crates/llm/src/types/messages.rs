@@ -339,16 +339,6 @@ fn extract_output_message(resp: &Response) -> Option<Vec<OutputMessage>> {
 	let mut content = Vec::new();
 
 	for c in &resp.content {
-		if let Some(text) = &c.text {
-			let typ = c
-				.rest
-				.get("type")
-				.and_then(|v| v.as_str())
-				.unwrap_or("text");
-			if typ == "text" && !text.is_empty() {
-				content.push(OutputMessagePart::Text { text: text.clone() });
-			}
-		}
 		let typ = c.rest.get("type").and_then(|v| v.as_str());
 		if matches!(typ, Some("tool_use" | "server_tool_use")) {
 			let id = c.rest.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -1032,13 +1022,6 @@ pub mod typed {
 
 		for block in &resp.content {
 			match block {
-				ContentBlock::Text(t) => {
-					if !t.text.is_empty() {
-						content.push(super::OutputMessagePart::Text {
-							text: t.text.clone(),
-						});
-					}
-				},
 				ContentBlock::ToolUse {
 					id, name, input, ..
 				}
@@ -1241,7 +1224,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_typed_response_text_only_has_text_content() {
+	fn test_typed_response_text_only_omits_output_messages() {
 		let response = typed::MessagesResponse {
 			id: "msg_test2".to_string(),
 			r#type: "message".to_string(),
@@ -1269,11 +1252,7 @@ mod tests {
 			completion: true,
 			tool_calls: true,
 		});
-		let messages = llm_response
-			.output_messages
-			.expect("output_messages should be present for text-only response");
-		assert!(messages[0].tool_calls().is_empty());
-		assert_eq!(messages[0].finish_reason.as_deref(), Some("end_turn"));
+		assert!(llm_response.output_messages.is_none());
 	}
 
 	#[test]
@@ -1324,8 +1303,7 @@ mod tests {
 		assert_eq!(messages[0].role.as_str(), "assistant");
 		assert_eq!(messages[0].finish_reason.as_deref(), Some("tool_use"));
 
-		// Should have text + tool_call parts
-		assert_eq!(messages[0].content.len(), 2);
+		assert_eq!(messages[0].content.len(), 1);
 
 		let tool_calls = messages[0].tool_calls();
 		assert_eq!(tool_calls.len(), 1);

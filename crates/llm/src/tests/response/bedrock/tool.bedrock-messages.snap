@@ -53,6 +53,30 @@ info:
     "input_tokens": 0,
     "output_tokens": 0,
     "total_tokens": 0,
-    "provider_model": "input-model"
+    "provider_model": "input-model",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
+            "name": "top_song",
+            "arguments": {
+              "sign": "WZPZ"
+            }
+          },
+          {
+            "type": "tool_call",
+            "id": "tooluse_kZJMlvQmRJ6eAyxxx",
+            "name": "hello",
+            "arguments": {
+              "sign": "world"
+            }
+          }
+        ],
+        "finish_reason": "tool_use"
+      }
+    ]
   }
 }

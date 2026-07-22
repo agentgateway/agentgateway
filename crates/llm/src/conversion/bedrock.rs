@@ -1839,10 +1839,7 @@ pub mod from_messages {
 								},
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
-								tool_calls.append_arguments(
-									delta.content_block_index as usize,
-									&tu.input,
-								);
+								tool_calls.append_arguments(delta.content_block_index as usize, &tu.input);
 								messages::ContentBlockDelta::InputJsonDelta {
 									partial_json: tu.input,
 								}

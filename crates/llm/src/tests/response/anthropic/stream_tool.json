@@ -18,3 +18,5 @@ data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":
 
 event: message_stop
 data: {"type":"message_stop"}
+
+: stream complete

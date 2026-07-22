@@ -246,14 +246,8 @@ impl ResponseType for Response {
 fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 	let messages: Vec<OutputMessage> = choices
 		.iter()
-		.map(|choice| {
+		.filter_map(|choice| {
 			let mut content = Vec::new();
-
-			if let Some(text) = &choice.message.content
-				&& !text.is_empty()
-			{
-				content.push(OutputMessagePart::Text { text: text.clone() });
-			}
 
 			if let Some(tc_array) = choice
 				.message
@@ -290,11 +284,11 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 				.and_then(|v| v.as_str())
 				.map(strng::new);
 
-			OutputMessage {
+			(!content.is_empty()).then(|| OutputMessage {
 				role: strng::new(choice.message.role.as_deref().unwrap_or("assistant")),
 				content,
 				finish_reason,
-			}
+			})
 		})
 		.collect();
 
@@ -1231,12 +1225,6 @@ mod tests {
 			tool_calls: true,
 		});
 
-		let messages = llm_response
-			.output_messages
-			.expect("output_messages should be present for text-only response");
-		assert!(
-			messages[0].tool_calls().is_empty(),
-			"tool_calls should be empty when no tool calls in response"
-		);
+		assert!(llm_response.output_messages.is_none());
 	}
 }

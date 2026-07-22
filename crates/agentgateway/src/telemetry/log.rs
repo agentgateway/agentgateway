@@ -2315,5 +2315,4 @@ mod tests {
 			"cost should use the AGW AI usage namespace"
 		);
 	}
-
 }

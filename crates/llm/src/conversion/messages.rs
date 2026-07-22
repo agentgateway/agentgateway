@@ -886,7 +886,10 @@ pub fn passthrough_stream(
 				}
 			},
 			messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
-				let finish_reason = delta.stop_reason.as_ref().and_then(crate::types::serialize_str);
+				let finish_reason = delta
+					.stop_reason
+					.as_ref()
+					.and_then(crate::types::serialize_str);
 				log.update(|r| {
 					if let Some(o) = usage.output_tokens {
 						r.response.output_tokens = Some(o as u64);
