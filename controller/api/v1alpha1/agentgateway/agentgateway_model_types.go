@@ -130,8 +130,10 @@ type UpstreamOverrides struct {
 
 // ModelMatch contains conditions for selecting a model.
 type ModelMatch struct {
-	// Model name or wildcard expression matched against client requests.
+	// Model name matched against client requests. It may be exact, a suffix
+	// wildcard such as `gpt-*`, a prefix wildcard such as `*-latest`, or `*`.
 	// When omitted, the model matches metadata.name exactly.
+	// +kubebuilder:validation:XValidation:rule="!self.contains('*') || (self.indexOf('*') == self.lastIndexOf('*') && (self.indexOf('*') == 0 || self.indexOf('*') == size(self) - 1))",message="model wildcards must be '*', a suffix like 'gpt-*', or a prefix like '*-latest'"
 	// +optional
 	Model *LongString `json:"model,omitempty"`
 }
@@ -221,7 +223,9 @@ type FailoverModelRouting struct {
 type FailoverModelTarget struct {
 	ModelTargetReference `json:",inline"`
 
-	// Priority of this target. Lower values are preferred.
+	// Priority of this target. Lower values are preferred. Targets at the same
+	// priority are selected using a score that considers health and latency. The
+	// next priority is used only when every target at this priority is degraded.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=1000000
 	// +required
@@ -252,9 +256,9 @@ type ModelTargetReference struct {
 	// +required
 	ModelRef corev1.LocalObjectReference `json:"modelRef"`
 
-	// Concrete model name selected through the referenced model. This is needed
+	// Concrete model name selected through the referenced model. It is required
 	// when modelRef points to a wildcard match.model. When omitted, the referenced
-	// model's effective match.model is used.
+	// model's exact effective match.model is used.
 	// +optional
 	Model *LongString `json:"model,omitempty"`
 }

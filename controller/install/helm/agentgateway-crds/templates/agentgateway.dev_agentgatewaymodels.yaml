@@ -226,11 +226,18 @@ spec:
                 properties:
                   model:
                     description: |-
-                      Model name or wildcard expression matched against client requests.
+                      Model name matched against client requests. It may be exact, a suffix
+                      wildcard such as `gpt-*`, a prefix wildcard such as `*-latest`, or `*`.
                       When omitted, the model matches metadata.name exactly.
                     maxLength: 1024
                     minLength: 1
                     type: string
+                    x-kubernetes-validations:
+                    - message: model wildcards must be '*', a suffix like 'gpt-*',
+                        or a prefix like '*-latest'
+                      rule: '!self.contains(''*'') || (self.indexOf(''*'') == self.lastIndexOf(''*'')
+                        && (self.indexOf(''*'') == 0 || self.indexOf(''*'') == size(self)
+                        - 1))'
                 type: object
               parentRefs:
                 description: Gateways and listeners to which this model attaches.
@@ -445,9 +452,9 @@ spec:
                           properties:
                             model:
                               description: |-
-                                Concrete model name selected through the referenced model. This is needed
+                                Concrete model name selected through the referenced model. It is required
                                 when modelRef points to a wildcard match.model. When omitted, the referenced
-                                model's effective match.model is used.
+                                model's exact effective match.model is used.
                               maxLength: 1024
                               minLength: 1
                               type: string
@@ -492,9 +499,9 @@ spec:
                           properties:
                             model:
                               description: |-
-                                Concrete model name selected through the referenced model. This is needed
+                                Concrete model name selected through the referenced model. It is required
                                 when modelRef points to a wildcard match.model. When omitted, the referenced
-                                model's effective match.model is used.
+                                model's exact effective match.model is used.
                               maxLength: 1024
                               minLength: 1
                               type: string
@@ -509,8 +516,10 @@ spec:
                               type: object
                               x-kubernetes-map-type: atomic
                             priority:
-                              description: Priority of this target. Lower values are
-                                preferred.
+                              description: |-
+                                Priority of this target. Lower values are preferred. Targets at the same
+                                priority are selected using a score that considers health and latency. The
+                                next priority is used only when every target at this priority is degraded.
                               format: int32
                               maximum: 1000000
                               minimum: 0
@@ -534,9 +543,9 @@ spec:
                           properties:
                             model:
                               description: |-
-                                Concrete model name selected through the referenced model. This is needed
+                                Concrete model name selected through the referenced model. It is required
                                 when modelRef points to a wildcard match.model. When omitted, the referenced
-                                model's effective match.model is used.
+                                model's exact effective match.model is used.
                               maxLength: 1024
                               minLength: 1
                               type: string

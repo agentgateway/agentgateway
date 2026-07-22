@@ -14,7 +14,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -402,7 +401,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 			GuardrailVersion:    guardrailVersion,
 		}}
 	case llm.Custom != nil:
-		formats, err := translateModelProviderFormats(llm.Custom.Formats)
+		formats, err := plugins.TranslateCustomProviderFormats(llm.Custom.Formats)
 		if err != nil {
 			return nil, err
 		}
@@ -411,7 +410,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 			Model:   providerModel(modelOverride, llm.Custom.Model),
 		}}
 		if llm.Custom.BackendRef != nil {
-			ref, err := translateModelCustomProviderBackendRef(ctx, namespace, *llm.Custom.BackendRef)
+			ref, err := plugins.TranslateCustomProviderBackendRef(ctx.Krt, ctx.References.RouteBackend, namespace, *llm.Custom.BackendRef)
 			if err != nil {
 				return nil, err
 			}
@@ -535,62 +534,6 @@ func modelProviderPreset(provider agentgateway.ModelProvider) (api.AIBackend_Pro
 	}
 }
 
-func translateModelProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*api.AIBackend_ProviderFormatConfig, error) {
-	out := make([]*api.AIBackend_ProviderFormatConfig, 0, len(formats))
-	for _, format := range formats {
-		protoFormat, err := translateModelProviderFormat(format.Type)
-		if err != nil {
-			return nil, err
-		}
-		var path *string
-		if format.Path != "" {
-			path = new(string(format.Path))
-		}
-		out = append(out, &api.AIBackend_ProviderFormatConfig{Format: protoFormat, Path: path})
-	}
-	return out, nil
-}
-
-func translateModelProviderFormat(format agentgateway.ProviderFormat) (api.AIBackend_ProviderFormat, error) {
-	switch format {
-	case agentgateway.ProviderFormatCompletions:
-		return api.AIBackend_COMPLETIONS, nil
-	case agentgateway.ProviderFormatMessages:
-		return api.AIBackend_MESSAGES, nil
-	case agentgateway.ProviderFormatResponses:
-		return api.AIBackend_RESPONSES, nil
-	case agentgateway.ProviderFormatEmbeddings:
-		return api.AIBackend_EMBEDDINGS, nil
-	case agentgateway.ProviderFormatAnthropicTokenCount:
-		return api.AIBackend_ANTHROPIC_TOKEN_COUNT, nil
-	case agentgateway.ProviderFormatRealtime:
-		return api.AIBackend_REALTIME, nil
-	case agentgateway.ProviderFormatRerank:
-		return api.AIBackend_RERANK, nil
-	default:
-		return api.AIBackend_PROVIDER_FORMAT_UNSPECIFIED, fmt.Errorf("unsupported custom provider format %q", format)
-	}
-}
-
-func translateModelCustomProviderBackendRef(ctx RouteContext, namespace string, ref agentgateway.LocalBackendObjectReference) (*api.BackendReference, error) {
-	kind := ptr.OrDefault(ref.Kind, wellknown.ServiceKind)
-	group := ""
-	if ref.Group != nil {
-		group = *ref.Group
-	}
-	gk := schema.GroupKind{Group: group, Kind: kind}
-	switch gk {
-	case wellknown.ServiceGVK.GroupKind(), wellknown.InferencePoolGVK.GroupKind():
-	default:
-		return nil, fmt.Errorf("custom provider backendRef may target only Service or InferencePool")
-	}
-	var port *gwv1.PortNumber
-	if ref.Port != nil {
-		port = new(gwv1.PortNumber(*ref.Port))
-	}
-	return ctx.References.RouteBackend(ctx.Krt, namespace, gk, gwv1.ObjectName(ref.Name), nil, port)
-}
-
 func resolveModelTargetName(ctx RouteContext, namespace string, target agentgateway.ModelTargetReference) (string, error) {
 	_, modelName, err := resolveModelTarget(ctx, namespace, target)
 	return modelName, err
@@ -610,7 +553,11 @@ func resolveModelTarget(ctx RouteContext, namespace string, target agentgateway.
 	if target.Model != nil {
 		return ref, string(*target.Model), nil
 	}
-	return ref, effectiveModelName(ref), nil
+	modelName := effectiveModelName(ref)
+	if strings.Contains(modelName, "*") {
+		return nil, "", fmt.Errorf("model target %s/%s requires model when the referenced model uses a wildcard match.model", namespace, target.ModelRef.Name)
+	}
+	return ref, modelName, nil
 }
 
 func routeConditionMessage(condition *reporter.RouteCondition) string {

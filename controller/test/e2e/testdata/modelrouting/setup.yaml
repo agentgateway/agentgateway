@@ -1,25 +1,3 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: model-routing-primary
-  namespace: default
-spec:
-  replicas: 0
-  selector:
-    matchLabels:
-      app: model-routing-primary
-  template:
-    metadata:
-      labels:
-        app: model-routing-primary
-    spec:
-      containers:
-      - name: mock
-        image: busybox
-        ports:
-        - containerPort: 9234
-        command: ["sleep", "infinity"]
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -27,10 +5,10 @@ metadata:
   namespace: default
 spec:
   selector:
-    app: model-routing-primary
+    app.kubernetes.io/name: testbox
   ports:
-  - port: 9234
-    targetPort: 9234
+  - port: 9235
+    targetPort: 9235
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -154,7 +132,7 @@ spec:
   visibility: Internal
   provider: OpenAI
   upstreamOverrides:
-    baseURL: http://model-routing-primary.default.svc.cluster.local:9234
+    baseURL: http://model-routing-primary.default.svc.cluster.local:9235
     model: agw-primary-down
 ---
 apiVersion: agentgateway.dev/v1alpha1

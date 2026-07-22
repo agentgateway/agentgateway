@@ -9,6 +9,19 @@ spec:
     sectionName: llm
   provider: Bedrock
 ---
+_err: model wildcards must be '*', a prefix like 'gpt-*', or a suffix like '*-latest'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: invalid-wildcard
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: gpt-*-latest
+  provider: OpenAI
+---
 _err: virtual model match.model must be an exact name
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
