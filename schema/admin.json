@@ -622,6 +622,17 @@
         {
           "type": "object",
           "properties": {
+            "inlineBackend": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "inlineBackend"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
             "routeGroup": {
               "type": "string"
             }

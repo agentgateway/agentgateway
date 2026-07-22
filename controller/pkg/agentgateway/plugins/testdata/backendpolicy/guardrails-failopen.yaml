@@ -13,24 +13,12 @@ spec:
       guardrails:
         processors:
         - remote:
-            backendRef:
-              name: guardrails-srv
-              port: 4317
+            url: https://guardrails.example.com:4317
             failureMode: FailOpen
           methods:
             tools/call: "Off"
             tools/list: Response
             prompts/list: Request
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: guardrails-srv
-  namespace: default
-spec:
-  ports:
-    - port: 4317
-
 ---
 # Output
 output:
@@ -48,11 +36,13 @@ output:
               tools/list: RESPONSE
             remote:
               failureMode: ALLOW
+              inlinePolicies:
+              - backendTls:
+                  hostname: guardrails.example.com
               target:
-                port: 4317
-                service:
-                  hostname: guardrails-srv.default.svc.cluster.local
-                  namespace: default
+                inline:
+                  hostname: guardrails.example.com
+                  port: 4317
       key: backend/default/guardrails-failopen:mcp-guardrails:default/test
       name:
         kind: AgentgatewayPolicy

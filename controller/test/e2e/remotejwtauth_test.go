@@ -27,6 +27,9 @@ func TestRemoteJwtAuth(tt *testing.T) {
 	t.Run("RoutePolicySvc", func(t base.Test) {
 		testRemoteJwtAuthRoutePolicySvc(t, "secured-route-with-svc.yaml")
 	})
+	t.Run("RoutePolicyURL", func(t base.Test) {
+		testRemoteJwtAuthRoutePolicySvc(t, "secured-route-with-url.yaml")
+	})
 	t.Run("RoutePolicyWithRBAC", func(t base.Test) {
 		testRemoteJwtAuthRoutePolicyWithRbac(t)
 	})

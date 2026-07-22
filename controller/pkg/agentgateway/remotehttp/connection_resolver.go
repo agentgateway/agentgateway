@@ -116,8 +116,8 @@ func (r *defaultResolver) resolveBackendConnection(
 		tls:         resolvedTLS,
 	}
 
-	if backend.Policies != nil && backend.Policies.Tunnel != nil {
-		proxy, err := r.resolveTunnelProxy(krtctx, refNamespace, backend.Policies.Tunnel.BackendRef)
+	if backend.Policies != nil && backend.Policies.Tunnel != nil && backend.Policies.Tunnel.BackendRef != nil {
+		proxy, err := r.resolveTunnelProxy(krtctx, refNamespace, *backend.Policies.Tunnel.BackendRef)
 		if err != nil {
 			return nil, fmt.Errorf("error resolving tunnel proxy for backend %s: %w", backendNN, err)
 		}

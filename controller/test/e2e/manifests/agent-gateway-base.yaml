@@ -311,5 +311,8 @@ spec:
     - name: http
       port: 8443
       targetPort: 8443
+    - name: plaintext
+      port: 8088
+      targetPort: 8088
   selector:
     app.kubernetes.io/name: testbox

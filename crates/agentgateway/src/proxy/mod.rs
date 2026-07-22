@@ -475,6 +475,11 @@ pub fn resolve_backend(
 				.ok_or(ProxyError::ServiceNotFound)?;
 			Arc::unwrap_or_clone(be)
 		},
+		BackendReference::InlineBackend(t) => Backend::Opaque(
+			ResourceName::new(strng::format!("{}", t), strng::EMPTY),
+			t.clone(),
+		)
+		.into(),
 		BackendReference::Invalid => Backend::Invalid.into(),
 	};
 	Ok(backend)
