@@ -60,6 +60,49 @@ pub(crate) fn authorization_server_metadata_url(issuer: &str) -> String {
 	}
 }
 
+/// OAuth endpoints for a Microsoft Entra ID (Azure AD) tenant, derived from the configured
+/// issuer.
+///
+/// Entra apps can be configured to mint v1 tokens (`iss` = `https://sts.windows.net/{tenant}/`)
+/// or v2 tokens (`iss` = `https://login.microsoftonline.com/{tenant}/v2.0`). Either form can be
+/// configured as the issuer; the interactive OAuth endpoints always live on the login host
+/// under `oauth2/v2.0`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EntraEndpoints {
+	pub openid_configuration: String,
+	pub authorization_endpoint: String,
+	pub token_endpoint: String,
+	pub jwks_uri: String,
+}
+
+pub(crate) fn entra_endpoints(issuer: &str) -> Result<EntraEndpoints, String> {
+	let parsed =
+		url::Url::parse(issuer).map_err(|e| format!("invalid Entra issuer URL {issuer:?}: {e}"))?;
+	let host = parsed
+		.host_str()
+		.ok_or_else(|| format!("Entra issuer URL {issuer:?} has no host"))?;
+	let tenant = parsed
+		.path_segments()
+		.and_then(|mut segments| segments.find(|s| !s.is_empty()).map(ToString::to_string))
+		.ok_or_else(|| {
+			format!("Entra issuer URL {issuer:?} has no tenant path segment (expected https://login.microsoftonline.com/<tenant>/v2.0 or https://sts.windows.net/<tenant>/)")
+		})?;
+	// v1 tokens are issued by sts.windows.net, but the interactive endpoints live on the
+	// login host. Other hosts (e.g. sovereign clouds like login.microsoftonline.us) pass through.
+	let login_host = if host.eq_ignore_ascii_case("sts.windows.net") {
+		"login.microsoftonline.com"
+	} else {
+		host
+	};
+	let authority = format!("https://{login_host}/{tenant}");
+	Ok(EntraEndpoints {
+		openid_configuration: format!("{authority}/v2.0/.well-known/openid-configuration"),
+		authorization_endpoint: format!("{authority}/oauth2/v2.0/authorize"),
+		token_endpoint: format!("{authority}/oauth2/v2.0/token"),
+		jwks_uri: format!("{authority}/discovery/v2.0/keys"),
+	})
+}
+
 pub(crate) fn parse_token_endpoint_auth_methods(
 	methods: Option<Vec<String>>,
 ) -> Result<TokenEndpointAuth, String> {
@@ -111,6 +154,63 @@ mod tests {
 	use rstest::rstest;
 
 	use super::*;
+
+	#[test]
+	fn entra_endpoints_from_v2_issuer() {
+		let endpoints = entra_endpoints(
+			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0",
+		)
+		.expect("valid v2 issuer");
+		assert_eq!(
+			endpoints.openid_configuration,
+			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0/.well-known/openid-configuration"
+		);
+		assert_eq!(
+			endpoints.authorization_endpoint,
+			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/authorize"
+		);
+		assert_eq!(
+			endpoints.token_endpoint,
+			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/token"
+		);
+		assert_eq!(
+			endpoints.jwks_uri,
+			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/discovery/v2.0/keys"
+		);
+	}
+
+	#[test]
+	fn entra_endpoints_from_v1_issuer() {
+		// v1 tokens have iss=https://sts.windows.net/{tenant}/; the OAuth endpoints still live
+		// on login.microsoftonline.com.
+		let endpoints =
+			entra_endpoints("https://sts.windows.net/11111111-2222-3333-4444-555555555555/")
+				.expect("valid v1 issuer");
+		assert_eq!(
+			endpoints.token_endpoint,
+			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/token"
+		);
+		assert_eq!(
+			endpoints.jwks_uri,
+			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/discovery/v2.0/keys"
+		);
+	}
+
+	#[test]
+	fn entra_endpoints_preserves_sovereign_cloud_hosts() {
+		let endpoints = entra_endpoints("https://login.microsoftonline.us/tenant-id/v2.0")
+			.expect("valid sovereign cloud issuer");
+		assert_eq!(
+			endpoints.authorization_endpoint,
+			"https://login.microsoftonline.us/tenant-id/oauth2/v2.0/authorize"
+		);
+	}
+
+	#[test]
+	fn entra_endpoints_rejects_issuer_without_tenant() {
+		assert!(entra_endpoints("https://login.microsoftonline.com").is_err());
+		assert!(entra_endpoints("not a url").is_err());
+	}
 
 	#[test]
 	fn authorization_server_metadata_url_supports_path_based_issuers() {

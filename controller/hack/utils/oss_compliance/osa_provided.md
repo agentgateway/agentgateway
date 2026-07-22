@@ -2,6 +2,7 @@ Name|Version|License
 ---|---|---
 [semver/v3](https://github.com/Masterminds/semver)|v3.5.0|MIT License
 [retry-go/v4](https://github.com/avast/retry-go)|v4.7.0|MIT License
+[xxhash/v2](https://github.com/cespare/xxhash)|v2.3.0|MIT License
 [xds/go](https://github.com/cncf/xds)|v0.0.0-20260202195803-dba9d589def2|Apache License 2.0
 [go-control-plane/envoy](https://github.com/envoyproxy/go-control-plane)|v1.37.1-0.20260627225610-70ff85c381ff|Apache License 2.0
 [tcell/v2](https://github.com/gdamore/tcell)|v2.13.10|Apache License 2.0
@@ -31,7 +32,7 @@ Name|Version|License
 [go.uber.org/zap](https://go.uber.org/zap)|v1.28.0|MIT License
 [x/clipboard](https://golang.design/x/clipboard)|v0.8.0|MIT License
 [x/net](https://golang.org/x/net)|v0.56.0|BSD 3-clause "New" or "Revised" License
-[x/sync](https://golang.org/x/sync)|v0.21.0|BSD 3-clause "New" or "Revised" License
+[x/sync](https://golang.org/x/sync)|v0.22.0|BSD 3-clause "New" or "Revised" License
 [x/time](https://golang.org/x/time)|v0.15.0|BSD 3-clause "New" or "Revised" License
 [x/tools](https://golang.org/x/tools)|v0.47.0|BSD 3-clause "New" or "Revised" License
 [googleapis/rpc](https://google.golang.org/genproto/googleapis/rpc)|v0.0.0-20260630182238-925bb5da69e7|Apache License 2.0
@@ -53,7 +54,7 @@ Name|Version|License
 [sigs.k8s.io/gateway-api](https://sigs.k8s.io/gateway-api)|v1.6.0|Apache License 2.0
 [sigs.k8s.io/gateway-api-inference-extension](https://sigs.k8s.io/gateway-api-inference-extension)|v1.5.0|Apache License 2.0
 [gateway-api-inference-extension/conformance](https://sigs.k8s.io/gateway-api-inference-extension/conformance)|v0.0.0-20260610234253-d7447d7420de|Apache License 2.0
-[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.6.1-0.20260702135020-8e96714756a4|Apache License 2.0
+[gateway-api/conformance](https://sigs.k8s.io/gateway-api/conformance)|v1.6.1-0.20260710021432-dae9ac3ab4df|Apache License 2.0
 [sigs.k8s.io/yaml](https://sigs.k8s.io/yaml)|v1.6.0|MIT License
 [cmd/goimports](https://golang.org/x/tools/cmd/goimports)|latest|MIT License
 [gogo/protobuf](https://github.com/gogo/protobuf)|latest|MIT License

@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, Clipboard, Code2, KeyRound, Terminal } from "lucide-react";
+import {
+  Check,
+  Clipboard,
+  Code2,
+  GitBranch,
+  KeyRound,
+  Terminal,
+} from "lucide-react";
 import {
   Dropdown,
   Field,
@@ -11,10 +18,10 @@ import {
 } from "../components/Primitives";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
 import { claudeSubscriptionWarning } from "../claudeSubscription";
+import { providerLabel } from "../config";
 import { hasKeyValue, keyLabel, maskKey } from "../credentialDisplay";
-import { gatewayOrigin } from "../gatewayUrls";
-import { useGatewayConfig } from "../hooks";
-import { llmModelOptions, resolveLlmModelOption } from "../llmModelOptions";
+import { llmGatewayOrigin } from "../gatewayUrls";
+import { useLlmConfigData } from "../hooks";
 import {
   isWildcardModelName,
   modelProviderLabel,
@@ -50,21 +57,51 @@ type ClientRecipe = {
   code: string;
 };
 
+type RequestModelOption =
+  | {
+      kind: "model";
+      name: string;
+      config: LlmModel;
+      icon: ReactNode;
+      searchText: string;
+    }
+  | { kind: "virtual"; name: string; icon: ReactNode; searchText: string };
+
 export function ClientSetupPage() {
-  const config = useGatewayConfig();
+  const {
+    config,
+    hybrid,
+    configResources,
+    models,
+    virtualModels,
+    providers,
+    apiKeys,
+    isLoading: modelsLoading,
+  } = useLlmConfigData();
   const modelOptions = useMemo(
-    () => llmModelOptions(config.data?.llm),
-    [config.data],
+    () => [
+      ...models.map((item) => ({
+        kind: "model" as const,
+        name: item.name,
+        icon: (
+          <ProviderIcon
+            provider={modelProviderLabel(item, providers) as ProviderName}
+          />
+        ),
+        searchText: `${item.name} ${modelProviderLabel(item, providers)} ${providerLabel(item.provider)}`,
+        config: item,
+      })),
+      ...virtualModels.map((item) => ({
+        kind: "virtual" as const,
+        name: item.name,
+        icon: <GitBranch size={16} />,
+        searchText: `${item.name} virtual`,
+      })),
+    ],
+    [models, providers, virtualModels],
   );
-  const virtualKeys = useMemo(
-    () => config.data?.llm?.policies?.apiKey?.keys ?? [],
-    [config.data],
-  );
-  const rawVirtualKeys = useMemo(
-    () => virtualKeys.filter(hasKeyValue),
-    [virtualKeys],
-  );
-  const derivedBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
+  const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
+  const derivedBaseUrl = llmGatewayOrigin(config.data);
   const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
   const [baseUrlTouched, setBaseUrlTouched] = useState(false);
   const [model, setModel] = useState("");
@@ -82,7 +119,7 @@ export function ClientSetupPage() {
   );
   const selectedModelConfig =
     selectedModelOption?.kind === "model"
-      ? selectedModelOption.model
+      ? selectedModelOption.config
       : undefined;
   const wildcardPrefix =
     selectedModelConfig && isWildcardModelName(selectedModelConfig.name)
@@ -96,7 +133,7 @@ export function ClientSetupPage() {
       )
     : "";
   const selectedCatalogProvider = selectedModelConfig
-    ? modelProviderLabel(selectedModelConfig, config.data?.llm?.providers ?? [])
+    ? modelProviderLabel(selectedModelConfig, providers)
     : null;
   const selectedVirtualKey =
     apiKeyMode === "saved"
@@ -107,13 +144,14 @@ export function ClientSetupPage() {
   const effectiveBaseUrl = baseUrlTouched ? baseUrl : derivedBaseUrl;
   const requestModel = clientSetupRequestModel(
     selectedModelOption,
+    selectedModel,
     specificModel,
-    config.data?.llm?.providers ?? [],
+    providers,
   );
   const recipes = clientRecipes({
     baseUrl: effectiveBaseUrl,
     model: requestModel || "model",
-    apiKey: apiKey || "agw_sk_...",
+    apiKey,
   });
   const activeRecipe =
     recipes.find((recipe) => recipe.id === selectedIntegration) ?? recipes[0];
@@ -124,25 +162,19 @@ export function ClientSetupPage() {
         title="Client Setup"
         description="Generate connection settings and snippets for OpenAI-compatible LLM clients."
       />
-      {config.isError ? (
+      {config.isError || (hybrid && configResources.isError) ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
-          {config.error.message}
+          {config.error?.message ?? configResources.error?.message}
         </StatusBanner>
       ) : null}
-      {modelOptions.length === 0 && !config.isLoading ? (
+      {modelOptions.length === 0 && !modelsLoading ? (
         <StatusBanner state="warn" title="No models configured">
           Create an LLM model before wiring clients to the gateway.
         </StatusBanner>
       ) : null}
-      {claudeSubscriptionWarning(
-        selectedModelConfig,
-        config.data?.llm?.providers ?? [],
-      ) ? (
+      {claudeSubscriptionWarning(selectedModelConfig, providers) ? (
         <StatusBanner state="warn" title="Claude subscription key detected">
-          {claudeSubscriptionWarning(
-            selectedModelConfig,
-            config.data?.llm?.providers ?? [],
-          )}
+          {claudeSubscriptionWarning(selectedModelConfig, providers)}
         </StatusBanner>
       ) : null}
 
@@ -172,14 +204,13 @@ export function ClientSetupPage() {
               searchable
               options={modelOptions.map((item) => ({
                 value: item.name,
-                label: item.label,
+                label: item.name,
+                description:
+                  item.kind === "virtual" ? "Virtual model" : undefined,
                 icon: item.icon,
                 searchText: item.searchText,
               }))}
-              onChange={(value) => {
-                setModel(value);
-                setSpecificModel("");
-              }}
+              onChange={setModel}
             />
           </FieldGroup>
           {selectedModelConfig &&
@@ -254,9 +285,7 @@ export function ClientSetupPage() {
             </div>
             <div>
               <span>Auth</span>
-              <code>
-                Authorization: Bearer {apiKey ? maskKey(apiKey) : "..."}
-              </code>
+              <code>{apiKey ? `Bearer ${maskKey(apiKey)}` : "None"}</code>
             </div>
           </div>
         </Panel>
@@ -273,19 +302,21 @@ export function ClientSetupPage() {
 }
 
 function clientSetupRequestModel(
-  option: ReturnType<typeof llmModelOptions>[number] | undefined,
+  option: RequestModelOption | undefined,
+  selectedModel: string,
   specificModel: string,
   providers: LlmProvider[],
 ) {
   if (!option) return "";
-  if (option.kind === "virtual")
-    return resolveLlmModelOption(option, specificModel, providers);
-  if (!option.model) return "";
-  if (!isWildcardModelName(option.model.name))
-    return resolveModelName(option.model, specificModel, providers);
-  const normalized = normalizedClientSpecificModel(option.model, specificModel);
-  if (normalized) return resolveModelName(option.model, normalized, providers);
-  const prefix = wildcardModelPrefix(option.model.name);
+  if (option.kind === "virtual") return selectedModel;
+  if (!isWildcardModelName(option.config.name))
+    return resolveModelName(option.config, specificModel, providers);
+  const normalized = normalizedClientSpecificModel(
+    option.config,
+    specificModel,
+  );
+  if (normalized) return resolveModelName(option.config, normalized, providers);
+  const prefix = wildcardModelPrefix(option.config.name);
   return prefix ? `${prefix}<model>` : "<model>";
 }
 
@@ -371,6 +402,20 @@ function clientRecipes(args: {
   const base = args.baseUrl.replace(/\/$/, "");
   const v1 = `${base}/v1`;
   const completions = `${v1}/chat/completions`;
+  const requiredApiKey = args.apiKey || "dummy_key";
+  const continuation = "\\";
+  const curlAuthorization = args.apiKey
+    ? `  -H ${JSON.stringify(`Authorization: Bearer ${args.apiKey}`)} ${continuation}\n`
+    : "";
+  const openCodeApiKey = args.apiKey
+    ? `,
+        "apiKey": "{env:AGENTGATEWAY_API_KEY}"`
+    : "";
+  const openCodeApiKeyExport = args.apiKey
+    ? `
+
+export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, type /connect to enter your API key.`
+    : "";
   return [
     {
       id: "curl",
@@ -379,9 +424,8 @@ function clientRecipes(args: {
         "Minimal raw HTTP request for debugging client connectivity.",
       icon: "curl",
       language: "bash",
-      code: `curl ${JSON.stringify(completions)} \\
-  -H "Authorization: Bearer ${args.apiKey}" \\
-  -H "Content-Type: application/json" \\
+      code: `curl ${JSON.stringify(completions)} ${continuation}
+${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
   -d '{
     "model": "${args.model}",
     "messages": [
@@ -396,10 +440,10 @@ function clientRecipes(args: {
         "Use the gateway URL and key with Claude-compatible model routes when configured.",
       icon: "claude",
       language: "bash",
-      code: `export ANTHROPIC_AUTH_TOKEN="${args.apiKey}"
-export ANTHROPIC_BASE_URL="${base}"
+      code: `export ANTHROPIC_AUTH_TOKEN=${JSON.stringify(requiredApiKey)}
+export ANTHROPIC_BASE_URL=${JSON.stringify(base)}
 
-claude --model "${args.model}"`,
+claude --model ${JSON.stringify(args.model)}`,
     },
     {
       id: "claude-desktop",
@@ -429,7 +473,7 @@ claude --model "${args.model}"`,
       ],
       language: "text",
       code: `Gateway URL: ${base}
-API Key: ${args.apiKey}`,
+API Key: ${requiredApiKey}`,
     },
     {
       id: "codex",
@@ -438,7 +482,7 @@ API Key: ${args.apiKey}`,
         "Use OpenAI-compatible environment variables when running Codex against the gateway.",
       icon: "codex",
       language: "bash",
-      code: `export OPENAI_API_KEY='${args.apiKey}'
+      code: `export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
 # If Codex has an existing login it can impact functionality. Better if it's logged out.
 # If you don't want to override your Codex configuration, you can set up a new dedicated configuration file.
 export CODEX_HOME=/tmp/codex-gateway-home && mkdir -p $CODEX_HOME # optional
@@ -474,8 +518,7 @@ cat > opencode.json <<'EOF'
       "npm": "@ai-sdk/openai-compatible",
       "name": "Agentgateway",
       "options": {
-        "baseURL": "${v1}",
-        "apiKey": "{env:AGENTGATEWAY_API_KEY}"
+        "baseURL": "${v1}"${openCodeApiKey}
       },
       "models": {
         "${args.model}": {
@@ -486,8 +529,7 @@ cat > opencode.json <<'EOF'
   }
 }
 EOF
-
-export AGENTGATEWAY_API_KEY='${args.apiKey}'  # Alternatively, type /connect to enter your API key.
+${openCodeApiKeyExport}
 opencode`,
     },
     {
@@ -511,7 +553,7 @@ opencode`,
       ],
       language: "text",
       code: `Override OpenAI Base URL: ${base}
-OpenAI API Key: ${args.apiKey}
+OpenAI API Key: ${requiredApiKey}
 Custom model: ${args.model}`,
     },
     {
@@ -568,7 +610,7 @@ Custom model: ${args.model}`,
       code: `import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: "${args.apiKey}",
+  apiKey: "${requiredApiKey}",
   baseURL: "${v1}",
 });
 
@@ -589,7 +631,7 @@ console.log(response.choices[0]?.message?.content);`,
       code: `from openai import OpenAI
 
 client = OpenAI(
-    api_key="${args.apiKey}",
+    api_key="${requiredApiKey}",
     base_url="${v1}",
 )
 

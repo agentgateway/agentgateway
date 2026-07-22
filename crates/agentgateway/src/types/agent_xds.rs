@@ -452,6 +452,7 @@ fn mcp_authentication_from_proto(
 		std::sync::Arc::new(jwt_validator),
 		mode,
 		m.client_id.clone(),
+		m.client_secret.clone().map(Into::into),
 	))
 }
 
@@ -491,6 +492,8 @@ fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
 		x if x == McpIdp::Keycloak as i32 => Some(McpIDP::Keycloak {}),
 		x if x == McpIdp::Okta as i32 => Some(McpIDP::Okta {}),
 		x if x == McpIdp::Descope as i32 => Some(McpIDP::Descope {}),
+		x if x == McpIdp::Authentik as i32 => Some(McpIDP::Authentik {}),
+		x if x == McpIdp::Entra as i32 => Some(McpIDP::Entra {}),
 		_ => None,
 	}
 }
@@ -514,6 +517,7 @@ where
 	ResourceMetadata { extra }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_mcp_authentication(
 	issuer: String,
 	audiences: Vec<String>,
@@ -522,6 +526,7 @@ fn build_mcp_authentication(
 	jwt_validator: Arc<http::jwt::Jwt>,
 	mode: McpAuthenticationMode,
 	client_id: Option<String>,
+	client_secret: Option<secrecy::SecretString>,
 ) -> McpAuthentication {
 	McpAuthentication {
 		issuer,
@@ -531,6 +536,7 @@ fn build_mcp_authentication(
 		jwt_validator,
 		mode,
 		client_id,
+		client_secret,
 	}
 }
 
@@ -1003,6 +1009,11 @@ fn backend_auth_from_proto(
 			} else {
 				Some(a.service_name.clone())
 			};
+			let region = if a.region.is_empty() {
+				None
+			} else {
+				Some(a.region.clone())
+			};
 			let assume_role = a
 				.assume_role
 				.map(|assume_role| -> Result<_, ProtoError> {
@@ -1039,13 +1050,32 @@ fn backend_auth_from_proto(
 							})
 						})
 						.collect::<Result<Vec<_>, _>>()?;
+					// An unset proto string is indistinguishable from an empty one; treat
+					// empty as unset for both session name forms.
+					let session_name = match (
+						assume_role.session_name.is_empty(),
+						assume_role.session_name_expression.is_empty(),
+					) {
+						(true, true) => None,
+						(false, true) => Some(auth::aws::AwsSessionName::Static(assume_role.session_name)),
+						// Permissive: a bad expression fails requests that hit this policy
+						// (fail closed) instead of rejecting the whole policy update.
+						(true, false) => Some(auth::aws::AwsSessionName::Dynamic {
+							expression: permissive_cel_expression_arc(
+								diagnostics,
+								"AWS session name",
+								assume_role.session_name_expression,
+							),
+						}),
+						(false, false) => {
+							return Err(ProtoError::Generic(
+								"assumeRole sets both sessionName and sessionNameExpression".to_string(),
+							));
+						},
+					};
 					Ok(auth::AwsAssumeRole {
 						role_arn: assume_role.role_arn,
-						session_name: if assume_role.session_name.is_empty() {
-							None
-						} else {
-							Some(assume_role.session_name)
-						},
+						session_name,
 						tags: auth::aws::AwsSessionTags::try_new(tags)
 							.map_err(|e| ProtoError::Generic(e.to_string()))?,
 					})
@@ -1062,7 +1092,7 @@ fn backend_auth_from_proto(
 						access_key_id: config.access_key_id.into(),
 						secret_access_key: config.secret_access_key.into(),
 						region: if config.region.is_empty() {
-							None
+							region.clone()
 						} else {
 							Some(config.region.clone())
 						},
@@ -1072,6 +1102,7 @@ fn backend_auth_from_proto(
 				},
 				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {
 					service_name,
+					region,
 					assume_role,
 					source_credentials_cache: Default::default(),
 					assume_role_cache: Default::default(),
@@ -1137,6 +1168,9 @@ fn backend_auth_from_proto(
 				s,
 				diagnostics,
 			)?))
+		},
+		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(s)) => {
+			BackendAuth::CrossAppAccess(Box::new(auth::oauth::CrossAppAccessAuth::from_proto(s)?))
 		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
@@ -1513,9 +1547,10 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::StatefulMode::Stateful => true,
 					proto::agent::mcp_backend::StatefulMode::Stateless => false,
 				},
-				always_use_prefix: match m.prefix_mode() {
-					proto::agent::mcp_backend::PrefixMode::Always => true,
-					proto::agent::mcp_backend::PrefixMode::Conditional => false,
+				prefix_mode: match m.prefix_mode() {
+					proto::agent::mcp_backend::PrefixMode::Always => McpPrefixMode::Always,
+					proto::agent::mcp_backend::PrefixMode::Conditional => McpPrefixMode::Conditional,
+					proto::agent::mcp_backend::PrefixMode::Never => McpPrefixMode::Never,
 				},
 				failure_mode: match m.failure_mode() {
 					proto::agent::mcp_backend::FailureMode::FailOpen => FailureMode::FailOpen,
@@ -1706,6 +1741,9 @@ fn transformation_from_proto(
 			add,
 			set,
 			remove,
+			// `replace` is only available via local file config today; the XDS proto does not
+			// carry it yet, so dynamic configs leave it unset.
+			replace: None,
 			body,
 			metadata,
 		}
@@ -1970,6 +2008,9 @@ fn traffic_policy_from_proto(
 				condition,
 			})
 		},
+		Some(tps::Kind::Delay(d)) => TrafficPolicy::Delay(http::delay::Policy {
+			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
+		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
 			let t = tps::local_rate_limit::Type::try_from(lrl.r#type)?;
 			let spec = http::localratelimit::RateLimitSpec {
@@ -2078,6 +2119,7 @@ fn traffic_policy_from_proto(
 							tps::jwt::Mode::Permissive => McpAuthenticationMode::Permissive,
 						},
 						mcp.client_id.clone(),
+						mcp.client_secret.clone().map(Into::into),
 					))
 				},
 				None => None,
@@ -3111,6 +3153,24 @@ pub(crate) fn targeted_policy_from_proto(
 		None => return Err(ProtoError::MissingRequiredField),
 	};
 
+	// section-level MCP policies are expressable via proto but blocked by CRDs
+	// drop and warn here
+	if let PolicyTarget::Backend(BackendTarget::Backend {
+		section: Some(section),
+		..
+	}) = &target
+		&& let PolicyType::Backend(bp) = &policy
+		&& let Some(kind) = match bp {
+			BackendTrafficPolicy::McpAuthorization(_) => Some("mcpAuthorization"),
+			BackendTrafficPolicy::McpAuthentication(_) => Some("mcpAuthentication"),
+			BackendTrafficPolicy::McpGuardrails(_) => Some("mcpGuardrails"),
+			_ => None,
+		} {
+		return Err(ProtoError::Generic(format!(
+			"{kind} applies to the whole MCP backend and cannot target section {section}",
+		)));
+	}
+
 	Ok(TargetedPolicy {
 		key: strng::new(&p.key),
 		name: p.name.as_ref().map(Into::into),
@@ -3236,6 +3296,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 	match policy {
 		TrafficPolicy::Timeout(_) => "timeout",
 		TrafficPolicy::Retry(_) => "retry",
+		TrafficPolicy::Delay(_) => "delay",
 		TrafficPolicy::AI(_) => "ai",
 		TrafficPolicy::Authorization(_) => "authorization",
 		TrafficPolicy::LocalRateLimit(_) => "localRateLimit",
@@ -3625,6 +3686,39 @@ mod tests {
 		};
 		assert_eq!(policies.iter().count(), 2);
 		Ok(())
+	}
+
+	#[test]
+	fn test_targeted_policy_from_proto_rejects_mcp_policy_on_sub_backend() {
+		let policy = |section: Option<String>| proto::agent::Policy {
+			key: "policy".to_string(),
+			name: None,
+			target: Some(proto::agent::PolicyTarget {
+				kind: Some(proto::agent::policy_target::Kind::Backend(
+					proto::agent::policy_target::BackendTarget {
+						name: "mcp".to_string(),
+						namespace: "default".to_string(),
+						section,
+					},
+				)),
+			}),
+			inheritance: proto::agent::policy::Inheritance::Default as i32,
+			kind: Some(proto::agent::policy::Kind::Backend(
+				proto::agent::BackendPolicySpec {
+					kind: Some(proto::agent::backend_policy_spec::Kind::McpAuthorization(
+						proto::agent::backend_policy_spec::McpAuthorization::default(),
+					)),
+				},
+			)),
+		};
+
+		let err = targeted_policy_from_proto(
+			&policy(Some("server".to_string())),
+			&mut Diagnostics::default(),
+		)
+		.unwrap_err();
+		assert!(err.to_string().contains("mcpAuthorization"), "{err}");
+		targeted_policy_from_proto(&policy(None), &mut Diagnostics::default()).unwrap();
 	}
 
 	#[test]
@@ -4250,6 +4344,36 @@ mod tests {
 			panic!("Expected Transformation policy variant");
 		};
 		assert_eq!(transformation.expressions().count(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_auth_aws_region_conversion() -> Result<(), ProtoError> {
+		let auth = backend_auth_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(proto::agent::backend_auth_policy::Kind::Aws(
+					proto::agent::Aws {
+						kind: Some(proto::agent::aws::Kind::Implicit(
+							proto::agent::AwsImplicit {},
+						)),
+						service_name: "bedrock-agentcore".to_string(),
+						assume_role: None,
+						region: "us-east-1".to_string(),
+					},
+				)),
+			},
+			&mut Diagnostics::default(),
+		)?;
+		let BackendAuth::Aws(AwsAuth::Implicit {
+			service_name,
+			region,
+			..
+		}) = auth
+		else {
+			panic!("Expected implicit AWS auth, got {auth:?}");
+		};
+		assert_eq!(service_name.as_deref(), Some("bedrock-agentcore"));
+		assert_eq!(region.as_deref(), Some("us-east-1"));
 		Ok(())
 	}
 

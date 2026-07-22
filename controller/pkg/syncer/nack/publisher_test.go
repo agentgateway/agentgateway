@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -36,14 +35,8 @@ func TestPublisher_PublishNack(t *testing.T) {
 			Namespace: testGateway.Namespace,
 		},
 	}
-	dep := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testGateway.Name,
-			Namespace: testGateway.Namespace,
-		},
-	}
 
-	fakeClient := fake.NewClient(t, gw, dep)
+	fakeClient := fake.NewClient(t, gw)
 
 	publisher := NewPublisher(fakeClient)
 	fakeRecorder := record.NewFakeRecorder(10)

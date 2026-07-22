@@ -216,6 +216,11 @@ fn request_conversion_golden() {
 			vertex_anthropic.prepare_anthropic_message_body(body)
 		});
 	}
+	test_request(
+		COMPLETIONS,
+		"requests/messages/gpt_adaptive_thinking_with_tools.json",
+		|i| conversion::completions::from_messages::translate(&i),
+	);
 	test_request(BEDROCK, "requests/messages/reasoning_replay.json", |i| {
 		conversion::bedrock::from_messages::translate(&i, &bedrock_claude, None).map(|r| r.body)
 	});

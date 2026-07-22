@@ -20,8 +20,22 @@ func TestOAuthTokenExchange(tt *testing.T) {
 	t := New(tt)
 	t.Apply(manifest("oauth", "routes.yaml"))
 
+	t.HTTPRouteAccepted("cross-app-access", base.Namespace)
 	t.HTTPRouteAccepted("oauth-token-exchange", base.Namespace)
 	t.HTTPRouteAccepted("oauth-jwt-bearer", base.Namespace)
+
+	assertions.EventuallyAgwPolicyCondition(t, "cross-app-access", base.Namespace, "Accepted", metav1.ConditionTrue)
+	t.Run("CrossAppAccess", func(t base.Test) {
+		t.Send("cross-app-access.com",
+			&testmatchers.HttpResponse{
+				StatusCode: http.StatusOK,
+				Body: gomega.WithTransform(transforms.WithEchoHeaders(),
+					gomega.HaveKeyWithValue("Authorization", "Bearer cross-app-access-token"),
+				),
+			},
+			curl.WithHeader("Authorization", "Bearer subject-id-token"),
+		)
+	})
 
 	assertions.EventuallyAgwPolicyCondition(t, "oauth-token-exchange", base.Namespace, "Accepted", metav1.ConditionTrue)
 	t.Run("TokenExchange", func(t base.Test) {

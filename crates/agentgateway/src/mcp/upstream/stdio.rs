@@ -13,7 +13,7 @@ use rmcp::model::{
 use rmcp::transport::{TokioChildProcess, Transport};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use crate::mcp::mergestream::Messages;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
@@ -144,6 +144,24 @@ impl Process {
 									let _ = sender.send(ServerJsonRpcMessage::Response(res));
 								}
 							},
+							Some(JsonRpcMessage::Error(err)) => {
+								// An error carrying a request id terminates that request, like a response.
+								// An id-less error can't be matched, so it belongs on the event stream.
+								match err.id.as_ref() {
+									Some(id) => {
+										if let Some(sender) = pending_requests_clone.lock().unwrap().remove(id) {
+											let _ = sender.send(ServerJsonRpcMessage::Error(err));
+										} else {
+											debug!("dropping stdio error for unknown request id {id:?}");
+										}
+									},
+									None => {
+										if let Some(sender) = event_stream_send.load().as_ref() {
+											let _ = sender.send(JsonRpcMessage::Error(err)).await;
+										}
+									},
+								}
+							},
 							Some(other) => {
 								if let Some(sender) = event_stream_send.load().as_ref() {
 									let _ = sender.send(other).await;
@@ -255,6 +273,66 @@ mod tests {
 
 		fn close(&mut self) -> impl Future<Output = Result<(), UpstreamError>> + Send {
 			std::future::ready(Ok(()))
+		}
+	}
+
+	struct ErrorReplyTransport {
+		tx: mpsc::Sender<ServerJsonRpcMessage>,
+		rx: mpsc::Receiver<ServerJsonRpcMessage>,
+	}
+
+	impl MCPTransport for ErrorReplyTransport {
+		fn send(
+			&mut self,
+			item: ClientJsonRpcMessage,
+			_: &IncomingRequestContext,
+		) -> impl Future<Output = Result<(), UpstreamError>> + Send + 'static {
+			let tx = self.tx.clone();
+			async move {
+				if let JsonRpcMessage::Request(req) = item {
+					let err = rmcp::model::JsonRpcError::new(
+						Some(req.id),
+						rmcp::ErrorData::invalid_request(
+							"connection is locked to the legacy handshake era",
+							None,
+						),
+					);
+					let _ = tx.send(ServerJsonRpcMessage::Error(err)).await;
+				}
+				Ok(())
+			}
+		}
+
+		fn receive(&mut self) -> impl Future<Output = Option<ServerJsonRpcMessage>> + Send {
+			self.rx.recv()
+		}
+
+		fn close(&mut self) -> impl Future<Output = Result<(), UpstreamError>> + Send {
+			std::future::ready(Ok(()))
+		}
+	}
+
+	#[tokio::test]
+	async fn test_process_error_reply_resolves_pending_request() {
+		let (tx, rx) = mpsc::channel(4);
+		let proc = Process::new(ErrorReplyTransport { tx, rx });
+		let req = JsonRpcRequest {
+			jsonrpc: Default::default(),
+			id: RequestId::Number(1),
+			request: ClientRequest::PingRequest(Default::default()),
+		};
+
+		let resp = timeout(
+			Duration::from_secs(1),
+			proc.send_message(req, &IncomingRequestContext::empty()),
+		)
+		.await
+		.expect("an error reply must resolve the pending request, not hang")
+		.unwrap();
+
+		match resp {
+			ServerJsonRpcMessage::Error(e) => assert_eq!(e.id, Some(RequestId::Number(1))),
+			other => panic!("expected error reply, got {other:?}"),
 		}
 	}
 

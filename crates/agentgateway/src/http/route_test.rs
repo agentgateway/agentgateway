@@ -398,11 +398,37 @@ fn test_header_matching() {
 			expected_route: Some("exact-header"),
 		},
 		TestCase {
+			name: "exact header matches any repeated value",
+			headers: vec![
+				("content-type", "text/html"),
+				("content-type", "application/json"),
+			],
+			expected_route: Some("exact-header"),
+		},
+		TestCase {
+			name: "exact repeated header match is order independent",
+			headers: vec![
+				("content-type", "application/json"),
+				("content-type", "text/html"),
+			],
+			expected_route: Some("exact-header"),
+		},
+		TestCase {
+			name: "comma-joined header remains a single value",
+			headers: vec![("content-type", "text/html,application/json")],
+			expected_route: Some("no-headers"),
+		},
+		TestCase {
 			name: "regex header match",
 			headers: vec![(
 				"user-agent",
 				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
 			)],
+			expected_route: Some("regex-header"),
+		},
+		TestCase {
+			name: "regex header matches any repeated value",
+			headers: vec![("user-agent", "curl/8.0"), ("user-agent", "Mozilla/5.0")],
 			expected_route: Some("regex-header"),
 		},
 		TestCase {

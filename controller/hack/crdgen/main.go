@@ -163,6 +163,11 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 		return fmt.Errorf("found zero Kubernetes kinds for paths: %s", strings.Join(paths, ", "))
 	}
 
+	// After kind discovery: this indexes imported packages, which would otherwise make FindKubeKinds emit upstream CRDs
+	if err := applyImportedDescriptionOverrides(parser, roots); err != nil {
+		return fmt.Errorf("apply imported description overrides: %w", err)
+	}
+
 	for _, groupKind := range kubeKinds {
 		parser.NeedCRDFor(groupKind, &maxDescLen)
 		crdRaw := parser.CustomResourceDefinitions[groupKind]
@@ -911,6 +916,187 @@ func typeIdentForExpr(parser *crd.Parser, contextPkg *loader.Package, expr ast.E
 			return crd.TypeIdent{}, false
 		}
 	}
+}
+
+// importedDescriptionOverride shortens an imported symbol's description, keyed
+// by Go symbol so every inlined use inherits it.
+type importedDescriptionOverride struct {
+	pkgPath  string
+	typeName string
+	field    string // empty targets the type's own description
+	doc      string
+}
+
+var importedDescriptionOverrides = []importedDescriptionOverride{
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPHeaderName",
+		doc:      "Name of an HTTP header. HTTP/2 pseudo-headers (names beginning with `:`) are not supported",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "BackendObjectReference",
+		field:    "Group",
+		doc:      "Group of the referent, for example `gateway.networking.k8s.io`. Empty selects the core API group",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "BackendObjectReference",
+		field:    "Kind",
+		doc:      "Kubernetes resource kind of the referent, for example `Service`. Defaults to `Service`",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "BackendObjectReference",
+		field:    "Namespace",
+		doc:      "Namespace of the referent. Defaults to the local namespace. A cross-namespace reference requires a ReferenceGrant in the referent namespace",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "BackendObjectReference",
+		field:    "Port",
+		doc:      "Destination port number. Required when the referent is a Kubernetes `Service`",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPHeaderMatch",
+		field:    "Type",
+		doc:      "How to match against the header value: `Exact` (default) or `RegularExpression`. The regex dialect is implementation-specific",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPHeaderMatch",
+		field:    "Name",
+		doc:      "Name of the HTTP header to match, case-insensitive. When names are equivalent, only the first matching entry is used",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPHeaderMatch",
+		field:    "Value",
+		doc:      "Value of the HTTP header to match",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPHeader",
+		field:    "Name",
+		doc:      "Name of the HTTP header, case-insensitive",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPHeader",
+		field:    "Value",
+		doc:      "Value for the HTTP header",
+	},
+	{
+		pkgPath:  "k8s.io/api/core/v1",
+		typeName: "LocalObjectReference",
+		field:    "Name",
+		doc:      "Name of the referent",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPCORSFilter",
+		field:    "AllowOrigins",
+		doc:      "Origins allowed to share the response, each as `<scheme>://<host>(:<port>)`; the host may use the `*` wildcard, and a bare `*` allows all origins. Sets `Access-Control-Allow-Origin`. When credentials are allowed, a specific origin is echoed instead of `*`. Support: Extended",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPCORSFilter",
+		field:    "AllowMethods",
+		doc:      "HTTP methods allowed for the resource, or `*` for all. CORS-safelisted methods (`GET`, `HEAD`, `POST`) are always allowed. Sets `Access-Control-Allow-Methods`. Support: Extended",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPCORSFilter",
+		field:    "AllowHeaders",
+		doc:      "Request headers allowed when accessing the resource, or `*` for all. Sets `Access-Control-Allow-Headers`. Support: Extended",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPCORSFilter",
+		field:    "ExposeHeaders",
+		doc:      "Response headers exposed to client scripts, or `*` for all. Sets `Access-Control-Expose-Headers`. Support: Extended",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "HTTPRouteRetry",
+		field:    "Backoff",
+		doc:      "Minimum duration to wait between retry attempts, in Gateway API Duration format. Implementations may add jitter or use exponential backoff, and must not exceed a configured request timeout. Support: Extended",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "ParentReference",
+		field:    "Namespace",
+		doc:      "Namespace of the referent. Defaults to the Route's local namespace. Cross-namespace references must be explicitly allowed, for example via ReferenceGrant. Support: Core",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "ParentReference",
+		field:    "SectionName",
+		doc:      "Name of a section within the target resource, for example a Gateway Listener name or Service port name. Empty references the entire resource. Support: Core",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "ParentReference",
+		field:    "Port",
+		doc:      "Port this Route targets on the parent, interpreted per parent kind (for example a Gateway listener port or Service port). Support: Extended",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "PolicyAncestorStatus",
+		doc:      "Status of a policy with respect to an associated ancestor resource, usually a Gateway",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "PolicyAncestorStatus",
+		field:    "Conditions",
+		doc:      "Conditions describing the status of the policy for this ancestor",
+	},
+	{
+		pkgPath:  "sigs.k8s.io/gateway-api/apis/v1",
+		typeName: "PolicyStatus",
+		field:    "Ancestors",
+		doc:      "Ancestor resources (usually Gateways) associated with the policy, with the policy's status for each. At most 16 entries; an empty list means the policy is not relevant to any ancestor",
+	},
+}
+
+func applyImportedDescriptionOverrides(parser *crd.Parser, roots []*loader.Package) error {
+	for _, o := range importedDescriptionOverrides {
+		pkg := importedPackageForPath(parser, roots, o.pkgPath)
+		if pkg == nil {
+			_, _ = fmt.Fprintf(os.Stderr, "warning: package %q not imported by any root; skipping imported description override\n", o.pkgPath)
+			continue
+		}
+		parser.NeedPackage(pkg)
+
+		info := parser.LookupType(pkg, o.typeName)
+		if info == nil {
+			return fmt.Errorf("type %s.%s not found", o.pkgPath, o.typeName)
+		}
+
+		if o.field == "" {
+			info.Doc = o.doc
+			continue
+		}
+
+		idx := slices.IndexFunc(info.Fields, func(field markers.FieldInfo) bool {
+			return field.Name == o.field
+		})
+		if idx < 0 {
+			return fmt.Errorf("field %s.%s.%s not found", o.pkgPath, o.typeName, o.field)
+		}
+		info.Fields[idx].Doc = o.doc
+	}
+	return nil
+}
+
+func importedPackageForPath(parser *crd.Parser, roots []*loader.Package, pkgPath string) *loader.Package {
+	for _, root := range roots {
+		if pkg := packageForPath(parser, root, pkgPath); pkg != nil {
+			return pkg
+		}
+	}
+	return nil
 }
 
 func packageForPath(parser *crd.Parser, contextPkg *loader.Package, pkgPath string) *loader.Package {

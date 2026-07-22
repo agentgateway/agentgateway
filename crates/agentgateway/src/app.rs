@@ -9,9 +9,12 @@ use tokio::task::JoinSet;
 
 use crate::control::caclient;
 use crate::telemetry::trc;
-use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
+use crate::{Config, ProxyInputs, client, config_store, mcp, proxy, state_manager};
 
-pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
+pub async fn run(
+	config: Arc<Config>,
+	config_resource_store: Option<config_store::ConfigResourceStore>,
+) -> anyhow::Result<Bound> {
 	crate::transport::tls::warn_if_key_log_enabled();
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
@@ -85,6 +88,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		control_client.clone(),
 		Arc::new(xds_metrics),
 		xds_tx,
+		config_resource_store.clone(),
 	)
 	.await?;
 	let stores = state_mgr.stores();
@@ -92,7 +96,17 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 
 	state_manager::start_self_workload_resolution(&config, stores.clone(), &ready);
 
-	let model_catalog = crate::llm::cost::ModelCatalog::new(config.model_catalog.sources.clone())?;
+	let mut model_catalog_sources = if let Some(store) = &config_resource_store {
+		config_store::model_catalog_sources(
+			&store
+				.list(Some(config_store::ConfigResourceKind::ModelCatalog))
+				.await?,
+		)?
+	} else {
+		Vec::new()
+	};
+	model_catalog_sources.extend(config.model_catalog.sources.clone());
+	let model_catalog = crate::llm::cost::ModelCatalog::new(model_catalog_sources)?;
 
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
@@ -106,6 +120,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let admin_server = crate::management::admin::Service::new(
 		config.clone(),
 		model_catalog.clone(),
+		config_resource_store,
 		stores.clone(),
 		resource_manager,
 		shutdown.trigger(),
@@ -115,7 +130,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	.await
 	.context("admin server starts")?;
 	#[cfg(feature = "ui")]
-	info!("serving UI at http://{}/ui", config.admin_addr);
+	info!("serving UI at {}", ui_url(config.as_ref()).await);
 
 	let pi = ProxyInputs {
 		cfg: config.clone(),
@@ -165,6 +180,80 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		stores,
 		ready,
 	})
+}
+
+#[cfg(feature = "ui")]
+async fn ui_url(config: &Config) -> String {
+	let admin_url = || format!("http://{}/ui", config.admin_addr);
+	let Some(local_config) = &config.xds.local_config else {
+		return admin_url();
+	};
+	let Ok(contents) = local_config.read_to_string().await else {
+		return admin_url();
+	};
+	let Ok(local) = crate::serdes::yamlviajson::from_str::<serde_json::Value>(&contents) else {
+		return admin_url();
+	};
+	let gateway_ref = match local.pointer("/ui/gateways") {
+		Some(serde_json::Value::String(reference)) => Some(reference.as_str()),
+		Some(serde_json::Value::Array(references)) => {
+			references.iter().find_map(serde_json::Value::as_str)
+		},
+		_ => None,
+	}
+	.or_else(|| {
+		if local.get("ui").is_some() && local.pointer("/gateways/default").is_some() {
+			Some("default")
+		} else {
+			None
+		}
+	});
+	let Some(gateway_ref) = gateway_ref else {
+		return admin_url();
+	};
+	let (gateway_name, listener_name) = gateway_ref
+		.split_once('/')
+		.map(|(gateway, listener)| (gateway, Some(listener)))
+		.unwrap_or((gateway_ref, None));
+	let Some(gateway) = local.get("gateways").and_then(|g| g.get(gateway_name)) else {
+		return admin_url();
+	};
+	let Some(port) = gateway
+		.get("port")
+		.and_then(serde_json::Value::as_u64)
+		.and_then(|port| u16::try_from(port).ok())
+	else {
+		return admin_url();
+	};
+	let endpoint = match listener_name {
+		Some(listener_name) => gateway
+			.get("listeners")
+			.and_then(serde_json::Value::as_array)
+			.and_then(|listeners| {
+				listeners.iter().find(|listener| {
+					listener.get("name").and_then(serde_json::Value::as_str) == Some(listener_name)
+				})
+			}),
+		None => gateway
+			.get("listeners")
+			.and_then(serde_json::Value::as_array)
+			.and_then(|listeners| listeners.first())
+			.or(Some(gateway)),
+	};
+	let Some(endpoint) = endpoint else {
+		return admin_url();
+	};
+	let hostname = endpoint
+		.get("hostname")
+		.and_then(serde_json::Value::as_str)
+		.filter(|hostname| *hostname != "*")
+		.unwrap_or("localhost");
+	let scheme = if endpoint.get("tls").is_some_and(|tls| !tls.is_null()) {
+		"https"
+	} else {
+		"http"
+	};
+	format!("{scheme}://{hostname}:{port}/ui")
 }
 
 pub struct Bound {

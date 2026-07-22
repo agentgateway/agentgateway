@@ -209,7 +209,7 @@ fn with_body(req: crate::http::Request) -> crate::http::Request {
 	let rt = &tokio::runtime::Runtime::new().unwrap();
 	let (mut head, body) = req.into_parts();
 	let b = rt.block_on(async move { body.collect().await.unwrap().to_bytes() });
-	head.extensions.insert(BufferedBody(b));
+	head.extensions.insert(BufferedBody::complete(b));
 	Request::from_parts(head, Body::empty())
 }
 

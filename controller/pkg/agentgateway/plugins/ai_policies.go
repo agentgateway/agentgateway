@@ -275,10 +275,7 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 	pgModeration.Model = moderation.Model
 
 	if moderation.Policies != nil {
-		pol := &agentgateway.BackendFull{
-			BackendSimple: *moderation.Policies,
-		}
-		pols, err := TranslateInlineBackendPolicy(ctx, namespace, pol)
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, moderation.Policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
@@ -301,10 +298,7 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 	}
 
 	if guardrails.Policies != nil {
-		pol := &agentgateway.BackendFull{
-			BackendSimple: *guardrails.Policies,
-		}
-		pols, err := TranslateInlineBackendPolicy(ctx, namespace, pol)
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardrails.Policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
@@ -333,10 +327,7 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	}
 
 	if armor.Policies != nil {
-		pol := &agentgateway.BackendFull{
-			BackendSimple: *armor.Policies,
-		}
-		pols, err := TranslateInlineBackendPolicy(ctx, namespace, pol)
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, armor.Policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
@@ -345,4 +336,22 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	}
 
 	return pgArmor
+}
+
+type backendSimplePolicy interface {
+	BackendSimple() *agentgateway.BackendSimple
+}
+
+func translateAuxiliaryBackendPolicies(ctx PolicyCtx, namespace string, policies backendSimplePolicy) ([]*api.BackendPolicySpec, error) {
+	if policies == nil {
+		return nil, nil
+	}
+	backend := policies.BackendSimple()
+	if backend == nil {
+		return nil, nil
+	}
+	pol := &agentgateway.BackendFull{
+		BackendSimple: *backend,
+	}
+	return TranslateInlineBackendPolicy(ctx, namespace, pol)
 }

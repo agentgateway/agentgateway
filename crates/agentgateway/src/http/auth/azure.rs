@@ -121,6 +121,8 @@ const FOUNDRY_SCOPES: &[&str] = &["https://ai.azure.com/.default"];
 /// Reference: <https://learn.microsoft.com/azure/developer/go/azure-sdk-authentication>
 struct DefaultAzureCredential {
 	sources: Vec<(&'static str, Arc<dyn TokenCredential>)>,
+	/// Errors from credentials that failed to *construct*
+	construction_errors: Vec<String>,
 	/// Index of the source that first provided a token.
 	/// `usize::MAX` indicates no source has provided a token yet.
 	cached_source_index: AtomicUsize,
@@ -166,10 +168,17 @@ impl TokenCredential for DefaultAzureCredential {
 		Err(azure_core::Error::with_message_fn(
 			azure_core::error::ErrorKind::Credential,
 			|| {
-				format!(
+				let mut msg = format!(
 					"DefaultAzureCredential: all credentials failed:\n{}",
 					format_credential_errors(&errors)
-				)
+				);
+				if !self.construction_errors.is_empty() {
+					msg.push_str(&format!(
+						"\nCredentials excluded because they could not be constructed:\n{}",
+						self.construction_errors.join("\n")
+					));
+				}
+				msg
 			},
 		))
 	}
@@ -420,6 +429,7 @@ async fn build_credential(
 
 			Ok(Arc::new(DefaultAzureCredential {
 				sources,
+				construction_errors: errors,
 				cached_source_index: AtomicUsize::new(usize::MAX),
 			}))
 		},

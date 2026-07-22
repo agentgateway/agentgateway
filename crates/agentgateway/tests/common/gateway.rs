@@ -72,10 +72,25 @@ impl AgentGateway {
 		let (port_tx, port_rx) = tokio::sync::oneshot::channel::<u16>();
 
 		let task = tokio::task::spawn(async move {
-			let config =
+			let config = Arc::new(
 				agentgateway::config::parse_config(js, Some(agentgateway::ConfigSource::File(config)))
-					.unwrap();
-			let app = agentgateway::app::run(Arc::new(config)).await.unwrap();
+					.unwrap(),
+			);
+			let config_resource_store =
+				if config.config_store.mode == agentgateway::ConfigStoreMode::Hybrid {
+					Some(
+						agentgateway::config_store::setup(
+							config.database.as_ref().expect("hybrid database config"),
+						)
+						.await
+						.unwrap(),
+					)
+				} else {
+					None
+				};
+			let app = agentgateway::app::run(config, config_resource_store)
+				.await
+				.unwrap();
 
 			// Report the actual bound port back to the test.
 			let addrs = app.bind_addresses();
@@ -102,7 +117,7 @@ impl AgentGateway {
 			.timer(TokioTimer::new())
 			.build_http();
 		Ok(Self {
-			_temp_dirs: Vec::new(),
+			_temp_dirs: temp_dirs,
 			port,
 			task,
 			client,
@@ -129,11 +144,20 @@ impl AgentGateway {
 	}
 
 	pub async fn send_request_json(&self, url: &str, body: serde_json::Value) -> Response {
+		self.send_request_json_method(Method::POST, url, body).await
+	}
+
+	pub async fn send_request_json_method(
+		&self,
+		method: Method,
+		url: &str,
+		body: serde_json::Value,
+	) -> Response {
 		let id = generate_id();
 		let mut url = Url::parse(url).unwrap();
 		url.set_port(Some(self.port)).unwrap();
 		let body = serde_json::to_vec_pretty(&body).unwrap();
-		let mut resp = RequestBuilder::new(Method::POST, url.as_str())
+		let mut resp = RequestBuilder::new(method, url.as_str())
 			.header("x-test-id", id.clone())
 			.header("Content-Type", "application/json")
 			.body(body)

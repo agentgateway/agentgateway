@@ -1999,7 +1999,8 @@ mod context_compression {
 		for (k, v) in headers {
 			b = b.header(*k, *v);
 		}
-		b.body(Body::from(serde_json::to_vec(&body).unwrap())).unwrap()
+		b.body(Body::from(serde_json::to_vec(&body).unwrap()))
+			.unwrap()
 	}
 
 	// Headers the compression engine actually received on the /v1/compress callout.
@@ -2014,7 +2015,10 @@ mod context_compression {
 
 	#[tokio::test]
 	async fn empty_config_forwards_curated_defaults_not_credentials() {
-		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "c"}]))).await;
+		let mock = body_mock(&compress_response(
+			json!([{"role": "user", "content": "c"}]),
+		))
+		.await;
 		let policy = policy_with_forward(Target::Address(*mock.address()), vec![]);
 
 		let req = messages_request_with_headers(
@@ -2029,7 +2033,10 @@ mod context_compression {
 
 		let headers = callout_headers(&mock).await;
 		// Curated defaults are forwarded...
-		assert_eq!(headers.get("anthropic-beta").unwrap(), "prompt-caching-2024");
+		assert_eq!(
+			headers.get("anthropic-beta").unwrap(),
+			"prompt-caching-2024"
+		);
 		assert_eq!(headers.get("cache-control").unwrap(), "no-cache");
 		// ...but credentials never are.
 		assert!(headers.get("authorization").is_none());
@@ -2037,7 +2044,10 @@ mod context_compression {
 
 	#[tokio::test]
 	async fn explicit_matches_replace_defaults() {
-		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "c"}]))).await;
+		let mock = body_mock(&compress_response(
+			json!([{"role": "user", "content": "c"}]),
+		))
+		.await;
 		// Only forward x-custom; this replaces (does not extend) the defaults.
 		let policy = policy_with_forward(
 			Target::Address(*mock.address()),
@@ -2058,7 +2068,10 @@ mod context_compression {
 
 	#[tokio::test]
 	async fn match_nothing_forwards_no_headers() {
-		let mock = body_mock(&compress_response(json!([{"role": "user", "content": "c"}]))).await;
+		let mock = body_mock(&compress_response(
+			json!([{"role": "user", "content": "c"}]),
+		))
+		.await;
 		// A non-empty list that matches nothing => defaults suppressed, nothing forwarded.
 		let policy = policy_with_forward(
 			Target::Address(*mock.address()),

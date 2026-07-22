@@ -145,6 +145,14 @@ async fn apply_request_policies(
 	req: &mut Request,
 	rp: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
+	// TODO we only need allow policies to be timeout-aware because we odn't have
+	// a unified timeout guard that applies during policy evalutation
+	if let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout) {
+		req.extensions_mut().insert(http::filters::RequestDeadline(
+			l.start.as_instant() + timeout,
+		));
+	}
+
 	// CORS must run before authentication, authorization and rate limiting so that:
 	// 1. Preflight OPTIONS requests short-circuit without requiring credentials
 	// 2. CORS response headers are queued even if the request is later rejected,
@@ -252,6 +260,12 @@ async fn apply_request_policies(
 	pol
 		.request_redirect
 		.apply_without_response("request redirect", c, l, req, rp.headers())
+		.await?;
+
+	// delay should happen after auth but before direct response
+	pol
+		.delay
+		.apply_without_response("delay", c, l, req, rp.headers())
 		.await?;
 	pol
 		.direct_response
@@ -1178,7 +1192,8 @@ impl HTTPProxy {
 		log.cel.ctx().maybe_buffer_request_body(req).await;
 
 		let trace_parent = trc::TraceParent::from_request(req);
-		let trace_sampled = sampler.trace_sampled(req, trace_parent.as_ref());
+		let (trace_sampled, trace_decision) = sampler.trace_sampled(req, trace_parent.as_ref());
+		dtrace::trace(|trace| trace.trace_sampling(trace_decision));
 
 		// Use dynamic tracer from frontend policy if available, otherwise use static tracer
 		if trace_sampled {
@@ -1893,6 +1908,7 @@ async fn build_simple_backend_call(
 				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
 				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
 					service_name: Some(config.service_name().to_string()),
+					region: None,
 					assume_role: None,
 					source_credentials_cache: Default::default(),
 					assume_role_cache: Default::default(),
@@ -2311,6 +2327,21 @@ async fn make_backend_call(
 							upstream_route_type,
 						} => (request, llm_request, upstream_route_type),
 						RequestResult::Rejected(dr) => return Err(ProxyResponse::DirectResponse(Box::new(dr))),
+						RequestResult::GuardrailRejected {
+							response,
+							guardrail,
+						} => {
+							let response = http::SendDirectResponse::new(response)
+								.await
+								.map_err(ProxyError::Body)?;
+							return Err(
+								ProxyError::GuardrailRejected {
+									guardrail,
+									response: Box::new(response),
+								}
+								.into(),
+							);
+						},
 					};
 					dtrace::trace(|trace| {
 						trace.llm_request_detected(

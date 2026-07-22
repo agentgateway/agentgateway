@@ -43,3 +43,10 @@ stringData:
       }
     }
   client2: "k-4560"
+  client3: |
+    {
+      "keyHash": "sha256:afe8242ac87b577c6d0636cd066907ff7317d890549369c456264eeb7709b0f7",
+      "metadata": {
+        "group": "engineering"
+      }
+    }

@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::{Arc, OnceLock};
@@ -21,9 +22,10 @@ use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::http::Response;
-use crate::mcp::handler::{Relay, RelayInputs};
+use crate::mcp::handler::{Relay, RelayInputs, ResolveKind};
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
+use crate::mcp::subscriptions::ResourceSubscription;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
@@ -62,37 +64,45 @@ impl Session {
 			.send_internal(parts, message)
 			.assert_size::<{ 6 * 1024 }>()
 			.await;
-		Self::handle_error(req_id, res).await
+		Self::handle_error(req_id, res, false).await
 	}
 
 	/// Send a downstream message to upstream server(s) in gateway stateless mode.
-	/// Every non-initialize message gets a gateway-generated InitializeRequest
-	/// first, because many legacy servers require initialize before any other
-	/// request. Once downstream stateless transport is supported, remove this
-	/// wrapper and forward the message as-is.
+	/// When `initialize_upstream` is true, every non-initialize message gets a
+	/// gateway-generated InitializeRequest first because many legacy servers
+	/// require initialize before any other request. The caller sets it to false
+	/// for modern requests, which are forwarded as-is without a synthetic
+	/// handshake.
 	pub async fn stateless_send_and_initialize(
 		&mut self,
 		parts: Parts,
 		message: ClientJsonRpcMessage,
+		initialize_upstream: bool,
 	) -> Result<Response, ProxyError> {
-		let (req_id, request_type) = match &message {
-			ClientJsonRpcMessage::Request(r) => (Some(r.id.clone()), Some(&r.request)),
-			_ => (None, None),
+		let req_id = match &message {
+			ClientJsonRpcMessage::Request(r) => Some(r.id.clone()),
+			_ => None,
 		};
-		let is_init = request_type.is_some_and(|r| matches!(r, ClientRequest::InitializeRequest(_)));
-		if !is_init {
+		let is_init = matches!(&message,
+			ClientJsonRpcMessage::Request(r) if matches!(r.request, ClientRequest::InitializeRequest(_)));
+		if initialize_upstream && !is_init {
 			let mut client_info = get_client_info();
 			if let Some(protocol_version) =
-				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone())?
+				crate::mcp::streamablehttp::protocol_version_header(&parts.headers, req_id.clone(), true)?
 			{
 				client_info.protocol_version = protocol_version;
 			}
 			let init_request = rmcp::model::InitializeRequest::new(client_info);
-			// first, determine how widely to send the initialize
+			let request_type = match &message {
+				ClientJsonRpcMessage::Request(r) => Some(&r.request),
+				_ => None,
+			};
 			match request_type {
-				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_)) => {
-					// Single-target methods only hit one backend, so initialize/initialized should be scoped
-					// to that backend rather than fanning out.
+				// Initialize only the target named by a prefixed call. With prefixMode: never,
+				// the list request used to find that target requires every target to be initialized.
+				Some(ClientRequest::CallToolRequest(_)) | Some(ClientRequest::GetPromptRequest(_))
+					if !self.relay.needs_resolution() =>
+				{
 					let name = match request_type {
 						Some(ClientRequest::CallToolRequest(ctr)) => ctr.params.name.to_string(),
 						Some(ClientRequest::GetPromptRequest(gpr)) => gpr.params.name.clone(),
@@ -100,7 +110,7 @@ impl Session {
 					};
 					let (service_name, _) = match self.relay.parse_resource_name(&name) {
 						Ok(target) => target,
-						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
+						Err(err) => return Self::handle_error(req_id.clone(), Err(err), false).await,
 					};
 					let res = self
 						.send_init_single(parts.clone(), init_request, service_name)
@@ -113,13 +123,14 @@ impl Session {
 							self.id = id.into();
 						}
 					}
-					Self::handle_error(Some(RequestId::Number(0)), res).await?;
+					Self::handle_error(Some(RequestId::Number(0)), res, false).await?;
 					// Now send the initialized notification
 					let _ = Self::handle_error(
 						None,
 						self
 							.send_initialized_notification_single(parts.clone(), service_name)
 							.await,
+						false,
 					)
 					.await?;
 				},
@@ -143,7 +154,21 @@ impl Session {
 			}
 		}
 		// Now we can send the message like normal (if it's tools/call, it'll go to the initialized target)
-		self.send(parts, message).await
+		if initialize_upstream {
+			return self.send(parts, message).await;
+		}
+		let res = self
+			.send_internal(parts, message)
+			.assert_size::<{ 6 * 1024 }>()
+			.await;
+		match res {
+			// Modern requests are never part of a legacy session, so method-not-found can use its
+			// 404 status; on the legacy `send` path a 404 would signal session termination.
+			Err(UpstreamError::InvalidMethod(method)) if req_id.is_some() => {
+				Err(mcp::Error::MethodNotFound(req_id, method).into())
+			},
+			other => Self::handle_error(req_id, other, true).await,
+		}
 	}
 
 	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
@@ -151,15 +176,19 @@ impl Session {
 		self
 	}
 
-	fn authorize_prompt_request<'a, 'b: 'a>(
+	async fn authorize_prompt_request<'a, 'b: 'a>(
 		&'a self,
 		name: &'b str,
 		method: &str,
 		span: &mut SpanWriteOnDrop,
 		log: &AsyncLog<mcp::MCPInfo>,
 		cel: &rbac::CelExecWrapper,
-	) -> Result<(&'a str, &'b str), UpstreamError> {
-		let (service_name, prompt) = self.relay.parse_resource_name(name)?;
+		ctx: &IncomingRequestContext,
+	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
+		let (service_name, prompt) = self
+			.relay
+			.resolve_resource_name(ResolveKind::Prompt, name, ctx)
+			.await?;
 		span.rename_span(format!("{method} {service_name}"));
 		log.non_atomic_mutate(|l| {
 			l.set_prompt(service_name.to_string(), prompt.to_string());
@@ -237,6 +266,12 @@ impl Session {
 		}
 	}
 
+	/// True when some upstream's `delete` does teardown work even without an upstream
+	/// session id (stdio processes, SSE streams).
+	pub fn has_connection_teardown(&self) -> bool {
+		self.relay.upstreams.has_connection_teardown()
+	}
+
 	/// delete any active sessions
 	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
@@ -246,7 +281,7 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await).await
+		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await, false).await
 	}
 
 	/// forward_legacy_sse takes an upstream Response and forwards all messages to the SSE data stream.
@@ -268,7 +303,7 @@ impl Session {
 				let (body, _encoding) =
 					crate::http::compression::decompress_body(resp.into_body(), content_encoding.as_ref())
 						.map_err(ClientError::new)?;
-				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
+				let event_stream = SseStream::from_bytes_stream(body.into_data_stream()).boxed();
 				StreamableHttpPostResponse::Sse(event_stream, None)
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
@@ -303,12 +338,13 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_get(ctx).await).await
+		Self::handle_error(None, self.relay.send_fanout_get(ctx).await, false).await
 	}
 
 	async fn handle_error(
 		req_id: Option<RequestId>,
 		d: Result<Response, UpstreamError>,
+		downstream_modern: bool,
 	) -> Result<Response, ProxyError> {
 		match d {
 			Ok(r) => Ok(r),
@@ -327,6 +363,12 @@ impl Session {
 			},
 			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
 				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
+			},
+			Err(UpstreamError::InvalidRequest(message)) if req_id.is_some() && downstream_modern => {
+				Err(mcp::Error::InvalidParams(req_id, message).into())
+			},
+			Err(UpstreamError::Unavailable(message)) if req_id.is_some() && downstream_modern => {
+				Err(mcp::Error::Unavailable(req_id, message).into())
 			},
 			// TODO: this is too broad. We have a big tangle of errors to untangle though
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
@@ -348,7 +390,7 @@ impl Session {
 			l.session_id = Some(session_id);
 		});
 
-		self.strip_unsupported_client_capabilities(&mut init_request.params.capabilities);
+		self.strip_unsupported_client_capabilities(&mut init_request.params.capabilities, &ctx);
 		self
 			.relay
 			.send_single(
@@ -406,10 +448,10 @@ impl Session {
 					l.method_name = Some(method.clone());
 					l.session_id = Some(session_id);
 				});
-				self.strip_unsupported_client_capabilities_from_meta(&mut r.request);
+				self.strip_unsupported_client_capabilities_from_meta(&mut r.request, &ctx);
 				match &mut r.request {
 					ClientRequest::InitializeRequest(ir) => {
-						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities);
+						self.strip_unsupported_client_capabilities(&mut ir.params.capabilities, &ctx);
 
 						let pv = ir.params.protocol_version.clone();
 						let res = Box::pin(
@@ -449,43 +491,37 @@ impl Session {
 						Box::pin(self.relay.send_fanout(r, ctx, self.relay.merge_empty())).await
 					},
 					ClientRequest::SubscriptionsListenRequest(slr) => {
-						let subscription_id = r.id.clone();
-						let target_names = if let Some(resource_subscriptions) =
-							&mut slr.params.notifications.resource_subscriptions
+						// Per-target upstream filters are rebuilt from resource_subs, so the request's
+						// URIs stay in the client's service+ form and are never sent upstream as-is.
+						let client_filter = slr.params.notifications.clone();
+						let mut resource_subs = Vec::new();
+						for uri in slr
+							.params
+							.notifications
+							.resource_subscriptions
+							.as_deref()
+							.unwrap_or_default()
 						{
-							let mut target_name = None;
-							for uri in resource_subscriptions.iter_mut() {
-								let requested_uri = uri.clone();
-								let (service_name, original_uri) = self.relay.parse_resource_uri(&requested_uri)?;
-								if let Some(target_name) = &target_name
-									&& target_name != service_name
-								{
-									return Err(UpstreamError::InvalidRequest(
-										"subscriptions/listen resourceSubscriptions must target one upstream"
-											.to_string(),
-									));
-								}
-								self.authorize_resource_request(
-									service_name,
-									&original_uri,
-									&method,
-									&mut span,
-									&log,
-									&cel,
-								)?;
-								target_name = Some(service_name.to_string());
-								*uri = original_uri;
-							}
-							target_name.map(|target| vec![target])
-						} else {
-							None
-						};
-						Box::pin(self.relay.send_fanout_to(
-							r,
-							ctx,
-							self.relay.merge_subscriptions_listen(subscription_id),
-							target_names,
-						))
+							let (service_name, upstream_uri) = self.relay.parse_resource_uri(uri)?;
+							self.authorize_resource_request(
+								service_name,
+								&upstream_uri,
+								&method,
+								&mut span,
+								&log,
+								&cel,
+							)?;
+							resource_subs.push(ResourceSubscription {
+								owner: service_name.to_string(),
+								client_uri: uri.clone(),
+								upstream_uri,
+							});
+						}
+						Box::pin(
+							self
+								.relay
+								.send_subscriptions_listen(r, ctx, client_filter, resource_subs),
+						)
 						.await
 					},
 					ClientRequest::ListPromptsRequest(_) => {
@@ -504,7 +540,12 @@ impl Session {
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
-						let (service_name, tool) = self.relay.parse_resource_name(&name)?;
+						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
+							ResolveKind::Tool,
+							&name,
+							&ctx,
+						))
+						.await?;
 						span.rename_span(format!("{method} {service_name}"));
 						let call_arguments = ctr.params.arguments.clone();
 						log.non_atomic_mutate(|l| {
@@ -514,7 +555,7 @@ impl Session {
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
 						Box::pin(self.authorize_with_ctx(
-							service_name,
+							&service_name,
 							mcp::guardrails::methods::TOOLS_CALL,
 							&mut ctr.params,
 							&mut ctx,
@@ -529,20 +570,25 @@ impl Session {
 						Box::pin(
 							self
 								.relay
-								.send_single(r, ctx, service_name, Some(log.clone())),
+								.send_single(r, ctx, &service_name, Some(log.clone())),
 						)
 						.await
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
 						let name = gpr.params.name.clone();
-						let (service_name, prompt) = self.relay.parse_resource_name(&name)?;
+						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
+							ResolveKind::Prompt,
+							&name,
+							&ctx,
+						))
+						.await?;
 						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
 							l.set_prompt(service_name.to_string(), prompt.to_string());
 						});
 						gpr.params.name = prompt.to_string();
 						Box::pin(self.authorize_with_ctx(
-							service_name,
+							&service_name,
 							mcp::guardrails::methods::PROMPTS_GET,
 							&mut gpr.params,
 							&mut ctx,
@@ -554,7 +600,7 @@ impl Session {
 							&name,
 						))
 						.await?;
-						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+						Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
 						let uri = rrr.params.uri.clone();
@@ -611,18 +657,29 @@ impl Session {
 					ClientRequest::ListTasksRequest(_)
 					| ClientRequest::GetTaskRequest(_)
 					| ClientRequest::GetTaskPayloadRequest(_)
-					| ClientRequest::CancelTaskRequest(_)
-					| ClientRequest::CustomRequest(_) => {
+					| ClientRequest::CancelTaskRequest(_) => {
 						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
 						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
+					},
+					ClientRequest::CustomRequest(_) => {
+						let method = r.request.method();
+						if mcp::is_known_client_request_method(method) {
+							Err(UpstreamError::InvalidRequest(format!(
+								"invalid params for method: {method}"
+							)))
+						} else {
+							Err(UpstreamError::InvalidMethod(method.to_string()))
+						}
 					},
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {
 							let name = prompt.name.clone();
-							let (service_name, prompt_name) =
-								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel)?;
+							let (service_name, prompt_name) = Box::pin(
+								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel, &ctx),
+							)
+							.await?;
 							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
-							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},
 						Reference::Resource(resource) => {
 							let uri = resource.uri.clone();
@@ -658,7 +715,7 @@ impl Session {
 					l.method_name = Some(method.to_string());
 					l.session_id = Some(session_id);
 				});
-				self.strip_unsupported_client_capabilities_from_meta(&mut r.notification);
+				self.strip_unsupported_client_capabilities_from_meta(&mut r.notification, &ctx);
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
 				Box::pin(self.relay.send_notification(r, ctx)).await
@@ -673,20 +730,34 @@ impl Session {
 	fn strip_unsupported_client_capabilities(
 		&self,
 		capabilities: &mut rmcp::model::ClientCapabilities,
+		ctx: &IncomingRequestContext,
 	) {
-		// Until server-to-client request routing is implemented, do not advertise
-		// capabilities that require the proxy to route upstream requests back to
-		// the downstream client and route the client's JSON-RPC response upstream.
-		capabilities.roots = None;
-		capabilities.sampling = None;
-		capabilities.elicitation = None;
+		// TODO implement MCP tasks
+		capabilities.tasks = None;
+		if let Some(extensions) = capabilities.extensions.as_mut() {
+			extensions.remove("io.modelcontextprotocol/tasks");
+			if extensions.is_empty() {
+				capabilities.extensions = None;
+			}
+		}
+
+		if !mcp::handler::ctx_downstream_modern(ctx) {
+			// Legacy clients require reverse JSON-RPC routing for these capabilities.
+			capabilities.roots = None;
+			capabilities.sampling = None;
+			capabilities.elicitation = None;
+		}
 	}
 
-	fn strip_unsupported_client_capabilities_from_meta<T: GetMeta>(&self, message: &mut T) {
+	fn strip_unsupported_client_capabilities_from_meta<T: GetMeta>(
+		&self,
+		message: &mut T,
+		ctx: &IncomingRequestContext,
+	) {
 		let Some(mut capabilities) = message.get_meta().client_capabilities() else {
 			return;
 		};
-		self.strip_unsupported_client_capabilities(&mut capabilities);
+		self.strip_unsupported_client_capabilities(&mut capabilities, ctx);
 		message.get_meta_mut().set_client_capabilities(capabilities);
 	}
 }

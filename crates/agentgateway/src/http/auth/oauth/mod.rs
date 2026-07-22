@@ -16,8 +16,6 @@ use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
 use crate::serdes::schema;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
-#[cfg(test)]
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
 use crate::types::agent_xds::{
 	Diagnostics, authorization_location, optional_authorization_location,
 	permissive_cel_expression_arc, resolve_simple_reference,
@@ -31,17 +29,10 @@ mod cross_app_access;
 mod transport;
 
 use cache::{InMemoryTokenCache, TokenCacheResult};
-#[cfg(test)]
-use client_auth::RawPrivateKeyJwt;
 use client_auth::sign_client_assertion;
 pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt, SigningAlg};
 pub use cross_app_access::CrossAppAccessAuth;
-#[cfg(test)]
-use cross_app_access::CrossAppAccessEndpoint;
 pub(super) use transport::FetchError;
-
-#[cfg(test)]
-use crate::serdes::FileOrInline;
 
 #[apply(schema!)]
 pub struct OAuthTokenExchangeAuth {
@@ -51,7 +42,7 @@ pub struct OAuthTokenExchangeAuth {
 	target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
-	token_endpoint_path: String,
+	path: String,
 
 	// ----- Grant and incoming tokens -----
 	/// Selects which RFC the request follows; defaults to token exchange (RFC 8693).
@@ -75,8 +66,8 @@ pub struct OAuthTokenExchangeAuth {
 	/// `resource` parameters with the target service URIs.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	resources: Vec<String>,
-	/// `requested_token_type` parameter. When unset, the form field is omitted
-	/// and a declared response type is expected to be access_token.
+	/// `requested_token_type` parameter. Under token exchange, unset defaults to
+	/// access_token because this policy forwards bearer access tokens.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	requested_token_type: Option<OAuthTokenType>,
@@ -121,7 +112,7 @@ struct ChainedExchange {
 	target: SimpleBackendReferenceWithPolicies,
 	/// Token endpoint path on the backend; defaults to "/".
 	#[serde(default, skip_serializing_if = "String::is_empty")]
-	token_endpoint_path: String,
+	path: String,
 	/// Client authentication used when calling the chained token endpoint.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	client_auth: Option<OAuthClientAuth>,
@@ -142,15 +133,17 @@ struct ChainedExchange {
 
 impl ChainedExchange {
 	fn validate_load(&self) -> Result<(), String> {
-		if !self.token_endpoint_path.is_empty() && !self.token_endpoint_path.starts_with('/') {
+		if !self.path.is_empty() && !self.path.starts_with('/') {
 			return Err(format!(
-				"chained_exchange.token_endpoint_path {:?} must start with /",
-				self.token_endpoint_path
+				"chained_exchange.path {:?} must start with /",
+				self.path
 			));
 		}
 		if let Some(client_auth) = &self.client_auth {
 			client_auth.validate_load()?;
 		}
+		warn_on_invalid_resources("chained oauth token exchange", &self.resources);
+		warn_on_invalid_scopes("chained oauth token exchange scopes", &self.scopes);
 		validate_additional_params(&self.additional_params)?;
 		Ok(())
 	}
@@ -180,11 +173,8 @@ const RESERVED_FORM_PARAMS: &[&str] = &[
 
 impl OAuthTokenExchangeAuth {
 	pub(crate) fn validate_load(&self) -> Result<(), String> {
-		if !self.token_endpoint_path.is_empty() && !self.token_endpoint_path.starts_with('/') {
-			return Err(format!(
-				"token_endpoint_path {:?} must start with /",
-				self.token_endpoint_path
-			));
+		if !self.path.is_empty() && !self.path.starts_with('/') {
+			return Err(format!("path {:?} must start with /", self.path));
 		}
 		if self.grant_type == OAuthGrantType::JwtBearer {
 			if self.requested_token_type.is_some() {
@@ -200,7 +190,14 @@ impl OAuthTokenExchangeAuth {
 		if let Some(client_auth) = &self.client_auth {
 			client_auth.validate_load()?;
 		}
+		if let Some(OAuthTokenType::Custom(token_type)) = &self.requested_token_type {
+			return Err(format!(
+				"unsupported requested_token_type {token_type:?}; custom token types are only supported for subject_token and actor_token"
+			));
+		}
 
+		warn_on_invalid_resources("oauth token exchange", &self.resources);
+		warn_on_invalid_scopes("oauth token exchange scopes", &self.scopes);
 		validate_additional_params(&self.additional_params)?;
 
 		if let Some(chained_exchange) = &self.chained_exchange {
@@ -234,6 +231,14 @@ impl OAuthTokenExchangeAuth {
 		) {
 			return Err("expression auth location is only supported for credential extraction".into());
 		}
+		if matches!(
+			self.authorization_location,
+			AuthorizationLocation::QueryParameter { .. }
+		) {
+			warn!(
+				"oauth token exchange is configured to forward the exchanged bearer token in a URI query parameter; OAuth 2.1 omits this bearer-token usage and future versions may reject it"
+			);
+		}
 		Ok(())
 	}
 
@@ -244,7 +249,7 @@ impl OAuthTokenExchangeAuth {
 		use proto::o_auth_token_exchange::GrantType;
 
 		let target = resolve_simple_reference(t.token_endpoint.as_ref());
-		let token_endpoint_path = t.token_endpoint_path.unwrap_or_default();
+		let path = t.token_endpoint_path.unwrap_or_default();
 
 		let grant_type = match GrantType::try_from(t.grant_type) {
 			Ok(GrantType::Unspecified | GrantType::TokenExchange) => OAuthGrantType::TokenExchange,
@@ -264,9 +269,10 @@ impl OAuthTokenExchangeAuth {
 			.transpose()?;
 
 		let requested_token_type = match t.requested_token_type {
-			Some(token_type) if !token_type.is_empty() => {
-				Some(proto_token_type("requested_token_type", &token_type)?)
-			},
+			Some(token_type) if !token_type.is_empty() => Some(proto_requested_token_type(
+				"requested_token_type",
+				&token_type,
+			)?),
 			_ => None,
 		};
 		if requested_token_type == Some(OAuthTokenType::IdJag) {
@@ -302,7 +308,7 @@ impl OAuthTokenExchangeAuth {
 				// the backend resource carries its own policies there.
 				policies: Vec::new(),
 			},
-			token_endpoint_path,
+			path,
 			grant_type,
 			subject_token,
 			actor_token,
@@ -320,11 +326,17 @@ impl OAuthTokenExchangeAuth {
 		Ok(auth)
 	}
 
-	fn expected_issued_token_type(&self) -> Option<OAuthTokenType> {
+	fn requested_token_type_param(&self) -> Option<OAuthTokenType> {
 		match self.grant_type {
-			OAuthGrantType::TokenExchange => Some(self.requested_token_type.unwrap_or_default()),
+			OAuthGrantType::TokenExchange => Some(self.requested_token_type.clone().unwrap_or_default()),
 			OAuthGrantType::JwtBearer => None,
 		}
+	}
+
+	// We expect the authorization server to issue exactly the token type we
+	// requested, so the expected issued type mirrors the requested param.
+	fn expected_issued_token_type(&self) -> Option<OAuthTokenType> {
+		self.requested_token_type_param()
 	}
 
 	/// Evaluate the configured `additional_params` CEL expressions against the
@@ -362,7 +374,7 @@ impl OAuthTokenExchangeAuth {
 
 		Ok(ExchangeRequest {
 			subject_token: subject_token.into(),
-			subject_token_type: self.subject_token.token_type,
+			subject_token_type: self.subject_token.token_type.clone(),
 			actor,
 			extra_params,
 			chained_extra_params,
@@ -397,19 +409,14 @@ pub enum OAuthGrantType {
 	JwtBearer,
 }
 
-#[derive(
-	Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 enum OAuthTokenType {
-	#[serde(rename = "urn:ietf:params:oauth:token-type:access_token")]
 	#[default]
 	AccessToken,
-	#[serde(rename = "urn:ietf:params:oauth:token-type:jwt")]
 	Jwt,
-	#[serde(rename = "urn:ietf:params:oauth:token-type:id_token")]
 	IdToken,
-	#[serde(rename = "urn:ietf:params:oauth:token-type:id-jag")]
 	IdJag,
+	Custom(String),
 }
 
 impl OAuthTokenType {
@@ -419,17 +426,52 @@ impl OAuthTokenType {
 			TOKEN_TYPE_JWT => Some(Self::Jwt),
 			TOKEN_TYPE_ID => Some(Self::IdToken),
 			TOKEN_TYPE_ID_JAG => Some(Self::IdJag),
+			_ if is_oauth_absolute_uri(token_type) => Some(Self::Custom(token_type.into())),
 			_ => None,
 		}
 	}
 
-	fn as_str(self) -> &'static str {
+	fn supported_requested_from_urn(token_type: &str) -> Option<Self> {
+		match token_type {
+			TOKEN_TYPE_ACCESS => Some(Self::AccessToken),
+			TOKEN_TYPE_JWT => Some(Self::Jwt),
+			TOKEN_TYPE_ID => Some(Self::IdToken),
+			TOKEN_TYPE_ID_JAG => Some(Self::IdJag),
+			_ => None,
+		}
+	}
+
+	fn as_str(&self) -> &str {
 		match self {
 			Self::AccessToken => TOKEN_TYPE_ACCESS,
 			Self::Jwt => TOKEN_TYPE_JWT,
 			Self::IdToken => TOKEN_TYPE_ID,
 			Self::IdJag => TOKEN_TYPE_ID_JAG,
+			Self::Custom(token_type) => token_type,
 		}
+	}
+}
+
+impl serde::Serialize for OAuthTokenType {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		serializer.serialize_str(self.as_str())
+	}
+}
+
+impl<'de> serde::Deserialize<'de> for OAuthTokenType {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let token_type = <String as serde::Deserialize>::deserialize(deserializer)?;
+		Self::from_urn(&token_type).ok_or_else(|| {
+			serde::de::Error::custom(format!(
+				"OAuth token type must be an absolute URI without a fragment, got {token_type:?}"
+			))
+		})
 	}
 }
 
@@ -602,6 +644,43 @@ fn validate_additional_params(
 	Ok(())
 }
 
+fn warn_on_invalid_resources(context: &str, resources: &[String]) {
+	for resource in resources {
+		if !is_oauth_absolute_uri(resource) {
+			warn!(
+				resource,
+				"{context} resource is not an absolute URI without a fragment; future OAuth 2.1 compliance enforcement may reject it"
+			);
+		}
+	}
+}
+
+// RFC 8707 resource identifiers and RFC 8693 token type identifiers must both be
+// absolute URIs without a fragment.
+fn is_oauth_absolute_uri(value: &str) -> bool {
+	url::Url::parse(value)
+		.map(|url| url.fragment().is_none())
+		.unwrap_or(false)
+}
+
+fn warn_on_invalid_scopes(context: &str, scopes: &[String]) {
+	for scope in scopes {
+		if !is_valid_scope_token(scope) {
+			warn!(
+				scope,
+				"{context} contains an invalid OAuth scope-token; scopes must be non-empty and free of spaces, quotes, backslashes, control characters, and non-ASCII characters; future OAuth 2.1 compliance enforcement may reject it"
+			);
+		}
+	}
+}
+
+fn is_valid_scope_token(scope: &str) -> bool {
+	!scope.is_empty()
+		&& scope
+			.bytes()
+			.all(|b| b == 0x21 || (0x23..=0x5b).contains(&b) || (0x5d..=0x7e).contains(&b))
+}
+
 fn evaluate_additional_params(
 	params: &BTreeMap<String, Arc<cel::Expression>>,
 	req: &Request,
@@ -670,7 +749,7 @@ pub(super) async fn apply_identity_assertion(
 	let oauth = auth.oauth_token_exchange();
 	let client = PolicyClient::new(inputs.clone());
 
-	trace!(audience = %auth.audience, "performing ID-JAG identity assertion exchange");
+	trace!(audience = %auth.audience(), "performing ID-JAG identity assertion exchange");
 	let access_token = fetch_token(&client, oauth, oauth.build_exchange_request(req)?)
 		.await
 		.map_err(FetchError::into_proxy_error)?;
@@ -718,7 +797,7 @@ fn actor_token_from_request(
 		debug!("oauth token exchange actor is not authorized by the subject's may_act claim");
 		return Err(ProxyError::AuthorizationFailed);
 	}
-	Ok((SecretString::from(token), spec.token_type))
+	Ok((SecretString::from(token), spec.token_type.clone()))
 }
 
 fn may_act_authorizes(req: &Request, subject_token: &str, actor_token: &str) -> bool {
@@ -784,6 +863,11 @@ fn claim_satisfies(actor_value: Option<&Value>, expected: &Value) -> bool {
 
 fn proto_token_type(field: &str, token_type: &str) -> Result<OAuthTokenType, ProtoError> {
 	OAuthTokenType::from_urn(token_type)
+		.ok_or_else(|| ProtoError::Generic(format!("unsupported {field} {token_type:?}")))
+}
+
+fn proto_requested_token_type(field: &str, token_type: &str) -> Result<OAuthTokenType, ProtoError> {
+	OAuthTokenType::supported_requested_from_urn(token_type)
 		.ok_or_else(|| ProtoError::Generic(format!("unsupported {field} {token_type:?}")))
 }
 

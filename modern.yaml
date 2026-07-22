@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+gateways:
+  public:
+    port: 3000
+llm:
+  gateways:
+  - public
+  models:
+  - name: gpt-4
+    provider: openAI
+  - name: openai/*
+    provider: openai
+    transformation:
+      model: llmRequest.model.stripPrefix("openai/")
+  - name: ollama/*
+    provider: ollama
+    transformation:
+      model: llmRequest.model.stripPrefix("ollama/")
+  providers: []
+  virtualModels: []
+mcp:
+  gateways:
+  - public
+  targets:
+  - name: time
+    mcp:
+      host: http://localhost:3001/mcp
+ui:
+  gateways:
+  - public

@@ -14,12 +14,14 @@ pub const DISCOVERY_ENGINE_HOST: Strng = strng::literal!("discoveryengine.google
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "VertexProvider"))]
 pub struct Provider {
+	/// Model ID to send to Vertex AI, overriding the model in the client request.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub model: Option<Strng>,
 	/// Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`
 	/// use restricted multi-region endpoints. Other values are treated as regional locations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub region: Option<Strng>,
+	/// Google Cloud project ID for Vertex AI.
 	pub project_id: Strng,
 }
 

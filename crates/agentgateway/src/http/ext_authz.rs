@@ -146,28 +146,11 @@ pub struct CacheConfig {
 	/// CEL expression that returns how long cached authorization results are reused.
 	/// The expression is evaluated after the authorization response has been applied
 	/// to the request, and must return either a duration or timestamp.
-	#[serde(deserialize_with = "deserialize_cache_ttl")]
+	#[serde(deserialize_with = "crate::cel::de_duration_or_expression")]
 	pub ttl: Arc<cel::Expression>,
 	/// Maximum number of authorization results to keep in the cache.
 	#[serde(default = "default_cache_entries")]
 	pub max_entries: usize,
-}
-
-fn deserialize_cache_ttl<'de, D>(deserializer: D) -> Result<Arc<cel::Expression>, D::Error>
-where
-	D: serde::Deserializer<'de>,
-{
-	use serde::Deserialize;
-
-	let raw = String::deserialize(deserializer)?;
-	let expression = if agent_core::durfmt::parse(&raw).is_ok() {
-		format!("duration({raw:?})")
-	} else {
-		raw
-	};
-	cel::Expression::new_strict(&expression)
-		.map(Arc::new)
-		.map_err(serde::de::Error::custom)
 }
 
 #[apply(schema!)]
@@ -271,21 +254,18 @@ impl ExtAuthz {
 	) -> Result<BufferedRequestBody, BufferRequestBodyError> {
 		let max_size = body_opts.max_request_bytes as usize;
 
-		let peek_limit = max_size.saturating_add(1);
-		let body = crate::http::inspect_body_with_limit(req.body_mut(), peek_limit)
+		let inspection = crate::http::inspect_body_with_limit(req.body_mut(), max_size)
 			.await
 			.map_err(BufferRequestBodyError::Read)?;
-		let is_partial = body.len() > max_size;
+		let (body, is_partial) = match inspection {
+			crate::http::BodyInspection::Complete(body) => (body, false),
+			crate::http::BodyInspection::Partial(body) => (body, true),
+		};
 
 		if is_partial && !body_opts.allow_partial_message {
 			return Err(BufferRequestBodyError::TooLarge);
 		}
 
-		let body = if is_partial {
-			body.slice(0..max_size)
-		} else {
-			body
-		};
 		let original_size = match is_partial {
 			false => i64::try_from(body.len()).unwrap_or(i64::MAX),
 			true => -1,
@@ -863,7 +843,7 @@ impl ExtAuthz {
 			let mut dynamic_metadata = None;
 			if !metadata.is_empty() {
 				if let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
-					resp.extensions_mut().insert(BufferedBody(body));
+					resp.extensions_mut().insert(BufferedBody::from(body));
 				};
 				let m = metadata
 					.iter()

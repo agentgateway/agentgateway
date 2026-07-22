@@ -6,6 +6,7 @@ pub mod buffer;
 pub mod bufferbody;
 mod buflist;
 pub mod cors;
+pub mod delay;
 pub mod jwt;
 pub mod localratelimit;
 pub mod retry;
@@ -250,7 +251,7 @@ use crate::cel::{BackendContext, DestinationContext, LLMContext, RequestTime, So
 use crate::client::PoolKey;
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::stream::TCPConnectionInfo;
-use crate::types::agent::PathMatch;
+use crate::types::agent::{HeaderValueMatch, PathMatch};
 
 /// Represents either an HTTP header or an HTTP/2 pseudo-header
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -445,6 +446,22 @@ pub fn get_pseudo_or_header_value<'a>(
 		HeaderOrPseudo::Header(v) => req.headers().get(v).map(std::borrow::Cow::Borrowed),
 		_ => get_pseudo_header_value(pseudo, req)
 			.and_then(|v| HeaderValue::try_from(&v).ok().map(std::borrow::Cow::Owned)),
+	}
+}
+
+/// Match repeated header fields independently without splitting commas within a field value.
+pub(crate) fn request_header_matches(
+	name: &HeaderOrPseudo,
+	value: &HeaderValueMatch,
+	req: &Request,
+) -> bool {
+	match name {
+		HeaderOrPseudo::Header(name) => req
+			.headers()
+			.get_all(name)
+			.iter()
+			.any(|have| value.matches(have)),
+		_ => get_pseudo_or_header_value(name, req).is_some_and(|have| value.matches(have.as_ref())),
 	}
 }
 
@@ -727,18 +744,37 @@ pub async fn read_response_body(
 	read_body_with_limit(b, lim).await.map(|b| (h, b))
 }
 
-pub async fn inspect_body(req: &mut Request) -> anyhow::Result<Bytes> {
+/// Result of inspecting a body without consuming it from the caller's perspective.
+#[derive(Debug)]
+#[must_use]
+pub enum BodyInspection {
+	/// The complete body fit within the configured limit.
+	Complete(Bytes),
+	/// The body exceeded the limit. Contains the first `limit` bytes.
+	Partial(Bytes),
+}
+
+pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
 	let lim = buffer_limit(req);
 	inspect_body_with_limit(req.body_mut(), lim).await
 }
 
-pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<Bytes> {
+pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
 	let lim = response_buffer_limit(resp);
 	inspect_body_with_limit(resp.body_mut(), lim).await
 }
 
-pub async fn inspect_body_with_limit(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {
-	peekbody::inspect_body(body, limit).await
+pub async fn inspect_body_with_limit(
+	body: &mut Body,
+	limit: usize,
+) -> anyhow::Result<BodyInspection> {
+	let mut bytes = peekbody::inspect_body(body, limit.saturating_add(1)).await?;
+	if bytes.len() > limit {
+		bytes.truncate(limit);
+		Ok(BodyInspection::Partial(bytes))
+	} else {
+		Ok(BodyInspection::Complete(bytes))
+	}
 }
 
 #[derive(Debug, Default)]

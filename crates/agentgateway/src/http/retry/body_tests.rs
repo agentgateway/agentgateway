@@ -146,6 +146,31 @@ async fn test_replay_body_empty() {
 }
 
 #[tokio::test]
+async fn test_replay_body_reports_end_stream_after_inner_eof() {
+	let inner = crate::http::Body::new(StreamBody::new(futures_util::stream::unfold(
+		false,
+		|emitted| async move {
+			if emitted {
+				None
+			} else {
+				Some((
+					Ok::<_, crate::http::Error>(Frame::data(Bytes::from_static(b"body"))),
+					true,
+				))
+			}
+		},
+	)));
+	let mut body = ReplayBody::try_new(inner, 1024).unwrap();
+
+	assert!(body.frame().await.is_some(), "data frame should be present");
+	assert!(body.frame().await.is_none(), "stream should report EOF");
+	assert!(
+		body.is_end_stream(),
+		"completed body should report end-of-stream"
+	);
+}
+
+#[tokio::test]
 async fn test_replay_body_error_propagation() {
 	// Create a body that will error by using a stream that fails
 	let stream = iter(vec![

@@ -2,29 +2,29 @@ import { makeEmptyModel } from "../../config";
 import type { LlmModel } from "../../types";
 
 export type ModelHash =
-  | { kind: "edit"; modelName: string }
+  | { kind: "edit"; modelId: string }
   | { kind: "add"; type: "model" | "virtual" };
 
 export function modelHashFromUrl(): ModelHash | null {
   const raw = decodeURIComponent(window.location.hash.replace(/^#/, ""));
   if (!raw) return null;
   if (raw.startsWith("edit=")) {
-    const modelName = raw.slice("edit=".length);
-    return modelName ? { kind: "edit", modelName } : null;
+    const modelId = raw.slice("edit=".length);
+    return modelId ? { kind: "edit", modelId } : null;
   }
   if (raw === "add=model") return { kind: "add", type: "model" };
   if (raw === "add=virtual") return { kind: "add", type: "virtual" };
   if (raw.startsWith("policies=")) {
-    const modelName = raw.slice("policies=".length);
-    return modelName ? { kind: "edit", modelName } : null;
+    const modelId = raw.slice("policies=".length);
+    return modelId ? { kind: "edit", modelId } : null;
   }
   if (raw.startsWith("model=")) {
-    const modelName = raw.slice("model=".length);
-    return modelName ? { kind: "edit", modelName } : null;
+    const modelId = raw.slice("model=".length);
+    return modelId ? { kind: "edit", modelId } : null;
   }
   if (raw.startsWith("modelPolicy=")) {
-    const modelName = raw.slice("modelPolicy=".length);
-    return modelName ? { kind: "edit", modelName } : null;
+    const modelId = raw.slice("modelPolicy=".length);
+    return modelId ? { kind: "edit", modelId } : null;
   }
   return null;
 }
@@ -35,7 +35,7 @@ export function setModelHash(
 ) {
   const hash = value
     ? value.kind === "edit"
-      ? `#edit=${encodeURIComponent(value.modelName)}`
+      ? `#edit=${encodeURIComponent(value.modelId)}`
       : `#add=${value.type}`
     : "";
   const nextUrl = `${window.location.pathname}${window.location.search}${hash}`;

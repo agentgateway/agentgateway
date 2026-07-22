@@ -16,9 +16,8 @@ impl HTTPAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
 		Self(rs)
 	}
-	pub fn merge(mut self, other: Self) -> Self {
-		self.0.0.extend(other.0.0);
-		self
+	pub fn merge(self, other: Self) -> Self {
+		Self(self.0.merge(other.0))
 	}
 	pub fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
 		self.0.expressions()
@@ -221,6 +220,13 @@ impl From<Vec<RuleSet>> for RuleSets {
 impl RuleSets {
 	pub fn from_arcs(value: Vec<Arc<RuleSet>>) -> Self {
 		Self(value)
+	}
+
+	/// Combine two sets so both apply: a deny in either denies, all requires must
+	/// hold, and allow rules are OR'd across both.
+	pub fn merge(mut self, other: Self) -> Self {
+		self.0.extend(other.0);
+		self
 	}
 }
 

@@ -42,6 +42,12 @@ impl McpAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
 		Self(rs)
 	}
+
+	/// Combine rule sets so both apply; see [`RuleSets::merge`].
+	pub fn merge(self, other: Self) -> Self {
+		Self(self.0.merge(other.0))
+	}
+
 	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
 		if !self.0.has_rules() {
 			return true;
@@ -173,6 +179,38 @@ mod tests {
 			PolicySet::new(vec![], vec![], vec![]),
 		)]));
 		assert!(empty_rule_set.validate(&res, &CelExecWrapper::new(req_without_claims())));
+	}
+
+	#[test]
+	fn test_backend_policies_merge_composes_mcp_authorization() {
+		let with_authz = |authz: McpAuthorizationSet| crate::store::BackendPolicies {
+			mcp_authorization: Some(authz),
+			..Default::default()
+		};
+		let deny_all = || {
+			McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(PolicySet::new(
+				vec![],
+				vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+				vec![],
+			))]))
+		};
+		let res = tool_resource("server", "increment");
+		let cel = CelExecWrapper::new(req_without_claims());
+
+		// Higher-precedence allow does not erase a base deny
+		let merged = with_authz(deny_all())
+			.merge(with_authz(authorization_set("true")))
+			.mcp_authorization
+			.unwrap();
+		assert!(!merged.validate(&res, &cel));
+
+		// A policy on only one side passes through
+		for merged in [
+			with_authz(deny_all()).merge(Default::default()),
+			crate::store::BackendPolicies::default().merge(with_authz(deny_all())),
+		] {
+			assert!(!merged.mcp_authorization.unwrap().validate(&res, &cel));
+		}
 	}
 
 	#[test]

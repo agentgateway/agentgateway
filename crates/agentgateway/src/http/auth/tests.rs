@@ -45,9 +45,12 @@ fn test_aws_auth_deserializes_assume_role_with_session_name_and_tags() {
 			..
 		} => {
 			assert_eq!(ar.role_arn, "arn:aws:iam::123456789012:role/my-role");
+			// A plain string keeps its existing (static) meaning.
 			assert_eq!(
-				ar.session_name.as_deref(),
-				Some("acme-payments-invoice-processor")
+				ar.session_name,
+				Some(aws::AwsSessionName::Static(
+					"acme-payments-invoice-processor".to_string()
+				))
 			);
 			// Tags are stored sorted by key, regardless of configured order.
 			assert_eq!(
@@ -111,6 +114,85 @@ fn test_aws_session_tags_round_trip_through_serialization() {
 	let round_tripped: AwsAssumeRole =
 		serde_json::from_value(serialized).expect("serialized form should deserialize");
 	assert_eq!(ar.tags, round_tripped.tags);
+}
+
+#[test]
+fn test_aws_auth_deserializes_dynamic_session_name() {
+	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"sessionName": {"expression": "jwt.sub"}
+		}
+	}))
+	.expect("should deserialize dynamic session name");
+	match implicit {
+		AwsAuth::Implicit {
+			assume_role: Some(ar),
+			..
+		} => match ar.session_name {
+			Some(aws::AwsSessionName::Dynamic { expression }) => {
+				assert_eq!(expression.original_expression.as_str(), "jwt.sub");
+			},
+			other => panic!("expected dynamic session name, got {other:?}"),
+		},
+		_ => panic!("expected implicit AWS auth with assume role"),
+	}
+}
+
+#[test]
+fn test_aws_session_name_round_trips_through_serialization() {
+	for source in [
+		// Static form serializes back to a plain string.
+		serde_json::json!({
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"sessionName": "acme-payments"
+		}),
+		// Dynamic form serializes back to {expression: ...}.
+		serde_json::json!({
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"sessionName": {"expression": "jwt.sub"}
+		}),
+	] {
+		let ar: AwsAssumeRole = serde_json::from_value(source.clone()).expect("should deserialize");
+		let serialized = serde_json::to_value(&ar).expect("should serialize");
+		assert_eq!(
+			serialized.get("sessionName"),
+			source.get("sessionName"),
+			"sessionName should round-trip in its original form"
+		);
+	}
+}
+
+#[test]
+fn test_aws_auth_cel_expressions_include_tags_and_session_name() {
+	let auth: AwsAuth = serde_json::from_value(serde_json::json!({
+		"assumeRole": {
+			"roleArn": "arn:aws:iam::123456789012:role/my-role",
+			"sessionName": {"expression": "jwt.sub"},
+			"tags": [
+				{"key": "App", "expression": "request.headers[\"x-app\"]"}
+			]
+		}
+	}))
+	.expect("should deserialize");
+	let expressions: Vec<&str> = auth
+		.cel_expressions()
+		.map(|e| e.original_expression.as_str())
+		.collect();
+	assert_eq!(
+		expressions,
+		vec![r#"request.headers["x-app"]"#, "jwt.sub"],
+		"both tag and session name expressions must register with the CEL context"
+	);
+}
+
+#[test]
+fn test_aws_session_name_rejects_invalid_expression() {
+	let result = serde_json::from_value::<AwsAssumeRole>(serde_json::json!({
+		"roleArn": "arn:aws:iam::123456789012:role/my-role",
+		"sessionName": {"expression": "this is not cel ("}
+	}));
+	assert!(result.is_err(), "invalid CEL expression should be rejected");
 }
 
 #[test]
@@ -525,6 +607,7 @@ async fn test_aws_sign_request_no_region_error() {
 async fn test_aws_sign_request_implicit_with_extension() {
 	// Test AWS signing with implicit auth uses region from request extensions
 	// Set temporary AWS credentials in environment for test consistency
+	let _env_guard = crate::config::lock_env_for_tests_async().await;
 	unsafe {
 		std::env::set_var("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE");
 		std::env::set_var(
@@ -546,6 +629,7 @@ async fn test_aws_sign_request_implicit_with_extension() {
 
 	let aws_auth = AwsAuth::Implicit {
 		service_name: None,
+		region: None,
 		assume_role: None,
 		source_credentials_cache: Default::default(),
 		assume_role_cache: Default::default(),
@@ -561,6 +645,58 @@ async fn test_aws_sign_request_implicit_with_extension() {
 	}
 
 	result.expect("signing failed");
+}
+
+#[tokio::test]
+async fn test_aws_sign_request_implicit_configured_region_wins() {
+	// A region configured on the auth policy beats the typed-backend region
+	// extension (and thus also the ambient AWS region it falls back to).
+	// AWS_REGION is deliberately not set here: the ambient SDK config is
+	// process-global and cached, so setting it would leak into other tests.
+	let _env_guard = crate::config::lock_env_for_tests_async().await;
+	unsafe {
+		std::env::set_var("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE");
+		std::env::set_var(
+			"AWS_SECRET_ACCESS_KEY",
+			"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		);
+	}
+
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	*req.uri_mut() = "https://bedrock-agentcore.us-east-1.amazonaws.com/runtimes/x/invocations"
+		.parse()
+		.unwrap();
+	*req.method_mut() = http::Method::POST;
+	req.extensions_mut().insert(AwsRegion {
+		region: "us-east-2".to_string(),
+	});
+
+	let aws_auth = AwsAuth::Implicit {
+		service_name: Some("bedrock-agentcore".to_string()),
+		region: Some("us-east-1".to_string()),
+		assume_role: None,
+		source_credentials_cache: Default::default(),
+		assume_role_cache: Default::default(),
+	};
+
+	let result = aws::sign_request(&mut req, &aws_auth).await;
+
+	unsafe {
+		std::env::remove_var("AWS_ACCESS_KEY_ID");
+		std::env::remove_var("AWS_SECRET_ACCESS_KEY");
+	}
+
+	result.expect("signing failed");
+	let authz = req
+		.headers()
+		.get(http::header::AUTHORIZATION)
+		.expect("authorization header")
+		.to_str()
+		.unwrap();
+	assert!(
+		authz.contains("/us-east-1/bedrock-agentcore/"),
+		"credential scope must use the configured region: {authz}"
+	);
 }
 
 #[test]

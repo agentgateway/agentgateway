@@ -23,6 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
@@ -195,9 +197,10 @@ func (d *Deployer) RenderManifest(ns, name string, vals map[string]any) ([]byte,
 //
 //	a pointer to an InferencePool (https://github.com/kubernetes-sigs/gateway-api-inference-extension/blob/main/api/v1alpha2/inferencepool_types.go#L30)
 func (d *Deployer) GetObjsToDeploy(ctx context.Context, obj client.Object) ([]client.Object, error) {
+	objectGVK := d.objectGVK(obj)
 	vals, err := d.helmValues.GetValues(ctx, obj)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get helm values for object %s %s/%s: %w", obj.GetObjectKind().GroupVersionKind().String(), obj.GetNamespace(), obj.GetName(), err)
+		return nil, fmt.Errorf("failed to get helm values for object %s %s/%s: %w", objectGVK.String(), obj.GetNamespace(), obj.GetName(), err)
 	}
 	if vals == nil {
 		return nil, nil
@@ -205,7 +208,7 @@ func (d *Deployer) GetObjsToDeploy(ctx context.Context, obj client.Object) ([]cl
 	logger.Debug("got deployer helm values",
 		"name", obj.GetName(),
 		"namespace", obj.GetNamespace(),
-		"gvk", obj.GetObjectKind().GroupVersionKind().String(),
+		"gvk", objectGVK.String(),
 		"values", vals,
 	)
 
@@ -225,6 +228,33 @@ func (d *Deployer) GetObjsToDeploy(ctx context.Context, obj client.Object) ([]cl
 	}
 
 	return objs, nil
+}
+
+// objectGVK returns the object's runtime GVK, falling back to known deployer
+// input types or an unambiguous scheme lookup when TypeMeta is not populated.
+func (d *Deployer) objectGVK(obj client.Object) schema.GroupVersionKind {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+	if !gvk.Empty() {
+		return gvk
+	}
+
+	switch obj.(type) {
+	case *gwv1.Gateway:
+		return wellknown.GatewayGVK
+	case *inf.InferencePool:
+		return wellknown.InferencePoolGVK
+	}
+
+	if d.scheme == nil {
+		return gvk
+	}
+
+	gvks, _, err := d.scheme.ObjectKinds(obj)
+	if err != nil || len(gvks) != 1 {
+		return gvk
+	}
+
+	return gvks[0]
 }
 
 // Deprecated: use SetNamespaceAndOwnerWithGVK
@@ -337,12 +367,12 @@ func (d *Deployer) DeployObjsWithSource(ctx context.Context, objs []client.Objec
 	return nil
 }
 
-// PruneRemovedResources deletes PDB/HPA/VPA resources that are owned by the owner
-// but are no longer in the desired set of objects. This prevents stale autoscaling
-// resources from persisting when configuration changes.
+// PruneRemovedResources deletes generated resources associated with the owner when they are
+// no longer in the desired set. This removes stale workloads after workload-kind switches
+// and stale autoscaling or disruption resources after configuration changes.
 func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Object, desiredObjs []client.Object) error {
 	ownerNamespace := owner.GetNamespace()
-	labelSelector := fmt.Sprintf("%s=%s", wellknown.GatewayNameLabel, owner.GetName())
+	labelSelector := fmt.Sprintf("%s=%s", wellknown.GatewayNameLabel, safeLabelValue(owner.GetName()))
 
 	// Build map of desired resources by GVK
 	desiredByGVK := make(map[schema.GroupVersionKind]map[string]bool)
@@ -356,6 +386,8 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 
 	// Check each target GVK for resources to prune
 	targetGVKs := []schema.GroupVersionKind{
+		wellknown.DeploymentGVK,
+		wellknown.DaemonSetGVK,
 		wellknown.PodDisruptionBudgetGVK,
 		wellknown.HorizontalPodAutoscalerGVK,
 		wellknown.VerticalPodAutoscalerGVK,
@@ -385,6 +417,12 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 
 		// Check each resource for pruning
 		for _, item := range list.Items {
+			// User-managed resources can share the Gateway label with generated objects.
+			// Require a controller owner reference before pruning any target kind.
+			if !hasControllerOwnerRef(owner, &item) {
+				continue
+			}
+
 			// Check if resource is in desired set
 			resourceName := item.GetName()
 			if desiredSet, exists := desiredByGVK[gvk]; exists && desiredSet[resourceName] {
@@ -418,6 +456,23 @@ func (d *Deployer) PruneRemovedResources(ctx context.Context, owner client.Objec
 	}
 
 	return nil
+}
+
+func hasControllerOwnerRef(owner client.Object, obj client.Object) bool {
+	for _, ref := range obj.GetOwnerReferences() {
+		if ref.APIVersion != wellknown.GatewayGVK.GroupVersion().String() ||
+			ref.Kind != wellknown.GatewayGVK.Kind ||
+			ref.Name != owner.GetName() ||
+			ref.Controller == nil ||
+			!*ref.Controller {
+			continue
+		}
+		if owner.GetUID() != "" && ref.UID != owner.GetUID() {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func (d *Deployer) gvkToGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) {

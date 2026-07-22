@@ -140,6 +140,9 @@ async fn log_only_request_body_records_without_buffering() {
 		.uri("http://example.com")
 		.body(Body::from("hello"))
 		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::BufferLimit::new(5));
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
@@ -173,6 +176,9 @@ async fn request_body_expression_buffers_before_log() {
 		.uri("http://example.com")
 		.body(Body::from("hello"))
 		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::BufferLimit::new(5));
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
@@ -188,6 +194,29 @@ async fn request_body_expression_buffers_before_log() {
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"hello")
 	);
+}
+
+#[tokio::test]
+async fn request_body_expression_fails_when_body_exceeds_buffer_limit() {
+	let exp = Expression::new_strict("request.body").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&exp);
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("http://example.com")
+		.body(Body::from("hello"))
+		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::BufferLimit::new(4));
+
+	cb.maybe_buffer_request_body(&mut req).await;
+
+	let buffered = req.extensions().get::<BufferedBody>().unwrap();
+	assert!(buffered.bytes().is_none());
+	assert!(Executor::new_request(&req).eval(&exp).is_err());
+	let sent = req.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
 }
 
 #[tokio::test]

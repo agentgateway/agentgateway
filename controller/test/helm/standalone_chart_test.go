@@ -662,3 +662,17 @@ extraVolumeMounts:
 	require.Contains(t, out, "name: plugin-cache")
 	require.Contains(t, out, "mountPath: /var/lib/agentgateway/plugins")
 }
+
+func TestStandaloneChartExtraContainers(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `extraContainers:
+- name: httpbin
+  image: kennethreitz/httpbin
+  ports:
+    - containerPort: 80
+      name: httpbin
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "name: httpbin")
+	require.Contains(t, out, "image: kennethreitz/httpbin")
+	require.Contains(t, out, "containerPort: 80")
+}

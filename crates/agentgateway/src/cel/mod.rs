@@ -236,7 +236,7 @@ impl ContextBuilder {
 			let Ok(body) = crate::http::inspect_body(req).await else {
 				return;
 			};
-			req.extensions_mut().insert(BufferedBody(body));
+			req.extensions_mut().insert(BufferedBody::from(body));
 		} else if self.log_only_has(Attributes::RequestBody) {
 			if req.extensions().get::<BufferedBody>().is_some() {
 				return;
@@ -263,7 +263,7 @@ impl ContextBuilder {
 			let Ok(body) = crate::http::inspect_response_body(resp).await else {
 				return;
 			};
-			resp.extensions_mut().insert(BufferedBody(body));
+			resp.extensions_mut().insert(BufferedBody::from(body));
 		} else if self.log_only_has(Attributes::ResponseBody) {
 			if resp.extensions().get::<BufferedBody>().is_some() {
 				return;

@@ -273,6 +273,7 @@ impl BackendPolicies {
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
+			// Authorization composes to avoid erasing a broader deny
 			authorization: match (
 				self.authorization.into_arc(),
 				other.authorization.into_arc(),
@@ -284,8 +285,10 @@ impl BackendPolicies {
 				(None, Some(right)) => BackendPolicy::from_arc(right),
 				(None, None) => BackendPolicy::default(),
 			},
-			// TODO: is this right??
-			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
+			mcp_authorization: match (self.mcp_authorization, other.mcp_authorization) {
+				(Some(base), Some(more)) => Some(base.merge(more)),
+				(base, more) => more.or(base),
+			},
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			mcp_guardrails: other.mcp_guardrails.or(self.mcp_guardrails),
 			inference_routing: other.inference_routing.or(self.inference_routing),
@@ -361,6 +364,7 @@ pub struct RoutePolicies {
 	pub llm: RequestPolicy<llm::Policy>,
 	pub timeout: RequestPolicy<timeout::Policy>,
 	pub retry: RequestPolicy<retry::Policy>,
+	pub delay: RequestPolicy<http::delay::Policy>,
 
 	pub request_header_modifier: RequestPolicy<filters::HeaderModifier>,
 	pub response_header_modifier: RequestPolicy<filters::HeaderModifier>,
@@ -428,6 +432,7 @@ impl RoutePolicies {
 			&self.llm as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
 			&self.retry as &dyn PolicyExpressions,
+			&self.delay as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
@@ -905,6 +910,11 @@ impl Store {
 						.retry
 						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
+				TrafficPolicy::Delay(p) => {
+					pol
+						.delay
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
+				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
 					pol
 						.request_header_modifier
@@ -1204,7 +1214,7 @@ impl Store {
 					}
 				},
 				BackendTrafficPolicy::McpAuthorization(p) => {
-					// Authorization policies merge, unlike others
+					// Authorization composes to avoid erasing a broader deny
 					mcp_authz.push(p.clone().into_inner());
 				},
 				BackendTrafficPolicy::McpAuthentication(p) => {

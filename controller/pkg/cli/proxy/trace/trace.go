@@ -73,6 +73,7 @@ type traceEvent struct {
 	Status          *uint16           `json:"status,omitempty"`
 	Error           *string           `json:"error,omitempty"`
 	Details         json.RawMessage   `json:"details,omitempty"`
+	Decision        string            `json:"decision,omitempty"`
 	Provider        string            `json:"provider,omitempty"`
 	RouteType       string            `json:"routeType,omitempty"`
 	InputFormat     string            `json:"inputFormat,omitempty"`
@@ -644,6 +645,8 @@ func displayEventType(eventType string) string {
 		return "Policy"
 	case "policyEvent":
 		return "Policy Event"
+	case "traceSampling":
+		return "Tracing"
 	case "authorizationResult":
 		return "Authz"
 	case "backendCallStart":
@@ -685,6 +688,8 @@ func summarizeEvent(event traceEvent) string {
 		return summarizePolicy(event.Kind, event.Result)
 	case "policyEvent":
 		return truncate(fmt.Sprintf("%s: %s", event.Kind, eventDetailsText(event.Details)), 120)
+	case "traceSampling":
+		return event.Decision
 	case "authorizationResult":
 		return summarizeAuthorizationResult(event.Result, event.Rules)
 	case "backendCallStart":

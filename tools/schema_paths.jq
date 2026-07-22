@@ -212,6 +212,8 @@ def schema_paths(prefix):
     (.value | select(type != "boolean") | schema_paths($path + "."))
   elif (.type // [] | if type == "array" then . else [.] end | contains(["array"])) and .items then
     .items | schema_paths(prefix + "[].")
+  elif (.type // [] | if type == "array" then . else [.] end | contains(["object"])) and (.additionalProperties | type == "object") then
+    .additionalProperties | schema_paths(prefix + "*.")
   elif .properties then
     .properties | to_entries[] |
     (prefix + .key) as $path |

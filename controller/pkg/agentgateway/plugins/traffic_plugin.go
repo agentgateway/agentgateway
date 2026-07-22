@@ -54,6 +54,7 @@ const (
 	hostnameRewritePolicySuffix    = ":hostname-rewrite"
 	retryPolicySuffix              = ":retry"
 	timeoutPolicySuffix            = ":timeout"
+	delayPolicySuffix              = ":delay"
 	jwtPolicySuffix                = ":jwt"
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
@@ -146,6 +147,17 @@ func (ctx PolicyCtx) ResolveCredentialRef(ref agentgateway.LocalSecretObjectRef,
 		return nil, errors.New("secret credential resolver is not configured")
 	}
 	return ctx.CredentialResolver.ResolveCredentialRef(ctx.Krt, ref, namespace)
+}
+
+// ResolveCredentialKeyRef resolves a credential ref and returns the key to read,
+// using defaultKey when the ref does not override it.
+func (ctx PolicyCtx) ResolveCredentialKeyRef(ref agentgateway.LocalSecretKeyRef, namespace, defaultKey string) (map[string][]byte, string, error) {
+	key := defaultKey
+	if ref.Key != nil && *ref.Key != "" {
+		key = *ref.Key
+	}
+	data, err := ctx.ResolveCredentialRef(ref.ObjectRef(), namespace)
+	return data, key, err
 }
 
 type ResolvedTarget struct {
@@ -542,6 +554,10 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("retry")(processRetriesPolicy(traffic.Retry, basePolicyName, policyName))
 	}
 
+	if traffic.Delay != nil {
+		appendPolicy("delay")(processDelayPolicy(traffic.Delay, basePolicyName, policyName))
+	}
+
 	if traffic.DirectResponse != nil {
 		appendPolicy("directResponse")(processConditional(
 			traffic.DirectResponse,
@@ -819,13 +835,13 @@ func processBasicAuthenticationPolicy(
 	}
 
 	if s := ba.SecretRef; s != nil {
-		data, err := ctx.ResolveCredentialRef(*s, policy.Namespace)
+		data, key, err := ctx.ResolveCredentialKeyRef(*s, policy.Namespace, ".htaccess")
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			d, ok := data[".htaccess"]
+			d, ok := data[key]
 			if !ok {
-				errs = append(errs, fmt.Errorf("basic authentication secret %v found, but doesn't contain '.htaccess' key", s.Name))
+				errs = append(errs, fmt.Errorf("basic authentication secret %v found, but doesn't contain %q key", s.Name, key))
 			}
 			p.HtpasswdContent = string(d)
 		}
@@ -892,6 +908,7 @@ func processAPIKeyAuthenticationPolicy(
 	}
 
 	type apiKeyData struct {
+		kind string
 		name string
 		data map[string][]byte
 	}
@@ -905,7 +922,7 @@ func processAPIKeyAuthenticationPolicy(
 		if err != nil {
 			errs = append(errs, err)
 		} else {
-			dataSets = []apiKeyData{{name: string(s.Name), data: data}}
+			dataSets = []apiKeyData{{kind: "secret", name: string(s.Name), data: data}}
 		}
 	}
 	if s := ak.SecretSelector; s != nil {
@@ -913,14 +930,25 @@ func processAPIKeyAuthenticationPolicy(
 		// Preserve existing precedence: secretSelector replaces secretRef, and
 		// remains Secret-only. CredentialRef resolution is handled by secretRef.
 		for _, secret := range krt.Fetch(ctx.Krt, ctx.Collections.Secrets, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.SecretsByNamespace, policy.Namespace)) {
-			dataSets = append(dataSets, apiKeyData{name: secret.Name, data: secret.Data})
+			dataSets = append(dataSets, apiKeyData{kind: "secret", name: secret.Name, data: secret.Data})
+		}
+	}
+	if s := ak.ConfigMapSelector; s != nil {
+		dataSets = nil
+		// Note that its intentional that we only allow keyHash as its already dangerous to store in a secret and even more so in configmap
+		for _, cm := range krt.Fetch(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterLabel(s.MatchLabels), krt.FilterIndex(ctx.Collections.ConfigMapsByNamespace, policy.Namespace)) {
+			data := make(map[string][]byte, len(cm.Data))
+			for k, v := range cm.Data {
+				data[k] = []byte(v)
+			}
+			dataSets = append(dataSets, apiKeyData{kind: "configMap", name: cm.Name, data: data})
 		}
 	}
 	for _, s := range dataSets {
 		for k, v := range s.data {
 			trimmed := bytes.TrimSpace(v)
 			if len(trimmed) == 0 {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: empty value", s.name, k))
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: empty value", s.kind, s.name, k))
 				continue
 			}
 			var ke APIKeyEntry
@@ -932,23 +960,27 @@ func processAPIKeyAuthenticationPolicy(
 					Metadata: nil,
 				}
 			} else if err := json.Unmarshal(trimmed, &ke); err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: %w", s.kind, s.name, k, err))
 				continue
 			}
 			if (ke.Key == "") == (ke.KeyHash == "") {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: exactly one of key or keyHash must be set", s.name, k))
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: exactly one of key or keyHash must be set", s.kind, s.name, k))
+				continue
+			}
+			if s.kind == "configMap" && ke.Key != "" {
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: keys sourced from a ConfigMap must use keyHash, not a raw key, since ConfigMaps are not confidential", s.kind, s.name, k))
 				continue
 			}
 			if ke.KeyHash != "" {
 				if err := validateAPIKeyHash(ke.KeyHash); err != nil {
-					errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
+					errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: %w", s.kind, s.name, k, err))
 					continue
 				}
 			}
 
 			pbs, err := toStruct(ke.Metadata)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid key %v: %w", s.name, k, err))
+				errs = append(errs, fmt.Errorf("%s %v contains invalid key %v: %w", s.kind, s.name, k, err))
 				continue
 			}
 			p.ApiKeys = append(p.ApiKeys, &api.TrafficPolicySpec_APIKey_User{
@@ -1001,6 +1033,40 @@ func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string,
 		"agentgateway_policy", timeoutPolicy.Name)
 
 	return timeoutPolicy
+}
+
+func processDelayPolicy(delay *agentgateway.Delay, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
+	if delay.Duration == "" {
+		return nil, fmt.Errorf("failed to build delay: duration is required")
+	}
+	var errs []error
+	duration := castDurationOrCEL(delay.Duration, func(expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("delay duration is not a valid duration or CEL expression: %s", expr))
+	})
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return &api.Policy{
+		Key:  basePolicyName + delayPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Delay{Delay: &api.Delay{
+					Duration: duration,
+				}},
+			},
+		},
+	}, nil
+}
+
+// castDurationOrCEL accepts an ergonomic duration string (e.g. "5m") by wrapping it as a CEL
+// duration(...) call, otherwise treats the value as a CEL expression.
+func castDurationOrCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
+	raw := string(item)
+	if _, err := time.ParseDuration(raw); err == nil {
+		return "duration(" + strconv.Quote(raw) + ")"
+	}
+	return castCEL(item, invalid)
 }
 
 func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicyName string, policy types.NamespacedName) *api.Policy {
@@ -1279,7 +1345,7 @@ func buildExtAuthSpec(
 		key := castCELSlice(cache.Key, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache key is not a valid CEL expression: %s", expr))
 		})
-		ttl := castExtAuthCacheTTL(cache.TTL, func(expr agentgateway.CELExpression) {
+		ttl := castDurationOrCEL(cache.TTL, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache ttl is not a valid CEL expression: %s", expr))
 		})
 		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
@@ -1312,8 +1378,8 @@ func processExtProcTraffic(
 
 	spec := &api.TrafficPolicySpec_ExtProc{
 		Target: be,
-		// always use FAIL_CLOSED to prevent silent data loss when ExtProc is unavailable.
-		FailureMode: api.TrafficPolicySpec_ExtProc_FAIL_CLOSED,
+		// Defaults to FAIL_CLOSED to prevent silent data loss when ExtProc is unavailable.
+		FailureMode: extProcFailureMode(extProc.FailureMode),
 	}
 	if extProc.ProcessingOptions != nil {
 		spec.ProcessingOptions = &api.TrafficPolicySpec_ExtProc_ProcessingOptions{
@@ -1464,14 +1530,6 @@ func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpre
 		invalid(item)
 	}
 	return string(item)
-}
-
-func castExtAuthCacheTTL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
-	raw := string(item)
-	if _, err := time.ParseDuration(raw); err == nil {
-		return "duration(" + strconv.Quote(raw) + ")"
-	}
-	return castCEL(item, invalid)
 }
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
@@ -1748,6 +1806,13 @@ func remoteRateLimitFailureMode(mode agentgateway.FailureMode) api.TrafficPolicy
 		return api.TrafficPolicySpec_RemoteRateLimit_FAIL_OPEN
 	}
 	return api.TrafficPolicySpec_RemoteRateLimit_FAIL_CLOSED
+}
+
+func extProcFailureMode(mode agentgateway.FailureMode) api.TrafficPolicySpec_ExtProc_FailureMode {
+	if mode == agentgateway.FailOpen {
+		return api.TrafficPolicySpec_ExtProc_FAIL_OPEN
+	}
+	return api.TrafficPolicySpec_ExtProc_FAIL_CLOSED
 }
 
 // BuildBackendRef constructs an agentgateway backend reference from a Gateway
@@ -2187,12 +2252,21 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 			app(backend.Tunnel.BackendRef)
 		}
 	}
+	appAuxiliaryTunnel := func(backend interface {
+		BackendSimple() *agentgateway.BackendSimple
+	}) {
+		appTunnel(backend.BackendSimple())
+	}
 	appTunnel(&s.BackendSimple)
 	if s.ExtAuth != nil && s.ExtAuth.BackendRef != nil {
 		app(*s.ExtAuth.BackendRef)
 	}
 	if s.Auth != nil && s.Auth.OAuthTokenExchange != nil {
-		app(s.Auth.OAuthTokenExchange.TokenEndpoint.BackendObjectReference)
+		app(s.Auth.OAuthTokenExchange.BackendRef)
+	}
+	if s.Auth != nil && s.Auth.CrossAppAccess != nil {
+		app(s.Auth.CrossAppAccess.IdentityProvider.BackendRef)
+		app(s.Auth.CrossAppAccess.ResourceAuthorizationServer.BackendRef)
 	}
 	if s.MCP != nil && s.MCP.Authentication != nil {
 		app(s.MCP.Authentication.JWKS.BackendRef)
@@ -2210,13 +2284,13 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 				app(p.Webhook.BackendRef)
 			}
 			if p.OpenAIModeration != nil {
-				appTunnel(p.OpenAIModeration.Policies)
+				appAuxiliaryTunnel(p.OpenAIModeration.Policies)
 			}
 			if p.GoogleModelArmor != nil {
-				appTunnel(p.GoogleModelArmor.Policies)
+				appAuxiliaryTunnel(p.GoogleModelArmor.Policies)
 			}
 			if p.BedrockGuardrails != nil {
-				appTunnel(p.BedrockGuardrails.Policies)
+				appAuxiliaryTunnel(p.BedrockGuardrails.Policies)
 			}
 		}
 		for _, p := range s.AI.PromptGuard.Response {
@@ -2224,10 +2298,10 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 				app(p.Webhook.BackendRef)
 			}
 			if p.GoogleModelArmor != nil {
-				appTunnel(p.GoogleModelArmor.Policies)
+				appAuxiliaryTunnel(p.GoogleModelArmor.Policies)
 			}
 			if p.BedrockGuardrails != nil {
-				appTunnel(p.BedrockGuardrails.Policies)
+				appAuxiliaryTunnel(p.BedrockGuardrails.Policies)
 			}
 		}
 	}

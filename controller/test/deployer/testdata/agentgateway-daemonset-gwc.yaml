@@ -1,0 +1,55 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: agentgateway
+spec:
+  controllerName: agentgateway.dev/agentgateway
+  description: Specialized class for agentgateway.
+  parametersRef:
+    group: agentgateway.dev
+    kind: AgentgatewayParameters
+    name: daemonset-agwp
+    namespace: default
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: daemonset-agwp
+  namespace: default
+spec:
+  workload:
+    kind: DaemonSet
+  daemonSet:
+    metadata:
+      labels:
+        daemonset-label: from-overlay
+      annotations:
+        daemonset-annotation: from-overlay
+    spec:
+      updateStrategy:
+        type: RollingUpdate
+      template:
+        spec:
+          tolerations:
+            - operator: Exists
+  podDisruptionBudget:
+    metadata:
+      labels:
+        pdb-label: from-daemonset
+    spec:
+      minAvailable: 1
+---
+kind: Gateway
+apiVersion: gateway.networking.k8s.io/v1
+metadata:
+  name: gw
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - protocol: HTTP
+      port: 8080
+      name: http
+      allowedRoutes:
+        namespaces:
+          from: Same

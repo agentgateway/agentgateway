@@ -4,12 +4,12 @@ import {
   Pencil,
   Plus,
   Route as RouteIcon,
-  Save,
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { EnumSelector } from "../components/EnumSelector";
 import {
+  ConfirmDialog,
   Drawer,
   Dropdown,
   EmptyState,
@@ -21,6 +21,7 @@ import {
   Tooltip,
   YamlBlock,
 } from "../components/Primitives";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
@@ -29,7 +30,7 @@ import {
   listenerDisplayName,
   trafficStats,
 } from "../traffic";
-import type { TrafficBind, TrafficListener } from "../types";
+import type { GatewayConfig, TrafficBind, TrafficListener } from "../types";
 import type { LocalTLSServerConfig } from "../gateway-config";
 import {
   ReadonlyModeBanner,
@@ -84,6 +85,21 @@ function TrafficListenersEditorPage() {
     listenerIndex?: number;
     listener: TrafficListener;
   } | null>(null);
+  const [deleting, setDeleting] = useState<
+    | {
+        kind: "bind";
+        bindIndex: number;
+        label: string;
+        listenerCount: number;
+      }
+    | {
+        kind: "listener";
+        bindIndex: number;
+        listenerIndex: number;
+        label: string;
+      }
+    | null
+  >(null);
   const [trafficDrawer, setTrafficDrawer] = useStickyQueryParam("drawer");
   const linkedBind = linkedBindEditor(trafficDrawer, config.data?.binds ?? []);
   const linkedListener = linkedListenerEditor(
@@ -174,17 +190,13 @@ function TrafficListenersEditorPage() {
           </StatusBanner>
         ) : !config.data?.binds?.length ? (
           <EmptyState
-            title="No traffic binds configured"
-            description="Add a bind port before attaching listeners and routes."
+            title="No legacy binds configured"
+            description="Use traffic gateways for new HTTP routing configuration."
             action={
-              <button
-                className="button primary"
-                type="button"
-                onClick={() => openBindEditor(null)}
-              >
+              <Link className="button primary" to="/traffic/gateways">
                 <Network size={16} />
-                Add bind
-              </button>
+                Manage gateways
+              </Link>
             }
           />
         ) : (
@@ -240,11 +252,13 @@ function TrafficListenersEditorPage() {
                           className="icon-button danger"
                           type="button"
                           aria-label="Delete bind"
+                          disabled={update.isPending}
                           onClick={() =>
-                            update.mutate((next) => {
-                              next.binds = (next.binds ?? []).filter(
-                                (_, index) => index !== bindIndex,
-                              );
+                            setDeleting({
+                              kind: "bind",
+                              bindIndex,
+                              label: `Port ${bind.port}`,
+                              listenerCount: bind.listeners.length,
                             })
                           }
                         >
@@ -317,15 +331,16 @@ function TrafficListenersEditorPage() {
                                     className="icon-button danger"
                                     type="button"
                                     aria-label="Delete listener"
+                                    disabled={update.isPending}
                                     onClick={() =>
-                                      update.mutate((next) => {
-                                        const target = next.binds?.[bindIndex];
-                                        if (target)
-                                          target.listeners =
-                                            target.listeners.filter(
-                                              (_, index) =>
-                                                index !== listenerIndex,
-                                            );
+                                      setDeleting({
+                                        kind: "listener",
+                                        bindIndex,
+                                        listenerIndex,
+                                        label: listenerDisplayName(
+                                          listener,
+                                          listenerIndex,
+                                        ),
                                       })
                                     }
                                   >
@@ -355,6 +370,7 @@ function TrafficListenersEditorPage() {
         <BindEditor
           key={`${trafficDrawer ?? "bind-local"}-${activeBindEditor.port}`}
           bind={activeBindEditor}
+          config={config.data}
           help={help}
           saving={update.isPending}
           onCancel={closeTrafficDrawer}
@@ -377,6 +393,7 @@ function TrafficListenersEditorPage() {
       {activeListenerEditor ? (
         <ListenerEditor
           binds={config.data?.binds ?? []}
+          config={config.data}
           key={trafficDrawer ?? "listener-local"}
           editing={activeListenerEditor}
           help={help}
@@ -396,12 +413,47 @@ function TrafficListenersEditorPage() {
           }
         />
       ) : null}
+      {deleting ? (
+        <ConfirmDialog
+          title={`Delete ${deleting.kind}?`}
+          destructive
+          confirmLabel={`Delete ${deleting.kind}`}
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() =>
+            update.mutate(
+              (next) => {
+                if (deleting.kind === "bind") {
+                  next.binds = (next.binds ?? []).filter(
+                    (_, index) => index !== deleting.bindIndex,
+                  );
+                  return;
+                }
+                const bind = next.binds?.[deleting.bindIndex];
+                if (bind)
+                  bind.listeners = bind.listeners.filter(
+                    (_, index) => index !== deleting.listenerIndex,
+                  );
+              },
+              { onSuccess: () => setDeleting(null) },
+            )
+          }
+        >
+          <p>
+            Delete <strong>{deleting.label}</strong>?
+            {deleting.kind === "bind" && deleting.listenerCount
+              ? ` This also removes ${deleting.listenerCount} listener${deleting.listenerCount === 1 ? "" : "s"} and their routes.`
+              : " Traffic using it will no longer be served."}
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
 
 function BindEditor(props: {
   bind: TrafficBind;
+  config?: GatewayConfig;
   help: SchemaHelp;
   saving: boolean;
   onCancel: () => void;
@@ -427,22 +479,36 @@ function BindEditor(props: {
     <Drawer
       title="Bind port"
       onClose={props.onCancel}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save bind
-          </button>
-        </div>
-      }
+      dirty={port !== String(props.bind.port)}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Bind config diff"
+          saveLabel="Save bind"
+          saving={props.saving}
+          onCancel={requestClose}
+          onSave={save}
+          beforeDiff={() => {
+            const parsed = Number(port);
+            if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+              setError("Port must be between 1 and 65535.");
+              return false;
+            }
+            return true;
+          }}
+          applyDiff={(next) => {
+            if (!Array.isArray(next.binds)) next.binds = [];
+            const index = next.binds.findIndex(
+              (item) => item.port === props.bind.port,
+            );
+            const parsed = Number(port);
+            const bind = { ...preview, port: parsed };
+            if (index >= 0) next.binds[index] = bind;
+            else next.binds.push(bind);
+          }}
+        />
+      )}
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}
       <div className="form-grid">
@@ -466,6 +532,7 @@ function BindEditor(props: {
 
 function ListenerEditor(props: {
   binds: TrafficBind[];
+  config?: GatewayConfig;
   editing: {
     bindIndex: number;
     listenerIndex?: number;
@@ -486,6 +553,8 @@ function ListenerEditor(props: {
   );
   const [cert, setCert] = useState(listener.tls?.cert ?? "");
   const [key, setKey] = useState(listener.tls?.key ?? "");
+  const draft = JSON.stringify({ bindIndex, listener, cert, key });
+  const [initialDraft] = useState(() => draft);
   const protocol = listener.protocol ?? "HTTP";
   const supportsTcp = protocol === "TCP" || protocol === "TLS";
   const preview: TrafficListener = {
@@ -507,28 +576,34 @@ function ListenerEditor(props: {
           : "Add listener"
       }
       onClose={props.onCancel}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={() =>
-              props.onSave(
-                Number(bindIndex),
-                cleanListener(preview),
-                props.editing.listenerIndex,
-              )
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Listener config diff"
+          saveLabel="Save listener"
+          saving={props.saving}
+          onCancel={requestClose}
+          onSave={() =>
+            props.onSave(
+              Number(bindIndex),
+              cleanListener(preview),
+              props.editing.listenerIndex,
+            )
+          }
+          applyDiff={(next) => {
+            const bind = next.binds?.[Number(bindIndex)];
+            if (!bind) return;
+            if (typeof props.editing.listenerIndex === "number") {
+              bind.listeners[props.editing.listenerIndex] =
+                cleanListener(preview);
+            } else {
+              bind.listeners.push(cleanListener(preview));
             }
-          >
-            <Save size={16} />
-            Save listener
-          </button>
-        </div>
-      }
+          }}
+        />
+      )}
     >
       <div className="form-grid">
         {typeof props.editing.listenerIndex !== "number" ? (

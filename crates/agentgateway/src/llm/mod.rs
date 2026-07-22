@@ -669,6 +669,10 @@ pub enum RequestResult {
 		upstream_route_type: RouteType,
 	},
 	Rejected(Response),
+	GuardrailRejected {
+		response: Response,
+		guardrail: &'static str,
+	},
 }
 
 /// Byte length of the decoded (plaintext) request body, before deserialization. Stashed on the
@@ -684,6 +688,10 @@ enum PreparedRequest {
 		compression_snapshot: Option<Vec<serde_json::Value>>,
 	},
 	Rejected(Response),
+	GuardrailRejected {
+		response: Response,
+		guardrail: &'static str,
+	},
 }
 
 struct BufferedResponse {
@@ -900,6 +908,7 @@ impl AIProvider {
 			AIProvider::Bedrock(p) => BackendPolicies {
 				backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {
 					service_name: None,
+					region: None,
 					assume_role: None,
 					source_credentials_cache: p.source_credentials_cache.clone(),
 					assume_role_cache: p.assume_role_cache.clone(),
@@ -1609,14 +1618,17 @@ impl AIProvider {
 			if original_format.supports_prompt_guard() {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
-				if let Some(dr) = p
+				if let Some((response, guardrail)) = p
 					.apply_prompt_guard(backend_info, req, http_headers, claims)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
 						AIError::PromptWebhookError
 					})? {
-					return Ok(PreparedRequest::Rejected(dr));
+					return Ok(PreparedRequest::GuardrailRejected {
+						response,
+						guardrail,
+					});
 				}
 			}
 		}
@@ -1693,6 +1705,15 @@ impl AIProvider {
 				compression_snapshot,
 			} => (llm_info, compression_snapshot),
 			PreparedRequest::Rejected(resp) => return Ok(RequestResult::Rejected(resp)),
+			PreparedRequest::GuardrailRejected {
+				response,
+				guardrail,
+			} => {
+				return Ok(RequestResult::GuardrailRejected {
+					response,
+					guardrail,
+				});
+			},
 		};
 
 		let render_ctx = ChatRequestContext {
@@ -1779,6 +1800,15 @@ impl AIProvider {
 		let llm_info = match prepared {
 			PreparedRequest::Ready { llm_info, .. } => llm_info,
 			PreparedRequest::Rejected(resp) => return Ok(RequestResult::Rejected(resp)),
+			PreparedRequest::GuardrailRejected {
+				response,
+				guardrail,
+			} => {
+				return Ok(RequestResult::GuardrailRejected {
+					response,
+					guardrail,
+				});
+			},
 		};
 		let request_model = llm_info.request_model.as_str();
 		let body = render(self, &req, &parts, request_model)?;
@@ -1944,7 +1974,7 @@ impl AIProvider {
 		if encoding.is_some() {
 			parts
 				.extensions
-				.insert(crate::cel::BufferedBody(bytes.clone()));
+				.insert(crate::cel::BufferedBody::complete(bytes.clone()));
 			parts.headers.remove(header::CONTENT_ENCODING);
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}

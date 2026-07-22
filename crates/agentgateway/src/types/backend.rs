@@ -74,6 +74,8 @@ pub struct TCP {
 	/// TCP keepalive settings for backend connections.
 	pub keepalives: super::agent::KeepaliveConfig,
 	/// Maximum time allowed to establish a backend TCP connection.
+	#[serde(with = "crate::serdes::serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub connect_timeout: Duration,
 }
 

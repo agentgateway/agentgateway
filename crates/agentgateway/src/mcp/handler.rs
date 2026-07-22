@@ -1,21 +1,23 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use agent_core::prelude::AssertSize;
+use agent_core::prelude::{AssertSize, Strng};
 use agent_core::version::BuildInfo;
 use futures_core::Stream;
+use futures_util::StreamExt;
 use http::StatusCode;
 use http::request::Parts;
 use itertools::Itertools;
 use rmcp::ErrorData;
 use rmcp::model::{
-	CacheScope, ClientNotification, ClientRequest, DiscoverResult, Implementation,
-	JsonRpcNotification, JsonRpcRequest, ListPromptsResult, ListResourceTemplatesResult,
-	ListResourcesResult, ListToolsResult, Meta, ProtocolVersion, RequestId, ServerCapabilities,
-	ServerInfo, ServerJsonRpcMessage, ServerNotification, ServerResult, SubscriptionsListenResult,
+	CacheScope, ClientNotification, ClientRequest, ConstString, DiscoverResult,
+	ExtensionCapabilities, Implementation, JsonRpcNotification, JsonRpcRequest, ListPromptsResult,
+	ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
+	ProtocolVersion, RequestId, ResultType, ServerCapabilities, ServerInfo, ServerJsonRpcMessage,
+	ServerNotification, ServerRequest, ServerResult, SubscriptionFilter,
 };
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::http::Response;
 use crate::http::sessionpersistence::MCPSession;
@@ -24,30 +26,104 @@ use crate::mcp::mergestream::{MergeFn, Messages};
 use crate::mcp::rbac::{CelExecWrapper, McpAuthorizationSet};
 use crate::mcp::router::McpBackendGroup;
 use crate::mcp::streamablehttp::{RequestProtocol, ServerSseMessage};
+use crate::mcp::subscriptions::ResourceSubscription;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
-use crate::mcp::{ClientError, FailureMode, MCPInfo, mergestream, rbac, upstream};
+use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
+use crate::types::agent::McpPrefixMode;
 
 const DELIMITER: &str = "_";
 
-fn resource_name(default_target_name: Option<&String>, target: &str, name: &str) -> String {
-	if default_target_name.is_none() {
+fn resource_name(prefix_names: bool, target: &str, name: &str) -> String {
+	if prefix_names {
 		format!("{target}{DELIMITER}{name}")
 	} else {
 		name.to_string()
 	}
 }
 
+fn duplicate_names<'a>(enabled: bool, names: impl Iterator<Item = &'a str>) -> HashSet<String> {
+	if !enabled {
+		return HashSet::new();
+	}
+	let duplicates = names
+		.duplicates()
+		.map(str::to_owned)
+		.collect::<HashSet<_>>();
+	if !duplicates.is_empty() {
+		debug!(
+			"dropping ambiguous MCP names served by multiple targets: {}",
+			duplicates.iter().sorted().join(", ")
+		);
+	}
+	duplicates
+}
+
+/// Split per-target list results and, when rejecting duplicates, drop names
+/// served by more than one target.
+fn per_target_deduped<T>(
+	streams: Vec<(Strng, ServerResult)>,
+	reject_duplicates: bool,
+	extract: impl Fn(ServerResult) -> Vec<T>,
+	name: impl for<'a> Fn(&'a T) -> &'a str,
+) -> Vec<(Strng, Vec<T>)> {
+	let per_target = streams
+		.into_iter()
+		.map(|(server_name, s)| (server_name, extract(s)))
+		.collect_vec();
+	let duplicates = duplicate_names(
+		reject_duplicates,
+		per_target
+			.iter()
+			.flat_map(|(_, items)| items.iter().map(&name)),
+	);
+	per_target
+		.into_iter()
+		.map(|(server_name, items)| {
+			let items = items
+				.into_iter()
+				.filter(|item| !duplicates.contains(name(item)))
+				.collect_vec();
+			(server_name, items)
+		})
+		.collect_vec()
+}
+
+/// Returns the byte length of an RFC 3986 scheme prefix ending at `:`, if present.
+///
+/// MCP resource identifiers are URIs, which include hierarchical forms (`http://…`)
+/// and opaque forms (`foo:bar`, `urn:uuid:…`). Multiplexing must accept both.
+fn uri_scheme_prefix_len(uri: &str) -> Option<usize> {
+	let bytes = uri.as_bytes();
+	if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
+		return None;
+	}
+	let mut i = 1;
+	while i < bytes.len() {
+		match bytes[i] {
+			b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'-' | b'.' => i += 1,
+			b':' => return Some(i),
+			_ => return None,
+		}
+	}
+	None
+}
+
 fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
 	if default_target_name.is_none() {
-		// Transform URI to service+scheme:// format for multiplexing
-		// e.g., "http://example.com" becomes "service+http://example.com"
-		if let Some(scheme_end) = uri.find("://") {
-			let (scheme, rest) = uri.split_at(scheme_end);
-			format!("{target}+{scheme}{rest}")
+		// Apps UI resources must keep their ui:// scheme so hosts still
+		// recognize them; the target is carried in the authority instead.
+		if let Some(rewritten) = apps::encode_ui_uri(target, uri) {
+			return rewritten;
+		}
+		// Prefix with `service+` for multiplexing whenever the URI has a scheme.
+		// e.g. "http://example.com" → "service+http://example.com"
+		//      "memo:insights"      → "service+memo:insights"
+		if uri_scheme_prefix_len(uri).is_some() {
+			format!("{target}+{uri}")
 		} else {
-			// URI must have a scheme - if not, return as-is and let validation handle it
+			// Scheme-less / relative references stay unchanged; validation handles rejects.
 			uri.to_string()
 		}
 	} else {
@@ -55,7 +131,7 @@ fn resource_uri(default_target_name: Option<&String>, target: &str, uri: &str) -
 	}
 }
 
-fn rewrite_resource_update_message(
+pub(super) fn rewrite_resource_messages(
 	default_target_name: Option<&String>,
 	target: &str,
 	mut message: ServerJsonRpcMessage,
@@ -70,22 +146,70 @@ fn rewrite_resource_update_message(
 			resource_updated.params.uri.as_str(),
 		);
 	}
+	if let ServerJsonRpcMessage::Response(resp) = &mut message
+		&& let ServerResult::ReadResourceResult(read) = &mut resp.result
+	{
+		for content in &mut read.contents {
+			match content {
+				rmcp::model::ResourceContents::TextResourceContents { uri, .. }
+				| rmcp::model::ResourceContents::BlobResourceContents { uri, .. } => {
+					*uri = resource_uri(default_target_name, target, uri);
+				},
+				_ => {},
+			}
+		}
+	}
 	message
 }
 
-fn set_subscription_ack_id(
-	mut message: ServerJsonRpcMessage,
-	subscription_id: &RequestId,
-) -> ServerJsonRpcMessage {
-	if let ServerJsonRpcMessage::Notification(notification) = &mut message
-		&& let ServerNotification::SubscriptionsAcknowledgedNotification(ack) =
-			&mut notification.notification
-	{
-		let mut meta = ack.params.meta.take().unwrap_or_else(Meta::new);
-		meta.set_subscription_id(subscription_id.clone());
-		ack.params.meta = Some(meta);
+/// What kind of name is being resolved to a target (`prefixMode: never`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResolveKind {
+	Tool,
+	Prompt,
+}
+
+impl ResolveKind {
+	fn as_str(&self) -> &'static str {
+		match self {
+			ResolveKind::Tool => "tool",
+			ResolveKind::Prompt => "prompt",
+		}
 	}
-	message
+
+	fn list_request(&self, cursor: Option<String>) -> ClientRequest {
+		let params = cursor.map(|c| PaginatedRequestParams::default().with_cursor(Some(c)));
+		match self {
+			ResolveKind::Tool => ClientRequest::ListToolsRequest(rmcp::model::ListToolsRequest {
+				params,
+				..Default::default()
+			}),
+			ResolveKind::Prompt => ClientRequest::ListPromptsRequest(rmcp::model::ListPromptsRequest {
+				params,
+				..Default::default()
+			}),
+		}
+	}
+
+	fn next_cursor(&self, result: &ServerResult) -> Option<String> {
+		match (self, result) {
+			(ResolveKind::Tool, ServerResult::ListToolsResult(r)) => r.next_cursor.clone(),
+			(ResolveKind::Prompt, ServerResult::ListPromptsResult(r)) => r.next_cursor.clone(),
+			_ => None,
+		}
+	}
+
+	fn contains_name(&self, result: &ServerResult, name: &str) -> bool {
+		match (self, result) {
+			(ResolveKind::Tool, ServerResult::ListToolsResult(r)) => {
+				r.tools.iter().any(|t| t.name == name)
+			},
+			(ResolveKind::Prompt, ServerResult::ListPromptsResult(r)) => {
+				r.prompts.iter().any(|p| p.name == name)
+			},
+			_ => false,
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -135,12 +259,44 @@ impl Relay {
 		}
 	}
 
-	fn rewrite_outbound_server_messages(&self, target: &str, stream: Messages) -> Messages {
+	fn rewrite_outbound_server_messages(
+		&self,
+		target: &str,
+		stream: Messages,
+		cel: CelExecWrapper,
+	) -> Messages {
 		let target = target.to_string();
 		let default_target_name = self.upstreams.default_target_name.clone();
+		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
-			rewrite_resource_update_message(default_target_name.as_ref(), &target, message)
+			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
+
+			let mut resource_allowed = |uri: &str| {
+				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against
+				// these UI resources
+				policies.validate(
+					&rbac::ResourceType::Resource(rbac::ResourceId::new(target.clone(), uri.to_string())),
+					&cel,
+				)
+			};
+			apps::rewrite_tool_list_ui_meta(
+				default_target_name.is_none(),
+				&target,
+				&mut resource_allowed,
+				message,
+			)
 		})
+	}
+
+	/// Whether names carry no routing information (`prefixMode: never`), so the
+	/// owning target can only be found by listing upstreams.
+	pub fn needs_resolution(&self) -> bool {
+		self.upstreams.is_multiplexing && self.upstreams.prefix_mode == McpPrefixMode::Never
+	}
+
+	/// Whether tool/prompt names are exposed to clients with a target prefix.
+	fn prefix_names(&self) -> bool {
+		self.upstreams.default_target_name.is_none() && !self.needs_resolution()
 	}
 
 	pub fn parse_resource_name<'a, 'b: 'a>(
@@ -158,18 +314,153 @@ impl Relay {
 		}
 	}
 
+	/// Find the target for an unprefixed name from the corresponding list response.
+	pub async fn resolve_resource_name<'a, 'b: 'a>(
+		&'a self,
+		kind: ResolveKind,
+		res: &'b str,
+		ctx: &IncomingRequestContext,
+	) -> Result<(Cow<'a, str>, &'b str), UpstreamError> {
+		if self.needs_resolution() {
+			let target = self.resolve_unprefixed(kind, res, ctx).await?;
+			return Ok((Cow::Owned(target.to_string()), res));
+		}
+		let (target, name) = self.parse_resource_name(res)?;
+		Ok((Cow::Borrowed(target), name))
+	}
+
+	/// Find the single target serving the unprefixed `name` by listing every
+	/// target at call time.
+	/// TODO cache list results so every tool call/prompt get doesn't require making
+	/// tons of extra list calls to every upstream.
+	async fn resolve_unprefixed(
+		&self,
+		kind: ResolveKind,
+		name: &str,
+		ctx: &IncomingRequestContext,
+	) -> Result<Strng, UpstreamError> {
+		let futs: Vec<_> = self
+			.upstreams
+			.iter_named()
+			.map(|(target, con)| async move {
+				let res = Self::serves_name(&con, kind, name, ctx).await;
+				(target, res)
+			})
+			.collect();
+
+		let mut owner = None;
+		for (target, res) in futures::future::join_all(futs).await {
+			match res {
+				Ok(true) => {
+					if owner.is_some() {
+						return Err(UpstreamError::InvalidRequest(format!(
+							"{} {name} is served by multiple targets",
+							kind.as_str()
+						)));
+					}
+					owner = Some(target);
+				},
+				Ok(false) => {},
+				Err(e) => {
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!(
+							"upstream '{target}' failed while resolving {} '{name}', skipping: {e}",
+							kind.as_str()
+						);
+					} else {
+						return Err(e);
+					}
+				},
+			}
+		}
+
+		owner.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown {} {name}", kind.as_str())))
+	}
+
+	/// Page through one target's `kind` list until `name` is found or the pages
+	/// run out. `Ok(false)` includes targets that don't support the list method.
+	async fn serves_name(
+		con: &upstream::Upstream,
+		kind: ResolveKind,
+		name: &str,
+		ctx: &IncomingRequestContext,
+	) -> Result<bool, UpstreamError> {
+		// Gateway-generated ids: reusing the client's id here would make the upstream
+		// see it twice (list probe, then the forwarded call) in one session.
+		static RESOLVE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+		// Bounds paging against upstreams that return cursors forever.
+		const MAX_LIST_PAGES: usize = 64;
+		let mut cursor = None;
+		for _ in 0..MAX_LIST_PAGES {
+			let seq = RESOLVE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			let req = JsonRpcRequest::new(
+				RequestId::String(format!("agw-resolve-{seq}").into()),
+				kind.list_request(cursor),
+			);
+			let Some(result) = Self::first_response(con.generic_stream(req, ctx).await?).await? else {
+				return Ok(false);
+			};
+			if kind.contains_name(&result, name) {
+				return Ok(true);
+			}
+			cursor = kind.next_cursor(&result);
+			if cursor.is_none() {
+				return Ok(false);
+			}
+		}
+		Err(UpstreamError::InvalidRequest(format!(
+			"exceeded {MAX_LIST_PAGES} pages listing {}s",
+			kind.as_str()
+		)))
+	}
+
+	/// Consume a response stream until the first result, error data, or end.
+	/// `Ok(None)` means the target rejected the list method as unsupported.
+	async fn first_response(stream: Messages) -> Result<Option<ServerResult>, UpstreamError> {
+		let mut stream = std::pin::pin!(stream);
+		while let Some(msg) = stream.next().await {
+			match msg {
+				Ok(ServerJsonRpcMessage::Response(resp)) => return Ok(Some(resp.result)),
+				Ok(ServerJsonRpcMessage::Error(err)) => {
+					if err.error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND {
+						return Ok(None);
+					}
+					return Err(UpstreamError::InvalidRequest(err.error.message.to_string()));
+				},
+				Ok(_) => {},
+				Err(e) => return Err(e.into()),
+			}
+		}
+		Err(UpstreamError::Recv)
+	}
+
 	/// Reverse of `resource_uri`: extracts the service name and original URI from a
-	/// multiplexed URI of the form `service+scheme://rest`.
+	/// multiplexed URI of the form `service+<original-uri>` (hierarchical or opaque),
+	/// or `ui://service+rest` for Apps UI resources.
 	pub fn parse_resource_uri<'a>(&'a self, uri: &str) -> Result<(&'a str, String), UpstreamError> {
 		if let Some(default) = self.upstreams.default_target_name.as_ref() {
 			Ok((default.as_str(), uri.to_string()))
+		} else if apps::is_ui_uri(uri) {
+			let (service_name, original_uri) = apps::decode_ui_uri(uri)
+				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
+			let validated_name = self
+				.upstreams
+				.get_name(service_name)
+				.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+			Ok((validated_name, original_uri))
 		} else {
-			// URI format: "service+scheme://rest"
+			// URI format: "service+<original-uri>" where original-uri is any absolute URI
 			let plus_pos = uri
 				.find('+')
 				.ok_or_else(|| UpstreamError::InvalidRequest("invalid resource URI".to_string()))?;
 			let service_name = &uri[..plus_pos];
 			let original_uri = &uri[plus_pos + 1..];
+			// ui:// resources use the ui://service+rest namespace exclusively
+			if apps::is_ui_uri(original_uri) {
+				return Err(UpstreamError::InvalidRequest(
+					"invalid resource URI".to_string(),
+				));
+			}
 			// Validate that the extracted service name corresponds to a known upstream
 			let validated_name = self
 				.upstreams
@@ -329,15 +620,21 @@ impl Relay {
 
 	pub fn merge_tools(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let prefix_names = self.prefix_names();
+		let reject_duplicates = self.needs_resolution();
 		Box::new(move |streams, cel| {
-			let tools = streams
+			let per_target = per_target_deduped(
+				streams,
+				reject_duplicates,
+				|s| match s {
+					ServerResult::ListToolsResult(ltr) => ltr.tools,
+					_ => vec![],
+				},
+				|tool| tool.name.as_ref(),
+			);
+			let tools = per_target
 				.into_iter()
-				.flat_map(|(server_name, s)| {
-					let tools = match s {
-						ServerResult::ListToolsResult(ltr) => ltr.tools,
-						_ => vec![],
-					};
+				.flat_map(|(server_name, tools)| {
 					tools
 						.into_iter()
 						// Apply authorization policies, filtering tools that are not allowed.
@@ -352,11 +649,7 @@ impl Relay {
 						})
 						// Rename to handle multiplexing
 						.map(|mut t| {
-							t.name = Cow::Owned(resource_name(
-								default_target_name.as_ref(),
-								server_name.as_str(),
-								&t.name,
-							));
+							t.name = Cow::Owned(resource_name(prefix_names, server_name.as_str(), &t.name));
 							t
 						})
 						.collect_vec()
@@ -376,19 +669,29 @@ impl Relay {
 
 	pub fn merge_initialize(&self, pv: ProtocolVersion, multiplexing: bool) -> Box<MergeFn> {
 		let resource_subscribe = self.upstreams.stateful();
+		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
 			if !multiplexing {
 				// Happy case: we can forward everything
-				let res = s.into_iter().next().and_then(|(_, r)| match r {
-					ServerResult::InitializeResult(ir) => Some(ir),
+				let res = s.into_iter().next().and_then(|(name, r)| match r {
+					ServerResult::InitializeResult(ir) => Some((name, ir)),
 					_ => None,
 				});
-				if let Some(ir) = res {
+				if let Some((name, ir)) = res {
+					upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
 					return Ok(ir.into());
 				}
 				// If we got here in FailOpen mode, it means the only target failed.
 				// Return a default info response to keep the client session alive.
-				return Ok(Self::get_info(pv, resource_subscribe, Vec::new()).into());
+				return Ok(
+					Self::get_info(
+						pv,
+						resource_subscribe,
+						Vec::new(),
+						upstreams.merged_extensions(&HashMap::new()),
+					)
+					.into(),
+				);
 			}
 
 			// Multiplexing is more complex. We need to find the lowest protocol version
@@ -398,6 +701,7 @@ impl Relay {
 
 			for (server_name, v) in s {
 				if let ServerResult::InitializeResult(r) = v {
+					upstreams.record_extensions(server_name.as_str(), r.capabilities.extensions.as_ref());
 					if r.protocol_version.to_string() < lowest_version.to_string() {
 						lowest_version = r.protocol_version;
 					}
@@ -409,13 +713,25 @@ impl Relay {
 				}
 			}
 
-			Ok(Self::get_info(lowest_version, resource_subscribe, upstream_instructions).into())
+			Ok(
+				Self::get_info(
+					lowest_version,
+					resource_subscribe,
+					upstream_instructions,
+					upstreams.merged_extensions(&HashMap::new()),
+				)
+				.into(),
+			)
 		})
 	}
 
 	pub fn merge_discover(&self, multiplexing: bool) -> Box<MergeFn> {
 		let resource_subscribe = self.upstreams.stateful();
+		let upstreams = self.upstreams.clone();
 		Box::new(move |s, _cel| {
+			// Single server: forward the upstream's advertised versions untouched. The gateway
+			// does no version translation, so an old-only upstream must surface as-is and let
+			// the client fall back to `initialize`. Multiplexed: advertise the intersection.
 			if !multiplexing {
 				let res = s.into_iter().next().and_then(|(_, r)| match r {
 					ServerResult::DiscoverResult(dr) => Some(dr),
@@ -426,15 +742,29 @@ impl Relay {
 					// Gateway routing/backend config can change without client invalidation.
 					return Ok(dr.with_cache(0, CacheScope::Private).into());
 				}
-				// If we got here in FailOpen mode, it means the only target failed.
-				// Return a default discovery response so clients can continue negotiation.
-				return Ok(Self::get_discovery(resource_subscribe, Vec::new()).into());
+				// In FailOpen, a default discovery response lets the client continue negotiation
+				// when no upstream discovery response is available.
+				// Include the recorded extensions from initialize responses.
+				return Ok(
+					Self::get_discovery(
+						resource_subscribe,
+						Vec::new(),
+						upstreams.merged_extensions(&HashMap::new()),
+					)
+					.into(),
+				);
 			}
 
 			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
 			let mut supported_versions = ProtocolVersion::KNOWN_VERSIONS.to_vec();
+			let mut upstream_extensions: HashMap<Strng, ExtensionCapabilities> = HashMap::new();
 			for (server_name, v) in s {
-				if let ServerResult::DiscoverResult(r) = v {
+				if let ServerResult::DiscoverResult(mut r) = v {
+					if let Some(ext) = r.capabilities.extensions.take()
+						&& !ext.is_empty()
+					{
+						upstream_extensions.insert(server_name.clone(), ext);
+					}
 					supported_versions.retain(|version| r.supported_versions.contains(version));
 					if let Some(instructions) = r.instructions
 						&& !instructions.is_empty()
@@ -444,7 +774,11 @@ impl Relay {
 				}
 			}
 
-			let mut discover = Self::get_discovery(resource_subscribe, upstream_instructions);
+			let mut discover = Self::get_discovery(
+				resource_subscribe,
+				upstream_instructions,
+				upstreams.merged_extensions(&upstream_extensions),
+			);
 			discover.supported_versions = supported_versions;
 			Ok(discover.into())
 		})
@@ -452,15 +786,21 @@ impl Relay {
 
 	pub fn merge_prompts(&self) -> Box<MergeFn> {
 		let policies = self.policies.clone();
-		let default_target_name = self.upstreams.default_target_name.clone();
+		let prefix_names = self.prefix_names();
+		let reject_duplicates = self.needs_resolution();
 		Box::new(move |streams, cel| {
-			let prompts = streams
+			let per_target = per_target_deduped(
+				streams,
+				reject_duplicates,
+				|s| match s {
+					ServerResult::ListPromptsResult(lpr) => lpr.prompts,
+					_ => vec![],
+				},
+				|prompt| prompt.name.as_str(),
+			);
+			let prompts = per_target
 				.into_iter()
-				.flat_map(|(server_name, s)| {
-					let prompts = match s {
-						ServerResult::ListPromptsResult(lpr) => lpr.prompts,
-						_ => vec![],
-					};
+				.flat_map(|(server_name, prompts)| {
 					prompts
 						.into_iter()
 						.filter(|p| {
@@ -473,7 +813,7 @@ impl Relay {
 							)
 						})
 						.map(|mut p| {
-							p.name = resource_name(default_target_name.as_ref(), server_name.as_str(), &p.name);
+							p.name = resource_name(prefix_names, server_name.as_str(), &p.name);
 							p
 						})
 						.collect_vec()
@@ -580,8 +920,198 @@ impl Relay {
 		Box::new(move |_, _cel| Ok(rmcp::model::ServerResult::empty(())))
 	}
 
-	pub fn merge_subscriptions_listen(&self, subscription_id: RequestId) -> Box<MergeFn> {
-		Box::new(move |_, _cel| Ok(SubscriptionsListenResult::new(subscription_id).into()))
+	/// Opens the upstream streams shared by `subscriptions/listen` and request fanout.
+	/// The request-phase mcpGuardrails hook runs once over the shared context before
+	/// any upstream is contacted.
+	async fn fanout_open_streams(
+		&self,
+		r: &JsonRpcRequest<ClientRequest>,
+		ctx: &mut IncomingRequestContext,
+		target_names: Option<Vec<String>>,
+		request_for_target: impl Fn(&str, &JsonRpcRequest<ClientRequest>) -> JsonRpcRequest<ClientRequest>,
+	) -> Result<(Vec<(Strng, Messages)>, Option<Vec<String>>), UpstreamError> {
+		let selected_upstreams = self
+			.upstreams
+			.iter_named()
+			.filter(|(name, _)| {
+				target_names
+					.as_ref()
+					.is_none_or(|targets| targets.iter().any(|target| target == name.as_str()))
+			})
+			.collect::<Vec<_>>();
+		if selected_upstreams.is_empty() {
+			return Err(UpstreamError::Unavailable(
+				"no upstreams available".to_string(),
+			));
+		}
+
+		// The fanout-wide mcpGuardrails hook receives every selected backend.
+		let service_names = self.mcp_guardrails.as_ref().map(|_| {
+			selected_upstreams
+				.iter()
+				.map(|(n, _)| n.to_string())
+				.collect::<Vec<_>>()
+		});
+
+		// params is None because fanout has no single request body to rewrite.
+		if let Some(ext) = self.mcp_guardrails.as_ref() {
+			let outcome = Box::pin(
+				crate::mcp::guardrails::run_call_request::<serde_json::Value>(
+					ext,
+					&mut crate::mcp::guardrails::CallRequestCtx {
+						backends: service_names.as_deref().unwrap_or_default(),
+						method: r.request.method(),
+						params: None,
+					},
+					ctx,
+					&self.policy_client,
+				)
+				.assert_size::<{ 4 * 1024 }>(),
+			)
+			.await;
+			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
+				return Err(UpstreamError::McpGuardrails(rej));
+			}
+		}
+
+		let futs: Vec<_> = selected_upstreams
+			.into_iter()
+			.map(|(name, con)| {
+				let r = request_for_target(name.as_str(), r);
+				let ctx = &*ctx;
+				async move { (name, con.generic_stream(r, ctx).await) }
+			})
+			.collect();
+		let fut_results = futures::future::join_all(futs).await;
+
+		let mut streams = Vec::new();
+		let mut last_error = None;
+		for (name, result) in fut_results {
+			match result {
+				Ok(s) => streams.push((name, s)),
+				Err(e) => {
+					// FailOpen skips pre-stream failures. FailClosed fails before any frame streams.
+					if self.upstreams.failure_mode == FailureMode::FailOpen {
+						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
+						last_error = Some(e);
+					} else {
+						return Err(e);
+					}
+				},
+			}
+		}
+		if streams.is_empty() {
+			// Request fanout has no transport fallback or generic synthetic success.
+			return Err(
+				last_error
+					.unwrap_or_else(|| UpstreamError::Unavailable("no upstreams available".to_string())),
+			);
+		}
+		Ok((streams, service_names))
+	}
+
+	/// Handles `subscriptions/listen` with an ACK derived from every selected upstream.
+	///
+	/// `client_filter` keeps service+ URIs for the downstream ACK. `resource_subs` carries the
+	/// owning target and rewritten upstream URI for each of them.
+	pub async fn send_subscriptions_listen(
+		&self,
+		r: JsonRpcRequest<ClientRequest>,
+		mut ctx: IncomingRequestContext,
+		client_filter: SubscriptionFilter,
+		resource_subs: Vec<ResourceSubscription>,
+	) -> Result<Response, UpstreamError> {
+		use futures_util::StreamExt;
+
+		use super::subscriptions::{
+			client_filter_from_accepted, filter_and_tag_listen_notification, prepare_listen_streams,
+			synthesize_listen_ack,
+		};
+		let id = r.id.clone();
+		let has_global_filter = client_filter.tools_list_changed == Some(true)
+			|| client_filter.prompts_list_changed == Some(true)
+			|| client_filter.resources_list_changed == Some(true);
+		// Resource-only listens go to just the owning targets; any global filter widens the
+		// fanout to every upstream (non-owners then get a filter without resource URIs).
+		let targets = (!has_global_filter && !resource_subs.is_empty()).then(|| {
+			resource_subs.iter().fold(Vec::new(), |mut targets, sub| {
+				if !targets.contains(&sub.owner) {
+					targets.push(sub.owner.clone());
+				}
+				targets
+			})
+		});
+		let (streams, service_names) = self
+			.fanout_open_streams(&r, &mut ctx, targets, |target, r| {
+				let mut r = r.clone();
+				if let ClientRequest::SubscriptionsListenRequest(slr) = &mut r.request {
+					slr.params.notifications =
+						listen_filter_for_target(&client_filter, &resource_subs, target);
+				}
+				r
+			})
+			.await?;
+
+		let prepared_inputs = streams
+			.into_iter()
+			.map(|(name, stream)| {
+				let filter = listen_filter_for_target(&client_filter, &resource_subs, name.as_str());
+				(name, stream, filter)
+			})
+			.collect();
+		let (prepared, accepted_filter) =
+			match prepare_listen_streams(prepared_inputs, self.upstreams.failure_mode).await {
+				Ok(prepared) => prepared,
+				Err(error) => {
+					let error_id = id.clone();
+					return respond_with_guardrails(
+						id,
+						futures::stream::once(async move { error.into_downstream_message(error_id) }),
+						service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
+						None,
+						&ctx,
+					);
+				},
+			};
+
+		let ack_filter =
+			client_filter_from_accepted(&client_filter, &resource_subs, &accepted_filter, &prepared);
+		let ack = synthesize_listen_ack(id.clone(), ack_filter);
+		let pipelines = prepared
+			.into_iter()
+			.map(|prepared| {
+				let name = prepared.target;
+				let stream = prepared.stream;
+				let filter = prepared.accepted_filter;
+				let target = name.to_string();
+				let sub_id = id.clone();
+				let default_target_name = self.upstreams.default_target_name.clone();
+				(
+					name,
+					stream.filter_map_messages_result(move |msg| {
+						filter_and_tag_listen_notification(
+							msg,
+							default_target_name.as_ref(),
+							&target,
+							&filter,
+							&sub_id,
+						)
+					}),
+				)
+			})
+			.collect::<Vec<_>>();
+
+		let merged =
+			mergestream::MergeStream::new_without_merge(pipelines, self.upstreams.failure_mode);
+		let body = futures::stream::once(async move { Ok(ack) }).chain(merged);
+
+		respond_with_guardrails(
+			id,
+			body,
+			service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
+			None,
+			&ctx,
+		)
 	}
 	pub async fn send_single(
 		&self,
@@ -597,20 +1127,14 @@ impl Relay {
 			)));
 		};
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
+		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
 			Box::pin(us.generic_stream(r, &ctx).assert_size::<{ 3 * 1024 }>()).await?,
+			cel,
 		);
 
-		match guardrails {
-			Some(guardrails) => messages_to_response(
-				id,
-				wrap_with_guardrails(stream, guardrails),
-				mcp_log,
-				ctx_downstream_modern(&ctx),
-			),
-			None => messages_to_response(id, stream, mcp_log, ctx_downstream_modern(&ctx)),
-		}
+		respond_with_guardrails(id, stream, guardrails, mcp_log, &ctx)
 	}
 	pub async fn send_fanout_deletion(
 		&self,
@@ -662,10 +1186,11 @@ impl Relay {
 
 		let fut_results = futures::future::join_all(futs).await;
 
+		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		for (name, result) in fut_results {
 			match result {
 				Ok(s) => {
-					let s = self.rewrite_outbound_server_messages(name.as_str(), s);
+					let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
 					streams.push((name, s));
 				},
 				Err(e) => {
@@ -731,120 +1256,30 @@ impl Relay {
 		target_names: Option<Vec<String>>,
 	) -> Result<Response, UpstreamError> {
 		let id = r.id.clone();
-		let subscription_id = if matches!(&r.request, ClientRequest::SubscriptionsListenRequest(_)) {
-			Some(id.clone())
-		} else {
-			None
-		};
-		let mut streams = Vec::new();
-		let method = r.request.method().to_string();
-		let method = method.as_str();
-		let selected_upstreams = self
-			.upstreams
-			.iter_named()
-			.filter(|(name, _)| {
-				target_names
-					.as_ref()
-					.is_none_or(|targets| targets.iter().any(|target| target == name.as_str()))
-			})
-			.collect::<Vec<_>>();
-		if selected_upstreams.is_empty() {
-			return Err(UpstreamError::InvalidRequest(
-				"no upstreams available".to_string(),
-			));
-		}
-
-		// service_names for the single fanout-wide mcpGuardrails hook: every backend this call
-		// fans out to (just the one name when there is a single backend).
-		let service_names = self.mcp_guardrails.as_ref().map(|_| {
-			selected_upstreams
-				.iter()
-				.map(|(n, _)| n.to_string())
-				.collect::<Vec<_>>()
-		});
-
-		// Request-phase hook runs once for the whole client call. params is None for
-		// fanout (no body to rewrite); header/metadata side effects apply to the single
-		// shared ctx forwarded to every upstream. A reject fails the whole call.
-		if let Some(ext) = self.mcp_guardrails.as_ref() {
-			// params is None, so mutations are discarded unparsed and the params
-			// type is never used.
-			let outcome = Box::pin(
-				crate::mcp::guardrails::run_call_request::<serde_json::Value>(
-					ext,
-					&mut crate::mcp::guardrails::CallRequestCtx {
-						backends: service_names.as_deref().unwrap_or_default(),
-						method,
-						params: None,
-					},
-					&mut ctx,
-					&self.policy_client,
-				)
-				.assert_size::<{ 4 * 1024 }>(),
-			)
-			.await;
-			if let crate::mcp::guardrails::Outcome::Reject(rej) = outcome {
-				return Err(UpstreamError::McpGuardrails(rej));
-			}
-		}
-
-		let futs: Vec<_> = selected_upstreams
-			.into_iter()
-			.map(|(name, con)| {
-				let r = r.clone();
-				let ctx = &ctx;
-				async move { (name, con.generic_stream(r, ctx).await) }
-			})
-			.collect();
-
-		let fut_results = futures::future::join_all(futs).await;
+		let (streams, service_names) = self
+			.fanout_open_streams(&r, &mut ctx, target_names, |_, r| r.clone())
+			.await?;
 
 		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
-		for (name, result) in fut_results {
-			match result {
-				Ok(s) => {
-					let mut s = self.rewrite_outbound_server_messages(name.as_str(), s);
-					if let Some(subscription_id) = subscription_id.clone() {
-						s = s.map_server_messages(move |message| {
-							set_subscription_ack_id(message, &subscription_id)
-						});
-					}
-					streams.push((name, s));
-				},
-				Err(e) => {
-					if self.upstreams.failure_mode == FailureMode::FailOpen {
-						warn!("upstream '{}' failed during fanout, skipping: {}", name, e);
-					} else {
-						return Err(e);
-					}
-				},
-			}
-		}
-
-		if streams.is_empty() {
-			// Unlike GET fanout, ordinary request fanout does not have a transport-level
-			// "stay connected" fallback, and most MCP methods do not have a safe generic
-			// synthetic success response. By the time we get here, every initialized
-			// upstream has failed this request, so we surface that as an error even in
-			// FailOpen rather than inventing a method-specific response.
-			return Err(UpstreamError::InvalidRequest(
-				"no upstreams available".to_string(),
-			));
-		}
+		let streams = streams
+			.into_iter()
+			.map(|(name, s)| {
+				let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
+				(name, s)
+			})
+			.collect::<Vec<_>>();
 
 		let ms =
 			mergestream::MergeStream::new(streams, id.clone(), merge, cel, self.upstreams.failure_mode);
 
 		// Response-phase hook runs once on the merged (muxed) result.
-		match service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)) {
-			Some(guardrails) => messages_to_response(
-				id,
-				wrap_with_guardrails(ms, guardrails),
-				None,
-				ctx_downstream_modern(&ctx),
-			),
-			None => messages_to_response(id, ms, None, ctx_downstream_modern(&ctx)),
-		}
+		respond_with_guardrails(
+			id,
+			ms,
+			service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
+			None,
+			&ctx,
+		)
 	}
 	pub async fn send_notification(
 		&self,
@@ -901,10 +1336,11 @@ impl Relay {
 		pv: ProtocolVersion,
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
+		extensions: Option<ExtensionCapabilities>,
 	) -> ServerInfo {
 		let capabilities = {
 			// Prompts are supported with multiplexing using proxy-prefixed names.
-			// Resources are supported with multiplexing using service+scheme:// URI prefixing.
+			// Resources are supported with multiplexing using service+<uri> prefixing.
 			let mut builder = ServerCapabilities::builder()
 				.enable_tools()
 				.enable_tool_list_changed()
@@ -915,7 +1351,9 @@ impl Relay {
 			if resource_subscribe {
 				builder = builder.enable_resources_subscribe();
 			}
-			builder.build()
+			let mut capabilities = builder.build();
+			capabilities.extensions = extensions;
+			capabilities
 		};
 		let gateway_preamble = "This server is a gateway to a set of mcp servers. It is responsible for routing requests to the correct server and aggregating the results.";
 		let instructions = if upstream_instructions.is_empty() {
@@ -939,11 +1377,13 @@ impl Relay {
 	fn get_discovery(
 		resource_subscribe: bool,
 		upstream_instructions: Vec<(String, String)>,
+		extensions: Option<ExtensionCapabilities>,
 	) -> DiscoverResult {
 		let info = Self::get_info(
 			ProtocolVersion::default(),
 			resource_subscribe,
 			upstream_instructions,
+			extensions,
 		);
 		DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
 			.with_server_info(info.server_info)
@@ -982,7 +1422,7 @@ pub(crate) struct GuardrailsCtx {
 	pub req_ctx: Arc<IncomingRequestContext>,
 }
 
-fn messages_to_response(
+pub(super) fn messages_to_response(
 	id: RequestId,
 	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
 	mcp_log: Option<AsyncLog<MCPInfo>>,
@@ -994,12 +1434,44 @@ fn messages_to_response(
 	))
 }
 
-fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
+fn respond_with_guardrails(
+	id: RequestId,
+	stream: impl Stream<Item = Result<ServerJsonRpcMessage, ClientError>> + Send + 'static,
+	guardrails: Option<GuardrailsCtx>,
+	mcp_log: Option<AsyncLog<MCPInfo>>,
+	ctx: &IncomingRequestContext,
+) -> Result<Response, UpstreamError> {
+	match guardrails {
+		Some(guardrails) => messages_to_response(
+			id,
+			wrap_with_guardrails(stream, guardrails),
+			mcp_log,
+			ctx_downstream_modern(ctx),
+		),
+		None => messages_to_response(id, stream, mcp_log, ctx_downstream_modern(ctx)),
+	}
+}
+
+pub(crate) fn ctx_downstream_modern(ctx: &IncomingRequestContext) -> bool {
 	ctx
-		.as_request()
 		.extensions()
 		.get::<RequestProtocol>()
 		.is_some_and(RequestProtocol::is_modern)
+}
+
+fn listen_filter_for_target(
+	client_filter: &SubscriptionFilter,
+	resource_subs: &[ResourceSubscription],
+	target: &str,
+) -> SubscriptionFilter {
+	let mut filter = client_filter.clone();
+	let mine = resource_subs
+		.iter()
+		.filter(|sub| sub.owner == target)
+		.map(|sub| sub.upstream_uri.clone())
+		.collect::<Vec<_>>();
+	filter.resource_subscriptions = (!mine.is_empty()).then_some(mine);
+	filter
 }
 
 fn wrap_with_guardrails(
@@ -1031,90 +1503,172 @@ fn into_sse_stream(
 	downstream_modern: bool,
 ) -> impl Stream<Item = ServerSseMessage> + Send + 'static {
 	use futures_util::StreamExt;
-	let mut captured_terminal = false;
-	stream.map(move |rpc| {
-		let r = match rpc {
-			Ok(rpc) => {
-				let rpc = with_gateway_cache_policy(rpc);
-				let rpc = normalize_outbound_for_protocol(rpc, downstream_modern);
-				if !captured_terminal && let Some(log) = mcp_log.as_ref() {
-					captured_terminal = capture_terminal_mcp_payload(log, &request_id, &rpc);
-				}
-				rpc
-			},
-			Err(e) => ServerJsonRpcMessage::error(
-				ErrorData::internal_error(e.to_string(), None),
-				Some(request_id.clone()),
-			),
-		};
-		// TODO: is it ok to have no event_id here?
-		ServerSseMessage {
-			event_id: None,
-			message: Arc::new(r),
-		}
-	})
+	stream
+		.scan((false, false), move |st, rpc| {
+			let (errored, terminal_seen) = st;
+			std::future::ready((!*errored).then(|| {
+				let msg: Option<ServerJsonRpcMessage> = match rpc {
+					Ok(ServerJsonRpcMessage::Request(req)) if downstream_modern => {
+						reject_direct_request(req, &request_id, mcp_log.as_ref(), *terminal_seen, errored)
+					},
+					Ok(rpc) => {
+						let rpc =
+							normalize_outbound_for_protocol(with_gateway_cache_policy(rpc), downstream_modern);
+						if !*terminal_seen {
+							*terminal_seen = capture_terminal_mcp_payload(mcp_log.as_ref(), &request_id, &rpc);
+						}
+						Some(rpc)
+					},
+					Err(e) => {
+						*errored = true;
+						if *terminal_seen {
+							None
+						} else {
+							let msg = ServerJsonRpcMessage::error(
+								ErrorData::internal_error(e.to_string(), None),
+								Some(request_id.clone()),
+							);
+							*terminal_seen = capture_terminal_mcp_payload(mcp_log.as_ref(), &request_id, &msg);
+							Some(msg)
+						}
+					},
+				};
+				// TODO: is it ok to have no event_id here?
+				msg.map(|message| ServerSseMessage {
+					event_id: None,
+					message: Arc::new(message),
+				})
+			}))
+		})
+		.flat_map(futures_util::stream::iter)
+}
+
+// Modern servers must return input_required instead of direct requests.
+fn reject_direct_request(
+	req: JsonRpcRequest<ServerRequest>,
+	request_id: &RequestId,
+	mcp_log: Option<&AsyncLog<MCPInfo>>,
+	terminal_seen: bool,
+	errored: &mut bool,
+) -> Option<ServerJsonRpcMessage> {
+	info!(
+		"upstream sent a direct server-to-client request on a modern stream: {}",
+		server_request_method(&req.request)
+	);
+	*errored = true;
+	if terminal_seen {
+		return None;
+	}
+	let msg = ServerJsonRpcMessage::error(
+		ErrorData::internal_error(
+			"gateway cannot route direct server-to-client requests; return an input_required result instead",
+			None,
+		),
+		Some(request_id.clone()),
+	);
+	capture_terminal_mcp_payload(mcp_log, request_id, &msg);
+	Some(msg)
+}
+
+fn server_request_method(request: &ServerRequest) -> &str {
+	match request {
+		ServerRequest::PingRequest(r) => r.method.as_str(),
+		ServerRequest::CreateMessageRequest(r) => r.method.as_str(),
+		ServerRequest::ListRootsRequest(r) => r.method.as_str(),
+		ServerRequest::ElicitRequest(r) => r.method.as_str(),
+		ServerRequest::CustomRequest(r) => r.method.as_str(),
+	}
 }
 
 fn normalize_outbound_for_protocol(
 	mut msg: ServerJsonRpcMessage,
 	downstream_modern: bool,
 ) -> ServerJsonRpcMessage {
-	if downstream_modern {
-		return msg;
-	}
-
 	let ServerJsonRpcMessage::Response(resp) = &mut msg else {
 		return msg;
 	};
 
 	match &mut resp.result {
 		ServerResult::DiscoverResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
-		},
-		ServerResult::InitializeResult(r) => r.result_type = None,
-		ServerResult::CompleteResult(r) => r.result_type = None,
-		ServerResult::GetPromptResult(r) => r.result_type = None,
-		ServerResult::ListPromptsResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
-		},
-		ServerResult::ListResourcesResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
-		},
-		ServerResult::ListResourceTemplatesResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
-		},
-		ServerResult::ReadResourceResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
 		ServerResult::ListToolsResult(r) => {
-			r.result_type = None;
-			r.ttl_ms = None;
-			r.cache_scope = None;
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
-		ServerResult::ElicitResult(r) => r.result_type = None,
-		ServerResult::CreateTaskResult(r) => r.result_type = None,
-		ServerResult::ListTasksResult(r) => r.result_type = None,
-		ServerResult::GetTaskResult(r) => r.result_type = None,
-		ServerResult::CancelTaskResult(r) => r.result_type = None,
-		ServerResult::SubscriptionsListenResult(r) => r.result_type = None,
-		ServerResult::CallToolResult(r) => r.result_type = None,
-		ServerResult::GetTaskPayloadResult(r) => strip_protocol_result_fields(&mut r.0),
-		ServerResult::EmptyResult(r) => r.result_type = None,
-		ServerResult::CustomResult(r) => strip_protocol_result_fields(&mut r.0),
+		ServerResult::ListPromptsResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::ListResourcesResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::ListResourceTemplatesResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::ReadResourceResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern);
+			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
+		},
+		ServerResult::InitializeResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::CompleteResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::GetPromptResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::ElicitResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::CreateTaskResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::ListTasksResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::GetTaskResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::CancelTaskResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::SubscriptionsListenResult(r) => {
+			normalize_result_type(&mut r.result_type, downstream_modern)
+		},
+		ServerResult::CallToolResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::EmptyResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
+		ServerResult::GetTaskPayloadResult(r) => {
+			if !downstream_modern {
+				strip_protocol_result_fields(&mut r.0)
+			}
+		},
+		ServerResult::CustomResult(r) => {
+			if !downstream_modern {
+				strip_protocol_result_fields(&mut r.0)
+			}
+		},
 		ServerResult::InputRequiredResult(_) => {},
 	}
 
 	msg
+}
+
+fn normalize_result_type(result_type: &mut Option<ResultType>, downstream_modern: bool) {
+	if downstream_modern {
+		result_type.get_or_insert(ResultType::COMPLETE);
+	} else {
+		*result_type = None;
+	}
+}
+
+fn normalize_cache_fields(
+	ttl_ms: &mut Option<u64>,
+	cache_scope: &mut Option<CacheScope>,
+	downstream_modern: bool,
+) {
+	if !downstream_modern {
+		*ttl_ms = None;
+		*cache_scope = None;
+	}
 }
 
 fn strip_protocol_result_fields(value: &mut serde_json::Value) {
@@ -1207,19 +1761,23 @@ async fn apply_guardrails_response_intercept(
 }
 
 fn capture_terminal_mcp_payload(
-	log: &AsyncLog<MCPInfo>,
+	log: Option<&AsyncLog<MCPInfo>>,
 	request_id: &RequestId,
 	message: &ServerJsonRpcMessage,
 ) -> bool {
 	match message {
 		ServerJsonRpcMessage::Response(response) if response.id == *request_id => {
-			if let ServerResult::CallToolResult(result) = &response.result {
+			if let ServerResult::CallToolResult(result) = &response.result
+				&& let Some(log) = log
+			{
 				log.non_atomic_mutate(|mcp| mcp.capture_call_result(result));
 			}
 			true
 		},
 		ServerJsonRpcMessage::Error(error) if error.id.as_ref() == Some(request_id) => {
-			log.non_atomic_mutate(|mcp| mcp.capture_call_error(&error.error));
+			if let Some(log) = log {
+				log.non_atomic_mutate(|mcp| mcp.capture_call_error(&error.error));
+			}
 			true
 		},
 		_ => false,
@@ -1235,11 +1793,49 @@ fn accepted_response() -> Response {
 
 #[cfg(test)]
 mod tests {
-	use futures_util::stream;
-	use rmcp::model::{CallToolResult, ListToolsResult};
+	use futures_util::{StreamExt, stream};
+	use rmcp::model::{CallToolResult, ListResourcesResult, ListToolsResult};
 	use serde_json::json;
 
 	use super::*;
+
+	#[test]
+	fn uri_scheme_prefix_accepts_hierarchical_and_opaque() {
+		assert_eq!(uri_scheme_prefix_len("http://example.com/x"), Some(4));
+		assert_eq!(uri_scheme_prefix_len("svn+ssh://host/repo"), Some(7));
+		assert_eq!(uri_scheme_prefix_len("memo:insights"), Some(4));
+		assert_eq!(uri_scheme_prefix_len("urn:uuid:1234"), Some(3));
+		assert_eq!(uri_scheme_prefix_len("relative/path"), None);
+		assert_eq!(uri_scheme_prefix_len("/absolute/path"), None);
+		assert_eq!(uri_scheme_prefix_len(""), None);
+	}
+
+	#[test]
+	fn resource_uri_multiplexes_opaque_and_hierarchical() {
+		let single = Some("only".to_string());
+		assert_eq!(
+			resource_uri(single.as_ref(), "svc", "memo:insights"),
+			"memo:insights"
+		);
+		assert_eq!(
+			resource_uri(None, "svc", "http://example.com/x"),
+			"svc+http://example.com/x"
+		);
+		assert_eq!(
+			resource_uri(None, "svc", "memo:insights"),
+			"svc+memo:insights"
+		);
+		assert_eq!(
+			resource_uri(None, "svc", "svn+ssh://host/repo"),
+			"svc+svn+ssh://host/repo"
+		);
+		assert_eq!(resource_uri(None, "svc", "relative/path"), "relative/path");
+		// Apps: ui:// must stay on the left; never become svc+ui://…
+		assert_eq!(
+			resource_uri(None, "svc", "ui://weather/dashboard.html"),
+			"ui://svc+weather/dashboard.html"
+		);
+	}
 
 	#[test]
 	fn normalize_outbound_result_type_by_downstream_protocol() {
@@ -1260,6 +1856,20 @@ mod tests {
 
 		let legacy = serde_json::to_value(normalize_outbound_for_protocol(response, false)).unwrap();
 		assert!(legacy["result"].get("resultType").is_none());
+		assert!(legacy["result"].get("ttlMs").is_none());
+		assert!(legacy["result"].get("cacheScope").is_none());
+
+		// Gateway cache hints make unstamped results stale and private for modern clients.
+		// Legacy normalization omits those fields.
+		let stamped = with_gateway_cache_policy(ServerJsonRpcMessage::response(
+			ServerResult::ListResourcesResult(ListResourcesResult::default()),
+			RequestId::Number(2),
+		));
+		let modern =
+			serde_json::to_value(normalize_outbound_for_protocol(stamped.clone(), true)).unwrap();
+		assert_eq!(modern["result"]["ttlMs"], 0);
+		assert_eq!(modern["result"]["cacheScope"], "private");
+		let legacy = serde_json::to_value(normalize_outbound_for_protocol(stamped, false)).unwrap();
 		assert!(legacy["result"].get("ttlMs").is_none());
 		assert!(legacy["result"].get("cacheScope").is_none());
 	}
@@ -1304,7 +1914,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn messages_to_response_ignores_transport_errors_before_result() {
+	async fn messages_to_response_captures_transport_error_and_ends_stream() {
 		let log = AsyncLog::default();
 		let mut info = MCPInfo::default();
 		info.set_tool("mcp".to_string(), "echo".to_string());
@@ -1319,16 +1929,27 @@ mod tests {
 				RequestId::Number(7),
 			)),
 		]);
-		let response =
-			messages_to_response(RequestId::Number(7), stream, Some(log.clone()), false).unwrap();
-		let _ = crate::http::read_resp_body(response).await.unwrap();
+		let messages = into_sse_stream(RequestId::Number(7), stream, Some(log.clone()), false)
+			.collect::<Vec<_>>()
+			.await;
+		assert_eq!(messages.len(), 1, "the transport error must end the stream");
+		assert!(matches!(
+			messages[0].message.as_ref(),
+			ServerJsonRpcMessage::Error(error) if error.id == Some(RequestId::Number(7))
+		));
 
 		let info = log.take().unwrap();
+		assert!(info.tool.as_ref().unwrap().result.is_none());
 		assert_eq!(
-			info.tool.as_ref().unwrap().result.as_ref().unwrap()["structuredContent"]["status"],
-			"ok"
+			info.tool.as_ref().unwrap().error.as_ref().unwrap()["code"],
+			-32603
 		);
-		assert!(info.tool.as_ref().unwrap().error.is_none());
+		assert!(
+			info.tool.as_ref().unwrap().error.as_ref().unwrap()["message"]
+				.as_str()
+				.unwrap()
+				.contains("boom")
+		);
 	}
 
 	#[tokio::test]

@@ -45,7 +45,7 @@ func TestConformance(t *testing.T) {
 	}
 
 	// Configure profiles and exempt features based on detected channel
-	profiles := sets.New(suite.GatewayGRPCConformanceProfileName, suite.GatewayHTTPConformanceProfileName)
+	profiles := sets.New(suite.GatewayGRPCConformanceProfileName, suite.GatewayHTTPConformanceProfileName, suite.GatewayTCPConformanceProfileName)
 	if channel == features.FeatureChannelExperimental {
 		profiles.Insert(suite.GatewayTLSConformanceProfileName)
 	}

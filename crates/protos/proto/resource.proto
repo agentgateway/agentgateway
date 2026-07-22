@@ -336,6 +336,12 @@ message Retry {
   string condition = 5;
 }
 
+message Delay {
+  // CEL expression evaluating to the artificial latency, in milliseconds, injected before the
+  // request is forwarded to the backend. A non-positive result injects no delay.
+  string duration = 1;
+}
+
 message BackendAuthPolicy {
   oneof kind {
     Passthrough passthrough = 1;
@@ -344,6 +350,7 @@ message BackendAuthPolicy {
     Aws aws = 4;
     Azure azure = 5;
     OAuthTokenExchange oauth_token_exchange = 6;
+    CrossAppAccessAuth cross_app_access = 7;
   }
 }
 
@@ -409,6 +416,10 @@ message Aws {
   string service_name = 3;
   // Optional STS role to assume before signing requests.
   AwsAssumeRole assume_role = 4;
+  // AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS
+  // backends may provide this automatically; otherwise the ambient AWS region
+  // is used.
+  string region = 5;
 }
 
 // Azure-specific backend authentication.
@@ -447,6 +458,12 @@ message AwsAssumeRole {
   // tags, they surface as columns in the AWS Cost & Usage Report for per-tenant
   // cost attribution.
   repeated AwsSessionTag tags = 3;
+  // CEL expression evaluated against each request to produce the session name
+  // (RoleSessionName), for example `jwt.sub` or `request.headers["x-team"]`. If
+  // the expression does not produce a valid session name at request time, the
+  // request is rejected. At most one of session_name and session_name_expression
+  // may be set.
+  string session_name_expression = 4;
 }
 
 // AWS STS session tag passed to AssumeRole for cost attribution.
@@ -967,6 +984,9 @@ message TrafficPolicySpec {
       BackendPolicySpec.McpAuthentication.McpIDP provider = 1;
       BackendPolicySpec.McpAuthentication.ResourceMetadata resource_metadata = 2;
       optional string client_id = 3;
+      // OAuth client secret injected into proxied token requests for confidential clients
+      // (used by the ENTRA provider).
+      optional string client_secret = 4;
     }
 
     // Validation mode for JWT authentication
@@ -1156,6 +1176,7 @@ message TrafficPolicySpec {
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
     Buffer buffer = 22;
+    Delay delay = 23;
   }
 }
 
@@ -1510,6 +1531,8 @@ message BackendPolicySpec {
       KEYCLOAK = 2;
       OKTA = 3;
       DESCOPE = 4;
+      AUTHENTIK = 5;
+      ENTRA = 6;
     }
 
     // Validation mode for JWT authentication
@@ -1533,6 +1556,9 @@ message BackendPolicySpec {
     JWTValidationOptions jwt_validation_options = 7;
     AuthorizationLocation authorization_location = 8;
     optional string client_id = 9;
+    // OAuth client secret injected into proxied token requests for confidential clients
+    // (used by the ENTRA provider).
+    optional string client_secret = 10;
   }
 
   // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of
@@ -1738,6 +1764,9 @@ message MCPBackend {
   enum PrefixMode {
     CONDITIONAL = 0;
     ALWAYS = 1;
+    // Never prefix names, even with multiple targets; tool/prompt calls are
+    // routed by looking up which target serves the name.
+    NEVER = 2;
   }
 
   repeated MCPTarget targets = 2;
@@ -1839,8 +1868,9 @@ message OAuthTokenExchange {
     // from the Claims extension when an upstream JWT policy has stripped the
     // header, so the default keeps working behind a JWT auth policy.
     AuthorizationLocation source = 1;
-    // RFC 8693 §3 token type URN sent as subject_token_type / actor_token_type.
-    // e.g. "urn:ietf:params:oauth:token-type:access_token"
+    // RFC 8693 token type URI sent as subject_token_type / actor_token_type.
+    // Built-ins such as "urn:ietf:params:oauth:token-type:access_token" and
+    // custom absolute URIs such as "urn:company:domain:human" are accepted.
     // Empty defaults to access_token under TOKEN_EXCHANGE. Ignored for the
     // JWT_BEARER subject token because RFC 7523 sends the token as `assertion`
     // and has no subject_token_type parameter.
@@ -1855,8 +1885,8 @@ message OAuthTokenExchange {
     // credential.
     AuthorizationLocation source = 1;
 
-    // RFC 8693 §3 token type URN sent as actor_token_type.
-    // e.g. "urn:ietf:params:oauth:token-type:access_token"
+    // RFC 8693 token type URI sent as actor_token_type. Built-ins and custom
+    // absolute URIs are accepted.
     // Empty defaults to access_token, and actor_token_type is still sent.
     string token_type = 2;
 
@@ -1889,11 +1919,13 @@ message OAuthTokenExchange {
   // ----- Token request parameters -----
   // Properties sent only when non-empty.
   repeated string audiences = 2;
-  repeated string scopes = 3; // joined with spaces into a single `scope` param
+  // OAuth scope-token values joined with spaces into a single `scope` param.
+  // Each entry must already be a single scope token, not a space-delimited list.
+  repeated string scopes = 3;
   repeated string resources = 4;
   // requested_token_type parameter sent under TOKEN_EXCHANGE only. Rejected
-  // under JWT_BEARER. When unset, no requested_token_type is sent; if the token
-  // endpoint returns issued_token_type, the gateway expects access_token.
+  // under JWT_BEARER. When unset under TOKEN_EXCHANGE, the gateway sends
+  // access_token because this backend auth policy forwards bearer access tokens.
   optional string requested_token_type = 5;
   // Arbitrary extra string form fields appended to the token exchange request.
   // Values are CEL expressions evaluated against the incoming request.
@@ -1922,4 +1954,29 @@ message OAuthTokenExchange {
   }
   // Response cache configuration. When unset uses InMemory cache with defaults
   TokenCache cache = 14;
+}
+
+// Cross App Access / ID-JAG backend authentication.
+message CrossAppAccessAuth {
+  message Endpoint {
+    // Authorization server token endpoint.
+    BackendReference token_endpoint = 1;
+    // Token endpoint path on the backend that must start with "/" (defaults to "/")
+    optional string token_endpoint_path = 2;
+    // Client authentication used when calling this token endpoint.
+    OAuthClientAuth client_auth = 3;
+  }
+
+  // User identity provider authorization server, used for the RFC 8693 ID-JAG exchange.
+  Endpoint identity_provider = 1;
+  // Resource authorization server, used for the RFC 7523 jwt-bearer exchange.
+  Endpoint resource_authorization_server = 2;
+  // Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.
+  string audience = 3;
+  // resource parameters naming the protected resource APIs.
+  repeated string resources = 4;
+  // scope values for the requested token.
+  repeated string scopes = 5;
+  // Response cache configuration. When unset uses InMemory cache with defaults.
+  OAuthTokenExchange.TokenCache cache = 6;
 }

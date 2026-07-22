@@ -120,6 +120,8 @@ const (
 	oauthGrantTypeTokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange" // #nosec G101
 	oauthGrantTypeJWTBearer     = "urn:ietf:params:oauth:grant-type:jwt-bearer"     // #nosec G101
 	oauthTokenTypeAccessToken   = "urn:ietf:params:oauth:token-type:access_token"   // #nosec G101
+	oauthTokenTypeIDToken       = "urn:ietf:params:oauth:token-type:id_token"       // #nosec G101
+	oauthTokenTypeIDJAG         = "urn:ietf:params:oauth:token-type:id-jag"         // #nosec G101
 	oauthTokenTypeJWT           = "urn:ietf:params:oauth:token-type:jwt"            // #nosec G101
 )
 
@@ -267,6 +269,11 @@ func handleOAuthTokenExchange(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleTokenExchangeGrant(w http.ResponseWriter, r *http.Request, form url.Values) {
+	if form.Get("requested_token_type") == oauthTokenTypeIDJAG {
+		handleCrossAppAccessIdentityAssertionGrant(w, r, form)
+		return
+	}
+
 	required := map[string][]string{
 		"subject_token":        {"subject-token"},
 		"subject_token_type":   {oauthTokenTypeAccessToken},
@@ -287,7 +294,40 @@ func handleTokenExchangeGrant(w http.ResponseWriter, r *http.Request, form url.V
 	writeOAuthTokenExchangeResponse(w, r, "token-exchange-access")
 }
 
+func handleCrossAppAccessIdentityAssertionGrant(w http.ResponseWriter, r *http.Request, form url.Values) {
+	required := map[string][]string{
+		"subject_token":        {"subject-id-token"},
+		"subject_token_type":   {oauthTokenTypeIDToken},
+		"audience":             {"api://cross-app-resource"},
+		"resource":             {"https://cross-app.example.com"},
+		"scope":                {"cross-app.read"},
+		"requested_token_type": {oauthTokenTypeIDJAG},
+		"client_id":            {"cross-app-idp-client"},
+	}
+	if !formContainsValues(form, required) {
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	if form.Has("actor_token") || form.Has("actor_token_type") {
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	sendJSONResponse(w, r, map[string]any{
+		"access_token":      "id-jag-assertion",
+		"token_type":        "N_A",
+		"issued_token_type": oauthTokenTypeIDJAG,
+		"expires_in":        60,
+	}, http.StatusOK)
+}
+
 func handleJWTBearerGrant(w http.ResponseWriter, r *http.Request, form url.Values) {
+	if form.Get("assertion") == "id-jag-assertion" {
+		handleCrossAppAccessResourceGrant(w, r, form)
+		return
+	}
+
 	required := map[string][]string{
 		"assertion": {"jwt-assertion"},
 		"client_id": {"oauth-e2e-jwt-client"},
@@ -303,6 +343,25 @@ func handleJWTBearerGrant(w http.ResponseWriter, r *http.Request, form url.Value
 	}
 
 	writeOAuthTokenExchangeResponse(w, r, "jwt-bearer-access")
+}
+
+func handleCrossAppAccessResourceGrant(w http.ResponseWriter, r *http.Request, form url.Values) {
+	required := map[string][]string{
+		"assertion": {"id-jag-assertion"},
+		"client_id": {"cross-app-resource-client"},
+		"scope":     {"cross-app.read"},
+	}
+	if !formContainsValues(form, required) {
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	if form.Has("subject_token") || form.Has("actor_token") || form.Has("requested_token_type") || form.Has("resource") {
+		writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+		return
+	}
+
+	writeOAuthTokenExchangeResponse(w, r, "cross-app-access-token")
 }
 
 func formContainsValues(form url.Values, required map[string][]string) bool {

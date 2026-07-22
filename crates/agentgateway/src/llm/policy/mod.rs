@@ -12,9 +12,7 @@ use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction}
 use crate::llm::{AIError, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
-use crate::types::agent::{
-	BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, SimpleBackendReference,
-};
+use crate::types::agent::{BackendTrafficPolicy, HeaderMatch, SimpleBackendReference};
 use crate::*;
 
 fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
@@ -672,7 +670,7 @@ impl Policy {
 		req: &mut dyn RequestType,
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
-	) -> anyhow::Result<Option<Response>> {
+	) -> anyhow::Result<Option<(Response, &'static str)>> {
 		let client = PolicyClient::new(backend_info.inputs.clone());
 		for g in self
 			.prompt_guard
@@ -687,7 +685,7 @@ impl Policy {
 						crate::telemetry::metrics::GuardrailPhase::Request,
 						crate::telemetry::metrics::GuardrailAction::Reject,
 					);
-					return Ok(Some(res));
+					return Ok(Some((res, g.kind.name())));
 				},
 				GuardrailOutcome::Masked => {
 					Self::record_guardrail_trip(
@@ -1194,31 +1192,13 @@ impl Policy {
 				crate::http::HeaderOrPseudo::Header(h) => h,
 				_ => continue, // Skip pseudo headers
 			};
-			let Some(have) = http_headers.get(header_name.as_str()) else {
+			let values = http_headers.get_all(header_name.as_str());
+			if !values.iter().any(|have| value.matches(have)) {
 				continue;
-			};
-			match value {
-				HeaderValueMatch::Exact(want) => {
-					if have != want {
-						continue;
-					}
-				},
-				HeaderValueMatch::Regex(want) => {
-					// Must be a valid string to do regex match
-					let Some(have_str) = have.to_str().ok() else {
-						continue;
-					};
-					let Some(m) = want.find(have_str) else {
-						continue;
-					};
-					// Make sure we matched the entire thing
-					if !(m.start() == 0 && m.end() == have_str.len()) {
-						continue;
-					}
-				},
-				HeaderValueMatch::Invalid => continue,
 			}
-			headers.insert(header_name, have.clone());
+			for have in values {
+				headers.append(header_name.clone(), have.clone());
+			}
 		}
 		headers
 	}
@@ -1434,6 +1414,19 @@ pub enum RequestGuardKind {
 	GoogleModelArmor(GoogleModelArmor),
 	/// Use Azure Content Safety to evaluate the prompt.
 	AzureContentSafety(AzureContentSafety),
+}
+
+impl RequestGuardKind {
+	fn name(&self) -> &'static str {
+		match self {
+			RequestGuardKind::Regex(_) => "regex",
+			RequestGuardKind::Webhook(_) => "webhook",
+			RequestGuardKind::OpenAIModeration(_) => "openAIModeration",
+			RequestGuardKind::BedrockGuardrails(_) => "bedrockGuardrails",
+			RequestGuardKind::GoogleModelArmor(_) => "googleModelArmor",
+			RequestGuardKind::AzureContentSafety(_) => "azureContentSafety",
+		}
+	}
 }
 
 #[apply(schema!)]

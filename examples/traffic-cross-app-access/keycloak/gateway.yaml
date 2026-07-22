@@ -31,7 +31,7 @@ binds:
             # Leg 1 — the user's IdP token endpoint, authenticated as the requesting client.
             identityProvider:
               host: localhost:8480
-              tokenEndpointPath: /realms/idjag-demo/protocol/openid-connect/token
+              path: /realms/idjag-demo/protocol/openid-connect/token
               clientAuth:
                 clientId: agent-client
                 method: clientSecretBasic
@@ -39,7 +39,7 @@ binds:
             # Leg 2 — the resource authorization server, authenticated as the resource client.
             resourceAuthorizationServer:
               host: localhost:8480
-              tokenEndpointPath: /realms/idjag-demo/protocol/openid-connect/token
+              path: /realms/idjag-demo/protocol/openid-connect/token
               clientAuth:
                 clientId: resource-client
                 method: clientSecretBasic

@@ -14,7 +14,6 @@ import {
   Download,
   RefreshCw,
   Route,
-  Save,
   Settings,
   User,
 } from "lucide-react";
@@ -37,6 +36,7 @@ import {
 import { EnumSelector } from "../components/EnumSelector";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { MultiCheckboxDropdown } from "../components/MultiCheckboxDropdown";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import {
   promptCompletionLoggingEnabled,
   setPromptCompletionLogging,
@@ -44,7 +44,7 @@ import {
   uiLogAttributeExpressions,
 } from "../config";
 import { queryParam, useStickyQueryParam } from "../drawerRouteState";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import { useLlmConfigData, useUpdateConfig } from "../hooks";
 import {
   Drawer,
   EmptyState,
@@ -79,6 +79,7 @@ import {
 import type {
   AnalyticsGroup,
   AnalyticsTimeBucket,
+  GatewayConfig,
   LogEntry,
   SearchLogsResponse,
   TimeRange,
@@ -86,11 +87,21 @@ import type {
 
 export function LogsPage() {
   const navigate = useNavigate({ from: "/llm/logs" });
-  const config = useGatewayConfig();
+  const {
+    config,
+    models: configuredModels,
+    virtualModels,
+    providers,
+  } = useLlmConfigData();
   const updateConfig = useUpdateConfig();
   const models = useMemo(
-    () => llmModelOptions(config.data?.llm),
-    [config.data],
+    () =>
+      llmModelOptions({
+        models: configuredModels,
+        virtualModels,
+        providers,
+      }),
+    [configuredModels, providers, virtualModels],
   );
   const promptLoggingEnabled = promptCompletionLoggingEnabled(config.data);
   const [settings, setSettings] = useStickyQueryParam("settings");
@@ -439,6 +450,7 @@ export function LogsPage() {
 
       {settings === "logs" ? (
         <LogsSettingsDrawer
+          config={config.data}
           enabled={promptLoggingEnabled}
           attributes={uiLogAttributeExpressions(config.data)}
           saving={updateConfig.isPending}
@@ -462,6 +474,7 @@ export function LogsPage() {
 }
 
 function LogsSettingsDrawer(props: {
+  config?: GatewayConfig | null;
   enabled: boolean;
   attributes: { user: string; group: string };
   saving: boolean;
@@ -477,36 +490,39 @@ function LogsSettingsDrawer(props: {
   const [groupExpression, setGroupExpression] = useState(
     props.attributes.group,
   );
+  const dirty =
+    enabled !== props.enabled ||
+    userExpression !== props.attributes.user ||
+    groupExpression !== props.attributes.group;
   useEffect(() => setEnabled(props.enabled), [props.enabled]);
   useEffect(() => {
     setUserExpression(props.attributes.user);
     setGroupExpression(props.attributes.group);
   }, [props.attributes.group, props.attributes.user]);
+  const values = {
+    enabled,
+    attributes: { user: userExpression, group: groupExpression },
+  };
   return (
     <Drawer
       title="Log settings"
       onClose={props.onClose}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onClose}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={() =>
-              props.onSave({
-                enabled,
-                attributes: { user: userExpression, group: groupExpression },
-              })
-            }
-          >
-            <Save size={16} />
-            Save settings
-          </button>
-        </div>
-      }
+      dirty={dirty}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Log settings config diff"
+          saveLabel="Save settings"
+          saving={props.saving}
+          onCancel={requestClose}
+          onSave={() => props.onSave(values)}
+          applyDiff={(next) => {
+            setPromptCompletionLogging(next, values.enabled);
+            setUiLogAttributeExpressions(next, values.attributes);
+          }}
+        />
+      )}
     >
       <label className="config-option-row">
         <input

@@ -4,6 +4,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
 use futures_util::stream;
+use headers::{ContentEncoding, HeaderMapExt};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
@@ -11,14 +12,15 @@ use serde_json::Value;
 use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, Response};
 use crate::types::agent::{
-	Authorization, BackendReference, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch,
-	RouteBackendReference,
+	Authorization, BackendReference, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
 };
 use crate::{apply, cel, llm, schema_enum};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRoute {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub id: Option<String>,
 	pub name: String,
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,
@@ -368,27 +370,8 @@ fn header_matches(matches: &[Vec<HeaderMatch>], req: &Request) -> bool {
 
 fn headers_match(headers: &[HeaderMatch], req: &Request) -> bool {
 	for HeaderMatch { name, value } in headers {
-		let Some(have) = http::get_pseudo_or_header_value(name, req) else {
+		if !http::request_header_matches(name, value, req) {
 			return false;
-		};
-		match value {
-			HeaderValueMatch::Exact(want) => {
-				if have.as_ref() != *want {
-					return false;
-				}
-			},
-			HeaderValueMatch::Regex(want) => {
-				let Some(have_str) = have.to_str().ok() else {
-					return false;
-				};
-				let Some(m) = want.find(have_str) else {
-					return false;
-				};
-				if !(m.start() == 0 && m.end() == have_str.len()) {
-					return false;
-				}
-			},
-			HeaderValueMatch::Invalid => return false,
 		}
 	}
 	true
@@ -516,10 +499,17 @@ fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 
 fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
-		let (prefix, rest) = path.split_once("/publishers/anthropic/models/")?;
-		let (_, suffix) = rest.split_once(':')?;
+		// Vertex: .../publishers/{publisher}/models/{model}:{rawPredict|streamRawPredict}
+		// Preserve the publisher from the path; only rewrite the model id. Matching only
+		// `publishers/anthropic` incorrectly dropped virtual-model rewrites for other publishers.
+		let (prefix, rest) = path.split_once("/publishers/")?;
+		let (publisher, after_publisher) = rest.split_once("/models/")?;
+		if publisher.is_empty() {
+			return None;
+		}
+		let (_, suffix) = after_publisher.split_once(':')?;
 		return Some(format!(
-			"{prefix}/publishers/anthropic/models/{}:{suffix}",
+			"{prefix}/publishers/{publisher}/models/{}:{suffix}",
 			encode_model_path_segment(target)
 		));
 	}
@@ -585,16 +575,50 @@ async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 
 async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 	let limit = http::buffer_limit(req);
-	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-		if body.0.len() < limit {
-			return Ok(body.0.clone());
+	let content_encoding = req.headers().typed_get::<ContentEncoding>();
+	if content_encoding.is_some() {
+		let body = if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
+			http::Body::from(
+				body
+					.bytes()
+					.cloned()
+					.ok_or_else(|| Box::new(request_body_too_large_response()))?,
+			)
+		} else {
+			std::mem::take(req.body_mut())
+		};
+		let (encoding, body) =
+			http::compression::to_bytes_with_decompression(body, content_encoding.as_ref(), limit)
+				.await
+				.map_err(|err| match err {
+					http::compression::Error::LimitExceeded => Box::new(request_body_too_large_response()),
+					err => {
+						tracing::debug!(%err, "failed to decode LLM request body");
+						Box::new(llm_error_response(
+							::http::StatusCode::BAD_REQUEST,
+							"Failed to decode LLM request body",
+							"request_body_decode_failed",
+						))
+					},
+				})?;
+		*req.body_mut() = http::Body::from(body.clone());
+		if encoding.is_some() {
+			req.headers_mut().remove(::http::header::CONTENT_ENCODING);
+			req.headers_mut().remove(::http::header::CONTENT_LENGTH);
+			req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
 		}
-		if body.0.len() > limit {
-			return Err(Box::new(request_body_too_large_response()));
-		}
+		req
+			.extensions_mut()
+			.insert(cel::BufferedBody::complete(body.clone()));
+		return Ok(body);
 	}
-	let inspect_limit = limit.saturating_add(1);
-	let mut body = http::inspect_body_with_limit(req.body_mut(), inspect_limit)
+	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
+		return body
+			.bytes()
+			.cloned()
+			.ok_or_else(|| Box::new(request_body_too_large_response()));
+	}
+	let inspection = http::inspect_body_with_limit(req.body_mut(), limit)
 		.await
 		.map_err(|err| {
 			tracing::debug!(%err, "failed to read LLM request body");
@@ -604,13 +628,15 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 				"request_body_read_failed",
 			))
 		})?;
-	if body.len() > limit {
-		return Err(Box::new(request_body_too_large_response()));
-	}
-	if body.len() == inspect_limit {
-		body.truncate(limit);
-	}
-	req.extensions_mut().insert(cel::BufferedBody(body.clone()));
+	let body = match inspection {
+		http::BodyInspection::Complete(body) => body,
+		http::BodyInspection::Partial(_) => {
+			return Err(Box::new(request_body_too_large_response()));
+		},
+	};
+	req
+		.extensions_mut()
+		.insert(cel::BufferedBody::complete(body.clone()));
 	Ok(body)
 }
 
@@ -658,6 +684,26 @@ mod tests {
 	}
 
 	#[test]
+	fn rewrite_path_model_rewrites_vertex_raw_predict_for_non_anthropic_publishers() {
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/us/publishers/google/models/virtual:rawPredict",
+				"gemini-2.0-flash",
+			)
+			.as_deref(),
+			Some("/v1/projects/p/locations/us/publishers/google/models/gemini-2.0-flash:rawPredict")
+		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/us/publishers/meta/models/virtual:streamRawPredict",
+				"llama-3.1-70b",
+			)
+			.as_deref(),
+			Some("/v1/projects/p/locations/us/publishers/meta/models/llama-3.1-70b:streamRawPredict")
+		);
+	}
+
+	#[test]
 	fn rewrite_uri_model_preserves_query() {
 		let mut req = ::http::Request::builder()
 			.uri("http://example.com/model/virtual/converse?trace=true")
@@ -693,5 +739,32 @@ mod tests {
 			.await
 			.expect("restored request body");
 		assert_eq!(restored, Bytes::from_static(request_body));
+	}
+
+	#[tokio::test]
+	async fn requested_model_decodes_gzip_body() {
+		let body = br#"{"model":"claude-opus-4-8","messages":[]}"#;
+		let compressed = http::compression::encode_body(body, "gzip")
+			.await
+			.expect("gzip encode");
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/messages")
+			.header(::http::header::CONTENT_ENCODING, "gzip")
+			.header(::http::header::CONTENT_LENGTH, compressed.len())
+			.body(http::Body::from(compressed))
+			.unwrap();
+
+		let requested = requested_model(&mut req)
+			.await
+			.expect("gzip request body should decode");
+		assert_eq!(requested.model, "claude-opus-4-8");
+		assert!(!req.headers().contains_key(::http::header::CONTENT_ENCODING));
+		assert!(!req.headers().contains_key(::http::header::CONTENT_LENGTH));
+		assert_eq!(
+			http::read_body_with_limit(req.into_body(), 1024)
+				.await
+				.expect("decompressed request body"),
+			Bytes::from_static(body)
+		);
 	}
 }

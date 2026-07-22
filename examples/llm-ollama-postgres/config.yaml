@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  database:
+    url: postgresql://agentgateway:agentgateway@localhost:5432/agentgateway
+
+llm:
+  port: 4000
+  models:
+  - name: '*'
+    provider: ollama

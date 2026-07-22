@@ -1,0 +1,254 @@
+# syntax=docker/dockerfile:1.11
+#
+# Build natively on an s390x host:
+#
+#   docker build -f Dockerfile.s390x \
+#     --build-arg VERSION="$(git describe --tags --always --dirty)" \
+#     --build-arg GIT_REVISION="$(git rev-parse HEAD)" \
+#     -t <repo>/agentgateway:<tag> .
+#
+# s390x-specific notes:
+#  * lightningcss / @tailwindcss/oxide ship no working s390x prebuilt natives, so
+#    we compile them from source and inject them into the UI build. Upstream PRs
+#    add s390x prebuilts: lightningcss parcel-bundler/lightningcss#1294 and oxide
+#    tailwindlabs/tailwindcss#20327 — drop each from-source stage once its PR
+#    ships in a release.
+#  * vite's rolldown bundler needs a working s390x binding too. The published
+#    @rolldown/binding-linux-s390x-gnu is built against a json-escape-simd
+#    release with a big-endian bug, so we rebuild the binding from source with
+#    the fixed dependency. Nothing outside this file changes, so other
+#    architectures are unaffected.
+#  * .cargo/config.toml is unchanged from main. Its CFLAGS include the x86_64/
+#    AArch64-only `-mno-omit-leaf-frame-pointer`, which the s390x compiler
+#    rejects, so the builder stage exports a portable CFLAGS (see below).
+#  * s390x taskdump support needs tokio >= 1.53 (tokio-rs/tokio#8192); the
+#    workspace Cargo.toml pins that, so no tokio patch is required.
+#  * The runtime image is debian:bookworm-slim — it has an s390x variant, whereas
+#    chainguard's glibc-dynamic (used by the main Dockerfile) does not.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage: build the lightningcss native addon (.node) for s390x from source.
+# (a rust image with node/npm copied in, so napi has both toolchains)
+# Temporary: drop once parcel-bundler/lightningcss#1294 ships a s390x prebuilt.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM docker.io/library/rust:1.97.0-bookworm AS lightningcss-s390x
+
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/bin/node /usr/local/bin/node
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/include/node /usr/local/include/node
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pin the build tool for reproducibility.
+ARG NAPI_CLI_VERSION=3.7.1
+RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION}
+
+# Keep in sync with the lightningcss version resolved in ui/package-lock.json.
+ARG LIGHTNINGCSS_VERSION=1.30.2
+RUN rustup target add s390x-unknown-linux-gnu
+RUN git clone --depth 1 --branch v${LIGHTNINGCSS_VERSION} \
+    https://github.com/parcel-bundler/lightningcss.git /lightningcss-src
+WORKDIR /lightningcss-src
+RUN npm install
+RUN napi build --platform --release --target s390x-unknown-linux-gnu \
+    --manifest-path /lightningcss-src/node/Cargo.toml \
+    --output-dir /lightningcss-src/node
+RUN ls -la /lightningcss-src/node/*.node
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage: build the @tailwindcss/oxide native addon (.node) for s390x from source.
+# Temporary: drop once tailwindlabs/tailwindcss#20327 ships a s390x prebuilt.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM docker.io/library/rust:1.97.0-bookworm AS oxide-s390x
+
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/bin/node /usr/local/bin/node
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/include/node /usr/local/include/node
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pin the build tools for reproducibility.
+ARG NAPI_CLI_VERSION=3.7.1
+ARG PNPM_VERSION=11.5.3
+RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION} pnpm@${PNPM_VERSION}
+
+# Keep in sync with the @tailwindcss/oxide version resolved in ui/package-lock.json.
+ARG OXIDE_VERSION=4.1.18
+RUN rustup target add s390x-unknown-linux-gnu
+RUN git clone --depth 1 --branch v${OXIDE_VERSION} \
+    https://github.com/tailwindlabs/tailwindcss.git /oxide-src
+WORKDIR /oxide-src
+RUN pnpm install --filter @tailwindcss/node --ignore-scripts
+WORKDIR /oxide-src/crates/node
+RUN napi build --platform --release --target s390x-unknown-linux-gnu \
+    --output-dir /oxide-src/crates/node
+RUN ls -la /oxide-src/crates/node/*.node
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage: build the rolldown native binding (.node) for s390x from source.
+#
+# The published s390x binding is compiled against json-escape-simd 3.1.0/3.0.x,
+# which mis-computes the SIMD bitmask on big-endian and corrupts escaped JSON
+# strings (broken sourcemaps / import paths). We rebuild the binding with
+# json-escape-simd 3.1.1, which carries the fix — the same change rolldown made
+# upstream in rolldown/rolldown#10211 (napi-rs/json-escape-simd#88).
+#
+# IMPORTANT: the .node binding and the `rolldown` npm package are a matched
+# pair. Build the SAME version ui/package-lock.json resolves, otherwise the
+# binding rejects builtins the JS side sends (e.g. "builtin:vite-wasm-fallback").
+# ─────────────────────────────────────────────────────────────────────────────
+FROM docker.io/library/rust:1.97.0-bookworm AS rolldown-s390x
+
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/bin/node /usr/local/bin/node
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/include/node /usr/local/include/node
+COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+# cmake is required to build rolldown's mimalloc dependency (libmimalloc-sys2).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ git cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pin the build tool for reproducibility.
+ARG NAPI_CLI_VERSION=3.7.1
+RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION}
+
+# Keep in sync with the rolldown version resolved in ui/package-lock.json.
+ARG ROLLDOWN_VERSION=1.0.3
+RUN git clone --depth 1 --branch v${ROLLDOWN_VERSION} \
+    https://github.com/rolldown/rolldown.git /rolldown-src
+
+# rolldown pins its own toolchain via rust-toolchain.toml; running rustup inside
+# the tree honors that pin, so the s390x target is added to the right one.
+WORKDIR /rolldown-src
+RUN rustup target add s390x-unknown-linux-gnu
+# The big-endian fix. rolldown requires json-escape-simd "3", so this is an
+# in-range bump of the locked version rather than a source patch.
+ARG JSON_ESCAPE_SIMD_VERSION=3.1.1
+RUN cargo update -p json-escape-simd --precise ${JSON_ESCAPE_SIMD_VERSION} \
+    && grep -A1 'name = "json-escape-simd"' Cargo.lock
+
+# Same napi invocation rolldown's own build-binding.ts uses.
+WORKDIR /rolldown-src/packages/rolldown
+RUN napi build --platform --release --target s390x-unknown-linux-gnu \
+    --manifest-path ../../crates/rolldown_binding/Cargo.toml \
+    --package rolldown_binding \
+    --output-dir ./src
+RUN ls -la ./src/*.node
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage: build the Next.js UI, injecting the s390x natives built above.
+# (npm ships no working s390x prebuilts for lightningcss / @tailwindcss/oxide /
+#  the rolldown binding)
+# ─────────────────────────────────────────────────────────────────────────────
+FROM docker.io/library/node:23.11.0-bookworm AS node
+WORKDIR /app
+COPY ui .
+# ui/scripts/generate-schema.mjs reads ../schema/*.json (i.e. /schema here), so
+# the repo's schema/ dir must be present alongside the UI — same as the main
+# Dockerfile does.
+COPY schema /schema
+
+RUN --mount=type=cache,target=/app/npm/cache \
+    npm install --cache /app/npm/cache
+
+COPY --from=lightningcss-s390x \
+    /lightningcss-src/node/lightningcss.linux-s390x-gnu.node \
+    node_modules/lightningcss/lightningcss.linux-s390x-gnu.node
+COPY --from=oxide-s390x \
+    /oxide-src/crates/node/tailwindcss-oxide.linux-s390x-gnu.node \
+    node_modules/@tailwindcss/oxide/tailwindcss-oxide.linux-s390x-gnu.node
+COPY --from=rolldown-s390x \
+    /rolldown-src/packages/rolldown/src/rolldown-binding.linux-s390x-gnu.node \
+    node_modules/@rolldown/binding-linux-s390x-gnu/rolldown-binding.linux-s390x-gnu.node
+
+RUN --mount=type=cache,target=/app/npm/cache npm run build
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage: build the agentgateway binary for s390x.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM docker.io/library/rust:1.97.0-bookworm AS builder
+ARG PROFILE=release
+ARG VERSION
+ARG GIT_REVISION
+ARG CARGO_FEATURES=agentgateway/ui
+ARG CARGO_NO_DEFAULT_FEATURES=false
+
+WORKDIR /app
+
+COPY Makefile Cargo.toml Cargo.lock ./
+COPY .cargo ./.cargo
+COPY crates ./crates
+COPY tools ./tools
+COPY --from=node /app/out ./ui/out
+
+RUN rustup target add s390x-unknown-linux-gnu
+RUN --mount=type=cache,id=cargo-s390x,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git-s390x,target=/usr/local/cargo/git \
+    cargo fetch --locked
+
+# tokio_unstable + force-frame-pointers come from .cargo/config.toml. That file
+# (unchanged from main) also sets the x86_64/AArch64-only flag
+# `-mno-omit-leaf-frame-pointer`, which the s390x compiler rejects — so we
+# override CFLAGS/CXXFLAGS to the portable subset here. Cargo's [env] is
+# non-forced, so an exported CFLAGS wins over the config value.
+RUN --mount=type=cache,id=target-s390x,target=/app/target \
+    --mount=type=cache,id=cargo-s390x,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=cargo-git-s390x,target=/usr/local/cargo/git \
+    <<EOF
+# NOTE: 'set -e' (not '-eu'): VERSION/GIT_REVISION are validated explicitly below.
+set -e
+export VERSION="${VERSION}"
+export GIT_REVISION="${GIT_REVISION}"
+# Fail fast — before the multi-minute compile — if version/revision weren't provided.
+if [ -z "${VERSION}" ] || [ -z "${GIT_REVISION}" ]; then
+  echo "ERROR: both --build-arg VERSION=... and --build-arg GIT_REVISION=... are required." >&2
+  echo "  e.g. --build-arg VERSION=\"\$(git describe --tags --always --dirty)\" --build-arg GIT_REVISION=\"\$(git rev-parse HEAD)\"" >&2
+  exit 1
+fi
+# s390x has no `-mno-omit-leaf-frame-pointer`; keep only the portable flag.
+export CFLAGS="-fno-omit-frame-pointer"
+export CXXFLAGS="-fno-omit-frame-pointer"
+TARGET=s390x-unknown-linux-gnu
+if [ "${CARGO_NO_DEFAULT_FEATURES}" = "true" ]; then
+  cargo build --no-default-features --features "${CARGO_FEATURES}" --target "${TARGET}" --profile ${PROFILE}
+else
+  cargo build --features "${CARGO_FEATURES}" --target "${TARGET}" --profile ${PROFILE}
+fi
+mkdir /out
+mv /app/target/${TARGET}/${PROFILE}/agentgateway /out/
+/out/agentgateway --version
+# Fail the build if the version was not stamped in.
+if /out/agentgateway --version | grep -q '"unknown"'; then
+  echo "ERROR: version is 'unknown' — VERSION/GIT_REVISION not set" >&2
+  exit 1
+fi
+EOF
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage: final runtime image.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS runner
+
+# Matches the main Dockerfile: marks this as an official container build, which
+# makes the generated default config bind adminAddr to 0.0.0.0 instead of
+# localhost (see running_in_official_container()).
+ENV AGENTGATEWAY_ENV=container
+
+WORKDIR /
+
+COPY --from=builder /out/agentgateway /app/agentgateway
+
+LABEL org.opencontainers.image.source=https://github.com/agentgateway/agentgateway
+LABEL org.opencontainers.image.description="Agentgateway is an open source project that is built on AI-native protocols to connect, secure, and observe agent-to-agent and agent-to-tool communication across any agent framework and environment."
+
+ENTRYPOINT ["/app/agentgateway"]

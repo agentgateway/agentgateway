@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,6 +9,11 @@ import (
 	"sigs.k8s.io/controller-tools/pkg/crd"
 	"sigs.k8s.io/controller-tools/pkg/loader"
 	"sigs.k8s.io/controller-tools/pkg/markers"
+)
+
+const (
+	overrideEmbeddedRootPath = "github.com/agentgateway/agentgateway/controller/hack/crdgen/testdata/overrideembedded/api/v1"
+	overrideEmbeddedPkgPath  = "github.com/agentgateway/agentgateway/controller/hack/crdgen/testdata/overrideembedded/upstream"
 )
 
 func newTestParser(t *testing.T, rootPath string) ([]*loader.Package, *crd.Parser) {
@@ -47,6 +53,75 @@ func TestAllJSONFieldNamesForTypeIncludesImportedInlineFields(t *testing.T) {
 	fields, err := allJSONFieldNamesForType(parser, typ, info, map[crd.TypeIdent][]string{}, map[crd.TypeIdent]bool{})
 	require.NoError(t, err)
 	require.Equal(t, []string{"bar", "baz", "foo"}, fields)
+}
+
+func TestApplyImportedDescriptionOverridesUpdatesTypeAndFieldDocs(t *testing.T) {
+	roots, parser := newTestParser(t, overrideEmbeddedRootPath)
+	withImportedDescriptionOverrides(t, []importedDescriptionOverride{
+		{
+			pkgPath:  overrideEmbeddedPkgPath,
+			typeName: "FullPolicy",
+			doc:      "Short policy doc",
+		},
+		{
+			pkgPath:  overrideEmbeddedPkgPath,
+			typeName: "FullPolicy",
+			field:    "Health",
+			doc:      "Short health doc",
+		},
+	})
+
+	require.NoError(t, applyImportedDescriptionOverrides(parser, roots))
+
+	pkg := importedPackageForPath(parser, roots, overrideEmbeddedPkgPath)
+	require.NotNil(t, pkg)
+	info := parser.LookupType(pkg, "FullPolicy")
+	require.NotNil(t, info)
+	require.Equal(t, "Short policy doc", info.Doc)
+
+	idx := slices.IndexFunc(info.Fields, func(field markers.FieldInfo) bool {
+		return field.Name == "Health"
+	})
+	require.NotEqual(t, -1, idx)
+	require.Equal(t, "Short health doc", info.Fields[idx].Doc)
+}
+
+func TestApplyImportedDescriptionOverridesErrorsForMissingField(t *testing.T) {
+	roots, parser := newTestParser(t, overrideEmbeddedRootPath)
+	withImportedDescriptionOverrides(t, []importedDescriptionOverride{
+		{
+			pkgPath:  overrideEmbeddedPkgPath,
+			typeName: "FullPolicy",
+			field:    "Missing",
+			doc:      "Short missing doc",
+		},
+	})
+
+	err := applyImportedDescriptionOverrides(parser, roots)
+	require.EqualError(t, err, "field github.com/agentgateway/agentgateway/controller/hack/crdgen/testdata/overrideembedded/upstream.FullPolicy.Missing not found")
+}
+
+func TestApplyImportedDescriptionOverridesSkipsMissingPackage(t *testing.T) {
+	roots, parser := newTestParser(t, overrideEmbeddedRootPath)
+	withImportedDescriptionOverrides(t, []importedDescriptionOverride{
+		{
+			pkgPath:  "example.com/not/imported",
+			typeName: "Missing",
+			doc:      "Short missing doc",
+		},
+	})
+
+	require.NoError(t, applyImportedDescriptionOverrides(parser, roots))
+}
+
+func withImportedDescriptionOverrides(t *testing.T, overrides []importedDescriptionOverride) {
+	t.Helper()
+
+	original := importedDescriptionOverrides
+	importedDescriptionOverrides = overrides
+	t.Cleanup(func() {
+		importedDescriptionOverrides = original
+	})
 }
 
 func TestOverrideXValidationReplacesExactlyOneMatch(t *testing.T) {

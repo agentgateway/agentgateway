@@ -155,7 +155,7 @@ impl TokenResponse {
 pub(super) struct TokenRequestSpec<'a> {
 	target: &'a SimpleBackendReference,
 	policies: &'a [BackendTrafficPolicy],
-	token_endpoint_path: &'a str,
+	path: &'a str,
 	grant_type: OAuthGrantType,
 	client_auth: Option<&'a OAuthClientAuth>,
 	audiences: &'a [String],
@@ -170,13 +170,13 @@ impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
 		Self {
 			target: auth.target.target.as_ref(),
 			policies: &auth.target.policies,
-			token_endpoint_path: &auth.token_endpoint_path,
+			path: &auth.path,
 			grant_type: auth.grant_type,
 			client_auth: auth.client_auth.as_ref(),
 			audiences: &auth.audiences,
 			scopes: &auth.scopes,
 			resources: &auth.resources,
-			requested_token_type: auth.requested_token_type,
+			requested_token_type: auth.requested_token_type_param(),
 			expected_issued_token_type: auth.expected_issued_token_type(),
 		}
 	}
@@ -187,7 +187,7 @@ impl<'a> From<&'a ChainedExchange> for TokenRequestSpec<'a> {
 		Self {
 			target: auth.target.target.as_ref(),
 			policies: &auth.target.policies,
-			token_endpoint_path: &auth.token_endpoint_path,
+			path: &auth.path,
 			grant_type: OAuthGrantType::JwtBearer,
 			client_auth: auth.client_auth.as_ref(),
 			audiences: &auth.audiences,
@@ -228,7 +228,7 @@ pub(super) async fn request_token(
 	json::from_body_with_limit::<TokenResponse>(resp.into_body(), limit)
 		.await
 		.map_err(|e| FetchError::Upstream(anyhow!("token exchange response decode failed: {e}")))?
-		.into_token(spec.expected_issued_token_type)
+		.into_token(spec.expected_issued_token_type.clone())
 }
 
 fn classify_token_endpoint_error(status: StatusCode, body: String) -> FetchError {
@@ -251,20 +251,19 @@ fn build_token_request(
 	req: &ExchangeRequest,
 ) -> Result<::http::Request<Body>, FetchError> {
 	let form = build_token_request_form(spec, req)?;
-	let path = if spec.token_endpoint_path.is_empty() {
-		"/"
-	} else {
-		spec.token_endpoint_path
-	};
-	let mut builder = ::http::Request::builder()
+
+	let builder = ::http::Request::builder()
 		.method(::http::Method::POST)
-		.uri(path)
+		.uri(if spec.path.is_empty() { "/" } else { spec.path })
 		.header(CONTENT_TYPE, "application/x-www-form-urlencoded")
 		.header(ACCEPT, "application/json");
-	if let Some(basic) = &form.basic_auth {
-		builder = builder.header(AUTHORIZATION, format!("Basic {basic}"));
-	}
-	builder
+
+	form
+		.basic_auth
+		.iter()
+		.fold(builder, |builder, basic| {
+			builder.header(AUTHORIZATION, format!("Basic {basic}"))
+		})
 		.body(Body::from(form.body.into_bytes()))
 		.map_err(|e| FetchError::Upstream(e.into()))
 }
@@ -293,7 +292,7 @@ fn build_token_request_form(
 					.append_pair("actor_token", actor_token.expose_secret())
 					.append_pair("actor_token_type", actor_token_type.as_str());
 			}
-			if let Some(rtt) = spec.requested_token_type {
+			if let Some(rtt) = &spec.requested_token_type {
 				ser.append_pair("requested_token_type", rtt.as_str());
 			}
 		},
