@@ -10,18 +10,24 @@ import (
 	"io"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	agentgateway "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
 )
 
-// virtualkeysMigratedLabelKey is the configMapSelector matchLabels key, used
-// since the API has no ref-by-name alternative.
+// virtualkeysAPIGroup is discovered at runtime, so this migration works against any Kind in
+// the group - including ones this repo doesn't know about - not just AgentgatewayPolicy.
+const virtualkeysAPIGroup = "agentgateway.dev"
+
+// virtualkeysMigratedLabelKey is the configMapSelector matchLabels key (no ref-by-name alternative exists).
 const virtualkeysMigratedLabelKey = "agentgateway.dev/migrated-from-secret"
 
 func init() {
@@ -29,7 +35,7 @@ func init() {
 	registry["virtualkeys-to-configmap"] = Migration{
 		ID: "virtualkeys-to-configmap",
 		RegisterFlags: func(fs *pflag.FlagSet) {
-			fs.StringVar(&flags.policy, "policy", "", "virtualkeys-to-configmap: only migrate the named AgentgatewayPolicy (default: all policies in the namespace)")
+			fs.StringVar(&flags.policy, "policy", "", "virtualkeys-to-configmap: only migrate the named resource (default: all matching resources in the namespace)")
 		},
 		Run: func(ctx context.Context, out, status io.Writer, kubeClient kubeutil.CLIClient, namespace string, write bool) error {
 			return runVirtualkeysToConfigMap(ctx, out, status, kubeClient, namespace, flags.policy, !write)
@@ -37,18 +43,35 @@ func init() {
 	}
 }
 
-func runVirtualkeysToConfigMap(ctx context.Context, out, status io.Writer, kubeClient kubeutil.CLIClient, namespace, policyName string, dryRun bool) error {
-	policies, err := virtualkeysLoadPolicies(ctx, kubeClient, namespace, policyName)
+// virtualkeysCandidate pairs a discovered object with the GVR it came from, needed to write it back.
+type virtualkeysCandidate struct {
+	gvr    schema.GroupVersionResource
+	object unstructured.Unstructured
+}
+
+// virtualkeysAPIKeyAuth is the apiKeyAuthentication subset this migration duck-types against.
+type virtualkeysAPIKeyAuth struct {
+	SecretRef *struct {
+		Name string `json:"name"`
+		Kind string `json:"kind,omitempty"`
+	} `json:"secretRef,omitempty"`
+	SecretSelector *struct {
+		MatchLabels map[string]string `json:"matchLabels"`
+	} `json:"secretSelector,omitempty"`
+}
+
+func runVirtualkeysToConfigMap(ctx context.Context, out, status io.Writer, kubeClient kubeutil.CLIClient, namespace, name string, dryRun bool) error {
+	candidates, err := virtualkeysLoadCandidates(ctx, kubeClient, namespace, name)
 	if err != nil {
 		return err
 	}
 
 	var secretsToRemove []string
 	anyMigrated := false
-	for _, policy := range policies {
-		migrated, secrets, err := virtualkeysMigratePolicy(ctx, out, status, kubeClient, policy, dryRun)
+	for _, candidate := range candidates {
+		migrated, secrets, err := virtualkeysMigratePolicy(ctx, out, status, kubeClient, candidate, dryRun)
 		if err != nil {
-			return fmt.Errorf("policy %s/%s: %w", policy.Namespace, policy.Name, err)
+			return fmt.Errorf("%s %s/%s: %w", candidate.object.GetKind(), candidate.object.GetNamespace(), candidate.object.GetName(), err)
 		}
 		if migrated {
 			anyMigrated = true
@@ -57,7 +80,7 @@ func runVirtualkeysToConfigMap(ctx context.Context, out, status io.Writer, kubeC
 	}
 
 	if !anyMigrated {
-		fmt.Fprintln(status, "no AgentgatewayPolicy resources using secretRef/secretSelector API key credentials were found")
+		fmt.Fprintf(status, "no resources with an apiKeyAuthentication using secretRef/secretSelector were found in the %s API group\n", virtualkeysAPIGroup)
 		return nil
 	}
 
@@ -68,7 +91,7 @@ func runVirtualkeysToConfigMap(ctx context.Context, out, status io.Writer, kubeC
 		if dryRun {
 			verb = "will be able to"
 		}
-		fmt.Fprintf(status, "\nThe following Secrets are no longer referenced by migrated AgentgatewayPolicy resources and %s be removed, if nothing else references them:\n", verb)
+		fmt.Fprintf(status, "\nThe following Secrets are no longer referenced by migrated resources and %s be removed, if nothing else references them:\n", verb)
 		for _, s := range secretsToRemove {
 			fmt.Fprintf(status, "  - %s\n", s)
 		}
@@ -77,30 +100,86 @@ func runVirtualkeysToConfigMap(ctx context.Context, out, status io.Writer, kubeC
 	return nil
 }
 
-func virtualkeysLoadPolicies(ctx context.Context, kubeClient kubeutil.CLIClient, namespace, name string) ([]agentgateway.AgentgatewayPolicy, error) {
-	client := kubeClient.Agentgateway().AgentgatewayAgentgateway().AgentgatewayPolicies(namespace)
-	if name != "" {
-		policy, err := client.Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to get AgentgatewayPolicy %s/%s: %w", namespace, name, err)
-		}
-		return []agentgateway.AgentgatewayPolicy{*policy}, nil
+// virtualkeysDiscoverGVRs returns every namespaced resource served under virtualkeysAPIGroup, across all its versions.
+func virtualkeysDiscoverGVRs(kubeClient kubeutil.CLIClient) ([]schema.GroupVersionResource, error) {
+	groups, err := kubeClient.Kube().Discovery().ServerGroups()
+	if err != nil {
+		return nil, fmt.Errorf("failed to discover API groups: %w", err)
 	}
 
-	list, err := client.List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list AgentgatewayPolicy resources in namespace %q: %w", namespace, err)
+	var gvrs []schema.GroupVersionResource
+	for _, group := range groups.Groups {
+		if group.Name != virtualkeysAPIGroup {
+			continue
+		}
+		for _, v := range group.Versions {
+			gv, err := schema.ParseGroupVersion(v.GroupVersion)
+			if err != nil {
+				return nil, fmt.Errorf("invalid group version %q: %w", v.GroupVersion, err)
+			}
+			resources, err := kubeClient.Kube().Discovery().ServerResourcesForGroupVersion(v.GroupVersion)
+			if err != nil {
+				return nil, fmt.Errorf("failed to discover resources for %s: %w", v.GroupVersion, err)
+			}
+			for _, r := range resources.APIResources {
+				if !r.Namespaced || strings.Contains(r.Name, "/") { // skip cluster-scoped resources and subresources
+					continue
+				}
+				gvrs = append(gvrs, gv.WithResource(r.Name))
+			}
+		}
 	}
-	return list.Items, nil
+	return gvrs, nil
 }
 
-// virtualkeysMigratePolicy migrates one policy, returning whether it migrated
-// and any "ns/name" Secrets no longer referenced as a result.
-func virtualkeysMigratePolicy(ctx context.Context, out, status io.Writer, kubeClient kubeutil.CLIClient, policy agentgateway.AgentgatewayPolicy, dryRun bool) (bool, []string, error) {
-	if policy.Spec.Traffic == nil || policy.Spec.Traffic.APIKeyAuthentication == nil {
+func virtualkeysLoadCandidates(ctx context.Context, kubeClient kubeutil.CLIClient, namespace, name string) ([]virtualkeysCandidate, error) {
+	gvrs, err := virtualkeysDiscoverGVRs(kubeClient)
+	if err != nil {
+		return nil, err
+	}
+
+	var candidates []virtualkeysCandidate
+	for _, gvr := range gvrs {
+		client := kubeClient.Dynamic().Resource(gvr).Namespace(namespace)
+		if name != "" {
+			obj, err := client.Get(ctx, name, metav1.GetOptions{})
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed to get %s %s/%s: %w", gvr.Resource, namespace, name, err)
+			}
+			candidates = append(candidates, virtualkeysCandidate{gvr: gvr, object: *obj})
+			continue
+		}
+
+		list, err := client.List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list %s in namespace %q: %w", gvr.Resource, namespace, err)
+		}
+		for _, obj := range list.Items {
+			candidates = append(candidates, virtualkeysCandidate{gvr: gvr, object: obj})
+		}
+	}
+	return candidates, nil
+}
+
+// virtualkeysMigratePolicy migrates one candidate, returning whether it migrated and any secrets no longer referenced.
+func virtualkeysMigratePolicy(ctx context.Context, out, status io.Writer, kubeClient kubeutil.CLIClient, candidate virtualkeysCandidate, dryRun bool) (bool, []string, error) {
+	policy := candidate.object
+
+	akRaw, found, err := unstructured.NestedMap(policy.Object, "spec", "traffic", "apiKeyAuthentication")
+	if err != nil {
+		return false, nil, fmt.Errorf("reading spec.traffic.apiKeyAuthentication: %w", err)
+	}
+	if !found {
 		return false, nil, nil
 	}
-	ak := policy.Spec.Traffic.APIKeyAuthentication
+	var ak virtualkeysAPIKeyAuth
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(akRaw, &ak); err != nil {
+		// Has an apiKeyAuthentication block, but not one this migration understands - skip it.
+		return false, nil, nil
+	}
 
 	var secretNames []string
 	switch {
@@ -108,9 +187,9 @@ func virtualkeysMigratePolicy(ctx context.Context, out, status io.Writer, kubeCl
 		if ak.SecretRef.Kind != "" && ak.SecretRef.Kind != "Secret" {
 			return false, nil, nil
 		}
-		secretNames = []string{string(ak.SecretRef.Name)}
+		secretNames = []string{ak.SecretRef.Name}
 	case ak.SecretSelector != nil:
-		list, err := kubeClient.Kube().CoreV1().Secrets(policy.Namespace).List(ctx, metav1.ListOptions{
+		list, err := kubeClient.Kube().CoreV1().Secrets(policy.GetNamespace()).List(ctx, metav1.ListOptions{
 			LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{MatchLabels: ak.SecretSelector.MatchLabels}),
 		})
 		if err != nil {
@@ -124,24 +203,24 @@ func virtualkeysMigratePolicy(ctx context.Context, out, status io.Writer, kubeCl
 		return false, nil, nil
 	}
 
-	labels := map[string]string{virtualkeysMigratedLabelKey: policy.Name}
+	labels := map[string]string{virtualkeysMigratedLabelKey: policy.GetName()}
 	var secretsToRemove []string
 	for _, secretName := range secretNames {
-		secret, err := kubeClient.Kube().CoreV1().Secrets(policy.Namespace).Get(ctx, secretName, metav1.GetOptions{})
+		secret, err := kubeClient.Kube().CoreV1().Secrets(policy.GetNamespace()).Get(ctx, secretName, metav1.GetOptions{})
 		if err != nil {
-			return false, nil, fmt.Errorf("failed to get Secret %s/%s: %w", policy.Namespace, secretName, err)
+			return false, nil, fmt.Errorf("failed to get Secret %s/%s: %w", policy.GetNamespace(), secretName, err)
 		}
 
-		configMap, err := virtualkeysBuildConfigMap(secret, policy.Name, labels)
+		configMap, err := virtualkeysBuildConfigMap(secret, policy.GetName(), labels)
 		if err != nil {
-			return false, nil, fmt.Errorf("failed to convert Secret %s/%s: %w", policy.Namespace, secretName, err)
+			return false, nil, fmt.Errorf("failed to convert Secret %s/%s: %w", policy.GetNamespace(), secretName, err)
 		}
 
 		if dryRun {
 			if err := printYAML(out, configMap); err != nil {
 				return false, nil, err
 			}
-		} else if _, err := kubeClient.Kube().CoreV1().ConfigMaps(policy.Namespace).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
+		} else if _, err := kubeClient.Kube().CoreV1().ConfigMaps(policy.GetNamespace()).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
 			if !apierrors.IsAlreadyExists(err) {
 				return false, nil, fmt.Errorf("failed to create ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
 			}
@@ -150,23 +229,24 @@ func virtualkeysMigratePolicy(ctx context.Context, out, status io.Writer, kubeCl
 			fmt.Fprintf(status, "created ConfigMap %s/%s (from Secret %s)\n", configMap.Namespace, configMap.Name, secretName)
 		}
 
-		secretsToRemove = append(secretsToRemove, fmt.Sprintf("%s/%s", policy.Namespace, secretName))
+		secretsToRemove = append(secretsToRemove, fmt.Sprintf("%s/%s", policy.GetNamespace(), secretName))
 	}
 
 	updated := policy.DeepCopy()
-	updated.TypeMeta = metav1.TypeMeta{APIVersion: agentgateway.GroupVersion.String(), Kind: "AgentgatewayPolicy"}
-	updated.Spec.Traffic.APIKeyAuthentication.SecretRef = nil
-	updated.Spec.Traffic.APIKeyAuthentication.SecretSelector = nil
-	updated.Spec.Traffic.APIKeyAuthentication.ConfigMapSelector = &agentgateway.ConfigMapSelector{MatchLabels: labels}
+	unstructured.RemoveNestedField(updated.Object, "spec", "traffic", "apiKeyAuthentication", "secretRef")
+	unstructured.RemoveNestedField(updated.Object, "spec", "traffic", "apiKeyAuthentication", "secretSelector")
+	if err := unstructured.SetNestedStringMap(updated.Object, labels, "spec", "traffic", "apiKeyAuthentication", "configMapSelector", "matchLabels"); err != nil {
+		return false, nil, fmt.Errorf("failed to set configMapSelector: %w", err)
+	}
 
 	if dryRun {
 		if err := printYAML(out, updated); err != nil {
 			return false, nil, err
 		}
-	} else if _, err := kubeClient.Agentgateway().AgentgatewayAgentgateway().AgentgatewayPolicies(policy.Namespace).Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
-		return false, nil, fmt.Errorf("failed to update AgentgatewayPolicy %s/%s: %w", updated.Namespace, updated.Name, err)
+	} else if _, err := kubeClient.Dynamic().Resource(candidate.gvr).Namespace(updated.GetNamespace()).Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
+		return false, nil, fmt.Errorf("failed to update %s %s/%s: %w", updated.GetKind(), updated.GetNamespace(), updated.GetName(), err)
 	} else {
-		fmt.Fprintf(status, "updated AgentgatewayPolicy %s/%s to use configMapSelector\n", updated.Namespace, updated.Name)
+		fmt.Fprintf(status, "updated %s %s/%s to use configMapSelector\n", updated.GetKind(), updated.GetNamespace(), updated.GetName())
 	}
 
 	return true, secretsToRemove, nil

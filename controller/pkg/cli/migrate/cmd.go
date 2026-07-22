@@ -10,19 +10,18 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/printer"
 )
 
-// Migration is one migration selectable via --apply <id>. Migrations
-// register into registry from their own init().
+// Migration is selectable via --apply <id>; migrations self-register into registry via init().
 type Migration struct {
 	ID string
-	// RegisterFlags adds this migration's own flags to the command; nil if none.
+	// RegisterFlags adds flags to the command; nil if none.
 	RegisterFlags func(fs *pflag.FlagSet)
-	// Run executes the migration.
-	Run func(ctx context.Context, out, status io.Writer, kubeClient kubeutil.CLIClient, namespace string, write bool) error
+	Run           func(ctx context.Context, out, status io.Writer, kubeClient kubeutil.CLIClient, namespace string, write bool) error
 }
 
 var registry = map[string]Migration{}
@@ -103,9 +102,28 @@ func runMigrate(cmd *cobra.Command, f *migrateFlags) error {
 	return nil
 }
 
+// serverManagedFields are read-time metadata stripped before printing, so output stays git-clean.
+var serverManagedFields = [][]string{
+	{"metadata", "resourceVersion"},
+	{"metadata", "uid"},
+	{"metadata", "generation"},
+	{"metadata", "creationTimestamp"},
+	{"metadata", "managedFields"},
+	{"metadata", "selfLink"},
+	{"status"},
+}
+
+// printYAML writes a "---"-prefixed doc; unstructured objects get serverManagedFields stripped first.
 func printYAML(out io.Writer, v any) error {
 	if _, err := fmt.Fprintln(out, "---"); err != nil {
 		return err
+	}
+	if u, ok := v.(*unstructured.Unstructured); ok {
+		clean := u.DeepCopy()
+		for _, path := range serverManagedFields {
+			unstructured.RemoveNestedField(clean.Object, path...)
+		}
+		v = clean
 	}
 	p, err := printer.New("yaml")
 	if err != nil {

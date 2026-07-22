@@ -6,9 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -17,24 +23,68 @@ import (
 	agentgateway "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
 	agentgatewayclient "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
-	agentgatewayfake "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned/fake"
 )
 
-// fakeCLIClient is a minimal kubeutil.CLIClient backed by fake clientsets, for
-// exercising the dry-run YAML output end to end.
+// fakeCLIClient is a minimal kubeutil.CLIClient backed by fake clientsets.
 type fakeCLIClient struct {
 	kube kubernetes.Interface
-	agw  agentgatewayclient.Interface
+	dyn  dynamic.Interface
 }
 
 func (f fakeCLIClient) Kube() kubernetes.Interface                 { return f.kube }
 func (f fakeCLIClient) GatewayAPI() gatewayapiclient.Interface     { return nil }
-func (f fakeCLIClient) Agentgateway() agentgatewayclient.Interface { return f.agw }
+func (f fakeCLIClient) Agentgateway() agentgatewayclient.Interface { return nil }
+func (f fakeCLIClient) Dynamic() dynamic.Interface                 { return f.dyn }
 func (f fakeCLIClient) AgentgatewayRequest(context.Context, string, string, string, string, int) ([]byte, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 func (f fakeCLIClient) NewPortForwarder(string, string, string, int, int) (kubeutil.PortForwarder, error) {
 	return nil, fmt.Errorf("not implemented")
+}
+
+var virtualkeysPolicyGVR = schema.GroupVersionResource{Group: virtualkeysAPIGroup, Version: "v1alpha1", Resource: "agentgatewaypolicies"}
+
+// virtualkeysFakeClient seeds discovery with agentgatewaypolicies and a dynamic client with policyObjects.
+func virtualkeysFakeClient(t *testing.T, secret *corev1.Secret, policyObjects ...runtime.Object) fakeCLIClient {
+	t.Helper()
+
+	kube := k8sfake.NewSimpleClientset(secret)
+	kube.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: virtualkeysPolicyGVR.GroupVersion().String(),
+			APIResources: []metav1.APIResource{
+				{Name: virtualkeysPolicyGVR.Resource, Namespaced: true, Kind: "AgentgatewayPolicy"},
+			},
+		},
+	}
+
+	var unstructuredObjs []runtime.Object
+	for _, obj := range policyObjects {
+		m, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		if err != nil {
+			t.Fatalf("failed to convert fixture to unstructured: %v", err)
+		}
+		unstructuredObjs = append(unstructuredObjs, &unstructured.Unstructured{Object: m})
+	}
+	dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{virtualkeysPolicyGVR: "AgentgatewayPolicyList"},
+		unstructuredObjs...)
+
+	return fakeCLIClient{kube: kube, dyn: dyn}
+}
+
+func virtualkeysFixturePolicy(name, namespace string) *agentgateway.AgentgatewayPolicy {
+	return &agentgateway.AgentgatewayPolicy{
+		TypeMeta:   metav1.TypeMeta{APIVersion: virtualkeysPolicyGVR.GroupVersion().String(), Kind: "AgentgatewayPolicy"},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Traffic: &agentgateway.Traffic{
+				APIKeyAuthentication: &agentgateway.APIKeyAuthentication{
+					SecretRef: &agentgateway.LocalSecretObjectRef{Name: gwv1.ObjectName("api-key")},
+				},
+			},
+		},
+	}
 }
 
 func TestVirtualkeysToKeyHashEntryRawKey(t *testing.T) {
@@ -142,25 +192,13 @@ func TestVirtualkeysBuildConfigMapNameScopedPerPolicy(t *testing.T) {
 	}
 }
 
-// TestVirtualkeysDryRunOutputIsApplyableYAML exercises the full dry-run path
-// against fake clientsets and checks that every printed document sets
-// apiVersion/kind - without them, `kubectl apply -f -` rejects the output.
+// Without apiVersion/kind on every document, `kubectl apply -f -` rejects the output.
 func TestVirtualkeysDryRunOutputIsApplyableYAML(t *testing.T) {
-	kube := k8sfake.NewSimpleClientset(&corev1.Secret{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
 		Data:       map[string][]byte{"client1": []byte("k-456")},
-	})
-	agw := agentgatewayfake.NewSimpleClientset(&agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "my-policy", Namespace: "ns"},
-		Spec: agentgateway.AgentgatewayPolicySpec{
-			Traffic: &agentgateway.Traffic{
-				APIKeyAuthentication: &agentgateway.APIKeyAuthentication{
-					SecretRef: &agentgateway.LocalSecretObjectRef{Name: gwv1.ObjectName("api-key")},
-				},
-			},
-		},
-	})
-	client := fakeCLIClient{kube: kube, agw: agw}
+	}
+	client := virtualkeysFakeClient(t, secret, virtualkeysFixturePolicy("my-policy", "ns"))
 
 	var out, status bytes.Buffer
 	if err := runVirtualkeysToConfigMap(context.Background(), &out, &status, client, "ns", "", true); err != nil {
@@ -178,6 +216,54 @@ func TestVirtualkeysDryRunOutputIsApplyableYAML(t *testing.T) {
 	}
 	if !bytes.Contains(out.Bytes(), []byte("kind: AgentgatewayPolicy")) {
 		t.Errorf("expected an AgentgatewayPolicy document, got:\n%s", out.String())
+	}
+}
+
+// A resource without a matching apiKeyAuthentication shape must be skipped, not errored.
+func TestVirtualkeysDiscoveryIgnoresNonConformingResources(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
+		Data:       map[string][]byte{"client1": []byte("k-456")},
+	}
+	noAuth := virtualkeysFixturePolicy("no-auth-policy", "ns")
+	noAuth.Spec.Traffic.APIKeyAuthentication = nil
+	client := virtualkeysFakeClient(t, secret, noAuth)
+
+	var out, status bytes.Buffer
+	if err := runVirtualkeysToConfigMap(context.Background(), &out, &status, client, "ns", "", true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("expected no YAML output for a non-conforming resource, got:\n%s", out.String())
+	}
+}
+
+// Read-time fields on a fetched object must not leak into a manifest meant for GitOps.
+func TestVirtualkeysDryRunOutputStripsServerManagedFields(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
+		Data:       map[string][]byte{"client1": []byte("k-456")},
+	}
+	policy := virtualkeysFixturePolicy("my-policy", "ns")
+	policy.ObjectMeta.ResourceVersion = "123456"
+	policy.ObjectMeta.UID = "abc-123-def-456"
+	policy.ObjectMeta.Generation = 3
+	policy.ObjectMeta.CreationTimestamp = metav1.NewTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	policy.ObjectMeta.ManagedFields = []metav1.ManagedFieldsEntry{{Manager: "kubectl", Operation: "Update"}}
+	client := virtualkeysFakeClient(t, secret, policy)
+
+	var out, status bytes.Buffer
+	if err := runVirtualkeysToConfigMap(context.Background(), &out, &status, client, "ns", "", true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, field := range []string{"resourceVersion", "uid", "generation", "creationTimestamp", "managedFields"} {
+		if bytes.Contains(out.Bytes(), []byte(field)) {
+			t.Errorf("expected %s to be stripped from the printed manifest, got:\n%s", field, out.String())
+		}
+	}
+	if !bytes.Contains(out.Bytes(), []byte("name: my-policy")) {
+		t.Errorf("expected the policy's actual identity to survive stripping, got:\n%s", out.String())
 	}
 }
 
