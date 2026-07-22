@@ -7,7 +7,11 @@ import type { AuthorizationLocation } from "../gateway-config";
 import { AdvancedSettingPanel, AdvancedSettingRow } from "./PolicyLayout";
 
 type LocationMode =
-  "default" | "header" | "queryParameter" | "cookie" | "expression";
+  | "default"
+  | "header"
+  | "queryParameter"
+  | "cookie"
+  | "expression";
 
 export type AuthorizationLocationDraft = {
   mode: LocationMode;
