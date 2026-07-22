@@ -409,15 +409,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
 // +kubebuilder:validation:XValidation:rule="!has(self.certificateSource) || self.certificateSource != 'SPIFFE' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))",message="certificateSource SPIFFE may not be combined with mtlsCertificateRef, caCertificateRefs, or insecureSkipVerify"
 type BackendTLS struct {
-	// Source for the gateway's client identity and trust roots when originating TLS to the backend.
-	//
-	// * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-	//   roots when unset).
-	// * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-	//   (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-	//   `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-	//   `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-	//   `AgentgatewayParameters.spec.spiffe`).
+	// Source for the gateway's client identity and trust roots (`Inline` default, or `SPIFFE`).
 	//
 	// +optional
 	// +kubebuilder:default=Inline

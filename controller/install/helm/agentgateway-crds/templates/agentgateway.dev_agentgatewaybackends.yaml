@@ -2765,16 +2765,11 @@ spec:
                                                               x-kubernetes-list-type: atomic
                                                             certificateSource:
                                                               default: Inline
-                                                              description: |-
-                                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                                  roots when unset).
-                                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                                  `AgentgatewayParameters.spec.spiffe`).
+                                                              description: Source
+                                                                for the gateway's
+                                                                client identity and
+                                                                trust roots (`Inline`
+                                                                default, or `SPIFFE`).
                                                               enum:
                                                               - Inline
                                                               - SPIFFE
@@ -5153,16 +5148,11 @@ spec:
                                                               x-kubernetes-list-type: atomic
                                                             certificateSource:
                                                               default: Inline
-                                                              description: |-
-                                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                                  roots when unset).
-                                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                                  `AgentgatewayParameters.spec.spiffe`).
+                                                              description: Source
+                                                                for the gateway's
+                                                                client identity and
+                                                                trust roots (`Inline`
+                                                                default, or `SPIFFE`).
                                                               enum:
                                                               - Inline
                                                               - SPIFFE
@@ -7537,16 +7527,11 @@ spec:
                                                               x-kubernetes-list-type: atomic
                                                             certificateSource:
                                                               default: Inline
-                                                              description: |-
-                                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                                  roots when unset).
-                                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                                  `AgentgatewayParameters.spec.spiffe`).
+                                                              description: Source
+                                                                for the gateway's
+                                                                client identity and
+                                                                trust roots (`Inline`
+                                                                default, or `SPIFFE`).
                                                               enum:
                                                               - Inline
                                                               - SPIFFE
@@ -10118,16 +10103,11 @@ spec:
                                                               x-kubernetes-list-type: atomic
                                                             certificateSource:
                                                               default: Inline
-                                                              description: |-
-                                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                                  roots when unset).
-                                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                                  `AgentgatewayParameters.spec.spiffe`).
+                                                              description: Source
+                                                                for the gateway's
+                                                                client identity and
+                                                                trust roots (`Inline`
+                                                                default, or `SPIFFE`).
                                                               enum:
                                                               - Inline
                                                               - SPIFFE
@@ -12506,16 +12486,11 @@ spec:
                                                               x-kubernetes-list-type: atomic
                                                             certificateSource:
                                                               default: Inline
-                                                              description: |-
-                                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                                  roots when unset).
-                                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                                  `AgentgatewayParameters.spec.spiffe`).
+                                                              description: Source
+                                                                for the gateway's
+                                                                client identity and
+                                                                trust roots (`Inline`
+                                                                default, or `SPIFFE`).
                                                               enum:
                                                               - Inline
                                                               - SPIFFE
@@ -14570,16 +14545,9 @@ spec:
                                         x-kubernetes-list-type: atomic
                                       certificateSource:
                                         default: Inline
-                                        description: |-
-                                          Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                          * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                            roots when unset).
-                                          * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                            (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                            `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                            `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                            `AgentgatewayParameters.spec.spiffe`).
+                                        description: Source for the gateway's client
+                                          identity and trust roots (`Inline` default,
+                                          or `SPIFFE`).
                                         enum:
                                         - Inline
                                         - SPIFFE
@@ -17119,16 +17087,9 @@ spec:
                                       x-kubernetes-list-type: atomic
                                     certificateSource:
                                       default: Inline
-                                      description: |-
-                                        Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                        * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                          roots when unset).
-                                        * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                          (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                          `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                          `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                          `AgentgatewayParameters.spec.spiffe`).
+                                      description: Source for the gateway's client
+                                        identity and trust roots (`Inline` default,
+                                        or `SPIFFE`).
                                       enum:
                                       - Inline
                                       - SPIFFE
@@ -19121,16 +19082,9 @@ spec:
                                               x-kubernetes-list-type: atomic
                                             certificateSource:
                                               default: Inline
-                                              description: |-
-                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                  roots when unset).
-                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                  `AgentgatewayParameters.spec.spiffe`).
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
                                               enum:
                                               - Inline
                                               - SPIFFE
@@ -20909,16 +20863,9 @@ spec:
                                               x-kubernetes-list-type: atomic
                                             certificateSource:
                                               default: Inline
-                                              description: |-
-                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                  roots when unset).
-                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                  `AgentgatewayParameters.spec.spiffe`).
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
                                               enum:
                                               - Inline
                                               - SPIFFE
@@ -22692,16 +22639,9 @@ spec:
                                               x-kubernetes-list-type: atomic
                                             certificateSource:
                                               default: Inline
-                                              description: |-
-                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                  roots when unset).
-                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                  `AgentgatewayParameters.spec.spiffe`).
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
                                               enum:
                                               - Inline
                                               - SPIFFE
@@ -24654,16 +24594,9 @@ spec:
                                               x-kubernetes-list-type: atomic
                                             certificateSource:
                                               default: Inline
-                                              description: |-
-                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                  roots when unset).
-                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                  `AgentgatewayParameters.spec.spiffe`).
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
                                               enum:
                                               - Inline
                                               - SPIFFE
@@ -26442,16 +26375,9 @@ spec:
                                               x-kubernetes-list-type: atomic
                                             certificateSource:
                                               default: Inline
-                                              description: |-
-                                                Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                                                * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                                                  roots when unset).
-                                                * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                                                  (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                                                  `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                                                  `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                                                  `AgentgatewayParameters.spec.spiffe`).
+                                              description: Source for the gateway's
+                                                client identity and trust roots (`Inline`
+                                                default, or `SPIFFE`).
                                               enum:
                                               - Inline
                                               - SPIFFE
@@ -28909,16 +28835,8 @@ spec:
                         x-kubernetes-list-type: atomic
                       certificateSource:
                         default: Inline
-                        description: |-
-                          Source for the gateway's client identity and trust roots when originating TLS to the backend.
-
-                          * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
-                            roots when unset).
-                          * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
-                            (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
-                            `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
-                            `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
-                            `AgentgatewayParameters.spec.spiffe`).
+                        description: Source for the gateway's client identity and
+                          trust roots (`Inline` default, or `SPIFFE`).
                         enum:
                         - Inline
                         - SPIFFE
