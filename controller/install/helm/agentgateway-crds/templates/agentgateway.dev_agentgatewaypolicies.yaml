@@ -1563,13 +1563,8 @@ spec:
                                                   type: string
                                                 requestedTokenType:
                                                   description: |-
-                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
-                                                    built-in values may be requested; custom URIs are not supported here.
-                                                  enum:
-                                                  - AccessToken
-                                                  - Jwt
-                                                  - IdToken
-                                                  - IdJag
+                                                    RFC 8693 requested_token_type. The built-in values below are translated
+                                                    to their URN form; custom absolute URI values are passed through unchanged.
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -3328,13 +3323,8 @@ spec:
                                                   type: string
                                                 requestedTokenType:
                                                   description: |-
-                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
-                                                    built-in values may be requested; custom URIs are not supported here.
-                                                  enum:
-                                                  - AccessToken
-                                                  - Jwt
-                                                  - IdToken
-                                                  - IdJag
+                                                    RFC 8693 requested_token_type. The built-in values below are translated
+                                                    to their URN form; custom absolute URI values are passed through unchanged.
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -5088,13 +5078,8 @@ spec:
                                                   type: string
                                                 requestedTokenType:
                                                   description: |-
-                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
-                                                    built-in values may be requested; custom URIs are not supported here.
-                                                  enum:
-                                                  - AccessToken
-                                                  - Jwt
-                                                  - IdToken
-                                                  - IdJag
+                                                    RFC 8693 requested_token_type. The built-in values below are translated
+                                                    to their URN form; custom absolute URI values are passed through unchanged.
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -7027,13 +7012,8 @@ spec:
                                                   type: string
                                                 requestedTokenType:
                                                   description: |-
-                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
-                                                    built-in values may be requested; custom URIs are not supported here.
-                                                  enum:
-                                                  - AccessToken
-                                                  - Jwt
-                                                  - IdToken
-                                                  - IdJag
+                                                    RFC 8693 requested_token_type. The built-in values below are translated
+                                                    to their URN form; custom absolute URI values are passed through unchanged.
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -8792,13 +8772,8 @@ spec:
                                                   type: string
                                                 requestedTokenType:
                                                   description: |-
-                                                    RFC 8693 requested_token_type. Unlike subject/actor token types, only the
-                                                    built-in values may be requested; custom URIs are not supported here.
-                                                  enum:
-                                                  - AccessToken
-                                                  - Jwt
-                                                  - IdToken
-                                                  - IdJag
+                                                    RFC 8693 requested_token_type. The built-in values below are translated
+                                                    to their URN form; custom absolute URI values are passed through unchanged.
                                                   type: string
                                                 resources:
                                                   description: Resources sent to the
@@ -10584,13 +10559,8 @@ spec:
                             type: string
                           requestedTokenType:
                             description: |-
-                              RFC 8693 requested_token_type. Unlike subject/actor token types, only the
-                              built-in values may be requested; custom URIs are not supported here.
-                            enum:
-                            - AccessToken
-                            - Jwt
-                            - IdToken
-                            - IdJag
+                              RFC 8693 requested_token_type. The built-in values below are translated
+                              to their URN form; custom absolute URI values are passed through unchanged.
                             type: string
                           resources:
                             description: Resources sent to the token endpoint.

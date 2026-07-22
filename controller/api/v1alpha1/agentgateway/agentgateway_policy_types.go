@@ -1496,9 +1496,8 @@ type OAuthTokenExchange struct {
 	// +optional
 	Resources []string `json:"resources,omitempty"`
 
-	// RFC 8693 requested_token_type. Unlike subject/actor token types, only the
-	// built-in values may be requested; custom URIs are not supported here.
-	// +kubebuilder:validation:Enum=AccessToken;Jwt;IdToken;IdJag
+	// RFC 8693 requested_token_type. The built-in values below are translated
+	// to their URN form; custom absolute URI values are passed through unchanged.
 	// +optional
 	RequestedTokenType *OAuthTokenType `json:"requestedTokenType,omitempty"`
 

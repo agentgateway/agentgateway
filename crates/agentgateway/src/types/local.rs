@@ -66,10 +66,50 @@ impl NormalizedLocalConfig {
 		let s = shellexpand::full(&s)?;
 		let local_config: LocalConfig = serdes::yamlviajson::from_str(&s)?;
 		let scope = resources.scope_full_computation();
-		let result = Box::pin(convert(resources, gateway_name, config, local_config)).await;
+		let result = Box::pin(async {
+			track_local_file_dependencies(resources, &s).await?;
+			convert(resources, gateway_name, config, local_config).await
+		})
+		.await;
 		scope.finish(result.is_ok());
 		let t = result?;
 		Ok(t)
+	}
+}
+
+async fn track_local_file_dependencies(
+	resources: &crate::resource_manager::ResourceFetcher,
+	s: &str,
+) -> anyhow::Result<()> {
+	let cfg: serde_json::Value = serdes::yamlviajson::from_str(s)?;
+	let mut files = HashSet::new();
+	collect_local_file_dependencies(&cfg, &mut files);
+	for file in files {
+		resources
+			.fetch(crate::resource_manager::ResourceRef::File(file))
+			.await?;
+	}
+	Ok(())
+}
+
+fn collect_local_file_dependencies(value: &serde_json::Value, files: &mut HashSet<PathBuf>) {
+	match value {
+		serde_json::Value::Object(map) => {
+			if map.len() == 1
+				&& let Some(file) = map.get("file").and_then(serde_json::Value::as_str)
+			{
+				files.insert(PathBuf::from(file));
+			}
+			for value in map.values() {
+				collect_local_file_dependencies(value, files);
+			}
+		},
+		serde_json::Value::Array(values) => {
+			for value in values {
+				collect_local_file_dependencies(value, files);
+			}
+		},
+		_ => {},
 	}
 }
 

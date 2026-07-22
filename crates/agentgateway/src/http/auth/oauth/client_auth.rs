@@ -289,7 +289,6 @@ impl JwtSigningKey {
 		kid: Option<String>,
 		context: &str,
 	) -> Result<Self, String> {
-		// TODO: file-based keys are read once at config load; consider reload/rotation (K8s secret remounts need a restart)
 		let pem = signing_key
 			.load()
 			.map_err(|e| format!("failed to load {context}: {e}"))?;

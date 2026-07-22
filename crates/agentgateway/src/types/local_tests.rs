@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use secrecy::SecretString;
@@ -163,6 +163,44 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 		yaml,
 	)
 	.await
+}
+
+#[test]
+fn collects_nested_file_dependencies() {
+	let cfg = serde_json::json!({
+		"backends": [{
+			"policies": {
+				"backendAuth": {
+					"key": {
+						"file": "/tmp/backend-auth-key"
+					}
+				}
+			}
+		}],
+		"policies": [{
+			"jwt": {
+				"jwks": {
+					"file": "./jwks.json"
+				}
+			}
+		}],
+		"metadata": {
+			"file": "not-a-file-source",
+			"name": "ignored"
+		},
+		"inline": "not-a-file"
+	});
+	let mut files = std::collections::HashSet::new();
+
+	super::collect_local_file_dependencies(&cfg, &mut files);
+
+	assert_eq!(
+		files,
+		std::collections::HashSet::from([
+			PathBuf::from("/tmp/backend-auth-key"),
+			PathBuf::from("./jwks.json")
+		])
+	);
 }
 
 async fn normalize_test_config(yaml_str: &str) -> anyhow::Result<NormalizedLocalConfig> {
