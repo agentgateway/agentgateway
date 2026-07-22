@@ -3491,9 +3491,17 @@ spec:
                                           typically the token endpoint URL.
                                         minLength: 1
                                         type: string
+                                      certificateHeader:
+                                        description: JWS certificate header. Required
+                                          when certificateRef is set.
+                                        enum:
+                                        - x5c
+                                        - x5t#S256
+                                        type: string
                                       certificateRef:
                                         description: |-
-                                          PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                          PEM-encoded X.509 certificate chain used by certificateHeader, leaf first.
+                                          Required when certificateHeader is set.
                                           The key defaults to `certificate`.
                                         properties:
                                           group:
@@ -3571,6 +3579,10 @@ spec:
                                     - assertionAudience
                                     - signingKeyRef
                                     type: object
+                                    x-kubernetes-validations:
+                                    - message: certificateRef and certificateHeader
+                                        must be set together
+                                      rule: has(self.certificateRef) == has(self.certificateHeader)
                                   secretRef:
                                     description: Client secret credential; key defaults
                                       to `clientSecret`.
@@ -3713,9 +3725,17 @@ spec:
                                           typically the token endpoint URL.
                                         minLength: 1
                                         type: string
+                                      certificateHeader:
+                                        description: JWS certificate header. Required
+                                          when certificateRef is set.
+                                        enum:
+                                        - x5c
+                                        - x5t#S256
+                                        type: string
                                       certificateRef:
                                         description: |-
-                                          PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                          PEM-encoded X.509 certificate chain used by certificateHeader, leaf first.
+                                          Required when certificateHeader is set.
                                           The key defaults to `certificate`.
                                         properties:
                                           group:
@@ -3793,6 +3813,10 @@ spec:
                                     - assertionAudience
                                     - signingKeyRef
                                     type: object
+                                    x-kubernetes-validations:
+                                    - message: certificateRef and certificateHeader
+                                        must be set together
+                                      rule: has(self.certificateRef) == has(self.certificateHeader)
                                   secretRef:
                                     description: Client secret credential; key defaults
                                       to `clientSecret`.
@@ -4234,9 +4258,17 @@ spec:
                                       typically the token endpoint URL.
                                     minLength: 1
                                     type: string
+                                  certificateHeader:
+                                    description: JWS certificate header. Required
+                                      when certificateRef is set.
+                                    enum:
+                                    - x5c
+                                    - x5t#S256
+                                    type: string
                                   certificateRef:
                                     description: |-
-                                      PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                      PEM-encoded X.509 certificate chain used by certificateHeader, leaf first.
+                                      Required when certificateHeader is set.
                                       The key defaults to `certificate`.
                                     properties:
                                       group:
@@ -4312,6 +4344,10 @@ spec:
                                 - assertionAudience
                                 - signingKeyRef
                                 type: object
+                                x-kubernetes-validations:
+                                - message: certificateRef and certificateHeader must
+                                    be set together
+                                  rule: has(self.certificateRef) == has(self.certificateHeader)
                               secretRef:
                                 description: Client secret credential; key defaults
                                   to `clientSecret`.
