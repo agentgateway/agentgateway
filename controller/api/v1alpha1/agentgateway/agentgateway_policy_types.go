@@ -203,12 +203,16 @@ type BackendSimple struct {
 
 // PolicyBackendEndpoint identifies a backend used by policy features.
 type PolicyBackendEndpoint struct {
-	// `backendRef` references a Kubernetes backend to reach.
+	// `backendRef` selects a backend for this policy.
+	// Mutually exclusive with `url`.
 	// +optional
 	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
 
-	// `url` is an absolute HTTP(S) URL or origin for this policy backend.
+	// `url` directly specifies the HTTP(S) endpoint for this policy.
 	// When the scheme is `https`, backend TLS is enabled automatically.
+	// Mutually exclusive with `backendRef`.
+	// URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+	// will not apply Service policies or load balancing.
 	// +kubebuilder:validation:Pattern=`^https?://[^/?#]+(/[^?#]*)?$`
 	// +optional
 	URL *LongString `json:"url,omitempty"`
@@ -1177,7 +1181,7 @@ type JWKS struct {
 	Inline *string `json:"inline,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="has(self.backendRef) ? has(self.jwksPath) : true",message="jwksPath is required when backendRef is set"
 // +kubebuilder:validation:XValidation:rule="has(self.url) ? !has(self.jwksPath) : true",message="jwksPath may not be set when url is set"
 type RemoteJWKS struct {
@@ -1638,7 +1642,7 @@ type CrossAppAccessSubjectToken struct {
 	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="has(self.url) ? !has(self.path) : true",message="path may not be set when url is set"
 type CrossAppAccessEndpoint struct {
 	// Token endpoint backend.
@@ -1659,7 +1663,7 @@ type CrossAppAccessEndpoint struct {
 // +kubebuilder:validation:XValidation:rule="!(has(self.actorToken) && has(self.grantType) && self.grantType == 'JwtBearer')",message="actorToken is only valid with TokenExchange grantType"
 // +kubebuilder:validation:XValidation:rule="!(has(self.requestedTokenType) && has(self.grantType) && self.grantType == 'JwtBearer')",message="requestedTokenType is only valid with TokenExchange grantType"
 // +kubebuilder:validation:XValidation:rule="!has(self.requestedTokenType) || self.requestedTokenType != 'IdJag'",message="requestedTokenType IdJag is only supported by crossAppAccess"
-// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="has(self.url) ? !has(self.path) : true",message="path may not be set when url is set"
 type OAuthTokenExchange struct {
 	// RFC 8693 token endpoint backend.
@@ -2194,7 +2198,7 @@ type MCPGuardrailsProcessor struct {
 	Methods map[string]MCPMethodPhase `json:"methods"`
 }
 
-// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path"
 type MCPGuardrailsRemote struct {
 	// References the remote guardrails policy server.
@@ -2292,10 +2296,10 @@ const (
 	Entra     McpIDP = "Entra"
 )
 
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 type BackendTunnel struct {
 	// Proxy server to reach.
 	// Supported types: `Service` and `Backend`.
-	// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
 	// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path for backend tunnel"
 	// +optional
 	PolicyBackendEndpoint `json:",inline"`
@@ -2924,7 +2928,7 @@ func (r *RateLimitsOrConditional) ConditionalPolicy() (*RateLimits, iter.Seq[Con
 	return &RateLimits{Local: r.Local, Global: r.Global}, seq
 }
 
-// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path"
 type GlobalRateLimit struct {
 	// Rate limit server to reach.
@@ -3136,7 +3140,7 @@ type AccessLog struct {
 
 // Ships access logs to an
 // OpenTelemetry-compatible backend via OTLP.
-// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
 // +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || (has(self.protocol) && self.protocol == 'HTTP')",message="url path is only valid with protocol HTTP"
@@ -3227,7 +3231,7 @@ const (
 	OTLPProtocolGrpc OTLPProtocol = "GRPC"
 )
 
-// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
 // +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || (has(self.protocol) && self.protocol == 'HTTP')",message="url path is only valid with protocol HTTP"

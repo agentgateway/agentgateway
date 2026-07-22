@@ -1027,7 +1027,7 @@ spec:
           methods:
             tools/call: Full
 ---
-_err: 'exactly one of backendRef or url must be set'
+_err: 'exactly one of the fields in [backendRef url] must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -1439,7 +1439,7 @@ spec:
           methods:
             tools/call: Full
 ---
-_err: 'exactly one of backendRef or url must be set'
+_err: 'exactly one of the fields in [backendRef url] must be set'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
