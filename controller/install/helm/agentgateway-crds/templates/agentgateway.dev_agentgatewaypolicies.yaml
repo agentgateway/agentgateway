@@ -3586,8 +3586,10 @@ spec:
                                         must be set together
                                       rule: has(self.certificateRef) == has(self.certificateHeader)
                                   secretRef:
-                                    description: Client secret credential; key defaults
-                                      to `clientSecret`.
+                                    description: |-
+                                      Secret providing the `clientSecret` key by default; override via
+                                      `secretRef.key`. When omitted, client_id is sent without a secret, which
+                                      is only valid with ClientSecretPost.
                                     properties:
                                       group:
                                         description: API group of the referenced credential;
@@ -3822,8 +3824,10 @@ spec:
                                         must be set together
                                       rule: has(self.certificateRef) == has(self.certificateHeader)
                                   secretRef:
-                                    description: Client secret credential; key defaults
-                                      to `clientSecret`.
+                                    description: |-
+                                      Secret providing the `clientSecret` key by default; override via
+                                      `secretRef.key`. When omitted, client_id is sent without a secret, which
+                                      is only valid with ClientSecretPost.
                                     properties:
                                       group:
                                         description: API group of the referenced credential;
@@ -4355,8 +4359,10 @@ spec:
                                     be set together
                                   rule: has(self.certificateRef) == has(self.certificateHeader)
                               secretRef:
-                                description: Client secret credential; key defaults
-                                  to `clientSecret`.
+                                description: |-
+                                  Secret providing the `clientSecret` key by default; override via
+                                  `secretRef.key`. When omitted, client_id is sent without a secret, which
+                                  is only valid with ClientSecretPost.
                                 properties:
                                   group:
                                     description: API group of the referenced credential;
