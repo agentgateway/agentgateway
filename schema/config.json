@@ -3814,6 +3814,17 @@
                 }
               ]
             },
+            "certificateHeader": {
+              "description": "JWS certificate header emitted from `certificate`. Required when `certificate` is set.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CertificateHeader"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "alg": {
               "$ref": "#/$defs/SigningAlg",
               "default": "RS256"
@@ -3839,6 +3850,20 @@
             "signingKey",
             "assertionAudience"
           ]
+        }
+      ]
+    },
+    "CertificateHeader": {
+      "oneOf": [
+        {
+          "description": "Send the X.509 certificate chain in `x5c`.",
+          "type": "string",
+          "const": "x5c"
+        },
+        {
+          "description": "Send the leaf certificate's SHA-256 thumbprint in `x5t#S256`.",
+          "type": "string",
+          "const": "x5t#S256"
         }
       ]
     },

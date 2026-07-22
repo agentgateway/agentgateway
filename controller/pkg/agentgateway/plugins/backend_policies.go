@@ -1255,10 +1255,14 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 		Alg:               translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
 		Kid:               auth.KeyID,
 		AssertionAudience: auth.AssertionAudience,
+		CertificateHeader: translateOAuthPrivateKeyJWTCertificateHeader(auth.CertificateHeader),
 	}
 
 	if auth.AssertionAudience == "" {
 		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt assertionAudience must not be empty"))
+	}
+	if (auth.CertificateRef == nil) != (auth.CertificateHeader == nil) {
+		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt certificateRef and certificateHeader must be set together"))
 	}
 
 	data, key, err := ctx.ResolveCredentialKeyRef(auth.SigningKeyRef, namespace, wellknown.SigningKey)
@@ -1353,6 +1357,20 @@ func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTS
 		return api.OAuthClientAuth_PrivateKeyJwt_ES384
 	default:
 		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+	}
+}
+
+func translateOAuthPrivateKeyJWTCertificateHeader(header *agentgateway.OAuthPrivateKeyJWTCertificateHeader) api.OAuthClientAuth_PrivateKeyJwt_CertificateHeader {
+	if header == nil {
+		return api.OAuthClientAuth_PrivateKeyJwt_CERTIFICATE_HEADER_UNSPECIFIED
+	}
+	switch *header {
+	case agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5C:
+		return api.OAuthClientAuth_PrivateKeyJwt_X5C
+	case agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5TS256:
+		return api.OAuthClientAuth_PrivateKeyJwt_X5T_S256
+	default:
+		return api.OAuthClientAuth_PrivateKeyJwt_CERTIFICATE_HEADER_UNSPECIFIED
 	}
 }
 

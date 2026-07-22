@@ -1797,15 +1797,21 @@ type OAuthClientAuth struct {
 }
 
 // OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
+// +kubebuilder:validation:XValidation:rule="has(self.certificateRef) == has(self.certificateHeader)",message="certificateRef and certificateHeader must be set together"
 type OAuthPrivateKeyJWT struct {
 	// PEM-encoded RSA or EC private key; key defaults to `signingKey`.
 	// +required
 	SigningKeyRef LocalSecretKeyRef `json:"signingKeyRef"`
 
-	// PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+	// PEM-encoded X.509 certificate chain used by certificateHeader, leaf first.
+	// Required when certificateHeader is set.
 	// The key defaults to `certificate`.
 	// +optional
 	CertificateRef *LocalSecretKeyRef `json:"certificateRef,omitempty"`
+
+	// JWS certificate header. Required when certificateRef is set.
+	// +optional
+	CertificateHeader *OAuthPrivateKeyJWTCertificateHeader `json:"certificateHeader,omitempty"`
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
@@ -1820,6 +1826,14 @@ type OAuthPrivateKeyJWT struct {
 	// +required
 	AssertionAudience string `json:"assertionAudience"`
 }
+
+// +k8s:enum
+type OAuthPrivateKeyJWTCertificateHeader string
+
+const (
+	OAuthPrivateKeyJWTCertificateHeaderX5C     OAuthPrivateKeyJWTCertificateHeader = "x5c"
+	OAuthPrivateKeyJWTCertificateHeaderX5TS256 OAuthPrivateKeyJWTCertificateHeader = "x5t#S256"
+)
 
 // +k8s:enum
 type OAuthPrivateKeyJWTSigningAlgorithm string

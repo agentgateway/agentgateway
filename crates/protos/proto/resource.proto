@@ -1806,6 +1806,12 @@ message OAuthClientAuth {
       ES384                   = 5;
     }
 
+    enum CertificateHeader {
+      CERTIFICATE_HEADER_UNSPECIFIED = 0;
+      X5C                            = 1;
+      X5T_S256                       = 2;
+    }
+
     // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
     // EC keys are used with ES* algorithms.
     string signing_key = 1;
@@ -1815,9 +1821,12 @@ message OAuthClientAuth {
     optional string kid = 3;
     // Audience for the client assertion, typically the token endpoint URL.
     string assertion_audience = 4;
-    // PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+    // PEM-encoded X.509 certificate chain used by certificate_header, leaf first.
     // Public key must match signing_key.
     string certificate = 5;
+    // JWS certificate header. Required when certificate is set and must be
+    // unspecified otherwise.
+    CertificateHeader certificate_header = 6;
   }
 
   // Required and non-empty when client_auth is set.

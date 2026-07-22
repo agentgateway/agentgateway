@@ -9,7 +9,7 @@ use url::form_urlencoded;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use super::client_auth::RawPrivateKeyJwt;
+use super::client_auth::{CertificateHeader, RawPrivateKeyJwt};
 use super::cross_app_access::{
 	CrossAppAccessAuthConfig, CrossAppAccessEndpoint, CrossAppAccessSubjectToken,
 };
@@ -168,6 +168,7 @@ a/ilbAkCIDgWcfFL3rujLODULW5JbYq9n2xykz5cFTkvLAoAury0
 ";
 
 const TEST_EC_CERT_DER_BASE64: &str = "MIIBEzCBugIBATAKBggqhkjOPQQDAjAWMRQwEgYDVQQDDAt0ZXN0LWNsaWVudDAeFw0yNjA3MjIwNDE0NThaFw0zNjA3MTkwNDE0NThaMBYxFDASBgNVBAMMC3Rlc3QtY2xpZW50MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq/XxsOcDhnFztPhp+RebCMRskzNBcJ1BxTc9kqIsWUeXbcYTXPi6DAKBggqhkjOPQQDAgNIADBFAiEAgECXIs3VPrp++0UvPRk1fVXbIo+p19qOQG8ea/ilbAkCIDgWcfFL3rujLODULW5JbYq9n2xykz5cFTkvLAoAury0";
+const TEST_EC_CERT_SHA256_THUMBPRINT: &str = "LA9ZC2X4Pp6GweXI77YHyao7DPcTLuQKuNmauXVPCcs";
 
 const TEST_MISMATCHED_CERT_PEM: &str =
 	include_str!("../../../../tests/common/testdata/root-cert.pem");
@@ -658,6 +659,7 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
 		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
 		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string())),
+		certificate_header: Some(CertificateHeader::X5c),
 		alg: SigningAlg::Es256,
 		kid: Some("kid-1".into()),
 		assertion_audience: "https://issuer.example/token".into(),
@@ -699,11 +701,52 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 	let claims: AssertionClaims = decode_unverified_jwt_claims(&pairs["client_assertion"]).unwrap();
 	let header = jsonwebtoken::decode_header(&pairs["client_assertion"]).unwrap();
 	assert_eq!(header.x5c, Some(vec![TEST_EC_CERT_DER_BASE64.to_string()]));
+	assert_eq!(header.x5t_s256, None);
 	assert_eq!(claims.iss, "gateway-client");
 	assert_eq!(claims.sub, "gateway-client");
 	assert_eq!(claims.aud, "https://issuer.example/token");
 	assert!(!claims.jti.is_empty());
 	assert!(claims.exp > claims.iat);
+}
+
+#[test]
+fn private_key_jwt_sets_x5t_s256_header() {
+	let private_key = serde_json::from_value::<PrivateKeyJwt>(json!({
+		"signingKey": TEST_EC_PRIVATE_KEY_PEM,
+		"certificate": TEST_EC_CERT_PEM,
+		"certificateHeader": "x5t#S256",
+		"alg": "ES256",
+		"assertionAudience": "https://issuer.example/token",
+	}))
+	.unwrap();
+
+	let assertion = sign_client_assertion("gateway-client", &private_key).unwrap();
+	let header = jsonwebtoken::decode_header(&assertion).unwrap();
+	assert_eq!(header.x5c, None);
+	assert_eq!(
+		header.x5t_s256.as_deref(),
+		Some(TEST_EC_CERT_SHA256_THUMBPRINT)
+	);
+}
+
+#[rstest]
+#[case::missing_header(true, false, "certificate_header is required when certificate is set")]
+#[case::missing_certificate(false, true, "certificate is required when certificate_header is set")]
+fn private_key_jwt_requires_certificate_and_header_together(
+	#[case] with_certificate: bool,
+	#[case] with_certificate_header: bool,
+	#[case] expected: &str,
+) {
+	let err = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
+		certificate: with_certificate.then(|| FileOrInline::Inline(TEST_EC_CERT_PEM.to_string())),
+		certificate_header: with_certificate_header.then_some(CertificateHeader::X5c),
+		alg: SigningAlg::Es256,
+		kid: None,
+		assertion_audience: "https://issuer.example/token".into(),
+	})
+	.expect_err("certificate and certificate_header must be configured together");
+	assert!(err.contains(expected), "got: {err}");
 }
 
 #[test]
@@ -734,6 +777,7 @@ fn private_key_jwt_rejects_non_certificate_pem_at_deserialize_time() {
 				"method": "privateKeyJwt",
 				"signingKey": {signing_key:?},
 				"certificate": {certificate:?},
+				"certificateHeader": "x5c",
 				"alg": "ES256",
 				"assertionAudience": "https://issuer.example/token"
 			}}
@@ -756,6 +800,7 @@ fn private_key_jwt_rejects_invalid_certificate_in_chain() {
 		certificate: Some(FileOrInline::Inline(format!(
 			"{TEST_EC_CERT_PEM}{TEST_INVALID_CERT_PEM}"
 		))),
+		certificate_header: Some(CertificateHeader::X5c),
 		alg: SigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
@@ -772,6 +817,7 @@ fn private_key_jwt_warns_but_accepts_mismatched_certificate() {
 	PrivateKeyJwt::try_from(RawPrivateKeyJwt {
 		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
 		certificate: Some(FileOrInline::Inline(TEST_MISMATCHED_CERT_PEM.to_string())),
+		certificate_header: Some(CertificateHeader::X5c),
 		alg: SigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
@@ -1481,6 +1527,7 @@ fn private_key_jwt_client_auth_from_proto() {
 		private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
 			signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
 			certificate: TEST_EC_CERT_PEM.to_string(),
+			certificate_header: proto::o_auth_client_auth::private_key_jwt::CertificateHeader::X5c as i32,
 			alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
 			kid: Some("kid-1".to_string()),
 			assertion_audience: "https://issuer.example/token".to_string(),
@@ -1510,6 +1557,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
 		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
 		certificate: None,
+		certificate_header: None,
 		alg: SigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
@@ -1519,6 +1567,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 	let serialized = serde_json::to_value(private_key).unwrap();
 	assert!(serialized.get("kid").is_none());
 	assert!(serialized.get("x5c").is_none());
+	assert!(serialized.get("x5t#S256").is_none());
 }
 
 #[rstest]
@@ -1621,6 +1670,24 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 		..Default::default()
 	},
 	"requires the PRIVATE_KEY_JWT method"
+)]
+#[case::private_key_jwt_certificate_without_header(
+	proto::OAuthTokenExchange {
+		client_auth: Some(proto::OAuthClientAuth {
+			client_id: "gateway-client".to_string(),
+			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
+				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+				certificate: TEST_EC_CERT_PEM.to_string(),
+				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				assertion_audience: "https://issuer.example/token".to_string(),
+				..Default::default()
+			}),
+			..Default::default()
+		}),
+		..Default::default()
+	},
+	"certificate_header is required when certificate is set"
 )]
 #[case::jwt_bearer_actor_token(
 	proto::OAuthTokenExchange {
