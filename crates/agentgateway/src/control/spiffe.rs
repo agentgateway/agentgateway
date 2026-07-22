@@ -337,7 +337,8 @@ impl SpiffeClient {
 	}
 }
 
-#[cfg(test)]
+// The SPIFFE Workload API is a Unix-domain-socket protocol, limited to unix.
+#[cfg(all(test, target_family = "unix"))]
 mod tests {
 	use futures::StreamExt;
 	use protos::spiffe_workload_api::spiffe_workload_api_server::{
