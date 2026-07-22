@@ -4310,16 +4310,17 @@ spec:
                                                     minLength: 1
                                                     type: string
                                                   method:
-                                                    description: Defaults to ClientSecretBasic.
+                                                    description: Client authentication
+                                                      method. Defaults to ClientSecretBasic.
                                                     enum:
                                                     - ClientSecretBasic
                                                     - ClientSecretPost
                                                     - PrivateKeyJwt
                                                     type: string
                                                   privateKeyJwt:
-                                                    description: privateKeyJwt client
-                                                      assertion settings. Required
-                                                      when method is PrivateKeyJwt.
+                                                    description: Client assertion
+                                                      settings. Required when method
+                                                      is PrivateKeyJwt.
                                                     properties:
                                                       alg:
                                                         description: JWS signing algorithm.
@@ -4337,14 +4338,59 @@ spec:
                                                           the token endpoint URL.
                                                         minLength: 1
                                                         type: string
+                                                      certificateRef:
+                                                        description: |-
+                                                          PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                                          The key defaults to `certificate`.
+                                                        properties:
+                                                          group:
+                                                            description: API group
+                                                              of the referenced credential;
+                                                              empty selects the core
+                                                              API group
+                                                            type: string
+                                                          key:
+                                                            description: Key in the
+                                                              referenced Secret. If
+                                                              omitted, a location-specific
+                                                              default is used
+                                                            maxLength: 253
+                                                            minLength: 1
+                                                            type: string
+                                                          kind:
+                                                            description: Kind of the
+                                                              referenced credential;
+                                                              empty defaults to `Secret`
+                                                            type: string
+                                                          name:
+                                                            description: Name of the
+                                                              referenced credential
+                                                            maxLength: 253
+                                                            minLength: 1
+                                                            type: string
+                                                        required:
+                                                        - name
+                                                        type: object
+                                                        x-kubernetes-map-type: atomic
+                                                        x-kubernetes-validations:
+                                                        - message: custom credential
+                                                            refs must set both group
+                                                            and kind
+                                                          rule: '(!has(self.group)
+                                                            || size(self.group) ==
+                                                            0) ? (!has(self.kind)
+                                                            || size(self.kind) ==
+                                                            0 || self.kind == ''Secret'')
+                                                            : (has(self.kind) && size(self.kind)
+                                                            > 0)'
                                                       kid:
                                                         description: Optional JWS
                                                           key ID header.
                                                         type: string
                                                       signingKeyRef:
-                                                        description: |-
-                                                          Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                                          or EC private key; override the key name via `signingKeyRef.key`.
+                                                        description: PEM-encoded RSA
+                                                          or EC private key; key defaults
+                                                          to `signingKey`.
                                                         properties:
                                                           group:
                                                             description: API group
@@ -4391,10 +4437,8 @@ spec:
                                                     - signingKeyRef
                                                     type: object
                                                   secretRef:
-                                                    description: |-
-                                                      Secret providing the `clientSecret` key by default; override via
-                                                      `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                                      is only valid with ClientSecretPost.
+                                                    description: Client secret credential;
+                                                      key defaults to `clientSecret`.
                                                     properties:
                                                       group:
                                                         description: API group of
@@ -4529,16 +4573,17 @@ spec:
                                                     minLength: 1
                                                     type: string
                                                   method:
-                                                    description: Defaults to ClientSecretBasic.
+                                                    description: Client authentication
+                                                      method. Defaults to ClientSecretBasic.
                                                     enum:
                                                     - ClientSecretBasic
                                                     - ClientSecretPost
                                                     - PrivateKeyJwt
                                                     type: string
                                                   privateKeyJwt:
-                                                    description: privateKeyJwt client
-                                                      assertion settings. Required
-                                                      when method is PrivateKeyJwt.
+                                                    description: Client assertion
+                                                      settings. Required when method
+                                                      is PrivateKeyJwt.
                                                     properties:
                                                       alg:
                                                         description: JWS signing algorithm.
@@ -4556,14 +4601,59 @@ spec:
                                                           the token endpoint URL.
                                                         minLength: 1
                                                         type: string
+                                                      certificateRef:
+                                                        description: |-
+                                                          PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                                          The key defaults to `certificate`.
+                                                        properties:
+                                                          group:
+                                                            description: API group
+                                                              of the referenced credential;
+                                                              empty selects the core
+                                                              API group
+                                                            type: string
+                                                          key:
+                                                            description: Key in the
+                                                              referenced Secret. If
+                                                              omitted, a location-specific
+                                                              default is used
+                                                            maxLength: 253
+                                                            minLength: 1
+                                                            type: string
+                                                          kind:
+                                                            description: Kind of the
+                                                              referenced credential;
+                                                              empty defaults to `Secret`
+                                                            type: string
+                                                          name:
+                                                            description: Name of the
+                                                              referenced credential
+                                                            maxLength: 253
+                                                            minLength: 1
+                                                            type: string
+                                                        required:
+                                                        - name
+                                                        type: object
+                                                        x-kubernetes-map-type: atomic
+                                                        x-kubernetes-validations:
+                                                        - message: custom credential
+                                                            refs must set both group
+                                                            and kind
+                                                          rule: '(!has(self.group)
+                                                            || size(self.group) ==
+                                                            0) ? (!has(self.kind)
+                                                            || size(self.kind) ==
+                                                            0 || self.kind == ''Secret'')
+                                                            : (has(self.kind) && size(self.kind)
+                                                            > 0)'
                                                       kid:
                                                         description: Optional JWS
                                                           key ID header.
                                                         type: string
                                                       signingKeyRef:
-                                                        description: |-
-                                                          Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                                          or EC private key; override the key name via `signingKeyRef.key`.
+                                                        description: PEM-encoded RSA
+                                                          or EC private key; key defaults
+                                                          to `signingKey`.
                                                         properties:
                                                           group:
                                                             description: API group
@@ -4610,10 +4700,8 @@ spec:
                                                     - signingKeyRef
                                                     type: object
                                                   secretRef:
-                                                    description: |-
-                                                      Secret providing the `clientSecret` key by default; override via
-                                                      `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                                      is only valid with ClientSecretPost.
+                                                    description: Client secret credential;
+                                                      key defaults to `clientSecret`.
                                                     properties:
                                                       group:
                                                         description: API group of
@@ -5072,16 +5160,16 @@ spec:
                                                 minLength: 1
                                                 type: string
                                               method:
-                                                description: Defaults to ClientSecretBasic.
+                                                description: Client authentication
+                                                  method. Defaults to ClientSecretBasic.
                                                 enum:
                                                 - ClientSecretBasic
                                                 - ClientSecretPost
                                                 - PrivateKeyJwt
                                                 type: string
                                               privateKeyJwt:
-                                                description: privateKeyJwt client
-                                                  assertion settings. Required when
-                                                  method is PrivateKeyJwt.
+                                                description: Client assertion settings.
+                                                  Required when method is PrivateKeyJwt.
                                                 properties:
                                                   alg:
                                                     description: JWS signing algorithm.
@@ -5099,14 +5187,56 @@ spec:
                                                       the token endpoint URL.
                                                     minLength: 1
                                                     type: string
+                                                  certificateRef:
+                                                    description: |-
+                                                      PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                                      The key defaults to `certificate`.
+                                                    properties:
+                                                      group:
+                                                        description: API group of
+                                                          the referenced credential;
+                                                          empty selects the core API
+                                                          group
+                                                        type: string
+                                                      key:
+                                                        description: Key in the referenced
+                                                          Secret. If omitted, a location-specific
+                                                          default is used
+                                                        maxLength: 253
+                                                        minLength: 1
+                                                        type: string
+                                                      kind:
+                                                        description: Kind of the referenced
+                                                          credential; empty defaults
+                                                          to `Secret`
+                                                        type: string
+                                                      name:
+                                                        description: Name of the referenced
+                                                          credential
+                                                        maxLength: 253
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - name
+                                                    type: object
+                                                    x-kubernetes-map-type: atomic
+                                                    x-kubernetes-validations:
+                                                    - message: custom credential refs
+                                                        must set both group and kind
+                                                      rule: '(!has(self.group) ||
+                                                        size(self.group) == 0) ? (!has(self.kind)
+                                                        || size(self.kind) == 0 ||
+                                                        self.kind == ''Secret'') :
+                                                        (has(self.kind) && size(self.kind)
+                                                        > 0)'
                                                   kid:
                                                     description: Optional JWS key
                                                       ID header.
                                                     type: string
                                                   signingKeyRef:
-                                                    description: |-
-                                                      Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                                      or EC private key; override the key name via `signingKeyRef.key`.
+                                                    description: PEM-encoded RSA or
+                                                      EC private key; key defaults
+                                                      to `signingKey`.
                                                     properties:
                                                       group:
                                                         description: API group of
@@ -5150,10 +5280,8 @@ spec:
                                                 - signingKeyRef
                                                 type: object
                                               secretRef:
-                                                description: |-
-                                                  Secret providing the `clientSecret` key by default; override via
-                                                  `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                                  is only valid with ClientSecretPost.
+                                                description: Client secret credential;
+                                                  key defaults to `clientSecret`.
                                                 properties:
                                                   group:
                                                     description: API group of the
@@ -7111,16 +7239,16 @@ spec:
                                                   minLength: 1
                                                   type: string
                                                 method:
-                                                  description: Defaults to ClientSecretBasic.
+                                                  description: Client authentication
+                                                    method. Defaults to ClientSecretBasic.
                                                   enum:
                                                   - ClientSecretBasic
                                                   - ClientSecretPost
                                                   - PrivateKeyJwt
                                                   type: string
                                                 privateKeyJwt:
-                                                  description: privateKeyJwt client
-                                                    assertion settings. Required when
-                                                    method is PrivateKeyJwt.
+                                                  description: Client assertion settings.
+                                                    Required when method is PrivateKeyJwt.
                                                   properties:
                                                     alg:
                                                       description: JWS signing algorithm.
@@ -7138,14 +7266,58 @@ spec:
                                                         the token endpoint URL.
                                                       minLength: 1
                                                       type: string
+                                                    certificateRef:
+                                                      description: |-
+                                                        PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                                        The key defaults to `certificate`.
+                                                      properties:
+                                                        group:
+                                                          description: API group of
+                                                            the referenced credential;
+                                                            empty selects the core
+                                                            API group
+                                                          type: string
+                                                        key:
+                                                          description: Key in the
+                                                            referenced Secret. If
+                                                            omitted, a location-specific
+                                                            default is used
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        kind:
+                                                          description: Kind of the
+                                                            referenced credential;
+                                                            empty defaults to `Secret`
+                                                          type: string
+                                                        name:
+                                                          description: Name of the
+                                                            referenced credential
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-map-type: atomic
+                                                      x-kubernetes-validations:
+                                                      - message: custom credential
+                                                          refs must set both group
+                                                          and kind
+                                                        rule: '(!has(self.group) ||
+                                                          size(self.group) == 0) ?
+                                                          (!has(self.kind) || size(self.kind)
+                                                          == 0 || self.kind == ''Secret'')
+                                                          : (has(self.kind) && size(self.kind)
+                                                          > 0)'
                                                     kid:
                                                       description: Optional JWS key
                                                         ID header.
                                                       type: string
                                                     signingKeyRef:
-                                                      description: |-
-                                                        Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                                        or EC private key; override the key name via `signingKeyRef.key`.
+                                                      description: PEM-encoded RSA
+                                                        or EC private key; key defaults
+                                                        to `signingKey`.
                                                       properties:
                                                         group:
                                                           description: API group of
@@ -7191,10 +7363,8 @@ spec:
                                                   - signingKeyRef
                                                   type: object
                                                 secretRef:
-                                                  description: |-
-                                                    Secret providing the `clientSecret` key by default; override via
-                                                    `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                                    is only valid with ClientSecretPost.
+                                                  description: Client secret credential;
+                                                    key defaults to `clientSecret`.
                                                   properties:
                                                     group:
                                                       description: API group of the
@@ -7325,16 +7495,16 @@ spec:
                                                   minLength: 1
                                                   type: string
                                                 method:
-                                                  description: Defaults to ClientSecretBasic.
+                                                  description: Client authentication
+                                                    method. Defaults to ClientSecretBasic.
                                                   enum:
                                                   - ClientSecretBasic
                                                   - ClientSecretPost
                                                   - PrivateKeyJwt
                                                   type: string
                                                 privateKeyJwt:
-                                                  description: privateKeyJwt client
-                                                    assertion settings. Required when
-                                                    method is PrivateKeyJwt.
+                                                  description: Client assertion settings.
+                                                    Required when method is PrivateKeyJwt.
                                                   properties:
                                                     alg:
                                                       description: JWS signing algorithm.
@@ -7352,14 +7522,58 @@ spec:
                                                         the token endpoint URL.
                                                       minLength: 1
                                                       type: string
+                                                    certificateRef:
+                                                      description: |-
+                                                        PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                                        The key defaults to `certificate`.
+                                                      properties:
+                                                        group:
+                                                          description: API group of
+                                                            the referenced credential;
+                                                            empty selects the core
+                                                            API group
+                                                          type: string
+                                                        key:
+                                                          description: Key in the
+                                                            referenced Secret. If
+                                                            omitted, a location-specific
+                                                            default is used
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                        kind:
+                                                          description: Kind of the
+                                                            referenced credential;
+                                                            empty defaults to `Secret`
+                                                          type: string
+                                                        name:
+                                                          description: Name of the
+                                                            referenced credential
+                                                          maxLength: 253
+                                                          minLength: 1
+                                                          type: string
+                                                      required:
+                                                      - name
+                                                      type: object
+                                                      x-kubernetes-map-type: atomic
+                                                      x-kubernetes-validations:
+                                                      - message: custom credential
+                                                          refs must set both group
+                                                          and kind
+                                                        rule: '(!has(self.group) ||
+                                                          size(self.group) == 0) ?
+                                                          (!has(self.kind) || size(self.kind)
+                                                          == 0 || self.kind == ''Secret'')
+                                                          : (has(self.kind) && size(self.kind)
+                                                          > 0)'
                                                     kid:
                                                       description: Optional JWS key
                                                         ID header.
                                                       type: string
                                                     signingKeyRef:
-                                                      description: |-
-                                                        Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                                        or EC private key; override the key name via `signingKeyRef.key`.
+                                                      description: PEM-encoded RSA
+                                                        or EC private key; key defaults
+                                                        to `signingKey`.
                                                       properties:
                                                         group:
                                                           description: API group of
@@ -7405,10 +7619,8 @@ spec:
                                                   - signingKeyRef
                                                   type: object
                                                 secretRef:
-                                                  description: |-
-                                                    Secret providing the `clientSecret` key by default; override via
-                                                    `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                                    is only valid with ClientSecretPost.
+                                                  description: Client secret credential;
+                                                    key defaults to `clientSecret`.
                                                   properties:
                                                     group:
                                                       description: API group of the
@@ -7856,16 +8068,16 @@ spec:
                                               minLength: 1
                                               type: string
                                             method:
-                                              description: Defaults to ClientSecretBasic.
+                                              description: Client authentication method.
+                                                Defaults to ClientSecretBasic.
                                               enum:
                                               - ClientSecretBasic
                                               - ClientSecretPost
                                               - PrivateKeyJwt
                                               type: string
                                             privateKeyJwt:
-                                              description: privateKeyJwt client assertion
-                                                settings. Required when method is
-                                                PrivateKeyJwt.
+                                              description: Client assertion settings.
+                                                Required when method is PrivateKeyJwt.
                                               properties:
                                                 alg:
                                                   description: JWS signing algorithm.
@@ -7883,14 +8095,54 @@ spec:
                                                     endpoint URL.
                                                   minLength: 1
                                                   type: string
+                                                certificateRef:
+                                                  description: |-
+                                                    PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                                    The key defaults to `certificate`.
+                                                  properties:
+                                                    group:
+                                                      description: API group of the
+                                                        referenced credential; empty
+                                                        selects the core API group
+                                                      type: string
+                                                    key:
+                                                      description: Key in the referenced
+                                                        Secret. If omitted, a location-specific
+                                                        default is used
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                    kind:
+                                                      description: Kind of the referenced
+                                                        credential; empty defaults
+                                                        to `Secret`
+                                                      type: string
+                                                    name:
+                                                      description: Name of the referenced
+                                                        credential
+                                                      maxLength: 253
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                  x-kubernetes-map-type: atomic
+                                                  x-kubernetes-validations:
+                                                  - message: custom credential refs
+                                                      must set both group and kind
+                                                    rule: '(!has(self.group) || size(self.group)
+                                                      == 0) ? (!has(self.kind) ||
+                                                      size(self.kind) == 0 || self.kind
+                                                      == ''Secret'') : (has(self.kind)
+                                                      && size(self.kind) > 0)'
                                                 kid:
                                                   description: Optional JWS key ID
                                                     header.
                                                   type: string
                                                 signingKeyRef:
-                                                  description: |-
-                                                    Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                                    or EC private key; override the key name via `signingKeyRef.key`.
+                                                  description: PEM-encoded RSA or
+                                                    EC private key; key defaults to
+                                                    `signingKey`.
                                                   properties:
                                                     group:
                                                       description: API group of the
@@ -7932,10 +8184,8 @@ spec:
                                               - signingKeyRef
                                               type: object
                                             secretRef:
-                                              description: |-
-                                                Secret providing the `clientSecret` key by default; override via
-                                                `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                                is only valid with ClientSecretPost.
+                                              description: Client secret credential;
+                                                key defaults to `clientSecret`.
                                               properties:
                                                 group:
                                                   description: API group of the referenced
@@ -11931,15 +12181,16 @@ spec:
                                     minLength: 1
                                     type: string
                                   method:
-                                    description: Defaults to ClientSecretBasic.
+                                    description: Client authentication method. Defaults
+                                      to ClientSecretBasic.
                                     enum:
                                     - ClientSecretBasic
                                     - ClientSecretPost
                                     - PrivateKeyJwt
                                     type: string
                                   privateKeyJwt:
-                                    description: privateKeyJwt client assertion settings.
-                                      Required when method is PrivateKeyJwt.
+                                    description: Client assertion settings. Required
+                                      when method is PrivateKeyJwt.
                                     properties:
                                       alg:
                                         description: JWS signing algorithm. Defaults
@@ -11956,13 +12207,49 @@ spec:
                                           typically the token endpoint URL.
                                         minLength: 1
                                         type: string
+                                      certificateRef:
+                                        description: |-
+                                          PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                          The key defaults to `certificate`.
+                                        properties:
+                                          group:
+                                            description: API group of the referenced
+                                              credential; empty selects the core API
+                                              group
+                                            type: string
+                                          key:
+                                            description: Key in the referenced Secret.
+                                              If omitted, a location-specific default
+                                              is used
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                          kind:
+                                            description: Kind of the referenced credential;
+                                              empty defaults to `Secret`
+                                            type: string
+                                          name:
+                                            description: Name of the referenced credential
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                        x-kubernetes-validations:
+                                        - message: custom credential refs must set
+                                            both group and kind
+                                          rule: '(!has(self.group) || size(self.group)
+                                            == 0) ? (!has(self.kind) || size(self.kind)
+                                            == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                            && size(self.kind) > 0)'
                                       kid:
                                         description: Optional JWS key ID header.
                                         type: string
                                       signingKeyRef:
-                                        description: |-
-                                          Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                          or EC private key; override the key name via `signingKeyRef.key`.
+                                        description: PEM-encoded RSA or EC private
+                                          key; key defaults to `signingKey`.
                                         properties:
                                           group:
                                             description: API group of the referenced
@@ -12001,10 +12288,8 @@ spec:
                                     - signingKeyRef
                                     type: object
                                   secretRef:
-                                    description: |-
-                                      Secret providing the `clientSecret` key by default; override via
-                                      `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                      is only valid with ClientSecretPost.
+                                    description: Client secret credential; key defaults
+                                      to `clientSecret`.
                                     properties:
                                       group:
                                         description: API group of the referenced credential;
@@ -12118,15 +12403,16 @@ spec:
                                     minLength: 1
                                     type: string
                                   method:
-                                    description: Defaults to ClientSecretBasic.
+                                    description: Client authentication method. Defaults
+                                      to ClientSecretBasic.
                                     enum:
                                     - ClientSecretBasic
                                     - ClientSecretPost
                                     - PrivateKeyJwt
                                     type: string
                                   privateKeyJwt:
-                                    description: privateKeyJwt client assertion settings.
-                                      Required when method is PrivateKeyJwt.
+                                    description: Client assertion settings. Required
+                                      when method is PrivateKeyJwt.
                                     properties:
                                       alg:
                                         description: JWS signing algorithm. Defaults
@@ -12143,13 +12429,49 @@ spec:
                                           typically the token endpoint URL.
                                         minLength: 1
                                         type: string
+                                      certificateRef:
+                                        description: |-
+                                          PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                          The key defaults to `certificate`.
+                                        properties:
+                                          group:
+                                            description: API group of the referenced
+                                              credential; empty selects the core API
+                                              group
+                                            type: string
+                                          key:
+                                            description: Key in the referenced Secret.
+                                              If omitted, a location-specific default
+                                              is used
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                          kind:
+                                            description: Kind of the referenced credential;
+                                              empty defaults to `Secret`
+                                            type: string
+                                          name:
+                                            description: Name of the referenced credential
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                        x-kubernetes-validations:
+                                        - message: custom credential refs must set
+                                            both group and kind
+                                          rule: '(!has(self.group) || size(self.group)
+                                            == 0) ? (!has(self.kind) || size(self.kind)
+                                            == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                            && size(self.kind) > 0)'
                                       kid:
                                         description: Optional JWS key ID header.
                                         type: string
                                       signingKeyRef:
-                                        description: |-
-                                          Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                          or EC private key; override the key name via `signingKeyRef.key`.
+                                        description: PEM-encoded RSA or EC private
+                                          key; key defaults to `signingKey`.
                                         properties:
                                           group:
                                             description: API group of the referenced
@@ -12188,10 +12510,8 @@ spec:
                                     - signingKeyRef
                                     type: object
                                   secretRef:
-                                    description: |-
-                                      Secret providing the `clientSecret` key by default; override via
-                                      `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                      is only valid with ClientSecretPost.
+                                    description: Client secret credential; key defaults
+                                      to `clientSecret`.
                                     properties:
                                       group:
                                         description: API group of the referenced credential;
@@ -12604,15 +12924,16 @@ spec:
                                 minLength: 1
                                 type: string
                               method:
-                                description: Defaults to ClientSecretBasic.
+                                description: Client authentication method. Defaults
+                                  to ClientSecretBasic.
                                 enum:
                                 - ClientSecretBasic
                                 - ClientSecretPost
                                 - PrivateKeyJwt
                                 type: string
                               privateKeyJwt:
-                                description: privateKeyJwt client assertion settings.
-                                  Required when method is PrivateKeyJwt.
+                                description: Client assertion settings. Required when
+                                  method is PrivateKeyJwt.
                                 properties:
                                   alg:
                                     description: JWS signing algorithm. Defaults to
@@ -12629,13 +12950,48 @@ spec:
                                       typically the token endpoint URL.
                                     minLength: 1
                                     type: string
+                                  certificateRef:
+                                    description: |-
+                                      PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+                                      The key defaults to `certificate`.
+                                    properties:
+                                      group:
+                                        description: API group of the referenced credential;
+                                          empty selects the core API group
+                                        type: string
+                                      key:
+                                        description: Key in the referenced Secret.
+                                          If omitted, a location-specific default
+                                          is used
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                      kind:
+                                        description: Kind of the referenced credential;
+                                          empty defaults to `Secret`
+                                        type: string
+                                      name:
+                                        description: Name of the referenced credential
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                    x-kubernetes-validations:
+                                    - message: custom credential refs must set both
+                                        group and kind
+                                      rule: '(!has(self.group) || size(self.group)
+                                        == 0) ? (!has(self.kind) || size(self.kind)
+                                        == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                        && size(self.kind) > 0)'
                                   kid:
                                     description: Optional JWS key ID header.
                                     type: string
                                   signingKeyRef:
-                                    description: |-
-                                      Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                      or EC private key; override the key name via `signingKeyRef.key`.
+                                    description: PEM-encoded RSA or EC private key;
+                                      key defaults to `signingKey`.
                                     properties:
                                       group:
                                         description: API group of the referenced credential;
@@ -12673,10 +13029,8 @@ spec:
                                 - signingKeyRef
                                 type: object
                               secretRef:
-                                description: |-
-                                  Secret providing the `clientSecret` key by default; override via
-                                  `secretRef.key`. When omitted, client_id is sent without a secret, which
-                                  is only valid with ClientSecretPost.
+                                description: Client secret credential; key defaults
+                                  to `clientSecret`.
                                 properties:
                                   group:
                                     description: API group of the referenced credential;
