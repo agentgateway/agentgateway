@@ -1,0 +1,14 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/unsupported-provider.yaml
+---
+source: litellm
+config:
+  llm:
+    port: 4000
+    models: []
+    virtualModels: []
+findings:
+  - sourcePath: "model_list[0].litellm_params.model"
+    status: unsupported
+    message: "LiteLLM provider \"unknown\" is not supported by this importer"

@@ -1,0 +1,14 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/wildcard-model.yaml
+---
+source: litellm
+config:
+  llm:
+    port: 4000
+    models: []
+    virtualModels: []
+findings:
+  - sourcePath: "model_list[0].model_name"
+    status: unsupported
+    message: LiteLLM wildcard models are not yet supported and were not emitted

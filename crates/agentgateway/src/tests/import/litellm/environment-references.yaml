@@ -1,0 +1,9 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: azure/gpt-4o
+    api_base: os.environ/AZURE_API_BASE
+    api_key: os.environ/AZURE_API_KEY
+    api_version: os.environ/AZURE_API_VERSION
+    temperature: os.environ/DEFAULT_TEMPERATURE
+    stop: [os.environ/STOP_SEQUENCE]

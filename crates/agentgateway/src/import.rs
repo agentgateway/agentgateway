@@ -691,203 +691,60 @@ fn imported_model_name(source: &str, public_name: &str, deployment: usize) -> St
 
 #[cfg(test)]
 mod tests {
+	use std::fs;
+	use std::path::{Path, PathBuf};
+
 	use super::*;
+
+	fn fixture_path(name: &str) -> PathBuf {
+		Path::new("src/tests/import/litellm").join(format!("{name}.yaml"))
+	}
+
+	fn assert_litellm_golden(name: &str) {
+		let input_path = fixture_path(name);
+		let input = fs::read_to_string(&input_path)
+			.unwrap_or_else(|error| panic!("{}: {error}", input_path.display()));
+		let result = import_config("litellm", &input)
+			.unwrap_or_else(|error| panic!("{}: {error}", input_path.display()));
+
+		insta::with_settings!({
+			description => input_path.to_string_lossy().to_string(),
+			omit_expression => true,
+			prepend_module_to_snapshot => false,
+			snapshot_path => "tests/import/litellm",
+		}, {
+			insta::assert_yaml_snapshot!(name, result);
+		});
+	}
 
 	#[test]
 	fn imports_litellm_models_load_balancing_and_fallbacks() {
-		let input = r#"
-model_list:
-- model_name: fast
-  litellm_params:
-    model: azure/gpt-4o-east
-    api_base: https://east.openai.azure.com
-    api_key: os.environ/AZURE_EAST_KEY
-    api_version: 2025-01-01
-    rpm: 60
-    temperature: 0.2
-- model_name: fast
-  litellm_params:
-    model: openai/gpt-4o
-    api_key: os.environ/OPENAI_API_KEY
-    rpm: 40
-- model_name: backup
-  litellm_params:
-    model: anthropic/claude-sonnet-4
-    api_key: os.environ/ANTHROPIC_API_KEY
-- model_name: backup
-  litellm_params:
-    model: anthropic/claude-haiku-4
-    api_key: os.environ/ANTHROPIC_API_KEY
-router_settings:
-  routing_strategy: simple-shuffle
-  fallbacks:
-  - fast: [backup]
-"#;
-		let result = import_config("litellm", input).unwrap();
-		let llm = &result.config["llm"];
-		assert_eq!(llm["models"].as_array().unwrap().len(), 4);
-		assert_eq!(llm["models"][0]["name"], "imported/litellm/fast/1");
-		assert_eq!(llm["models"][0]["provider"], "azure");
-		assert_eq!(llm["models"][0]["params"]["apiKey"], "$AZURE_EAST_KEY");
-		assert_eq!(llm["models"][0]["defaults"]["temperature"], 0.2);
-		assert_eq!(llm["virtualModels"][0]["name"], "fast");
-		let targets = llm["virtualModels"][0]["routing"]["failover"]["targets"]
-			.as_array()
-			.unwrap();
-		assert_eq!(targets.len(), 4);
-		assert_eq!(targets[0]["priority"], 0);
-		assert_eq!(targets[2]["priority"], 1);
-		assert_eq!(targets[3]["priority"], 1);
-		assert!(
-			result
-				.findings
-				.iter()
-				.any(|finding| finding.status == ImportStatus::Approximate)
-		);
+		assert_litellm_golden("load-balancing-fallbacks");
 	}
 
 	#[test]
 	fn reports_unsupported_provider_without_emitting_invalid_route() {
-		let input = r#"
-model_list:
-- model_name: unsupported
-  litellm_params:
-    model: unknown/model
-"#;
-		let result = import_config("litellm", input).unwrap();
-		assert!(
-			result.config["llm"]["models"]
-				.as_array()
-				.unwrap()
-				.is_empty()
-		);
-		assert!(
-			result
-				.findings
-				.iter()
-				.any(|finding| finding.status == ImportStatus::Unsupported)
-		);
+		assert_litellm_golden("unsupported-provider");
 	}
 
 	#[test]
 	fn reports_unmapped_top_level_and_model_fields() {
-		let input = r#"
-model_list:
-- model_name: chat
-  litellm_params:
-    model: openai/gpt-4o
-  model_info:
-    id: deployment-1
-  custom_model_field: true
-credential_list:
-- credential_name: shared
-  credential_values:
-    api_key: os.environ/OPENAI_API_KEY
-  credential_info: {}
-general_settings:
-  master_key: os.environ/LITELLM_MASTER_KEY
-environment_variables:
-  LOG_LEVEL: info
-custom_section:
-  enabled: true
-"#;
-		let result = import_config("litellm", input).unwrap();
-		for expected in [
-			"model_list[0].model_info.id",
-			"model_list[0].custom_model_field",
-			"credential_list",
-			"general_settings.master_key",
-			"environment_variables.LOG_LEVEL",
-			"custom_section",
-		] {
-			assert!(
-				result
-					.findings
-					.iter()
-					.any(|finding| finding.source_path == expected),
-				"missing finding for {expected}"
-			);
-		}
+		assert_litellm_golden("unmapped-fields");
 	}
 
 	#[test]
 	fn normalizes_environment_references_in_all_mapped_values() {
-		let input = r#"
-model_list:
-- model_name: chat
-  litellm_params:
-    model: azure/gpt-4o
-    api_base: os.environ/AZURE_API_BASE
-    api_key: os.environ/AZURE_API_KEY
-    api_version: os.environ/AZURE_API_VERSION
-    temperature: os.environ/DEFAULT_TEMPERATURE
-    stop: [os.environ/STOP_SEQUENCE]
-"#;
-		let result = import_config("litellm", input).unwrap();
-		let model = &result.config["llm"]["models"][0];
-		assert_eq!(model["params"]["baseUrl"], "$AZURE_API_BASE");
-		assert_eq!(model["params"]["apiKey"], "$AZURE_API_KEY");
-		assert_eq!(model["params"]["azureApiVersion"], "$AZURE_API_VERSION");
-		assert_eq!(model["defaults"]["temperature"], "$DEFAULT_TEMPERATURE");
-		assert_eq!(model["defaults"]["stop"][0], "$STOP_SEQUENCE");
+		assert_litellm_golden("environment-references");
 	}
 
 	#[test]
 	fn does_not_apply_capacity_weights_to_incompatible_routing() {
-		let input = r#"
-model_list:
-- model_name: chat
-  litellm_params:
-    model: openai/gpt-4o
-    rpm: 100
-- model_name: chat
-  litellm_params:
-    model: openai/gpt-4o-mini
-    rpm: 50
-    tpm: 10000
-router_settings:
-  routing_strategy: least-busy
-"#;
-		let result = import_config("litellm", input).unwrap();
-		let targets = result.config["llm"]["virtualModels"][0]["routing"]["weighted"]["targets"]
-			.as_array()
-			.unwrap();
-		assert!(targets.iter().all(|target| target["weight"] == 1));
-		assert!(result.findings.iter().any(|finding| {
-			finding.source_path == "router_settings.routing_strategy"
-				&& finding.status == ImportStatus::Unsupported
-		}));
-		assert!(result.findings.iter().any(|finding| {
-			finding.source_path == "model_list[1].litellm_params.tpm"
-				&& finding.status == ImportStatus::Manual
-		}));
+		assert_litellm_golden("incompatible-routing");
 	}
 
 	#[test]
 	fn reports_wildcard_models_without_emitting_malformed_names() {
-		let input = r#"
-model_list:
-- model_name: "*"
-  litellm_params:
-    model: "openai/*"
-"#;
-		let result = import_config("litellm", input).unwrap();
-		assert!(
-			result.config["llm"]["models"]
-				.as_array()
-				.unwrap()
-				.is_empty()
-		);
-		assert!(
-			result.config["llm"]["virtualModels"]
-				.as_array()
-				.unwrap()
-				.is_empty()
-		);
-		assert!(result.findings.iter().any(|finding| {
-			finding.source_path == "model_list[0].model_name"
-				&& finding.status == ImportStatus::Unsupported
-		}));
+		assert_litellm_golden("wildcard-model");
 	}
 
 	#[test]

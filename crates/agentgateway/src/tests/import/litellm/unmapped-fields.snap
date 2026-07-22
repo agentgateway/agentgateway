@@ -1,0 +1,43 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/unmapped-fields.yaml
+---
+source: litellm
+config:
+  llm:
+    port: 4000
+    models:
+      - name: imported/litellm/chat/1
+        visibility: internal
+        provider: openAI
+        params:
+          model: gpt-4o
+    virtualModels:
+      - name: chat
+        routing:
+          weighted:
+            targets:
+              - model: imported/litellm/chat/1
+                weight: 1
+findings:
+  - sourcePath: "model_list[0].model_info.id"
+    status: manual
+    message: LiteLLM model metadata requires manual review and was not emitted
+  - sourcePath: "model_list[0].custom_model_field"
+    status: unsupported
+    message: Unrecognized LiteLLM model field was not emitted
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: Requires manual review and was not emitted
+  - sourcePath: environment_variables.LOG_LEVEL
+    status: manual
+    message: Requires manual review and was not emitted
+  - sourcePath: credential_list
+    status: unsupported
+    message: Unrecognized LiteLLM top-level field was not emitted
+  - sourcePath: custom_section
+    status: unsupported
+    message: Unrecognized LiteLLM top-level field was not emitted
